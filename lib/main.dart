@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+// Color variables
+const Color backgroundColor = Color(0xFF251E18);
+const Color inputBoxColor = Color(0xFF251E18);
+const Color accentButtonColor = Color.fromARGB(255, 70, 99, 98);
+const Color otherButtonColor = Color(0xFF3B4554);
+
 void main() {
   runApp(const MyApp());
 }
@@ -16,7 +22,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         brightness: Brightness.dark,
         primarySwatch: Colors.blue,
-        visualDensity: Visual AdaptivePlatformDensity,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
       home: const PerplexityProUI(),
     );
@@ -72,7 +78,8 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
 
   @override
   Widget build(BuildContext context) {
-    const Color darkBackground = Color(0xFF1E1E1E);
+    // Use color variable for background
+    const Color darkBackground = backgroundColor;
     const double baseContentWidth = 600;
     const double expandedWidthIncrease = 160;
 
@@ -152,15 +159,16 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
     final Border buttonBorder = Border.all(color: Colors.grey[700]!, width: 0.8);
     const double buttonHeight = 36.0;
     const double iconButtonWidth = 44.0;
+    // const double customButtonHorizontalPadding = 10.0; // Unused variable
 
     return Container(
-      height: 100, // Reduced height from 135 to 100
+      height: 135,
       decoration: BoxDecoration(
-        color: Colors.grey[900],
+        color: inputBoxColor,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.grey[800]!),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), // Adjusted vertical padding
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -189,7 +197,7 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
                       hintText: 'Ask anything or @mention a Space',
                       hintStyle: TextStyle(color: Colors.grey),
                       border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(vertical: 4.0), // Reduced vertical content padding
+                      contentPadding: EdgeInsets.symmetric(vertical: 8.0),
                     ),
                     style: const TextStyle(color: Colors.white),
                   ),
@@ -202,7 +210,7 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
                   width: iconButtonWidth,
                   height: buttonHeight,
                   decoration: BoxDecoration(
-                    color: const Color.fromARGB(255, 194, 18, 18),
+                    color: accentButtonColor,
                     borderRadius: BorderRadius.circular(buttonBorderRadius),
                   ),
                   child: const Icon(
@@ -225,6 +233,7 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
                 width: iconButtonWidth,
               ),
               const SizedBox(width: 8),
+              // Brain (Thinking) Button - just icon, no dropdown, does nothing
               _buildIconButton(
                 icon: Icons.psychology, // brain icon
                 onPressed: () => print("Thinking (brain) button tapped!"),
@@ -234,6 +243,7 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
                 width: iconButtonWidth,
               ),
               const SizedBox(width: 8),
+              // Image Generation Button - just icon, does nothing
               _buildIconButton(
                 icon: Icons.image,
                 onPressed: () => print("Image generation button tapped!"),
@@ -261,13 +271,15 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
               const SizedBox(width: 8),
               GestureDetector(
                 onTap: () {
+                  // VoiceAssistantApp is no longer available in this standalone file.
+                  // Replaced with a print statement.
                   print("Voice mode button clicked, functionality not available in standalone mode.");
                 },
                 child: Container(
                   width: iconButtonWidth,
                   height: buttonHeight,
                   decoration: BoxDecoration(
-                    color: const Color.fromARGB(255, 194, 18, 18),
+                    color: const Color.fromARGB(255, 70, 99, 98),
                     borderRadius: BorderRadius.circular(buttonBorderRadius),
                   ),
                   child: const Icon(
@@ -296,7 +308,7 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
       width: width,
       height: height,
       decoration: BoxDecoration(
-        color: Colors.grey[800],
+        color: otherButtonColor,
         borderRadius: BorderRadius.circular(borderRadius),
         border: border,
       ),
@@ -307,6 +319,7 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
     );
   }
 
+  // _buildCustomButton is not used in the original code, but kept for completeness
   Widget _buildCustomButton({
     required IconData icon,
     required String text,
@@ -324,7 +337,7 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
         padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: Colors.grey[800],
+          color: otherButtonColor,
           borderRadius: BorderRadius.circular(borderRadius),
           border: border,
         ),
@@ -378,17 +391,20 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
         width: buttonWidth,
         height: buttonHeight,
         decoration: BoxDecoration(
-          color: Colors.grey[800],
-          borderRadius: BorderRadius.circular(buttonBorderRadius),
-          border: buttonBorder,
+          color: otherButtonColor,
+          borderRadius: BorderRadius.circular(borderRadius),
+          border: border,
         ),
         child: const Icon(Icons.grid_3x3, color: Colors.white, size: 20),
       ),
       onSelected: (String newValue) {
         setState(() {
+          // Find the name associated with the selected value to update _selectedModel
           _selectedModel = models.firstWhere((model) => model['value'] == newValue)['name'];
           if (newValue == 'best') {
-            // Handle toggle logic for "Best" if needed
+            // Handle toggle logic for "Best" if needed, e.g.,
+            // a toggle might imply selecting a default "best" model rather than "Best" itself as a name
+            // For now, it just sets the name to "Best".
           }
         });
       },
@@ -402,15 +418,32 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
             child: Row(
               children: [
                 if (model['isToggle'] == true)
+                  // This GestureDetector inside PopupMenuItem might cause unexpected behavior
+                  // as PopupMenuItem itself handles tap.
+                  // For a toggle, typically a separate item or a dialog is used.
+                  // Keeping the original structure for now.
                   GestureDetector(
                     onTap: () {
+                      // Close the menu and select the 'best' model
                       Navigator.pop(context, model['value']);
                     },
                     child: Row(
                       children: [
                         Switch(
-                          value: isSelected,
-                          onChanged: (bool value) {},
+                          value: isSelected, // This switch controls nothing visually on its own
+                          onChanged: (bool value) {
+                            // If this was a true toggle switch, it would update _selectedModel directly
+                            // and the menu would ideally stay open or redraw.
+                            // For a PopupMenuItem, onChanged here will not trigger rebuild of the menu.
+                            // The onTap on GestureDetector handles the selection.
+                            if (value) {
+                                // Simulate selection of 'best' model if toggle is turned on
+                                setState(() {
+                                  _selectedModel = model['name'];
+                                });
+                                // Navigator.pop(context, model['value']); // Optionally close menu
+                            }
+                          },
                           activeColor: Colors.cyan[300],
                         ),
                         const Text(
@@ -439,11 +472,10 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
                     margin: const EdgeInsets.only(left: 8),
                     padding:
                         const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color:
-                          model['badge'] == 'new' ? Colors.teal[700] : Colors.orange[700],
-                      borderRadius: BorderRadius.circular(4),
-                    ),
+        decoration: BoxDecoration(
+          color: model['badge'] == 'new' ? Colors.teal[700] : Colors.orange[700],
+          borderRadius: BorderRadius.circular(4),
+        ),
                     child: Text(
                       model['badge']!,
                       style: const TextStyle(color: Colors.white, fontSize: 10),
