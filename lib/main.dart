@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'voice_mode.dart';
 
-/* ---------- FINAL PALETTE ---------- */
-const Color bg     = Color(0xFF211B15);   // 33 27 21  (kept darker)
-const Color accent = Color(0xFF3F5E5D);   // 63 94 93  (kept corrected)
-const Color iconFg = Color(0xFF93854C);   //147 133  76  (your new warm grey-yellow)
+/* ---------- COLOURS ---------- */
+const Color bg     = Color(0xFF211B15);   // 33 27 21
+const Color accent = Color(0xFF3F5E5D);   // 70 99 93
+const Color iconFg = Color(0xFF93854C);   //147 133 76
 
 /* ---------- THEME ---------- */
 final appTheme = ThemeData.dark().copyWith(
@@ -23,28 +24,30 @@ class ModelItem {
   final bool isToggle;
   final String? badge;
 
-  ModelItem({
-    required this.name,
-    required this.value,
-    this.isToggle = false,
-    this.badge,
-  });
+  ModelItem({required this.name, required this.value, this.isToggle = false, this.badge});
 }
 
 /* ---------- MAIN ---------- */
-void main() => runApp(const MyApp());
+void main() => runApp(const ChukChatApp());
 
-class MyApp extends StatelessWidget {
-  const MyApp({Key? key}) : super(key: key);
+class ChukChatApp extends StatelessWidget {
+  const ChukChatApp({Key? key}) : super(key: key);
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'chuk.chat',
-      debugShowCheckedModeBanner: false,
-      theme: appTheme,
-      home: const RootWrapper(),
-    );
-  }
+  Widget build(BuildContext context) => MaterialApp(title: 'chuk.chat', debugShowCheckedModeBanner: false, theme: appTheme, home: const RootWrapper());
+}
+
+/* ---------- DATA ---------- */
+List<String> _savedChats = [];
+
+Future<void> _loadChats() async {
+  final prefs = await SharedPreferences.getInstance();
+  _savedChats = prefs.getStringList('savedChats') ?? [];
+}
+
+Future<void> _saveChat(String json) async {
+  final prefs = await SharedPreferences.getInstance();
+  _savedChats.add(json);
+  await prefs.setStringList('savedChats', _savedChats);
 }
 
 /* ---------- ROOT WRAPPER ---------- */
@@ -73,12 +76,11 @@ class _RootWrapperState extends State<RootWrapper> {
   void initState() {
     super.initState();
     _loadSidebar();
+    _loadChats();
   }
 
   void _openSettingsPage() {
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => const SettingsPage(),
-    ));
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsPage()));
   }
 
   @override
@@ -100,13 +102,18 @@ class _RootWrapperState extends State<RootWrapper> {
                 child: const Text('chuk.chat', style: TextStyle(fontSize: 22)),
               ),
               Expanded(
-                child: ListView(
+                child: ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  children: const [
-                    ListTile(leading: Icon(Icons.chat_bubble_outline, size: 20), title: Text('How to cook pasta'), dense: true),
-                    ListTile(leading: Icon(Icons.chat_bubble_outline, size: 20), title: Text('Flutter vs React Native'), dense: true),
-                    ListTile(leading: Icon(Icons.chat_bubble_outline, size: 20), title: Text('Explain async-await'), dense: true),
-                  ],
+                  itemCount: _savedChats.length,
+                  itemBuilder: (_, i) {
+                    final title = 'Chat ${i + 1}';
+                    return ListTile(
+                      leading: const Icon(Icons.chat_bubble_outline, size: 20),
+                      title: Text(title, style: const TextStyle(color: iconFg)),
+                      dense: true,
+                      onTap: () {/* load / view */},
+                    );
+                  },
                 ),
               ),
               ListTile(
@@ -121,53 +128,25 @@ class _RootWrapperState extends State<RootWrapper> {
           ),
         ),
       ),
-      body: Row(
-        children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOutCubic,
-            width: _sidebarOpen ? 72 : 0,
-            color: bg,
-            child: _sidebarOpen
-                ? Column(
-                    children: [
-                      const SizedBox(height: 16),
-                      IconButton(icon: const Icon(Icons.menu_open), onPressed: () => _saveSidebar(false)),
-                      const Spacer(),
-                      IconButton(icon: const Icon(Icons.settings), onPressed: _openSettingsPage),
-                      const SizedBox(height: 16),
-                    ],
-                  )
-                : null,
-          ),
-          Expanded(
-            child: Stack(
-              children: [
-                Container(color: bg),
-                PerplexityProUI(
-                  sidebarOpen: _sidebarOpen,
-                  onToggleSidebar: () => _saveSidebar(!_sidebarOpen),
-                ),
-              ],
-            ),
-          ),
-        ],
+      body: ChukChatUI(
+        sidebarOpen: _sidebarOpen,
+        onToggleSidebar: () => _saveSidebar(!_sidebarOpen),
       ),
     );
   }
 }
 
-/* ---------- CHAT PAGE ---------- */
-class PerplexityProUI extends StatefulWidget {
+/* ---------- CHAT UI ---------- */
+class ChukChatUI extends StatefulWidget {
   final bool sidebarOpen;
   final VoidCallback onToggleSidebar;
-  const PerplexityProUI({Key? key, required this.sidebarOpen, required this.onToggleSidebar}) : super(key: key);
+  const ChukChatUI({Key? key, required this.sidebarOpen, required this.onToggleSidebar}) : super(key: key);
 
   @override
-  State<PerplexityProUI> createState() => _PerplexityProUIState();
+  State<ChukChatUI> createState() => _ChukChatUIState();
 }
 
-class _PerplexityProUIState extends State<PerplexityProUI> with SingleTickerProviderStateMixin {
+class _ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMixin {
   final TextEditingController _controller = TextEditingController();
   final List<Map<String, String>> _messages = [];
   final ScrollController _scrollController = ScrollController();
@@ -194,6 +173,20 @@ class _PerplexityProUIState extends State<PerplexityProUI> with SingleTickerProv
     super.dispose();
   }
 
+  /* ---------- NEW CHAT ---------- */
+  void _newChat() async {
+    if (_messages.isNotEmpty) {
+      final json = _messages.map((m) => '${m['sender']}|${m['text']}').join('§');
+      await _saveChat(json);
+    }
+    setState(() {
+      _messages.clear();
+      _animCtrl.reset();
+    });
+    _focusNode.requestFocus();
+  }
+
+  /* ---------- SEND MESSAGE ---------- */
   void _sendMessage() {
     if (_controller.text.trim().isEmpty) return;
     final first = _messages.isEmpty;
@@ -229,15 +222,29 @@ class _PerplexityProUIState extends State<PerplexityProUI> with SingleTickerProv
       backgroundColor: Colors.transparent,
       body: Stack(
         children: [
+          /* ---- TOP CONTROLS ---- */
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.only(left: 8, top: 4),
-              child: IconButton(
-                icon: Icon(widget.sidebarOpen ? Icons.chevron_left : Icons.menu),
-                onPressed: widget.onToggleSidebar,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.edit_square),
+                    tooltip: 'New chat',
+                    onPressed: _newChat,
+                  ),
+                  const SizedBox(height: 4),
+                  IconButton(
+                    icon: const Icon(Icons.menu),
+                    onPressed: widget.onToggleSidebar,
+                  ),
+                ],
               ),
             ),
           ),
+          /* ---- EMPTY STATE ---- */
           if (_messages.isEmpty)
             Center(
               child: Column(
@@ -270,6 +277,7 @@ class _PerplexityProUIState extends State<PerplexityProUI> with SingleTickerProv
                 ),
               ),
             ),
+          /* ---- BOTTOM SEARCH BAR ---- */
           if (_messages.isNotEmpty)
             Align(
               alignment: Alignment.bottomCenter,
@@ -345,15 +353,16 @@ class _PerplexityProUIState extends State<PerplexityProUI> with SingleTickerProv
                   ),
                 ),
                 const SizedBox(width: 8),
-                // SEND BUTTON (accent)
                 GestureDetector(
-                  onTap: _sendMessage,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const VoiceMode()),
+                  ),
                   child: Container(
                     width: btnW,
                     height: btnH,
                     decoration: BoxDecoration(
                       color: accent,
-                      borderRadius: BorderRadius.circular(radius),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(Icons.arrow_upward, color: Colors.black),
                   ),
@@ -374,15 +383,16 @@ class _PerplexityProUIState extends State<PerplexityProUI> with SingleTickerProv
               const SizedBox(width: 8),
               _buildIconBtn(Icons.mic, () => print('Mic')),
               const SizedBox(width: 8),
-              // VOICE BUTTON (accent)
               GestureDetector(
-                onTap: () => print('Voice'),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const VoiceMode()),
+                ),
                 child: Container(
-                  width: btnW,
-                  height: btnH,
+                  width: 44,
+                  height: 36,
                   decoration: BoxDecoration(
                     color: accent,
-                    borderRadius: BorderRadius.circular(radius),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(Icons.graphic_eq, color: Colors.black),
                 ),
@@ -505,19 +515,10 @@ class MessageBubble extends StatelessWidget {
 /* ---------- SETTINGS PAGE ---------- */
 class SettingsPage extends StatelessWidget {
   const SettingsPage({Key? key}) : super(key: key);
-
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: bg,
-      appBar: AppBar(
-        title: const Text('Settings'),
+  Widget build(BuildContext context) => Scaffold(
         backgroundColor: bg,
-        elevation: 0,
-      ),
-      body: const Center(
-        child: Text('Settings page – add options here', style: TextStyle(color: iconFg)),
-      ),
-    );
-  }
+        appBar: AppBar(title: const Text('Settings'), backgroundColor: bg, elevation: 0),
+        body: const Center(child: Text('Settings page – add options here', style: TextStyle(color: iconFg))),
+      );
 }
