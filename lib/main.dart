@@ -1,12 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-// Color variables
-const Color backgroundColor = Color(0xFF251E18);
-const Color inputBoxColor = Color(0xFF251E18);
-const Color accentButtonColor = Color.fromARGB(255, 70, 99, 98);
-const Color otherButtonColor = Color(0xFF3B4554);
-
 void main() {
   runApp(const MyApp());
 }
@@ -78,8 +72,7 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
 
   @override
   Widget build(BuildContext context) {
-    // Use color variable for background
-    const Color darkBackground = backgroundColor;
+    const Color darkBackground = Color(0xFF1E1E1E);
     const double baseContentWidth = 600;
     const double expandedWidthIncrease = 160;
 
@@ -164,7 +157,7 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
     return Container(
       height: 135,
       decoration: BoxDecoration(
-        color: inputBoxColor,
+        color: Colors.grey[900],
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.grey[800]!),
       ),
@@ -210,7 +203,7 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
                   width: iconButtonWidth,
                   height: buttonHeight,
                   decoration: BoxDecoration(
-                    color: accentButtonColor,
+                    color: const Color.fromARGB(255, 194, 18, 18),
                     borderRadius: BorderRadius.circular(buttonBorderRadius),
                   ),
                   child: const Icon(
@@ -279,7 +272,7 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
                   width: iconButtonWidth,
                   height: buttonHeight,
                   decoration: BoxDecoration(
-                    color: const Color.fromARGB(255, 70, 99, 98),
+                    color: const Color.fromARGB(255, 194, 18, 18),
                     borderRadius: BorderRadius.circular(buttonBorderRadius),
                   ),
                   child: const Icon(
@@ -308,7 +301,7 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
       width: width,
       height: height,
       decoration: BoxDecoration(
-        color: otherButtonColor,
+        color: Colors.grey[800],
         borderRadius: BorderRadius.circular(borderRadius),
         border: border,
       ),
@@ -337,7 +330,7 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
         padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: otherButtonColor,
+          color: Colors.grey[800],
           borderRadius: BorderRadius.circular(borderRadius),
           border: border,
         ),
@@ -391,9 +384,9 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
         width: buttonWidth,
         height: buttonHeight,
         decoration: BoxDecoration(
-          color: otherButtonColor,
-          borderRadius: BorderRadius.circular(borderRadius),
-          border: border,
+          color: Colors.grey[800],
+          borderRadius: BorderRadius.circular(buttonBorderRadius),
+          border: buttonBorder,
         ),
         child: const Icon(Icons.grid_3x3, color: Colors.white, size: 20),
       ),
@@ -472,10 +465,11 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
                     margin: const EdgeInsets.only(left: 8),
                     padding:
                         const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration: BoxDecoration(
-          color: model['badge'] == 'new' ? Colors.teal[700] : Colors.orange[700],
-          borderRadius: BorderRadius.circular(4),
-        ),
+                    decoration: BoxDecoration(
+                      color:
+                          model['badge'] == 'new' ? Colors.teal[700] : Colors.orange[700],
+                      borderRadius: BorderRadius.circular(4),
+                    ),
                     child: Text(
                       model['badge']!,
                       style: const TextStyle(color: Colors.white, fontSize: 10),
