@@ -1,13 +1,37 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-/* ---------- COLOR PALETTE ---------- */
-const Color c1 = Color.fromARGB(255, 37, 30, 24);      // almost black
-const Color c2 = Color.fromARGB(255, 147, 133, 129);   // warm grey
-const Color c3 = Color.fromARGB(255, 70, 99, 98);       // teal-ish
-const Color c4 = Color.fromARGB(255, 76, 89, 107);      // slate
-const Color c5 = Color.fromARGB(255, 197, 213, 228);    // light blue-grey
+/* ---------- FINAL PALETTE ---------- */
+const Color bg     = Color(0xFF211B15);   // 33 27 21  (kept darker)
+const Color accent = Color(0xFF3F5E5D);   // 63 94 93  (kept corrected)
+const Color iconFg = Color(0xFF93854C);   //147 133  76  (your new warm grey-yellow)
 
+/* ---------- THEME ---------- */
+final appTheme = ThemeData.dark().copyWith(
+  scaffoldBackgroundColor: bg,
+  cardColor: bg,
+  dividerColor: iconFg.withOpacity(.4),
+  iconTheme: const IconThemeData(color: iconFg),
+  colorScheme: const ColorScheme.dark(primary: accent, secondary: iconFg, surface: bg),
+);
+
+/* ---------- MODEL ITEM ---------- */
+class ModelItem {
+  final String name;
+  final String value;
+  final bool isToggle;
+  final String? badge;
+
+  ModelItem({
+    required this.name,
+    required this.value,
+    this.isToggle = false,
+    this.badge,
+  });
+}
+
+/* ---------- MAIN ---------- */
 void main() => runApp(const MyApp());
 
 class MyApp extends StatelessWidget {
@@ -17,53 +41,148 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'chuk.chat',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: c1,
-        visualDensity: VisualDensity.adaptivePlatformDensity,
-      ),
-      home: const PerplexityProUI(),
+      theme: appTheme,
+      home: const RootWrapper(),
     );
   }
 }
 
-/* ---------- ROOT PAGE ---------- */
-class PerplexityProUI extends StatefulWidget {
-  const PerplexityProUI({Key? key}) : super(key: key);
+/* ---------- ROOT WRAPPER ---------- */
+class RootWrapper extends StatefulWidget {
+  const RootWrapper({Key? key}) : super(key: key);
   @override
-  State<PerplexityProUI> createState() => _PerplexityProUIState();
+  State<RootWrapper> createState() => _RootWrapperState();
 }
 
-class _PerplexityProUIState extends State<PerplexityProUI>
-    with SingleTickerProviderStateMixin {
-  final TextEditingController _controller = TextEditingController();
-  final List<Map<String, String>> _messages = [];
-  final ScrollController _scrollController = ScrollController();
-  final FocusNode _focusNode = FocusNode();
-  final FocusNode _sidebarFocus = FocusNode();
+class _RootWrapperState extends State<RootWrapper> {
+  bool _sidebarOpen = false;
+  final GlobalKey<ScaffoldState> _key = GlobalKey();
 
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  Future<void> _loadSidebar() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() => _sidebarOpen = prefs.getBool('sidebarOpen') ?? false);
+  }
 
-  String _selectedModel = "Sonar";
-
-  late AnimationController _animationController;
-  late Animation<double> _animation;
+  Future<void> _saveSidebar(bool val) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('sidebarOpen', val);
+    setState(() => _sidebarOpen = val);
+  }
 
   @override
   void initState() {
     super.initState();
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 200),
-      vsync: this,
-    );
-    _animation = CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeOutCubic,
-    );
+    _loadSidebar();
+  }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _focusNode.requestFocus();
-      // first message animation starts when needed
-    });
+  void _openSettingsPage() {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => const SettingsPage(),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final drawerWidth = MediaQuery.of(context).size.width * 0.75;
+    return Scaffold(
+      key: _key,
+      drawerEnableOpenDragGesture: true,
+      drawer: SizedBox(
+        width: drawerWidth,
+        child: Container(
+          color: bg,
+          child: Column(
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(16, 48, 16, 20),
+                color: bg,
+                child: const Text('chuk.chat', style: TextStyle(fontSize: 22)),
+              ),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  children: const [
+                    ListTile(leading: Icon(Icons.chat_bubble_outline, size: 20), title: Text('How to cook pasta'), dense: true),
+                    ListTile(leading: Icon(Icons.chat_bubble_outline, size: 20), title: Text('Flutter vs React Native'), dense: true),
+                    ListTile(leading: Icon(Icons.chat_bubble_outline, size: 20), title: Text('Explain async-await'), dense: true),
+                  ],
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.settings),
+                title: const Text('Settings'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _openSettingsPage();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+      body: Row(
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOutCubic,
+            width: _sidebarOpen ? 72 : 0,
+            color: bg,
+            child: _sidebarOpen
+                ? Column(
+                    children: [
+                      const SizedBox(height: 16),
+                      IconButton(icon: const Icon(Icons.menu_open), onPressed: () => _saveSidebar(false)),
+                      const Spacer(),
+                      IconButton(icon: const Icon(Icons.settings), onPressed: _openSettingsPage),
+                      const SizedBox(height: 16),
+                    ],
+                  )
+                : null,
+          ),
+          Expanded(
+            child: Stack(
+              children: [
+                Container(color: bg),
+                PerplexityProUI(
+                  sidebarOpen: _sidebarOpen,
+                  onToggleSidebar: () => _saveSidebar(!_sidebarOpen),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/* ---------- CHAT PAGE ---------- */
+class PerplexityProUI extends StatefulWidget {
+  final bool sidebarOpen;
+  final VoidCallback onToggleSidebar;
+  const PerplexityProUI({Key? key, required this.sidebarOpen, required this.onToggleSidebar}) : super(key: key);
+
+  @override
+  State<PerplexityProUI> createState() => _PerplexityProUIState();
+}
+
+class _PerplexityProUIState extends State<PerplexityProUI> with SingleTickerProviderStateMixin {
+  final TextEditingController _controller = TextEditingController();
+  final List<Map<String, String>> _messages = [];
+  final ScrollController _scrollController = ScrollController();
+  final FocusNode _focusNode = FocusNode();
+
+  late AnimationController _animCtrl;
+  late Animation<double> _anim;
+  String _selectedModel = 'Sonar';
+
+  @override
+  void initState() {
+    super.initState();
+    _animCtrl = AnimationController(duration: const Duration(milliseconds: 200), vsync: this);
+    _anim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _focusNode.requestFocus());
   }
 
   @override
@@ -71,31 +190,23 @@ class _PerplexityProUIState extends State<PerplexityProUI>
     _controller.dispose();
     _scrollController.dispose();
     _focusNode.dispose();
-    _sidebarFocus.dispose();
-    _animationController.dispose();
+    _animCtrl.dispose();
     super.dispose();
   }
 
   void _sendMessage() {
     if (_controller.text.trim().isEmpty) return;
-
-    final String userMsg = _controller.text;
-    final isFirst = _messages.isEmpty;
-
+    final first = _messages.isEmpty;
     setState(() {
-      _messages.add({'sender': 'user', 'text': userMsg});
+      _messages.add({'sender': 'user', 'text': _controller.text});
       _controller.clear();
     });
-
-    if (isFirst) _animationController.forward();
-
+    if (first) _animCtrl.forward();
     _focusNode.requestFocus();
-
     Future.delayed(const Duration(milliseconds: 300), () {
       setState(() {
-        _messages.add({'sender': 'ai', 'text': "You said: $userMsg\n(Model: $_selectedModel)"});
+        _messages.add({'sender': 'ai', 'text': 'You said: ${_messages.last['text']}\n(Model: $_selectedModel)'});
       });
-
       Future.delayed(const Duration(milliseconds: 50), () {
         if (_scrollController.hasClients) {
           _scrollController.animateTo(
@@ -109,159 +220,56 @@ class _PerplexityProUIState extends State<PerplexityProUI>
     });
   }
 
-  /* ---------- SIDEBAR ---------- */
-
-  void _openSettings() {
-    _scaffoldKey.currentState?.openEndDrawer();
-    Future.microtask(() => _sidebarFocus.requestFocus());
-  }
-
-  Widget _settingsDrawer() {
-    final recent = <String>[
-      'How to cook pasta',
-      'Flutter vs React Native',
-      'Explain async-await',
-      'Best coffee beans',
-      'Top 10 sci-fi movies',
-    ];
-
-    return Container(
-      width: MediaQuery.of(context).size.width * 0.75,
-      color: c3.withOpacity(0.1),
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              color: c3,
-              width: double.infinity,
-              child: const Text(
-                'Settings',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Text(
-                'Recent Chats',
-                style: TextStyle(color: c5.withOpacity(0.8)),
-              ),
-            ),
-            Expanded(
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                itemCount: recent.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
-                itemBuilder: (_, i) => ListTile(
-                  leading: const Icon(Icons.chat_bubble_outline, size: 20, color: c4),
-                  title: Text(recent[i], style: const TextStyle(color: c2)),
-                  dense: true,
-                  onTap: () => Navigator.pop(context), // close on selection
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: c2.withOpacity(0.5)),
-                  foregroundColor: c2,
-                ),
-                icon: const Icon(Icons.info_outline),
-                label: const Text('About'),
-                onPressed: () => Navigator.pop(context),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /* ---------- MAIN UI ---------- */
-
   @override
   Widget build(BuildContext context) {
-    const double baseContentWidth = 600;
-    const double expandedWidthIncrease = 160;
-    const double bottomBarTotalHeight = 16 + 135 + 16;
-
-    final double dynamicWidth = _messages.isEmpty
-        ? baseContentWidth
-        : baseContentWidth + expandedWidthIncrease * _animation.value;
+    const baseW = 600.0, extraW = 160.0, bottomH = 16.0 + 135.0 + 16.0;
+    final dynamicW = _messages.isEmpty ? baseW : baseW + extraW * _anim.value;
 
     return Scaffold(
-      key: _scaffoldKey,
-      backgroundColor: c1,
-      endDrawerEnableOpenDragGesture: true,
-      endDrawer: Drawer(
-        backgroundColor: Colors.transparent,
-        shadowColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        shape: const RoundedRectangleBorder(),
-        child: _settingsDrawer(),
-      ),
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-          // BACKDROP
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [c1, c4.withOpacity(0.2)],
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.only(left: 8, top: 4),
+              child: IconButton(
+                icon: Icon(widget.sidebarOpen ? Icons.chevron_left : Icons.menu),
+                onPressed: widget.onToggleSidebar,
               ),
             ),
           ),
-
-          // CONTENT
           if (_messages.isEmpty)
             Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text(
-                    'chuk.chat',
-                    style: TextStyle(
-                      color: c5,
-                      fontSize: 32,
-                      fontWeight: FontWeight.w300,
-                    ),
-                  ),
+                  const Text('chuk.chat', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w300)),
                   const SizedBox(height: 20),
-                  SizedBox(width: dynamicWidth, child: _buildSearchBar()),
+                  SizedBox(width: dynamicW, child: _buildSearchBar()),
                 ],
               ),
-            ),
-
-          if (_messages.isNotEmpty)
+            )
+          else
             Positioned.fill(
-              top: bottomBarTotalHeight,
-              bottom: bottomBarTotalHeight,
+              top: bottomH,
+              bottom: bottomH,
               child: Center(
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   curve: Curves.easeOutCubic,
-                  constraints: BoxConstraints(maxWidth: dynamicWidth),
+                  constraints: BoxConstraints(maxWidth: dynamicW),
                   child: ListView.builder(
                     controller: _scrollController,
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                     itemCount: _messages.length,
                     itemBuilder: (_, i) {
                       final m = _messages[i];
-                      return MessageBubble(
-                        message: m['text']!,
-                        isUser: m['sender'] == 'user',
-                      );
+                      return MessageBubble(message: m['text']!, isUser: m['sender'] == 'user');
                     },
                   ),
                 ),
               ),
             ),
-
-          // BOTTOM TEXT AREA
           if (_messages.isNotEmpty)
             Align(
               alignment: Alignment.bottomCenter,
@@ -269,49 +277,25 @@ class _PerplexityProUIState extends State<PerplexityProUI>
                 duration: const Duration(milliseconds: 200),
                 curve: Curves.easeOutCubic,
                 padding: const EdgeInsets.all(16),
-                width: dynamicWidth,
+                width: dynamicW,
                 child: _buildSearchBar(),
               ),
             ),
-
-          // TOP-RIGHT SETTINGS BUTTON
-          Positioned(
-            top: 16,
-            right: 16,
-            child: SafeArea(
-              child: IconButton(
-                icon: const Icon(Icons.settings, color: c5),
-                onPressed: _openSettings,
-              ),
-            ),
-          ),
         ],
       ),
     );
   }
 
-  /* ---------- TEXT BAR ---------- */
-
   Widget _buildSearchBar() {
-    const double buttonBorderRadius = 10;
-    final Border buttonBorder = Border.all(color: c2.withOpacity(0.4), width: 0.8);
-    const double buttonHeight = 36;
-    const double iconButtonWidth = 44;
-
-    const double verticalEdgePadding = 14;
-    const double textFieldVerticalContentPadding = 8;
-
+    const btnH = 36.0, btnW = 44.0, radius = 10.0;
     return Container(
       height: 135,
       decoration: BoxDecoration(
-        color: c3.withOpacity(0.6),
+        color: bg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c2.withOpacity(0.3)),
+        border: Border.all(color: iconFg.withOpacity(.3)),
       ),
-      padding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: verticalEdgePadding,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -327,16 +311,10 @@ class _PerplexityProUIState extends State<PerplexityProUI>
                         if (event.isKeyPressed(LogicalKeyboardKey.enter)) {
                           if (event.isShiftPressed) {
                             final v = _controller.value;
-                            final t = v.text.replaceRange(
-                              v.selection.start,
-                              v.selection.end,
-                              '\n',
-                            );
+                            final t = v.text.replaceRange(v.selection.start, v.selection.end, '\n');
                             _controller.value = v.copyWith(
                               text: t,
-                              selection: TextSelection.collapsed(
-                                offset: v.selection.start + 1,
-                              ),
+                              selection: TextSelection.collapsed(offset: v.selection.start + 1),
                             );
                             return;
                           } else {
@@ -353,37 +331,31 @@ class _PerplexityProUIState extends State<PerplexityProUI>
                       maxLines: null,
                       keyboardType: TextInputType.multiline,
                       textInputAction: TextInputAction.send,
-                      style: const TextStyle(color: c5),
-                      decoration: const InputDecoration(
+                      style: TextStyle(color: iconFg),
+                      decoration: InputDecoration(
                         hintText: 'Ask anything or @mention a Space',
-                        hintStyle: TextStyle(color: c2),
+                        hintStyle: TextStyle(color: iconFg.withOpacity(.8)),
                         border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(
-                          vertical: textFieldVerticalContentPadding,
-                          horizontal: 0,
-                        ),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 0),
                       ),
+                      cursorColor: iconFg,
                       onTap: () => _focusNode.requestFocus(),
                       onSubmitted: (_) => _focusNode.requestFocus(),
-                      cursorColor: c5,
                     ),
                   ),
                 ),
                 const SizedBox(width: 8),
+                // SEND BUTTON (accent)
                 GestureDetector(
                   onTap: _sendMessage,
                   child: Container(
-                    width: iconButtonWidth,
-                    height: buttonHeight,
+                    width: btnW,
+                    height: btnH,
                     decoration: BoxDecoration(
-                      color: c4,
-                      borderRadius: BorderRadius.circular(buttonBorderRadius),
+                      color: accent,
+                      borderRadius: BorderRadius.circular(radius),
                     ),
-                    child: const Icon(
-                      Icons.arrow_upward,
-                      color: Colors.white,
-                      size: 24,
-                    ),
+                    child: const Icon(Icons.arrow_upward, color: Colors.black),
                   ),
                 ),
               ],
@@ -392,38 +364,27 @@ class _PerplexityProUIState extends State<PerplexityProUI>
           const SizedBox(height: 8),
           Row(
             children: [
-              _buildIconButton(
-                icon: Icons.add,
-                onPressed: () => print('Add'),
-              ),
+              _buildIconBtn(Icons.add, () => print('Add')),
               const SizedBox(width: 8),
-              _buildIconButton(
-                icon: Icons.psychology,
-                onPressed: () => print('Brain'),
-              ),
+              _buildIconBtn(Icons.psychology, () => print('Brain')),
               const SizedBox(width: 8),
-              _buildIconButton(
-                icon: Icons.image,
-                onPressed: () => print('Image'),
-              ),
+              _buildIconBtn(Icons.image, () => print('Image')),
               const Spacer(),
-              _buildModelSelectionDropdown(),
+              _buildModelDropdown(),
               const SizedBox(width: 8),
-              _buildIconButton(
-                icon: Icons.mic,
-                onPressed: () => print('Mic'),
-              ),
+              _buildIconBtn(Icons.mic, () => print('Mic')),
               const SizedBox(width: 8),
+              // VOICE BUTTON (accent)
               GestureDetector(
                 onTap: () => print('Voice'),
                 child: Container(
-                  width: iconButtonWidth,
-                  height: buttonHeight,
+                  width: btnW,
+                  height: btnH,
                   decoration: BoxDecoration(
-                    color: c4,
-                    borderRadius: BorderRadius.circular(buttonBorderRadius),
+                    color: accent,
+                    borderRadius: BorderRadius.circular(radius),
                   ),
-                  child: const Icon(Icons.graphic_eq, color: Colors.white),
+                  child: const Icon(Icons.graphic_eq, color: Colors.black),
                 ),
               ),
             ],
@@ -433,101 +394,81 @@ class _PerplexityProUIState extends State<PerplexityProUI>
     );
   }
 
-  /* ---------- BUTTON BUILDERS ---------- */
-
-  Widget _buildIconButton({
-    required IconData icon,
-    required VoidCallback onPressed,
-    double borderRadius = 10,
-    double height = 36,
-    double width = 44,
-  }) =>
-      Container(
-        width: width,
-        height: height,
+  Widget _buildIconBtn(IconData icon, VoidCallback onTap) => Container(
+        width: 44,
+        height: 36,
         decoration: BoxDecoration(
-          color: c4.withOpacity(0.4),
-          borderRadius: BorderRadius.circular(borderRadius),
-          border: Border.all(color: c2.withOpacity(0.3), width: 0.8),
+          color: bg,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: iconFg.withOpacity(.3), width: .8),
         ),
-        child: IconButton(
-          icon: Icon(icon, color: c5, size: 20),
-          onPressed: onPressed,
-        ),
+        child: IconButton(icon: Icon(icon, color: iconFg, size: 20), onPressed: onTap),
       );
 
-  Widget _buildModelSelectionDropdown() {
-    List<Map<String, dynamic>> models = [
-      {'name': 'Best', 'isToggle': true, 'value': 'best'},
-      {'name': 'gpt-oss-120b', 'value': 'gpt-oss-120b'},
-      {'name': 'Qwen3 235B A22B Thinking 2507', 'value': 'qwen3-235b-a22b-thinking-2507'},
-      {'name': 'Qwen: Qwen3 Coder 480B A35B', 'value': 'qwen3-coder'},
-      {'name': 'Qwen: Qwen3 235B A22B Instruct 2507', 'value': 'qwen3-235b-a22b-2507', 'badge': 'max'},
-      {'name': 'Qwen: Qwen3 32B', 'value': 'qwen3-32b'},
-      {'name': 'GPT-5', 'value': 'gpt_5', 'badge': 'new'},
-      {'name': 'GPT-5 Thinking', 'value': 'gpt_5_thinking', 'badge': 'new'},
-      {'name': 'o3', 'value': 'o3'},
-      {'name': 'o3-pro', 'value': 'o3_pro', 'badge': 'max'},
-      {'name': 'Grok 4', 'value': 'grok_4'},
+  Widget _buildModelDropdown() {
+    final models = <ModelItem>[
+      ModelItem(name: 'Best', isToggle: true, value: 'best'),
+      ModelItem(name: 'gpt-oss-120b', value: 'gpt-oss-120b'),
+      ModelItem(name: 'Qwen3 235B A22B Thinking 2507', value: 'qwen3-235b-a22b-thinking-2507'),
+      ModelItem(name: 'Qwen: Qwen3 Coder 480B A35B', value: 'qwen3-coder'),
+      ModelItem(name: 'Qwen: Qwen3 235B A22B Instruct 2507', value: 'qwen3-235b-a22b-2507', badge: 'max'),
+      ModelItem(name: 'Qwen: Qwen3 32B', value: 'qwen3-32b'),
+      ModelItem(name: 'GPT-5', value: 'gpt_5', badge: 'new'),
+      ModelItem(name: 'GPT-5 Thinking', value: 'gpt_5_thinking', badge: 'new'),
+      ModelItem(name: 'o3', value: 'o3'),
+      ModelItem(name: 'o3-pro', value: 'o3_pro', badge: 'max'),
+      ModelItem(name: 'Grok 4', value: 'grok_4'),
     ];
 
     return PopupMenuButton<String>(
-      padding: EdgeInsets.zero,
-      color: c3.withOpacity(0.9),
+      color: bg,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: c2.withOpacity(0.3)),
+        side: BorderSide(color: iconFg.withOpacity(.3)),
       ),
       icon: Container(
         width: 44,
         height: 36,
         decoration: BoxDecoration(
-          color: c4.withOpacity(0.4),
+          color: bg,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: c2.withOpacity(0.3), width: 0.8),
+          border: Border.all(color: iconFg.withOpacity(.3), width: .8),
         ),
-        child: const Icon(Icons.grid_3x3, color: c5, size: 20),
+        child: Icon(Icons.grid_3x3, color: iconFg, size: 20),
       ),
       onSelected: (v) {
-        setState(() {
-          _selectedModel = models.firstWhere((m) => m['value'] == v)['name'];
-        });
+        setState(() => _selectedModel = models.firstWhere((m) => m.value == v).name);
         Future.microtask(() => _focusNode.requestFocus());
       },
-      itemBuilder: (context) => models.map((model) {
-        final isSelected = _selectedModel == model['name'];
+      itemBuilder: (_) => models.map((m) {
+        final selected = _selectedModel == m.name;
         return PopupMenuItem<String>(
-          value: model['value'],
+          value: m.value,
           height: 40,
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
             children: [
-              if (model['isToggle'] == true)
+              if (m.isToggle)
                 Row(
                   children: [
-                    Switch(
-                      value: isSelected,
-                      onChanged: (_) {},
-                      activeColor: c5,
-                    ),
+                    Switch(value: selected, onChanged: (_) {}, activeColor: iconFg),
                     const SizedBox(width: 6),
-                    const Text('Best', style: TextStyle(color: c2)),
+                    const Text('Best', style: TextStyle(color: iconFg)),
                   ],
                 )
               else
-                Text(model['name']!, style: TextStyle(color: isSelected ? c5 : c2)),
+                Text(m.name, style: TextStyle(color: selected ? iconFg : iconFg.withOpacity(.8))),
               const Spacer(),
-              if (model['isToggle'] != true && isSelected)
-                Icon(Icons.check, color: c5, size: 18),
-              if (model['badge'] != null)
+              if (!m.isToggle && selected) Icon(Icons.check, color: iconFg, size: 18),
+              if (m.badge != null)
                 Container(
                   margin: const EdgeInsets.only(left: 8),
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: model['badge'] == 'new' ? Colors.teal : Colors.orange,
+                    color: m.badge == 'new' ? Colors.teal : Colors.orange,
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: Text(model['badge']!, style: const TextStyle(color: Colors.white, fontSize: 10)),
+                  child: Text(m.badge!, style: const TextStyle(color: Colors.white, fontSize: 10)),
                 ),
             ],
           ),
@@ -541,7 +482,6 @@ class _PerplexityProUIState extends State<PerplexityProUI>
 class MessageBubble extends StatelessWidget {
   final String message;
   final bool isUser;
-
   const MessageBubble({Key? key, required this.message, required this.isUser}) : super(key: key);
 
   @override
@@ -552,13 +492,31 @@ class MessageBubble extends StatelessWidget {
         margin: const EdgeInsets.symmetric(vertical: 8),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isUser ? c4.withOpacity(0.8) : c3.withOpacity(0.5),
+          color: isUser ? accent.withOpacity(.8) : bg,
           borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: iconFg.withOpacity(.3)),
         ),
-        child: Text(
-          message,
-          style: const TextStyle(color: c5),
-        ),
+        child: Text(message, style: TextStyle(color: iconFg)),
+      ),
+    );
+  }
+}
+
+/* ---------- SETTINGS PAGE ---------- */
+class SettingsPage extends StatelessWidget {
+  const SettingsPage({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: bg,
+      appBar: AppBar(
+        title: const Text('Settings'),
+        backgroundColor: bg,
+        elevation: 0,
+      ),
+      body: const Center(
+        child: Text('Settings page – add options here', style: TextStyle(color: iconFg)),
       ),
     );
   }
