@@ -79,6 +79,8 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
     final double dynamicContentWidth =
         _messages.isEmpty ? baseContentWidth : baseContentWidth + expandedWidthIncrease;
 
+    const double bottomBarTotalHeight = 16.0 + 135.0 + 16.0;
+
     return Scaffold(
       backgroundColor: darkBackground,
       body: Stack(
@@ -106,8 +108,8 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
             ),
           if (_messages.isNotEmpty)
             Positioned.fill(
-              top: 30,
-              bottom: 100,
+              top: bottomBarTotalHeight,
+              bottom: bottomBarTotalHeight,
               child: Center(
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
@@ -137,7 +139,7 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
                 curve: Curves.easeOut,
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.all(16.0), // This padding contributes to `bottomBarTotalHeight`
                 width: dynamicContentWidth,
                 child: _buildSearchBar(),
               ),
@@ -152,69 +154,92 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
     final Border buttonBorder = Border.all(color: Colors.grey[700]!, width: 0.8);
     const double buttonHeight = 36.0;
     const double iconButtonWidth = 44.0;
-    // const double customButtonHorizontalPadding = 10.0; // Unused variable
+
+    // The vertical padding that defines the distance from the container's top/bottom
+    // to the content inside. Increased from 10.0 to 14.0.
+    const double verticalEdgePadding = 14.0; // Adjusted for a bit more space
+
+    // Vertical padding for TextField to align it better visually with the button.
+    const double textFieldVerticalContentPadding = 8.0;
 
     return Container(
-      height: 135,
+      height: 135, // Fixed height for the search bar container
       decoration: BoxDecoration(
         color: Colors.grey[900],
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.grey[800]!),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      // Apply the symmetrical padding from the container edges.
+      padding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: verticalEdgePadding,
+      ),
       child: Column(
+        // Use MainAxisAlignment.spaceBetween to distribute space between the two rows.
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: RawKeyboardListener(
-                  focusNode: FocusNode(),
-                  onKey: (event) {
-                    if (event.isKeyPressed(LogicalKeyboardKey.enter) &&
-                        !event.isShiftPressed &&
-                        !event.isControlPressed &&
-                        !event.isAltPressed &&
-                        event.runtimeType.toString() == 'RawKeyDownEvent') {
-                      _sendMessage();
-                    }
-                  },
-                  child: TextField(
-                    controller: _controller,
-                    minLines: 1,
-                    maxLines: null,
-                    keyboardType: TextInputType.multiline,
-                    textInputAction: TextInputAction.newline,
-                    decoration: const InputDecoration(
-                      hintText: 'Ask anything or @mention a Space',
-                      hintStyle: TextStyle(color: Colors.grey),
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(vertical: 8.0),
+          // Changed: Wrap the first Row in a Flexible widget
+          Flexible(
+            child: Row(
+              // Align contents of this row to the start (top), so the send button starts at the top.
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  // The TextField itself should be wrapped in an Expanded
+                  // to take available vertical space, allowing it to scroll.
+                  child: RawKeyboardListener(
+                    focusNode: FocusNode(),
+                    onKey: (event) {
+                      if (event.isKeyPressed(LogicalKeyboardKey.enter) &&
+                          !event.isShiftPressed &&
+                          !event.isControlPressed &&
+                          !event.isAltPressed &&
+                          event.runtimeType.toString() == 'RawKeyDownEvent') {
+                        _sendMessage();
+                      }
+                    },
+                    child: TextField(
+                      controller: _controller,
+                      minLines: 1,
+                      maxLines: null, // Allow multiple lines if text exceeds
+                      keyboardType: TextInputType.multiline,
+                      textInputAction: TextInputAction.newline,
+                      decoration: InputDecoration(
+                        hintText: 'Ask anything or @mention a Space',
+                        hintStyle: const TextStyle(color: Colors.grey),
+                        border: InputBorder.none,
+                        // Adjust content padding to visually align with the send button better
+                        contentPadding: EdgeInsets.symmetric(
+                          vertical: textFieldVerticalContentPadding,
+                          horizontal: 0, // No horizontal padding inside the TextField's content
+                        ),
+                      ),
+                      style: const TextStyle(color: Colors.white),
                     ),
-                    style: const TextStyle(color: Colors.white),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: _sendMessage,
-                child: Container(
-                  width: iconButtonWidth,
-                  height: buttonHeight,
-                  decoration: BoxDecoration(
-                    color: const Color.fromARGB(255, 194, 18, 18),
-                    borderRadius: BorderRadius.circular(buttonBorderRadius),
-                  ),
-                  child: const Icon(
-                    Icons.arrow_upward,
-                    color: Colors.black,
-                    size: 24,
+                const SizedBox(width: 8),
+                // Send Button
+                GestureDetector(
+                  onTap: _sendMessage,
+                  child: Container(
+                    width: iconButtonWidth,
+                    height: buttonHeight, // Fixed height
+                    decoration: BoxDecoration(
+                      color: const Color.fromARGB(255, 194, 18, 18),
+                      borderRadius: BorderRadius.circular(buttonBorderRadius),
+                    ),
+                    child: const Icon(
+                      Icons.arrow_upward,
+                      color: Colors.black,
+                      size: 24,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
+          const SizedBox(height: 8), // Added space between text input and button row
           Row(
             children: [
               _buildIconButton(
@@ -226,7 +251,6 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
                 width: iconButtonWidth,
               ),
               const SizedBox(width: 8),
-              // Brain (Thinking) Button - just icon, no dropdown, does nothing
               _buildIconButton(
                 icon: Icons.psychology, // brain icon
                 onPressed: () => print("Thinking (brain) button tapped!"),
@@ -236,7 +260,6 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
                 width: iconButtonWidth,
               ),
               const SizedBox(width: 8),
-              // Image Generation Button - just icon, does nothing
               _buildIconButton(
                 icon: Icons.image,
                 onPressed: () => print("Image generation button tapped!"),
@@ -264,8 +287,6 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
               const SizedBox(width: 8),
               GestureDetector(
                 onTap: () {
-                  // VoiceAssistantApp is no longer available in this standalone file.
-                  // Replaced with a print statement.
                   print("Voice mode button clicked, functionality not available in standalone mode.");
                 },
                 child: Container(
@@ -312,7 +333,6 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
     );
   }
 
-  // _buildCustomButton is not used in the original code, but kept for completeness
   Widget _buildCustomButton({
     required IconData icon,
     required String text,
@@ -392,12 +412,9 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
       ),
       onSelected: (String newValue) {
         setState(() {
-          // Find the name associated with the selected value to update _selectedModel
           _selectedModel = models.firstWhere((model) => model['value'] == newValue)['name'];
           if (newValue == 'best') {
-            // Handle toggle logic for "Best" if needed, e.g.,
-            // a toggle might imply selecting a default "best" model rather than "Best" itself as a name
-            // For now, it just sets the name to "Best".
+            // Handle toggle logic for "Best" if needed
           }
         });
       },
@@ -411,32 +428,15 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
             child: Row(
               children: [
                 if (model['isToggle'] == true)
-                  // This GestureDetector inside PopupMenuItem might cause unexpected behavior
-                  // as PopupMenuItem itself handles tap.
-                  // For a toggle, typically a separate item or a dialog is used.
-                  // Keeping the original structure for now.
                   GestureDetector(
                     onTap: () {
-                      // Close the menu and select the 'best' model
                       Navigator.pop(context, model['value']);
                     },
                     child: Row(
                       children: [
                         Switch(
-                          value: isSelected, // This switch controls nothing visually on its own
-                          onChanged: (bool value) {
-                            // If this was a true toggle switch, it would update _selectedModel directly
-                            // and the menu would ideally stay open or redraw.
-                            // For a PopupMenuItem, onChanged here will not trigger rebuild of the menu.
-                            // The onTap on GestureDetector handles the selection.
-                            if (value) {
-                                // Simulate selection of 'best' model if toggle is turned on
-                                setState(() {
-                                  _selectedModel = model['name'];
-                                });
-                                // Navigator.pop(context, model['value']); // Optionally close menu
-                            }
-                          },
+                          value: isSelected,
+                          onChanged: (bool value) {},
                           activeColor: Colors.cyan[300],
                         ),
                         const Text(
