@@ -155,11 +155,7 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
     const double buttonHeight = 36.0;
     const double iconButtonWidth = 44.0;
 
-    // The vertical padding that defines the distance from the container's top/bottom
-    // to the content inside. Increased from 10.0 to 14.0.
-    const double verticalEdgePadding = 14.0; // Adjusted for a bit more space
-
-    // Vertical padding for TextField to align it better visually with the button.
+    const double verticalEdgePadding = 14.0;
     const double textFieldVerticalContentPadding = 8.0;
 
     return Container(
@@ -169,33 +165,50 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.grey[800]!),
       ),
-      // Apply the symmetrical padding from the container edges.
       padding: const EdgeInsets.symmetric(
         horizontal: 16,
         vertical: verticalEdgePadding,
       ),
       child: Column(
-        // Use MainAxisAlignment.spaceBetween to distribute space between the two rows.
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Changed: Wrap the first Row in a Flexible widget
           Flexible(
             child: Row(
-              // Align contents of this row to the start (top), so the send button starts at the top.
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  // The TextField itself should be wrapped in an Expanded
-                  // to take available vertical space, allowing it to scroll.
                   child: RawKeyboardListener(
                     focusNode: FocusNode(),
                     onKey: (event) {
-                      if (event.isKeyPressed(LogicalKeyboardKey.enter) &&
-                          !event.isShiftPressed &&
-                          !event.isControlPressed &&
-                          !event.isAltPressed &&
-                          event.runtimeType.toString() == 'RawKeyDownEvent') {
-                        _sendMessage();
+                      if (event.runtimeType.toString() == 'RawKeyDownEvent') {
+                        if (event.isKeyPressed(LogicalKeyboardKey.enter)) {
+                          if (event.isShiftPressed) {
+                            // Wenn Shift + Enter gedrückt wird, füge einen Zeilenumbruch ein
+                            // und verhindere, dass der RawKeyboardListener das Event für Senden verarbeitet.
+                            // Wichtig: Der TextField sollte selbst auch nicht versuchen, eine neue Zeile einzufügen,
+                            // deshalb haben wir textInputAction auf .send gesetzt.
+                            final TextEditingValue value = _controller.value;
+                            final TextSelection selection = value.selection;
+                            final String newText = value.text.replaceRange(
+                              selection.start,
+                              selection.end,
+                              '\n',
+                            );
+                            _controller.value = value.copyWith(
+                              text: newText,
+                              selection: TextSelection.collapsed(offset: selection.start + 1),
+                            );
+                            // Verhindere, dass das Send-Event ausgelöst wird
+                            return;
+                          } else {
+                            // Nur Enter ohne Shift -> Nachricht senden
+                            _sendMessage();
+                            // Wichtig: Hier kehren wir nicht zurück, da wir wollen, dass das Event
+                            // vom TextField NICHT als neuer Zeilenumbruch behandelt wird.
+                            // Durch textInputAction: TextInputAction.send im TextField
+                            // sollte das TextField die Enter-Taste nicht als Zeilenumbruch interpretieren.
+                          }
+                        }
                       }
                     },
                     child: TextField(
@@ -203,15 +216,16 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
                       minLines: 1,
                       maxLines: null, // Allow multiple lines if text exceeds
                       keyboardType: TextInputType.multiline,
-                      textInputAction: TextInputAction.newline,
+                      // WICHTIGE ÄNDERUNG: Setze textInputAction auf .send, damit die Enter-Taste
+                      // nicht automatisch einen Zeilenumbruch erzeugt.
+                      textInputAction: TextInputAction.send,
                       decoration: InputDecoration(
                         hintText: 'Ask anything or @mention a Space',
                         hintStyle: const TextStyle(color: Colors.grey),
                         border: InputBorder.none,
-                        // Adjust content padding to visually align with the send button better
                         contentPadding: EdgeInsets.symmetric(
                           vertical: textFieldVerticalContentPadding,
-                          horizontal: 0, // No horizontal padding inside the TextField's content
+                          horizontal: 0,
                         ),
                       ),
                       style: const TextStyle(color: Colors.white),
@@ -224,7 +238,7 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
                   onTap: _sendMessage,
                   child: Container(
                     width: iconButtonWidth,
-                    height: buttonHeight, // Fixed height
+                    height: buttonHeight,
                     decoration: BoxDecoration(
                       color: const Color.fromARGB(255, 194, 18, 18),
                       borderRadius: BorderRadius.circular(buttonBorderRadius),
@@ -239,7 +253,7 @@ class _PerplexityProUIState extends State<PerplexityProUI> {
               ],
             ),
           ),
-          const SizedBox(height: 8), // Added space between text input and button row
+          const SizedBox(height: 8),
           Row(
             children: [
               _buildIconButton(
