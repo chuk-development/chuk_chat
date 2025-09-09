@@ -6,6 +6,8 @@ import 'package:ui_elements_flutter/models/chat_model.dart';
 import 'package:ui_elements_flutter/services/chat_storage_service.dart';
 import 'package:ui_elements_flutter/widgets/message_bubble.dart';
 import 'package:ui_elements_flutter/pages/voice_mode_page.dart'; // For the voice mode button
+// Importiere das neue ModelSelectionDropdown widget
+import 'package:ui_elements_flutter/widgets/model_selection_dropdown.dart';
 
 /* ---------- CHAT UI ---------- */
 class ChukChatUI extends StatefulWidget {
@@ -34,7 +36,7 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
 
   late AnimationController _animCtrl;
   late Animation<double> _anim;
-  String _selectedModel = 'Sonar';
+  String _selectedModel = 'Qwen3 235B'; // _selectedModel bleibt hier, da _sendMessage es verwendet
 
   @override
   void initState() {
@@ -249,9 +251,9 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
                 ),
               ),
               const SizedBox(width: 8),
-              // Corrected: This button now sends the message.
+              // Dieser Button sendet nun die Nachricht
               GestureDetector(
-                onTap: _sendMessage, // Calls _sendMessage()
+                onTap: _sendMessage,
                 child: Container(
                   width: btnW,
                   height: btnH,
@@ -272,11 +274,20 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
               const SizedBox(width: 8),
               _buildIconBtn(Icons.image, () => print('Image')),
               const Spacer(),
-              _buildModelDropdown(),
-              const SizedBox(width: 8), // Now consistent 8px spacing
+              // Verwende das neue ModelSelectionDropdown Widget
+              ModelSelectionDropdown(
+                initialSelectedModel: _selectedModel,
+                onModelSelected: (newModel) {
+                  setState(() {
+                    _selectedModel = newModel; // Aktualisiere _selectedModel im Parent-Widget
+                  });
+                },
+                textFieldFocusNode: _textFieldFocusNode,
+              ),
+              const SizedBox(width: 8), // Konsistenter 8px Abstand
               _buildIconBtn(Icons.mic, () => print('Mic')),
               const SizedBox(width: 8),
-              // This button remains for Voice Mode
+              // Dieser Button bleibt für den Voice Mode
               GestureDetector(
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const VoiceModePage()),
@@ -299,7 +310,7 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
   }
 
   Widget _buildIconBtn(IconData icon, VoidCallback onTap) {
-    // Using a ValueNotifier to manage hover state for border animation
+    // Verwendet einen ValueNotifier, um den Hover-Zustand für die Randanimation zu verwalten
     final ValueNotifier<bool> isHovered = ValueNotifier<bool>(false);
 
     return MouseRegion(
@@ -308,9 +319,9 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(10),
-        splashFactory: InkRipple.splashFactory, // Standard ripple effect
-        hoverColor: Colors.transparent, // Don't show a background fill on hover
-        highlightColor: Colors.transparent, // Don't show a background fill on highlight
+        splashFactory: InkRipple.splashFactory, // Standard Ripple-Effekt
+        hoverColor: Colors.transparent, // Keine Hintergrundfüllung beim Hover
+        highlightColor: Colors.transparent, // Keine Hintergrundfüllung beim Highlight
         child: ValueListenableBuilder<bool>(
           valueListenable: isHovered,
           builder: (context, hovered, child) {
@@ -323,7 +334,7 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
                 color: bg,
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: hovered ? iconFg : iconFg.withOpacity(.3), // Thicker/brighter border on hover
+                  color: hovered ? iconFg : iconFg.withOpacity(.3), // Dickerer/hellerer Rand beim Hover
                   width: hovered ? 1.2 : 0.8,
                 ),
               ),
@@ -332,73 +343,6 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
           },
         ),
       ),
-    );
-  }
-
-  Widget _buildModelDropdown() {
-    final models = <ModelItem>[
-      ModelItem(name: 'Best', isToggle: true, value: 'best'),
-      ModelItem(name: 'gpt-oss-120b', value: 'gpt-oss-120b'),
-      ModelItem(name: 'Qwen3 235B A22B Thinking 2507', value: 'qwen3-235b-a22b-thinking-2507'),
-      ModelItem(name: 'Qwen: Qwen3 Coder 480B A35B', value: 'qwen3-coder'),
-      ModelItem(name: 'Qwen: Qwen3 235B A22B Instruct 2507', value: 'qwen3-235b-a22b-2507', badge: 'max'),
-      ModelItem(name: 'Qwen: Qwen3 32B', value: 'qwen3-32b'),
-      ModelItem(name: 'GPT-5', value: 'gpt_5', badge: 'new'),
-      ModelItem(name: 'GPT-5 Thinking', value: 'gpt_5_thinking', badge: 'new'),
-      ModelItem(name: 'o3', value: 'o3'),
-      ModelItem(name: 'o3-pro', value: 'o3_pro', badge: 'max'),
-      ModelItem(name: 'Grok 4', value: 'grok_4'),
-    ];
-
-    // Wrap the PopupMenuButton's child with _buildIconBtn's hover logic
-    // This allows the entire button to have the hover effect,
-    // while the PopupMenuButton handles the tap and menu display.
-    return PopupMenuButton<String>(
-      // The child is responsible for the visual representation of the button
-      child: _buildIconBtn(Icons.grid_3x3, () {}), // Empty onTap, PopupMenuButton handles tap
-      color: bg,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: iconFg.withOpacity(.3)),
-      ),
-      onSelected: (v) {
-        setState(() => _selectedModel = models.firstWhere((m) => m.value == v).name);
-        Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
-      },
-      itemBuilder: (BuildContext context) => models.map((m) {
-        final selected = _selectedModel == m.name;
-        return PopupMenuItem<String>(
-          value: m.value,
-          height: 40,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              if (m.isToggle)
-                Row(
-                  children: [
-                    Switch(value: selected, onChanged: (_) {}, activeColor: iconFg),
-                    const SizedBox(width: 6),
-                    Text('Best', style: TextStyle(color: iconFg)),
-                  ],
-                )
-              else
-                Text(m.name, style: TextStyle(color: selected ? iconFg : iconFg.withOpacity(.8))),
-              const Spacer(),
-              if (!m.isToggle && selected) Icon(Icons.check, color: iconFg, size: 18),
-              if (m.badge != null)
-                Container(
-                  margin: const EdgeInsets.only(left: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: m.badge == 'new' ? Colors.teal : Colors.orange,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(m.badge!, style: const TextStyle(color: Colors.white, fontSize: 10)),
-                ),
-            ],
-          ),
-        );
-      }).toList(),
     );
   }
 }
