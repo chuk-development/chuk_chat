@@ -34,11 +34,11 @@ class _RootWrapperState extends State<RootWrapper> {
   final GlobalKey<ChukChatUIState> _chatUIKey = GlobalKey();
 
   // Constants for positioning
-  static const double _fixedLeftPadding = 8.0; // Left padding for elements fixed on the left
-  static const double _topToolbarVerticalPadding = 16.0; // Vertical padding from the top
+  static const double _fixedLeftPadding = 8.0; // Left padding for top-left elements
+  static const double _topInitialSpacing = 16.0; // Initial vertical spacing from top edge of screen
   static const double _menuButtonHeight = 48.0; // IconButton default height (including implicit padding for touch target)
-  static const double _buttonVisualHeight = 40.0; // New chat/Projects button container visual height
-  static const double _spacingBetweenTopButtons = 8.0; // Spacing between Menu, New Chat, Projects
+  static const double _buttonVisualHeight = 40.0; // Height of New Chat/Projects InkWell containers
+  static const double _spacingBetweenTopButtons = 8.0; // Vertical/Horizontal spacing between top buttons
 
   @override
   void initState() {
@@ -70,17 +70,25 @@ class _RootWrapperState extends State<RootWrapper> {
 
   @override
   Widget build(BuildContext context) {
-    const double sidebarVisibleWidth = 320.0;
+    const double sidebarVisibleWidth = 280.0; // Reduced sidebar width
 
     return Scaffold(
       body: Stack(
         children: [
-          // Layer 1: The main Chat UI, always filling the screen
-          ChukChatUI(
-            key: _chatUIKey,
-            onToggleSidebar: () {}, // Dummy, as button is handled here
-            selectedChatIndex: ChatStorageService.selectedChatIndex,
-            isSidebarExpanded: _isSidebarExpanded,
+          // Layer 1: Main Chat UI wrapper (now moves to the right)
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOutCubic,
+            left: _isSidebarExpanded ? sidebarVisibleWidth : 0,
+            right: 0,
+            top: 0,
+            bottom: 0,
+            child: ChukChatUI(
+              key: _chatUIKey,
+              onToggleSidebar: () {}, // Dummy, as button is handled here
+              selectedChatIndex: ChatStorageService.selectedChatIndex,
+              isSidebarExpanded: _isSidebarExpanded,
+            ),
           ),
 
           // Layer 2: The Animated Sidebar that slides over the chat UI
@@ -94,31 +102,68 @@ class _RootWrapperState extends State<RootWrapper> {
             child: CustomSidebar(
               onChatItemTapped: _handleChatTapped,
               onSettingsTapped: _openSettingsPage,
-              onProjectsTapped: _openProjectsPage, // Projects is now also a top-level button, but passing it for consistency.
+              onProjectsTapped: _openProjectsPage,
               selectedChatIndex: ChatStorageService.selectedChatIndex,
             ),
           ),
 
           // Layer 3: The Menu button (always top-left)
           Positioned(
-            top: _topToolbarVerticalPadding,
+            top: _topInitialSpacing,
             left: _fixedLeftPadding,
-            child: SafeArea(
-              left: false, right: false, top: false, bottom: false, // Avoid unwanted SafeArea padding
-              child: IconButton(
-                icon: const Icon(Icons.menu),
-                onPressed: _toggleSidebar,
-                color: iconFg,
-                iconSize: 24, // Explicit size
-                padding: EdgeInsets.zero, // Remove default padding for precise height control
-                constraints: BoxConstraints.tightFor(width: _menuButtonHeight, height: _menuButtonHeight), // Make it a square of its height
+            child: IconButton(
+              icon: const Icon(Icons.menu),
+              onPressed: _toggleSidebar,
+              color: iconFg,
+              iconSize: 24, // Explicit size
+              padding: EdgeInsets.zero, // Remove default padding for precise height control
+              constraints: BoxConstraints.tightFor(width: _menuButtonHeight, height: _menuButtonHeight), // Make it a square of its height
+            ),
+          ),
+
+          // Layer 4: The "chuk.chat" title next to the menu (animates text width)
+          Positioned(
+            top: _topInitialSpacing, // Same top as menu
+            left: _fixedLeftPadding + _menuButtonHeight + _spacingBetweenTopButtons, // To the right of menu
+            child: InkWell( // Use InkWell for consistent behavior/look with other animated buttons
+              onTap: () {}, // No action, just a title
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                height: _buttonVisualHeight, // Match height of other buttons
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.chat_bubble_outline, color: iconFg), // Example icon for chuk.chat
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeOut,
+                      width: _isSidebarExpanded ? 0 : 100, // Text hides when sidebar is open, shows when closed
+                      constraints: BoxConstraints(
+                        minWidth: _isSidebarExpanded ? 0 : 100,
+                      ),
+                      child: ClipRect(
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 12.0),
+                          child: Text(
+                            'chuk.chat',
+                            style: TextStyle(color: iconFg, fontSize: 16),
+                            softWrap: false,
+                            overflow: TextOverflow.clip,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
 
-          // Layer 4: The "New Chat" button (always below the menu button)
+
+          // Layer 5: The "New Chat" button (always below the menu/title row)
           Positioned(
-            top: _topToolbarVerticalPadding + _menuButtonHeight + _spacingBetweenTopButtons,
+            top: _topInitialSpacing + _menuButtonHeight + _spacingBetweenTopButtons,
             left: _fixedLeftPadding,
             child: InkWell(
               onTap: () {
@@ -157,9 +202,9 @@ class _RootWrapperState extends State<RootWrapper> {
             ),
           ),
 
-          // Layer 5: The "Projects" button (now a top-level button, below New Chat)
+          // Layer 6: The "Projects" button (now a top-level button, below New Chat)
           Positioned(
-            top: _topToolbarVerticalPadding + _menuButtonHeight + _spacingBetweenTopButtons + _buttonVisualHeight + _spacingBetweenTopButtons,
+            top: _topInitialSpacing + _menuButtonHeight + _spacingBetweenTopButtons + _buttonVisualHeight + _spacingBetweenTopButtons,
             left: _fixedLeftPadding,
             child: InkWell(
               onTap: _openProjectsPage,

@@ -72,8 +72,9 @@ class _CustomSidebarState extends State<CustomSidebar> {
       child: Column(
         children: [
           // Give initial vertical space for the top toolbar elements outside the sidebar
-          // (Menu button, New Chat button, Projects button)
-          const SizedBox(height: 160.0), // ~ (48+16) for Menu + (40+8) for New Chat + (40+8) for Projects
+          // (Menu button, chuk.chat title, New Chat button, Projects button)
+          const SizedBox(height: 160.0), // ~ (16 top padding + 48 menu + 8 spacing + 40 new chat + 8 spacing + 40 projects) = 160
+
 
           // Starred Section - Fixed
           _buildSectionHeader('Starred'),
