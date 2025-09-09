@@ -68,12 +68,12 @@ class _CustomSidebarState extends State<CustomSidebar> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: bg,
+      color: const Color(0xFF1D1813), // Slightly darker background for the sidebar
       child: Column(
         children: [
           // Give initial vertical space for the top toolbar elements outside the sidebar
-          // (Menu button, chuk.chat title, New Chat button, Projects button)
-          const SizedBox(height: 160.0), // ~ (16 top padding + 48 menu + 8 spacing + 40 new chat + 8 spacing + 40 projects) = 160
+          // (Menu button, chuk.chat title, New Chat button, Projects button) - 16 top + 48 menu + 8 spacing + 40 new chat + 8 spacing + 40 projects = 160
+          const SizedBox(height: 160.0),
 
 
           // Starred Section - Fixed

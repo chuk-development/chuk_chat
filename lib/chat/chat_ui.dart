@@ -151,8 +151,7 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('chuk.chat', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w300, color: iconFg)),
-                  const SizedBox(height: 20),
+                  // Removed the 'chuk.chat' text here
                   SizedBox(width: dynamicW, child: _buildSearchBar()),
                 ],
               ),
@@ -250,10 +249,9 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
                 ),
               ),
               const SizedBox(width: 8),
+              // Corrected: This button now sends the message.
               GestureDetector(
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const VoiceModePage()),
-                ),
+                onTap: _sendMessage, // Calls _sendMessage()
                 child: Container(
                   width: btnW,
                   height: btnH,
@@ -267,7 +265,7 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
             ],
           ),
           Row(
-            children: [
+            children: <Widget>[
               _buildIconBtn(Icons.add, () => print('Add')),
               const SizedBox(width: 8),
               _buildIconBtn(Icons.psychology, () => print('Brain')),
@@ -275,9 +273,10 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
               _buildIconBtn(Icons.image, () => print('Image')),
               const Spacer(),
               _buildModelDropdown(),
-              const SizedBox(width: 8),
+              const SizedBox(width: 8), // Now consistent 8px spacing
               _buildIconBtn(Icons.mic, () => print('Mic')),
               const SizedBox(width: 8),
+              // This button remains for Voice Mode
               GestureDetector(
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const VoiceModePage()),
@@ -299,16 +298,42 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
     );
   }
 
-  Widget _buildIconBtn(IconData icon, VoidCallback onTap) => Container(
-        width: 44,
-        height: 36,
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: iconFg.withOpacity(.3), width: .8),
+  Widget _buildIconBtn(IconData icon, VoidCallback onTap) {
+    // Using a ValueNotifier to manage hover state for border animation
+    final ValueNotifier<bool> isHovered = ValueNotifier<bool>(false);
+
+    return MouseRegion(
+      onEnter: (_) => isHovered.value = true,
+      onExit: (_) => isHovered.value = false,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        splashFactory: InkRipple.splashFactory, // Standard ripple effect
+        hoverColor: Colors.transparent, // Don't show a background fill on hover
+        highlightColor: Colors.transparent, // Don't show a background fill on highlight
+        child: ValueListenableBuilder<bool>(
+          valueListenable: isHovered,
+          builder: (context, hovered, child) {
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              curve: Curves.easeOutCubic,
+              width: 44,
+              height: 36,
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: hovered ? iconFg : iconFg.withOpacity(.3), // Thicker/brighter border on hover
+                  width: hovered ? 1.2 : 0.8,
+                ),
+              ),
+              child: Icon(icon, color: iconFg, size: 20),
+            );
+          },
         ),
-        child: IconButton(icon: Icon(icon, color: iconFg, size: 20), onPressed: onTap),
-      );
+      ),
+    );
+  }
 
   Widget _buildModelDropdown() {
     final models = <ModelItem>[
@@ -325,27 +350,22 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
       ModelItem(name: 'Grok 4', value: 'grok_4'),
     ];
 
+    // Wrap the PopupMenuButton's child with _buildIconBtn's hover logic
+    // This allows the entire button to have the hover effect,
+    // while the PopupMenuButton handles the tap and menu display.
     return PopupMenuButton<String>(
+      // The child is responsible for the visual representation of the button
+      child: _buildIconBtn(Icons.grid_3x3, () {}), // Empty onTap, PopupMenuButton handles tap
       color: bg,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(color: iconFg.withOpacity(.3)),
       ),
-      icon: Container(
-        width: 44,
-        height: 36,
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: iconFg.withOpacity(.3), width: .8),
-        ),
-        child: Icon(Icons.grid_3x3, color: iconFg, size: 20),
-      ),
       onSelected: (v) {
         setState(() => _selectedModel = models.firstWhere((m) => m.value == v).name);
         Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
       },
-      itemBuilder: (_) => models.map((m) {
+      itemBuilder: (BuildContext context) => models.map((m) {
         final selected = _selectedModel == m.name;
         return PopupMenuItem<String>(
           value: m.value,

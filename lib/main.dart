@@ -1,6 +1,6 @@
 // main.dart
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Still needed for LogicalKeyboardKey if not moved
+import 'package:flutter/services.dart'; // Falls LogicalKeyboardKey benötigt wird
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:ui_elements_flutter/constants.dart';
@@ -10,14 +10,18 @@ import 'package:ui_elements_flutter/sidebar.dart';
 import 'package:ui_elements_flutter/pages/projects_page.dart';
 import 'package:ui_elements_flutter/pages/settings_page.dart';
 
-
 /* ---------- MAIN ---------- */
 void main() => runApp(const ChukChatApp());
 
 class ChukChatApp extends StatelessWidget {
   const ChukChatApp({Key? key}) : super(key: key);
   @override
-  Widget build(BuildContext context) => MaterialApp(title: 'chuk.chat', debugShowCheckedModeBanner: false, theme: appTheme, home: const RootWrapper());
+  Widget build(BuildContext context) => MaterialApp(
+        title: 'chuk.chat',
+        debugShowCheckedModeBanner: false,
+        theme: appTheme,
+        home: const RootWrapper(),
+      );
 }
 
 /* ---------- ROOT WRAPPER ---------- */
@@ -28,17 +32,17 @@ class RootWrapper extends StatefulWidget {
 }
 
 class _RootWrapperState extends State<RootWrapper> {
-  // Sidebar is now closed by default
+  // Sidebar ist standardmäßig geschlossen
   bool _isSidebarExpanded = false;
 
   final GlobalKey<ChukChatUIState> _chatUIKey = GlobalKey();
 
-  // Constants for positioning
-  static const double _fixedLeftPadding = 8.0; // Left padding for top-left elements
-  static const double _topInitialSpacing = 16.0; // Initial vertical spacing from top edge of screen
-  static const double _menuButtonHeight = 48.0; // IconButton default height (including implicit padding for touch target)
-  static const double _buttonVisualHeight = 40.0; // Height of New Chat/Projects InkWell containers
-  static const double _spacingBetweenTopButtons = 8.0; // Vertical/Horizontal spacing between top buttons
+  // Konstanten für die Positionierung
+  static const double _fixedLeftPadding = 8.0; // Abstand von der linken Wand für alle Icons
+  static const double _topInitialSpacing = 16.0; // Abstand vom oberen Bildschirmrand
+  static const double _menuButtonHeight = 48.0; // Höhe des IconButtons (Standard 48x48)
+  static const double _buttonVisualHeight = 40.0; // Höhe der "New Chat"/"Projects"-Buttons
+  static const double _spacingBetweenTopButtons = 8.0; // Abstand zwischen den oberen Elementen
 
   @override
   void initState() {
@@ -48,11 +52,13 @@ class _RootWrapperState extends State<RootWrapper> {
   }
 
   void _openSettingsPage() {
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsPage()));
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const SettingsPage()));
   }
 
   void _openProjectsPage() {
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProjectsPage()));
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const ProjectsPage()));
   }
 
   void _handleChatTapped(int index) {
@@ -70,12 +76,12 @@ class _RootWrapperState extends State<RootWrapper> {
 
   @override
   Widget build(BuildContext context) {
-    const double sidebarVisibleWidth = 280.0; // Reduced sidebar width
+    const double sidebarVisibleWidth = 280.0; // Breite der angezeigten Sidebar
 
     return Scaffold(
       body: Stack(
         children: [
-          // Layer 1: Main Chat UI wrapper (now moves to the right)
+          // Layer 1: Haupt-Chat-UI, die nach rechts verschoben wird
           AnimatedPositioned(
             duration: const Duration(milliseconds: 250),
             curve: Curves.easeOutCubic,
@@ -85,17 +91,17 @@ class _RootWrapperState extends State<RootWrapper> {
             bottom: 0,
             child: ChukChatUI(
               key: _chatUIKey,
-              onToggleSidebar: () {}, // Dummy, as button is handled here
+              onToggleSidebar: () {}, // Dummy, da der Button hier behandelt wird
               selectedChatIndex: ChatStorageService.selectedChatIndex,
               isSidebarExpanded: _isSidebarExpanded,
             ),
           ),
 
-          // Layer 2: The Animated Sidebar that slides over the chat UI
+          // Layer 2: Animierte Sidebar, die über die Chat-UI schiebt
           AnimatedPositioned(
             duration: const Duration(milliseconds: 250),
             curve: Curves.easeOutCubic,
-            left: _isSidebarExpanded ? 0 : -sidebarVisibleWidth, // Slide in from the left
+            left: _isSidebarExpanded ? 0 : -sidebarVisibleWidth, // Schiebt von links herein
             top: 0,
             bottom: 0,
             width: sidebarVisibleWidth,
@@ -107,44 +113,40 @@ class _RootWrapperState extends State<RootWrapper> {
             ),
           ),
 
-          // Layer 3: The Menu button (always top-left)
+          // Layer 3: Hamburger-Menü als einfacher IconButton mit gleichem Abstand zur linken Wand
           Positioned(
             top: _topInitialSpacing,
             left: _fixedLeftPadding,
             child: IconButton(
-              icon: const Icon(Icons.menu),
+              icon: Icon(Icons.menu, color: iconFg, size: 24),
               onPressed: _toggleSidebar,
-              color: iconFg,
-              iconSize: 24, // Explicit size
-              padding: EdgeInsets.zero, // Remove default padding for precise height control
-              constraints: BoxConstraints.tightFor(width: _menuButtonHeight, height: _menuButtonHeight), // Make it a square of its height
             ),
           ),
 
-          // Layer 4: The "chuk.chat" title next to the menu (animates text width)
+          // Layer 4: "chuk.chat"-Titel neben dem Hamburger-Menü
+          // Hier wurde der linke Offset öfters erhöht (statt +12 nun +16)
           Positioned(
-            top: _topInitialSpacing, // Same top as menu
-            left: _fixedLeftPadding + _menuButtonHeight + _spacingBetweenTopButtons, // To the right of menu
-            child: InkWell( // Use InkWell for consistent behavior/look with other animated buttons
-              onTap: () {}, // No action, just a title
+            top: _topInitialSpacing + (_menuButtonHeight - _buttonVisualHeight) / 2,
+            left: _fixedLeftPadding + _menuButtonHeight + 16, // 16px Abstand vom Hamburger-Menü
+            child: InkWell(
+              onTap: () {}, // Keine Aktion, rein als Titel
               borderRadius: BorderRadius.circular(8),
               child: Container(
-                height: _buttonVisualHeight, // Match height of other buttons
+                height: _buttonVisualHeight,
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.chat_bubble_outline, color: iconFg), // Example icon for chuk.chat
                     AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
                       curve: Curves.easeOut,
-                      width: _isSidebarExpanded ? 0 : 100, // Text hides when sidebar is open, shows when closed
+                      width: _isSidebarExpanded ? 100 : 0, // Text sichtbar, wenn Sidebar offen
                       constraints: BoxConstraints(
-                        minWidth: _isSidebarExpanded ? 0 : 100,
+                        minWidth: _isSidebarExpanded ? 100 : 0,
                       ),
                       child: ClipRect(
                         child: Padding(
-                          padding: const EdgeInsets.only(left: 12.0),
+                          padding: const EdgeInsets.only(left: 10.0),
                           child: Text(
                             'chuk.chat',
                             style: TextStyle(color: iconFg, fontSize: 16),
@@ -160,19 +162,20 @@ class _RootWrapperState extends State<RootWrapper> {
             ),
           ),
 
-
-          // Layer 5: The "New Chat" button (always below the menu/title row)
+          // Layer 5: "New Chat"-Button (immer unter der Menü-/Titelzeile)
           Positioned(
-            top: _topInitialSpacing + _menuButtonHeight + _spacingBetweenTopButtons,
+            top:
+                _topInitialSpacing + _menuButtonHeight + _spacingBetweenTopButtons,
             left: _fixedLeftPadding,
             child: InkWell(
               onTap: () {
-                _chatUIKey.currentState?.newChat(); // Using the new public method
+                _chatUIKey.currentState?.newChat(); // Ruft die neue Chat-Methode auf
               },
               borderRadius: BorderRadius.circular(8),
               child: Container(
                 height: _buttonVisualHeight,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -180,7 +183,7 @@ class _RootWrapperState extends State<RootWrapper> {
                     AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
                       curve: Curves.easeOut,
-                      width: _isSidebarExpanded ? 100 : 0, // Text expands with sidebar
+                      width: _isSidebarExpanded ? 100 : 0, // Text erweitert sich mit der Sidebar
                       constraints: BoxConstraints(
                         minWidth: _isSidebarExpanded ? 100 : 0,
                       ),
@@ -202,9 +205,13 @@ class _RootWrapperState extends State<RootWrapper> {
             ),
           ),
 
-          // Layer 6: The "Projects" button (now a top-level button, below New Chat)
+          // Layer 6: "Projects"-Button (oben-level, unter dem "New Chat"-Button)
           Positioned(
-            top: _topInitialSpacing + _menuButtonHeight + _spacingBetweenTopButtons + _buttonVisualHeight + _spacingBetweenTopButtons,
+            top: _topInitialSpacing +
+                _menuButtonHeight +
+                _spacingBetweenTopButtons +
+                _buttonVisualHeight +
+                _spacingBetweenTopButtons,
             left: _fixedLeftPadding,
             child: InkWell(
               onTap: _openProjectsPage,
@@ -219,7 +226,7 @@ class _RootWrapperState extends State<RootWrapper> {
                     AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
                       curve: Curves.easeOut,
-                      width: _isSidebarExpanded ? 100 : 0, // Text expands with sidebar
+                      width: _isSidebarExpanded ? 100 : 0, // Text erweitert sich mit der Sidebar
                       constraints: BoxConstraints(
                         minWidth: _isSidebarExpanded ? 100 : 0,
                       ),
