@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'voice_mode.dart';
 import 'sidebar.dart';
+import 'projects_page.dart';
 
 /* ---------- COLOURS ---------- */
 const Color bg     = Color(0xFF211B15);
@@ -68,7 +69,10 @@ class RootWrapper extends StatefulWidget {
 }
 
 class _RootWrapperState extends State<RootWrapper> {
-  bool _isSidebarExpanded = true;
+  // Sidebar is now closed by default
+  bool _isSidebarExpanded = false;
+
+  final GlobalKey<_ChukChatUIState> _chatUIKey = GlobalKey();
 
   @override
   void initState() {
@@ -81,11 +85,8 @@ class _RootWrapperState extends State<RootWrapper> {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsPage()));
   }
 
-  void _handleNewChatFromSidebar() {
-    setState(() {
-      _selectedChatIndex = -1;
-    });
-    loadSavedChatsForSidebar();
+  void _openProjectsPage() {
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProjectsPage()));
   }
 
   void _handleChatTapped(int index) {
@@ -93,11 +94,6 @@ class _RootWrapperState extends State<RootWrapper> {
       _selectedChatIndex = index;
     });
     print('Loading chat at index: $index');
-  }
-  
-  void _handleProjectsTapped() {
-    // Placeholder for when "Projects" is clicked
-    print('Projects tapped!');
   }
 
   void _toggleSidebar() {
@@ -109,43 +105,87 @@ class _RootWrapperState extends State<RootWrapper> {
   @override
   Widget build(BuildContext context) {
     const double sidebarVisibleWidth = 320.0;
+    const double topIconPadding = 48.0;
+    const double menuIconTopPadding = topIconPadding + 40.0; // Position below "New Chat"
 
     return Scaffold(
-      body: Row(
+      body: Stack(
         children: [
-          // The Sidebar Section
-          AnimatedContainer(
+          // Layer 1: The main Chat UI, always filling the screen
+          ChukChatUI(
+            key: _chatUIKey,
+            // Pass a dummy callback, as the button is now managed here in the Stack
+            onToggleSidebar: () {}, 
+            selectedChatIndex: _selectedChatIndex,
+            isSidebarExpanded: _isSidebarExpanded,
+          ),
+
+          // Layer 2: The Animated Sidebar that slides over the chat UI
+          AnimatedPositioned(
             duration: const Duration(milliseconds: 250),
             curve: Curves.easeOutCubic,
-            width: _isSidebarExpanded ? sidebarVisibleWidth : 0.0,
-            decoration: BoxDecoration(
-              border: Border(
-                right: BorderSide(
-                  color: iconFg.withOpacity(_isSidebarExpanded ? 0.2 : 0.0),
-                  width: 1.0,
-                ),
-              ),
+            left: _isSidebarExpanded ? 0 : -sidebarVisibleWidth, // Slide in from the left
+            top: 0,
+            bottom: 0,
+            width: sidebarVisibleWidth,
+            child: CustomSidebar(
+              onChatItemTapped: _handleChatTapped,
+              onSettingsTapped: _openSettingsPage,
+              onProjectsTapped: _openProjectsPage,
+              selectedChatIndex: _selectedChatIndex,
             ),
-            // FIX: This structure correctly animates and clips the content.
-            child: ClipRect(
-              child: SizedBox(
-                width: sidebarVisibleWidth,
-                child: CustomSidebar(
-                  onNewChat: _handleNewChatFromSidebar,
-                  onChatItemTapped: _handleChatTapped,
-                  onSettingsTapped: _openSettingsPage,
-                  onProjectsTapped: _handleProjectsTapped, // Pass new callback
-                  selectedChatIndex: _selectedChatIndex,
+          ),
+
+          // Layer 3: The Animated "New Chat" button on top
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOutCubic,
+            top: topIconPadding,
+            left: _isSidebarExpanded ? 16.0 : 8.0,
+            child: InkWell(
+              onTap: () {
+                _chatUIKey.currentState?._newChat();
+              },
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Row(
+                  children: [
+                    const Icon(Icons.edit_square, color: iconFg),
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeOut,
+                      width: _isSidebarExpanded ? 100 : 0,
+                      child: ClipRect(
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 12.0),
+                          child: Text(
+                            'New chat',
+                            style: TextStyle(color: iconFg, fontSize: 16),
+                            softWrap: false,
+                            overflow: TextOverflow.clip,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
           ),
-          // The Main Chat UI Section
-          Expanded(
-            child: ChukChatUI(
-              onToggleSidebar: _toggleSidebar,
-              selectedChatIndex: _selectedChatIndex,
-              isSidebarExpanded: _isSidebarExpanded,
+
+          // Layer 4: The Animated Menu button on top
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOutCubic,
+            top: menuIconTopPadding,
+            left: _isSidebarExpanded ? sidebarVisibleWidth + 8.0 : 8.0, // Slide with the sidebar
+            child: SafeArea(
+              child: IconButton(
+                icon: const Icon(Icons.menu),
+                onPressed: _toggleSidebar,
+                color: iconFg,
+              ),
             ),
           ),
         ],
@@ -154,8 +194,6 @@ class _RootWrapperState extends State<RootWrapper> {
   }
 }
 
-// ... (The rest of main.dart remains exactly the same)
-// ChukChatUI, MessageBubble, SettingsPage, etc. are all unchanged.
 /* ---------- CHAT UI ---------- */
 class ChukChatUI extends StatefulWidget {
   final VoidCallback onToggleSidebar;
@@ -245,6 +283,7 @@ class _ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateM
     });
   }
 
+  // This method can now be called from the parent via GlobalKey
   void _newChat() async {
     if (_messages.isNotEmpty) {
       final json = _messages.map((m) => '${m['sender']}|${m['text']}').join('§');
@@ -290,32 +329,12 @@ class _ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateM
     const baseW = 600.0, extraW = 160.0, bottomH = 16.0 + 135.0 + 16.0;
     final dynamicW = _messages.isEmpty ? baseW : baseW + extraW * _anim.value;
 
+    // REMOVED: No more AnimatedContainer wrapping this widget
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.only(left: 8, top: 4),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.edit_square),
-                    tooltip: 'New chat',
-                    onPressed: _newChat,
-                    color: iconFg,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.menu),
-                    onPressed: widget.onToggleSidebar,
-                    color: iconFg,
-                  ),
-                ],
-              ),
-            ),
-          ),
+          // REMOVED: Top-left icons are now handled in the parent Stack
           if (_messages.isEmpty)
             Center(
               child: Column(
@@ -365,6 +384,7 @@ class _ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateM
   }
 
   Widget _buildSearchBar() {
+    // ... (This method remains unchanged)
     const btnH = 36.0, btnW = 44.0;
     return Container(
       height: 135,

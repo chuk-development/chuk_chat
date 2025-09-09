@@ -12,18 +12,16 @@ Future<void> loadSavedChatsForSidebar() async {
 }
 
 class CustomSidebar extends StatefulWidget {
-  final Function() onNewChat;
   final Function(int index) onChatItemTapped;
   final Function() onSettingsTapped;
-  final Function() onProjectsTapped; // New callback for Projects
+  final Function() onProjectsTapped;
   final int selectedChatIndex;
 
   const CustomSidebar({
     Key? key,
-    required this.onNewChat,
     required this.onChatItemTapped,
     required this.onSettingsTapped,
-    required this.onProjectsTapped, // Add to constructor
+    required this.onProjectsTapped,
     required this.selectedChatIndex,
   }) : super(key: key);
 
@@ -63,16 +61,19 @@ class _CustomSidebarState extends State<CustomSidebar> {
             child: ListView(
               padding: EdgeInsets.zero,
               children: <Widget>[
-                // REMOVED: "chuk.chat" header
-                const SizedBox(height: 48.0), // Add padding to the top instead
+                const SizedBox(height: 100.0),
 
-                // REMOVED: "New chat" button
-
-                // ADDED: "Projects" button
                 _buildNavItem(
                   icon: Icons.folder_open,
                   title: 'Projects',
                   onTap: widget.onProjectsTapped,
+                ),
+
+                // "Settings" is now here
+                _buildNavItem(
+                  icon: Icons.settings,
+                  title: 'Settings',
+                  onTap: widget.onSettingsTapped,
                 ),
 
                 const Divider(color: Colors.white12),
@@ -107,36 +108,21 @@ class _CustomSidebarState extends State<CustomSidebar> {
               ],
             ),
           ),
-          // User Profile Section at the bottom
           Align(
             alignment: Alignment.bottomCenter,
-            child: Column(
-              children: [
-                const Divider(color: Colors.white12),
-                ListTile(
-                  leading: const Icon(Icons.settings),
-                  title: const Text('Settings'),
-                  onTap: widget.onSettingsTapped,
-                  iconColor: iconFg,
-                  textColor: iconFg,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: iconFg.withOpacity(0.3),
+                  child: Text('DM',
+                      style: TextStyle(color: iconFg, fontSize: 16)),
                 ),
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: iconFg.withOpacity(0.3),
-                      child: Text('DM',
-                          style: TextStyle(color: iconFg, fontSize: 16)),
-                    ),
-                    title: Text('Dietrich Munier', style: TextStyle(color: iconFg)),
-                    subtitle:
-                        Text('Free plan', style: TextStyle(color: iconFg.withOpacity(0.7))),
-                    trailing: Icon(Icons.keyboard_arrow_down, color: iconFg),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  ),
-                ),
-              ],
+                title: Text('Dietrich Munier', style: TextStyle(color: iconFg)),
+                // REMOVED: "Free plan" subtitle
+                trailing: Icon(Icons.keyboard_arrow_down, color: iconFg),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16.0),
+              ),
             ),
           ),
         ],
@@ -144,14 +130,13 @@ class _CustomSidebarState extends State<CustomSidebar> {
     );
   }
 
-  // Helper for top-level navigation items like Projects
   Widget _buildNavItem({required IconData icon, required String title, required VoidCallback onTap}) {
     return ListTile(
       leading: Icon(icon),
       title: Text(title),
       onTap: onTap,
-      dense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16.0),
+      dense: false,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 4.0),
     );
   }
 
