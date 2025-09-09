@@ -7,12 +7,14 @@ class ModelSelectionDropdown extends StatefulWidget {
   final String initialSelectedModel;
   final ValueChanged<String> onModelSelected;
   final FocusNode textFieldFocusNode; // To request focus back after selection
+  final bool isCompactMode; // Neue Eigenschaft für den Kompaktmodus
 
   const ModelSelectionDropdown({
     Key? key,
     required this.initialSelectedModel,
     required this.onModelSelected,
     required this.textFieldFocusNode,
+    this.isCompactMode = false, // Standardwert ist false
   }) : super(key: key);
 
   @override
@@ -22,8 +24,6 @@ class ModelSelectionDropdown extends StatefulWidget {
 class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
   late String _selectedModel;
 
-  // Die Liste der Modelle, wie sie im letzten Code bereitgestellt wurde.
-  // Wenn du eine andere Liste möchtest, musst du diese hier anpassen.
   final List<ModelItem> _allModels = <ModelItem>[
     ModelItem(name: 'Qwen3 235B Thinking', value: 'qwen/qwen3-235b-a22b-thinking-2507'),
     ModelItem(name: 'Qwen3 Coder 480B', value: 'qwen/qwen3-coder'),
@@ -32,7 +32,6 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
     ModelItem(name: 'Kimi K2', value: 'moonshotai/kimi-k2-0905'),
     ModelItem(name: 'DeepSeek: R1 0528', value: 'deepseek/deepseek-r1-0528'),
     ModelItem(name: 'DeepSeek V3.1', value: 'deepseek/deepseek-chat-v3.1'),
-
   ];
 
   @override
@@ -62,7 +61,10 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
           return AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             curve: Curves.easeOutCubic,
-            padding: const EdgeInsets.symmetric(horizontal: 10), // Padding innerhalb des Buttons
+            // Reduziertes Padding für Kompaktmodus, oder normales Padding
+            padding: widget.isCompactMode ? EdgeInsets.zero : const EdgeInsets.symmetric(horizontal: 10),
+            // Feste Breite von 44px im Kompaktmodus, ansonsten dynamisch
+            width: widget.isCompactMode ? 44 : null,
             height: 36, // Höhe an die anderen Buttons anpassen
             decoration: BoxDecoration(
               color: bg,
@@ -72,21 +74,29 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
                 width: hovered ? 1.2 : 0.8,
               ),
             ),
+            // Zentriert den Inhalt im Kompaktmodus
+            alignment: widget.isCompactMode ? Alignment.center : null,
             child: Row(
-              mainAxisSize: MainAxisSize.min, // Damit die Zeile so klein wie möglich ist
+              // Max Größe im Kompaktmodus, um den Container zu füllen, sonst Min
+              mainAxisSize: widget.isCompactMode ? MainAxisSize.max : MainAxisSize.min,
+              // Zentriert die Icons im Kompaktmodus
+              mainAxisAlignment: widget.isCompactMode ? MainAxisAlignment.center : MainAxisAlignment.start,
               children: [
                 Icon(Icons.grid_3x3, color: iconFg, size: 20), // Das 3x3-Gitter-Icon
-                const SizedBox(width: 8),
-                Flexible( // Flexible, um Überlauf bei langen Modellnamen zu verhindern
-                  child: Text(
-                    _selectedModel, // Zeigt den aktuell ausgewählten Modellnamen an
-                    style: TextStyle(color: iconFg, fontSize: 14),
-                    softWrap: false,
-                    overflow: TextOverflow.ellipsis, // Zeigt "..." an, wenn der Text zu lang ist
-                    maxLines: 1, // Stellt sicher, dass der Text in einer Zeile bleibt
+                if (!widget.isCompactMode) ...[ // Nur Text und Pfeil anzeigen, wenn NICHT im Kompaktmodus
+                  const SizedBox(width: 8),
+                  Flexible( // Flexible, um Überlauf bei langen Modellnamen zu verhindern
+                    child: Text(
+                      _selectedModel, // Zeigt den aktuell ausgewählten Modellnamen an
+                      style: TextStyle(color: iconFg, fontSize: 14),
+                      softWrap: false,
+                      overflow: TextOverflow.ellipsis, // Zeigt "..." an, wenn der Text zu lang ist
+                      maxLines: 1, // Stellt sicher, dass der Text in einer Zeile bleibt
+                    ),
                   ),
-                ),
-                Icon(Icons.keyboard_arrow_down, color: iconFg.withOpacity(0.8), size: 16),
+                  Icon(Icons.keyboard_arrow_down, color: iconFg.withOpacity(0.8), size: 16),
+                ],
+                // Wenn im Kompaktmodus, wird nur das Icon angezeigt.
               ],
             ),
           );

@@ -6,8 +6,9 @@ class MessageBubble extends StatelessWidget {
   final String message;
   final bool isUser; // true for bot, false for user in voice mode (to match image)
   // In regular chat, true for user, false for AI.
+  final double? maxWidth; // Neue optionale Eigenschaft für responsive Breite
 
-  const MessageBubble({Key? key, required this.message, required this.isUser}) : super(key: key);
+  const MessageBubble({Key? key, required this.message, required this.isUser, this.maxWidth}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -18,12 +19,15 @@ class MessageBubble extends StatelessWidget {
     // to match the visual design, so we respect that here.
     final bool alignRight = isUser; // User messages (regular chat) go right, bot messages go left.
 
+    // Nutze die übergebene maxWidth, falls vorhanden, ansonsten den Standardwert von 70% der Bildschirmbreite
+    final double effectiveMaxWidth = maxWidth ?? MediaQuery.of(context).size.width * 0.7;
+
     return Align(
       alignment: alignRight ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 8),
         padding: const EdgeInsets.all(12),
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.7), // Default width limit
+        constraints: BoxConstraints(maxWidth: effectiveMaxWidth), // Verwendet effectiveMaxWidth
         decoration: BoxDecoration(
           color: alignRight ? accent.withOpacity(.8) : bg,
           borderRadius: BorderRadius.circular(12),

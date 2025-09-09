@@ -1,6 +1,6 @@
 // sidebar.dart
 import 'package:flutter/material.dart';
-import 'package:ui_elements_flutter/constants.dart';
+import 'package:ui_elements_flutter/constants.dart'; // Import der neuen Konstanten
 import 'package:ui_elements_flutter/services/chat_storage_service.dart';
 
 final List<String> _starredChats = ['Book writing Per chapter']; // Kept local for now
@@ -10,6 +10,7 @@ class CustomSidebar extends StatefulWidget {
   final Function() onSettingsTapped;
   final Function() onProjectsTapped; // Still passed, though Projects is now a top-level button
   final int selectedChatIndex;
+  final bool isCompactMode; // NEU: Flag für den Kompaktmodus
 
   const CustomSidebar({
     Key? key,
@@ -17,6 +18,7 @@ class CustomSidebar extends StatefulWidget {
     required this.onSettingsTapped,
     required this.onProjectsTapped,
     required this.selectedChatIndex,
+    required this.isCompactMode, // NEU
   }) : super(key: key);
 
   @override
@@ -45,36 +47,45 @@ class _CustomSidebarState extends State<CustomSidebar> {
   @override
   void didUpdateWidget(covariant CustomSidebar oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Wenn sich der ausgewählte Chat-Index ändert, lösen wir einen Rebuild aus,
-    // um die neue Auswahl hervorzuheben.
     if (widget.selectedChatIndex != oldWidget.selectedChatIndex) {
       if (mounted) setState(() {});
     }
-    // Die vorherige Zeile, die 'oldWidget.savedChats.length' zu vergleichen versuchte,
-    // war ein Kompilierungsfehler, da CustomSidebar keine 'savedChats'-Eigenschaft besitzt.
-    // ChatStorageService ist ein statischer Dienst. Wenn sich dessen Daten ändern (z.B. über saveChat),
-    // ruft es selbst loadSavedChatsForSidebar() auf.
-    // Damit die UI diese Änderungen widerspiegelt, muss CustomSidebar neu aufgebaut werden.
-    // Aktuell werden Rebuilds ausgelöst durch:
-    // 1. Initialer Zustand (initState ruft _loadChatsAndRefresh auf)
-    // 2. Änderungen des selectedChatIndex (dieser didUpdateWidget-Block)
-    // 3. Erstellung eines neuen Chats (main.darts newChat ruft ChatStorageService.loadSavedChatsForSidebar() auf
-    //    und setzt selectedChatIndex, was dann Punkt 2 auslöst, wenn die Seitenleiste aktiv ist)
-    // Ein zusätzliches explizites Aktualisieren basierend auf der Länge von 'savedChats' in didUpdateWidget
-    // ist weder notwendig noch ohne die Umwandlung von ChatStorageService in einen Observable
-    // ordnungsgemäß implementierbar.
   }
 
   @override
   Widget build(BuildContext context) {
+    // Die Höhe der oberen Leiste wird dynamisch basierend auf isCompactMode berechnet.
+    // Im Kompaktmodus werden die "New Chat"- und "Projects"-Buttons außerhalb der Sidebar gehandhabt
+    // und nur sichtbar, wenn die Sidebar geöffnet ist. Daher benötigen wir nur den Platz
+    // für das Hamburger-Menü und den Titel, sowie die beiden Buttons, die nun IN der Sidebar
+    // sichtbar sind, aber eben den Platz in der Sidebar selbst einnehmen müssen.
+    // Der Gesamtabstand, den die Sidebar am oberen Rand berücksichtigen muss:
+    // kTopInitialSpacing (16) + kMenuButtonHeight (48) + kSpacingBetweenTopButtons (8) = 72.0
+    // + kButtonVisualHeight (40, New Chat) + kSpacingBetweenTopButtons (8)
+    // + kButtonVisualHeight (40, Projects) + kSpacingBetweenTopButtons (8)
+    // = 72 + 40 + 8 + 40 + 8 = 168.0
+    // ABER: Da New Chat und Projects nun Conditional sind, wenn sidebar offen, brauchen sie Platz.
+    // Wenn NICHT kompakt, ist der Platz fix 160.0, da sie immer da sind.
+    // Wenn kompakt und Sidebar offen, sind sie auch da, und nehmen den Platz von 160.0 ein.
+    // Also bleibt der obere Platz 160.0, damit Starred und Recents unter diesen Buttons beginnen.
+    final double topSpacingForSidebarContent = kTopInitialSpacing +
+        kMenuButtonHeight +
+        kSpacingBetweenTopButtons +
+        kButtonVisualHeight +
+        kSpacingBetweenTopButtons +
+        kButtonVisualHeight +
+        kSpacingBetweenTopButtons; // Das ist der 160.0 Wert aus main.dart
+
     return Container(
       color: const Color(0xFF1D1813), // Slightly darker background for the sidebar
       child: Column(
         children: [
-          // Give initial vertical space for the top toolbar elements outside the sidebar
-          // (Menu button, chuk.chat title, New Chat button, Projects button) - 16 top + 48 menu + 8 spacing + 40 new chat + 8 spacing + 40 projects = 160
-          const SizedBox(height: 160.0),
-
+          // Gebe initialen vertikalen Platz für die obere Symbolleistelemente außerhalb der Sidebar
+          // Der New Chat und Projects Button sind auf Mobilgeräten *nur* sichtbar, wenn die Sidebar offen ist.
+          // In diesem Fall müssen sie aber trotzdem diesen Platz _in_ der Sidebar einnehmen,
+          // damit Starred und Recents korrekt darunter beginnen.
+          // Daher wird der "160.0" Wert beibehalten.
+          SizedBox(height: topSpacingForSidebarContent), // Verwendet die berechnete Konstante
 
           // Starred Section - Fixed
           _buildSectionHeader('Starred'),
@@ -97,19 +108,7 @@ class _CustomSidebarState extends State<CustomSidebar> {
                   ),
                 ...ChatStorageService.savedChats.asMap().entries.map((entry) {
                   int index = entry.key;
-                  // Attempt to get a more meaningful title from the first message, if available.
-                  // For now, it's still a placeholder.
-                  String title = 'Chat ${index + 1}';
-                  // if (ChatStorageService.savedChats[index].isNotEmpty) {
-                  //   final messageParts = ChatStorageService.savedChats[index].split('§');
-                  //   if (messageParts.isNotEmpty) {
-                  //     final firstMessage = messageParts.first.split('|');
-                  //     if (firstMessage.length == 2 && firstMessage[0] == 'user') {
-                  //       title = firstMessage[1].substring(0, math.min(firstMessage[1].length, 30)) + (firstMessage[1].length > 30 ? '...' : '');
-                  //     }
-                  //   }
-                  // }
-
+                  String title = 'Chat ${index + 1}'; // Placeholder
                   return _buildRecentItem(
                     title,
                     index: index,

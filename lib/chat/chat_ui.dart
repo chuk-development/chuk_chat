@@ -1,6 +1,7 @@
 // lib/chat/chat_ui.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:math' as math; // Import for math.min
 import 'package:ui_elements_flutter/constants.dart';
 import 'package:ui_elements_flutter/models/chat_model.dart';
 import 'package:ui_elements_flutter/services/chat_storage_service.dart';
@@ -14,12 +15,14 @@ class ChukChatUI extends StatefulWidget {
   final VoidCallback onToggleSidebar;
   final int selectedChatIndex;
   final bool isSidebarExpanded;
+  final bool isCompactMode; // NEU: Flag für den Kompaktmodus
 
   const ChukChatUI({
     Key? key,
     required this.onToggleSidebar,
     required this.selectedChatIndex,
     required this.isSidebarExpanded,
+    required this.isCompactMode, // NEU
   }) : super(key: key);
 
   @override
@@ -37,6 +40,15 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
   late AnimationController _animCtrl;
   late Animation<double> _anim;
   String _selectedModel = 'Qwen3 235B'; // _selectedModel bleibt hier, da _sendMessage es verwendet
+
+  // Responsive constants
+  static const double _kMaxChatContentWidth = 760.0; // Maximale Breite für Chat-Blasen und Suchleiste
+  static const double _kSearchBarContentHeight = 135.0; // Die intrinsische Höhe des Inhalts der Suchleiste
+
+  // NEU: Responsive horizontale Polsterung
+  static const double _kHorizontalPaddingLarge = 16.0; // Standard-Horizontal-Padding für große Bildschirme
+  static const double _kHorizontalPaddingSmall = 8.0; // Horizontal-Padding im Kompaktmodus (kleinere Bildschirme)
+
 
   @override
   void initState() {
@@ -141,8 +153,28 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
 
   @override
   Widget build(BuildContext context) {
-    const baseW = 600.0, extraW = 160.0, bottomH = 16.0 + 135.0 + 16.0;
-    final dynamicW = _messages.isEmpty ? baseW : baseW + extraW * _anim.value;
+    final double screenWidth = MediaQuery.of(context).size.width;
+
+    // NEU: Responsive horizontale Polsterung basierend auf dem Kompaktmodus-Flag des Widgets
+    final double effectiveHorizontalPadding = widget.isCompactMode ? _kHorizontalPaddingSmall : _kHorizontalPaddingLarge;
+
+    // Die maximale Breite, die der Chat-Inhalt (Blasen oder Suchleisten-Container) einnehmen kann
+    // Berücksichtigt screenWidth, responsive Polsterung und die feste Maximalbreite.
+    final double maxPossibleChatContentWidth = math.max(0.0, screenWidth - (effectiveHorizontalPadding * 2));
+    final double constrainedChatContentWidth = math.min(_kMaxChatContentWidth, maxPossibleChatContentWidth);
+
+    // Die tatsächliche Breite des Chat-Containers (Nachrichten oder Suchleiste).
+    // Wenn keine Nachrichten vorhanden sind, ist die Breite auf kompakten Bildschirmen fast voll,
+    // auf großen Bildschirmen 80% der möglichen Breite.
+    final double currentChatContentWidth = _messages.isEmpty
+        ? constrainedChatContentWidth * (widget.isCompactMode ? 0.95 : 0.8) // Fast volle Breite im Kompakt-Leerzustand
+        : constrainedChatContentWidth;
+
+    // Berechnet die Gesamthöhe des Suchleisten-Widgets, einschließlich seines internen Paddings.
+    final double searchBarWidgetTotalHeight = _kSearchBarContentHeight + (2 * 14.0);
+    // Zusätzlicher Padding unten für ästhetischen Abstand unter der Suchleiste
+    final double bottomOffsetForChatList = searchBarWidgetTotalHeight + effectiveHorizontalPadding;
+
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -150,44 +182,51 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
         children: [
           if (_messages.isEmpty)
             Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Removed the 'chuk.chat' text here
-                  SizedBox(width: dynamicW, child: _buildSearchBar()),
-                ],
+              child: SizedBox(
+                width: currentChatContentWidth, // Verwendet die responsive Breite
+                child: _buildSearchBar(isCompactMode: widget.isCompactMode),
               ),
             )
           else
-            Positioned.fill(
-              top: bottomH,
-              bottom: bottomH,
+            // Chat-Nachrichtenliste
+            Positioned(
+              top: 0, // Chat-Liste beginnt oben
+              bottom: bottomOffsetForChatList,
+              left: 0,
+              right: 0,
               child: Center(
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   curve: Curves.easeOutCubic,
-                  constraints: BoxConstraints(maxWidth: dynamicW),
+                  constraints: BoxConstraints(maxWidth: currentChatContentWidth), // Verwendet die responsive Breite
                   child: ListView.builder(
                     controller: _scrollController,
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    padding: EdgeInsets.symmetric(horizontal: effectiveHorizontalPadding, vertical: 10),
                     itemCount: _messages.length,
                     itemBuilder: (_, i) {
                       final m = _messages[i];
-                      return MessageBubble(message: m['text']!, isUser: m['sender'] == 'user');
+                      return MessageBubble(
+                        message: m['text']!,
+                        isUser: m['sender'] == 'user',
+                        maxWidth: currentChatContentWidth * 0.7, // Maximale Breite für Blasen basierend auf Containerbreite
+                      );
                     },
                   ),
                 ),
               ),
             ),
+          // Suchleiste (immer am unteren Rand, wenn Nachrichten existieren)
           if (_messages.isNotEmpty)
             Align(
               alignment: Alignment.bottomCenter,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOutCubic,
-                padding: const EdgeInsets.all(16),
-                width: dynamicW,
-                child: _buildSearchBar(),
+              child: Padding(
+                padding: EdgeInsets.all(effectiveHorizontalPadding), // Padding um die Suchleiste
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOutCubic,
+                  width: currentChatContentWidth, // Verwendet die responsive Breite
+                  child: _buildSearchBar(isCompactMode: widget.isCompactMode), // Baut nun den inneren Container
+                ),
               ),
             ),
         ],
@@ -195,16 +234,16 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
     );
   }
 
-  Widget _buildSearchBar() {
+  Widget _buildSearchBar({required bool isCompactMode}) {
     const btnH = 36.0, btnW = 44.0;
     return Container(
-      height: 135,
+      height: _kSearchBarContentHeight, // Verwendet die Konstante für die intrinsische Höhe
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: iconFg.withOpacity(.3)),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14), // Internes Padding des Suchleisteninhalts
       child: Column(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -283,6 +322,7 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
                   });
                 },
                 textFieldFocusNode: _textFieldFocusNode,
+                isCompactMode: isCompactMode, // Übergebe den Kompaktmodus-Flag
               ),
               const SizedBox(width: 8), // Konsistenter 8px Abstand
               _buildIconBtn(Icons.mic, () => print('Mic')),
