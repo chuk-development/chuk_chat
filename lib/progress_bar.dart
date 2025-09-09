@@ -1,3 +1,4 @@
+// lib/progress_bar.dart - UNCHANGED
 import 'package:flutter/material.dart';
 import 'dart:async'; // For the timer
 import 'dart:math'; // For min/max/round and Random

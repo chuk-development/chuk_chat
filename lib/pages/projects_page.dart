@@ -1,6 +1,6 @@
-// lib/projects_page.dart
+// lib/pages/projects_page.dart
 import 'package:flutter/material.dart';
-import 'main.dart'; // Import to use your color theme
+import 'package:ui_elements_flutter/constants.dart'; // Import app constants for theme
 
 class ProjectsPage extends StatelessWidget {
   const ProjectsPage({Key? key}) : super(key: key);

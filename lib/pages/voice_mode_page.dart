@@ -1,52 +1,22 @@
+// lib/pages/voice_mode_page.dart
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'dart:ui' as ui; // Import for MaskFilter
 
-/// Placeholder for custom icons or specific character details
-enum VoiceId {
-  ara, eve, leo, rex, sal, gork
-}
-enum PersonalityId {
-  custom, assistant, therapist, storyteller, kidsStoryTime, kidsTriviaGame, meditation, grokDoc, unhinged, sexy, motivation, conspiracy, romantic, argumentative
-}
-
-class VoiceOption {
-  final VoiceId id;
-  final String name;
-  final String description;
-
-  VoiceOption({required this.id, required this.name, required this.description});
-}
-
-class PersonalityOption {
-  final PersonalityId id;
-  final String name;
-  final IconData icon;
-  final bool isAdultContent;
-  final bool canReset; // For the refresh icon
-
-  PersonalityOption({
-    required this.id,
-    required this.name,
-    required this.icon,
-    this.isAdultContent = false,
-    this.canReset = false,
-  });
-}
+import 'package:ui_elements_flutter/constants.dart';
+import 'package:ui_elements_flutter/models/voice_mode_models.dart';
+import 'package:ui_elements_flutter/widgets/message_bubble.dart';
 
 ///  Voice-Mode  –  UI ONLY  –  LifeKit ready
-class VoiceMode extends StatefulWidget {
-  const VoiceMode({Key? key}) : super(key: key);
+class VoiceModePage extends StatefulWidget {
+  const VoiceModePage({Key? key}) : super(key: key);
 
   @override
-  State<VoiceMode> createState() => _VoiceModeState();
+  State<VoiceModePage> createState() => _VoiceModePageState();
 }
 
-class _VoiceModeState extends State<VoiceMode> with TickerProviderStateMixin {
-  /* ---------- colours ---------- */
-  final Color bg = const Color(0xFF211B15); // 33 27 21
-  final Color accent = const Color(0xFF3F5E5D); // Updated to match the main.dart accent
-  final Color iconFg = const Color(0xFF93854C); //147 133 76
+class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateMixin {
+  /* ---------- colours (local overrides to match image) ---------- */
   final Color cardBg = const Color(0xFF2A241F); // A slightly lighter dark for cards
 
   // New voice visualization colors
@@ -812,7 +782,6 @@ class _SciFiVisualizerPainter extends CustomPainter {
     final centerX = size.width / 2;
     final centerY = size.height / 2;
 
-    // Corrected: maxRadius can't be const
     final double maxRadius = 0.4 * math.min(size.width, size.height);
 
     // Base paint for lines
@@ -843,7 +812,6 @@ class _SciFiVisualizerPainter extends CustomPainter {
     const int lineCount = 40;
     for (int i = 0; i < lineCount; i++) {
       final double angle = (i / lineCount) * 2 * math.pi;
-      // Corrected: use math.sin()
       final double offsetFactor = math.sin(animationValue * 2 * math.pi + angle);
 
       // Adjust opacity and length based on offsetFactor and activity
@@ -874,36 +842,5 @@ class _SciFiVisualizerPainter extends CustomPainter {
     return oldDelegate.animationValue != animationValue ||
         oldDelegate.baseColor != baseColor ||
         oldDelegate.isActive != isActive;
-  }
-}
-
-/* ---------- MESSAGE BUBBLE (from main.dart) ---------- */
-class MessageBubble extends StatelessWidget {
-  final String message;
-  final bool isUser; // true for bot, false for user in this chat (to match image)
-  const MessageBubble({Key? key, required this.message, required this.isUser}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    // Use main.dart color constants for consistency
-    const Color bg = Color(0xFF211B15);
-    const Color accent = Color(0xFF3F5E5D);
-    const Color iconFg = Color(0xFF93854C);
-    const Color cardBg = Color(0xFF2A241F); // A slightly lighter dark for cards
-
-    return Align(
-      alignment: isUser ? Alignment.centerLeft : Alignment.centerRight, // Adjusted to make bot messages on the left and user messages on the right (typical chat layout)
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 8),
-        padding: const EdgeInsets.all(12),
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.35), // Limit bubble width
-        decoration: BoxDecoration(
-          color: isUser ? accent.withOpacity(.8) : cardBg, // Use cardBg for user bubbles to match new style
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: iconFg.withOpacity(.3)),
-        ),
-        child: Text(message, style: TextStyle(color: iconFg)),
-      ),
-    );
   }
 }
