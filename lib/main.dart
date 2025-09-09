@@ -1,12 +1,14 @@
+// main.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'voice_mode.dart';
+import 'sidebar.dart';
 
 /* ---------- COLOURS ---------- */
-const Color bg     = Color(0xFF211B15);   // 33 27 21
-const Color accent = Color(0xFF3F5E5D);   // 70 99 93
-const Color iconFg = Color(0xFF93854C);   //147 133 76
+const Color bg     = Color(0xFF211B15);
+const Color accent = Color(0xFF3F5E5D);
+const Color iconFg = Color(0xFF93854C);
 
 /* ---------- THEME ---------- */
 final appTheme = ThemeData.dark().copyWith(
@@ -15,6 +17,12 @@ final appTheme = ThemeData.dark().copyWith(
   dividerColor: iconFg.withOpacity(.4),
   iconTheme: const IconThemeData(color: iconFg),
   colorScheme: const ColorScheme.dark(primary: accent, secondary: iconFg, surface: bg),
+  listTileTheme: ListTileThemeData(
+    iconColor: iconFg,
+    textColor: iconFg,
+    selectedColor: accent,
+    selectedTileColor: accent.withOpacity(0.1),
+  ),
 );
 
 /* ---------- MODEL ITEM ---------- */
@@ -38,6 +46,7 @@ class ChukChatApp extends StatelessWidget {
 
 /* ---------- DATA ---------- */
 List<String> _savedChats = [];
+int _selectedChatIndex = -1;
 
 Future<void> _loadChats() async {
   final prefs = await SharedPreferences.getInstance();
@@ -48,6 +57,7 @@ Future<void> _saveChat(String json) async {
   final prefs = await SharedPreferences.getInstance();
   _savedChats.add(json);
   await prefs.setStringList('savedChats', _savedChats);
+  await loadSavedChatsForSidebar();
 }
 
 /* ---------- ROOT WRAPPER ---------- */
@@ -58,89 +68,106 @@ class RootWrapper extends StatefulWidget {
 }
 
 class _RootWrapperState extends State<RootWrapper> {
-  bool _sidebarOpen = false;
-  final GlobalKey<ScaffoldState> _key = GlobalKey();
-
-  Future<void> _loadSidebar() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() => _sidebarOpen = prefs.getBool('sidebarOpen') ?? false);
-  }
-
-  Future<void> _saveSidebar(bool val) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('sidebarOpen', val);
-    setState(() => _sidebarOpen = val);
-  }
+  bool _isSidebarExpanded = true;
 
   @override
   void initState() {
     super.initState();
-    _loadSidebar();
     _loadChats();
+    loadSavedChatsForSidebar();
   }
 
   void _openSettingsPage() {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsPage()));
   }
 
+  void _handleNewChatFromSidebar() {
+    setState(() {
+      _selectedChatIndex = -1;
+    });
+    loadSavedChatsForSidebar();
+  }
+
+  void _handleChatTapped(int index) {
+    setState(() {
+      _selectedChatIndex = index;
+    });
+    print('Loading chat at index: $index');
+  }
+  
+  void _handleProjectsTapped() {
+    // Placeholder for when "Projects" is clicked
+    print('Projects tapped!');
+  }
+
+  void _toggleSidebar() {
+    setState(() {
+      _isSidebarExpanded = !_isSidebarExpanded;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final drawerWidth = MediaQuery.of(context).size.width * 0.75;
+    const double sidebarVisibleWidth = 320.0;
+
     return Scaffold(
-      key: _key,
-      drawerEnableOpenDragGesture: true,
-      drawer: SizedBox(
-        width: drawerWidth,
-        child: Container(
-          color: bg,
-          child: Column(
-            children: [
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(16, 48, 16, 20),
-                color: bg,
-                child: const Text('chuk.chat', style: TextStyle(fontSize: 22)),
-              ),
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  itemCount: _savedChats.length,
-                  itemBuilder: (_, i) {
-                    final title = 'Chat ${i + 1}';
-                    return ListTile(
-                      leading: const Icon(Icons.chat_bubble_outline, size: 20),
-                      title: Text(title, style: const TextStyle(color: iconFg)),
-                      dense: true,
-                      onTap: () {/* load / view */},
-                    );
-                  },
+      body: Row(
+        children: [
+          // The Sidebar Section
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOutCubic,
+            width: _isSidebarExpanded ? sidebarVisibleWidth : 0.0,
+            decoration: BoxDecoration(
+              border: Border(
+                right: BorderSide(
+                  color: iconFg.withOpacity(_isSidebarExpanded ? 0.2 : 0.0),
+                  width: 1.0,
                 ),
               ),
-              ListTile(
-                leading: const Icon(Icons.settings),
-                title: const Text('Settings'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _openSettingsPage();
-                },
+            ),
+            // FIX: This structure correctly animates and clips the content.
+            child: ClipRect(
+              child: SizedBox(
+                width: sidebarVisibleWidth,
+                child: CustomSidebar(
+                  onNewChat: _handleNewChatFromSidebar,
+                  onChatItemTapped: _handleChatTapped,
+                  onSettingsTapped: _openSettingsPage,
+                  onProjectsTapped: _handleProjectsTapped, // Pass new callback
+                  selectedChatIndex: _selectedChatIndex,
+                ),
               ),
-            ],
+            ),
           ),
-        ),
-      ),
-      body: ChukChatUI(
-        sidebarOpen: _sidebarOpen,
-        onToggleSidebar: () => _saveSidebar(!_sidebarOpen),
+          // The Main Chat UI Section
+          Expanded(
+            child: ChukChatUI(
+              onToggleSidebar: _toggleSidebar,
+              selectedChatIndex: _selectedChatIndex,
+              isSidebarExpanded: _isSidebarExpanded,
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
+// ... (The rest of main.dart remains exactly the same)
+// ChukChatUI, MessageBubble, SettingsPage, etc. are all unchanged.
 /* ---------- CHAT UI ---------- */
 class ChukChatUI extends StatefulWidget {
-  final bool sidebarOpen;
   final VoidCallback onToggleSidebar;
-  const ChukChatUI({Key? key, required this.sidebarOpen, required this.onToggleSidebar}) : super(key: key);
+  final int selectedChatIndex;
+  final bool isSidebarExpanded;
+
+  const ChukChatUI({
+    Key? key,
+    required this.onToggleSidebar,
+    required this.selectedChatIndex,
+    required this.isSidebarExpanded,
+  }) : super(key: key);
 
   @override
   State<ChukChatUI> createState() => _ChukChatUIState();
@@ -150,7 +177,9 @@ class _ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateM
   final TextEditingController _controller = TextEditingController();
   final List<Map<String, String>> _messages = [];
   final ScrollController _scrollController = ScrollController();
-  final FocusNode _focusNode = FocusNode();
+  
+  final FocusNode _textFieldFocusNode = FocusNode();
+  final FocusNode _rawKeyboardListenerFocusNode = FocusNode();
 
   late AnimationController _animCtrl;
   late Animation<double> _anim;
@@ -161,19 +190,61 @@ class _ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateM
     super.initState();
     _animCtrl = AnimationController(duration: const Duration(milliseconds: 200), vsync: this);
     _anim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _focusNode.requestFocus());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+    });
+    _loadChatFromIndex(widget.selectedChatIndex);
+  }
+
+  @override
+  void didUpdateWidget(covariant ChukChatUI oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selectedChatIndex != oldWidget.selectedChatIndex) {
+      _loadChatFromIndex(widget.selectedChatIndex);
+    }
   }
 
   @override
   void dispose() {
     _controller.dispose();
     _scrollController.dispose();
-    _focusNode.dispose();
+    _textFieldFocusNode.dispose();
+    _rawKeyboardListenerFocusNode.dispose();
     _animCtrl.dispose();
     super.dispose();
   }
 
-  /* ---------- NEW CHAT ---------- */
+  void _loadChatFromIndex(int index) {
+    if (index == -1) {
+      _messages.clear();
+      _animCtrl.reset();
+    } else if (index >= 0 && index < _savedChats.length) {
+      final chatJson = _savedChats[index];
+      _messages.clear();
+      final messageParts = chatJson.split('§');
+      for (var part in messageParts) {
+        if (part.isNotEmpty) {
+          final components = part.split('|');
+          if (components.length == 2) {
+            _messages.add({'sender': components[0], 'text': components[1]});
+          }
+        }
+      }
+      if (_messages.isNotEmpty) {
+         _animCtrl.forward();
+      } else {
+        _animCtrl.reset();
+      }
+    }
+    setState(() {});
+    Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+    Future.delayed(const Duration(milliseconds: 50), () {
+      if (_scrollController.hasClients) {
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+      }
+    });
+  }
+
   void _newChat() async {
     if (_messages.isNotEmpty) {
       final json = _messages.map((m) => '${m['sender']}|${m['text']}').join('§');
@@ -182,11 +253,12 @@ class _ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateM
     setState(() {
       _messages.clear();
       _animCtrl.reset();
+      _selectedChatIndex = -1;
     });
-    _focusNode.requestFocus();
+    Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+    await loadSavedChatsForSidebar();
   }
 
-  /* ---------- SEND MESSAGE ---------- */
   void _sendMessage() {
     if (_controller.text.trim().isEmpty) return;
     final first = _messages.isEmpty;
@@ -195,7 +267,7 @@ class _ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateM
       _controller.clear();
     });
     if (first) _animCtrl.forward();
-    _focusNode.requestFocus();
+    Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
     Future.delayed(const Duration(milliseconds: 300), () {
       setState(() {
         _messages.add({'sender': 'ai', 'text': 'You said: ${_messages.last['text']}\n(Model: $_selectedModel)'});
@@ -208,7 +280,7 @@ class _ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateM
             curve: Curves.easeOut,
           );
         }
-        _focusNode.requestFocus();
+        Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
       });
     });
   }
@@ -222,7 +294,6 @@ class _ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateM
       backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-          /* ---- TOP CONTROLS ---- */
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.only(left: 8, top: 4),
@@ -234,23 +305,23 @@ class _ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateM
                     icon: const Icon(Icons.edit_square),
                     tooltip: 'New chat',
                     onPressed: _newChat,
+                    color: iconFg,
                   ),
-                  const SizedBox(height: 4),
                   IconButton(
                     icon: const Icon(Icons.menu),
                     onPressed: widget.onToggleSidebar,
+                    color: iconFg,
                   ),
                 ],
               ),
             ),
           ),
-          /* ---- EMPTY STATE ---- */
           if (_messages.isEmpty)
             Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('chuk.chat', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w300)),
+                  Text('chuk.chat', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w300, color: iconFg)),
                   const SizedBox(height: 20),
                   SizedBox(width: dynamicW, child: _buildSearchBar()),
                 ],
@@ -277,7 +348,6 @@ class _ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateM
                 ),
               ),
             ),
-          /* ---- BOTTOM SEARCH BAR ---- */
           if (_messages.isNotEmpty)
             Align(
               alignment: Alignment.bottomCenter,
@@ -295,7 +365,7 @@ class _ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateM
   }
 
   Widget _buildSearchBar() {
-    const btnH = 36.0, btnW = 44.0, radius = 10.0;
+    const btnH = 36.0, btnW = 44.0;
     return Container(
       height: 135,
       decoration: BoxDecoration(
@@ -307,70 +377,65 @@ class _ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateM
       child: Column(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Flexible(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: RawKeyboardListener(
-                    focusNode: FocusNode(),
-                    onKey: (event) {
-                      if (event.runtimeType.toString() == 'RawKeyDownEvent') {
-                        if (event.isKeyPressed(LogicalKeyboardKey.enter)) {
-                          if (event.isShiftPressed) {
-                            final v = _controller.value;
-                            final t = v.text.replaceRange(v.selection.start, v.selection.end, '\n');
-                            _controller.value = v.copyWith(
-                              text: t,
-                              selection: TextSelection.collapsed(offset: v.selection.start + 1),
-                            );
-                            return;
-                          } else {
-                            _sendMessage();
-                          }
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: RawKeyboardListener(
+                  focusNode: _rawKeyboardListenerFocusNode,
+                  onKey: (event) {
+                    if (event.runtimeType.toString() == 'RawKeyDownEvent') {
+                      if (event.isKeyPressed(LogicalKeyboardKey.enter)) {
+                        if (event.isShiftPressed) {
+                          final v = _controller.value;
+                          final t = v.text.replaceRange(v.selection.start, v.selection.end, '\n');
+                          _controller.value = v.copyWith(
+                            text: t,
+                            selection: TextSelection.collapsed(offset: v.selection.start + 1),
+                          );
+                          return;
+                        } else {
+                          _sendMessage();
                         }
                       }
-                    },
-                    child: TextField(
-                      controller: _controller,
-                      focusNode: _focusNode,
-                      autofocus: true,
-                      minLines: 1,
-                      maxLines: null,
-                      keyboardType: TextInputType.multiline,
-                      textInputAction: TextInputAction.send,
-                      style: TextStyle(color: iconFg),
-                      decoration: InputDecoration(
-                        hintText: 'Ask anything or @mention a Space',
-                        hintStyle: TextStyle(color: iconFg.withOpacity(.8)),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 0),
-                      ),
-                      cursorColor: iconFg,
-                      onTap: () => _focusNode.requestFocus(),
-                      onSubmitted: (_) => _focusNode.requestFocus(),
+                    }
+                  },
+                  child: TextField(
+                    controller: _controller,
+                    focusNode: _textFieldFocusNode,
+                    autofocus: false,
+                    minLines: 1,
+                    maxLines: 5,
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.send,
+                    style: TextStyle(color: iconFg),
+                    decoration: InputDecoration(
+                      hintText: 'Ask anything or @mention a Space',
+                      hintStyle: TextStyle(color: iconFg.withOpacity(.8)),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 0),
                     ),
+                    cursorColor: iconFg,
                   ),
                 ),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const VoiceMode()),
-                  ),
-                  child: Container(
-                    width: btnW,
-                    height: btnH,
-                    decoration: BoxDecoration(
-                      color: accent,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.arrow_upward, color: Colors.black),
-                  ),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const VoiceMode()),
                 ),
-              ],
-            ),
+                child: Container(
+                  width: btnW,
+                  height: btnH,
+                  decoration: BoxDecoration(
+                    color: accent,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.arrow_upward, color: Colors.black),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
           Row(
             children: [
               _buildIconBtn(Icons.add, () => print('Add')),
@@ -448,7 +513,7 @@ class _ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateM
       ),
       onSelected: (v) {
         setState(() => _selectedModel = models.firstWhere((m) => m.value == v).name);
-        Future.microtask(() => _focusNode.requestFocus());
+        Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
       },
       itemBuilder: (_) => models.map((m) {
         final selected = _selectedModel == m.name;
@@ -463,7 +528,7 @@ class _ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateM
                   children: [
                     Switch(value: selected, onChanged: (_) {}, activeColor: iconFg),
                     const SizedBox(width: 6),
-                    const Text('Best', style: TextStyle(color: iconFg)),
+                    Text('Best', style: TextStyle(color: iconFg)),
                   ],
                 )
               else
@@ -488,7 +553,6 @@ class _ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateM
   }
 }
 
-/* ---------- MESSAGE BUBBLE ---------- */
 class MessageBubble extends StatelessWidget {
   final String message;
   final bool isUser;
@@ -512,13 +576,12 @@ class MessageBubble extends StatelessWidget {
   }
 }
 
-/* ---------- SETTINGS PAGE ---------- */
 class SettingsPage extends StatelessWidget {
   const SettingsPage({Key? key}) : super(key: key);
   @override
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: bg,
         appBar: AppBar(title: const Text('Settings'), backgroundColor: bg, elevation: 0),
-        body: const Center(child: Text('Settings page – add options here', style: TextStyle(color: iconFg))),
+        body: Center(child: Text('Settings page – add options here', style: TextStyle(color: iconFg))),
       );
 }
