@@ -26,12 +26,12 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
 
   final List<ModelItem> _allModels = <ModelItem>[
     ModelItem(name: 'Qwen3 235B Thinking', value: 'qwen/qwen3-235b-a22b-thinking-2507'),
-    ModelItem(name: 'Qwen3 Coder 480B', value: 'qwen/qwen3-coder'),
     ModelItem(name: 'Qwen3 235B', value: 'qwen/qwen3-235b-a22b-2507'),
+    ModelItem(name: 'Qwen3 Coder 480B', value: 'qwen/qwen3-coder'),
     ModelItem(name: 'Qwen3 32B', value: 'qwen/qwen3-32b'),
     ModelItem(name: 'Kimi K2', value: 'moonshotai/kimi-k2-0905'),
     ModelItem(name: 'DeepSeek: R1 0528', value: 'deepseek/deepseek-r1-0528'),
-    ModelItem(name: 'DeepSeek V3.1', value: 'deepseek/deepseek-chat-v3.1'),
+    ModelItem(name: 'DeepSeek V3.1', value: ' '),
   ];
 
   @override
