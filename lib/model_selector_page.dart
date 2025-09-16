@@ -1,7 +1,29 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Import for SystemUiOverlayStyle
 import 'package:http/http.dart' as http;
+import 'package:flutter_svg/flutter_svg.dart'; // Import for SVG support
+
+// ---------- COLOURS ----------
+const Color bg = Color(0xFF211B15); // Dark brown - Overall background
+const Color accent = Color(0xFF3F5E5D); // Dark teal/green - Accent for selected items
+const Color iconFg = Color(0xFF93854C); // Golden brown - For borders, icons, hints, subtle text
+
+// Helper extension to subtly lighten colors
+extension ColorExtension on Color {
+  Color lighten([double amount = .1]) {
+    assert(amount >= 0 && amount <= 1); // amount should be between 0.0 and 1.0
+    final hsl = HSLColor.fromColor(this);
+    final hslLight = hsl.withLightness((hsl.lightness + amount).clamp(0.0, 1.0));
+    return hslLight.toColor();
+  }
+
+  Color darken([double amount = .1]) {
+    assert(amount >= 0 && amount <= 1); // amount should be between 0.0 and 1.0
+    final hsl = HSLColor.fromColor(this);
+    final hslDark = hsl.withLightness((hsl.lightness - amount).clamp(0.0, 1.0));
+    return hslDark.toColor();
+  }
+}
 
 // --- Data Models (Mirroring your FastAPI Pydantic Models) ---
 
@@ -9,11 +31,17 @@ class PricingDetails {
   final double prompt;
   final double completion;
   final double request;
+  final double? image;
+  final double? webSearch;
+  final double? internalReasoning;
 
   PricingDetails({
     required this.prompt,
     required this.completion,
     required this.request,
+    this.image,
+    this.webSearch,
+    this.internalReasoning,
   });
 
   factory PricingDetails.fromJson(Map<String, dynamic> json) {
@@ -21,6 +49,9 @@ class PricingDetails {
       prompt: (json['prompt'] as num?)?.toDouble() ?? 0.0,
       completion: (json['completion'] as num?)?.toDouble() ?? 0.0,
       request: (json['request'] as num?)?.toDouble() ?? 0.0,
+      image: (json['image'] as num?)?.toDouble(),
+      webSearch: (json['web_search'] as num?)?.toDouble(),
+      internalReasoning: (json['internal_reasoning'] as num?)?.toDouble(),
     );
   }
 
@@ -28,16 +59,15 @@ class PricingDetails {
   String formatTokenPrice(double pricePerToken) {
     if (pricePerToken == 0.0) return 'Free';
     final pricePerMillion = pricePerToken * 1000000;
-    // Format to 3 decimal places, remove trailing zeros, and trailing dot if it becomes integer
-    String priceStr = pricePerMillion.toStringAsFixed(6); // Start with enough precision
-    priceStr = priceStr.replaceAll(RegExp(r'\.?0+$'), ''); // Remove trailing .000 or .00 etc.
+    String priceStr = pricePerMillion.toStringAsFixed(6);
+    priceStr = priceStr.replaceAll(RegExp(r'\.?0+$'), '');
     return '\$${priceStr}/M';
   }
 
   // Helper to format request price (not per million)
   String formatRequestPrice(double price) {
     if (price == 0.0) return 'Free';
-    return '\$${price.toStringAsFixed(3)}/req'; // Formatted to 3 decimal places for request price
+    return '\$${price.toStringAsFixed(3)}/req';
   }
 }
 
@@ -47,6 +77,8 @@ class ModelProviderInfo {
   final PricingDetails pricing;
   final int? contextLength;
   final int? maxCompletionTokens;
+  final bool? isModerated;
+  final String? iconUrl;
 
   ModelProviderInfo({
     required this.slug,
@@ -54,6 +86,8 @@ class ModelProviderInfo {
     required this.pricing,
     this.contextLength,
     this.maxCompletionTokens,
+    this.isModerated,
+    this.iconUrl,
   });
 
   factory ModelProviderInfo.fromJson(Map<String, dynamic> json) {
@@ -63,6 +97,8 @@ class ModelProviderInfo {
       pricing: PricingDetails.fromJson(json['pricing'] as Map<String, dynamic>),
       contextLength: json['context_length'] as int?,
       maxCompletionTokens: json['max_completion_tokens'] as int?,
+      isModerated: json['is_moderated'] as bool?,
+      iconUrl: json['icon_url'] as String?,
     );
   }
 }
@@ -72,12 +108,14 @@ class CustomModelInfo {
   final String name;
   final String? description;
   final List<ModelProviderInfo> providers;
+  final String? iconUrl;
 
   CustomModelInfo({
     required this.id,
     required this.name,
     this.description,
     required this.providers,
+    this.iconUrl,
   });
 
   factory CustomModelInfo.fromJson(Map<String, dynamic> json) {
@@ -90,6 +128,7 @@ class CustomModelInfo {
       name: json['name'] as String,
       description: json['description'] as String?,
       providers: providers,
+      iconUrl: json['icon_url'] as String?,
     );
   }
 }
@@ -106,10 +145,10 @@ class ModelSelectorPage extends StatefulWidget {
 class _ModelSelectorPageState extends State<ModelSelectorPage> {
   final String _baseUrl = 'http://127.0.0.1:8000'; // <--- IMPORTANT: SET YOUR FASTAPI SERVER URL HERE
   List<CustomModelInfo> _models = [];
-  CustomModelInfo? _selectedModel;
-  ModelProviderInfo? _selectedProvider;
+  Map<String, ModelProviderInfo?> _selectedProviders = {};
   bool _isLoading = true;
   String? _error;
+  final Map<String, bool> _expandedDescriptions = {};
 
   @override
   void initState() {
@@ -121,6 +160,8 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
     setState(() {
       _isLoading = true;
       _error = null;
+      _selectedProviders.clear();
+      _expandedDescriptions.clear();
     });
 
     try {
@@ -128,14 +169,19 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
 
       if (response.statusCode == 200) {
         List<dynamic> modelsJson = json.decode(response.body);
+        List<CustomModelInfo> fetchedModels =
+            modelsJson.map((json) => CustomModelInfo.fromJson(json)).toList();
+
+        Map<String, ModelProviderInfo?> initialSelections = {};
+        for (var model in fetchedModels) {
+          initialSelections[model.id] =
+              model.providers.isNotEmpty ? model.providers.first : null;
+          _expandedDescriptions[model.id] = false;
+        }
+
         setState(() {
-          _models = modelsJson.map((json) => CustomModelInfo.fromJson(json)).toList();
-          if (_models.isNotEmpty) {
-            _selectedModel = _models.first; // Auto-select the first model
-            if (_selectedModel!.providers.isNotEmpty) {
-              _selectedProvider = _selectedModel!.providers.first; // Auto-select first provider
-            }
-          }
+          _models = fetchedModels;
+          _selectedProviders = initialSelections;
           _isLoading = false;
         });
       } else {
@@ -152,20 +198,18 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
     }
   }
 
-  void _onSelectModel(CustomModelInfo? model) {
+  void _onProviderSelect(String modelId, ModelProviderInfo? provider) {
     setState(() {
-      _selectedModel = model;
-      _selectedProvider = model?.providers.isNotEmpty == true ? model!.providers.first : null;
+      _selectedProviders[modelId] = provider;
     });
   }
 
-  void _onSelectProvider(ModelProviderInfo? provider) {
+  void _toggleDescription(String modelId) {
     setState(() {
-      _selectedProvider = provider;
+      _expandedDescriptions[modelId] = !(_expandedDescriptions[modelId] ?? false);
     });
   }
 
-  // Helper to format context length from tokens to 'K' or 'M'
   String _formatContextLength(int? tokens) {
     if (tokens == null) return 'N/A';
     if (tokens >= 1000000) {
@@ -176,16 +220,59 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
     return tokens.toString();
   }
 
+  // Widget to display an image from a URL (SVG or raster) or a fallback icon
+  Widget _buildIconWidget(String? imageUrl, IconData fallbackIcon, {double size = 24}) {
+    if (imageUrl != null && imageUrl.isNotEmpty) {
+      final isSvg = imageUrl.toLowerCase().endsWith('.svg');
+      if (isSvg) {
+        return SvgPicture.network(
+          imageUrl,
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+          // Removed color/colorBlendMode for SVGs to display original colors.
+          placeholderBuilder: (context) => SizedBox(
+            width: size,
+            height: size,
+            child: Center(
+                child: Icon(Icons.downloading, color: iconFg.lighten(0.3), size: size / 2)),
+          ),
+          // Error handling for SVG, this doesn't use errorBuilder directly,
+          // but if loading fails, the placeholderBuilder (or an empty box) will typically show.
+          // For a more robust error handling for SvgPicture.network, it's often
+          // recommended to wrap it in a FutureBuilder or a custom stateful widget.
+        );
+      } else {
+        return Image.network(
+          imageUrl,
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+          // Removed color/colorBlendMode for Image.network to display original colors.
+          errorBuilder: (context, error, stackTrace) {
+            print('Error loading image from $imageUrl: $error');
+            return Icon(fallbackIcon, color: iconFg.lighten(0.3), size: size); // Fallback icon is tinted
+          },
+        );
+      }
+    } else {
+      // Fallback to Icon if URL is null or empty
+      return Icon(fallbackIcon, color: iconFg.lighten(0.3), size: size); // Fallback icon is tinted
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: bg,
       appBar: AppBar(
-        title: const Text('Model & Provider Pricing', style: TextStyle(color: Colors.white)),
-        backgroundColor: Colors.deepPurple,
+        title: const Text('Models', style: TextStyle(color: Colors.white)),
+        backgroundColor: bg,
         elevation: 0,
+        centerTitle: true,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(color: iconFg))
           : _error != null
               ? Center(
                   child: Padding(
@@ -193,12 +280,13 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.error_outline, color: Colors.red, size: 50),
+                        const Icon(Icons.error_outline,
+                            color: Colors.red, size: 50),
                         const SizedBox(height: 16),
                         Text(
                           'Error: $_error',
                           textAlign: TextAlign.center,
-                          style: const TextStyle(color: Colors.red, fontSize: 18),
+                          style: const TextStyle(color: iconFg, fontSize: 18),
                         ),
                         const SizedBox(height: 24),
                         ElevatedButton.icon(
@@ -206,9 +294,10 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                           icon: const Icon(Icons.refresh),
                           label: const Text('Retry'),
                           style: ElevatedButton.styleFrom(
-                            foregroundColor: Colors.white,
-                            backgroundColor: Colors.deepPurple,
-                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                            foregroundColor: bg,
+                            backgroundColor: iconFg,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 24, vertical: 12),
                             textStyle: const TextStyle(fontSize: 16),
                           ),
                         ),
@@ -221,128 +310,119 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildSectionTitle('Select a Model'),
-                      const SizedBox(height: 10),
-                      Card(
-                        elevation: 2,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                          child: DropdownButtonFormField<CustomModelInfo>(
-                            value: _selectedModel,
-                            decoration: const InputDecoration(
-                              border: InputBorder.none,
-                              labelText: 'Model Name',
-                              labelStyle: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple),
-                              floatingLabelBehavior: FloatingLabelBehavior.always,
+                      ..._models.map((model) {
+                        ModelProviderInfo? selectedProviderForModel =
+                            _selectedProviders[model.id];
+                        bool isDescriptionExpanded = _expandedDescriptions[model.id] ?? false;
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ModelSelectionRow(
+                              key: ValueKey(model.id),
+                              model: model,
+                              selectedProvider: selectedProviderForModel,
+                              onProviderChanged: (provider) =>
+                                  _onProviderSelect(model.id, provider),
+                              formatContextLength: _formatContextLength,
+                              buildIconWidget: _buildIconWidget,
                             ),
-                            isExpanded: true,
-                            items: _models.map((model) {
-                              return DropdownMenuItem(
-                                value: model,
-                                child: Text(model.name, overflow: TextOverflow.ellipsis),
-                              );
-                            }).toList(),
-                            onChanged: _onSelectModel,
-                            icon: const Icon(Icons.arrow_drop_down, color: Colors.deepPurple),
-                            selectedItemBuilder: (context) {
-                              return _models.map<Widget>((model) {
-                                return Text(model.name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w500));
-                              }).toList();
-                            },
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      if (_selectedModel != null) ...[
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                          child: Text(
-                            '${_selectedModel!.description ?? 'No description available.'}',
-                            style: TextStyle(fontSize: 13, fontStyle: FontStyle.italic, color: Colors.grey[700]),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        _buildSectionTitle('Available Providers'),
-                        const SizedBox(height: 10),
-                        Card(
-                          elevation: 2,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                            child: DropdownButtonFormField<ModelProviderInfo>(
-                              value: _selectedProvider,
-                              decoration: const InputDecoration(
-                                border: InputBorder.none,
-                                labelText: 'Provider Name',
-                                labelStyle: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple),
-                                floatingLabelBehavior: FloatingLabelBehavior.always,
+                            if (model.description != null && model.description!.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 8.0, right: 8.0, top: 4.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    GestureDetector(
+                                      onTap: () => _toggleDescription(model.id),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
+                                        decoration: BoxDecoration(
+                                          color: bg.darken(0.05),
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(color: iconFg.withOpacity(0.3)),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Text(
+                                              'Description',
+                                              style: TextStyle(
+                                                color: iconFg.lighten(0.3),
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 13,
+                                              ),
+                                            ),
+                                            const Spacer(),
+                                            Icon(
+                                              isDescriptionExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                                              color: iconFg.lighten(0.3),
+                                              size: 20,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    if (isDescriptionExpanded)
+                                      Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.all(12.0),
+                                        margin: const EdgeInsets.only(top: 4.0),
+                                        decoration: BoxDecoration(
+                                          color: bg.darken(0.05),
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(color: iconFg.withOpacity(0.3)),
+                                        ),
+                                        child: Text(
+                                          model.description!,
+                                          style: TextStyle(
+                                              color: iconFg.lighten(0.3),
+                                              fontSize: 12,
+                                              height: 1.4),
+                                        ),
+                                      ),
+                                  ],
+                                ),
                               ),
-                              isExpanded: true,
-                              items: _selectedModel!.providers.map((provider) {
-                                return DropdownMenuItem(
-                                  value: provider,
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        provider.name,
-                                        style: const TextStyle(fontWeight: FontWeight.bold),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      Text(
-                                        'Input: ${provider.pricing.formatTokenPrice(provider.pricing.prompt)} | Output: ${provider.pricing.formatTokenPrice(provider.pricing.completion)}',
-                                        style: TextStyle(fontSize: 12, color: Colors.grey[700]),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      Text('Context: ${_formatContextLength(provider.contextLength)} | Max Out: ${_formatContextLength(provider.maxCompletionTokens)}',
-                                        style: TextStyle(fontSize: 12, color: Colors.grey[700]),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }).toList(),
-                              onChanged: _onSelectProvider,
-                              icon: const Icon(Icons.arrow_drop_down, color: Colors.deepPurple),
-                              selectedItemBuilder: (context) {
-                                return _selectedModel!.providers.map<Widget>((provider) {
-                                  return Text(provider.name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w500));
-                                }).toList();
-                              },
-                            ),
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 24),
-                      if (_selectedProvider != null)
-                        _buildSelectedProviderDetailsCard(_selectedProvider!),
-                      const SizedBox(height: 30),
+                            const SizedBox(height: 16),
+                          ],
+                        );
+                      }).toList(),
+                      const SizedBox(height: 16),
                       Center(
                         child: ElevatedButton.icon(
-                          onPressed: _selectedModel != null && _selectedProvider != null
-                              ? () {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                          'Selected: Model "${_selectedModel!.name}"\n'
-                                          'Provider: "${_selectedProvider!.name}" (Slug: ${_selectedProvider!.slug})'
-                                      ),
-                                      backgroundColor: Colors.deepPurple,
-                                      duration: const Duration(seconds: 3),
-                                    ),
-                                  );
-                                  // TODO: Integrate the actual API call here
-                                  // Use _selectedModel!.id and _selectedProvider!.slug
-                                }
-                              : null,
+                          onPressed: () {
+                            String summary = 'Current Selections:\n';
+                            _selectedProviders.forEach((modelId, provider) {
+                              CustomModelInfo? model = _models.firstWhere(
+                                  (m) => m.id == modelId,
+                                  orElse: () => CustomModelInfo(id: '', name: 'Unknown', providers: []));
+
+                              if (model.id.isNotEmpty && provider != null) {
+                                summary +=
+                                    '- ${model.name} -> ${provider.name} (Slug: ${provider.slug})\n';
+                              } else if (model.id.isNotEmpty) {
+                                summary +=
+                                    '- ${model.name} -> No provider selected\n';
+                              }
+                            });
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(summary),
+                                backgroundColor: accent,
+                                duration: const Duration(seconds: 5),
+                              ),
+                            );
+                          },
                           icon: const Icon(Icons.check_circle_outline),
-                          label: const Text('Use This Selection'),
+                          label: const Text('Confirm Selections'),
                           style: ElevatedButton.styleFrom(
-                            foregroundColor: Colors.white,
-                            backgroundColor: Colors.deepPurpleAccent,
-                            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                            textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            foregroundColor: bg,
+                            backgroundColor: iconFg,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 32, vertical: 16),
+                            textStyle:
+                                const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -354,82 +434,193 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                 ),
     );
   }
+}
 
-  Widget _buildSectionTitle(String title) {
-    return Text(
-      title,
-      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.deepPurple),
-    );
-  }
+// Widget to represent a single row for model, provider, and data
+class ModelSelectionRow extends StatelessWidget {
+  final CustomModelInfo model;
+  final ModelProviderInfo? selectedProvider;
+  final Function(ModelProviderInfo?) onProviderChanged;
+  final String Function(int?) formatContextLength;
+  final Widget Function(String?, IconData, {double size}) buildIconWidget;
 
-  Widget _buildModelDetailsCard(CustomModelInfo model) {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      margin: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Selected Model Overview:',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.deepPurple),
-            ),
-            const Divider(color: Colors.deepPurpleAccent),
-            _buildInfoRow('Name:', model.name),
-            _buildInfoRow('ID:', model.id),
-          ],
-        ),
-      ),
-    );
-  }
+  const ModelSelectionRow({
+    super.key,
+    required this.model,
+    required this.selectedProvider,
+    required this.onProviderChanged,
+    required this.formatContextLength,
+    required this.buildIconWidget,
+  });
 
-  Widget _buildSelectedProviderDetailsCard(ModelProviderInfo provider) {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      color: Colors.deepPurple[50],
-      margin: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Selected Provider Pricing:',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.deepPurple),
-            ),
-            const Divider(color: Colors.deepPurpleAccent),
-            _buildInfoRow('Provider Name:', provider.name),
-            _buildInfoRow('Provider Slug:', provider.slug),
-            const SizedBox(height: 8),
-            const Text('Pricing:', style: TextStyle(fontWeight: FontWeight.bold)),
-            _buildInfoRow('Input Price:', provider.pricing.formatTokenPrice(provider.pricing.prompt)),
-            _buildInfoRow('Output Price:', provider.pricing.formatTokenPrice(provider.pricing.completion)),
-            if (provider.pricing.request > 0)
-              _buildInfoRow('Request Price:', provider.pricing.formatRequestPrice(provider.pricing.request)),
-            const SizedBox(height: 8),
-            const Text('Context & Output:', style: TextStyle(fontWeight: FontWeight.bold)),
-            _buildInfoRow('Context Length:', _formatContextLength(provider.contextLength)),
-            _buildInfoRow('Max Output Tokens:', _formatContextLength(provider.maxCompletionTokens)),
-          ],
-        ),
-      ),
-    );
-  }
+  @override
+  Widget build(BuildContext context) {
+    final Color inputFieldBg = bg.lighten(0.05);
 
-  Widget _buildInfoRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 130,
-            child: Text(label, style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.black87)),
+          // Column 1: Model Name with Icon
+          Expanded(
+            flex: 2,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+              decoration: BoxDecoration(
+                color: inputFieldBg,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: iconFg.withOpacity(0.5)),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  buildIconWidget(model.iconUrl, Icons.psychology_alt, size: 24), // Distinct fallback for models
+                  const SizedBox(height: 4),
+                  Text(
+                    model.name,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        fontSize: 14),
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 2,
+                  ),
+                ],
+              ),
+            ),
           ),
-          Expanded(child: Text(value, style: const TextStyle(color: Colors.black))),
+          const SizedBox(width: 8),
+
+          // Column 2: Provider Dropdown with Icon
+          Expanded(
+            flex: 2,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: inputFieldBg,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: iconFg.withOpacity(0.5)),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<ModelProviderInfo>(
+                  value: selectedProvider,
+                  dropdownColor: bg.darken(0.05).withOpacity(0.9),
+                  icon: const Icon(Icons.arrow_drop_down, color: iconFg),
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  onChanged: onProviderChanged,
+                  isExpanded: true,
+                  items: model.providers.map((provider) {
+                    return DropdownMenuItem(
+                      value: provider,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          buildIconWidget(provider.iconUrl, Icons.business, size: 18), // Distinct fallback for providers
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              provider.name,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: (selectedProvider?.slug == provider.slug)
+                                    ? accent
+                                    : Colors.white,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                  selectedItemBuilder: (context) {
+                    return model.providers.map<Widget>((provider) {
+                      return Center(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            buildIconWidget(provider.iconUrl, Icons.business, size: 18), // Distinct fallback for providers
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                provider.name,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.white),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList();
+                  },
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+
+          // Column 3: All Data like price and tokens
+          Expanded(
+            flex: 5,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+              decoration: BoxDecoration(
+                color: inputFieldBg,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: iconFg.withOpacity(0.5)),
+              ),
+              child: selectedProvider == null
+                  ? Text(
+                      'Select a provider',
+                      style: TextStyle(
+                          color: iconFg.lighten(0.3).withOpacity(0.7),
+                          fontSize: 12),
+                      textAlign: TextAlign.center,
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Input: ${selectedProvider!.pricing.formatTokenPrice(selectedProvider!.pricing.prompt)}',
+                          style: TextStyle(fontSize: 12, color: iconFg.lighten(0.3)),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          'Output: ${selectedProvider!.pricing.formatTokenPrice(selectedProvider!.pricing.completion)}',
+                          style: TextStyle(fontSize: 12, color: iconFg.lighten(0.3)),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (selectedProvider!.pricing.request > 0)
+                          Text(
+                            'Request: ${selectedProvider!.pricing.formatRequestPrice(selectedProvider!.pricing.request)}',
+                            style: TextStyle(fontSize: 12, color: iconFg.lighten(0.3)),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Context: ${formatContextLength(selectedProvider!.contextLength)}',
+                          style: TextStyle(fontSize: 11, color: iconFg.lighten(0.2)),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          'Max Out: ${formatContextLength(selectedProvider!.maxCompletionTokens)}',
+                          style: TextStyle(fontSize: 11, color: iconFg.lighten(0.2)),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (selectedProvider!.isModerated != null)
+                          Text(
+                            'Moderated: ${selectedProvider!.isModerated! ? 'Yes' : 'No'}',
+                            style: TextStyle(fontSize: 11, color: iconFg.lighten(0.2)),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                      ],
+                    ),
+            ),
+          ),
         ],
       ),
     );
@@ -447,44 +638,51 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'OpenRouter Client',
+      title: 'Model Selector',
       theme: ThemeData(
-        primarySwatch: Colors.deepPurple,
-        visualDensity: VisualDensity.adaptivePlatformDensity,
-        appBarTheme: const AppBarTheme( // Fixed: Removed const from ThemeData and AppBarTheme constructor
-          backgroundColor: Colors.deepPurple,
+        brightness: Brightness.dark,
+        primaryColor: accent,
+        scaffoldBackgroundColor: bg,
+        appBarTheme: const AppBarTheme(
+          backgroundColor: bg,
           foregroundColor: Colors.white,
-          // systemOverlayStyle: SystemUiOverlayStyle.light, // This can't be const here
+          elevation: 0,
         ),
         cardTheme: const CardThemeData(
-          elevation: 4,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))), // Fixed: const here as well
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(10))),
+          margin: EdgeInsets.zero,
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.deepPurpleAccent,
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            backgroundColor: iconFg,
+            foregroundColor: bg,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
         ),
         inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: bg.lighten(0.05),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Colors.deepPurpleAccent),
+            borderSide: BorderSide(color: iconFg.withOpacity(0.5)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Colors.deepPurple, width: 2),
+            borderSide: BorderSide(color: iconFg, width: 2),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: Colors.grey[400]!),
+            borderSide: BorderSide(color: iconFg.withOpacity(0.5)),
           ),
-          labelStyle: const TextStyle(color: Colors.deepPurple),
-          floatingLabelStyle: const TextStyle(color: Colors.deepPurple, fontWeight: FontWeight.bold),
+          labelStyle: const TextStyle(color: Colors.white),
+          floatingLabelStyle:
+              const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         ),
+        visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
       home: const ModelSelectorPage(),
     );
