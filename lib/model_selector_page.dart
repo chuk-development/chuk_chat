@@ -230,17 +230,12 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
           width: size,
           height: size,
           fit: BoxFit.contain,
-          // Removed color/colorBlendMode for SVGs to display original colors.
           placeholderBuilder: (context) => SizedBox(
             width: size,
             height: size,
             child: Center(
                 child: Icon(Icons.downloading, color: iconFg.lighten(0.3), size: size / 2)),
           ),
-          // Error handling for SVG, this doesn't use errorBuilder directly,
-          // but if loading fails, the placeholderBuilder (or an empty box) will typically show.
-          // For a more robust error handling for SvgPicture.network, it's often
-          // recommended to wrap it in a FutureBuilder or a custom stateful widget.
         );
       } else {
         return Image.network(
@@ -248,7 +243,6 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
           width: size,
           height: size,
           fit: BoxFit.contain,
-          // Removed color/colorBlendMode for Image.network to display original colors.
           errorBuilder: (context, error, stackTrace) {
             print('Error loading image from $imageUrl: $error');
             return Icon(fallbackIcon, color: iconFg.lighten(0.3), size: size); // Fallback icon is tinted
@@ -462,30 +456,33 @@ class ModelSelectionRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Column 1: Model Name with Icon
+          // Column 1: Model Name with Icon (One line)
           Expanded(
-            flex: 2,
+            flex: 3, // Increased flex slightly for longer model names
             child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+              height: 56, // Fixed height to align with dropdowns
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
               decoration: BoxDecoration(
                 color: inputFieldBg,
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: iconFg.withOpacity(0.5)),
               ),
-              child: Column(
+              child: Row( // Changed to Row
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  buildIconWidget(model.iconUrl, Icons.psychology_alt, size: 24), // Distinct fallback for models
-                  const SizedBox(height: 4),
-                  Text(
-                    model.name,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        fontSize: 14),
-                    textAlign: TextAlign.center,
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 2,
+                  buildIconWidget(model.iconUrl, Icons.psychology_alt, size: 24),
+                  const SizedBox(width: 6),
+                  Expanded( // Use Expanded to ensure text is on one line
+                    child: Text(
+                      model.name,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          fontSize: 14),
+                      textAlign: TextAlign.center,
+                      overflow: TextOverflow.ellipsis, // Ensure single line
+                      maxLines: 1, // Explicitly one line
+                    ),
                   ),
                 ],
               ),
@@ -493,10 +490,11 @@ class ModelSelectionRow extends StatelessWidget {
           ),
           const SizedBox(width: 8),
 
-          // Column 2: Provider Dropdown with Icon
+          // Column 2: Provider Dropdown with Icon (Less wide)
           Expanded(
-            flex: 2,
+            flex: 3, // Similar flex to model name
             child: Container(
+              height: 56, // Fixed height to align
               padding: const EdgeInsets.symmetric(horizontal: 8),
               decoration: BoxDecoration(
                 color: inputFieldBg,
@@ -517,7 +515,7 @@ class ModelSelectionRow extends StatelessWidget {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          buildIconWidget(provider.iconUrl, Icons.business, size: 18), // Distinct fallback for providers
+                          buildIconWidget(provider.iconUrl, Icons.business, size: 18),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
@@ -542,7 +540,7 @@ class ModelSelectionRow extends StatelessWidget {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            buildIconWidget(provider.iconUrl, Icons.business, size: 18), // Distinct fallback for providers
+                            buildIconWidget(provider.iconUrl, Icons.business, size: 18),
                             const SizedBox(width: 6),
                             Expanded(
                               child: Text(
@@ -563,11 +561,12 @@ class ModelSelectionRow extends StatelessWidget {
           ),
           const SizedBox(width: 8),
 
-          // Column 3: All Data like price and tokens
+          // NEW Column 3: Price Data
           Expanded(
-            flex: 5,
+            flex: 4, // Flexible enough for prices
             child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+              height: 56, // Fixed height to align
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
               decoration: BoxDecoration(
                 color: inputFieldBg,
                 borderRadius: BorderRadius.circular(10),
@@ -575,34 +574,63 @@ class ModelSelectionRow extends StatelessWidget {
               ),
               child: selectedProvider == null
                   ? Text(
-                      'Select a provider',
+                      'Price Details',
                       style: TextStyle(
                           color: iconFg.lighten(0.3).withOpacity(0.7),
                           fontSize: 12),
                       textAlign: TextAlign.center,
                     )
                   : Column(
+                      mainAxisAlignment: MainAxisAlignment.center, // Center content vertically
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Input: ${selectedProvider!.pricing.formatTokenPrice(selectedProvider!.pricing.prompt)}',
-                          style: TextStyle(fontSize: 12, color: iconFg.lighten(0.3)),
+                          'In: ${selectedProvider!.pricing.formatTokenPrice(selectedProvider!.pricing.prompt)}',
+                          style: TextStyle(fontSize: 11, color: iconFg.lighten(0.3)),
                           overflow: TextOverflow.ellipsis,
                         ),
                         Text(
-                          'Output: ${selectedProvider!.pricing.formatTokenPrice(selectedProvider!.pricing.completion)}',
-                          style: TextStyle(fontSize: 12, color: iconFg.lighten(0.3)),
+                          'Out: ${selectedProvider!.pricing.formatTokenPrice(selectedProvider!.pricing.completion)}',
+                          style: TextStyle(fontSize: 11, color: iconFg.lighten(0.3)),
                           overflow: TextOverflow.ellipsis,
                         ),
                         if (selectedProvider!.pricing.request > 0)
                           Text(
-                            'Request: ${selectedProvider!.pricing.formatRequestPrice(selectedProvider!.pricing.request)}',
-                            style: TextStyle(fontSize: 12, color: iconFg.lighten(0.3)),
+                            'Req: ${selectedProvider!.pricing.formatRequestPrice(selectedProvider!.pricing.request)}',
+                            style: TextStyle(fontSize: 11, color: iconFg.lighten(0.3)),
                             overflow: TextOverflow.ellipsis,
                           ),
-                        const SizedBox(height: 4),
+                      ],
+                    ),
+            ),
+          ),
+          const SizedBox(width: 8),
+
+          // NEW Column 4: Context/Tokens Data (Behind Price)
+          Expanded(
+            flex: 4, // Flexible enough for token data
+            child: Container(
+              height: 56, // Fixed height to align
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+              decoration: BoxDecoration(
+                color: inputFieldBg,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: iconFg.withOpacity(0.5)),
+              ),
+              child: selectedProvider == null
+                  ? Text(
+                      'Token & Context',
+                      style: TextStyle(
+                          color: iconFg.lighten(0.3).withOpacity(0.7),
+                          fontSize: 12),
+                      textAlign: TextAlign.center,
+                    )
+                  : Column(
+                      mainAxisAlignment: MainAxisAlignment.center, // Center content vertically
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Text(
-                          'Context: ${formatContextLength(selectedProvider!.contextLength)}',
+                          'Ctx: ${formatContextLength(selectedProvider!.contextLength)}',
                           style: TextStyle(fontSize: 11, color: iconFg.lighten(0.2)),
                           overflow: TextOverflow.ellipsis,
                         ),
