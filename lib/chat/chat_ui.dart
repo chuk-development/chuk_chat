@@ -40,6 +40,13 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
   late Animation<double> _anim;
   String _selectedModel = 'Qwen3 235B'; // _selectedModel bleibt hier, da _sendMessage es verwendet
 
+  // NEW: State for the toggle buttons
+  bool _isAddActive = false; // Corresponds to Icons.add
+  bool _isBrainActive = false; // Corresponds to Icons.psychology
+  bool _isImageActive = false; // Corresponds to Icons.image
+  bool _isMicActive = false; // Corresponds to Icons.mic
+
+
   // Responsive constants
   static const double _kMaxChatContentWidth = 760.0; // Maximale Breite für Chat-Blasen und Suchleiste
   static const double _kSearchBarContentHeight = 135.0; // Die intrinsische Höhe des Inhalts der Suchleiste
@@ -119,6 +126,11 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
       _messages.clear();
       _animCtrl.reset();
       ChatStorageService.selectedChatIndex = -1;
+      // Reset button states on new chat
+      _isAddActive = false;
+      _isBrainActive = false;
+      _isImageActive = false;
+      _isMicActive = false;
     });
     Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
     await ChatStorageService.loadSavedChatsForSidebar();
@@ -153,8 +165,7 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
-    // Get colors from theme for general elements, but the search bar's internal TextField is overridden
-    // to match the original "transparent" text input field.
+    // Get colors from theme
     final Color bg = Theme.of(context).scaffoldBackgroundColor;
     final Color accent = Theme.of(context).colorScheme.primary;
     final Color iconFg = Theme.of(context).iconTheme.color!;
@@ -278,25 +289,25 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
                     textInputAction: TextInputAction.send,
                     style: TextStyle(color: iconFg),
                     decoration: InputDecoration(
-                      hintText: 'Ask me anything',
+                      hintText: 'Ask anything or @mention a Space',
                       hintStyle: TextStyle(color: iconFg.withOpacity(.8)),
-                      border: InputBorder.none, // Crucially, no border
-                      enabledBorder: InputBorder.none, // No border when enabled
-                      focusedBorder: InputBorder.none, // No border when focused
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
                       errorBorder: InputBorder.none,
                       focusedErrorBorder: InputBorder.none,
                       disabledBorder: InputBorder.none,
-                      filled: false, // Explicitly set to false to remove background fill
-                      fillColor: Colors.transparent, // Ensure transparent background
+                      filled: false,
+                      fillColor: Colors.transparent,
                       contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 0),
-                      isDense: true, // Keep it compact
+                      isDense: true,
                     ),
                     cursorColor: iconFg,
                   ),
                 ),
               ),
               const SizedBox(width: 8),
-              // Dieser Button sendet nun die Nachricht
+              // Send Message Button
               GestureDetector(
                 onTap: _sendMessage,
                 child: Container(
@@ -313,27 +324,59 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
           ),
           Row(
             children: <Widget>[
-              _buildIconBtn(Icons.add, () => print('Add')),
+              // Add Button
+              _buildIconBtn(
+                icon: Icons.add,
+                onTap: () {
+                  setState(() => _isAddActive = !_isAddActive);
+                  print('Add button toggled: $_isAddActive');
+                },
+                isActive: _isAddActive,
+              ),
               const SizedBox(width: 8),
-              _buildIconBtn(Icons.psychology, () => print('Brain')),
+              // Brain Button
+              _buildIconBtn(
+                icon: Icons.psychology,
+                onTap: () {
+                  setState(() => _isBrainActive = !_isBrainActive);
+                  print('Brain button toggled: $_isBrainActive');
+                },
+                isActive: _isBrainActive,
+              ),
               const SizedBox(width: 8),
-              _buildIconBtn(Icons.image, () => print('Image')),
+              // Image Button
+              _buildIconBtn(
+                icon: Icons.image,
+                onTap: () {
+                  setState(() => _isImageActive = !_isImageActive);
+                  print('Image button toggled: $_isImageActive');
+                },
+                isActive: _isImageActive,
+              ),
               const Spacer(),
-              // Verwende das neue ModelSelectionDropdown Widget
+              // Model Selection Dropdown
               ModelSelectionDropdown(
                 initialSelectedModel: _selectedModel,
                 onModelSelected: (newModel) {
                   setState(() {
-                    _selectedModel = newModel; // Aktualisiere _selectedModel im Parent-Widget
+                    _selectedModel = newModel;
                   });
                 },
                 textFieldFocusNode: _textFieldFocusNode,
                 isCompactMode: isCompactMode,
               ),
-              const SizedBox(width: 8), // Konsistenter 8px Abstand
-              _buildIconBtn(Icons.mic, () => print('Mic')),
               const SizedBox(width: 8),
-              // Dieser Button bleibt für den Voice Mode
+              // Mic Button (for a quick toggle in the main chat UI)
+              _buildIconBtn(
+                icon: Icons.mic,
+                onTap: () {
+                  setState(() => _isMicActive = !_isMicActive);
+                  print('Mic button toggled: $_isMicActive');
+                },
+                isActive: _isMicActive,
+              ),
+              const SizedBox(width: 8),
+              // Voice Mode Button (navigates to VoiceModePage)
               GestureDetector(
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const VoiceModePage()),
@@ -355,12 +398,16 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
     );
   }
 
-  Widget _buildIconBtn(IconData icon, VoidCallback onTap) {
-    // Get colors from theme here for this widget
+  Widget _buildIconBtn({
+    required IconData icon,
+    required VoidCallback onTap,
+    required bool isActive,
+  }) {
+    // Get current theme colors
     final Color bg = Theme.of(context).scaffoldBackgroundColor;
     final Color iconFg = Theme.of(context).iconTheme.color!;
 
-    // Verwendet einen ValueNotifier, um den Hover-Zustand für die Randanimation zu verwalten
+    // Use a ValueNotifier for hover state to preserve existing hover animation
     final ValueNotifier<bool> isHovered = ValueNotifier<bool>(false);
 
     return MouseRegion(
@@ -369,26 +416,43 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(10),
-        splashFactory: InkRipple.splashFactory, // Standard Ripple-Effekt
-        hoverColor: Colors.transparent, // Keine Hintergrundfüllung beim Hover
-        highlightColor: Colors.transparent, // Keine Hintergrundfüllung beim Highlight
+        splashFactory: InkRipple.splashFactory,
+        hoverColor: Colors.transparent,
+        highlightColor: Colors.transparent,
         child: ValueListenableBuilder<bool>(
           valueListenable: isHovered,
           builder: (context, hovered, child) {
+            // Determine colors based on isActive state
+            final Color effectiveBgColor = isActive ? iconFg : bg; // Active: button is iconFg color
+            final Color effectiveIconColor = isActive ? bg : iconFg; // Active: icon is bg color
+
+            // Determine border color based on hover or active state
+            final Color effectiveBorderColor = hovered
+                ? iconFg // Bright border on hover
+                : isActive
+                    ? iconFg.withOpacity(0.6) // Slightly muted active border
+                    : iconFg.withOpacity(.3); // Default border
+
+            final double effectiveBorderWidth = hovered
+                ? 1.2
+                : isActive
+                    ? 1.0 // Slightly thicker active border
+                    : 0.8;
+
             return AnimatedContainer(
               duration: const Duration(milliseconds: 150),
               curve: Curves.easeOutCubic,
               width: 44,
               height: 36,
               decoration: BoxDecoration(
-                color: bg,
+                color: effectiveBgColor,
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: hovered ? iconFg : iconFg.withOpacity(.3), // Dickerer/hellerer Rand beim Hover
-                  width: hovered ? 1.2 : 0.8,
+                  color: effectiveBorderColor,
+                  width: effectiveBorderWidth,
                 ),
               ),
-              child: Icon(icon, color: iconFg, size: 20),
+              child: Icon(icon, color: effectiveIconColor, size: 20),
             );
           },
         ),
