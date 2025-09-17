@@ -143,7 +143,7 @@ class ModelSelectorPage extends StatefulWidget {
 }
 
 class _ModelSelectorPageState extends State<ModelSelectorPage> {
-  final String _baseUrl = 'http://127.0.0.1:8000'; // <--- IMPORTANT: SET YOUR FASTAPI SERVER URL HERE
+  final String _baseUrl = 'https://api.chuk.dev';
   List<CustomModelInfo> _models = [];
   Map<String, ModelProviderInfo?> _selectedProviders = {};
   bool _isLoading = true;
