@@ -289,7 +289,7 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
                     textInputAction: TextInputAction.send,
                     style: TextStyle(color: iconFg),
                     decoration: InputDecoration(
-                      hintText: 'Ask anything or @mention a Space',
+                      hintText: 'Ask me anything !',
                       hintStyle: TextStyle(color: iconFg.withOpacity(.8)),
                       border: InputBorder.none,
                       enabledBorder: InputBorder.none,
@@ -332,6 +332,7 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
                   print('Add button toggled: $_isAddActive');
                 },
                 isActive: _isAddActive,
+                debugLabel: 'Add button', // Added debug label
               ),
               const SizedBox(width: 8),
               // Brain Button
@@ -342,6 +343,7 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
                   print('Brain button toggled: $_isBrainActive');
                 },
                 isActive: _isBrainActive,
+                debugLabel: 'Brain button', // Added debug label
               ),
               const SizedBox(width: 8),
               // Image Button
@@ -352,6 +354,7 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
                   print('Image button toggled: $_isImageActive');
                 },
                 isActive: _isImageActive,
+                debugLabel: 'Image button', // Added debug label
               ),
               const Spacer(),
               // Model Selection Dropdown
@@ -374,6 +377,7 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
                   print('Mic button toggled: $_isMicActive');
                 },
                 isActive: _isMicActive,
+                debugLabel: 'Mic button', // Added debug label
               ),
               const SizedBox(width: 8),
               // Voice Mode Button (navigates to VoiceModePage)
@@ -402,6 +406,7 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
     required IconData icon,
     required VoidCallback onTap,
     required bool isActive,
+    String? debugLabel, // New: Optional debug label
   }) {
     // Get current theme colors
     final Color bg = Theme.of(context).scaffoldBackgroundColor;
@@ -438,6 +443,11 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
                 : isActive
                     ? 1.0 // Slightly thicker active border
                     : 0.8;
+
+            // Debug print for this specific button
+            if (debugLabel != null) {
+              print('[$debugLabel] isActive: $isActive, effectiveBgColor: $effectiveBgColor, effectiveIconColor: $effectiveIconColor');
+            }
 
             return AnimatedContainer(
               duration: const Duration(milliseconds: 150),
