@@ -8,7 +8,6 @@ import 'package:ui_elements_flutter/services/chat_storage_service.dart';
 import 'package:ui_elements_flutter/widgets/message_bubble.dart';
 import 'package:ui_elements_flutter/pages/voice_mode_page.dart';
 import 'package:ui_elements_flutter/widgets/model_selection_dropdown.dart';
-// Removed ColorExtension import as it's not directly used here anymore for colors
 
 /* ---------- CHAT UI ---------- */
 class ChukChatUI extends StatefulWidget {
@@ -45,7 +44,7 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
   static const double _kMaxChatContentWidth = 760.0; // Maximale Breite für Chat-Blasen und Suchleiste
   static const double _kSearchBarContentHeight = 135.0; // Die intrinsische Höhe des Inhalts der Suchleiste
 
-  // NEU: Responsive horizontale Polsterung
+  // Responsive horizontale Polsterung
   static const double _kHorizontalPaddingLarge = 16.0; // Standard-Horizontal-Padding für große Bildschirme
   static const double _kHorizontalPaddingSmall = 8.0; // Horizontal-Padding im Kompaktmodus (kleinere Bildschirme)
 
@@ -154,33 +153,19 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
-    // Get colors from theme
-    // NOTE: bg is not fetched from theme in the original design; it's implicit from the Container below.
-    // However, for consistency with other themed elements, we'll use scaffoldBackgroundColor here
-    // for `bg` if it was meant to be used in generic elements within chat_ui.
-    // For the search bar, it explicitly uses `bg` (which is theme's scaffoldBg).
+    // Get colors from theme for general elements, but the search bar's internal TextField is overridden
+    // to match the original "transparent" text input field.
     final Color bg = Theme.of(context).scaffoldBackgroundColor;
     final Color accent = Theme.of(context).colorScheme.primary;
     final Color iconFg = Theme.of(context).iconTheme.color!;
 
-    // NEU: Responsive horizontale Polsterung basierend auf dem Kompaktmodus-Flag des Widgets
     final double effectiveHorizontalPadding = widget.isCompactMode ? _kHorizontalPaddingSmall : _kHorizontalPaddingLarge;
-
-    // Die maximale Breite, die der Chat-Inhalt (Blasen oder Suchleisten-Container) einnehmen kann
-    // Berücksichtigt screenWidth, responsive Polsterung und die feste Maximalbreite.
     final double maxPossibleChatContentWidth = math.max(0.0, screenWidth - (effectiveHorizontalPadding * 2));
     final double constrainedChatContentWidth = math.min(_kMaxChatContentWidth, maxPossibleChatContentWidth);
-
-    // Die tatsächliche Breite des Chat-Containers (Nachrichten oder Suchleiste).
-    // Wenn keine Nachrichten vorhanden sind, ist die Breite auf kompakten Bildschirmen fast voll,
-    // auf großen Bildschirmen 80% der mögliche Breite.
     final double currentChatContentWidth = _messages.isEmpty
-        ? constrainedChatContentWidth * (widget.isCompactMode ? 0.95 : 0.8) // Fast volle Breite im Kompakt-Leerzustand
+        ? constrainedChatContentWidth * (widget.isCompactMode ? 0.95 : 0.8)
         : constrainedChatContentWidth;
-
-    // Berechnet die Gesamthöhe des Suchleisten-Widgets, einschließlich seines internen Paddings.
     final double searchBarWidgetTotalHeight = _kSearchBarContentHeight + (2 * 14.0);
-    // Zusätzlicher Padding unten für ästhetischen Abstand unter der Suchleiste
     final double bottomOffsetForChatList = searchBarWidgetTotalHeight + effectiveHorizontalPadding;
 
 
@@ -191,14 +176,14 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
           if (_messages.isEmpty)
             Center(
               child: SizedBox(
-                width: currentChatContentWidth, // Verwendet die responsive Breite
+                width: currentChatContentWidth,
                 child: _buildSearchBar(isCompactMode: widget.isCompactMode),
               ),
             )
           else
             // Chat-Nachrichtenliste
             Positioned(
-              top: 0, // Chat-Liste beginnt oben
+              top: 0,
               bottom: bottomOffsetForChatList,
               left: 0,
               right: 0,
@@ -206,7 +191,7 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   curve: Curves.easeOutCubic,
-                  constraints: BoxConstraints(maxWidth: currentChatContentWidth), // Verwendet die responsive Breite
+                  constraints: BoxConstraints(maxWidth: currentChatContentWidth),
                   child: ListView.builder(
                     controller: _scrollController,
                     padding: EdgeInsets.symmetric(horizontal: effectiveHorizontalPadding, vertical: 10),
@@ -216,7 +201,7 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
                       return MessageBubble(
                         message: m['text']!,
                         isUser: m['sender'] == 'user',
-                        maxWidth: currentChatContentWidth * 0.7, // Maximale Breite für Blasen basierend auf Containerbreite
+                        maxWidth: currentChatContentWidth * 0.7,
                       );
                     },
                   ),
@@ -228,12 +213,12 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
             Align(
               alignment: Alignment.bottomCenter,
               child: Padding(
-                padding: EdgeInsets.all(effectiveHorizontalPadding), // Padding um die Suchleiste
+                padding: EdgeInsets.all(effectiveHorizontalPadding),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   curve: Curves.easeOutCubic,
-                  width: currentChatContentWidth, // Verwendet die responsive Breite
-                  child: _buildSearchBar(isCompactMode: widget.isCompactMode), // Baut nun den inneren Container
+                  width: currentChatContentWidth,
+                  child: _buildSearchBar(isCompactMode: widget.isCompactMode),
                 ),
               ),
             ),
@@ -250,13 +235,13 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
     final Color iconFg = Theme.of(context).iconTheme.color!;
 
     return Container(
-      height: _kSearchBarContentHeight, // Verwendet die Konstante für die intrinsische Höhe
+      height: _kSearchBarContentHeight,
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: iconFg.withOpacity(.3)),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14), // Internes Padding des Suchleisteninhalts
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -295,12 +280,16 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
                     decoration: InputDecoration(
                       hintText: 'Ask anything or @mention a Space',
                       hintStyle: TextStyle(color: iconFg.withOpacity(.8)),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 0),
-                      // --- START FIX ---
+                      border: InputBorder.none, // Crucially, no border
+                      enabledBorder: InputBorder.none, // No border when enabled
+                      focusedBorder: InputBorder.none, // No border when focused
+                      errorBorder: InputBorder.none,
+                      focusedErrorBorder: InputBorder.none,
+                      disabledBorder: InputBorder.none,
                       filled: false, // Explicitly set to false to remove background fill
-                      isDense: true, // Reduce overall height impact
-                      // --- END FIX ---
+                      fillColor: Colors.transparent, // Ensure transparent background
+                      contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 0),
+                      isDense: true, // Keep it compact
                     ),
                     cursorColor: iconFg,
                   ),
