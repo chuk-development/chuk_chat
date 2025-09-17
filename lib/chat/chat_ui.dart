@@ -278,7 +278,7 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
                     textInputAction: TextInputAction.send,
                     style: TextStyle(color: iconFg),
                     decoration: InputDecoration(
-                      hintText: 'Ask anything or @mention a Space',
+                      hintText: 'Ask me anything',
                       hintStyle: TextStyle(color: iconFg.withOpacity(.8)),
                       border: InputBorder.none, // Crucially, no border
                       enabledBorder: InputBorder.none, // No border when enabled

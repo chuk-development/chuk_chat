@@ -27,13 +27,13 @@ class _ChukChatAppState extends State<ChukChatApp> {
   Brightness _currentThemeMode = kDefaultThemeMode;
   Color _currentAccentColor = kDefaultAccentColor;
   Color _currentIconFgColor = kDefaultIconFgColor;
-  Color _currentBgColor = kDefaultBgColor;
+  Color _currentBgColor = kDefaultBgColor; // Managed here
 
   // Key for SharedPreferences
   static const String _kThemeModeKey = 'themeMode';
   static const String _kAccentColorKey = 'accentColor';
   static const String _kIconFgColorKey = 'iconFgColor';
-  static const String _kBgColorKey = 'bgColor';
+  static const String _kBgColorKey = 'bgColor'; // Key for background color
 
   @override
   void initState() {
@@ -64,10 +64,6 @@ class _ChukChatAppState extends State<ChukChatApp> {
     await prefs.setString(_kThemeModeKey, newMode == Brightness.light ? 'light' : 'dark');
     setState(() {
       _currentThemeMode = newMode;
-      // Also update bg color based on brightness if using a simple toggle
-      // Simplified: Just use default or a lightened version for light mode
-      _currentBgColor = newMode == Brightness.dark ? kDefaultBgColor : kDefaultBgColor.lighten(0.8);
-      prefs.setString(_kBgColorKey, _currentBgColor.toHexString());
     });
   }
 
@@ -87,13 +83,22 @@ class _ChukChatAppState extends State<ChukChatApp> {
     });
   }
 
+  void _setBgColor(Color newColor) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kBgColorKey, newColor.toHexString());
+    setState(() {
+      _currentBgColor = newColor;
+    });
+  }
+
+
   @override
   Widget build(BuildContext context) {
     // Construct the theme data dynamically
     final appTheme = buildAppTheme(
       accent: _currentAccentColor,
       iconFg: _currentIconFgColor,
-      bg: _currentBgColor,
+      bg: _currentBgColor, // Use the current background color
       brightness: _currentThemeMode,
     );
 
@@ -109,6 +114,7 @@ class _ChukChatAppState extends State<ChukChatApp> {
         setThemeMode: _setThemeMode,
         setAccentColor: _setAccentColor,
         setIconFgColor: _setIconFgColor,
+        setBgColor: _setBgColor, // Pass new callback
       ),
     );
   }
@@ -123,6 +129,7 @@ class RootWrapper extends StatefulWidget {
   final Function(Brightness) setThemeMode;
   final Function(Color) setAccentColor;
   final Function(Color) setIconFgColor;
+  final Function(Color) setBgColor; // New
 
   const RootWrapper({
     Key? key,
@@ -133,6 +140,7 @@ class RootWrapper extends StatefulWidget {
     required this.setThemeMode,
     required this.setAccentColor,
     required this.setIconFgColor,
+    required this.setBgColor, // New
   }) : super(key: key);
 
   @override
@@ -161,6 +169,7 @@ class _RootWrapperState extends State<RootWrapper> {
         setThemeMode: widget.setThemeMode,
         setAccentColor: widget.setAccentColor,
         setIconFgColor: widget.setIconFgColor,
+        setBgColor: widget.setBgColor, // Pass new callback
       ),
     ));
   }

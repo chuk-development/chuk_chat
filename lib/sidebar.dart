@@ -2,8 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:ui_elements_flutter/constants.dart';
 import 'package:ui_elements_flutter/services/chat_storage_service.dart';
-// NEW: Import the color extensions to use lighten/darken methods
-import 'package:ui_elements_flutter/utils/color_extensions.dart';
+import 'package:ui_elements_flutter/utils/color_extensions.dart'; // Import the color extensions
 
 final List<String> _starredChats = ['Book writing Per chapter']; // Kept local for now
 
@@ -119,23 +118,82 @@ class _CustomSidebarState extends State<CustomSidebar> {
             ),
           ),
 
-          // User profile section at the bottom - Fixed
+          // User profile section at the bottom - Now a PopupMenuButton with precise control
           Align(
             alignment: Alignment.bottomCenter,
             child: Padding(
               padding: const EdgeInsets.all(8.0),
-              child: ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: iconFg.withOpacity(0.3),
-                  child: Text('DM',
-                      style: TextStyle(color: iconFg, fontSize: 16)),
+              child: PopupMenuButton<String>(
+                tooltip: 'User options',
+                // This child is what gets rendered, and its tap triggers the menu.
+                // It should have the same appearance as the ListTile, but allow for proper tap handling
+                // by the PopupMenuButton itself.
+                child: InkWell( // Use InkWell here to ensure the ripple effect still works
+                  borderRadius: BorderRadius.circular(8),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: iconFg.withOpacity(0.3),
+                      child: Text('DM',
+                          style: TextStyle(color: iconFg, fontSize: 16)),
+                    ),
+                    title: Text('User Name', style: TextStyle(color: iconFg)),
+                    trailing: Icon(Icons.keyboard_arrow_up, color: iconFg), // Arrow pointing up
+                    contentPadding: const EdgeInsets.symmetric(horizontal: _sidebarHorizontalPadding),
+                  ),
                 ),
-                title: Text('User Name', style: TextStyle(color: iconFg)),
-                trailing: Icon(Icons.keyboard_arrow_down, color: iconFg),
-                contentPadding: const EdgeInsets.symmetric(horizontal: _sidebarHorizontalPadding),
-                onTap: () {
-                  _showUserOptions(context); // Show user options menu
+                // Custom styling for the popup menu
+                color: sidebarBg.lighten(0.05), // Slightly lighter than sidebar background for the menu card itself
+                elevation: 8.0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  side: BorderSide(color: iconFg.withOpacity(0.3), width: 1),
+                ),
+                // IMPORTANT: Precise positioning and width control
+                // The offset moves the menu relative to the bottom-left corner of the `child`.
+                // For a menu of 2 items (approx 40px each + padding), total height ~96px.
+                // We want its bottom to be aligned just above the child's top.
+                // ListTile height is about 56px.
+                // So, offset.dy = -(Menu Height + small gap)
+                offset: const Offset(0, -96), // Adjusted offset: 2*40 + 2*8 + 8(gap) = 96
+                constraints: const BoxConstraints(
+                  minWidth: 180, // Minimum width of the menu
+                  maxWidth: 220, // Maximum width, prevents it from taking full sidebar width
+                  minHeight: kButtonVisualHeight * 2 + 16, // Ensure it's tall enough for content
+                ),
+                onSelected: (value) {
+                  if (value == 'settings') {
+                    widget.onSettingsTapped(); // Call parent settings handler
+                  } else if (value == 'logout') {
+                    print('Logout pressed');
+                    // TODO: Implement actual logout logic here
+                  }
                 },
+                itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                  PopupMenuItem<String>(
+                    value: 'settings',
+                    height: kButtonVisualHeight, // Consistent button height
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        Icon(Icons.settings, color: iconFg, size: 20),
+                        const SizedBox(width: 12),
+                        Text('Settings', style: TextStyle(color: iconFg, fontSize: 15)),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem<String>(
+                    value: 'logout',
+                    height: kButtonVisualHeight, // Consistent button height
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        Icon(Icons.logout, color: iconFg, size: 20),
+                        const SizedBox(width: 12),
+                        Text('Logout', style: TextStyle(color: iconFg, fontSize: 15)),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -196,80 +254,5 @@ class _CustomSidebarState extends State<CustomSidebar> {
       selectedTileColor: accentColor.withOpacity(0.1),
       selectedColor: accentColor,
     );
-  }
-
-  // New method to show user options menu
-  void _showUserOptions(BuildContext context) {
-    // Access theme colors dynamically
-    final Color iconFg = Theme.of(context).iconTheme.color!;
-    final Color bg = Theme.of(context).scaffoldBackgroundColor;
-    final TextStyle? textStyle = Theme.of(context).listTileTheme.textColor != null
-        ? TextStyle(color: Theme.of(context).listTileTheme.textColor)
-        : null;
-
-    // Get the render box of the ListTile to position the menu accurately
-    final RenderBox? renderBox = context.findRenderObject() as RenderBox?;
-    if (renderBox == null) return;
-
-    final Offset offset = renderBox.localToGlobal(Offset.zero);
-    final Size size = renderBox.size;
-    final double screenHeight = MediaQuery.of(context).size.height;
-    final double screenWidth = MediaQuery.of(context).size.width;
-
-    // The 'bottom' property of RelativeRect.fromLTRB defines the distance from
-    // the bottom of the *stack* (the entire screen) to the bottom of the *anchor area*.
-    // To make the menu open *above* the ListTile, we want the bottom of its anchor
-    // area to be at the *top* of the ListTile.
-    final double menuAnchorBottom = screenHeight - offset.dy; // Distance from screen bottom to ListTile's top
-
-    showMenu<String>(
-      context: context,
-      // Define the anchor area. The menu will try to open above this area if possible.
-      position: RelativeRect.fromLTRB(
-        offset.dx, // Left edge of the menu anchor aligns with left of ListTile
-        0,         // Top can be 0, as showMenu will determine actual top position
-        screenWidth - (offset.dx + size.width), // Right edge of the menu anchor aligns with right of ListTile
-        menuAnchorBottom, // Bottom of the menu anchor aligns with top of ListTile
-      ),
-      color: bg, // Match app background
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: iconFg.withOpacity(.3)),
-      ),
-      items: <PopupMenuEntry<String>>[
-        PopupMenuItem<String>(
-          value: 'settings',
-          height: 40,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              Icon(Icons.settings, color: iconFg, size: 20),
-              const SizedBox(width: 12),
-              Text('Settings', style: textStyle),
-            ],
-          ),
-        ),
-        PopupMenuItem<String>(
-          value: 'logout',
-          height: 40,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              Icon(Icons.logout, color: iconFg, size: 20),
-              const SizedBox(width: 12),
-              Text('Logout', style: textStyle),
-            ],
-          ),
-        ),
-      ],
-      elevation: 8.0,
-    ).then((value) {
-      if (value == 'settings') {
-        widget.onSettingsTapped(); // Use the existing callback for settings
-      } else if (value == 'logout') {
-        print('Logout pressed');
-        // TODO: Implement actual logout logic here
-      }
-    });
   }
 }

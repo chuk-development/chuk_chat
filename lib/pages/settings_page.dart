@@ -9,20 +9,22 @@ class SettingsPage extends StatelessWidget {
   final Brightness currentThemeMode;
   final Color currentAccentColor;
   final Color currentIconFgColor;
-  final Color currentBgColor;
+  final Color currentBgColor; // Now passed for ThemePage to display initial
   final Function(Brightness) setThemeMode;
   final Function(Color) setAccentColor;
   final Function(Color) setIconFgColor;
+  final Function(Color) setBgColor; // Now passed for ThemePage to use
 
   const SettingsPage({
     Key? key,
     required this.currentThemeMode,
     required this.currentAccentColor,
     required this.currentIconFgColor,
-    required this.currentBgColor,
+    required this.currentBgColor, // New
     required this.setThemeMode,
     required this.setAccentColor,
     required this.setIconFgColor,
+    required this.setBgColor, // New
   }) : super(key: key);
 
   @override
@@ -58,10 +60,11 @@ class SettingsPage extends StatelessWidget {
                     currentThemeMode: currentThemeMode,
                     currentAccentColor: currentAccentColor,
                     currentIconFgColor: currentIconFgColor,
-                    currentBgColor: currentBgColor,
+                    currentBgColor: currentBgColor, // Pass current background color
                     setThemeMode: setThemeMode,
                     setAccentColor: setAccentColor,
                     setIconFgColor: setIconFgColor,
+                    setBgColor: setBgColor, // Pass background color setter
                   ),
                 ),
               );

@@ -9,10 +9,11 @@ class ThemePage extends StatefulWidget {
   final Brightness currentThemeMode;
   final Color currentAccentColor;
   final Color currentIconFgColor;
-  final Color currentBgColor; // Passed for initial display logic
+  final Color currentBgColor; // Now also passed for editing
   final Function(Brightness) setThemeMode;
   final Function(Color) setAccentColor;
   final Function(Color) setIconFgColor;
+  final Function(Color) setBgColor; // New callback
 
   const ThemePage({
     Key? key,
@@ -23,6 +24,7 @@ class ThemePage extends StatefulWidget {
     required this.setThemeMode,
     required this.setAccentColor,
     required this.setIconFgColor,
+    required this.setBgColor, // New
   }) : super(key: key);
 
   @override
@@ -33,9 +35,11 @@ class _ThemePageState extends State<ThemePage> {
   late Brightness _selectedThemeMode;
   late Color _selectedAccentColor;
   late Color _selectedIconFgColor;
+  late Color _selectedBgColor; // New
 
   final TextEditingController _accentHexController = TextEditingController();
   final TextEditingController _iconFgHexController = TextEditingController();
+  final TextEditingController _bgHexController = TextEditingController(); // New
 
   // Predefined color options for easy selection
   final List<Color> _accentColorOptions = [
@@ -54,38 +58,45 @@ class _ThemePageState extends State<ThemePage> {
     Colors.amber,
   ];
 
+  final List<Color> _bgColorOptions = [
+    kDefaultBgColor, // Default dark
+    kDefaultBgColor.lighten(0.8), // A predefined light option
+    Colors.black87,
+    Colors.blueGrey.shade900,
+    Colors.deepPurple.shade900,
+    Colors.white,
+    Colors.grey.shade100,
+    Colors.blue.shade50,
+  ];
+
+
   @override
   void initState() {
     super.initState();
     _selectedThemeMode = widget.currentThemeMode;
     _selectedAccentColor = widget.currentAccentColor;
     _selectedIconFgColor = widget.currentIconFgColor;
+    _selectedBgColor = widget.currentBgColor; // Initialize with current background color
 
     _accentHexController.text = _selectedAccentColor.toHexString();
     _iconFgHexController.text = _selectedIconFgColor.toHexString();
+    _bgHexController.text = _selectedBgColor.toHexString(); // Initialize hex controller
   }
 
   @override
   void dispose() {
     _accentHexController.dispose();
     _iconFgHexController.dispose();
+    _bgHexController.dispose(); // Dispose new controller
     super.dispose();
   }
 
-  void _updateTheme() {
+  // This method applies changes to the parent and saves them to SharedPreferences
+  void _applyThemeChanges() {
     widget.setThemeMode(_selectedThemeMode);
     widget.setAccentColor(_selectedAccentColor);
     widget.setIconFgColor(_selectedIconFgColor);
-
-    // After updating, save these to SharedPreferences for persistence
-    _saveColorsToPrefs();
-  }
-
-  // Save selected custom colors to SharedPreferences
-  Future<void> _saveColorsToPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('accentColor', _selectedAccentColor.toHexString());
-    await prefs.setString('iconFgColor', _selectedIconFgColor.toHexString());
+    widget.setBgColor(_selectedBgColor); // Apply background color change
   }
 
   @override
@@ -128,7 +139,14 @@ class _ThemePageState extends State<ThemePage> {
               onChanged: (bool value) {
                 setState(() {
                   _selectedThemeMode = value ? Brightness.dark : Brightness.light;
-                  _updateTheme(); // Apply theme changes immediately
+                  // When theme mode changes, also set a default background color
+                  // that aligns with the chosen brightness, but allow override by explicit
+                  // background color selection.
+                  _selectedBgColor = _selectedThemeMode == Brightness.dark
+                      ? kDefaultBgColor
+                      : kDefaultBgColor.lighten(0.8);
+                  _bgHexController.text = _selectedBgColor.toHexString();
+                  _applyThemeChanges(); // Apply theme changes immediately
                 });
               },
               activeColor: accent,
@@ -149,7 +167,7 @@ class _ThemePageState extends State<ThemePage> {
               setState(() {
                 _selectedAccentColor = color;
                 _accentHexController.text = color.toHexString();
-                _updateTheme();
+                _applyThemeChanges();
               });
             },
             hexController: _accentHexController,
@@ -158,10 +176,9 @@ class _ThemePageState extends State<ThemePage> {
                 final color = ColorExtension.fromHexString(hex);
                 setState(() {
                   _selectedAccentColor = color;
-                  _updateTheme();
+                  _applyThemeChanges();
                 });
               } catch (e) {
-                // Invalid hex code, do nothing or show error
                 print('Invalid accent hex: $hex');
               }
             },
@@ -181,7 +198,7 @@ class _ThemePageState extends State<ThemePage> {
               setState(() {
                 _selectedIconFgColor = color;
                 _iconFgHexController.text = color.toHexString();
-                _updateTheme();
+                _applyThemeChanges();
               });
             },
             hexController: _iconFgHexController,
@@ -190,11 +207,41 @@ class _ThemePageState extends State<ThemePage> {
                 final color = ColorExtension.fromHexString(hex);
                 setState(() {
                   _selectedIconFgColor = color;
-                  _updateTheme();
+                  _applyThemeChanges();
                 });
               } catch (e) {
-                // Invalid hex code, do nothing or show error
                 print('Invalid iconFg hex: $hex');
+              }
+            },
+            contextBgColor: scaffoldBg,
+            contextAccentColor: accent,
+            contextIconFgColor: iconFg,
+          ),
+          const SizedBox(height: 24),
+
+          // Background Color Selection (NEW SECTION)
+          _buildColorSelectionSection(
+            title: 'Background Color',
+            description: 'Choose the main background color for the app',
+            currentColor: _selectedBgColor,
+            options: _bgColorOptions,
+            onColorSelected: (color) {
+              setState(() {
+                _selectedBgColor = color;
+                _bgHexController.text = color.toHexString();
+                _applyThemeChanges();
+              });
+            },
+            hexController: _bgHexController,
+            onHexChanged: (hex) {
+              try {
+                final color = ColorExtension.fromHexString(hex);
+                setState(() {
+                  _selectedBgColor = color;
+                  _applyThemeChanges();
+                });
+              } catch (e) {
+                print('Invalid background hex: $hex');
               }
             },
             contextBgColor: scaffoldBg,
