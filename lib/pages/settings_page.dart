@@ -1,96 +1,153 @@
 // lib/pages/settings_page.dart
 import 'package:flutter/material.dart';
-import 'package:ui_elements_flutter/constants.dart'; // Import app constants for colors
+import 'package:ui_elements_flutter/constants.dart'; // Import app constants for default colors
 import 'package:ui_elements_flutter/model_selector_page.dart'; // Import the ModelSelectorPage
+import 'package:ui_elements_flutter/pages/theme_page.dart'; // Import the new ThemePage
+import 'package:ui_elements_flutter/utils/color_extensions.dart'; // Import ColorExtension
 
 class SettingsPage extends StatelessWidget {
-  const SettingsPage({Key? key}) : super(key: key);
+  final Brightness currentThemeMode;
+  final Color currentAccentColor;
+  final Color currentIconFgColor;
+  final Color currentBgColor;
+  final Function(Brightness) setThemeMode;
+  final Function(Color) setAccentColor;
+  final Function(Color) setIconFgColor;
+
+  const SettingsPage({
+    Key? key,
+    required this.currentThemeMode,
+    required this.currentAccentColor,
+    required this.currentIconFgColor,
+    required this.currentBgColor,
+    required this.setThemeMode,
+    required this.setAccentColor,
+    required this.setIconFgColor,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    // Access theme colors dynamically
+    final Color scaffoldBg = Theme.of(context).scaffoldBackgroundColor;
+    final Color accent = Theme.of(context).colorScheme.primary;
+    final Color iconFg = Theme.of(context).iconTheme.color!;
+    final TextStyle? titleTextStyle = Theme.of(context).appBarTheme.titleTextStyle;
+
     return Scaffold(
-      backgroundColor: bg,
+      backgroundColor: scaffoldBg,
       appBar: AppBar(
-        title: const Text('Settings'),
-        backgroundColor: bg,
+        title: Text('Settings', style: titleTextStyle),
+        backgroundColor: scaffoldBg,
         elevation: 0,
-        iconTheme: const IconThemeData(color: iconFg), // Set back button color
-        titleTextStyle: TextStyle(color: iconFg, fontSize: 20), // Set title text color
+        iconTheme: IconThemeData(color: iconFg), // Set back button color
       ),
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
-          // Setting: Model Selection
-          Card(
-            color: bg.lighten(0.05), // Slightly lighter background for the card
-            margin: const EdgeInsets.only(bottom: 16.0),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: iconFg.withOpacity(0.3), width: 1),
-            ),
-            child: ListTile(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              leading: Icon(Icons.psychology_alt, color: accent), // Accent color for the icon
-              title: const Text(
-                'Model Selection',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 16,
-                ),
-              ),
-              subtitle: Text(
-                'Choose and configure your AI models',
-                style: TextStyle(color: iconFg.lighten(0.3), fontSize: 13),
-              ),
-              trailing: Icon(Icons.arrow_forward_ios, color: iconFg),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const ModelSelectorPage()),
-                );
-              },
-            ),
-          ),
-          // Example of another setting option
-          Card(
-            color: bg.lighten(0.05),
-            margin: const EdgeInsets.only(bottom: 16.0),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: iconFg.withOpacity(0.3), width: 1),
-            ),
-            child: ListTile(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              leading: Icon(Icons.dark_mode, color: accent),
-              title: const Text(
-                'Theme Settings',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 16,
-                ),
-              ),
-              subtitle: Text(
-                'Adjust app theme and appearance',
-                style: TextStyle(color: iconFg.lighten(0.3), fontSize: 13),
-              ),
-              trailing: Icon(Icons.arrow_forward_ios, color: iconFg),
-              onTap: () {
-                // Navigate to Theme Settings page or show a dialog
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text('Theme settings tapped!'),
-                    backgroundColor: accent,
+          // Setting: Theme Settings (NEW)
+          _buildSettingsCard(
+            context,
+            title: 'Theme Settings',
+            subtitle: 'Adjust app theme, colors, and appearance',
+            icon: Icons.palette,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ThemePage(
+                    currentThemeMode: currentThemeMode,
+                    currentAccentColor: currentAccentColor,
+                    currentIconFgColor: currentIconFgColor,
+                    currentBgColor: currentBgColor,
+                    setThemeMode: setThemeMode,
+                    setAccentColor: setAccentColor,
+                    setIconFgColor: setIconFgColor,
                   ),
-                );
-              },
-            ),
+                ),
+              );
+            },
+            accentColor: accent,
+            iconFgColor: iconFg,
+            bgColor: scaffoldBg,
           ),
-          // Add more settings options as needed
+          const SizedBox(height: 16), // Spacing between cards
+
+          // Setting: Model Selection (Existing)
+          _buildSettingsCard(
+            context,
+            title: 'Model Selection',
+            subtitle: 'Choose and configure your AI models',
+            icon: Icons.psychology_alt,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ModelSelectorPage()),
+              );
+            },
+            accentColor: accent,
+            iconFgColor: iconFg,
+            bgColor: scaffoldBg,
+          ),
+          const SizedBox(height: 16), // Spacing between cards
+
+          // Example of another setting option
+          _buildSettingsCard(
+            context,
+            title: 'Account Settings',
+            subtitle: 'Manage your profile and account',
+            icon: Icons.person_outline,
+            onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text('Account settings tapped!'),
+                  backgroundColor: accent,
+                ),
+              );
+            },
+            accentColor: accent,
+            iconFgColor: iconFg,
+            bgColor: scaffoldBg,
+          ),
         ],
+      ),
+    );
+  }
+
+  // Helper method to build consistent looking setting cards
+  Widget _buildSettingsCard(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required VoidCallback onTap,
+    required Color accentColor,
+    required Color iconFgColor,
+    required Color bgColor,
+  }) {
+    return Card(
+      color: bgColor.lighten(0.05), // Slightly lighter background for the card
+      margin: EdgeInsets.zero, // No external margin, controlled by Column spacing
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: iconFgColor.withOpacity(0.3), width: 1),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: Icon(icon, color: accentColor), // Accent color for the icon
+        title: Text(
+          title,
+          style: TextStyle(
+            color: Theme.of(context).textTheme.titleMedium?.color, // Use theme's text color
+            fontWeight: FontWeight.w600,
+            fontSize: 16,
+          ),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: TextStyle(color: iconFgColor.lighten(0.3), fontSize: 13),
+        ),
+        trailing: Icon(Icons.arrow_forward_ios, color: iconFgColor),
+        onTap: onTap,
       ),
     );
   }

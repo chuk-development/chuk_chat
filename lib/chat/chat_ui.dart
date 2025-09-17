@@ -6,23 +6,23 @@ import 'package:ui_elements_flutter/constants.dart';
 import 'package:ui_elements_flutter/models/chat_model.dart';
 import 'package:ui_elements_flutter/services/chat_storage_service.dart';
 import 'package:ui_elements_flutter/widgets/message_bubble.dart';
-import 'package:ui_elements_flutter/pages/voice_mode_page.dart'; // For the voice mode button
-// Importiere das neue ModelSelectionDropdown widget
+import 'package:ui_elements_flutter/pages/voice_mode_page.dart';
 import 'package:ui_elements_flutter/widgets/model_selection_dropdown.dart';
+// Removed ColorExtension import as it's not directly used here anymore for colors
 
 /* ---------- CHAT UI ---------- */
 class ChukChatUI extends StatefulWidget {
   final VoidCallback onToggleSidebar;
   final int selectedChatIndex;
   final bool isSidebarExpanded;
-  final bool isCompactMode; // NEU: Flag für den Kompaktmodus
+  final bool isCompactMode;
 
   const ChukChatUI({
     Key? key,
     required this.onToggleSidebar,
     required this.selectedChatIndex,
     required this.isSidebarExpanded,
-    required this.isCompactMode, // NEU
+    required this.isCompactMode,
   }) : super(key: key);
 
   @override
@@ -154,6 +154,10 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
+    // Get colors from theme
+    final Color bg = Theme.of(context).scaffoldBackgroundColor;
+    final Color accent = Theme.of(context).colorScheme.primary;
+    final Color iconFg = Theme.of(context).iconTheme.color!;
 
     // NEU: Responsive horizontale Polsterung basierend auf dem Kompaktmodus-Flag des Widgets
     final double effectiveHorizontalPadding = widget.isCompactMode ? _kHorizontalPaddingSmall : _kHorizontalPaddingLarge;
@@ -236,6 +240,11 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
 
   Widget _buildSearchBar({required bool isCompactMode}) {
     const btnH = 36.0, btnW = 44.0;
+    // Get colors from theme here for this widget
+    final Color bg = Theme.of(context).scaffoldBackgroundColor;
+    final Color accent = Theme.of(context).colorScheme.primary;
+    final Color iconFg = Theme.of(context).iconTheme.color!;
+
     return Container(
       height: _kSearchBarContentHeight, // Verwendet die Konstante für die intrinsische Höhe
       decoration: BoxDecoration(
@@ -322,7 +331,7 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
                   });
                 },
                 textFieldFocusNode: _textFieldFocusNode,
-                isCompactMode: isCompactMode, // Übergebe den Kompaktmodus-Flag
+                isCompactMode: isCompactMode,
               ),
               const SizedBox(width: 8), // Konsistenter 8px Abstand
               _buildIconBtn(Icons.mic, () => print('Mic')),
@@ -350,6 +359,10 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
   }
 
   Widget _buildIconBtn(IconData icon, VoidCallback onTap) {
+    // Get colors from theme here for this widget
+    final Color bg = Theme.of(context).scaffoldBackgroundColor;
+    final Color iconFg = Theme.of(context).iconTheme.color!;
+
     // Verwendet einen ValueNotifier, um den Hover-Zustand für die Randanimation zu verwalten
     final ValueNotifier<bool> isHovered = ValueNotifier<bool>(false);
 

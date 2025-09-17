@@ -6,6 +6,7 @@ import 'dart:ui' as ui; // Import for MaskFilter
 import 'package:ui_elements_flutter/constants.dart';
 import 'package:ui_elements_flutter/models/voice_mode_models.dart';
 import 'package:ui_elements_flutter/widgets/message_bubble.dart';
+import 'package:ui_elements_flutter/utils/color_extensions.dart'; // Import for color extensions
 
 ///  Voice-Mode  –  UI ONLY  –  LifeKit ready
 class VoiceModePage extends StatefulWidget {
@@ -17,11 +18,27 @@ class VoiceModePage extends StatefulWidget {
 
 class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateMixin {
   /* ---------- colours (local overrides to match image) ---------- */
-  final Color cardBg = const Color(0xFF2A241F); // A slightly lighter dark for cards
+  // Use theme colors but allow local overrides for specific visual effects if needed
+  late Color cardBg;
+  late Color userMicColor;
+  late Color aiVoiceColor;
+  late Color accent;
+  late Color iconFg;
+  late Color bg;
 
-  // New voice visualization colors
-  final Color userMicColor = const Color(0xFF93854C); // Goldish, from iconFg
-  final Color aiVoiceColor = const Color(0xFF466362); // Bluish-green, from original accent
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Initialize theme-dependent colors here
+    accent = Theme.of(context).colorScheme.primary;
+    iconFg = Theme.of(context).iconTheme.color!;
+    bg = Theme.of(context).scaffoldBackgroundColor;
+
+    cardBg = bg.lighten(0.05); // A slightly lighter dark for cards based on current bg
+    userMicColor = iconFg; // Goldish, from iconFg
+    aiVoiceColor = accent; // Bluish-green, from accent
+  }
+
 
   /* ---------- UI state ---------- */
   bool _listening = false; // mic hot
@@ -163,7 +180,7 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
                           // Settings (middle)
                           _bottomSettingsPanel(),
                           const SizedBox(height: 24), // Spacing between settings and mic
-                          _bottomMicMainStyle(accent, iconFg), // Mic button at the very bottom
+                          _bottomMicMainStyle(), // Mic button at the very bottom
                         ],
                       ),
                     ),
@@ -219,7 +236,7 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
                             children: [
                               const Spacer(),
                               IconButton(
-                                icon: const Icon(Icons.close, color: Colors.white),
+                                icon: Icon(Icons.close, color: iconFg),
                                 onPressed: _close,
                               ),
                             ],
@@ -626,6 +643,7 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
     return MessageBubble(
       message: text,
       isUser: false, // User's message appearing on the left in the example chat
+      // Removed accentColor, bgColor, iconFgColor as they are now pulled from Theme
     );
   }
 
@@ -673,6 +691,7 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
     return MessageBubble(
       message: text,
       isUser: true, // Bot's message appearing on the right in the example chat
+      // Removed accentColor, bgColor, iconFgColor as they are now pulled from Theme
     );
   }
 
@@ -703,7 +722,7 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
   }
 
   // Main.dart style bottom mic
-  Widget _bottomMicMainStyle(Color accent, Color iconFg) {
+  Widget _bottomMicMainStyle() {
     return Column(
       children: [
         SizedBox(

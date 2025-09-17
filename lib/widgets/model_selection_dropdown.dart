@@ -1,20 +1,19 @@
 // lib/widgets/model_selection_dropdown.dart
 import 'package:flutter/material.dart';
-import 'package:ui_elements_flutter/constants.dart'; // For bg, iconFg, accent
 import 'package:ui_elements_flutter/models/chat_model.dart'; // For ModelItem
 
 class ModelSelectionDropdown extends StatefulWidget {
   final String initialSelectedModel;
   final ValueChanged<String> onModelSelected;
   final FocusNode textFieldFocusNode; // To request focus back after selection
-  final bool isCompactMode; // Neue Eigenschaft für den Kompaktmodus
+  final bool isCompactMode;
 
   const ModelSelectionDropdown({
     Key? key,
     required this.initialSelectedModel,
     required this.onModelSelected,
     required this.textFieldFocusNode,
-    this.isCompactMode = false, // Standardwert ist false
+    this.isCompactMode = false,
   }) : super(key: key);
 
   @override
@@ -52,6 +51,10 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
   // Hilfsfunktion für den visuellen Inhalt des Dropdown-Buttons, einschließlich Text und Hover-Effekt.
   Widget _buildDropdownButtonContent() {
     final ValueNotifier<bool> isHovered = ValueNotifier<bool>(false);
+    // Get colors from theme for this widget
+    final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
+    final Color iconFgColor = Theme.of(context).iconTheme.color!;
+
     return MouseRegion(
       onEnter: (_) => isHovered.value = true,
       onExit: (_) => isHovered.value = false,
@@ -67,10 +70,10 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
             width: widget.isCompactMode ? 44 : null,
             height: 36, // Höhe an die anderen Buttons anpassen
             decoration: BoxDecoration(
-              color: bg,
+              color: bgColor, // Use theme's bgColor
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                color: hovered ? iconFg : iconFg.withOpacity(.3),
+                color: hovered ? iconFgColor : iconFgColor.withOpacity(.3), // Use theme's iconFgColor
                 width: hovered ? 1.2 : 0.8,
               ),
             ),
@@ -82,21 +85,21 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
               // Zentriert die Icons im Kompaktmodus
               mainAxisAlignment: widget.isCompactMode ? MainAxisAlignment.center : MainAxisAlignment.start,
               children: [
-                Icon(Icons.grid_3x3, color: iconFg, size: 20), // Das 3x3-Gitter-Icon
-                if (!widget.isCompactMode) ...[ // Nur Text und Pfeil anzeigen, wenn NICHT im Kompaktmodus
+                Icon(Icons.grid_3x3, color: iconFgColor, size: 20), // The 3x3-grid-icon, use theme's iconFgColor
+                if (!widget.isCompactMode) ...[ // Only show text and arrow if NOT in compact mode
                   const SizedBox(width: 8),
-                  Flexible( // Flexible, um Überlauf bei langen Modellnamen zu verhindern
+                  Flexible( // Flexible to prevent overflow with long model names
                     child: Text(
-                      _selectedModel, // Zeigt den aktuell ausgewählten Modellnamen an
-                      style: TextStyle(color: iconFg, fontSize: 14),
+                      _selectedModel, // Displays the currently selected model name
+                      style: TextStyle(color: iconFgColor, fontSize: 14), // Use theme's iconFgColor
                       softWrap: false,
-                      overflow: TextOverflow.ellipsis, // Zeigt "..." an, wenn der Text zu lang ist
-                      maxLines: 1, // Stellt sicher, dass der Text in einer Zeile bleibt
+                      overflow: TextOverflow.ellipsis, // Shows "..." if text is too long
+                      maxLines: 1, // Ensures text stays on one line
                     ),
                   ),
-                  Icon(Icons.keyboard_arrow_down, color: iconFg.withOpacity(0.8), size: 16),
+                  Icon(Icons.keyboard_arrow_down, color: iconFgColor.withOpacity(0.8), size: 16), // Use theme's iconFgColor
                 ],
-                // Wenn im Kompaktmodus, wird nur das Icon angezeigt.
+                // In compact mode, only the icon is displayed.
               ],
             ),
           );
@@ -107,20 +110,24 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
 
   @override
   Widget build(BuildContext context) {
+    // Get colors from theme for this widget
+    final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
+    final Color iconFgColor = Theme.of(context).iconTheme.color!;
+
     return PopupMenuButton<String>(
-      // Das "child" des PopupMenuButton verwendet unsere Hilfsfunktion für das Aussehen
+      // The "child" of the PopupMenuButton uses our helper function for its appearance
       child: _buildDropdownButtonContent(),
-      color: bg,
+      color: bgColor, // Use theme's bgColor for dropdown background
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: iconFg.withOpacity(.3)),
+        side: BorderSide(color: iconFgColor.withOpacity(.3)), // Use theme's iconFgColor
       ),
       onSelected: (value) {
         setState(() {
-          // Setze das intern ausgewählte Modell basierend auf der Auswahl
+          // Set the internally selected model based on the selection
           _selectedModel = _allModels.firstWhere((m) => m.value == value).name;
         });
-        widget.onModelSelected(_selectedModel); // Benachrichtige den Parent-Widget über die Auswahl
+        widget.onModelSelected(_selectedModel); // Notify the Parent-Widget about the selection
         Future.delayed(Duration.zero, () => widget.textFieldFocusNode.requestFocus());
       },
       itemBuilder: (BuildContext context) => _allModels.map((m) {
@@ -134,15 +141,15 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
               if (m.isToggle)
                 Row(
                   children: [
-                    Switch(value: selected, onChanged: (_) {}, activeColor: iconFg),
+                    Switch(value: selected, onChanged: (_) {}, activeColor: iconFgColor), // Use theme's iconFgColor
                     const SizedBox(width: 6),
-                    Text('Best', style: TextStyle(color: iconFg)),
+                    Text('Best', style: TextStyle(color: iconFgColor)), // Use theme's iconFgColor
                   ],
                 )
               else
-                Text(m.name, style: TextStyle(color: selected ? iconFg : iconFg.withOpacity(.8))),
+                Text(m.name, style: TextStyle(color: selected ? iconFgColor : iconFgColor.withOpacity(.8))), // Use theme's iconFgColor
               const Spacer(),
-              if (!m.isToggle && selected) Icon(Icons.check, color: iconFg, size: 18),
+              if (!m.isToggle && selected) Icon(Icons.check, color: iconFgColor, size: 18), // Use theme's iconFgColor
               if (m.badge != null)
                 Container(
                   margin: const EdgeInsets.only(left: 8),

@@ -1,7 +1,9 @@
 // sidebar.dart
 import 'package:flutter/material.dart';
-import 'package:ui_elements_flutter/constants.dart'; // Import der neuen Konstanten
+import 'package:ui_elements_flutter/constants.dart';
 import 'package:ui_elements_flutter/services/chat_storage_service.dart';
+// NEW: Import the color extensions to use lighten/darken methods
+import 'package:ui_elements_flutter/utils/color_extensions.dart';
 
 final List<String> _starredChats = ['Book writing Per chapter']; // Kept local for now
 
@@ -10,7 +12,7 @@ class CustomSidebar extends StatefulWidget {
   final Function() onSettingsTapped;
   final Function() onProjectsTapped; // Still passed, though Projects is now a top-level button
   final int selectedChatIndex;
-  final bool isCompactMode; // NEU: Flag für den Kompaktmodus
+  final bool isCompactMode;
 
   const CustomSidebar({
     Key? key,
@@ -18,7 +20,7 @@ class CustomSidebar extends StatefulWidget {
     required this.onSettingsTapped,
     required this.onProjectsTapped,
     required this.selectedChatIndex,
-    required this.isCompactMode, // NEU
+    required this.isCompactMode,
   }) : super(key: key);
 
   @override
@@ -54,50 +56,42 @@ class _CustomSidebarState extends State<CustomSidebar> {
 
   @override
   Widget build(BuildContext context) {
-    // Die Höhe der oberen Leiste wird dynamisch basierend auf isCompactMode berechnet.
-    // Im Kompaktmodus werden die "New Chat"- und "Projects"-Buttons außerhalb der Sidebar gehandhabt
-    // und nur sichtbar, wenn die Sidebar geöffnet ist. Daher benötigen wir nur den Platz
-    // für das Hamburger-Menü und den Titel, sowie die beiden Buttons, die nun IN der Sidebar
-    // sichtbar sind, aber eben den Platz in der Sidebar selbst einnehmen müssen.
-    // Der Gesamtabstand, den die Sidebar am oberen Rand berücksichtigen muss:
-    // kTopInitialSpacing (16) + kMenuButtonHeight (48) + kSpacingBetweenTopButtons (8) = 72.0
-    // + kButtonVisualHeight (40, New Chat) + kSpacingBetweenTopButtons (8)
-    // + kButtonVisualHeight (40, Projects) + kSpacingBetweenTopButtons (8)
-    // = 72 + 40 + 8 + 40 + 8 = 168.0
-    // ABER: Da New Chat und Projects nun Conditional sind, wenn sidebar offen, brauchen sie Platz.
-    // Wenn NICHT kompakt, ist der Platz fix 160.0, da sie immer da sind.
-    // Wenn kompakt und Sidebar offen, sind sie auch da, und nehmen den Platz von 160.0 ein.
-    // Also bleibt der obere Platz 160.0, damit Starred und Recents unter diesen Buttons beginnen.
+    // Access theme colors dynamically
+    final Color iconFg = Theme.of(context).iconTheme.color!;
+    final Color accent = Theme.of(context).colorScheme.primary;
+    final Color sidebarBg = Theme.of(context).cardColor.darken(0.03); // Slightly darker for sidebar itself
+
+    // The height of the top bar is calculated dynamically.
+    // In compact mode, "New Chat" and "Projects" buttons are handled outside the sidebar
+    // and only visible when the sidebar is open.
+    // However, when open, they still need to occupy this space *within* the sidebar
+    // so that "Starred" and "Recents" start correctly below them.
+    // So, the "160.0" value is retained.
     final double topSpacingForSidebarContent = kTopInitialSpacing +
         kMenuButtonHeight +
         kSpacingBetweenTopButtons +
         kButtonVisualHeight +
         kSpacingBetweenTopButtons +
         kButtonVisualHeight +
-        kSpacingBetweenTopButtons; // Das ist der 160.0 Wert aus main.dart
+        kSpacingBetweenTopButtons; // This is the 160.0 value from main.dart
 
     return Container(
-      color: const Color(0xFF1D1813), // Slightly darker background for the sidebar
+      color: sidebarBg, // Use dynamically derived sidebar background
       child: Column(
         children: [
-          // Gebe initialen vertikalen Platz für die obere Symbolleistelemente außerhalb der Sidebar
-          // Der New Chat und Projects Button sind auf Mobilgeräten *nur* sichtbar, wenn die Sidebar offen ist.
-          // In diesem Fall müssen sie aber trotzdem diesen Platz _in_ der Sidebar einnehmen,
-          // damit Starred und Recents korrekt darunter beginnen.
-          // Daher wird der "160.0" Wert beibehalten.
-          SizedBox(height: topSpacingForSidebarContent), // Verwendet die berechnete Konstante
+          SizedBox(height: topSpacingForSidebarContent), // Uses the calculated constant
 
           // Starred Section - Fixed
-          _buildSectionHeader('Starred'),
-          ..._starredChats.map((title) => _buildStarredItem(title)).toList(),
-          const Divider(color: Colors.white12, indent: _sidebarHorizontalPadding, endIndent: _sidebarHorizontalPadding),
+          _buildSectionHeader('Starred', iconFg: iconFg),
+          ..._starredChats.map((title) => _buildStarredItem(title, iconFg: iconFg)).toList(),
+          Divider(color: Theme.of(context).dividerColor, indent: _sidebarHorizontalPadding, endIndent: _sidebarHorizontalPadding),
 
           // Recents Section - Scrollable
           Expanded(
             child: ListView(
               padding: EdgeInsets.zero, // Remove default ListView padding
               children: [
-                _buildSectionHeader('Recents'),
+                _buildSectionHeader('Recents', iconFg: iconFg),
                 if (ChatStorageService.savedChats.isEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: _sidebarHorizontalPadding, vertical: 8.0),
@@ -115,9 +109,11 @@ class _CustomSidebarState extends State<CustomSidebar> {
                     onTap: () {
                       widget.onChatItemTapped(index);
                     },
+                    accentColor: accent,
+                    iconFgColor: iconFg,
                   );
                 }).toList(),
-                _buildRecentItem('Herzrequenz vs. Puls', isLast: true), // Example static item
+                _buildRecentItem('Herzrequenz vs. Puls', isLast: true, accentColor: accent, iconFgColor: iconFg), // Example static item
                 const SizedBox(height: 10), // Small space at the end of scrollable content
               ],
             ),
@@ -149,17 +145,17 @@ class _CustomSidebarState extends State<CustomSidebar> {
   }
 
   // Helper for consistent leading alignment in ListTiles
-  Widget _leadingIconPlaceholder(IconData icon) {
+  Widget _leadingIconPlaceholder(IconData icon, {required Color iconFgColor}) {
     return SizedBox(
       width: _iconLeadingWidth + _iconTextSpacing, // Space for icon + its margin to text
       child: Align(
         alignment: Alignment.centerLeft,
-        child: Icon(icon, color: iconFg),
+        child: Icon(icon, color: iconFgColor),
       ),
     );
   }
 
-  Widget _buildSectionHeader(String title) {
+  Widget _buildSectionHeader(String title, {required Color iconFg}) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(_sidebarHorizontalPadding, 16.0, _sidebarHorizontalPadding, 8.0),
       child: Text(
@@ -170,9 +166,9 @@ class _CustomSidebarState extends State<CustomSidebar> {
     );
   }
 
-  Widget _buildStarredItem(String title) {
+  Widget _buildStarredItem(String title, {required Color iconFg}) {
     return ListTile(
-      leading: _leadingIconPlaceholder(Icons.star_border), // Using a placeholder for alignment
+      leading: _leadingIconPlaceholder(Icons.star_border, iconFgColor: iconFg), // Using a placeholder for alignment
       title: Text(title),
       onTap: () {},
       dense: true,
@@ -182,28 +178,35 @@ class _CustomSidebarState extends State<CustomSidebar> {
     );
   }
 
-  Widget _buildRecentItem(String title, {int? index, bool isLast = false, VoidCallback? onTap}) {
+  Widget _buildRecentItem(String title, {int? index, bool isLast = false, VoidCallback? onTap, required Color accentColor, required Color iconFgColor}) {
     bool isSelected = index != null && index == widget.selectedChatIndex;
     return ListTile(
-      leading: _leadingIconPlaceholder(Icons.chat_bubble_outline), // Placeholder for alignment
+      leading: _leadingIconPlaceholder(Icons.chat_bubble_outline, iconFgColor: iconFgColor), // Placeholder for alignment
       title: Text(
         title,
         style: TextStyle(
-          color: isLast ? iconFg.withOpacity(0.38) : (isSelected ? accent : iconFg),
+          color: isLast ? iconFgColor.withOpacity(0.38) : (isSelected ? accentColor : iconFgColor),
           fontSize: 15,
         ),
       ),
       onTap: onTap,
       dense: true,
       contentPadding: const EdgeInsets.only(left: _sidebarHorizontalPadding), // Only left padding as leading handles space
-      tileColor: isSelected ? accent.withOpacity(0.1) : null,
-      selectedTileColor: accent.withOpacity(0.1),
-      selectedColor: accent,
+      tileColor: isSelected ? accentColor.withOpacity(0.1) : null,
+      selectedTileColor: accentColor.withOpacity(0.1),
+      selectedColor: accentColor,
     );
   }
 
   // New method to show user options menu
   void _showUserOptions(BuildContext context) {
+    // Access theme colors dynamically
+    final Color iconFg = Theme.of(context).iconTheme.color!;
+    final Color bg = Theme.of(context).scaffoldBackgroundColor;
+    final TextStyle? textStyle = Theme.of(context).listTileTheme.textColor != null
+        ? TextStyle(color: Theme.of(context).listTileTheme.textColor)
+        : null;
+
     // Get the render box of the ListTile to position the menu accurately
     final RenderBox? renderBox = context.findRenderObject() as RenderBox?;
     if (renderBox == null) return;
@@ -242,7 +245,7 @@ class _CustomSidebarState extends State<CustomSidebar> {
             children: [
               Icon(Icons.settings, color: iconFg, size: 20),
               const SizedBox(width: 12),
-              Text('Settings', style: TextStyle(color: iconFg)),
+              Text('Settings', style: textStyle),
             ],
           ),
         ),
@@ -254,7 +257,7 @@ class _CustomSidebarState extends State<CustomSidebar> {
             children: [
               Icon(Icons.logout, color: iconFg, size: 20),
               const SizedBox(width: 12),
-              Text('Logout', style: TextStyle(color: iconFg)),
+              Text('Logout', style: textStyle),
             ],
           ),
         ),

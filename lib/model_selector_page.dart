@@ -6,24 +6,7 @@ import 'package:flutter_svg/flutter_svg.dart'; // Import for SVG support
 
 // Import your app constants for colors and theme
 import 'package:ui_elements_flutter/constants.dart';
-
-// Helper extension to subtly lighten colors
-// (Keep this here as it extends Color, and is specific to this page's styling logic)
-extension ColorExtension on Color {
-  Color lighten([double amount = .1]) {
-    assert(amount >= 0 && amount <= 1); // amount should be between 0.0 and 1.0
-    final hsl = HSLColor.fromColor(this);
-    final hslLight = hsl.withLightness((hsl.lightness + amount).clamp(0.0, 1.0));
-    return hslLight.toColor();
-  }
-
-  Color darken([double amount = .1]) {
-    assert(amount >= 0 && amount <= 1); // amount should be between 0.0 and 1.0
-    final hsl = HSLColor.fromColor(this);
-    final hslDark = hsl.withLightness((hsl.lightness - amount).clamp(0.0, 1.0));
-    return hslDark.toColor();
-  }
-}
+import 'package:ui_elements_flutter/utils/color_extensions.dart'; // Import the new extension
 
 // --- Data Models (Mirroring your FastAPI Pydantic Models) ---
 
@@ -222,6 +205,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
 
   // Widget to display an image from a URL (SVG or raster) or a fallback icon
   Widget _buildIconWidget(String? imageUrl, IconData fallbackIcon, {double size = 24}) {
+    final Color iconFg = Theme.of(context).iconTheme.color!;
     if (imageUrl != null && imageUrl.isNotEmpty) {
       final isSvg = imageUrl.toLowerCase().endsWith('.svg');
       if (isSvg) {
@@ -257,17 +241,22 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Access theme colors dynamically
+    final Color scaffoldBg = Theme.of(context).scaffoldBackgroundColor;
+    final Color accent = Theme.of(context).colorScheme.primary;
+    final Color iconFg = Theme.of(context).iconTheme.color!;
+    final TextStyle? titleTextStyle = Theme.of(context).appBarTheme.titleTextStyle;
+
     return Scaffold(
-      backgroundColor: bg,
+      backgroundColor: scaffoldBg,
       appBar: AppBar(
-        title: const Text('Models', style: TextStyle(color: iconFg)), // Use iconFg for consistency
-        backgroundColor: bg,
+        title: Text('Models', style: titleTextStyle), // Use theme's title text style
+        backgroundColor: scaffoldBg,
         elevation: 0,
-        centerTitle: true,
-        iconTheme: const IconThemeData(color: iconFg), // Set back button color
+        iconTheme: IconThemeData(color: iconFg), // Set back button color
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: iconFg))
+          ? Center(child: CircularProgressIndicator(color: iconFg))
           : _error != null
               ? Center(
                   child: Padding(
@@ -281,16 +270,15 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                         Text(
                           'Error: $_error',
                           textAlign: TextAlign.center,
-                          style: const TextStyle(color: iconFg, fontSize: 18),
+                          style: TextStyle(color: iconFg, fontSize: 18),
                         ),
                         const SizedBox(height: 24),
                         ElevatedButton.icon(
                           onPressed: _fetchModels,
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('Retry'),
+                          icon: Icon(Icons.refresh, color: scaffoldBg), // Text color on button
+                          label: Text('Retry', style: TextStyle(color: scaffoldBg)),
                           style: ElevatedButton.styleFrom(
-                            foregroundColor: bg,
-                            backgroundColor: iconFg,
+                            backgroundColor: iconFg, // Button background color
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 24, vertical: 12),
                             textStyle: const TextStyle(fontSize: 16),
@@ -321,6 +309,9 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                                   _onProviderSelect(model.id, provider),
                               formatContextLength: _formatContextLength,
                               buildIconWidget: _buildIconWidget,
+                              accentColor: accent, // Pass accent to row
+                              iconFgColor: iconFg,   // Pass iconFg to row
+                              bgColor: scaffoldBg, // Pass bg to row
                             ),
                             if (model.description != null && model.description!.isNotEmpty)
                               Padding(
@@ -333,7 +324,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                                       child: Container(
                                         padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
                                         decoration: BoxDecoration(
-                                          color: bg.darken(0.05),
+                                          color: scaffoldBg.darken(0.05),
                                           borderRadius: BorderRadius.circular(10),
                                           border: Border.all(color: iconFg.withOpacity(0.3)),
                                         ),
@@ -363,7 +354,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                                         padding: const EdgeInsets.all(12.0),
                                         margin: const EdgeInsets.only(top: 4.0),
                                         decoration: BoxDecoration(
-                                          color: bg.darken(0.05),
+                                          color: scaffoldBg.darken(0.05),
                                           borderRadius: BorderRadius.circular(10),
                                           border: Border.all(color: iconFg.withOpacity(0.3)),
                                         ),
@@ -409,11 +400,10 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                               ),
                             );
                           },
-                          icon: const Icon(Icons.check_circle_outline),
-                          label: const Text('Confirm Selections'),
+                          icon: Icon(Icons.check_circle_outline, color: scaffoldBg), // Text color on button
+                          label: Text('Confirm Selections', style: TextStyle(color: scaffoldBg)),
                           style: ElevatedButton.styleFrom(
-                            foregroundColor: bg,
-                            backgroundColor: iconFg,
+                            backgroundColor: iconFg, // Button background color
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 32, vertical: 16),
                             textStyle:
@@ -438,6 +428,9 @@ class ModelSelectionRow extends StatelessWidget {
   final Function(ModelProviderInfo?) onProviderChanged;
   final String Function(int?) formatContextLength;
   final Widget Function(String?, IconData, {double size}) buildIconWidget;
+  final Color accentColor; // New
+  final Color iconFgColor;   // New
+  final Color bgColor;     // New
 
   const ModelSelectionRow({
     super.key,
@@ -446,11 +439,14 @@ class ModelSelectionRow extends StatelessWidget {
     required this.onProviderChanged,
     required this.formatContextLength,
     required this.buildIconWidget,
+    required this.accentColor,
+    required this.iconFgColor,
+    required this.bgColor,
   });
 
   @override
   Widget build(BuildContext context) {
-    final Color inputFieldBg = bg.lighten(0.05);
+    final Color inputFieldBg = bgColor.lighten(0.05);
     const double containerHeight = 60.0; // Consistent height for all main fields
 
     return Padding(
@@ -467,7 +463,7 @@ class ModelSelectionRow extends StatelessWidget {
               decoration: BoxDecoration(
                 color: inputFieldBg,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: iconFg.withOpacity(0.5)),
+                border: Border.all(color: iconFgColor.withOpacity(0.5)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -501,13 +497,13 @@ class ModelSelectionRow extends StatelessWidget {
               decoration: BoxDecoration(
                 color: inputFieldBg,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: iconFg.withOpacity(0.5)),
+                border: Border.all(color: iconFgColor.withOpacity(0.5)),
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<ModelProviderInfo>(
                   value: selectedProvider,
-                  dropdownColor: bg.darken(0.05).withOpacity(0.9),
-                  icon: const Icon(Icons.arrow_drop_down, color: iconFg),
+                  dropdownColor: bgColor.darken(0.05).withOpacity(0.9),
+                  icon: Icon(Icons.arrow_drop_down, color: iconFgColor),
                   style: const TextStyle(color: Colors.white, fontSize: 13),
                   onChanged: onProviderChanged,
                   isExpanded: true,
@@ -526,7 +522,7 @@ class ModelSelectionRow extends StatelessWidget {
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: (selectedProvider?.slug == provider.slug)
-                                    ? accent
+                                    ? accentColor
                                     : Colors.white,
                                 fontWeight: FontWeight.w500,
                               ),
@@ -572,13 +568,13 @@ class ModelSelectionRow extends StatelessWidget {
               decoration: BoxDecoration(
                 color: inputFieldBg,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: iconFg.withOpacity(0.5)),
+                border: Border.all(color: iconFgColor.withOpacity(0.5)),
               ),
               child: selectedProvider == null
                   ? Text(
                       'Price Details',
                       style: TextStyle(
-                          color: iconFg.lighten(0.3).withOpacity(0.7),
+                          color: iconFgColor.lighten(0.3).withOpacity(0.7),
                           fontSize: 12),
                       textAlign: TextAlign.center,
                     )
@@ -588,20 +584,20 @@ class ModelSelectionRow extends StatelessWidget {
                       children: [
                         Text(
                           'In: ${selectedProvider!.pricing.formatTokenPrice(selectedProvider!.pricing.prompt)}',
-                          style: TextStyle(fontSize: 11, color: iconFg.lighten(0.3)),
+                          style: TextStyle(fontSize: 11, color: iconFgColor.lighten(0.3)),
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1, // Ensure single line
                         ),
                         Text(
                           'Out: ${selectedProvider!.pricing.formatTokenPrice(selectedProvider!.pricing.completion)}',
-                          style: TextStyle(fontSize: 11, color: iconFg.lighten(0.3)),
+                          style: TextStyle(fontSize: 11, color: iconFgColor.lighten(0.3)),
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1, // Ensure single line
                         ),
                         if (selectedProvider!.pricing.request > 0)
                           Text(
                             'Req: ${selectedProvider!.pricing.formatRequestPrice(selectedProvider!.pricing.request)}',
-                            style: TextStyle(fontSize: 11, color: iconFg.lighten(0.3)),
+                            style: TextStyle(fontSize: 11, color: iconFgColor.lighten(0.3)),
                             overflow: TextOverflow.ellipsis,
                             maxLines: 1, // Ensure single line
                           ),
@@ -620,13 +616,13 @@ class ModelSelectionRow extends StatelessWidget {
               decoration: BoxDecoration(
                 color: inputFieldBg,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: iconFg.withOpacity(0.5)),
+                border: Border.all(color: iconFgColor.withOpacity(0.5)),
               ),
               child: selectedProvider == null
                   ? Text(
                       'Token & Context',
                       style: TextStyle(
-                          color: iconFg.lighten(0.3).withOpacity(0.7),
+                          color: iconFgColor.lighten(0.3).withOpacity(0.7),
                           fontSize: 12),
                       textAlign: TextAlign.center,
                     )
@@ -636,20 +632,20 @@ class ModelSelectionRow extends StatelessWidget {
                       children: [
                         Text(
                           'Ctx: ${formatContextLength(selectedProvider!.contextLength)}',
-                          style: TextStyle(fontSize: 11, color: iconFg.lighten(0.2)),
+                          style: TextStyle(fontSize: 11, color: iconFgColor.lighten(0.2)),
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1, // Ensure single line
                         ),
                         Text(
                           'Max Out: ${formatContextLength(selectedProvider!.maxCompletionTokens)}',
-                          style: TextStyle(fontSize: 11, color: iconFg.lighten(0.2)),
+                          style: TextStyle(fontSize: 11, color: iconFgColor.lighten(0.2)),
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1, // Ensure single line
                         ),
                         if (selectedProvider!.isModerated != null)
                           Text(
                             'Moderated: ${selectedProvider!.isModerated! ? 'Yes' : 'No'}',
-                            style: TextStyle(fontSize: 10, color: iconFg.lighten(0.2)), // Smaller font for moderated status
+                            style: TextStyle(fontSize: 10, color: iconFgColor.lighten(0.2)), // Smaller font for moderated status
                             overflow: TextOverflow.ellipsis,
                             maxLines: 1, // Ensure single line
                           ),
@@ -662,6 +658,3 @@ class ModelSelectionRow extends StatelessWidget {
     );
   }
 }
-// NOTE: The main() and MyApp() functions are typically in lib/main.dart,
-// so they are not included here to avoid duplication if this file is just
-// a part of a larger project.
