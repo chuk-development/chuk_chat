@@ -1,14 +1,14 @@
+// lib/model_selector_page.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_svg/flutter_svg.dart'; // Import for SVG support
 
-// ---------- COLOURS ----------
-const Color bg = Color(0xFF211B15); // Dark brown - Overall background
-const Color accent = Color(0xFF3F5E5D); // Dark teal/green - Accent for selected items
-const Color iconFg = Color(0xFF93854C); // Golden brown - For borders, icons, hints, subtle text
+// Import your app constants for colors and theme
+import 'package:ui_elements_flutter/constants.dart';
 
 // Helper extension to subtly lighten colors
+// (Keep this here as it extends Color, and is specific to this page's styling logic)
 extension ColorExtension on Color {
   Color lighten([double amount = .1]) {
     assert(amount >= 0 && amount <= 1); // amount should be between 0.0 and 1.0
@@ -143,7 +143,7 @@ class ModelSelectorPage extends StatefulWidget {
 }
 
 class _ModelSelectorPageState extends State<ModelSelectorPage> {
-  final String _baseUrl = 'https://api.chuk.dev';
+  final String _baseUrl = 'https://api.chuk.chat'; // <--- IMPORTANT: SET YOUR FASTAPI SERVER URL HERE
   List<CustomModelInfo> _models = [];
   Map<String, ModelProviderInfo?> _selectedProviders = {};
   bool _isLoading = true;
@@ -260,10 +260,11 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
     return Scaffold(
       backgroundColor: bg,
       appBar: AppBar(
-        title: const Text('Models', style: TextStyle(color: Colors.white)),
+        title: const Text('Models', style: TextStyle(color: iconFg)), // Use iconFg for consistency
         backgroundColor: bg,
         elevation: 0,
         centerTitle: true,
+        iconTheme: const IconThemeData(color: iconFg), // Set back button color
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: iconFg))
@@ -661,65 +662,6 @@ class ModelSelectionRow extends StatelessWidget {
     );
   }
 }
-
-// --- Main function to run the app ---
-void main() {
-  runApp(const MyApp());
-}
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Model Selector',
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        primaryColor: accent,
-        scaffoldBackgroundColor: bg,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: bg,
-          foregroundColor: Colors.white,
-          elevation: 0,
-        ),
-        cardTheme: const CardThemeData(
-          elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(10))),
-          margin: EdgeInsets.zero,
-        ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: iconFg,
-            foregroundColor: bg,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          ),
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: bg.lighten(0.05),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: iconFg.withOpacity(0.5)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: iconFg, width: 2),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: iconFg.withOpacity(0.5)),
-          ),
-          labelStyle: const TextStyle(color: Colors.white),
-          floatingLabelStyle:
-              const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        ),
-        visualDensity: VisualDensity.adaptivePlatformDensity,
-      ),
-      home: const ModelSelectorPage(),
-    );
-  }
-}
+// NOTE: The main() and MyApp() functions are typically in lib/main.dart,
+// so they are not included here to avoid duplication if this file is just
+// a part of a larger project.
