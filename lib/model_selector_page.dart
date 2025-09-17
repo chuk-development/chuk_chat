@@ -450,6 +450,7 @@ class ModelSelectionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color inputFieldBg = bg.lighten(0.05);
+    const double containerHeight = 60.0; // Consistent height for all main fields
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
@@ -458,21 +459,21 @@ class ModelSelectionRow extends StatelessWidget {
         children: [
           // Column 1: Model Name with Icon (One line)
           Expanded(
-            flex: 3, // Increased flex slightly for longer model names
+            flex: 3,
             child: Container(
-              height: 56, // Fixed height to align with dropdowns
+              height: containerHeight,
               padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
               decoration: BoxDecoration(
                 color: inputFieldBg,
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: iconFg.withOpacity(0.5)),
               ),
-              child: Row( // Changed to Row
+              child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   buildIconWidget(model.iconUrl, Icons.psychology_alt, size: 24),
                   const SizedBox(width: 6),
-                  Expanded( // Use Expanded to ensure text is on one line
+                  Expanded(
                     child: Text(
                       model.name,
                       style: const TextStyle(
@@ -480,8 +481,8 @@ class ModelSelectionRow extends StatelessWidget {
                           color: Colors.white,
                           fontSize: 14),
                       textAlign: TextAlign.center,
-                      overflow: TextOverflow.ellipsis, // Ensure single line
-                      maxLines: 1, // Explicitly one line
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
                     ),
                   ),
                 ],
@@ -492,9 +493,9 @@ class ModelSelectionRow extends StatelessWidget {
 
           // Column 2: Provider Dropdown with Icon (Less wide)
           Expanded(
-            flex: 3, // Similar flex to model name
+            flex: 3,
             child: Container(
-              height: 56, // Fixed height to align
+              height: containerHeight,
               padding: const EdgeInsets.symmetric(horizontal: 8),
               decoration: BoxDecoration(
                 color: inputFieldBg,
@@ -561,12 +562,12 @@ class ModelSelectionRow extends StatelessWidget {
           ),
           const SizedBox(width: 8),
 
-          // NEW Column 3: Price Data
+          // Column 3: Price Data
           Expanded(
-            flex: 4, // Flexible enough for prices
+            flex: 4,
             child: Container(
-              height: 56, // Fixed height to align
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+              height: containerHeight,
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10), // Adjusted vertical padding
               decoration: BoxDecoration(
                 color: inputFieldBg,
                 borderRadius: BorderRadius.circular(10),
@@ -588,17 +589,20 @@ class ModelSelectionRow extends StatelessWidget {
                           'In: ${selectedProvider!.pricing.formatTokenPrice(selectedProvider!.pricing.prompt)}',
                           style: TextStyle(fontSize: 11, color: iconFg.lighten(0.3)),
                           overflow: TextOverflow.ellipsis,
+                          maxLines: 1, // Ensure single line
                         ),
                         Text(
                           'Out: ${selectedProvider!.pricing.formatTokenPrice(selectedProvider!.pricing.completion)}',
                           style: TextStyle(fontSize: 11, color: iconFg.lighten(0.3)),
                           overflow: TextOverflow.ellipsis,
+                          maxLines: 1, // Ensure single line
                         ),
                         if (selectedProvider!.pricing.request > 0)
                           Text(
                             'Req: ${selectedProvider!.pricing.formatRequestPrice(selectedProvider!.pricing.request)}',
                             style: TextStyle(fontSize: 11, color: iconFg.lighten(0.3)),
                             overflow: TextOverflow.ellipsis,
+                            maxLines: 1, // Ensure single line
                           ),
                       ],
                     ),
@@ -606,12 +610,12 @@ class ModelSelectionRow extends StatelessWidget {
           ),
           const SizedBox(width: 8),
 
-          // NEW Column 4: Context/Tokens Data (Behind Price)
+          // Column 4: Context/Tokens Data
           Expanded(
-            flex: 4, // Flexible enough for token data
+            flex: 4,
             child: Container(
-              height: 56, // Fixed height to align
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+              height: containerHeight,
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10), // Adjusted vertical padding
               decoration: BoxDecoration(
                 color: inputFieldBg,
                 borderRadius: BorderRadius.circular(10),
@@ -633,17 +637,20 @@ class ModelSelectionRow extends StatelessWidget {
                           'Ctx: ${formatContextLength(selectedProvider!.contextLength)}',
                           style: TextStyle(fontSize: 11, color: iconFg.lighten(0.2)),
                           overflow: TextOverflow.ellipsis,
+                          maxLines: 1, // Ensure single line
                         ),
                         Text(
                           'Max Out: ${formatContextLength(selectedProvider!.maxCompletionTokens)}',
                           style: TextStyle(fontSize: 11, color: iconFg.lighten(0.2)),
                           overflow: TextOverflow.ellipsis,
+                          maxLines: 1, // Ensure single line
                         ),
                         if (selectedProvider!.isModerated != null)
                           Text(
                             'Moderated: ${selectedProvider!.isModerated! ? 'Yes' : 'No'}',
-                            style: TextStyle(fontSize: 11, color: iconFg.lighten(0.2)),
+                            style: TextStyle(fontSize: 10, color: iconFg.lighten(0.2)), // Smaller font for moderated status
                             overflow: TextOverflow.ellipsis,
+                            maxLines: 1, // Ensure single line
                           ),
                       ],
                     ),
