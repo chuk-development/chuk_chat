@@ -155,6 +155,10 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
     // Get colors from theme
+    // NOTE: bg is not fetched from theme in the original design; it's implicit from the Container below.
+    // However, for consistency with other themed elements, we'll use scaffoldBackgroundColor here
+    // for `bg` if it was meant to be used in generic elements within chat_ui.
+    // For the search bar, it explicitly uses `bg` (which is theme's scaffoldBg).
     final Color bg = Theme.of(context).scaffoldBackgroundColor;
     final Color accent = Theme.of(context).colorScheme.primary;
     final Color iconFg = Theme.of(context).iconTheme.color!;
@@ -169,7 +173,7 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
 
     // Die tatsächliche Breite des Chat-Containers (Nachrichten oder Suchleiste).
     // Wenn keine Nachrichten vorhanden sind, ist die Breite auf kompakten Bildschirmen fast voll,
-    // auf großen Bildschirmen 80% der möglichen Breite.
+    // auf großen Bildschirmen 80% der mögliche Breite.
     final double currentChatContentWidth = _messages.isEmpty
         ? constrainedChatContentWidth * (widget.isCompactMode ? 0.95 : 0.8) // Fast volle Breite im Kompakt-Leerzustand
         : constrainedChatContentWidth;
@@ -293,6 +297,10 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
                       hintStyle: TextStyle(color: iconFg.withOpacity(.8)),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 0),
+                      // --- START FIX ---
+                      filled: false, // Explicitly set to false to remove background fill
+                      isDense: true, // Reduce overall height impact
+                      // --- END FIX ---
                     ),
                     cursorColor: iconFg,
                   ),
