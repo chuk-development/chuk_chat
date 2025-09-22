@@ -1,15 +1,15 @@
 // main.dart
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math' as math;
 
 import 'package:ui_elements_flutter/constants.dart';
 import 'package:ui_elements_flutter/services/chat_storage_service.dart';
-import 'package:ui_elements_flutter/chat/chat_ui.dart';
-import 'package:ui_elements_flutter/sidebar.dart';
 import 'package:ui_elements_flutter/pages/projects_page.dart';
 import 'package:ui_elements_flutter/pages/settings_page.dart';
+import 'package:ui_elements_flutter/pages/root_layout_desktop.dart';
+import 'package:ui_elements_flutter/pages/root_layout_mobile.dart';
+import 'package:ui_elements_flutter/chat/chat_ui.dart';
 import 'package:ui_elements_flutter/utils/color_extensions.dart'; // Import for hex conversion
 
 /* ---------- MAIN ---------- */
@@ -153,6 +153,13 @@ class _RootWrapperState extends State<RootWrapper> {
 
   final GlobalKey<ChukChatUIState> _chatUIKey = GlobalKey();
 
+  void _startNewChat() {
+    _chatUIKey.currentState?.newChat();
+    if (_isSidebarExpanded) {
+      _toggleSidebar();
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -207,196 +214,32 @@ class _RootWrapperState extends State<RootWrapper> {
     // Sicherstellen, dass die Sidebar nicht breiter als der Bildschirm ist
     final double effectiveSidebarWidth = math.min(screenWidth, sidebarVisibleWidth);
 
-    return Scaffold(
-      body: Stack(
-        children: [
-          // Layer 1: Haupt-Chat-UI, die nach rechts verschoben wird oder verschwindet
-          Visibility(
-            // Auf kompakten Bildschirmen ist die Chat-UI unsichtbar, wenn die Sidebar geöffnet ist.
-            // Ansonsten (großer Bildschirm ODER Sidebar geschlossen) ist sie sichtbar.
-            visible: !isCompactMode || !_isSidebarExpanded,
-            child: AnimatedPositioned(
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOutCubic,
-              // Verschiebt die Chat-UI um die Breite der Sidebar, wenn Sidebar offen und KEIN Kompaktmodus
-              left: (!isCompactMode && _isSidebarExpanded) ? effectiveSidebarWidth : 0,
-              right: 0,
-              top: 0,
-              bottom: 0,
-              child: GestureDetector(
-                onTap: _isSidebarExpanded ? _toggleSidebar : null, // Sidebar schließen bei Tap außerhalb
-                child: AbsorbPointer( // Interaktionen mit Chat-UI blockieren, wenn Sidebar offen ist
-                  absorbing: _isSidebarExpanded,
-                  child: ChukChatUI(
-                    key: _chatUIKey,
-                    onToggleSidebar: _toggleSidebar, // Dummy, da der Button hier behandelt wird
-                    selectedChatIndex: ChatStorageService.selectedChatIndex,
-                    isSidebarExpanded: _isSidebarExpanded,
-                    isCompactMode: isCompactMode, // Übergebe den Kompaktmodus-Flag an die ChatUI
-                  ),
-                ),
-              ),
-            ),
-          ),
+    if (isCompactMode) {
+      return MobileRootScaffold(
+        chatUIKey: _chatUIKey,
+        iconColor: iconFg,
+        isSidebarExpanded: _isSidebarExpanded,
+        onChatTapped: _handleChatTapped,
+        onNewChat: _startNewChat,
+        onOpenProjects: _openProjectsPage,
+        onOpenSettings: _openSettingsPage,
+        onToggleSidebar: _toggleSidebar,
+        selectedChatIndex: ChatStorageService.selectedChatIndex,
+        sidebarWidth: effectiveSidebarWidth,
+      );
+    }
 
-          // Layer 2: Animierte Sidebar, die über die Chat-UI schiebt
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOutCubic,
-            left: _isSidebarExpanded ? 0 : -effectiveSidebarWidth, // Schiebt von links herein
-            top: 0,
-            bottom: 0,
-            width: effectiveSidebarWidth,
-            child: CustomSidebar(
-              onChatItemTapped: _handleChatTapped,
-              onSettingsTapped: _openSettingsPage,
-              onProjectsTapped: _openProjectsPage,
-              selectedChatIndex: ChatStorageService.selectedChatIndex,
-              isCompactMode: isCompactMode, // Übergebe den Kompaktmodus an die Sidebar
-            ),
-          ),
-
-          // Layer 3: Hamburger-Menü als einfacher IconButton mit gleichem Abstand zur linken Wand
-          Positioned(
-            top: kTopInitialSpacing,
-            left: kFixedLeftPadding,
-            child: IconButton(
-              icon: Icon(Icons.menu, color: iconFg, size: 24),
-              onPressed: _toggleSidebar,
-            ),
-          ),
-
-          // Layer 4: "chuk.chat"-Titel neben dem Hamburger-Menü
-          // Titel ist immer sichtbar, Breite passt sich an Sidebar-Status an.
-          Positioned(
-            top: kTopInitialSpacing + (kMenuButtonHeight - kButtonVisualHeight) / 2,
-            left: kFixedLeftPadding + kMenuButtonHeight + 16, // 16px Abstand vom Hamburger-Menü
-            child: InkWell(
-              onTap: () {}, // Keine Aktion, rein als Titel
-              borderRadius: BorderRadius.circular(8),
-              child: Container(
-                height: kButtonVisualHeight,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      curve: Curves.easeOut,
-                      width: _isSidebarExpanded ? 100 : 0, // Text sichtbar, wenn Sidebar offen
-                      constraints: BoxConstraints(
-                        minWidth: _isSidebarExpanded ? 100 : 0,
-                      ),
-                      child: ClipRect(
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 10.0),
-                          child: Text(
-                            'chuk.chat',
-                            style: TextStyle(color: iconFg, fontSize: 16),
-                            softWrap: false,
-                            overflow: TextOverflow.clip,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // Layer 5: "New Chat"-Button
-          // Nur sichtbar, wenn NICHT im Kompaktmodus ODER die Sidebar geöffnet ist.
-          if (!isCompactMode || _isSidebarExpanded)
-            Positioned(
-              top:
-                  kTopInitialSpacing + kMenuButtonHeight + kSpacingBetweenTopButtons,
-              left: kFixedLeftPadding,
-              child: InkWell(
-                onTap: () {
-                  _chatUIKey.currentState?.newChat(); // Ruft die neue Chat-Methode auf
-                  if (_isSidebarExpanded) _toggleSidebar(); // Sidebar schließen, wenn neuer Chat erstellt
-                },
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  height: kButtonVisualHeight,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.edit_square, color: iconFg),
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        curve: Curves.easeOut,
-                        width: _isSidebarExpanded ? 100 : 0, // Text erweitert sich mit der Sidebar
-                        constraints: BoxConstraints(
-                          minWidth: _isSidebarExpanded ? 100 : 0,
-                        ),
-                        child: ClipRect(
-                          child: Padding(
-                            padding: const EdgeInsets.only(left: 12.0),
-                            child: Text(
-                              'New chat',
-                              style: TextStyle(color: iconFg, fontSize: 16),
-                              softWrap: false,
-                              overflow: TextOverflow.clip,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-          // Layer 6: "Projects"-Button
-          // Nur sichtbar, wenn NICHT im Kompaktmodus ODER die Sidebar geöffnet ist.
-          if (!isCompactMode || _isSidebarExpanded)
-            Positioned(
-              top: kTopInitialSpacing +
-                  kMenuButtonHeight +
-                  kSpacingBetweenTopButtons +
-                  kButtonVisualHeight +
-                  kSpacingBetweenTopButtons,
-              left: kFixedLeftPadding,
-              child: InkWell(
-                onTap: _openProjectsPage,
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  height: kButtonVisualHeight,
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.folder_open, color: iconFg),
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        curve: Curves.easeOut,
-                        width: _isSidebarExpanded ? 100 : 0, // Text erweitert sich mit der Sidebar
-                        constraints: BoxConstraints(
-                          minWidth: _isSidebarExpanded ? 100 : 0,
-                        ),
-                        child: ClipRect(
-                          child: Padding(
-                            padding: const EdgeInsets.only(left: 12.0),
-                            child: Text(
-                              'Projects',
-                              style: TextStyle(color: iconFg, fontSize: 16),
-                              softWrap: false,
-                              overflow: TextOverflow.clip,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
+    return DesktopRootScaffold(
+      chatUIKey: _chatUIKey,
+      iconColor: iconFg,
+      isSidebarExpanded: _isSidebarExpanded,
+      onChatTapped: _handleChatTapped,
+      onNewChat: _startNewChat,
+      onOpenProjects: _openProjectsPage,
+      onOpenSettings: _openSettingsPage,
+      onToggleSidebar: _toggleSidebar,
+      selectedChatIndex: ChatStorageService.selectedChatIndex,
+      sidebarWidth: effectiveSidebarWidth,
     );
   }
 }
