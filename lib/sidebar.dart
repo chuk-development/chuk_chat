@@ -96,7 +96,7 @@ class _CustomSidebarState extends State<CustomSidebar> {
                     padding: const EdgeInsets.symmetric(horizontal: _sidebarHorizontalPadding, vertical: 8.0),
                     child: Text(
                       'No recent chats yet.',
-                      style: TextStyle(color: iconFg.withOpacity(0.5)),
+                      style: TextStyle(color: iconFg.withValues(alpha: 0.5)),
                     ),
                   ),
                 ...ChatStorageService.savedChats.asMap().entries.map((entry) {
@@ -132,7 +132,7 @@ class _CustomSidebarState extends State<CustomSidebar> {
                   borderRadius: BorderRadius.circular(8),
                   child: ListTile(
                     leading: CircleAvatar(
-                      backgroundColor: iconFg.withOpacity(0.3),
+                      backgroundColor: iconFg.withValues(alpha: 0.3),
                       child: Text('DM',
                           style: TextStyle(color: iconFg, fontSize: 16)),
                     ),
@@ -146,7 +146,7 @@ class _CustomSidebarState extends State<CustomSidebar> {
                 elevation: 8.0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
-                  side: BorderSide(color: iconFg.withOpacity(0.3), width: 1),
+                  side: BorderSide(color: iconFg.withValues(alpha: 0.3), width: 1),
                 ),
                 // IMPORTANT: Precise positioning and width control
                 // The offset moves the menu relative to the bottom-left corner of the `child`.
@@ -243,15 +243,15 @@ class _CustomSidebarState extends State<CustomSidebar> {
       title: Text(
         title,
         style: TextStyle(
-          color: isLast ? iconFgColor.withOpacity(0.38) : (isSelected ? accentColor : iconFgColor),
+          color: isLast ? iconFgColor.withValues(alpha: 0.38) : (isSelected ? accentColor : iconFgColor),
           fontSize: 15,
         ),
       ),
       onTap: onTap,
       dense: true,
       contentPadding: const EdgeInsets.only(left: _sidebarHorizontalPadding), // Only left padding as leading handles space
-      tileColor: isSelected ? accentColor.withOpacity(0.1) : null,
-      selectedTileColor: accentColor.withOpacity(0.1),
+      tileColor: isSelected ? accentColor.withValues(alpha: 0.1) : null,
+      selectedTileColor: accentColor.withValues(alpha: 0.1),
       selectedColor: accentColor,
     );
   }

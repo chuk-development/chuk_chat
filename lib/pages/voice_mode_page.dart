@@ -214,12 +214,12 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
                           : Container(
                               alignment: Alignment.center,
                               decoration: BoxDecoration(
-                                color: accent.withOpacity(0.2),
+                                color: accent.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
                                 'No image generated',
-                                style: TextStyle(color: Colors.white.withOpacity(0.5)),
+                                style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
                               ),
                             ),
                     ),
@@ -306,7 +306,7 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
           decoration: BoxDecoration(
             color: cardBg,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: iconFg.withOpacity(0.3), width: 1),
+            border: Border.all(color: iconFg.withValues(alpha: 0.3), width: 1),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -324,7 +324,7 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
                 child: Text(
                   '• ${_selectedVoice.description.split(' ')[0]}', // e.g., "Upbeat"
                   style: TextStyle(
-                    color: iconFg.withOpacity(0.7),
+                    color: iconFg.withValues(alpha: 0.7),
                     fontSize: 14,
                   ),
                 ),
@@ -374,10 +374,10 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
               decoration: BoxDecoration(
                 color: cardBg,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: iconFg.withOpacity(0.3), width: 1),
+                border: Border.all(color: iconFg.withValues(alpha: 0.3), width: 1),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
+                    color: Colors.black.withValues(alpha: 0.3),
                     spreadRadius: 2,
                     blurRadius: 10,
                     offset: const Offset(0, 4),
@@ -399,7 +399,7 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         decoration: BoxDecoration(
-                          color: isSelected ? accent.withOpacity(0.2) : Colors.transparent,
+                          color: isSelected ? accent.withValues(alpha: 0.2) : Colors.transparent,
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Row(
@@ -407,7 +407,7 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
                             Text(
                               voice.name,
                               style: TextStyle(
-                                color: isSelected ? iconFg : iconFg.withOpacity(0.8),
+                                color: isSelected ? iconFg : iconFg.withValues(alpha: 0.8),
                                 fontSize: 16,
                                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                               ),
@@ -417,7 +417,7 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
                               child: Text(
                                 voice.description,
                                 style: TextStyle(
-                                  color: isSelected ? iconFg.withOpacity(0.7) : iconFg.withOpacity(0.5),
+                                  color: isSelected ? iconFg.withValues(alpha: 0.7) : iconFg.withValues(alpha: 0.5),
                                   fontSize: 12,
                                 ),
                               ),
@@ -455,7 +455,7 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
           decoration: BoxDecoration(
             color: cardBg,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: iconFg.withOpacity(0.3), width: 1),
+            border: Border.all(color: iconFg.withValues(alpha: 0.3), width: 1),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -521,10 +521,10 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
               decoration: BoxDecoration(
                 color: cardBg,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: iconFg.withOpacity(0.3), width: 1),
+                border: Border.all(color: iconFg.withValues(alpha: 0.3), width: 1),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
+                    color: Colors.black.withValues(alpha: 0.3),
                     spreadRadius: 2,
                     blurRadius: 10,
                     offset: const Offset(0, 4),
@@ -546,7 +546,7 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         decoration: BoxDecoration(
-                          color: isSelected ? accent.withOpacity(0.2) : Colors.transparent,
+                          color: isSelected ? accent.withValues(alpha: 0.2) : Colors.transparent,
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Row(
@@ -556,7 +556,7 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
                             Text(
                               personality.name,
                               style: TextStyle(
-                                color: isSelected ? iconFg : iconFg.withOpacity(0.8),
+                                color: isSelected ? iconFg : iconFg.withValues(alpha: 0.8),
                                 fontSize: 16,
                                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                               ),
@@ -571,7 +571,7 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
                             if (isSelected)
                               Icon(Icons.check, color: iconFg, size: 20)
                             else if (personality.canReset)
-                              Icon(Icons.refresh, color: iconFg.withOpacity(0.6), size: 20),
+                              Icon(Icons.refresh, color: iconFg.withValues(alpha: 0.6), size: 20),
                           ],
                         ),
                       ),
@@ -596,7 +596,7 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
         decoration: BoxDecoration(
           color: cardBg,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: iconFg.withOpacity(0.3), width: 1),
+          border: Border.all(color: iconFg.withValues(alpha: 0.3), width: 1),
         ),
         child: Row(
           children: [
@@ -607,9 +607,9 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
                   thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8.0), // Smaller thumb
                   overlayShape: const RoundSliderOverlayShape(overlayRadius: 16.0), // Smaller overlay
                   activeTrackColor: accent,
-                  inactiveTrackColor: accent.withOpacity(0.3),
+                  inactiveTrackColor: accent.withValues(alpha: 0.3),
                   thumbColor: iconFg,
-                  overlayColor: iconFg.withOpacity(0.2),
+                  overlayColor: iconFg.withValues(alpha: 0.2),
                 ),
                 child: Slider(
                   value: _playbackSpeed,
@@ -655,7 +655,7 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: accent.withOpacity(.8),
+          color: accent.withValues(alpha: .8),
           borderRadius: const BorderRadius.only(
             topLeft: Radius.circular(12),
             topRight: Radius.circular(12),
@@ -681,7 +681,7 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
         height: 6,
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(.6),
+            color: Colors.white.withValues(alpha: .6),
             borderRadius: BorderRadius.circular(3),
           ),
         ),
@@ -702,7 +702,7 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
       builder: (_, __) {
         // Determine the active color based on state
         Color activeColor =
-            accent.withOpacity(0.3); // Default idle color, subtle accent
+            accent.withValues(alpha: 0.3); // Default idle color, subtle accent
         bool isActive = false;
         if (_listening) {
           activeColor = userMicColor;
@@ -753,7 +753,7 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
         Text(
           _muted ? 'Muted' : 'Listening…',
           style: TextStyle(
-            color: _muted ? Colors.redAccent : iconFg.withOpacity(.8),
+            color: _muted ? Colors.redAccent : iconFg.withValues(alpha: .8),
             fontWeight: _muted ? FontWeight.bold : FontWeight.normal,
             fontSize: 14,
           ),
@@ -772,7 +772,7 @@ class _WavePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = color.withOpacity(.4)
+      ..color = color.withValues(alpha: .4)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
     final path = Path();
@@ -817,13 +817,13 @@ class _SciFiVisualizerPainter extends CustomPainter {
       // Outer ring pulse
       double pulseRadius =
           (5 + 20 * (0.5 + 0.5 * math.sin(animationValue * 2 * math.pi))).clamp(5.0, 25.0);
-      linePaint.color = baseColor.withOpacity(0.8);
+      linePaint.color = baseColor.withValues(alpha: 0.8);
       canvas.drawCircle(Offset(centerX, centerY), pulseRadius, linePaint);
 
       // Inner ring pulse
       pulseRadius = (5 + 15 * (0.5 + 0.5 * math.sin(animationValue * 2 * math.pi + math.pi / 2)))
           .clamp(5.0, 20.0);
-      linePaint.color = baseColor.withOpacity(0.6);
+      linePaint.color = baseColor.withValues(alpha: 0.6);
       canvas.drawCircle(Offset(centerX, centerY), pulseRadius, linePaint);
     }
 
@@ -841,7 +841,7 @@ class _SciFiVisualizerPainter extends CustomPainter {
           ? (0.3 + 0.7 * offsetFactor.abs()).clamp(0.3, 1.0)
           : 0.2; // Fixed short length when idle
 
-      linePaint.color = baseColor.withOpacity(opacity);
+      linePaint.color = baseColor.withValues(alpha: opacity);
 
       // Calculate start and end points for lines
       final double startRadius = 0.1 * maxRadius; // Start further out from center

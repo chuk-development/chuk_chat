@@ -250,7 +250,7 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: iconFg.withOpacity(.3)),
+        border: Border.all(color: iconFg.withValues(alpha: .3)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Column(
@@ -290,7 +290,7 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
                     style: TextStyle(color: iconFg),
                     decoration: InputDecoration(
                       hintText: 'Ask me anything !',
-                      hintStyle: TextStyle(color: iconFg.withOpacity(.8)),
+                      hintStyle: TextStyle(color: iconFg.withValues(alpha: .8)),
                       border: InputBorder.none,
                       enabledBorder: InputBorder.none,
                       focusedBorder: InputBorder.none,
@@ -435,8 +435,8 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
             final Color effectiveBorderColor = hovered
                 ? iconFg // Bright border on hover
                 : isActive
-                    ? iconFg.withOpacity(0.6) // Slightly muted active border
-                    : iconFg.withOpacity(.3); // Default border
+                    ? iconFg.withValues(alpha: 0.6) // Slightly muted active border
+                    : iconFg.withValues(alpha: .3); // Default border
 
             final double effectiveBorderWidth = hovered
                 ? 1.2

@@ -326,7 +326,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                                         decoration: BoxDecoration(
                                           color: scaffoldBg.darken(0.05),
                                           borderRadius: BorderRadius.circular(10),
-                                          border: Border.all(color: iconFg.withOpacity(0.3)),
+                                          border: Border.all(color: iconFg.withValues(alpha: 0.3)),
                                         ),
                                         child: Row(
                                           children: [
@@ -356,7 +356,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                                         decoration: BoxDecoration(
                                           color: scaffoldBg.darken(0.05),
                                           borderRadius: BorderRadius.circular(10),
-                                          border: Border.all(color: iconFg.withOpacity(0.3)),
+                                          border: Border.all(color: iconFg.withValues(alpha: 0.3)),
                                         ),
                                         child: Text(
                                           model.description!,
@@ -463,7 +463,7 @@ class ModelSelectionRow extends StatelessWidget {
               decoration: BoxDecoration(
                 color: inputFieldBg,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: iconFgColor.withOpacity(0.5)),
+                border: Border.all(color: iconFgColor.withValues(alpha: 0.5)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -497,12 +497,12 @@ class ModelSelectionRow extends StatelessWidget {
               decoration: BoxDecoration(
                 color: inputFieldBg,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: iconFgColor.withOpacity(0.5)),
+                border: Border.all(color: iconFgColor.withValues(alpha: 0.5)),
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<ModelProviderInfo>(
                   value: selectedProvider,
-                  dropdownColor: bgColor.darken(0.05).withOpacity(0.9),
+                  dropdownColor: bgColor.darken(0.05).withValues(alpha: 0.9),
                   icon: Icon(Icons.arrow_drop_down, color: iconFgColor),
                   style: const TextStyle(color: Colors.white, fontSize: 13),
                   onChanged: onProviderChanged,
@@ -568,13 +568,13 @@ class ModelSelectionRow extends StatelessWidget {
               decoration: BoxDecoration(
                 color: inputFieldBg,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: iconFgColor.withOpacity(0.5)),
+                border: Border.all(color: iconFgColor.withValues(alpha: 0.5)),
               ),
               child: selectedProvider == null
                   ? Text(
                       'Price Details',
                       style: TextStyle(
-                          color: iconFgColor.lighten(0.3).withOpacity(0.7),
+                          color: iconFgColor.lighten(0.3).withValues(alpha: 0.7),
                           fontSize: 12),
                       textAlign: TextAlign.center,
                     )
@@ -616,13 +616,13 @@ class ModelSelectionRow extends StatelessWidget {
               decoration: BoxDecoration(
                 color: inputFieldBg,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: iconFgColor.withOpacity(0.5)),
+                border: Border.all(color: iconFgColor.withValues(alpha: 0.5)),
               ),
               child: selectedProvider == null
                   ? Text(
                       'Token & Context',
                       style: TextStyle(
-                          color: iconFgColor.lighten(0.3).withOpacity(0.7),
+                          color: iconFgColor.lighten(0.3).withValues(alpha: 0.7),
                           fontSize: 12),
                       textAlign: TextAlign.center,
                     )

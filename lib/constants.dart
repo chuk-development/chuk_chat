@@ -19,7 +19,7 @@ ThemeData buildAppTheme({
     brightness: brightness,
     scaffoldBackgroundColor: bg,
     cardColor: bg, // Use background color for cards
-    dividerColor: iconFg.withOpacity(.4),
+    dividerColor: iconFg.withValues(alpha: .4),
     iconTheme: IconThemeData(color: iconFg),
     colorScheme: ColorScheme(
       primary: accent,
@@ -38,7 +38,7 @@ ThemeData buildAppTheme({
       iconColor: iconFg,
       textColor: iconFg,
       selectedColor: accent,
-      selectedTileColor: accent.withOpacity(0.1),
+      selectedTileColor: accent.withValues(alpha: 0.1),
     ),
     appBarTheme: AppBarTheme(
       backgroundColor: bg, // AppBar background matches general background
@@ -52,18 +52,18 @@ ThemeData buildAppTheme({
       fillColor: bg.lighten(0.05),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: iconFg.withOpacity(0.3), width: 1),
+        borderSide: BorderSide(color: iconFg.withValues(alpha: 0.3), width: 1),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: iconFg.withOpacity(0.3), width: 1),
+        borderSide: BorderSide(color: iconFg.withValues(alpha: 0.3), width: 1),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
         borderSide: BorderSide(color: accent, width: 1.5),
       ),
-      labelStyle: TextStyle(color: iconFg.withOpacity(0.8)),
-      hintStyle: TextStyle(color: iconFg.withOpacity(0.6)),
+      labelStyle: TextStyle(color: iconFg.withValues(alpha: 0.8)),
+      hintStyle: TextStyle(color: iconFg.withValues(alpha: 0.6)),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
     ),
   );

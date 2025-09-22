@@ -124,7 +124,7 @@ class _ThemePageState extends State<ThemePage> {
             margin: EdgeInsets.zero,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: iconFg.withOpacity(0.3), width: 1),
+              side: BorderSide(color: iconFg.withValues(alpha: 0.3), width: 1),
             ),
             child: SwitchListTile(
               title: Text(
@@ -150,7 +150,7 @@ class _ThemePageState extends State<ThemePage> {
                 });
               },
               activeColor: accent,
-              inactiveTrackColor: iconFg.withOpacity(0.3),
+              inactiveTrackColor: iconFg.withValues(alpha: 0.3),
               tileColor: scaffoldBg.lighten(0.05),
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             ),
@@ -288,8 +288,8 @@ class _ThemePageState extends State<ThemePage> {
             controller: hexController,
             decoration: InputDecoration(
               labelText: 'Custom Hex Color (#RRGGBB)',
-              prefixIcon: Icon(Icons.colorize, color: contextIconFgColor.withOpacity(0.7)),
-              labelStyle: TextStyle(color: contextIconFgColor.withOpacity(0.8)),
+              prefixIcon: Icon(Icons.colorize, color: contextIconFgColor.withValues(alpha: 0.7)),
+              labelStyle: TextStyle(color: contextIconFgColor.withValues(alpha: 0.8)),
               suffixIcon: IconButton(
                 icon: Icon(Icons.check_circle, color: contextAccentColor),
                 onPressed: () => onHexChanged(hexController.text),
@@ -319,13 +319,13 @@ class _ThemePageState extends State<ThemePage> {
                   color: color,
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: isSelected ? contextAccentColor : contextIconFgColor.withOpacity(0.4),
+                    color: isSelected ? contextAccentColor : contextIconFgColor.withValues(alpha: 0.4),
                     width: isSelected ? 3.0 : 1.0,
                   ),
                   boxShadow: isSelected
                       ? [
                           BoxShadow(
-                            color: color.withOpacity(0.5),
+                            color: color.withValues(alpha: 0.5),
                             blurRadius: 6,
                             spreadRadius: 2,
                           ),

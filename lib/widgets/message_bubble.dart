@@ -39,9 +39,9 @@ class MessageBubble extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         constraints: BoxConstraints(maxWidth: effectiveMaxWidth), // Verwendet effectiveMaxWidth
         decoration: BoxDecoration(
-          color: alignRight ? accentColor.withOpacity(.8) : bgColor,
+          color: alignRight ? accentColor.withValues(alpha: .8) : bgColor,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: iconFgColor.withOpacity(.3)),
+          border: Border.all(color: iconFgColor.withValues(alpha: .3)),
         ),
         child: Text(message, style: TextStyle(color: iconFgColor)),
       ),

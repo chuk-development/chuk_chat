@@ -73,7 +73,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
               color: bgColor, // Use theme's bgColor
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                color: hovered ? iconFgColor : iconFgColor.withOpacity(.3), // Use theme's iconFgColor
+                color: hovered ? iconFgColor : iconFgColor.withValues(alpha: .3), // Use theme's iconFgColor
                 width: hovered ? 1.2 : 0.8,
               ),
             ),
@@ -97,7 +97,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
                       maxLines: 1, // Ensures text stays on one line
                     ),
                   ),
-                  Icon(Icons.keyboard_arrow_down, color: iconFgColor.withOpacity(0.8), size: 16), // Use theme's iconFgColor
+                  Icon(Icons.keyboard_arrow_down, color: iconFgColor.withValues(alpha: 0.8), size: 16), // Use theme's iconFgColor
                 ],
                 // In compact mode, only the icon is displayed.
               ],
@@ -120,7 +120,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       color: bgColor, // Use theme's bgColor for dropdown background
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: iconFgColor.withOpacity(.3)), // Use theme's iconFgColor
+        side: BorderSide(color: iconFgColor.withValues(alpha: .3)), // Use theme's iconFgColor
       ),
       onSelected: (value) {
         setState(() {
@@ -147,7 +147,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
                   ],
                 )
               else
-                Text(m.name, style: TextStyle(color: selected ? iconFgColor : iconFgColor.withOpacity(.8))), // Use theme's iconFgColor
+                Text(m.name, style: TextStyle(color: selected ? iconFgColor : iconFgColor.withValues(alpha: .8))), // Use theme's iconFgColor
               const Spacer(),
               if (!m.isToggle && selected) Icon(Icons.check, color: iconFgColor, size: 18), // Use theme's iconFgColor
               if (m.badge != null)

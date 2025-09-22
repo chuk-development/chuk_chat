@@ -22,7 +22,7 @@ class ProjectsPage extends StatelessWidget {
       body: Center(
         child: Text(
           'Projects page - build your content here!',
-          style: TextStyle(color: iconFg.withOpacity(0.8)),
+          style: TextStyle(color: iconFg.withValues(alpha: 0.8)),
         ),
       ),
     );

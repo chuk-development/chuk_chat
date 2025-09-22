@@ -132,7 +132,7 @@ class SettingsPage extends StatelessWidget {
       margin: EdgeInsets.zero, // No external margin, controlled by Column spacing
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: iconFgColor.withOpacity(0.3), width: 1),
+        side: BorderSide(color: iconFgColor.withValues(alpha: 0.3), width: 1),
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
