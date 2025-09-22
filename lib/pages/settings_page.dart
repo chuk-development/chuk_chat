@@ -1,9 +1,9 @@
 // lib/pages/settings_page.dart
 import 'package:flutter/material.dart';
-import 'package:ui_elements_flutter/constants.dart'; // Import app constants for default colors
-import 'package:ui_elements_flutter/model_selector_page.dart'; // Import the ModelSelectorPage
-import 'package:ui_elements_flutter/pages/theme_page.dart'; // Import the new ThemePage
-import 'package:ui_elements_flutter/utils/color_extensions.dart'; // Import ColorExtension
+import 'package:chuk_chat/constants.dart'; // Import app constants for default colors
+import 'package:chuk_chat/model_selector_page.dart'; // Import the ModelSelectorPage
+import 'package:chuk_chat/pages/theme_page.dart'; // Import the new ThemePage
+import 'package:chuk_chat/utils/color_extensions.dart'; // Import ColorExtension
 
 class SettingsPage extends StatelessWidget {
   final Brightness currentThemeMode;

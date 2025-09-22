@@ -2,12 +2,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:math' as math; // Import for math.min
-import 'package:ui_elements_flutter/constants.dart';
-import 'package:ui_elements_flutter/models/chat_model.dart';
-import 'package:ui_elements_flutter/services/chat_storage_service.dart';
-import 'package:ui_elements_flutter/widgets/message_bubble.dart';
-import 'package:ui_elements_flutter/pages/voice_mode_page.dart';
-import 'package:ui_elements_flutter/widgets/model_selection_dropdown.dart';
+import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/models/chat_model.dart';
+import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/widgets/message_bubble.dart';
+import 'package:chuk_chat/pages/voice_mode_page.dart';
+import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 
 /* ---------- CHAT UI ---------- */
 class ChukChatUI extends StatefulWidget {

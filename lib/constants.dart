@@ -1,6 +1,6 @@
 // lib/constants.dart
 import 'package:flutter/material.dart';
-import 'package:ui_elements_flutter/utils/color_extensions.dart'; // Import the new extension
+import 'package:chuk_chat/utils/color_extensions.dart'; // Import the new extension
 
 /* ---------- DEFAULT COLOURS ---------- */
 const Color kDefaultBgColor = Color(0xFF211B15);

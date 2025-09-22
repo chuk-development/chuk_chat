@@ -2,8 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:ui_elements_flutter/constants.dart';
-import 'package:ui_elements_flutter/utils/color_extensions.dart'; // For ColorExtension
+import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/utils/color_extensions.dart'; // For ColorExtension
 
 class ThemePage extends StatefulWidget {
   final Brightness currentThemeMode;

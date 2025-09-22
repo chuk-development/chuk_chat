@@ -1,4 +1,4 @@
-package com.example.ui_elements_flutter
+package com.example.chuk_chat
 
 import io.flutter.embedding.android.FlutterActivity
 

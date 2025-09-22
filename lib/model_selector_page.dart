@@ -5,8 +5,8 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_svg/flutter_svg.dart'; // Import for SVG support
 
 // Import your app constants for colors and theme
-import 'package:ui_elements_flutter/constants.dart';
-import 'package:ui_elements_flutter/utils/color_extensions.dart'; // Import the new extension
+import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/utils/color_extensions.dart'; // Import the new extension
 
 // --- Data Models (Mirroring your FastAPI Pydantic Models) ---
 

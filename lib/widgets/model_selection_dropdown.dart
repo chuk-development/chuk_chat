@@ -1,6 +1,6 @@
 // lib/widgets/model_selection_dropdown.dart
 import 'package:flutter/material.dart';
-import 'package:ui_elements_flutter/models/chat_model.dart'; // For ModelItem
+import 'package:chuk_chat/models/chat_model.dart'; // For ModelItem
 
 class ModelSelectionDropdown extends StatefulWidget {
   final String initialSelectedModel;

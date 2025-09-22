@@ -4,13 +4,13 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math' as math;
 
-import 'package:ui_elements_flutter/constants.dart';
-import 'package:ui_elements_flutter/services/chat_storage_service.dart';
-import 'package:ui_elements_flutter/chat/chat_ui.dart';
-import 'package:ui_elements_flutter/sidebar.dart';
-import 'package:ui_elements_flutter/pages/projects_page.dart';
-import 'package:ui_elements_flutter/pages/settings_page.dart';
-import 'package:ui_elements_flutter/utils/color_extensions.dart'; // Import for hex conversion
+import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/chat/chat_ui.dart';
+import 'package:chuk_chat/sidebar.dart';
+import 'package:chuk_chat/pages/projects_page.dart';
+import 'package:chuk_chat/pages/settings_page.dart';
+import 'package:chuk_chat/utils/color_extensions.dart'; // Import for hex conversion
 
 /* ---------- MAIN ---------- */
 void main() => runApp(ChukChatApp()); // Removed const here as it's stateful

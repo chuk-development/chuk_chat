@@ -1,6 +1,6 @@
 {
-    "name": "ui_elements_flutter",
-    "short_name": "ui_elements_flutter",
+    "name": "chuk_chat",
+    "short_name": "chuk_chat",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

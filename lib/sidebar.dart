@@ -1,8 +1,8 @@
 // sidebar.dart
 import 'package:flutter/material.dart';
-import 'package:ui_elements_flutter/constants.dart';
-import 'package:ui_elements_flutter/services/chat_storage_service.dart';
-import 'package:ui_elements_flutter/utils/color_extensions.dart'; // Import the color extensions
+import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/utils/color_extensions.dart'; // Import the color extensions
 
 final List<String> _starredChats = ['Book writing Per chapter']; // Kept local for now
 

@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "ui_elements_flutter" "\0"
+            VALUE "FileDescription", "chuk_chat" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "ui_elements_flutter" "\0"
+            VALUE "InternalName", "chuk_chat" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2025 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "ui_elements_flutter.exe" "\0"
-            VALUE "ProductName", "ui_elements_flutter" "\0"
+            VALUE "OriginalFilename", "chuk_chat.exe" "\0"
+            VALUE "ProductName", "chuk_chat" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

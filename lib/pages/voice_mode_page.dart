@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'dart:ui' as ui; // Import for MaskFilter
 
-import 'package:ui_elements_flutter/constants.dart';
-import 'package:ui_elements_flutter/models/voice_mode_models.dart';
-import 'package:ui_elements_flutter/widgets/message_bubble.dart';
-import 'package:ui_elements_flutter/utils/color_extensions.dart'; // Import for color extensions
+import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/models/voice_mode_models.dart';
+import 'package:chuk_chat/widgets/message_bubble.dart';
+import 'package:chuk_chat/utils/color_extensions.dart'; // Import for color extensions
 
 ///  Voice-Mode  –  UI ONLY  –  LifeKit ready
 class VoiceModePage extends StatefulWidget {

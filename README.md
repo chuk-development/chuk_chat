@@ -1,4 +1,4 @@
-# ui_elements_flutter
+# chuk_chat
 
 A new Flutter project.
 
