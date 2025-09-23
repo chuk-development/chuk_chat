@@ -1,13 +1,13 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart'; // NEW: For defaultTargetPlatform
+import 'package:flutter/foundation.dart'; // For defaultTargetPlatform
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
-import 'package:chuk_chat/platform_specific/root_wrapper_desktop.dart'; // NEW
-import 'package:chuk_chat/platform_specific/root_wrapper_mobile.dart';  // NEW
+import 'package:chuk_chat/platform_specific/root_wrapper_desktop.dart';
+import 'package:chuk_chat/platform_specific/root_wrapper_mobile.dart';
 import 'package:chuk_chat/utils/color_extensions.dart'; // Import for hex conversion
 import 'package:chuk_chat/utils/grain_overlay.dart';   // Film grain overlay
 
@@ -138,41 +138,47 @@ class _ChukChatAppState extends State<ChukChatApp> {
         );
       },
 
-      home: _isMobilePlatform(defaultTargetPlatform)
-          ? RootWrapperMobile( // NEW: Use mobile wrapper
-              // Pass all theme props and callbacks
-              // The RootWrapperMobile will define its own navigation (e.g., BottomNavigationBar)
-              // and internal page structure for mobile.
-              currentThemeMode: _currentThemeMode,
-              currentAccentColor: _currentAccentColor,
-              currentIconFgColor: _currentIconFgColor,
-              currentBgColor: _currentBgColor,
-              setThemeMode: _setThemeMode,
-              setAccentColor: _setAccentColor,
-              setIconFgColor: _setIconFgColor,
-              setBgColor: _setBgColor,
-              // film grain
-              grainEnabled: _grainEnabled,
-              setGrainEnabled: _setGrainEnabled,
-            )
-          : RootWrapperDesktop( // NEW: Use desktop wrapper
-              // Pass all theme props and callbacks
-              currentThemeMode: _currentThemeMode,
-              currentAccentColor: _currentAccentColor,
-              currentIconFgColor: _currentIconFgColor,
-              currentBgColor: _currentBgColor,
-              setThemeMode: _setThemeMode,
-              setAccentColor: _setAccentColor,
-              setIconFgColor: _setIconFgColor,
-              setBgColor: _setBgColor,
-              grainEnabled: _grainEnabled,
-              setGrainEnabled: _setGrainEnabled,
-            ),
-    );
-  }
+      home: Builder( // Use Builder to get a context that has MediaQuery
+        builder: (context) {
+          final double screenWidth = MediaQuery.of(context).size.width;
+          final TargetPlatform platform = defaultTargetPlatform;
 
-  // NEW: Helper to determine if the platform is mobile
-  bool _isMobilePlatform(TargetPlatform platform) {
-    return platform == TargetPlatform.android || platform == TargetPlatform.iOS;
+          // Check if it's a mobile platform (Android/iOS) AND below tablet breakpoint
+          final bool isMobilePhone =
+              (platform == TargetPlatform.android || platform == TargetPlatform.iOS) &&
+              screenWidth < kTabletBreakpoint;
+
+          // If it's a mobile phone, use the mobile wrapper. Otherwise, use desktop wrapper.
+          if (isMobilePhone) {
+            return RootWrapperMobile(
+              currentThemeMode: _currentThemeMode,
+              currentAccentColor: _currentAccentColor,
+              currentIconFgColor: _currentIconFgColor,
+              currentBgColor: _currentBgColor,
+              setThemeMode: _setThemeMode,
+              setAccentColor: _setAccentColor,
+              setIconFgColor: _setIconFgColor,
+              setBgColor: _setBgColor,
+              grainEnabled: _grainEnabled,
+              setGrainEnabled: _setGrainEnabled,
+            );
+          } else {
+            // This applies to desktop (Linux, Windows, macOS), web, and tablets (Android/iOS >= kTabletBreakpoint)
+            return RootWrapperDesktop(
+              currentThemeMode: _currentThemeMode,
+              currentAccentColor: _currentAccentColor,
+              currentIconFgColor: _currentIconFgColor,
+              currentBgColor: _currentBgColor,
+              setThemeMode: _setThemeMode,
+              setAccentColor: _setAccentColor,
+              setIconFgColor: _setIconFgColor,
+              setBgColor: _setBgColor,
+              grainEnabled: _grainEnabled,
+              setGrainEnabled: _setGrainEnabled,
+            );
+          }
+        },
+      ),
+    );
   }
 }

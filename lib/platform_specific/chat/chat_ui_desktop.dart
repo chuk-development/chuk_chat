@@ -343,7 +343,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop> with SingleTickerP
 
     // Determine if the chat is currently empty (no messages, no attached files)
     final bool isChatEmpty = _messages.isEmpty; // This refers to the chat history, not just text input
-    final bool showInputAreaCentered = isChatEmpty; // Input area is centered only if NO messages yet
+    // On desktop, it centers when empty.
+    final bool showInputAreaCentered = isChatEmpty;
 
     // Determine the target width for the input area
     final double targetInputWidth = showInputAreaCentered ? centeredInputWidth : expandedInputWidth;
@@ -393,7 +394,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop> with SingleTickerP
             right: 0,
             // Position at the bottom if not empty, otherwise calculate center position
             bottom: showInputAreaCentered
-                ? (MediaQuery.of(context).size.height / 2 - (inputAreaVisualHeight / 2)) // Adjusted to center based on actual visual height
+                ? (MediaQuery.of(context).size.height / 2 - (inputAreaVisualHeight / 2))
                 : effectiveHorizontalPadding, // Always keep padding from bottom edge
             child: Center( // Centers horizontally
               child: AnimatedContainer( // NEW: AnimatedContainer for width transition

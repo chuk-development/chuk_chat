@@ -9,7 +9,7 @@ const Color kDefaultIconFgColor = Color(0xFF93854C);
 const Brightness kDefaultThemeMode = Brightness.dark;
 
 /* ---------- FILM GRAIN DEFAULT ---------- */
-const bool kDefaultGrainEnabled = false;
+const bool kDefaultGrainEnabled = true;
 
 /* ---------- THEME BUILDER ---------- */
 ThemeData buildAppTheme({
@@ -73,6 +73,7 @@ ThemeData buildAppTheme({
 
 /* ---------- RESPONSIVE BREAKPOINTS ---------- */
 const double kCompactModeBreakpoint = 600.0;
+const double kTabletBreakpoint = 800.0; // NEW: Define tablet breakpoint
 
 /* ---------- MAIN UI LAYOUT CONSTANTS ---------- */
 const double kFixedLeftPadding = 8.0;

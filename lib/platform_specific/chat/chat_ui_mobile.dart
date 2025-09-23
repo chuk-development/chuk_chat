@@ -1,7 +1,7 @@
 // lib/platform_specific/chat/chat_ui_mobile.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'dart:math' as math; // Added for min/max
+import 'dart:math' as math;
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
@@ -15,55 +15,53 @@ import 'dart:io';
 import 'dart:async';
 import 'package:uuid/uuid.dart';
 
-/* ---------- CHAT UI MOBILE ---------- */
+/* ---------- CHAT UI MOBILE (Phone-specific rendering) ---------- */
 class ChukChatUIMobile extends StatefulWidget {
-  final VoidCallback onToggleSidebar; // NEW: Callback to toggle sidebar
+  final VoidCallback onToggleSidebar;
   final int selectedChatIndex;
+  final bool isSidebarExpanded; // Passed from RootWrapperMobile
 
   const ChukChatUIMobile({
     Key? key,
-    required this.onToggleSidebar, // NEW
+    required this.onToggleSidebar,
     required this.selectedChatIndex,
+    required this.isSidebarExpanded,
   }) : super(key: key);
 
   @override
-  // Changed to return the public State class
   State<ChukChatUIMobile> createState() => ChukChatUIMobileState();
 }
 
-// Made the State class public
 class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerProviderStateMixin {
   final TextEditingController _controller = TextEditingController();
   final List<Map<String, String>> _messages = [];
   final ScrollController _scrollController = ScrollController();
   final FocusNode _textFieldFocusNode = FocusNode();
-  final FocusNode _rawKeyboardListenerFocusNode = FocusNode(); // Added for keyboard listener
+  final FocusNode _rawKeyboardListenerFocusNode = FocusNode();
   final Uuid _uuid = Uuid();
 
   late ChatApiService _chatApiService;
   final List<AttachedFile> _attachedFiles = [];
   String _selectedModelId = 'deepseek/deepseek-chat-v3.1'; // Default model
 
-  late AnimationController _animCtrl; // Added for animations
-  late Animation<double> _anim; // Added for animations
+  late AnimationController _animCtrl;
+  late Animation<double> _anim;
 
-  bool _isBrainActive = false; // Added
-  bool _isImageActive = false; // Added
-  bool _isMicActive = false;   // Added
+  bool _isBrainActive = false;
+  bool _isImageActive = false;
+  bool _isMicActive = false;
 
   static const double _kMaxChatContentWidth = 760.0;
   static const double _kSearchBarContentHeight = 135.0;
   static const double _kAttachmentBarHeight = 40.0;
   static const double _kAttachmentBarMarginBottom = 8.0;
-  static const double _kHorizontalPaddingLarge = 16.0;
-  static const double _kHorizontalPaddingSmall = 8.0;
-
+  static const double _kHorizontalPaddingSmall = 8.0; // Always use small padding for phones
 
   @override
   void initState() {
     super.initState();
-    _animCtrl = AnimationController(duration: const Duration(milliseconds: 200), vsync: this); // Initialized
-    _anim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic); // Initialized
+    _animCtrl = AnimationController(duration: const Duration(milliseconds: 200), vsync: this);
+    _anim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic);
     _chatApiService = ChatApiService(onUploadStatusUpdate: _handleFileUploadUpdate);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
@@ -84,15 +82,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
     _controller.dispose();
     _scrollController.dispose();
     _textFieldFocusNode.dispose();
-    _rawKeyboardListenerFocusNode.dispose(); // Dispose
-    _animCtrl.dispose(); // Dispose
+    _rawKeyboardListenerFocusNode.dispose();
+    _animCtrl.dispose();
     super.dispose();
   }
 
   void _loadChatFromIndex(int index) {
     if (index == -1) {
       _messages.clear();
-      _animCtrl.reset(); // Reset animation
+      _animCtrl.reset();
       _attachedFiles.clear();
     } else if (index >= 0 && index < ChatStorageService.savedChats.length) {
       final chatJson = ChatStorageService.savedChats[index];
@@ -113,7 +111,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
       }
     }
     setState(() {
-      // Reset these states when loading new chat
       _isBrainActive = false;
       _isImageActive = false;
       _isMicActive = false;
@@ -309,8 +306,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
 
   @override
   Widget build(BuildContext context) {
-    // This UI is always considered "compact mode" for layout purposes
-    const bool isCompactMode = true;
+    // On phones, this UI is always in compact mode, so `isCompactMode` is always true.
+    const bool isCompactMode = false; // Model dropdown should show text on mobile
 
     final double screenWidth = MediaQuery.of(context).size.width;
     final Color bg = Theme.of(context).scaffoldBackgroundColor;
@@ -318,13 +315,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
     final Color iconFg = Theme.of(context).iconTheme.color!;
     final Color textColor = iconFg;
 
-    // Use smaller padding consistently for mobile
-    final double effectiveHorizontalPadding = _kHorizontalPaddingSmall;
+    final double effectiveHorizontalPadding = _kHorizontalPaddingSmall; // Always use small padding
     final double maxPossibleChatContentWidth = math.max(0.0, screenWidth - (effectiveHorizontalPadding * 2));
     final double constrainedChatContentWidth = math.min(_kMaxChatContentWidth, maxPossibleChatContentWidth);
 
-    final double centeredInputWidth = constrainedChatContentWidth * 0.95;
-    final double expandedInputWidth = constrainedChatContentWidth;
+    final double expandedInputWidth = constrainedChatContentWidth; // Input field takes available width
 
     double inputAreaVisualHeight = _kSearchBarContentHeight;
     if (_attachedFiles.isNotEmpty) {
@@ -332,46 +327,56 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
     }
     double inputAreaTotalHeight = inputAreaVisualHeight + (2 * effectiveHorizontalPadding);
 
-    final bool isChatEmpty = _messages.isEmpty;
-    final bool showInputAreaCentered = isChatEmpty;
+    // --- FIX FOR INPUT FIELD CENTERING ---
+    // On mobile, the input field should always stick to the bottom,
+    // gracefully adjusting for the keyboard, not attempting to center when empty.
+    final double keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+    // --- END FIX ---
 
-    final double targetInputWidth = showInputAreaCentered ? centeredInputWidth : expandedInputWidth;
+    final double targetInputWidth = expandedInputWidth; // On mobile, input should always stretch to available width
 
     return Scaffold(
       backgroundColor: Colors.transparent, // Background will be handled by RootWrapperMobile
+      // resizeToAvoidBottomInset is true by default in Scaffold, crucial for keyboard interaction.
       body: Stack(
         children: [
-          // Chat-Nachrichtenliste (only shown if there are messages)
-          if (!isChatEmpty)
-            Positioned(
-              top: 0,
-              bottom: inputAreaTotalHeight,
-              left: 0,
-              right: 0,
-              child: FadeTransition(
-                opacity: _anim,
-                child: Center(
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    curve: Curves.easeOutCubic,
-                    constraints: BoxConstraints(maxWidth: expandedInputWidth),
-                    child: ListView.builder(
-                      controller: _scrollController,
-                      padding: EdgeInsets.symmetric(horizontal: effectiveHorizontalPadding, vertical: 10),
-                      itemCount: _messages.length,
-                      itemBuilder: (_, i) {
-                        final m = _messages[i];
-                        return MessageBubble(
-                          message: m['text']!,
-                          isUser: m['sender'] == 'user',
-                          maxWidth: expandedInputWidth * 0.7,
-                        );
-                      },
-                    ),
-                  ),
+          // Chat-Nachrichtenliste
+          Positioned(
+            top: 0,
+            bottom: inputAreaTotalHeight + keyboardHeight, // Adjusted for keyboard height
+            left: 0,
+            right: 0,
+            child: FadeTransition(
+              opacity: _anim,
+              child: Center(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOutCubic,
+                  constraints: BoxConstraints(maxWidth: expandedInputWidth),
+                  child: _messages.isEmpty
+                      ? Center(
+                          child: Text(
+                            'Start a new chat!',
+                            style: TextStyle(color: iconFg.withOpacity(0.6), fontSize: 18),
+                          ),
+                        )
+                      : ListView.builder(
+                          controller: _scrollController,
+                          padding: EdgeInsets.symmetric(horizontal: effectiveHorizontalPadding, vertical: 10),
+                          itemCount: _messages.length,
+                          itemBuilder: (_, i) {
+                            final m = _messages[i];
+                            return MessageBubble(
+                              message: m['text']!,
+                              isUser: m['sender'] == 'user',
+                              maxWidth: expandedInputWidth * 0.7,
+                            );
+                          },
+                        ),
                 ),
               ),
             ),
+          ),
 
           // Combined Input Area (Search bar + Attachment bar)
           AnimatedPositioned(
@@ -379,9 +384,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
             curve: Curves.easeOutCubic,
             left: 0,
             right: 0,
-            bottom: showInputAreaCentered
-                ? (MediaQuery.of(context).size.height / 2 - (inputAreaVisualHeight / 2))
-                : effectiveHorizontalPadding,
+            // --- FIX FOR INPUT FIELD CENTERING (MODIFIED) ---
+            bottom: effectiveHorizontalPadding + keyboardHeight, // Always stick to bottom, accounting for keyboard
+            // --- END FIX ---
             child: Center(
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
@@ -585,7 +590,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
                 debugLabel: 'Image button',
               ),
               const Spacer(),
-              // Model Selection Dropdown
+              // Model Selection Dropdown (always compact on mobile)
               ModelSelectionDropdown(
                 initialSelectedModelId: _selectedModelId,
                 onModelSelected: (newModelId) {
@@ -595,7 +600,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
                   print('Selected model ID: $_selectedModelId');
                 },
                 textFieldFocusNode: _textFieldFocusNode,
-                isCompactMode: true, // Always compact for mobile
+                isCompactMode: isCompactMode, // Force compact mode for phones
               ),
               const SizedBox(width: 8),
               // Mic Button (for a quick toggle in the main chat UI)
