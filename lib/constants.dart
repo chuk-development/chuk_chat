@@ -9,7 +9,7 @@ const Color kDefaultIconFgColor = Color(0xFF93854C);
 const Brightness kDefaultThemeMode = Brightness.dark;
 
 /* ---------- FILM GRAIN DEFAULT ---------- */
-const bool kDefaultGrainEnabled = true;
+const bool kDefaultGrainEnabled = false;
 
 /* ---------- THEME BUILDER ---------- */
 ThemeData buildAppTheme({

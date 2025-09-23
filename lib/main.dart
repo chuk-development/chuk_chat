@@ -1,15 +1,13 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart'; // NEW: For defaultTargetPlatform
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:math' as math;
 
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
-import 'package:chuk_chat/chat/chat_ui.dart';
-import 'package:chuk_chat/sidebar.dart';
-import 'package:chuk_chat/pages/projects_page.dart';
-import 'package:chuk_chat/pages/settings_page.dart';
+import 'package:chuk_chat/platform_specific/root_wrapper_desktop.dart'; // NEW
+import 'package:chuk_chat/platform_specific/root_wrapper_mobile.dart';  // NEW
 import 'package:chuk_chat/utils/color_extensions.dart'; // Import for hex conversion
 import 'package:chuk_chat/utils/grain_overlay.dart';   // Film grain overlay
 
@@ -140,295 +138,41 @@ class _ChukChatAppState extends State<ChukChatApp> {
         );
       },
 
-      home: RootWrapper(
-        currentThemeMode: _currentThemeMode,
-        currentAccentColor: _currentAccentColor,
-        currentIconFgColor: _currentIconFgColor,
-        currentBgColor: _currentBgColor,
-        setThemeMode: _setThemeMode,
-        setAccentColor: _setAccentColor,
-        setIconFgColor: _setIconFgColor,
-        setBgColor: _setBgColor,
-        // film grain
-        grainEnabled: _grainEnabled,
-        setGrainEnabled: _setGrainEnabled,
-      ),
+      home: _isMobilePlatform(defaultTargetPlatform)
+          ? RootWrapperMobile( // NEW: Use mobile wrapper
+              // Pass all theme props and callbacks
+              // The RootWrapperMobile will define its own navigation (e.g., BottomNavigationBar)
+              // and internal page structure for mobile.
+              currentThemeMode: _currentThemeMode,
+              currentAccentColor: _currentAccentColor,
+              currentIconFgColor: _currentIconFgColor,
+              currentBgColor: _currentBgColor,
+              setThemeMode: _setThemeMode,
+              setAccentColor: _setAccentColor,
+              setIconFgColor: _setIconFgColor,
+              setBgColor: _setBgColor,
+              // film grain
+              grainEnabled: _grainEnabled,
+              setGrainEnabled: _setGrainEnabled,
+            )
+          : RootWrapperDesktop( // NEW: Use desktop wrapper
+              // Pass all theme props and callbacks
+              currentThemeMode: _currentThemeMode,
+              currentAccentColor: _currentAccentColor,
+              currentIconFgColor: _currentIconFgColor,
+              currentBgColor: _currentBgColor,
+              setThemeMode: _setThemeMode,
+              setAccentColor: _setAccentColor,
+              setIconFgColor: _setIconFgColor,
+              setBgColor: _setBgColor,
+              grainEnabled: _grainEnabled,
+              setGrainEnabled: _setGrainEnabled,
+            ),
     );
   }
-}
 
-/* ---------- ROOT WRAPPER ---------- */
-class RootWrapper extends StatefulWidget {
-  final Brightness currentThemeMode;
-  final Color currentAccentColor;
-  final Color currentIconFgColor;
-  final Color currentBgColor;
-  final Function(Brightness) setThemeMode;
-  final Function(Color) setAccentColor;
-  final Function(Color) setIconFgColor;
-  final Function(Color) setBgColor;
-
-  // Film grain
-  final bool grainEnabled;
-  final Function(bool) setGrainEnabled;
-
-  const RootWrapper({
-    Key? key,
-    required this.currentThemeMode,
-    required this.currentAccentColor,
-    required this.currentIconFgColor,
-    required this.currentBgColor,
-    required this.setThemeMode,
-    required this.setAccentColor,
-    required this.setIconFgColor,
-    required this.setBgColor,
-    required this.grainEnabled,
-    required this.setGrainEnabled,
-  }) : super(key: key);
-
-  @override
-  State<RootWrapper> createState() => _RootWrapperState();
-}
-
-class _RootWrapperState extends State<RootWrapper> {
-  // Sidebar ist standardmäßig geschlossen
-  bool _isSidebarExpanded = false;
-
-  final GlobalKey<ChukChatUIState> _chatUIKey = GlobalKey();
-
-  void _openSettingsPage() {
-    if (_isSidebarExpanded) _toggleSidebar(); // Sidebar schließen, wenn offen
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => SettingsPage(
-        currentThemeMode: widget.currentThemeMode,
-        currentAccentColor: widget.currentAccentColor,
-        currentIconFgColor: widget.currentIconFgColor,
-        currentBgColor: widget.currentBgColor,
-        setThemeMode: widget.setThemeMode,
-        setAccentColor: widget.setAccentColor,
-        setIconFgColor: widget.setIconFgColor,
-        setBgColor: widget.setBgColor,
-        // pass grain toggle through
-        grainEnabled: widget.grainEnabled,
-        setGrainEnabled: widget.setGrainEnabled,
-      ),
-    ));
-  }
-
-  void _openProjectsPage() {
-    if (_isSidebarExpanded) _toggleSidebar(); // Sidebar schließen, wenn offen
-    Navigator.of(context)
-        .push(MaterialPageRoute(builder: (_) => const ProjectsPage()));
-  }
-
-  void _handleChatTapped(int index) {
-    setState(() {
-      ChatStorageService.selectedChatIndex = index;
-    });
-    if (_isSidebarExpanded) _toggleSidebar(); // Sidebar schließen, wenn Chat ausgewählt
-  }
-
-  void _toggleSidebar() {
-    setState(() {
-      _isSidebarExpanded = !_isSidebarExpanded;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final double screenWidth = MediaQuery.of(context).size.width;
-    final Color iconFg = Theme.of(context).iconTheme.color!; // Get iconFg from current theme
-
-    // Definiert, ob der Kompaktmodus aktiv sein soll
-    final bool isCompactMode = screenWidth < kCompactModeBreakpoint;
-
-    // Responsive Sidebar-Breite: 80% der Bildschirmbreite auf kleinen Geräten, sonst 280px
-    final double sidebarVisibleWidth = isCompactMode ? screenWidth * 0.8 : 280.0;
-    // Sicherstellen, dass die Sidebar nicht breiter als der Bildschirm ist
-    final double effectiveSidebarWidth = math.min(screenWidth, sidebarVisibleWidth);
-
-    return Scaffold(
-      body: Stack(
-        children: [
-          // Layer 1: Haupt-Chat-UI, die nach rechts verschoben wird oder verschwindet
-          Visibility(
-            visible: !isCompactMode || !_isSidebarExpanded,
-            child: AnimatedPositioned(
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOutCubic,
-              left: (!isCompactMode && _isSidebarExpanded) ? effectiveSidebarWidth : 0,
-              right: 0,
-              top: 0,
-              bottom: 0,
-              child: GestureDetector(
-                onTap: _isSidebarExpanded ? _toggleSidebar : null,
-                child: AbsorbPointer(
-                  absorbing: _isSidebarExpanded,
-                  child: ChukChatUI(
-                    key: _chatUIKey,
-                    onToggleSidebar: _toggleSidebar,
-                    selectedChatIndex: ChatStorageService.selectedChatIndex,
-                    isSidebarExpanded: _isSidebarExpanded,
-                    isCompactMode: isCompactMode,
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          // Layer 2: Animierte Sidebar, die über die Chat-UI schiebt
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOutCubic,
-            left: _isSidebarExpanded ? 0 : -effectiveSidebarWidth,
-            top: 0,
-            bottom: 0,
-            width: effectiveSidebarWidth,
-            child: CustomSidebar(
-              onChatItemTapped: _handleChatTapped,
-              onSettingsTapped: _openSettingsPage,
-              onProjectsTapped: _openProjectsPage,
-              selectedChatIndex: ChatStorageService.selectedChatIndex,
-              isCompactMode: isCompactMode,
-            ),
-          ),
-
-          // Layer 3: Hamburger-Menü
-          Positioned(
-            top: kTopInitialSpacing,
-            left: kFixedLeftPadding,
-            child: IconButton(
-              icon: Icon(Icons.menu, color: iconFg, size: 24),
-              onPressed: _toggleSidebar,
-            ),
-          ),
-
-          // Layer 4: Title
-          Positioned(
-            top: kTopInitialSpacing + (kMenuButtonHeight - kButtonVisualHeight) / 2,
-            left: kFixedLeftPadding + kMenuButtonHeight + 16,
-            child: InkWell(
-              onTap: () {},
-              borderRadius: BorderRadius.circular(8),
-              child: Container(
-                height: kButtonVisualHeight,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      curve: Curves.easeOut,
-                      width: _isSidebarExpanded ? 100 : 0,
-                      constraints: BoxConstraints(
-                        minWidth: _isSidebarExpanded ? 100 : 0,
-                      ),
-                      child: ClipRect(
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 10.0),
-                          child: Text(
-                            'chuk.chat',
-                            style: TextStyle(color: iconFg, fontSize: 16),
-                            softWrap: false,
-                            overflow: TextOverflow.clip,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // Layer 5: New Chat
-          if (!isCompactMode || _isSidebarExpanded)
-            Positioned(
-              top: kTopInitialSpacing + kMenuButtonHeight + kSpacingBetweenTopButtons,
-              left: kFixedLeftPadding,
-              child: InkWell(
-                onTap: () {
-                  _chatUIKey.currentState?.newChat();
-                  if (_isSidebarExpanded) _toggleSidebar();
-                },
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  height: kButtonVisualHeight,
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.edit_square, color: iconFg),
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        curve: Curves.easeOut,
-                        width: _isSidebarExpanded ? 100 : 0,
-                        constraints: BoxConstraints(
-                          minWidth: _isSidebarExpanded ? 100 : 0,
-                        ),
-                        child: ClipRect(
-                          child: Padding(
-                            padding: const EdgeInsets.only(left: 12.0),
-                            child: Text(
-                              'New chat',
-                              style: TextStyle(color: iconFg, fontSize: 16),
-                              softWrap: false,
-                              overflow: TextOverflow.clip,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-          // Layer 6: Projects
-          if (!isCompactMode || _isSidebarExpanded)
-            Positioned(
-              top: kTopInitialSpacing +
-                  kMenuButtonHeight +
-                  kSpacingBetweenTopButtons +
-                  kButtonVisualHeight +
-                  kSpacingBetweenTopButtons,
-              left: kFixedLeftPadding,
-              child: InkWell(
-                onTap: _openProjectsPage,
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  height: kButtonVisualHeight,
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.folder_open, color: iconFg),
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        curve: Curves.easeOut,
-                        width: _isSidebarExpanded ? 100 : 0,
-                        constraints: BoxConstraints(
-                          minWidth: _isSidebarExpanded ? 100 : 0,
-                        ),
-                        child: ClipRect(
-                          child: Padding(
-                            padding: const EdgeInsets.only(left: 12.0),
-                            child: Text(
-                              'Projects',
-                              style: TextStyle(color: iconFg, fontSize: 16),
-                              softWrap: false,
-                              overflow: TextOverflow.clip,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
+  // NEW: Helper to determine if the platform is mobile
+  bool _isMobilePlatform(TargetPlatform platform) {
+    return platform == TargetPlatform.android || platform == TargetPlatform.iOS;
   }
 }

@@ -8,7 +8,7 @@ class ModelSelectionDropdown extends StatefulWidget {
   final String initialSelectedModelId; // Now expects model ID
   final ValueChanged<String> onModelSelected; // Callback returns model ID
   final FocusNode textFieldFocusNode;
-  final bool isCompactMode;
+  final bool isCompactMode; // Indicates if it should show only the icon
 
   const ModelSelectionDropdown({
     Key? key,
@@ -42,7 +42,8 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
   @override
   void didUpdateWidget(covariant ModelSelectionDropdown oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.initialSelectedModelId != oldWidget.initialSelectedModelId) {
+    if (widget.initialSelectedModelId != oldWidget.initialSelectedModelId ||
+        widget.isCompactMode != oldWidget.isCompactMode) { // React to compact mode changes
       _selectedModelId = widget.initialSelectedModelId;
       _updateSelectedModelName(); // Update display name if ID changes
     }
@@ -120,7 +121,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
             duration: const Duration(milliseconds: 150),
             curve: Curves.easeOutCubic,
             padding: widget.isCompactMode ? EdgeInsets.zero : const EdgeInsets.symmetric(horizontal: 10),
-            width: widget.isCompactMode ? 44 : null,
+            width: widget.isCompactMode ? 44 : null, // Fixed width for compact mode
             height: 36,
             decoration: BoxDecoration(
               color: bgColor,
@@ -136,7 +137,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
               mainAxisAlignment: widget.isCompactMode ? MainAxisAlignment.center : MainAxisAlignment.start,
               children: [
                 Icon(Icons.grid_3x3, color: iconFgColor, size: 20),
-                if (!widget.isCompactMode) ...[
+                if (!widget.isCompactMode) ...[ // Only show text and arrow if not in compact mode
                   const SizedBox(width: 8),
                   Flexible(
                     child: Text(
