@@ -306,8 +306,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
 
   @override
   Widget build(BuildContext context) {
-    // On phones, this UI is always in compact mode, so `isCompactMode` is always true.
-    const bool isCompactMode = false; // Model dropdown should show text on mobile
+    // On phones, this UI's ModelSelectionDropdown will now show text by default
+    const bool isCompactModeForModelDropdown = false; // Setting to false so ModelSelectionDropdown shows text.
 
     final double screenWidth = MediaQuery.of(context).size.width;
     final Color bg = Theme.of(context).scaffoldBackgroundColor;
@@ -327,11 +327,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
     }
     double inputAreaTotalHeight = inputAreaVisualHeight + (2 * effectiveHorizontalPadding);
 
-    // --- FIX FOR INPUT FIELD CENTERING ---
     // On mobile, the input field should always stick to the bottom,
     // gracefully adjusting for the keyboard, not attempting to center when empty.
     final double keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
-    // --- END FIX ---
 
     final double targetInputWidth = expandedInputWidth; // On mobile, input should always stretch to available width
 
@@ -384,9 +382,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
             curve: Curves.easeOutCubic,
             left: 0,
             right: 0,
-            // --- FIX FOR INPUT FIELD CENTERING (MODIFIED) ---
             bottom: effectiveHorizontalPadding + keyboardHeight, // Always stick to bottom, accounting for keyboard
-            // --- END FIX ---
             child: Center(
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
@@ -400,7 +396,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
                         padding: const EdgeInsets.only(bottom: _kAttachmentBarMarginBottom),
                         child: _buildAttachmentBar(targetInputWidth, effectiveHorizontalPadding, textColor, accent),
                       ),
-                    _buildSearchBar(isCompactMode: isCompactMode), // Pass true for mobile compact mode
+                    _buildSearchBar(isCompactMode: isCompactModeForModelDropdown), // Pass the local variable
                   ],
                 ),
               ),
@@ -600,7 +596,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
                   print('Selected model ID: $_selectedModelId');
                 },
                 textFieldFocusNode: _textFieldFocusNode,
-                isCompactMode: isCompactMode, // Force compact mode for phones
+                isCompactMode: isCompactMode, // CORRECTED: Now uses the 'isCompactMode' parameter of _buildSearchBar
               ),
               const SizedBox(width: 8),
               // Mic Button (for a quick toggle in the main chat UI)

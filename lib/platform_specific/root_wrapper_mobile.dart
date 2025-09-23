@@ -4,10 +4,10 @@ import 'dart:math' as math;
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/pages/projects_page.dart';
 import 'package:chuk_chat/pages/settings_page.dart';
-import 'package:chuk_chat/platform_specific/chat/chat_ui_mobile.dart'; // NEW
-import 'package:chuk_chat/platform_specific/sidebar_desktop.dart'; // Reusing desktop sidebar structure
-import 'package:chuk_chat/services/chat_storage_service.dart'; // For new chat
-import 'package:chuk_chat/utils/color_extensions.dart'; // For color.darken
+import 'package:chuk_chat/platform_specific/chat/chat_ui_mobile.dart';
+import 'package:chuk_chat/platform_specific/sidebar_mobile.dart'; // UPDATED: Use mobile sidebar
+import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/utils/color_extensions.dart';
 
 /* ---------- ROOT WRAPPER MOBILE (for Phones) ---------- */
 class RootWrapperMobile extends StatefulWidget {
@@ -42,8 +42,8 @@ class RootWrapperMobile extends StatefulWidget {
 }
 
 class _RootWrapperMobileState extends State<RootWrapperMobile> {
-  bool _isSidebarExpanded = false; // Manages the sliding sidebar state
-  final GlobalKey<ChukChatUIMobileState> _chatUIMobileKey = GlobalKey(); // Global key for chat UI methods
+  bool _isSidebarExpanded = false;
+  final GlobalKey<ChukChatUIMobileState> _chatUIMobileKey = GlobalKey();
 
   void _toggleSidebar() {
     setState(() {
@@ -52,7 +52,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile> {
   }
 
   void _openSettingsPage() {
-    if (_isSidebarExpanded) _toggleSidebar(); // Close sidebar if open
+    if (_isSidebarExpanded) _toggleSidebar();
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => SettingsPage(
         currentThemeMode: widget.currentThemeMode,
@@ -70,7 +70,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile> {
   }
 
   void _openProjectsPage() {
-    if (_isSidebarExpanded) _toggleSidebar(); // Close sidebar if open
+    if (_isSidebarExpanded) _toggleSidebar();
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProjectsPage()));
   }
 
@@ -78,13 +78,11 @@ class _RootWrapperMobileState extends State<RootWrapperMobile> {
     setState(() {
       ChatStorageService.selectedChatIndex = index;
     });
-    if (_isSidebarExpanded) _toggleSidebar(); // Close sidebar after chat selected
+    if (_isSidebarExpanded) _toggleSidebar();
   }
 
-  // Mobile version of the 'New Chat' button action
   void _newChatFromAppBar() {
-    _chatUIMobileKey.currentState?.newChat(); // Call newChat method on mobile chat UI
-    if (_isSidebarExpanded) _toggleSidebar(); // Close sidebar if open
+    _chatUIMobileKey.currentState?.newChat();
   }
 
   @override
@@ -93,20 +91,17 @@ class _RootWrapperMobileState extends State<RootWrapperMobile> {
     final Color iconFg = Theme.of(context).iconTheme.color!;
     final Color sidebarBg = Theme.of(context).cardColor.darken(0.03);
 
-    // Sidebar width for mobile: 80% of screen width, clamped at a reasonable max (e.g., 320px)
-    final double sidebarVisibleWidth = math.min(screenWidth * 0.8, 320.0);
-    // Dynamic width for the title text within the app bar
+    final double sidebarVisibleWidth = math.min(screenWidth * 0.7, 280.0);
     final double titleAvailableWidth = screenWidth -
-        kFixedLeftPadding - // Padding for hamburger
-        kMenuButtonHeight - // Width of hamburger button
-        (3 * kFixedLeftPadding) - // Padding between leading and title, and actions
-        (2 * kButtonVisualHeight); // Approximate width of 2 action buttons
+        kFixedLeftPadding -
+        kMenuButtonHeight -
+        (3 * kFixedLeftPadding) -
+        (ChatStorageService.savedChats.isNotEmpty ? kButtonVisualHeight : 0);
 
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor, // Set scaffold background here
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Stack(
         children: [
-          // Layer 1: Main Chat UI, which will be covered by the sidebar
           AnimatedPositioned(
             duration: const Duration(milliseconds: 250),
             curve: Curves.easeOutCubic,
@@ -115,26 +110,25 @@ class _RootWrapperMobileState extends State<RootWrapperMobile> {
             top: 0,
             bottom: 0,
             child: GestureDetector(
-              onTap: _isSidebarExpanded ? _toggleSidebar : null, // Tap outside closes sidebar
+              onTap: _isSidebarExpanded ? _toggleSidebar : null,
               child: AbsorbPointer(
-                absorbing: _isSidebarExpanded, // Absorb pointers on chat when sidebar is open
+                absorbing: _isSidebarExpanded,
                 child: Column(
                   children: [
-                    // Custom AppBar for mobile
                     AppBar(
                       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
                       elevation: 0,
                       leading: IconButton(
                         icon: Icon(Icons.menu, color: iconFg, size: 24),
-                        onPressed: _toggleSidebar, // Opens sidebar
+                        onPressed: _toggleSidebar,
                         tooltip: 'Open menu',
                       ),
-                      title: AnimatedContainer( // Title with animated width
+                      title: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
-                        curve: Curves.easeOut,
-                        width: _isSidebarExpanded ? 0 : titleAvailableWidth, // Shrink title when sidebar open
+                        curve: Curves.easeOutCubic,
+                        width: _isSidebarExpanded ? 0 : titleAvailableWidth,
                         constraints: BoxConstraints(
-                          minWidth: _isSidebarExpanded ? 0 : math.min(100, titleAvailableWidth), // Minimum width for 'chuk.chat'
+                          minWidth: _isSidebarExpanded ? 0 : math.min(100, titleAvailableWidth),
                         ),
                         child: ClipRect(
                           child: Padding(
@@ -149,32 +143,20 @@ class _RootWrapperMobileState extends State<RootWrapperMobile> {
                         ),
                       ),
                       actions: [
-                        // New Chat Button (quick access from AppBar)
-                        IconButton(
-                          icon: Icon(Icons.edit_square, color: iconFg),
-                          onPressed: _newChatFromAppBar,
-                          tooltip: 'New Chat',
-                        ),
-                        // Projects Button
-                        IconButton(
-                          icon: Icon(Icons.folder_open, color: iconFg),
-                          onPressed: _openProjectsPage,
-                          tooltip: 'Projects',
-                        ),
-                        // Settings Button
-                        IconButton(
-                          icon: Icon(Icons.settings, color: iconFg),
-                          onPressed: _openSettingsPage,
-                          tooltip: 'Settings',
-                        ),
+                        if (ChatStorageService.savedChats.isNotEmpty)
+                          IconButton(
+                            icon: Icon(Icons.edit_square, color: iconFg),
+                            onPressed: _newChatFromAppBar,
+                            tooltip: 'New Chat',
+                          ),
                       ],
                     ),
                     Expanded(
-                      child: ChukChatUIMobile( // Using the mobile-specific chat UI
+                      child: ChukChatUIMobile(
                         key: _chatUIMobileKey,
-                        onToggleSidebar: _toggleSidebar, // Pass callback to chat UI
+                        onToggleSidebar: _toggleSidebar,
                         selectedChatIndex: ChatStorageService.selectedChatIndex,
-                        isSidebarExpanded: _isSidebarExpanded, // Pass sidebar state
+                        isSidebarExpanded: _isSidebarExpanded,
                       ),
                     ),
                   ],
@@ -183,7 +165,6 @@ class _RootWrapperMobileState extends State<RootWrapperMobile> {
             ),
           ),
 
-          // Layer 2: Animierte Sidebar, die über die Chat-UI schiebt
           AnimatedPositioned(
             duration: const Duration(milliseconds: 250),
             curve: Curves.easeOutCubic,
@@ -191,12 +172,12 @@ class _RootWrapperMobileState extends State<RootWrapperMobile> {
             top: 0,
             bottom: 0,
             width: sidebarVisibleWidth,
-            child: SidebarDesktop( // Reusing the desktop sidebar content
+            child: SidebarMobile( // UPDATED: Use SidebarMobile
               onChatItemTapped: _handleChatTapped,
-              onSettingsTapped: _openSettingsPage, // These will close the sidebar first
-              onProjectsTapped: _openProjectsPage, // These will close the sidebar first
+              onSettingsTapped: _openSettingsPage,
+              onProjectsTapped: _openProjectsPage,
               selectedChatIndex: ChatStorageService.selectedChatIndex,
-              isCompactMode: true, // Sidebar itself will now be considered compact for styling purposes
+              isCompactMode: true,
             ),
           ),
         ],

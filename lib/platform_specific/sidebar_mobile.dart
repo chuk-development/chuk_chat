@@ -1,4 +1,4 @@
-// lib/platform_specific/sidebar_desktop.dart
+// lib/platform_specific/sidebar_mobile.dart
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
@@ -6,14 +6,14 @@ import 'package:chuk_chat/utils/color_extensions.dart'; // Import the color exte
 
 final List<String> _starredChats = ['Book writing Per chapter']; // Kept local for now
 
-class SidebarDesktop extends StatefulWidget {
+class SidebarMobile extends StatefulWidget {
   final Function(int index) onChatItemTapped;
   final Function() onSettingsTapped;
   final Function() onProjectsTapped;
   final int selectedChatIndex;
   final bool isCompactMode;
 
-  const SidebarDesktop({
+  const SidebarMobile({
     Key? key,
     required this.onChatItemTapped,
     required this.onSettingsTapped,
@@ -23,10 +23,10 @@ class SidebarDesktop extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  State<SidebarDesktop> createState() => _SidebarDesktopState();
+  State<SidebarMobile> createState() => _SidebarMobileState();
 }
 
-class _SidebarDesktopState extends State<SidebarDesktop> {
+class _SidebarMobileState extends State<SidebarMobile> {
   // Common padding for sidebar list items and headers
   static const double _sidebarHorizontalPadding = 16.0;
   static const double _iconLeadingWidth = 24.0; // Standard icon width for alignment
@@ -46,7 +46,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
   }
 
   @override
-  void didUpdateWidget(covariant SidebarDesktop oldWidget) {
+  void didUpdateWidget(covariant SidebarMobile oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.selectedChatIndex != oldWidget.selectedChatIndex) {
       if (mounted) setState(() {});
@@ -60,22 +60,39 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
     final Color accent = Theme.of(context).colorScheme.primary;
     final Color sidebarBg = Theme.of(context).cardColor.darken(0.03); // Slightly darker for sidebar itself
 
-    // The height of the top bar is calculated dynamically for desktop.
-    // "New Chat" and "Projects" buttons are positioned *outside* this sidebar widget
-    // in `root_wrapper_desktop.dart`. This spacing accounts for them.
-    final double topSpacingForSidebarContent = kTopInitialSpacing +
-        kMenuButtonHeight +
-        kSpacingBetweenTopButtons +
-        kButtonVisualHeight +
-        kSpacingBetweenTopButtons +
-        kButtonVisualHeight +
-        kSpacingBetweenTopButtons;
+    // On mobile, the "New Chat" and "Projects" buttons are now part of the sidebar content.
+    const double initialVerticalSpacing = 16.0;
 
     return Container(
       color: sidebarBg, // Use dynamically derived sidebar background
       child: Column(
         children: [
-          SizedBox(height: topSpacingForSidebarContent), // Uses the calculated constant for desktop
+          SizedBox(height: initialVerticalSpacing), // Initial space at the very top
+
+          // New Chat Button (now inside sidebar for mobile)
+          _buildSidebarButton(
+            icon: Icons.edit_square,
+            label: 'New chat',
+            onTap: () {
+              widget.onChatItemTapped(-1); // Signal new chat
+              if (widget.isCompactMode) {
+                Navigator.of(context).pop(); // Close sidebar after action
+              }
+            },
+            iconFgColor: iconFg,
+            accentColor: accent,
+          ),
+          const SizedBox(height: kSpacingBetweenTopButtons),
+
+          // Projects Button (now inside sidebar for mobile)
+          _buildSidebarButton(
+            icon: Icons.folder_open,
+            label: 'Projects',
+            onTap: widget.onProjectsTapped, // Call parent handler, which will navigate and close sidebar
+            iconFgColor: iconFg,
+            accentColor: accent,
+          ),
+          const SizedBox(height: 16), // Spacing before Starred section
 
           // Starred Section - Fixed
           _buildSectionHeader('Starred', iconFg: iconFg),
@@ -256,5 +273,32 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
       selectedColor: accentColor,
     );
   }
-  // The _buildSidebarButton helper is removed from here as it's not used in the desktop sidebar.
+
+  // Helper widget for the New Chat and Projects buttons now embedded in the sidebar
+  Widget _buildSidebarButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    required Color iconFgColor,
+    required Color accentColor,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        height: kButtonVisualHeight,
+        padding: const EdgeInsets.symmetric(horizontal: _sidebarHorizontalPadding, vertical: 4),
+        child: Row(
+          children: [
+            Icon(icon, color: iconFgColor),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: TextStyle(color: iconFgColor, fontSize: 16, fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

@@ -1,17 +1,17 @@
 // lib/platform_specific/root_wrapper_desktop.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'dart:math' as math; // For min/max
+import 'dart:math' as math;
 
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
-import 'package:chuk_chat/platform_specific/chat/chat_ui_desktop.dart'; // UPDATED
-import 'package:chuk_chat/platform_specific/sidebar_desktop.dart';     // UPDATED
+import 'package:chuk_chat/platform_specific/chat/chat_ui_desktop.dart';
+import 'package:chuk_chat/platform_specific/sidebar_desktop.dart'; // UPDATED
 import 'package:chuk_chat/pages/projects_page.dart';
 import 'package:chuk_chat/pages/settings_page.dart';
-import 'package:chuk_chat/utils/color_extensions.dart'; // Import for hex conversion
+import 'package:chuk_chat/utils/color_extensions.dart';
 
-/* ---------- ROOT WRAPPER DESKTOP ---------- */
+/* ---------- ROOT WRAPPER DESKTOP (for Desktop, Web, and Tablets) ---------- */
 class RootWrapperDesktop extends StatefulWidget {
   final Brightness currentThemeMode;
   final Color currentAccentColor;
@@ -22,7 +22,6 @@ class RootWrapperDesktop extends StatefulWidget {
   final Function(Color) setIconFgColor;
   final Function(Color) setBgColor;
 
-  // Film grain
   final bool grainEnabled;
   final Function(bool) setGrainEnabled;
 
@@ -45,14 +44,12 @@ class RootWrapperDesktop extends StatefulWidget {
 }
 
 class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
-  // Sidebar ist standardmäßig geschlossen
   bool _isSidebarExpanded = false;
 
-  // UPDATED: GlobalKey type to reference the desktop chat UI's State class
   final GlobalKey<ChukChatUIDesktopState> _chatUIKey = GlobalKey();
 
   void _openSettingsPage() {
-    if (_isSidebarExpanded) _toggleSidebar(); // Sidebar schließen, wenn offen
+    if (_isSidebarExpanded) _toggleSidebar();
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => SettingsPage(
         currentThemeMode: widget.currentThemeMode,
@@ -63,7 +60,6 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
         setAccentColor: widget.setAccentColor,
         setIconFgColor: widget.setIconFgColor,
         setBgColor: widget.setBgColor,
-        // pass grain toggle through
         grainEnabled: widget.grainEnabled,
         setGrainEnabled: widget.setGrainEnabled,
       ),
@@ -71,7 +67,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   }
 
   void _openProjectsPage() {
-    if (_isSidebarExpanded) _toggleSidebar(); // Sidebar schließen, wenn offen
+    if (_isSidebarExpanded) _toggleSidebar();
     Navigator.of(context)
         .push(MaterialPageRoute(builder: (_) => const ProjectsPage()));
   }
@@ -80,7 +76,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     setState(() {
       ChatStorageService.selectedChatIndex = index;
     });
-    if (_isSidebarExpanded) _toggleSidebar(); // Sidebar schließen, wenn Chat ausgewählt
+    if (_isSidebarExpanded) _toggleSidebar();
   }
 
   void _toggleSidebar() {
@@ -92,20 +88,16 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
-    final Color iconFg = Theme.of(context).iconTheme.color!; // Get iconFg from current theme
+    final Color iconFg = Theme.of(context).iconTheme.color!;
 
-    // Definiert, ob der Kompaktmodus aktiv sein soll
     final bool isCompactMode = screenWidth < kCompactModeBreakpoint;
 
-    // Responsive Sidebar-Breite: 80% der Bildschirmbreite auf kleinen Geräten, sonst 280px
     final double sidebarVisibleWidth = isCompactMode ? screenWidth * 0.8 : 280.0;
-    // Sicherstellen, dass die Sidebar nicht breiter als der Bildschirm ist
     final double effectiveSidebarWidth = math.min(screenWidth, sidebarVisibleWidth);
 
     return Scaffold(
       body: Stack(
         children: [
-          // Layer 1: Haupt-Chat-UI, die nach rechts verschoben wird oder verschwindet
           Visibility(
             visible: !isCompactMode || !_isSidebarExpanded,
             child: AnimatedPositioned(
@@ -119,7 +111,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                 onTap: _isSidebarExpanded ? _toggleSidebar : null,
                 child: AbsorbPointer(
                   absorbing: _isSidebarExpanded,
-                  child: ChukChatUIDesktop( // UPDATED: Using ChukChatUIDesktop
+                  child: ChukChatUIDesktop(
                     key: _chatUIKey,
                     onToggleSidebar: _toggleSidebar,
                     selectedChatIndex: ChatStorageService.selectedChatIndex,
@@ -131,7 +123,6 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
             ),
           ),
 
-          // Layer 2: Animierte Sidebar, die über die Chat-UI schiebt
           AnimatedPositioned(
             duration: const Duration(milliseconds: 250),
             curve: Curves.easeOutCubic,
@@ -139,7 +130,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
             top: 0,
             bottom: 0,
             width: effectiveSidebarWidth,
-            child: SidebarDesktop(
+            child: SidebarDesktop( // Use the desktop-specific sidebar
               onChatItemTapped: _handleChatTapped,
               onSettingsTapped: _openSettingsPage,
               onProjectsTapped: _openProjectsPage,
@@ -196,7 +187,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
             ),
           ),
 
-          // Layer 5: New Chat
+          // Layer 5: New Chat (External for Desktop)
           if (!isCompactMode || _isSidebarExpanded)
             Positioned(
               top: kTopInitialSpacing + kMenuButtonHeight + kSpacingBetweenTopButtons,
@@ -239,7 +230,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
               ),
             ),
 
-          // Layer 6: Projects
+          // Layer 6: Projects (External for Desktop)
           if (!isCompactMode || _isSidebarExpanded)
             Positioned(
               top: kTopInitialSpacing +
