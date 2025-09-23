@@ -30,7 +30,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
   String _errorMessage = '';
 
   // NEW: Base URL for your FastAPI server
-  static const String _apiBaseUrl = 'https://api.chuk.dev'; // Adjust if your server is elsewhere
+  static const String _apiBaseUrl = 'https://api.chuk.chat'; // Adjust if your server is elsewhere
 
   @override
   void initState() {

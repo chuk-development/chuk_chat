@@ -54,7 +54,7 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
   final List<AttachedFile> _attachedFiles = [];
   final Uuid _uuid = Uuid();
 
-  static const String _apiBaseUrl = 'https://api.chuk.chat'; // Adjust if your server is elsewhere
+  static const String _apiBaseUrl = 'http://127.0.0.1:8000'; // Adjust if your server is elsewhere
 
   static const double _kMaxChatContentWidth = 760.0;
   static const double _kSearchBarContentHeight = 135.0;
