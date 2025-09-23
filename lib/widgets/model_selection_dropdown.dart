@@ -1,16 +1,18 @@
 // lib/widgets/model_selection_dropdown.dart
 import 'package:flutter/material.dart';
-import 'package:chuk_chat/models/chat_model.dart'; // For ModelItem
+import 'package:chuk_chat/models/chat_model.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class ModelSelectionDropdown extends StatefulWidget {
-  final String initialSelectedModel;
-  final ValueChanged<String> onModelSelected;
-  final FocusNode textFieldFocusNode; // To request focus back after selection
+  final String initialSelectedModelId; // Now expects model ID
+  final ValueChanged<String> onModelSelected; // Callback returns model ID
+  final FocusNode textFieldFocusNode;
   final bool isCompactMode;
 
   const ModelSelectionDropdown({
     Key? key,
-    required this.initialSelectedModel,
+    required this.initialSelectedModelId,
     required this.onModelSelected,
     required this.textFieldFocusNode,
     this.isCompactMode = false,
@@ -21,37 +23,90 @@ class ModelSelectionDropdown extends StatefulWidget {
 }
 
 class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
-  late String _selectedModel;
+  String _selectedModelId = ''; // Stores the model ID
+  String _selectedModelName = 'Loading Models...'; // Stores the display name
+  List<ModelItem> _allModels = [];
+  bool _isLoadingModels = true;
+  String _errorMessage = '';
 
-  final List<ModelItem> _allModels = <ModelItem>[
-    ModelItem(name: 'Qwen3 235B Thinking', value: 'qwen/qwen3-235b-a22b-thinking-2507'),
-    ModelItem(name: 'Qwen3 235B', value: 'qwen/qwen3-235b-a22b-2507'),
-    ModelItem(name: 'Qwen3 Coder 480B', value: 'qwen/qwen3-coder'),
-    ModelItem(name: 'Qwen3 32B', value: 'qwen/qwen3-32b'),
-    ModelItem(name: 'Kimi K2', value: 'moonshotai/kimi-k2-0905'),
-    ModelItem(name: 'DeepSeek: R1 0528', value: 'deepseek/deepseek-r1-0528'),
-    ModelItem(name: 'DeepSeek V3.1', value: ' '),
-  ];
+  // NEW: Base URL for your FastAPI server
+  static const String _apiBaseUrl = 'https://api.chuk.dev'; // Adjust if your server is elsewhere
 
   @override
   void initState() {
     super.initState();
-    _selectedModel = widget.initialSelectedModel;
+    _selectedModelId = widget.initialSelectedModelId;
+    _fetchModels();
   }
 
   @override
   void didUpdateWidget(covariant ModelSelectionDropdown oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Aktualisiere das intern ausgewählte Modell, wenn sich initialSelectedModel vom Parent ändert
-    if (widget.initialSelectedModel != oldWidget.initialSelectedModel) {
-      _selectedModel = widget.initialSelectedModel;
+    if (widget.initialSelectedModelId != oldWidget.initialSelectedModelId) {
+      _selectedModelId = widget.initialSelectedModelId;
+      _updateSelectedModelName(); // Update display name if ID changes
     }
   }
+
+  // NEW: Fetch models from FastAPI backend
+  Future<void> _fetchModels() async {
+    setState(() {
+      _isLoadingModels = true;
+      _errorMessage = '';
+    });
+    try {
+      final response = await http.get(Uri.parse('$_apiBaseUrl/models_info'));
+
+      if (response.statusCode == 200) {
+        final List<dynamic> jsonList = json.decode(response.body);
+        _allModels = jsonList.map((json) => ModelItem.fromJson(json)).toList();
+
+        // Sort models alphabetically by name
+        _allModels.sort((a, b) => a.name.compareTo(b.name));
+
+        // Ensure the initially selected model is in the fetched list
+        if (!_allModels.any((m) => m.value == _selectedModelId)) {
+          // If initialSelectedModelId is not in the fetched list,
+          // default to the first available model or a placeholder.
+          if (_allModels.isNotEmpty) {
+            _selectedModelId = _allModels.first.value;
+            widget.onModelSelected(_selectedModelId); // Notify parent of change
+          } else {
+            _selectedModelId = ''; // No models available
+          }
+        }
+        _updateSelectedModelName();
+      } else {
+        _errorMessage = 'Failed to load models: ${response.statusCode}';
+        _selectedModelName = 'Error Loading';
+        print('API Error: $_errorMessage');
+      }
+    } catch (e) {
+      _errorMessage = 'Network error: $e';
+      _selectedModelName = 'Network Error';
+      print('Network Error fetching models: $e');
+    } finally {
+      setState(() {
+        _isLoadingModels = false;
+      });
+    }
+  }
+
+  // Helper to update the displayed model name based on the selected ID
+  void _updateSelectedModelName() {
+    final selectedItem = _allModels.firstWhere(
+      (m) => m.value == _selectedModelId,
+      orElse: () => ModelItem(name: 'Select Model', value: ''), // Fallback
+    );
+    setState(() {
+      _selectedModelName = selectedItem.name;
+    });
+  }
+
 
   // Hilfsfunktion für den visuellen Inhalt des Dropdown-Buttons, einschließlich Text und Hover-Effekt.
   Widget _buildDropdownButtonContent() {
     final ValueNotifier<bool> isHovered = ValueNotifier<bool>(false);
-    // Get colors from theme for this widget
     final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
     final Color iconFgColor = Theme.of(context).iconTheme.color!;
 
@@ -64,42 +119,36 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
           return AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             curve: Curves.easeOutCubic,
-            // Reduziertes Padding für Kompaktmodus, oder normales Padding
             padding: widget.isCompactMode ? EdgeInsets.zero : const EdgeInsets.symmetric(horizontal: 10),
-            // Feste Breite von 44px im Kompaktmodus, ansonsten dynamisch
             width: widget.isCompactMode ? 44 : null,
-            height: 36, // Höhe an die anderen Buttons anpassen
+            height: 36,
             decoration: BoxDecoration(
-              color: bgColor, // Use theme's bgColor
+              color: bgColor,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                color: hovered ? iconFgColor : iconFgColor.withValues(alpha: .3), // Use theme's iconFgColor
+                color: hovered ? iconFgColor : iconFgColor.withOpacity(0.3),
                 width: hovered ? 1.2 : 0.8,
               ),
             ),
-            // Zentriert den Inhalt im Kompaktmodus
             alignment: widget.isCompactMode ? Alignment.center : null,
             child: Row(
-              // Max Größe im Kompaktmodus, um den Container zu füllen, sonst Min
               mainAxisSize: widget.isCompactMode ? MainAxisSize.max : MainAxisSize.min,
-              // Zentriert die Icons im Kompaktmodus
               mainAxisAlignment: widget.isCompactMode ? MainAxisAlignment.center : MainAxisAlignment.start,
               children: [
-                Icon(Icons.grid_3x3, color: iconFgColor, size: 20), // The 3x3-grid-icon, use theme's iconFgColor
-                if (!widget.isCompactMode) ...[ // Only show text and arrow if NOT in compact mode
+                Icon(Icons.grid_3x3, color: iconFgColor, size: 20),
+                if (!widget.isCompactMode) ...[
                   const SizedBox(width: 8),
-                  Flexible( // Flexible to prevent overflow with long model names
+                  Flexible(
                     child: Text(
-                      _selectedModel, // Displays the currently selected model name
-                      style: TextStyle(color: iconFgColor, fontSize: 14), // Use theme's iconFgColor
+                      _selectedModelName, // Displays the currently selected model name
+                      style: TextStyle(color: iconFgColor, fontSize: 14),
                       softWrap: false,
-                      overflow: TextOverflow.ellipsis, // Shows "..." if text is too long
-                      maxLines: 1, // Ensures text stays on one line
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
                     ),
                   ),
-                  Icon(Icons.keyboard_arrow_down, color: iconFgColor.withValues(alpha: 0.8), size: 16), // Use theme's iconFgColor
+                  Icon(Icons.keyboard_arrow_down, color: iconFgColor.withOpacity(0.8), size: 16),
                 ],
-                // In compact mode, only the icon is displayed.
               ],
             ),
           );
@@ -110,28 +159,34 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
 
   @override
   Widget build(BuildContext context) {
-    // Get colors from theme for this widget
     final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
     final Color iconFgColor = Theme.of(context).iconTheme.color!;
 
+    if (_isLoadingModels) {
+      return _buildDropdownButtonContent(); // Show "Loading Models..."
+    }
+
+    if (_errorMessage.isNotEmpty) {
+      return _buildDropdownButtonContent(); // Show "Error Loading"
+    }
+
     return PopupMenuButton<String>(
-      // The "child" of the PopupMenuButton uses our helper function for its appearance
       child: _buildDropdownButtonContent(),
-      color: bgColor, // Use theme's bgColor for dropdown background
+      color: bgColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: iconFgColor.withValues(alpha: .3)), // Use theme's iconFgColor
+        side: BorderSide(color: iconFgColor.withOpacity(0.3)),
       ),
       onSelected: (value) {
         setState(() {
-          // Set the internally selected model based on the selection
-          _selectedModel = _allModels.firstWhere((m) => m.value == value).name;
+          _selectedModelId = value;
+          _updateSelectedModelName(); // Update name after ID changes
         });
-        widget.onModelSelected(_selectedModel); // Notify the Parent-Widget about the selection
+        widget.onModelSelected(value); // Notify parent with the model ID
         Future.delayed(Duration.zero, () => widget.textFieldFocusNode.requestFocus());
       },
       itemBuilder: (BuildContext context) => _allModels.map((m) {
-        final selected = _selectedModel == m.name;
+        final selected = _selectedModelId == m.value;
         return PopupMenuItem<String>(
           value: m.value,
           height: 40,
@@ -141,15 +196,15 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
               if (m.isToggle)
                 Row(
                   children: [
-                    Switch(value: selected, onChanged: (_) {}, activeColor: iconFgColor), // Use theme's iconFgColor
+                    Switch(value: selected, onChanged: (_) {}, activeColor: iconFgColor),
                     const SizedBox(width: 6),
-                    Text('Best', style: TextStyle(color: iconFgColor)), // Use theme's iconFgColor
+                    Text('Best', style: TextStyle(color: iconFgColor)),
                   ],
                 )
               else
-                Text(m.name, style: TextStyle(color: selected ? iconFgColor : iconFgColor.withValues(alpha: .8))), // Use theme's iconFgColor
+                Text(m.name, style: TextStyle(color: selected ? iconFgColor : iconFgColor.withOpacity(0.8))),
               const Spacer(),
-              if (!m.isToggle && selected) Icon(Icons.check, color: iconFgColor, size: 18), // Use theme's iconFgColor
+              if (!m.isToggle && selected) Icon(Icons.check, color: iconFgColor, size: 18),
               if (m.badge != null)
                 Container(
                   margin: const EdgeInsets.only(left: 8),

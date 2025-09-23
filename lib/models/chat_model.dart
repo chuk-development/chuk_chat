@@ -1,9 +1,62 @@
 // lib/models/chat_model.dart
-class ModelItem {
-  final String name;
-  final String value;
-  final bool isToggle;
-  final String? badge;
 
-  ModelItem({required this.name, required this.value, this.isToggle = false, this.badge});
+class ModelItem {
+  final String name; // Display name
+  final String value; // Model ID (slug for API)
+  final bool isToggle; // Not from API, for potential local use
+  final String? badge; // Not from API, for potential local use
+
+  ModelItem({
+    required this.name,
+    required this.value,
+    this.isToggle = false,
+    this.badge,
+  });
+
+  // Factory constructor to create ModelItem from API JSON
+  factory ModelItem.fromJson(Map<String, dynamic> json) {
+    return ModelItem(
+      name: json['name'] as String,
+      value: json['id'] as String, // 'id' from API becomes 'value' for internal use
+      isToggle: false, // Defaulting as not from API
+      badge: null,    // Defaulting as not from API
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ModelItem &&
+          runtimeType == other.runtimeType &&
+          value == other.value;
+
+  @override
+  int get hashCode => value.hashCode;
+}
+
+// Class to represent an attached file's state
+class AttachedFile {
+  final String id; // Unique ID for managing state
+  final String fileName;
+  final String? markdownContent; // Null if still uploading or failed
+  final bool isUploading;
+
+  AttachedFile({
+    required this.id,
+    required this.fileName,
+    this.markdownContent,
+    this.isUploading = false,
+  });
+
+  AttachedFile copyWith({
+    String? markdownContent,
+    bool? isUploading,
+  }) {
+    return AttachedFile(
+      id: id,
+      fileName: fileName,
+      markdownContent: markdownContent ?? this.markdownContent,
+      isUploading: isUploading ?? this.isUploading,
+    );
+  }
 }

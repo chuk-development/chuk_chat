@@ -1,13 +1,29 @@
+import 'dart:io';
+
+// Helper class for queued uploads
+class _QueuedUpload {
+  final File file;
+  final String fileName;
+  final String fileId;
+  final int fileSize;
+  _QueuedUpload(this.file, this.fileName, this.fileId, this.fileSize);
+}
 // lib/chat/chat_ui.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'dart:math' as math; // Import for math.min
+import 'dart:math' as math;
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/pages/voice_mode_page.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'dart:io';
+import 'package:uuid/uuid.dart';
 
 /* ---------- CHAT UI ---------- */
 class ChukChatUI extends StatefulWidget {
@@ -25,10 +41,19 @@ class ChukChatUI extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  State<ChukChatUI> createState() => ChukChatUIState(); // Made state public for GlobalKey
+  State<ChukChatUI> createState() => ChukChatUIState();
 }
 
 class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMixin {
+
+  // File upload limits
+  static const int MAX_SINGLE_FILE_BYTES = 10 * 1024 * 1024; // 10MB
+  static const int MAX_TOTAL_ATTACHMENT_BYTES = 30 * 1024 * 1024; // 30MB
+  static const int MAX_CONCURRENT_UPLOADS = 3;
+
+  int _currentTotalAttachmentBytes = 0;
+  int _currentConcurrentUploads = 0;
+  final List<_QueuedUpload> _uploadQueue = [];
   final TextEditingController _controller = TextEditingController();
   final List<Map<String, String>> _messages = [];
   final ScrollController _scrollController = ScrollController();
@@ -38,23 +63,23 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
 
   late AnimationController _animCtrl;
   late Animation<double> _anim;
-  String _selectedModel = 'Qwen3 235B'; // _selectedModel bleibt hier, da _sendMessage es verwendet
+  String _selectedModelId = 'deepseek/deepseek-chat-v3.1';
 
-  // NEW: State for the toggle buttons
-  bool _isAddActive = false; // Corresponds to Icons.add
-  bool _isBrainActive = false; // Corresponds to Icons.psychology
-  bool _isImageActive = false; // Corresponds to Icons.image
-  bool _isMicActive = false; // Corresponds to Icons.mic
+  bool _isBrainActive = false;
+  bool _isImageActive = false;
+  bool _isMicActive = false;
 
+  final List<AttachedFile> _attachedFiles = [];
+  final Uuid _uuid = Uuid();
 
-  // Responsive constants
-  static const double _kMaxChatContentWidth = 760.0; // Maximale Breite für Chat-Blasen und Suchleiste
-  static const double _kSearchBarContentHeight = 135.0; // Die intrinsische Höhe des Inhalts der Suchleiste
+  static const String _apiBaseUrl = 'http://127.0.0.1:8000'; // Adjust if your server is elsewhere
 
-  // Responsive horizontale Polsterung
-  static const double _kHorizontalPaddingLarge = 16.0; // Standard-Horizontal-Padding für große Bildschirme
-  static const double _kHorizontalPaddingSmall = 8.0; // Horizontal-Padding im Kompaktmodus (kleinere Bildschirme)
-
+  static const double _kMaxChatContentWidth = 760.0;
+  static const double _kSearchBarContentHeight = 135.0;
+  static const double _kAttachmentBarHeight = 40.0;
+  static const double _kAttachmentBarMarginBottom = 8.0; // Margin between attachment bar and search bar
+  static const double _kHorizontalPaddingLarge = 16.0;
+  static const double _kHorizontalPaddingSmall = 8.0;
 
   @override
   void initState() {
@@ -89,6 +114,7 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
     if (index == -1) {
       _messages.clear();
       _animCtrl.reset();
+      _attachedFiles.clear();
     } else if (index >= 0 && index < ChatStorageService.savedChats.length) {
       final chatJson = ChatStorageService.savedChats[index];
       _messages.clear();
@@ -107,16 +133,15 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
         _animCtrl.reset();
       }
     }
-    setState(() {});
-    Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
-    Future.delayed(const Duration(milliseconds: 50), () {
-      if (_scrollController.hasClients) {
-        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-      }
+    setState(() {
+      _isBrainActive = false;
+      _isImageActive = false;
+      _isMicActive = false;
     });
+    _scrollChatToBottom();
+    Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
   }
 
-  // This method is now public for parent widget to call
   void newChat() async {
     if (_messages.isNotEmpty) {
       final json = _messages.map((m) => '${m['sender']}|${m['text']}').join('§');
@@ -126,131 +151,434 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
       _messages.clear();
       _animCtrl.reset();
       ChatStorageService.selectedChatIndex = -1;
-      // Reset button states on new chat
-      _isAddActive = false;
       _isBrainActive = false;
       _isImageActive = false;
       _isMicActive = false;
+      _attachedFiles.clear();
     });
+    _scrollChatToBottom();
     Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
     await ChatStorageService.loadSavedChatsForSidebar();
   }
 
   void _sendMessage() {
-    if (_controller.text.trim().isEmpty) return;
-    final first = _messages.isEmpty;
+    final bool hasText = _controller.text.trim().isNotEmpty;
+    final bool hasAttachments = _attachedFiles.any((f) => f.markdownContent != null);
+
+    if (!hasText && !hasAttachments) return;
+
+    final firstMessageInChat = _messages.isEmpty;
+
+    String userMessageText = _controller.text;
+    if (hasAttachments) {
+      final attachedFileNames = _attachedFiles.map((f) => '"${f.fileName}"').join(', ');
+      if (userMessageText.isNotEmpty) {
+        userMessageText = 'Uploaded documents: $attachedFileNames\n\n$userMessageText';
+      } else {
+        userMessageText = 'Uploaded documents: $attachedFileNames';
+      }
+    }
+
     setState(() {
-      _messages.add({'sender': 'user', 'text': _controller.text});
+      _messages.add({'sender': 'user', 'text': userMessageText});
       _controller.clear();
     });
-    if (first) _animCtrl.forward();
+
+    // Only trigger the animation/move-down effect when the FIRST message is sent
+    // This also implicitly starts the chat content animation (_anim.forward())
+    if (firstMessageInChat) _animCtrl.forward();
+    _scrollChatToBottom();
     Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+
+    String aiPrompt = userMessageText;
+    if (hasAttachments) {
+      final markdownSections = _attachedFiles
+          .where((f) => f.markdownContent != null)
+          .map((f) => "Document: \"${f.fileName}\"\n```\n${f.markdownContent}\n```")
+          .join('\n\n');
+      aiPrompt = "$markdownSections\n\nUser query: $aiPrompt";
+      _attachedFiles.clear(); // Clear all attachments after sending
+    }
+
     Future.delayed(const Duration(milliseconds: 300), () {
       setState(() {
-        _messages.add({'sender': 'ai', 'text': 'You said: ${_messages.last['text']}\n(Model: $_selectedModel)'});
+        _messages.add({'sender': 'ai', 'text': 'You said: "${_messages.last['text']}"\n(Model ID: $_selectedModelId)'});
       });
-      Future.delayed(const Duration(milliseconds: 50), () {
-        if (_scrollController.hasClients) {
-          _scrollController.animateTo(
-            _scrollController.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOut,
-          );
-        }
-        Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
-      });
+      _scrollChatToBottom();
+      Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
     });
   }
+
+  Future<void> _uploadFiles() async {
+  // Helper methods must be declared before use
+  void _enqueueFileUpload(File file, String fileName, String fileId, int fileSize) {
+    _uploadQueue.add(_QueuedUpload(file, fileName, fileId, fileSize));
+    _tryStartNextUpload();
+  }
+
+  void _tryStartNextUpload() {
+    while (_currentConcurrentUploads < MAX_CONCURRENT_UPLOADS && _uploadQueue.isNotEmpty) {
+      final next = _uploadQueue.removeAt(0);
+      _currentConcurrentUploads++;
+      _performFileUpload(next.file, next.fileName, next.fileId, next.fileSize);
+    }
+  }
+    final allowedExtensions = [
+      'wav', 'mp3', 'm4a', 'mp4', 'html', 'htm', 'csv', 'docx', 'pptx', 'xlsx',
+      'pdf', 'jpg', 'jpeg', 'png', 'bmp', 'tiff', 'epub', 'ipynb', 'msg', 'txt',
+      'text', 'md', 'markdown', 'json', 'jsonl', 'rss', 'atom', 'xml', 'xls', 'zip'
+    ];
+
+    if (_currentConcurrentUploads >= MAX_CONCURRENT_UPLOADS) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please wait for current uploads to complete')),
+        );
+      }
+      return;
+    }
+
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: allowedExtensions,
+      allowMultiple: true,
+    );
+
+    if (result != null && result.files.isNotEmpty) {
+      List<PlatformFile> selectedPlatformFiles = result.files;
+
+      for (PlatformFile platformFile in selectedPlatformFiles) {
+        if (platformFile.path == null) continue;
+
+        int fileSize = platformFile.size;
+        if (fileSize > MAX_SINGLE_FILE_BYTES) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('File "${platformFile.name}" exceeds the maximum size of 10MB.')),
+            );
+          }
+          continue;
+        }
+        if (_currentTotalAttachmentBytes + fileSize > MAX_TOTAL_ATTACHMENT_BYTES) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Total attachment size limit (30MB) exceeded. Remove files before adding more.')),
+            );
+          }
+          continue;
+        }
+
+        File file = File(platformFile.path!);
+        String fileName = platformFile.name;
+        String fileExtension = fileName.split('.').last.toLowerCase();
+        String fileId = _uuid.v4();
+
+        if (!allowedExtensions.contains(fileExtension)) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Unsupported file type for "$fileName": .$fileExtension')),
+            );
+          }
+          continue;
+        }
+
+        setState(() {
+          _attachedFiles.add(AttachedFile(
+            id: fileId,
+            fileName: fileName,
+            isUploading: true,
+          ));
+          _currentTotalAttachmentBytes += fileSize;
+        });
+        _scrollChatToBottom();
+        _enqueueFileUpload(file, fileName, fileId, fileSize);
+      }
+    } else {
+      print('File picking canceled.');
+    }
+    Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+  void _enqueueFileUpload(File file, String fileName, String fileId, int fileSize) {
+    _uploadQueue.add(_QueuedUpload(file, fileName, fileId, fileSize));
+    _tryStartNextUpload();
+  }
+
+  void _tryStartNextUpload() {
+    while (_currentConcurrentUploads < MAX_CONCURRENT_UPLOADS && _uploadQueue.isNotEmpty) {
+      final next = _uploadQueue.removeAt(0);
+      _currentConcurrentUploads++;
+      _performFileUpload(next.file, next.fileName, next.fileId, next.fileSize);
+    }
+  }
+  }
+
+  Future<void> _performFileUpload(File file, String fileName, String fileId, int fileSize) async {
+    try {
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$_apiBaseUrl/upload_file'),
+      );
+      request.files.add(await http.MultipartFile.fromPath('file', file.path));
+
+      var streamedResponse = await request.send();
+      var response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        final jsonResponse = json.decode(response.body);
+        setState(() {
+          int index = _attachedFiles.indexWhere((f) => f.id == fileId);
+          if (index != -1) {
+            _attachedFiles[index] = _attachedFiles[index].copyWith(
+              markdownContent: jsonResponse['markdown_content'],
+              isUploading: false,
+            );
+          }
+        });
+        print('File "$fileName" conversion successful. Markdown content received.');
+      } else {
+        final errorBody = json.decode(response.body);
+        setState(() {
+          _attachedFiles.removeWhere((f) => f.id == fileId);
+          _currentTotalAttachmentBytes -= fileSize;
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Failed to upload "$fileName": ${errorBody['detail'] ?? response.reasonPhrase}')),
+            );
+          }
+        });
+        print('File upload failed for "$fileName": ${response.statusCode}, ${response.body}');
+      }
+    } catch (e) {
+      setState(() {
+        _attachedFiles.removeWhere((f) => f.id == fileId);
+        _currentTotalAttachmentBytes -= fileSize;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error uploading "$fileName": $e')),
+          );
+        }
+      });
+      print('Error uploading "$fileName": $e');
+    } finally {
+      _currentConcurrentUploads--;
+      _tryStartNextUpload();
+      _scrollChatToBottom();
+    }
+  }
+
+  void _removeAttachedFile(String fileId) {
+    setState(() {
+      final idx = _attachedFiles.indexWhere((f) => f.id == fileId);
+      if (idx != -1) {
+        final file = _attachedFiles[idx];
+        // Estimate size: if markdownContent is null, use PlatformFile.size if available
+        // Otherwise, just subtract nothing (since upload failed, size already subtracted)
+        // This is a best-effort approach
+        // If you want to track sizes more robustly, store size in AttachedFile
+        // For now, we only subtract if file is not uploading
+        if (!file.isUploading && file.markdownContent == null) {
+          // Already subtracted on upload fail
+        } else if (!file.isUploading && file.markdownContent != null) {
+          // Subtract size if file was successfully uploaded
+          // Not tracked, so we skip (could be improved)
+        }
+      }
+      _attachedFiles.removeWhere((f) => f.id == fileId);
+    });
+    _scrollChatToBottom();
+    Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+  }
+
+  void _scrollChatToBottom() {
+    if (_scrollController.hasClients) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
+      });
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
-    // Get colors from theme
     final Color bg = Theme.of(context).scaffoldBackgroundColor;
     final Color accent = Theme.of(context).colorScheme.primary;
     final Color iconFg = Theme.of(context).iconTheme.color!;
+    final Color textColor = iconFg;
 
     final double effectiveHorizontalPadding = widget.isCompactMode ? _kHorizontalPaddingSmall : _kHorizontalPaddingLarge;
     final double maxPossibleChatContentWidth = math.max(0.0, screenWidth - (effectiveHorizontalPadding * 2));
     final double constrainedChatContentWidth = math.min(_kMaxChatContentWidth, maxPossibleChatContentWidth);
-    final double currentChatContentWidth = _messages.isEmpty
-        ? constrainedChatContentWidth * (widget.isCompactMode ? 0.95 : 0.8)
-        : constrainedChatContentWidth;
-    final double searchBarWidgetTotalHeight = _kSearchBarContentHeight + (2 * 14.0);
-    final double bottomOffsetForChatList = searchBarWidgetTotalHeight + effectiveHorizontalPadding;
 
+    // Define the smaller width for the centered state
+    final double centeredInputWidth = constrainedChatContentWidth * (widget.isCompactMode ? 0.95 : 0.8);
+    // Define the full width for the bottom-aligned state
+    final double expandedInputWidth = constrainedChatContentWidth;
+
+    // Calculate the total height of the input area (search bar + attachment bar + padding)
+    double inputAreaVisualHeight = _kSearchBarContentHeight;
+    if (_attachedFiles.isNotEmpty) {
+      inputAreaVisualHeight += _kAttachmentBarHeight + _kAttachmentBarMarginBottom;
+    }
+    double inputAreaTotalHeight = inputAreaVisualHeight + (2 * effectiveHorizontalPadding); // accounting for total vertical padding around the searchbar container
+
+    // Determine if the chat is currently empty (no messages, no attached files)
+    final bool isChatEmpty = _messages.isEmpty; // This refers to the chat history, not just text input
+    final bool showInputAreaCentered = isChatEmpty; // Input area is centered only if NO messages yet
+
+    // Determine the target width for the input area
+    final double targetInputWidth = showInputAreaCentered ? centeredInputWidth : expandedInputWidth;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-          if (_messages.isEmpty)
-            Center(
-              child: SizedBox(
-                width: currentChatContentWidth,
-                child: _buildSearchBar(isCompactMode: widget.isCompactMode),
-              ),
-            )
-          else
-            // Chat-Nachrichtenliste
+          // Chat-Nachrichtenliste (only shown if there are messages)
+          if (!isChatEmpty)
             Positioned(
               top: 0,
-              bottom: bottomOffsetForChatList,
+              bottom: inputAreaTotalHeight, // Chat list is positioned above the entire input area
               left: 0,
               right: 0,
-              child: Center(
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  curve: Curves.easeOutCubic,
-                  constraints: BoxConstraints(maxWidth: currentChatContentWidth),
-                  child: ListView.builder(
-                    controller: _scrollController,
-                    padding: EdgeInsets.symmetric(horizontal: effectiveHorizontalPadding, vertical: 10),
-                    itemCount: _messages.length,
-                    itemBuilder: (_, i) {
-                      final m = _messages[i];
-                      return MessageBubble(
-                        message: m['text']!,
-                        isUser: m['sender'] == 'user',
-                        maxWidth: currentChatContentWidth * 0.7,
-                      );
-                    },
+              child: FadeTransition(
+                opacity: _anim,
+                child: Center(
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOutCubic,
+                    constraints: BoxConstraints(maxWidth: expandedInputWidth), // Chat list itself uses expanded width
+                    child: ListView.builder(
+                      controller: _scrollController,
+                      padding: EdgeInsets.symmetric(horizontal: effectiveHorizontalPadding, vertical: 10),
+                      itemCount: _messages.length,
+                      itemBuilder: (_, i) {
+                        final m = _messages[i];
+                        return MessageBubble(
+                          message: m['text']!,
+                          isUser: m['sender'] == 'user',
+                          maxWidth: expandedInputWidth * 0.7, // Message bubbles also use expanded width
+                        );
+                      },
+                    ),
                   ),
                 ),
               ),
             ),
-          // Suchleiste (immer am unteren Rand, wenn Nachrichten existieren)
-          if (_messages.isNotEmpty)
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: Padding(
-                padding: EdgeInsets.all(effectiveHorizontalPadding),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  curve: Curves.easeOutCubic,
-                  width: currentChatContentWidth,
-                  child: _buildSearchBar(isCompactMode: widget.isCompactMode),
+
+          // Combined Input Area (Search bar + Attachment bar)
+          // Uses AnimatedPositioned to smoothly move from center to bottom
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+            left: 0,
+            right: 0,
+            // Position at the bottom if not empty, otherwise calculate center position
+            bottom: showInputAreaCentered
+                ? (MediaQuery.of(context).size.height / 2 - (inputAreaVisualHeight / 2)) // Adjusted to center based on actual visual height
+                : effectiveHorizontalPadding, // Always keep padding from bottom edge
+            child: Center( // Centers horizontally
+              child: AnimatedContainer( // NEW: AnimatedContainer for width transition
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOutCubic,
+                width: targetInputWidth, // Dynamically changes width
+                child: Column(
+                  mainAxisSize: MainAxisSize.min, // Crucial for column inside AnimatedPositioned/Center
+                  children: [
+                    // Multiple Attachment Indicator Bar (if files are present)
+                    if (_attachedFiles.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: _kAttachmentBarMarginBottom), // Margin below chips
+                        child: _buildAttachmentBar(targetInputWidth, effectiveHorizontalPadding, textColor, accent), // Pass targetInputWidth
+                      ),
+                    // Search Bar
+                    _buildSearchBar(isCompactMode: widget.isCompactMode),
+                  ],
                 ),
               ),
             ),
+          ),
         ],
+      ),
+    );
+  }
+
+  // NEW: Extracted Attachment Bar Widget
+  Widget _buildAttachmentBar(double contentWidth, double horizontalPadding, Color textColor, Color accentColor) {
+    return Container(
+      width: contentWidth, // Use the passed contentWidth
+      height: _kAttachmentBarHeight,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade800.withOpacity(0.9),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade700),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: _attachedFiles.map((file) =>
+              _buildAttachmentChip(file, textColor, accentColor)).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAttachmentChip(AttachedFile file, Color textColor, Color accentColor) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4.0),
+      child: Chip(
+        padding: EdgeInsets.zero,
+        backgroundColor: file.isUploading ? Colors.blueGrey.shade700 : Colors.grey.shade700,
+        label: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (file.isUploading)
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(accentColor),
+                ),
+              )
+            else
+              Icon(Icons.insert_drive_file, color: textColor.withOpacity(0.8), size: 16),
+            const SizedBox(width: 6),
+            Text(
+              file.fileName,
+              style: TextStyle(color: textColor, fontSize: 12),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+            ),
+          ],
+        ),
+        onDeleted: file.isUploading ? null : () => _removeAttachedFile(file.id),
+        deleteIcon: Icon(Icons.close, color: textColor.withOpacity(0.8), size: 16),
+        deleteButtonTooltipMessage: 'Remove "${file.fileName}"',
       ),
     );
   }
 
   Widget _buildSearchBar({required bool isCompactMode}) {
     const btnH = 36.0, btnW = 44.0;
-    // Get colors from theme here for this widget
     final Color bg = Theme.of(context).scaffoldBackgroundColor;
     final Color accent = Theme.of(context).colorScheme.primary;
     final Color iconFg = Theme.of(context).iconTheme.color!;
 
+    final bool hasAttachments = _attachedFiles.isNotEmpty;
+
     return Container(
+      width: double.infinity, // Occupy full width of its parent AnimatedContainer
       height: _kSearchBarContentHeight,
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: iconFg.withValues(alpha: .3)),
+        border: Border.all(color: iconFg.withOpacity(0.3)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Column(
@@ -289,8 +617,10 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
                     textInputAction: TextInputAction.send,
                     style: TextStyle(color: iconFg),
                     decoration: InputDecoration(
-                      hintText: 'Ask me anything !',
-                      hintStyle: TextStyle(color: iconFg.withValues(alpha: .8)),
+                      hintText: hasAttachments
+                          ? 'Add a message or send documents'
+                          : 'Ask me anything !',
+                      hintStyle: TextStyle(color: iconFg.withOpacity(0.8)),
                       border: InputBorder.none,
                       enabledBorder: InputBorder.none,
                       focusedBorder: InputBorder.none,
@@ -324,15 +654,12 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
           ),
           Row(
             children: <Widget>[
-              // Add Button
+              // Add Button (File Upload)
               _buildIconBtn(
                 icon: Icons.add,
-                onTap: () {
-                  setState(() => _isAddActive = !_isAddActive);
-                  print('Add button toggled: $_isAddActive');
-                },
-                isActive: _isAddActive,
-                debugLabel: 'Add button', // Added debug label
+                onTap: _uploadFiles,
+                isActive: hasAttachments,
+                debugLabel: 'Add button',
               ),
               const SizedBox(width: 8),
               // Brain Button
@@ -343,7 +670,7 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
                   print('Brain button toggled: $_isBrainActive');
                 },
                 isActive: _isBrainActive,
-                debugLabel: 'Brain button', // Added debug label
+                debugLabel: 'Brain button',
               ),
               const SizedBox(width: 8),
               // Image Button
@@ -354,16 +681,17 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
                   print('Image button toggled: $_isImageActive');
                 },
                 isActive: _isImageActive,
-                debugLabel: 'Image button', // Added debug label
+                debugLabel: 'Image button',
               ),
               const Spacer(),
               // Model Selection Dropdown
               ModelSelectionDropdown(
-                initialSelectedModel: _selectedModel,
-                onModelSelected: (newModel) {
+                initialSelectedModelId: _selectedModelId,
+                onModelSelected: (newModelId) {
                   setState(() {
-                    _selectedModel = newModel;
+                    _selectedModelId = newModelId;
                   });
+                  print('Selected model ID: $_selectedModelId');
                 },
                 textFieldFocusNode: _textFieldFocusNode,
                 isCompactMode: isCompactMode,
@@ -377,7 +705,7 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
                   print('Mic button toggled: $_isMicActive');
                 },
                 isActive: _isMicActive,
-                debugLabel: 'Mic button', // Added debug label
+                debugLabel: 'Mic button',
               ),
               const SizedBox(width: 8),
               // Voice Mode Button (navigates to VoiceModePage)
@@ -406,13 +734,11 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
     required IconData icon,
     required VoidCallback onTap,
     required bool isActive,
-    String? debugLabel, // New: Optional debug label
+    String? debugLabel,
   }) {
-    // Get current theme colors
     final Color bg = Theme.of(context).scaffoldBackgroundColor;
     final Color iconFg = Theme.of(context).iconTheme.color!;
 
-    // Use a ValueNotifier for hover state to preserve existing hover animation
     final ValueNotifier<bool> isHovered = ValueNotifier<bool>(false);
 
     return MouseRegion(
@@ -427,27 +753,20 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
         child: ValueListenableBuilder<bool>(
           valueListenable: isHovered,
           builder: (context, hovered, child) {
-            // Determine colors based on isActive state
-            final Color effectiveBgColor = isActive ? iconFg : bg; // Active: button is iconFg color
-            final Color effectiveIconColor = isActive ? bg : iconFg; // Active: icon is bg color
+            final Color effectiveBgColor = isActive ? iconFg : bg;
+            final Color effectiveIconColor = isActive ? bg : iconFg;
 
-            // Determine border color based on hover or active state
             final Color effectiveBorderColor = hovered
-                ? iconFg // Bright border on hover
+                ? iconFg
                 : isActive
-                    ? iconFg.withValues(alpha: 0.6) // Slightly muted active border
-                    : iconFg.withValues(alpha: .3); // Default border
+                    ? iconFg.withOpacity(0.6)
+                    : iconFg.withOpacity(0.3);
 
             final double effectiveBorderWidth = hovered
                 ? 1.2
                 : isActive
-                    ? 1.0 // Slightly thicker active border
+                    ? 1.0
                     : 0.8;
-
-            // Debug print for this specific button
-            if (debugLabel != null) {
-              print('[$debugLabel] isActive: $isActive, effectiveBgColor: $effectiveBgColor, effectiveIconColor: $effectiveIconColor');
-            }
 
             return AnimatedContainer(
               duration: const Duration(milliseconds: 150),
