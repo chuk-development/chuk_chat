@@ -1,4 +1,4 @@
-// main.dart
+// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -11,9 +11,10 @@ import 'package:chuk_chat/sidebar.dart';
 import 'package:chuk_chat/pages/projects_page.dart';
 import 'package:chuk_chat/pages/settings_page.dart';
 import 'package:chuk_chat/utils/color_extensions.dart'; // Import for hex conversion
+import 'package:chuk_chat/utils/grain_overlay.dart';   // Film grain overlay
 
 /* ---------- MAIN ---------- */
-void main() => runApp(ChukChatApp()); // Removed const here as it's stateful
+void main() => runApp(const ChukChatApp());
 
 class ChukChatApp extends StatefulWidget {
   const ChukChatApp({Key? key}) : super(key: key);
@@ -29,11 +30,15 @@ class _ChukChatAppState extends State<ChukChatApp> {
   Color _currentIconFgColor = kDefaultIconFgColor;
   Color _currentBgColor = kDefaultBgColor; // Managed here
 
-  // Key for SharedPreferences
+  // Film grain
+  bool _grainEnabled = kDefaultGrainEnabled;
+
+  // Keys for SharedPreferences
   static const String _kThemeModeKey = 'themeMode';
   static const String _kAccentColorKey = 'accentColor';
   static const String _kIconFgColorKey = 'iconFgColor';
-  static const String _kBgColorKey = 'bgColor'; // Key for background color
+  static const String _kBgColorKey = 'bgColor';
+  static const String _kGrainEnabledKey = 'grainEnabled';
 
   @override
   void initState() {
@@ -55,6 +60,7 @@ class _ChukChatAppState extends State<ChukChatApp> {
           prefs.getString(_kIconFgColorKey) ?? kDefaultIconFgColor.toHexString());
       _currentBgColor = ColorExtension.fromHexString(
           prefs.getString(_kBgColorKey) ?? kDefaultBgColor.toHexString());
+      _grainEnabled = prefs.getBool(_kGrainEnabledKey) ?? kDefaultGrainEnabled;
     });
   }
 
@@ -91,6 +97,13 @@ class _ChukChatAppState extends State<ChukChatApp> {
     });
   }
 
+  void _setGrainEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kGrainEnabledKey, enabled);
+    setState(() {
+      _grainEnabled = enabled;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -106,6 +119,27 @@ class _ChukChatAppState extends State<ChukChatApp> {
       title: 'chuk.chat',
       debugShowCheckedModeBanner: false,
       theme: appTheme, // Use the dynamically built theme
+
+      // 👇 Apply film grain to EVERY route/page
+      builder: (context, child) {
+        return Stack(
+          children: [
+            if (child != null) child,
+            if (_grainEnabled)
+              const Positioned.fill(
+                child: IgnorePointer(
+                  child: GrainOverlay(
+                    opacity: 0.10,
+                    speedMs: 160,
+                    noiseSize: 140,
+                    blendMode: BlendMode.overlay,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+
       home: RootWrapper(
         currentThemeMode: _currentThemeMode,
         currentAccentColor: _currentAccentColor,
@@ -114,7 +148,10 @@ class _ChukChatAppState extends State<ChukChatApp> {
         setThemeMode: _setThemeMode,
         setAccentColor: _setAccentColor,
         setIconFgColor: _setIconFgColor,
-        setBgColor: _setBgColor, // Pass new callback
+        setBgColor: _setBgColor,
+        // film grain
+        grainEnabled: _grainEnabled,
+        setGrainEnabled: _setGrainEnabled,
       ),
     );
   }
@@ -129,7 +166,11 @@ class RootWrapper extends StatefulWidget {
   final Function(Brightness) setThemeMode;
   final Function(Color) setAccentColor;
   final Function(Color) setIconFgColor;
-  final Function(Color) setBgColor; // New
+  final Function(Color) setBgColor;
+
+  // Film grain
+  final bool grainEnabled;
+  final Function(bool) setGrainEnabled;
 
   const RootWrapper({
     Key? key,
@@ -140,7 +181,9 @@ class RootWrapper extends StatefulWidget {
     required this.setThemeMode,
     required this.setAccentColor,
     required this.setIconFgColor,
-    required this.setBgColor, // New
+    required this.setBgColor,
+    required this.grainEnabled,
+    required this.setGrainEnabled,
   }) : super(key: key);
 
   @override
@@ -153,11 +196,6 @@ class _RootWrapperState extends State<RootWrapper> {
 
   final GlobalKey<ChukChatUIState> _chatUIKey = GlobalKey();
 
-  @override
-  void initState() {
-    super.initState();
-  }
-
   void _openSettingsPage() {
     if (_isSidebarExpanded) _toggleSidebar(); // Sidebar schließen, wenn offen
     Navigator.of(context).push(MaterialPageRoute(
@@ -169,7 +207,10 @@ class _RootWrapperState extends State<RootWrapper> {
         setThemeMode: widget.setThemeMode,
         setAccentColor: widget.setAccentColor,
         setIconFgColor: widget.setIconFgColor,
-        setBgColor: widget.setBgColor, // Pass new callback
+        setBgColor: widget.setBgColor,
+        // pass grain toggle through
+        grainEnabled: widget.grainEnabled,
+        setGrainEnabled: widget.setGrainEnabled,
       ),
     ));
   }
@@ -184,7 +225,6 @@ class _RootWrapperState extends State<RootWrapper> {
     setState(() {
       ChatStorageService.selectedChatIndex = index;
     });
-    print('Loading chat at index: $index');
     if (_isSidebarExpanded) _toggleSidebar(); // Sidebar schließen, wenn Chat ausgewählt
   }
 
@@ -212,27 +252,24 @@ class _RootWrapperState extends State<RootWrapper> {
         children: [
           // Layer 1: Haupt-Chat-UI, die nach rechts verschoben wird oder verschwindet
           Visibility(
-            // Auf kompakten Bildschirmen ist die Chat-UI unsichtbar, wenn die Sidebar geöffnet ist.
-            // Ansonsten (großer Bildschirm ODER Sidebar geschlossen) ist sie sichtbar.
             visible: !isCompactMode || !_isSidebarExpanded,
             child: AnimatedPositioned(
               duration: const Duration(milliseconds: 250),
               curve: Curves.easeOutCubic,
-              // Verschiebt die Chat-UI um die Breite der Sidebar, wenn Sidebar offen und KEIN Kompaktmodus
               left: (!isCompactMode && _isSidebarExpanded) ? effectiveSidebarWidth : 0,
               right: 0,
               top: 0,
               bottom: 0,
               child: GestureDetector(
-                onTap: _isSidebarExpanded ? _toggleSidebar : null, // Sidebar schließen bei Tap außerhalb
-                child: AbsorbPointer( // Interaktionen mit Chat-UI blockieren, wenn Sidebar offen ist
+                onTap: _isSidebarExpanded ? _toggleSidebar : null,
+                child: AbsorbPointer(
                   absorbing: _isSidebarExpanded,
                   child: ChukChatUI(
                     key: _chatUIKey,
-                    onToggleSidebar: _toggleSidebar, // Dummy, da der Button hier behandelt wird
+                    onToggleSidebar: _toggleSidebar,
                     selectedChatIndex: ChatStorageService.selectedChatIndex,
                     isSidebarExpanded: _isSidebarExpanded,
-                    isCompactMode: isCompactMode, // Übergebe den Kompaktmodus-Flag an die ChatUI
+                    isCompactMode: isCompactMode,
                   ),
                 ),
               ),
@@ -243,7 +280,7 @@ class _RootWrapperState extends State<RootWrapper> {
           AnimatedPositioned(
             duration: const Duration(milliseconds: 250),
             curve: Curves.easeOutCubic,
-            left: _isSidebarExpanded ? 0 : -effectiveSidebarWidth, // Schiebt von links herein
+            left: _isSidebarExpanded ? 0 : -effectiveSidebarWidth,
             top: 0,
             bottom: 0,
             width: effectiveSidebarWidth,
@@ -252,11 +289,11 @@ class _RootWrapperState extends State<RootWrapper> {
               onSettingsTapped: _openSettingsPage,
               onProjectsTapped: _openProjectsPage,
               selectedChatIndex: ChatStorageService.selectedChatIndex,
-              isCompactMode: isCompactMode, // Übergebe den Kompaktmodus an die Sidebar
+              isCompactMode: isCompactMode,
             ),
           ),
 
-          // Layer 3: Hamburger-Menü als einfacher IconButton mit gleichem Abstand zur linken Wand
+          // Layer 3: Hamburger-Menü
           Positioned(
             top: kTopInitialSpacing,
             left: kFixedLeftPadding,
@@ -266,13 +303,12 @@ class _RootWrapperState extends State<RootWrapper> {
             ),
           ),
 
-          // Layer 4: "chuk.chat"-Titel neben dem Hamburger-Menü
-          // Titel ist immer sichtbar, Breite passt sich an Sidebar-Status an.
+          // Layer 4: Title
           Positioned(
             top: kTopInitialSpacing + (kMenuButtonHeight - kButtonVisualHeight) / 2,
-            left: kFixedLeftPadding + kMenuButtonHeight + 16, // 16px Abstand vom Hamburger-Menü
+            left: kFixedLeftPadding + kMenuButtonHeight + 16,
             child: InkWell(
-              onTap: () {}, // Keine Aktion, rein als Titel
+              onTap: () {},
               borderRadius: BorderRadius.circular(8),
               child: Container(
                 height: kButtonVisualHeight,
@@ -283,7 +319,7 @@ class _RootWrapperState extends State<RootWrapper> {
                     AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
                       curve: Curves.easeOut,
-                      width: _isSidebarExpanded ? 100 : 0, // Text sichtbar, wenn Sidebar offen
+                      width: _isSidebarExpanded ? 100 : 0,
                       constraints: BoxConstraints(
                         minWidth: _isSidebarExpanded ? 100 : 0,
                       ),
@@ -305,23 +341,20 @@ class _RootWrapperState extends State<RootWrapper> {
             ),
           ),
 
-          // Layer 5: "New Chat"-Button
-          // Nur sichtbar, wenn NICHT im Kompaktmodus ODER die Sidebar geöffnet ist.
+          // Layer 5: New Chat
           if (!isCompactMode || _isSidebarExpanded)
             Positioned(
-              top:
-                  kTopInitialSpacing + kMenuButtonHeight + kSpacingBetweenTopButtons,
+              top: kTopInitialSpacing + kMenuButtonHeight + kSpacingBetweenTopButtons,
               left: kFixedLeftPadding,
               child: InkWell(
                 onTap: () {
-                  _chatUIKey.currentState?.newChat(); // Ruft die neue Chat-Methode auf
-                  if (_isSidebarExpanded) _toggleSidebar(); // Sidebar schließen, wenn neuer Chat erstellt
+                  _chatUIKey.currentState?.newChat();
+                  if (_isSidebarExpanded) _toggleSidebar();
                 },
                 borderRadius: BorderRadius.circular(8),
                 child: Container(
                   height: kButtonVisualHeight,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -329,7 +362,7 @@ class _RootWrapperState extends State<RootWrapper> {
                       AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
                         curve: Curves.easeOut,
-                        width: _isSidebarExpanded ? 100 : 0, // Text erweitert sich mit der Sidebar
+                        width: _isSidebarExpanded ? 100 : 0,
                         constraints: BoxConstraints(
                           minWidth: _isSidebarExpanded ? 100 : 0,
                         ),
@@ -351,8 +384,7 @@ class _RootWrapperState extends State<RootWrapper> {
               ),
             ),
 
-          // Layer 6: "Projects"-Button
-          // Nur sichtbar, wenn NICHT im Kompaktmodus ODER die Sidebar geöffnet ist.
+          // Layer 6: Projects
           if (!isCompactMode || _isSidebarExpanded)
             Positioned(
               top: kTopInitialSpacing +
@@ -374,7 +406,7 @@ class _RootWrapperState extends State<RootWrapper> {
                       AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
                         curve: Curves.easeOut,
-                        width: _isSidebarExpanded ? 100 : 0, // Text erweitert sich mit der Sidebar
+                        width: _isSidebarExpanded ? 100 : 0,
                         constraints: BoxConstraints(
                           minWidth: _isSidebarExpanded ? 100 : 0,
                         ),

@@ -1,12 +1,15 @@
 // lib/constants.dart
 import 'package:flutter/material.dart';
-import 'package:chuk_chat/utils/color_extensions.dart'; // Import the new extension
+import 'package:chuk_chat/utils/color_extensions.dart';
 
 /* ---------- DEFAULT COLOURS ---------- */
 const Color kDefaultBgColor = Color(0xFF211B15);
 const Color kDefaultAccentColor = Color(0xFF3F5E5D);
 const Color kDefaultIconFgColor = Color(0xFF93854C);
-const Brightness kDefaultThemeMode = Brightness.dark; // Default is dark mode
+const Brightness kDefaultThemeMode = Brightness.dark;
+
+/* ---------- FILM GRAIN DEFAULT ---------- */
+const bool kDefaultGrainEnabled = true;
 
 /* ---------- THEME BUILDER ---------- */
 ThemeData buildAppTheme({
@@ -18,7 +21,7 @@ ThemeData buildAppTheme({
   return ThemeData(
     brightness: brightness,
     scaffoldBackgroundColor: bg,
-    cardColor: bg, // Use background color for cards
+    cardColor: bg,
     dividerColor: iconFg.withValues(alpha: .4),
     iconTheme: IconThemeData(color: iconFg),
     colorScheme: ColorScheme(
@@ -27,11 +30,11 @@ ThemeData buildAppTheme({
       surface: bg,
       background: bg,
       error: Colors.red,
-      onPrimary: Colors.black, // Text on primary color
-      onSecondary: Colors.black, // Text on secondary color
-      onSurface: iconFg, // Text on surface color
-      onBackground: iconFg, // Text on background color
-      onError: Colors.white, // Text on error color
+      onPrimary: Colors.black,
+      onSecondary: Colors.black,
+      onSurface: iconFg,
+      onBackground: iconFg,
+      onError: Colors.white,
       brightness: brightness,
     ),
     listTileTheme: ListTileThemeData(
@@ -41,12 +44,11 @@ ThemeData buildAppTheme({
       selectedTileColor: accent.withValues(alpha: 0.1),
     ),
     appBarTheme: AppBarTheme(
-      backgroundColor: bg, // AppBar background matches general background
+      backgroundColor: bg,
       elevation: 0,
       iconTheme: IconThemeData(color: iconFg),
       titleTextStyle: TextStyle(color: iconFg, fontSize: 20),
     ),
-    // Customize text field decoration
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: bg.lighten(0.05),
@@ -69,14 +71,12 @@ ThemeData buildAppTheme({
   );
 }
 
-
 /* ---------- RESPONSIVE BREAKPOINTS ---------- */
-// Der Bildschirm wird als "kompakt" (z.B. Handygröße) betrachtet, wenn die Breite unter diesem Wert liegt.
 const double kCompactModeBreakpoint = 600.0;
 
-/* ---------- MAIN UI LAYOUT CONSTANTS (Shared for consistency) ---------- */
-const double kFixedLeftPadding = 8.0; // Abstand von der linken Wand für alle Icons
-const double kTopInitialSpacing = 16.0; // Abstand vom oberen Bildschirmrand
-const double kMenuButtonHeight = 48.0; // Höhe des IconButtons (Standard 48x48)
-const double kButtonVisualHeight = 40.0; // Höhe der "New Chat"/"Projects"-Buttons
-const double kSpacingBetweenTopButtons = 8.0; // Abstand zwischen den oberen Elementen
+/* ---------- MAIN UI LAYOUT CONSTANTS ---------- */
+const double kFixedLeftPadding = 8.0;
+const double kTopInitialSpacing = 16.0;
+const double kMenuButtonHeight = 48.0;
+const double kButtonVisualHeight = 40.0;
+const double kSpacingBetweenTopButtons = 8.0;
