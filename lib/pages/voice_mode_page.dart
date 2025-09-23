@@ -1,14 +1,18 @@
 // lib/pages/voice_mode_page.dart
-import 'package:flutter/material.dart';
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui; // Import for MaskFilter
 
-import 'package:chuk_chat/constants.dart';
-import 'package:chuk_chat/models/voice_mode_models.dart';
-import 'package:chuk_chat/widgets/message_bubble.dart';
-import 'package:chuk_chat/utils/color_extensions.dart'; // Import for color extensions
+import 'package:flutter/material.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
 
-///  Voice-Mode  –  UI ONLY  –  LifeKit ready
+import 'package:chuk_chat/models/voice_mode_models.dart';
+import 'package:chuk_chat/services/lifekit_client.dart';
+import 'package:chuk_chat/services/voice_presets.dart';
+import 'package:chuk_chat/utils/color_extensions.dart'; // Import for color extensions
+import 'package:chuk_chat/widgets/message_bubble.dart';
+
+///  Voice-Mode powered by LifeKit realtime voice streaming
 class VoiceModePage extends StatefulWidget {
   const VoiceModePage({Key? key}) : super(key: key);
 
@@ -16,7 +20,8 @@ class VoiceModePage extends StatefulWidget {
   State<VoiceModePage> createState() => _VoiceModePageState();
 }
 
-class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateMixin {
+class _VoiceModePageState extends State<VoiceModePage>
+    with TickerProviderStateMixin {
   /* ---------- colours (local overrides to match image) ---------- */
   // Use theme colors but allow local overrides for specific visual effects if needed
   late Color cardBg;
@@ -34,18 +39,19 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
     iconFg = Theme.of(context).iconTheme.color!;
     bg = Theme.of(context).scaffoldBackgroundColor;
 
-    cardBg = bg.lighten(0.05); // A slightly lighter dark for cards based on current bg
+    cardBg = bg.lighten(
+      0.05,
+    ); // A slightly lighter dark for cards based on current bg
     userMicColor = iconFg; // Goldish, from iconFg
     aiVoiceColor = accent; // Bluish-green, from accent
   }
-
 
   /* ---------- UI state ---------- */
   bool _listening = false; // mic hot
   bool _thinking = false; // bot typing
   String _transcript = ''; // user words
   String _reply = ''; // bot words
-  String _imageUrl = ''; // bot image (dummy)
+  String _imageUrl = ''; // bot image
 
   // New: Mute, voice, and speed state
   bool _muted = false;
@@ -57,33 +63,135 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
   bool _showPersonalityOptions = false;
   bool _showVoiceOptions = false; // New state for voice pop-up
 
-  final List<VoiceOption> _allVoices = [
-    VoiceOption(id: VoiceId.ara, name: 'Ara', description: 'Upbeat Female'),
-    VoiceOption(id: VoiceId.eve, name: 'Eve', description: 'Soothing Female'),
-    VoiceOption(id: VoiceId.leo, name: 'Leo', description: 'British Male'),
-    VoiceOption(id: VoiceId.rex, name: 'Rex', description: 'Calm Male'),
-    VoiceOption(id: VoiceId.sal, name: 'Sal', description: 'Smooth Male'),
-    VoiceOption(id: VoiceId.gork, name: 'Gork', description: 'Lazy Male'),
+  late LifeKitClient _lifeKitClient;
+  LifeKitConnectionState _connectionState = LifeKitConnectionState.disconnected;
+  String? _connectionError;
+  StreamSubscription<String>? _transcriptSub;
+  StreamSubscription<String>? _replySub;
+  StreamSubscription<String?>? _imageSub;
+  StreamSubscription<bool>? _thinkingSub;
+  StreamSubscription<LifeKitConnectionState>? _connectionSub;
+  StreamSubscription<String>? _errorSub;
+
+  final List<VoiceOption> _allVoices = const [
+    VoiceOption(
+      id: VoiceId.ara,
+      name: 'Ara',
+      description: 'Upbeat Female',
+      apiName: 'ara',
+    ),
+    VoiceOption(
+      id: VoiceId.eve,
+      name: 'Eve',
+      description: 'Soothing Female',
+      apiName: 'eve',
+    ),
+    VoiceOption(
+      id: VoiceId.leo,
+      name: 'Leo',
+      description: 'British Male',
+      apiName: 'leo',
+    ),
+    VoiceOption(
+      id: VoiceId.rex,
+      name: 'Rex',
+      description: 'Calm Male',
+      apiName: 'rex',
+    ),
+    VoiceOption(
+      id: VoiceId.sal,
+      name: 'Sal',
+      description: 'Smooth Male',
+      apiName: 'sal',
+    ),
+    VoiceOption(
+      id: VoiceId.gork,
+      name: 'Gork',
+      description: 'Lazy Male',
+      apiName: 'gork',
+    ),
   ];
 
   final List<PersonalityOption> _allPersonalities = [
-    PersonalityOption(id: PersonalityId.custom, name: 'Custom', icon: Icons.tune),
     PersonalityOption(
-        id: PersonalityId.assistant, name: 'Assistant', icon: Icons.assistant_outlined),
-    PersonalityOption(id: PersonalityId.therapist, name: '"Therapist"', icon: Icons.healing),
-    PersonalityOption(id: PersonalityId.storyteller, name: 'Storyteller', icon: Icons.menu_book),
+      id: PersonalityId.custom,
+      name: 'Custom',
+      icon: Icons.tune,
+    ),
     PersonalityOption(
-        id: PersonalityId.kidsStoryTime, name: 'Kids Story Time', icon: Icons.scale),
+      id: PersonalityId.assistant,
+      name: 'Assistant',
+      icon: Icons.assistant_outlined,
+    ),
     PersonalityOption(
-        id: PersonalityId.kidsTriviaGame, name: 'Kids Trivia Game', icon: Icons.emoji_events),
-    PersonalityOption(id: PersonalityId.meditation, name: 'Meditation', icon: Icons.self_improvement),
-    PersonalityOption(id: PersonalityId.grokDoc, name: 'Grok "Doc"', icon: Icons.medical_services_outlined, canReset: true),
-    PersonalityOption(id: PersonalityId.unhinged, name: 'Unhinged', icon: Icons.recycling, isAdultContent: true, canReset: true),
-    PersonalityOption(id: PersonalityId.sexy, name: 'Sexy', icon: Icons.local_fire_department, isAdultContent: true),
-    PersonalityOption(id: PersonalityId.motivation, name: 'Motivation', icon: Icons.fitness_center, isAdultContent: true),
-    PersonalityOption(id: PersonalityId.conspiracy, name: 'Conspiracy', icon: Icons.travel_explore, canReset: true),
-    PersonalityOption(id: PersonalityId.romantic, name: 'Romantic', icon: Icons.redeem, isAdultContent: true),
-    PersonalityOption(id: PersonalityId.argumentative, name: 'Argumentative', icon: Icons.electric_bolt, isAdultContent: true, canReset: true),
+      id: PersonalityId.therapist,
+      name: '"Therapist"',
+      icon: Icons.healing,
+    ),
+    PersonalityOption(
+      id: PersonalityId.storyteller,
+      name: 'Storyteller',
+      icon: Icons.menu_book,
+    ),
+    PersonalityOption(
+      id: PersonalityId.kidsStoryTime,
+      name: 'Kids Story Time',
+      icon: Icons.scale,
+    ),
+    PersonalityOption(
+      id: PersonalityId.kidsTriviaGame,
+      name: 'Kids Trivia Game',
+      icon: Icons.emoji_events,
+    ),
+    PersonalityOption(
+      id: PersonalityId.meditation,
+      name: 'Meditation',
+      icon: Icons.self_improvement,
+    ),
+    PersonalityOption(
+      id: PersonalityId.grokDoc,
+      name: 'Grok "Doc"',
+      icon: Icons.medical_services_outlined,
+      canReset: true,
+    ),
+    PersonalityOption(
+      id: PersonalityId.unhinged,
+      name: 'Unhinged',
+      icon: Icons.recycling,
+      isAdultContent: true,
+      canReset: true,
+    ),
+    PersonalityOption(
+      id: PersonalityId.sexy,
+      name: 'Sexy',
+      icon: Icons.local_fire_department,
+      isAdultContent: true,
+    ),
+    PersonalityOption(
+      id: PersonalityId.motivation,
+      name: 'Motivation',
+      icon: Icons.fitness_center,
+      isAdultContent: true,
+    ),
+    PersonalityOption(
+      id: PersonalityId.conspiracy,
+      name: 'Conspiracy',
+      icon: Icons.travel_explore,
+      canReset: true,
+    ),
+    PersonalityOption(
+      id: PersonalityId.romantic,
+      name: 'Romantic',
+      icon: Icons.redeem,
+      isAdultContent: true,
+    ),
+    PersonalityOption(
+      id: PersonalityId.argumentative,
+      name: 'Argumentative',
+      icon: Icons.electric_bolt,
+      isAdultContent: true,
+      canReset: true,
+    ),
   ];
 
   /* ---------- animators ---------- */
@@ -97,40 +205,261 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
   @override
   void initState() {
     super.initState();
-    _waveCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..repeat();
+    _waveCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
     // Adjusted duration for _barCtrl for a more fluid sci-fi animation
-    _barCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000))..repeat();
-    _selectedVoice = _allVoices.firstWhere((v) => v.id == VoiceId.ara); // Default to Ara
-    _selectedPersonality = _allPersonalities.firstWhere((p) => p.id == PersonalityId.assistant); // Default to Assistant
-    _startHotMic(); // auto-start
+    _barCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..repeat();
+    _selectedVoice = _allVoices.firstWhere(
+      (v) => v.id == VoiceId.ara,
+    ); // Default to Ara
+    _selectedPersonality = _allPersonalities.firstWhere(
+      (p) => p.id == PersonalityId.assistant,
+    ); // Default to Assistant
+    _lifeKitClient = LifeKitClient();
+    _attachLifeKitListeners();
+    _initializeLifeKit();
   }
 
-  /* ---------- auto hot mic ---------- */
-  void _startHotMic() {
-    setState(() => _listening = true);
-    _fakeListen(); // UI dummy
+  /* ---------- LifeKit setup ---------- */
+  Future<void> _initializeLifeKit() async {
+    try {
+      await _lifeKitClient.initialize();
+      if (!mounted) return;
+      if (_lifeKitClient.hasValidApiKey) {
+        await _connectToLifeKit();
+      } else {
+        setState(() {
+          _connectionError =
+              'LifeKit requires an OpenAI API key. Launch the app with --dart-define=OPENAI_API_KEY=YOUR_KEY.';
+          _connectionState = LifeKitConnectionState.disconnected;
+        });
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _connectionError = 'Failed to initialise LifeKit: $error';
+        _connectionState = LifeKitConnectionState.error;
+      });
+    }
   }
 
-  /* ---------- fake listen 3s → fake reply ---------- */
-  void _fakeListen() async {
-    await Future.delayed(const Duration(seconds: 3));
-    if (!mounted) return;
-    setState(() {
-      _listening = false;
-      _transcript = 'Hey, show me a picture of a cat';
+  void _attachLifeKitListeners() {
+    _connectionSub = _lifeKitClient.connectionState.listen((state) {
+      if (!mounted) return;
+      setState(() {
+        _connectionState = state;
+        if (state == LifeKitConnectionState.connected) {
+          _connectionError = null;
+        }
+        _listening = state == LifeKitConnectionState.connected && !_muted;
+      });
     });
-    _fakeThink();
+
+    _transcriptSub = _lifeKitClient.transcripts.listen((value) {
+      if (!mounted) return;
+      setState(() {
+        _transcript = value;
+      });
+    });
+
+    _replySub = _lifeKitClient.replies.listen((value) {
+      if (!mounted) return;
+      setState(() {
+        _reply = value;
+      });
+    });
+
+    _imageSub = _lifeKitClient.images.listen((value) {
+      if (!mounted) return;
+      setState(() {
+        _imageUrl = value ?? '';
+      });
+    });
+
+    _thinkingSub = _lifeKitClient.thinking.listen((value) {
+      if (!mounted) return;
+      setState(() {
+        _thinking = value;
+      });
+    });
+
+    _errorSub = _lifeKitClient.errors.listen((value) {
+      if (!mounted) return;
+      setState(() {
+        _connectionError = value;
+      });
+    });
   }
 
-  void _fakeThink() async {
-    setState(() => _thinking = true);
-    await Future.delayed(const Duration(seconds: 2));
-    if (!mounted) return;
+  Future<void> _connectToLifeKit() async {
     setState(() {
-      _thinking = false;
-      _reply = 'Here is a cat for you!';
-      _imageUrl = 'https://images.pexels.com/photos/33815055/pexels-photo-33815055.jpeg';
+      _connectionError = null;
+      _transcript = '';
+      _reply = '';
+      _imageUrl = '';
     });
+    try {
+      await _lifeKitClient.connect(
+        instructions: buildPersonalityPrompt(_selectedPersonality),
+        voice: voiceOptionToApiName(_selectedVoice),
+        playbackRate: _playbackSpeed,
+        microphoneEnabled: !_muted,
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _connectionError = error.toString();
+      });
+    }
+  }
+
+  void _handleVoiceSelection(VoiceOption voice) {
+    setState(() {
+      _selectedVoice = voice;
+      _showVoiceOptions = false;
+    });
+    unawaited(_lifeKitClient.updateSession(voice: voiceOptionToApiName(voice)));
+  }
+
+  void _handlePersonalitySelection(PersonalityOption personality) {
+    setState(() {
+      _selectedPersonality = personality;
+      _showPersonalityOptions = false;
+    });
+    unawaited(
+      _lifeKitClient.updateSession(
+        instructions: buildPersonalityPrompt(personality),
+      ),
+    );
+  }
+
+  void _handlePlaybackSpeedChange(double value) {
+    setState(() {
+      _playbackSpeed = value;
+    });
+    unawaited(_lifeKitClient.updateSession(playbackRate: value));
+  }
+
+  void _toggleMute() {
+    final nextMuted = !_muted;
+    setState(() {
+      _muted = nextMuted;
+      _listening =
+          _connectionState == LifeKitConnectionState.connected && !nextMuted;
+    });
+    unawaited(_lifeKitClient.setMicEnabled(!nextMuted));
+  }
+
+  Widget _connectionStatusIndicator() {
+    Widget leading;
+    String label;
+    Widget? trailing;
+
+    switch (_connectionState) {
+      case LifeKitConnectionState.connected:
+        leading = Icon(Icons.check_circle, color: accent, size: 18);
+        label = _muted ? 'Connected • mic muted' : 'Connected';
+        break;
+      case LifeKitConnectionState.connecting:
+        leading = const SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        );
+        label = 'Connecting…';
+        break;
+      case LifeKitConnectionState.error:
+        leading = const Icon(
+          Icons.warning_amber_rounded,
+          color: Colors.orangeAccent,
+          size: 18,
+        );
+        label = 'Connection error';
+        trailing = TextButton(
+          onPressed: _connectToLifeKit,
+          child: const Text('Retry'),
+        );
+        break;
+      case LifeKitConnectionState.disconnected:
+        leading = Icon(
+          Icons.sync_disabled,
+          color: iconFg.withValues(alpha: 0.6),
+          size: 18,
+        );
+        label = 'Not connected';
+        trailing = TextButton(
+          onPressed: _connectToLifeKit,
+          child: const Text('Connect'),
+        );
+        break;
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: iconFg.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                leading,
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: iconFg,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+                if (trailing != null) trailing,
+              ],
+            ),
+          ),
+          if (_connectionError != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 6.0, left: 4.0, right: 4.0),
+              child: Text(
+                _connectionError!,
+                style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _hiddenRemoteAudioView() {
+    if (!_lifeKitClient.isRendererInitialized) {
+      return const SizedBox.shrink();
+    }
+    return IgnorePointer(
+      ignoring: true,
+      child: Opacity(
+        opacity: 0.0,
+        child: SizedBox(
+          width: 1,
+          height: 1,
+          child: RTCVideoView(
+            _lifeKitClient.renderer,
+            objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+          ),
+        ),
+      ),
+    );
   }
 
   /* ---------- close ---------- */
@@ -138,6 +467,13 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
 
   @override
   void dispose() {
+    _transcriptSub?.cancel();
+    _replySub?.cancel();
+    _imageSub?.cancel();
+    _thinkingSub?.cancel();
+    _connectionSub?.cancel();
+    _errorSub?.cancel();
+    unawaited(_lifeKitClient.dispose());
     _waveCtrl.dispose();
     _barCtrl.dispose();
     super.dispose();
@@ -172,18 +508,28 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
                             height: 100, // Reduced height for visualizer
                             width: double.infinity,
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16.0,
+                              ),
                               child: _visualiser(),
                             ),
                           ),
-                          const SizedBox(height: 24), // Spacing between visualizer and settings
+                          const SizedBox(height: 16),
+                          _connectionStatusIndicator(),
+                          const SizedBox(height: 16),
                           // Settings (middle)
                           _bottomSettingsPanel(),
-                          const SizedBox(height: 24), // Spacing between settings and mic
+                          const SizedBox(
+                            height: 24,
+                          ), // Spacing between settings and mic
                           _bottomMicMainStyle(), // Mic button at the very bottom
                         ],
                       ),
                     ),
+                  ),
+                  Align(
+                    alignment: Alignment.bottomLeft,
+                    child: _hiddenRemoteAudioView(),
                   ),
                   if (_showVoiceOptions) _voiceOptionsOverlay(),
                   if (_showPersonalityOptions) _personalityOptionsOverlay(),
@@ -206,9 +552,7 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
                               borderRadius: BorderRadius.circular(12),
                               child: FittedBox(
                                 fit: BoxFit.contain,
-                                child: Image.network(
-                                  _imageUrl,
-                                ),
+                                child: Image.network(_imageUrl),
                               ),
                             )
                           : Container(
@@ -219,7 +563,9 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
                               ),
                               child: Text(
                                 'No image generated',
-                                style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.5),
+                                ),
                               ),
                             ),
                     ),
@@ -229,7 +575,10 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
                     flex: 1,
                     child: Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                       child: Column(
                         children: [
                           Row(
@@ -243,9 +592,12 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
                           ),
                           Expanded(
                             child: ListView(
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
                               children: [
-                                if (_transcript.isNotEmpty) _userBubble(_transcript),
+                                if (_transcript.isNotEmpty)
+                                  _userBubble(_transcript),
                                 if (_thinking) _botTyping(),
                                 if (_reply.isNotEmpty) _botBubble(_reply),
                               ],
@@ -330,7 +682,10 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
                 ),
               ),
               Icon(
-                _showVoiceOptions ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up, // Icon points down if open, up if closed (to indicate opening upwards)
+                _showVoiceOptions
+                    ? Icons.keyboard_arrow_down
+                    : Icons
+                          .keyboard_arrow_up, // Icon points down if open, up if closed (to indicate opening upwards)
                 color: iconFg,
                 size: 20,
               ),
@@ -343,7 +698,8 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
 
   // Voice Options Overlay (the pop-up "menu") - opens upwards
   Widget _voiceOptionsOverlay() {
-    final RenderBox? renderBox = _voiceButtonKey.currentContext?.findRenderObject() as RenderBox?;
+    final RenderBox? renderBox =
+        _voiceButtonKey.currentContext?.findRenderObject() as RenderBox?;
     if (renderBox == null) return const SizedBox.shrink();
 
     final Offset buttonOffset = renderBox.localToGlobal(Offset.zero);
@@ -367,14 +723,21 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
             });
           },
           child: Container(
-            color: Colors.transparent, // This also needs to be transparent to propagate tap
-            alignment: Alignment.bottomCenter, // Align content to bottom for upwards growth
+            color: Colors
+                .transparent, // This also needs to be transparent to propagate tap
+            alignment: Alignment
+                .bottomCenter, // Align content to bottom for upwards growth
             child: Container(
-              constraints: BoxConstraints(maxHeight: screenHeight * 0.3), // Max height to not go off screen
+              constraints: BoxConstraints(
+                maxHeight: screenHeight * 0.3,
+              ), // Max height to not go off screen
               decoration: BoxDecoration(
                 color: cardBg,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: iconFg.withValues(alpha: 0.3), width: 1),
+                border: Border.all(
+                  color: iconFg.withValues(alpha: 0.3),
+                  width: 1,
+                ),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.3),
@@ -390,16 +753,16 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
                   children: _allVoices.map((voice) {
                     final bool isSelected = voice.id == _selectedVoice.id;
                     return GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _selectedVoice = voice;
-                          _showVoiceOptions = false;
-                        });
-                      },
+                      onTap: () => _handleVoiceSelection(voice),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                         decoration: BoxDecoration(
-                          color: isSelected ? accent.withValues(alpha: 0.2) : Colors.transparent,
+                          color: isSelected
+                              ? accent.withValues(alpha: 0.2)
+                              : Colors.transparent,
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Row(
@@ -407,9 +770,13 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
                             Text(
                               voice.name,
                               style: TextStyle(
-                                color: isSelected ? iconFg : iconFg.withValues(alpha: 0.8),
+                                color: isSelected
+                                    ? iconFg
+                                    : iconFg.withValues(alpha: 0.8),
                                 fontSize: 16,
-                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                fontWeight: isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
                               ),
                             ),
                             Padding(
@@ -417,13 +784,16 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
                               child: Text(
                                 voice.description,
                                 style: TextStyle(
-                                  color: isSelected ? iconFg.withValues(alpha: 0.7) : iconFg.withValues(alpha: 0.5),
+                                  color: isSelected
+                                      ? iconFg.withValues(alpha: 0.7)
+                                      : iconFg.withValues(alpha: 0.5),
                                   fontSize: 12,
                                 ),
                               ),
                             ),
                             const Spacer(),
-                            if (isSelected) Icon(Icons.check, color: iconFg, size: 20),
+                            if (isSelected)
+                              Icon(Icons.check, color: iconFg, size: 20),
                           ],
                         ),
                       ),
@@ -463,7 +833,9 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
               Icon(_selectedPersonality.icon, color: iconFg, size: 20),
               const SizedBox(width: 8),
               Text(
-                _selectedPersonality.name.split(' ')[0], // Just first word for compactness
+                _selectedPersonality.name.split(
+                  ' ',
+                )[0], // Just first word for compactness
                 style: TextStyle(
                   color: iconFg,
                   fontSize: 16,
@@ -473,11 +845,20 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
               if (_selectedPersonality.isAdultContent)
                 Padding(
                   padding: const EdgeInsets.only(left: 4.0),
-                  child: Text('18+',
-                      style: TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+                  child: Text(
+                    '18+',
+                    style: TextStyle(
+                      color: Colors.redAccent,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               Icon(
-                _showPersonalityOptions ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up, // Icon points down if open, up if closed
+                _showPersonalityOptions
+                    ? Icons.keyboard_arrow_down
+                    : Icons
+                          .keyboard_arrow_up, // Icon points down if open, up if closed
                 color: iconFg,
                 size: 20,
               ),
@@ -490,7 +871,8 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
 
   // Personality Options Overlay (the "dropdown" itself) - opens upwards
   Widget _personalityOptionsOverlay() {
-    final RenderBox? renderBox = _personalityButtonKey.currentContext?.findRenderObject() as RenderBox?;
+    final RenderBox? renderBox =
+        _personalityButtonKey.currentContext?.findRenderObject() as RenderBox?;
     if (renderBox == null) return const SizedBox.shrink();
 
     final Offset buttonOffset = renderBox.localToGlobal(Offset.zero);
@@ -515,13 +897,19 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
           },
           child: Container(
             color: Colors.transparent, // Also needs to be transparent
-            alignment: Alignment.bottomCenter, // Align content to bottom for upwards growth
+            alignment: Alignment
+                .bottomCenter, // Align content to bottom for upwards growth
             child: Container(
-              constraints: BoxConstraints(maxHeight: screenHeight * 0.4), // Max height to not go off screen
+              constraints: BoxConstraints(
+                maxHeight: screenHeight * 0.4,
+              ), // Max height to not go off screen
               decoration: BoxDecoration(
                 color: cardBg,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: iconFg.withValues(alpha: 0.3), width: 1),
+                border: Border.all(
+                  color: iconFg.withValues(alpha: 0.3),
+                  width: 1,
+                ),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.3),
@@ -535,18 +923,19 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: _allPersonalities.map((personality) {
-                    final bool isSelected = personality.id == _selectedPersonality.id;
+                    final bool isSelected =
+                        personality.id == _selectedPersonality.id;
                     return GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _selectedPersonality = personality;
-                          _showPersonalityOptions = false;
-                        });
-                      },
+                      onTap: () => _handlePersonalitySelection(personality),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                         decoration: BoxDecoration(
-                          color: isSelected ? accent.withValues(alpha: 0.2) : Colors.transparent,
+                          color: isSelected
+                              ? accent.withValues(alpha: 0.2)
+                              : Colors.transparent,
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Row(
@@ -556,22 +945,36 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
                             Text(
                               personality.name,
                               style: TextStyle(
-                                color: isSelected ? iconFg : iconFg.withValues(alpha: 0.8),
+                                color: isSelected
+                                    ? iconFg
+                                    : iconFg.withValues(alpha: 0.8),
                                 fontSize: 16,
-                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                fontWeight: isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
                               ),
                             ),
                             if (personality.isAdultContent)
                               Padding(
                                 padding: const EdgeInsets.only(left: 8.0),
-                                child: Text('18+',
-                                    style: TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+                                child: Text(
+                                  '18+',
+                                  style: TextStyle(
+                                    color: Colors.redAccent,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                               ),
                             const Spacer(),
                             if (isSelected)
                               Icon(Icons.check, color: iconFg, size: 20)
                             else if (personality.canReset)
-                              Icon(Icons.refresh, color: iconFg.withValues(alpha: 0.6), size: 20),
+                              Icon(
+                                Icons.refresh,
+                                color: iconFg.withValues(alpha: 0.6),
+                                size: 20,
+                              ),
                           ],
                         ),
                       ),
@@ -592,7 +995,9 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
       child: Container(
         height: 48, // To match the height of other interactive elements
-        padding: const EdgeInsets.symmetric(horizontal: 8), // Reduced horizontal padding
+        padding: const EdgeInsets.symmetric(
+          horizontal: 8,
+        ), // Reduced horizontal padding
         decoration: BoxDecoration(
           color: cardBg,
           borderRadius: BorderRadius.circular(12),
@@ -604,8 +1009,12 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
               child: SliderTheme(
                 data: SliderTheme.of(context).copyWith(
                   trackHeight: 2.0,
-                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8.0), // Smaller thumb
-                  overlayShape: const RoundSliderOverlayShape(overlayRadius: 16.0), // Smaller overlay
+                  thumbShape: const RoundSliderThumbShape(
+                    enabledThumbRadius: 8.0,
+                  ), // Smaller thumb
+                  overlayShape: const RoundSliderOverlayShape(
+                    overlayRadius: 16.0,
+                  ), // Smaller overlay
                   activeTrackColor: accent,
                   inactiveTrackColor: accent.withValues(alpha: 0.3),
                   thumbColor: iconFg,
@@ -621,6 +1030,7 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
                       _playbackSpeed = value;
                     });
                   },
+                  onChangeEnd: _handlePlaybackSpeedChange,
                 ),
               ),
             ),
@@ -629,7 +1039,11 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
               alignment: Alignment.center,
               child: Text(
                 '${_playbackSpeed.toStringAsFixed(1)}x',
-                style: TextStyle(color: iconFg, fontSize: 14, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  color: iconFg,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ],
@@ -677,15 +1091,15 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
   }
 
   Widget _dot(int i) => SizedBox(
-        width: 6,
-        height: 6,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: .6),
-            borderRadius: BorderRadius.circular(3),
-          ),
-        ),
-      );
+    width: 6,
+    height: 6,
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .6),
+        borderRadius: BorderRadius.circular(3),
+      ),
+    ),
+  );
 
   Widget _botBubble(String text) {
     return MessageBubble(
@@ -701,8 +1115,9 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
       animation: _barCtrl,
       builder: (_, __) {
         // Determine the active color based on state
-        Color activeColor =
-            accent.withValues(alpha: 0.3); // Default idle color, subtle accent
+        Color activeColor = accent.withValues(
+          alpha: 0.3,
+        ); // Default idle color, subtle accent
         bool isActive = false;
         if (_listening) {
           activeColor = userMicColor;
@@ -714,7 +1129,10 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
 
         return CustomPaint(
           painter: _SciFiVisualizerPainter(
-              _barCtrl.value, activeColor, isActive), // Pass active state
+            _barCtrl.value,
+            activeColor,
+            isActive,
+          ), // Pass active state
           size: const Size(double.infinity, double.infinity),
         );
       },
@@ -723,6 +1141,45 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
 
   // Main.dart style bottom mic
   Widget _bottomMicMainStyle() {
+    final bool connected = _connectionState == LifeKitConnectionState.connected;
+    final bool connecting =
+        _connectionState == LifeKitConnectionState.connecting;
+    final bool canToggle = connected && !connecting;
+
+    VoidCallback? action;
+    String tooltip;
+    IconData icon;
+
+    if (canToggle) {
+      action = _toggleMute;
+      icon = _muted ? Icons.mic_off : Icons.mic;
+      tooltip = _muted ? 'Unmute' : 'Mute';
+    } else if (connecting) {
+      action = null;
+      icon = Icons.mic_none;
+      tooltip = 'Connecting';
+    } else {
+      action = _connectToLifeKit;
+      icon = Icons.mic_none;
+      tooltip = 'Connect voice session';
+    }
+
+    String statusText;
+    Color statusColor = iconFg.withValues(alpha: .8);
+    if (connecting) {
+      statusText = 'Connecting…';
+    } else if (connected) {
+      statusText = _muted ? 'Muted' : 'Listening…';
+      if (_muted) {
+        statusColor = Colors.redAccent;
+      }
+    } else if (_connectionState == LifeKitConnectionState.error) {
+      statusText = 'Tap to retry';
+      statusColor = Colors.orangeAccent;
+    } else {
+      statusText = 'Tap to connect';
+    }
+
     return Column(
       children: [
         SizedBox(
@@ -744,17 +1201,21 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
             borderRadius: BorderRadius.circular(10),
           ),
           child: IconButton(
-            icon: Icon(_muted ? Icons.mic_off : Icons.mic, color: Colors.black, size: 22),
-            onPressed: () => setState(() => _muted = !_muted),
-            tooltip: _muted ? 'Unmute' : 'Mute',
+            icon: Icon(icon, color: Colors.black, size: 22),
+            onPressed: action,
+            tooltip: tooltip,
           ),
         ),
         const SizedBox(height: 4),
         Text(
-          _muted ? 'Muted' : 'Listening…',
+          statusText,
           style: TextStyle(
-            color: _muted ? Colors.redAccent : iconFg.withValues(alpha: .8),
-            fontWeight: _muted ? FontWeight.bold : FontWeight.normal,
+            color: statusColor,
+            fontWeight:
+                (connected && _muted) ||
+                    _connectionState == LifeKitConnectionState.error
+                ? FontWeight.bold
+                : FontWeight.normal,
             fontSize: 14,
           ),
         ),
@@ -778,7 +1239,9 @@ class _WavePainter extends CustomPainter {
     final path = Path();
     final mid = size.height / 2;
     for (double x = 0; x <= size.width; x += 4) {
-      final y = mid + 15 * math.sin((x / size.width) * 6 * math.pi + value * 4 * math.pi);
+      final y =
+          mid +
+          15 * math.sin((x / size.width) * 6 * math.pi + value * 4 * math.pi);
       x == 0 ? path.moveTo(x, y) : path.lineTo(x, y);
     }
     canvas.drawPath(path, paint);
@@ -808,7 +1271,8 @@ class _SciFiVisualizerPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.0
       ..strokeCap = StrokeCap.round
-      ..maskFilter = isActive // Apply blur only when active
+      ..maskFilter =
+          isActive // Apply blur only when active
           ? ui.MaskFilter.blur(ui.BlurStyle.outer, 2.0)
           : null;
 
@@ -816,13 +1280,23 @@ class _SciFiVisualizerPainter extends CustomPainter {
     if (isActive) {
       // Outer ring pulse
       double pulseRadius =
-          (5 + 20 * (0.5 + 0.5 * math.sin(animationValue * 2 * math.pi))).clamp(5.0, 25.0);
+          (5 + 20 * (0.5 + 0.5 * math.sin(animationValue * 2 * math.pi))).clamp(
+            5.0,
+            25.0,
+          );
       linePaint.color = baseColor.withValues(alpha: 0.8);
       canvas.drawCircle(Offset(centerX, centerY), pulseRadius, linePaint);
 
       // Inner ring pulse
-      pulseRadius = (5 + 15 * (0.5 + 0.5 * math.sin(animationValue * 2 * math.pi + math.pi / 2)))
-          .clamp(5.0, 20.0);
+      pulseRadius =
+          (5 +
+                  15 *
+                      (0.5 +
+                          0.5 *
+                              math.sin(
+                                animationValue * 2 * math.pi + math.pi / 2,
+                              )))
+              .clamp(5.0, 20.0);
       linePaint.color = baseColor.withValues(alpha: 0.6);
       canvas.drawCircle(Offset(centerX, centerY), pulseRadius, linePaint);
     }
@@ -831,7 +1305,9 @@ class _SciFiVisualizerPainter extends CustomPainter {
     const int lineCount = 40;
     for (int i = 0; i < lineCount; i++) {
       final double angle = (i / lineCount) * 2 * math.pi;
-      final double offsetFactor = math.sin(animationValue * 2 * math.pi + angle);
+      final double offsetFactor = math.sin(
+        animationValue * 2 * math.pi + angle,
+      );
 
       // Adjust opacity and length based on offsetFactor and activity
       double opacity = isActive
@@ -844,8 +1320,10 @@ class _SciFiVisualizerPainter extends CustomPainter {
       linePaint.color = baseColor.withValues(alpha: opacity);
 
       // Calculate start and end points for lines
-      final double startRadius = 0.1 * maxRadius; // Start further out from center
-      final double endRadius = startRadius + (maxRadius - startRadius) * lengthFactor;
+      final double startRadius =
+          0.1 * maxRadius; // Start further out from center
+      final double endRadius =
+          startRadius + (maxRadius - startRadius) * lengthFactor;
 
       final double x1 = centerX + startRadius * math.cos(angle);
       final double y1 = centerY + startRadius * math.sin(angle);

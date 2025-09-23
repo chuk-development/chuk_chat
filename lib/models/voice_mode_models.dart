@@ -2,19 +2,37 @@
 import 'package:flutter/material.dart';
 
 /// Placeholder for custom icons or specific character details
-enum VoiceId {
-  ara, eve, leo, rex, sal, gork
-}
+enum VoiceId { ara, eve, leo, rex, sal, gork }
+
 enum PersonalityId {
-  custom, assistant, therapist, storyteller, kidsStoryTime, kidsTriviaGame, meditation, grokDoc, unhinged, sexy, motivation, conspiracy, romantic, argumentative
+  custom,
+  assistant,
+  therapist,
+  storyteller,
+  kidsStoryTime,
+  kidsTriviaGame,
+  meditation,
+  grokDoc,
+  unhinged,
+  sexy,
+  motivation,
+  conspiracy,
+  romantic,
+  argumentative,
 }
 
 class VoiceOption {
   final VoiceId id;
   final String name;
   final String description;
+  final String apiName;
 
-  VoiceOption({required this.id, required this.name, required this.description});
+  const VoiceOption({
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.apiName,
+  });
 }
 
 class PersonalityOption {
