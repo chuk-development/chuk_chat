@@ -1,13 +1,3 @@
-import 'dart:io';
-
-// Helper class for queued uploads
-class _QueuedUpload {
-  final File file;
-  final String fileName;
-  final String fileId;
-  final int fileSize;
-  _QueuedUpload(this.file, this.fileName, this.fileId, this.fileSize);
-}
 // lib/chat/chat_ui.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -22,7 +12,8 @@ import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'dart:io';
+import 'dart:io'; // Import for SocketException
+import 'dart:async'; // Import for TimeoutException
 import 'package:uuid/uuid.dart';
 
 /* ---------- CHAT UI ---------- */
@@ -45,15 +36,6 @@ class ChukChatUI extends StatefulWidget {
 }
 
 class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMixin {
-
-  // File upload limits
-  static const int MAX_SINGLE_FILE_BYTES = 10 * 1024 * 1024; // 10MB
-  static const int MAX_TOTAL_ATTACHMENT_BYTES = 30 * 1024 * 1024; // 30MB
-  static const int MAX_CONCURRENT_UPLOADS = 3;
-
-  int _currentTotalAttachmentBytes = 0;
-  int _currentConcurrentUploads = 0;
-  final List<_QueuedUpload> _uploadQueue = [];
   final TextEditingController _controller = TextEditingController();
   final List<Map<String, String>> _messages = [];
   final ScrollController _scrollController = ScrollController();
@@ -72,7 +54,7 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
   final List<AttachedFile> _attachedFiles = [];
   final Uuid _uuid = Uuid();
 
-  static const String _apiBaseUrl = 'http://127.0.0.1:8000'; // Adjust if your server is elsewhere
+  static const String _apiBaseUrl = 'https://api.chuk.chat'; // Adjust if your server is elsewhere
 
   static const double _kMaxChatContentWidth = 760.0;
   static const double _kSearchBarContentHeight = 135.0;
@@ -210,26 +192,16 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
   }
 
   Future<void> _uploadFiles() async {
-  // Helper methods must be declared before use
-  void _enqueueFileUpload(File file, String fileName, String fileId, int fileSize) {
-    _uploadQueue.add(_QueuedUpload(file, fileName, fileId, fileSize));
-    _tryStartNextUpload();
-  }
+    const int maxFileSize = 10 * 1024 * 1024; // 10MB
+    const int maxConcurrentUploads = 5;
 
-  void _tryStartNextUpload() {
-    while (_currentConcurrentUploads < MAX_CONCURRENT_UPLOADS && _uploadQueue.isNotEmpty) {
-      final next = _uploadQueue.removeAt(0);
-      _currentConcurrentUploads++;
-      _performFileUpload(next.file, next.fileName, next.fileId, next.fileSize);
-    }
-  }
     final allowedExtensions = [
       'wav', 'mp3', 'm4a', 'mp4', 'html', 'htm', 'csv', 'docx', 'pptx', 'xlsx',
       'pdf', 'jpg', 'jpeg', 'png', 'bmp', 'tiff', 'epub', 'ipynb', 'msg', 'txt',
       'text', 'md', 'markdown', 'json', 'jsonl', 'rss', 'atom', 'xml', 'xls', 'zip'
     ];
 
-    if (_currentConcurrentUploads >= MAX_CONCURRENT_UPLOADS) {
+    if (_attachedFiles.where((f) => f.isUploading).length >= maxConcurrentUploads) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Please wait for current uploads to complete')),
@@ -250,22 +222,14 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
       for (PlatformFile platformFile in selectedPlatformFiles) {
         if (platformFile.path == null) continue;
 
-        int fileSize = platformFile.size;
-        if (fileSize > MAX_SINGLE_FILE_BYTES) {
+        // Check file size
+        if (platformFile.size > maxFileSize) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('File "${platformFile.name}" exceeds the maximum size of 10MB.')),
+              SnackBar(content: Text('File "${platformFile.name}" exceeds 10MB limit')),
             );
           }
-          continue;
-        }
-        if (_currentTotalAttachmentBytes + fileSize > MAX_TOTAL_ATTACHMENT_BYTES) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Total attachment size limit (30MB) exceeded. Remove files before adding more.')),
-            );
-          }
-          continue;
+          continue; // Skip this file and go to the next
         }
 
         File file = File(platformFile.path!);
@@ -282,106 +246,120 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
           continue;
         }
 
+        // Check concurrent upload limit again before adding to UI and starting upload
+        // This handles cases where user quickly picks many files, or files picked while others finish
+        if (_attachedFiles.where((f) => f.isUploading).length >= maxConcurrentUploads) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Skipping "${fileName}": too many concurrent uploads. Try again soon.')),
+            );
+          }
+          continue;
+        }
+
         setState(() {
           _attachedFiles.add(AttachedFile(
             id: fileId,
             fileName: fileName,
             isUploading: true,
           ));
-          _currentTotalAttachmentBytes += fileSize;
         });
-        _scrollChatToBottom();
-        _enqueueFileUpload(file, fileName, fileId, fileSize);
+        _scrollChatToBottom(); // Scroll to ensure attachment bar is visible
+
+        _performFileUpload(file, fileName, fileId);
       }
     } else {
       print('File picking canceled.');
     }
     Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
-  void _enqueueFileUpload(File file, String fileName, String fileId, int fileSize) {
-    _uploadQueue.add(_QueuedUpload(file, fileName, fileId, fileSize));
-    _tryStartNextUpload();
   }
 
-  void _tryStartNextUpload() {
-    while (_currentConcurrentUploads < MAX_CONCURRENT_UPLOADS && _uploadQueue.isNotEmpty) {
-      final next = _uploadQueue.removeAt(0);
-      _currentConcurrentUploads++;
-      _performFileUpload(next.file, next.fileName, next.fileId, next.fileSize);
-    }
-  }
-  }
+  Future<void> _performFileUpload(File file, String fileName, String fileId) async {
+    const int maxRetries = 3;
+    const Duration timeoutDuration = Duration(seconds: 30);
+    int retryCount = 0;
+    bool uploadSuccess = false; // Flag to track if upload was successful
 
-  Future<void> _performFileUpload(File file, String fileName, String fileId, int fileSize) async {
+    // We'll keep the `finally` outside the loop to ensure _scrollChatToBottom() is called only once
+    // after the process is truly finished (either success or final failure).
     try {
-      var request = http.MultipartRequest(
-        'POST',
-        Uri.parse('$_apiBaseUrl/upload_file'),
-      );
-      request.files.add(await http.MultipartFile.fromPath('file', file.path));
-
-      var streamedResponse = await request.send();
-      var response = await http.Response.fromStream(streamedResponse);
-
-      if (response.statusCode == 200) {
-        final jsonResponse = json.decode(response.body);
-        setState(() {
-          int index = _attachedFiles.indexWhere((f) => f.id == fileId);
-          if (index != -1) {
-            _attachedFiles[index] = _attachedFiles[index].copyWith(
-              markdownContent: jsonResponse['markdown_content'],
-              isUploading: false,
-            );
-          }
-        });
-        print('File "$fileName" conversion successful. Markdown content received.');
-      } else {
-        final errorBody = json.decode(response.body);
-        setState(() {
-          _attachedFiles.removeWhere((f) => f.id == fileId);
-          _currentTotalAttachmentBytes -= fileSize;
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Failed to upload "$fileName": ${errorBody['detail'] ?? response.reasonPhrase}')),
-            );
-          }
-        });
-        print('File upload failed for "$fileName": ${response.statusCode}, ${response.body}');
-      }
-    } catch (e) {
-      setState(() {
-        _attachedFiles.removeWhere((f) => f.id == fileId);
-        _currentTotalAttachmentBytes -= fileSize;
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error uploading "$fileName": $e')),
+      while (retryCount < maxRetries && !uploadSuccess) {
+        try {
+          var request = http.MultipartRequest(
+            'POST',
+            Uri.parse('$_apiBaseUrl/upload_file'),
           );
+          request.files.add(await http.MultipartFile.fromPath('file', file.path));
+
+          // Apply timeout to the request send operation
+          var streamedResponse = await request.send().timeout(timeoutDuration);
+          var response = await http.Response.fromStream(streamedResponse);
+
+          if (response.statusCode == 200) {
+            final jsonResponse = json.decode(response.body);
+            setState(() {
+              int index = _attachedFiles.indexWhere((f) => f.id == fileId);
+              if (index != -1) {
+                _attachedFiles[index] = _attachedFiles[index].copyWith(
+                  markdownContent: jsonResponse['markdown_content'],
+                  isUploading: false,
+                );
+              }
+            });
+            print('File "$fileName" conversion successful. Markdown content received.');
+            uploadSuccess = true; // Mark as success to exit the while loop
+          } else {
+            // Non-200 status code from server: treat as a non-retriable failure
+            final errorBody = json.decode(response.body);
+            setState(() {
+              _attachedFiles.removeWhere((f) => f.id == fileId);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Failed to upload "$fileName" (Status: ${response.statusCode}): ${errorBody['detail'] ?? response.reasonPhrase}')),
+                );
+              }
+            });
+            print('File upload failed for "$fileName" (Status: ${response.statusCode}): ${response.body}');
+            break; // Exit the retry loop immediately for server-side errors
+          }
+        } catch (e) {
+          // This block catches network errors, timeouts, etc.
+          print('Upload attempt failed for "$fileName" (Attempt ${retryCount + 1}/$maxRetries): $e');
+          retryCount++;
+
+          if (retryCount >= maxRetries) {
+            // Final failure after all retries exhausted
+            setState(() {
+              _attachedFiles.removeWhere((f) => f.id == fileId);
+              if (mounted) {
+                String errorMessage = 'Error uploading "$fileName" after $maxRetries attempts.';
+                if (e is TimeoutException) {
+                  errorMessage = 'Upload of "$fileName" timed out after $maxRetries attempts.';
+                } else if (e is SocketException) {
+                  errorMessage = 'Network error uploading "$fileName" after $maxRetries attempts.';
+                } else {
+                  errorMessage = 'Error uploading "$fileName" after $maxRetries attempts: $e';
+                }
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(errorMessage)),
+                );
+              }
+            });
+            // The loop condition will naturally terminate it here.
+          } else {
+            // Delay before next retry with exponential backoff
+            await Future.delayed(Duration(seconds: retryCount * 2));
+            // Loop continues for next retry attempt
+          }
         }
-      });
-      print('Error uploading "$fileName": $e');
+      }
     } finally {
-      _currentConcurrentUploads--;
-      _tryStartNextUpload();
-      _scrollChatToBottom();
+      _scrollChatToBottom(); // Ensure scrolling happens once after all attempts
     }
   }
 
   void _removeAttachedFile(String fileId) {
     setState(() {
-      final idx = _attachedFiles.indexWhere((f) => f.id == fileId);
-      if (idx != -1) {
-        final file = _attachedFiles[idx];
-        // Estimate size: if markdownContent is null, use PlatformFile.size if available
-        // Otherwise, just subtract nothing (since upload failed, size already subtracted)
-        // This is a best-effort approach
-        // If you want to track sizes more robustly, store size in AttachedFile
-        // For now, we only subtract if file is not uploading
-        if (!file.isUploading && file.markdownContent == null) {
-          // Already subtracted on upload fail
-        } else if (!file.isUploading && file.markdownContent != null) {
-          // Subtract size if file was successfully uploaded
-          // Not tracked, so we skip (could be improved)
-        }
-      }
       _attachedFiles.removeWhere((f) => f.id == fileId);
     });
     _scrollChatToBottom();
