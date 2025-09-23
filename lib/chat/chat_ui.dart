@@ -98,7 +98,7 @@ class ChukChatUIState extends State<ChukChatUI> with SingleTickerProviderStateMi
       _animCtrl.reset();
       _attachedFiles.clear();
     } else if (index >= 0 && index < ChatStorageService.savedChats.length) {
-      final chatJson = ChatStorageService.savedChats[index];
+      final chatJson = ChatStorageService.savedChats[index].content;
       _messages.clear();
       final messageParts = chatJson.split('§');
       for (var part in messageParts) {

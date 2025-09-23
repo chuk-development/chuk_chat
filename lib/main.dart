@@ -1,12 +1,15 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:math' as math;
 
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/stripe_billing_service.dart';
 import 'package:chuk_chat/chat/chat_ui.dart';
+import 'package:chuk_chat/pages/auth_gate.dart';
 import 'package:chuk_chat/sidebar.dart';
 import 'package:chuk_chat/pages/projects_page.dart';
 import 'package:chuk_chat/pages/settings_page.dart';
@@ -14,7 +17,26 @@ import 'package:chuk_chat/utils/color_extensions.dart'; // Import for hex conver
 import 'package:chuk_chat/utils/grain_overlay.dart';   // Film grain overlay
 
 /* ---------- MAIN ---------- */
-void main() => runApp(const ChukChatApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await dotenv.load(fileName: '.env');
+  } catch (_) {
+    await dotenv.load(fileName: '.env.example');
+  }
+
+  final supabaseUrl = dotenv.env['SUPABASE_URL'];
+  final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'];
+
+  if (supabaseUrl == null || supabaseUrl.isEmpty || supabaseAnonKey == null || supabaseAnonKey.isEmpty) {
+    throw const FormatException('Missing Supabase credentials. Update .env with SUPABASE_URL and SUPABASE_ANON_KEY.');
+  }
+
+  await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
+  StripeBillingService.instance.configureStripe();
+
+  runApp(const ChukChatApp());
+}
 
 class ChukChatApp extends StatefulWidget {
   const ChukChatApp({Key? key}) : super(key: key);
@@ -44,8 +66,6 @@ class _ChukChatAppState extends State<ChukChatApp> {
   void initState() {
     super.initState();
     _loadThemeSettings();
-    ChatStorageService.loadChats();
-    ChatStorageService.loadSavedChatsForSidebar();
   }
 
   Future<void> _loadThemeSettings() async {
@@ -140,18 +160,20 @@ class _ChukChatAppState extends State<ChukChatApp> {
         );
       },
 
-      home: RootWrapper(
-        currentThemeMode: _currentThemeMode,
-        currentAccentColor: _currentAccentColor,
-        currentIconFgColor: _currentIconFgColor,
-        currentBgColor: _currentBgColor,
-        setThemeMode: _setThemeMode,
-        setAccentColor: _setAccentColor,
-        setIconFgColor: _setIconFgColor,
-        setBgColor: _setBgColor,
-        // film grain
-        grainEnabled: _grainEnabled,
-        setGrainEnabled: _setGrainEnabled,
+      home: AuthGate(
+        child: RootWrapper(
+          currentThemeMode: _currentThemeMode,
+          currentAccentColor: _currentAccentColor,
+          currentIconFgColor: _currentIconFgColor,
+          currentBgColor: _currentBgColor,
+          setThemeMode: _setThemeMode,
+          setAccentColor: _setAccentColor,
+          setIconFgColor: _setIconFgColor,
+          setBgColor: _setBgColor,
+          // film grain
+          grainEnabled: _grainEnabled,
+          setGrainEnabled: _setGrainEnabled,
+        ),
       ),
     );
   }
@@ -196,6 +218,17 @@ class _RootWrapperState extends State<RootWrapper> {
 
   final GlobalKey<ChukChatUIState> _chatUIKey = GlobalKey();
 
+  Future<void> _openSubscriptionCheckout() async {
+    try {
+      await StripeBillingService.instance.startSubscriptionCheckout();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to open billing: $error')),
+      );
+    }
+  }
+
   void _openSettingsPage() {
     if (_isSidebarExpanded) _toggleSidebar(); // Sidebar schließen, wenn offen
     Navigator.of(context).push(MaterialPageRoute(
@@ -237,6 +270,7 @@ class _RootWrapperState extends State<RootWrapper> {
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
+    final double statusBarPadding = MediaQuery.of(context).padding.top;
     final Color iconFg = Theme.of(context).iconTheme.color!; // Get iconFg from current theme
 
     // Definiert, ob der Kompaktmodus aktiv sein soll
@@ -291,6 +325,42 @@ class _RootWrapperState extends State<RootWrapper> {
               selectedChatIndex: ChatStorageService.selectedChatIndex,
               isCompactMode: isCompactMode,
             ),
+          ),
+
+          // Layer 2.5: Subscription reminder banner
+          ValueListenableBuilder<bool>(
+            valueListenable: StripeBillingService.instance.subscriptionActive,
+            builder: (context, active, _) {
+              if (active) return const SizedBox.shrink();
+              return Positioned(
+                top: statusBarPadding + 12,
+                left: 16,
+                right: 16,
+                child: Card(
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.lock_outline, size: 20),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Unlock encrypted cloud backups by activating your subscription.',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: _openSubscriptionCheckout,
+                          child: const Text('Subscribe'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
 
           // Layer 3: Hamburger-Menü

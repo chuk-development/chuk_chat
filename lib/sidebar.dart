@@ -1,7 +1,9 @@
 // sidebar.dart
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/services/auth_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/stripe_billing_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart'; // Import the color extensions
 
 final List<String> _starredChats = ['Book writing Per chapter']; // Kept local for now
@@ -36,6 +38,7 @@ class _CustomSidebarState extends State<CustomSidebar> {
   void initState() {
     super.initState();
     _loadChatsAndRefresh();
+    StripeBillingService.instance.refreshSubscriptionStatus();
   }
 
   Future<void> _loadChatsAndRefresh() async {
@@ -43,6 +46,39 @@ class _CustomSidebarState extends State<CustomSidebar> {
     if (mounted) {
       setState(() {});
     }
+  }
+
+  String _formatValidUntil(DateTime? date) {
+    if (date == null) return '';
+    final local = date.toLocal();
+    final String month = local.month.toString().padLeft(2, '0');
+    final String day = local.day.toString().padLeft(2, '0');
+    return '${local.year}-$month-$day';
+  }
+
+  Future<void> _handleManageSubscription() async {
+    try {
+      await StripeBillingService.instance.startSubscriptionCheckout();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to open billing portal: $error')),
+      );
+    }
+  }
+
+  String _userInitials(String email) {
+    final trimmed = email.trim();
+    if (trimmed.isEmpty) return 'U';
+    final namePart = trimmed.split('@').first;
+    final segments = namePart.split(RegExp(r'[._\- ]+')).where((s) => s.isNotEmpty).toList();
+    if (segments.length >= 2) {
+      return (segments.first[0] + segments.last[0]).toUpperCase();
+    }
+    if (segments.isNotEmpty) {
+      return segments.first.substring(0, 1).toUpperCase();
+    }
+    return trimmed.substring(0, 1).toUpperCase();
   }
 
   @override
@@ -91,6 +127,7 @@ class _CustomSidebarState extends State<CustomSidebar> {
               padding: EdgeInsets.zero, // Remove default ListView padding
               children: [
                 _buildSectionHeader('Recents', iconFg: iconFg),
+                _buildSubscriptionTile(iconFg: iconFg, accent: accent),
                 if (ChatStorageService.savedChats.isEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: _sidebarHorizontalPadding, vertical: 8.0),
@@ -100,11 +137,12 @@ class _CustomSidebarState extends State<CustomSidebar> {
                     ),
                   ),
                 ...ChatStorageService.savedChats.asMap().entries.map((entry) {
-                  int index = entry.key;
-                  String title = 'Chat ${index + 1}'; // Placeholder
+                  final int index = entry.key;
+                  final title = entry.value.previewTitle;
                   return _buildRecentItem(
                     title,
                     index: index,
+                    isLast: index == ChatStorageService.savedChats.length - 1,
                     onTap: () {
                       widget.onChatItemTapped(index);
                     },
@@ -112,7 +150,6 @@ class _CustomSidebarState extends State<CustomSidebar> {
                     iconFgColor: iconFg,
                   );
                 }).toList(),
-                _buildRecentItem('Herzrequenz vs. Puls', isLast: true, accentColor: accent, iconFgColor: iconFg), // Example static item
                 const SizedBox(height: 10), // Small space at the end of scrollable content
               ],
             ),
@@ -133,10 +170,12 @@ class _CustomSidebarState extends State<CustomSidebar> {
                   child: ListTile(
                     leading: CircleAvatar(
                       backgroundColor: iconFg.withValues(alpha: 0.3),
-                      child: Text('DM',
-                          style: TextStyle(color: iconFg, fontSize: 16)),
+                      child: Text(
+                        _userInitials(AuthService.currentUser?.email ?? 'U'),
+                        style: TextStyle(color: iconFg, fontSize: 16),
+                      ),
                     ),
-                    title: Text('User Name', style: TextStyle(color: iconFg)),
+                    title: Text(AuthService.currentUser?.email ?? 'Account', style: TextStyle(color: iconFg)),
                     trailing: Icon(Icons.keyboard_arrow_up, color: iconFg), // Arrow pointing up
                     contentPadding: const EdgeInsets.symmetric(horizontal: _sidebarHorizontalPadding),
                   ),
@@ -160,12 +199,13 @@ class _CustomSidebarState extends State<CustomSidebar> {
                   maxWidth: 220, // Maximum width, prevents it from taking full sidebar width
                   minHeight: kButtonVisualHeight * 2 + 16, // Ensure it's tall enough for content
                 ),
-                onSelected: (value) {
+                onSelected: (value) async {
                   if (value == 'settings') {
                     widget.onSettingsTapped(); // Call parent settings handler
                   } else if (value == 'logout') {
-                    print('Logout pressed');
-                    // TODO: Implement actual logout logic here
+                    await AuthService.signOut();
+                  } else if (value == 'billing') {
+                    await _handleManageSubscription();
                   }
                 },
                 itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
@@ -178,6 +218,18 @@ class _CustomSidebarState extends State<CustomSidebar> {
                         Icon(Icons.settings, color: iconFg, size: 20),
                         const SizedBox(width: 12),
                         Text('Settings', style: TextStyle(color: iconFg, fontSize: 15)),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem<String>(
+                    value: 'billing',
+                    height: kButtonVisualHeight,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        Icon(Icons.credit_card, color: iconFg, size: 20),
+                        const SizedBox(width: 12),
+                        Text('Manage billing', style: TextStyle(color: iconFg, fontSize: 15)),
                       ],
                     ),
                   ),
@@ -210,6 +262,66 @@ class _CustomSidebarState extends State<CustomSidebar> {
         alignment: Alignment.centerLeft,
         child: Icon(icon, color: iconFgColor),
       ),
+    );
+  }
+
+  Widget _buildSubscriptionTile({required Color iconFg, required Color accent}) {
+    final accentBg = accent.withValues(alpha: 0.08);
+    final accentBorder = accent.withValues(alpha: 0.3);
+
+    return ValueListenableBuilder<bool>(
+      valueListenable: StripeBillingService.instance.subscriptionActive,
+      builder: (context, active, _) {
+        return ValueListenableBuilder<DateTime?>(
+          valueListenable: StripeBillingService.instance.subscriptionValidUntil,
+          builder: (context, validUntil, __) {
+            final subtitle = active
+                ? (validUntil != null
+                    ? 'Active until ${_formatValidUntil(validUntil)}.'
+                    : 'Subscription active.')
+                : 'Subscribe to unlock encrypted, cloud-synced chat history.';
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(
+                _sidebarHorizontalPadding,
+                8.0,
+                _sidebarHorizontalPadding,
+                16.0,
+              ),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: accentBg,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: accentBorder, width: 1),
+                ),
+                child: ListTile(
+                  leading: Icon(
+                    active ? Icons.verified_user : Icons.lock_outline,
+                    color: iconFg,
+                  ),
+                  title: Text(
+                    active ? 'Subscription active' : 'Subscription inactive',
+                    style: TextStyle(color: iconFg, fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Text(
+                    subtitle,
+                    style: TextStyle(color: iconFg.withValues(alpha: 0.7)),
+                  ),
+                  trailing: active
+                      ? IconButton(
+                          tooltip: 'Refresh subscription status',
+                          onPressed: StripeBillingService.instance.refreshSubscriptionStatus,
+                          icon: Icon(Icons.refresh, color: iconFg),
+                        )
+                      : FilledButton.tonal(
+                          onPressed: _handleManageSubscription,
+                          child: const Text('Subscribe'),
+                        ),
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 

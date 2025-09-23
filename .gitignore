@@ -45,3 +45,6 @@ app.*.map.json
 /android/app/release
 combined_code_for_llm.txt
 generate_llm_input.sh
+.env
+.env.*
+!.env.example
