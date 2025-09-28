@@ -98,23 +98,20 @@ class _SidebarMobileState extends State<SidebarMobile> {
 
   @override
   Widget build(BuildContext context) {
-    // Using Colors directly from the main.dart theme for consistency
-    final Color iconColorDefault = Colors.white70; // From ListTileThemeData
-    final Color textColorDefault = Colors.white; // From TextTheme bodyLarge/titleMedium
-    final Color accentColor = Theme.of(context).colorScheme.primary; // Assuming a primary accent
-
-    // Drawer background color from main.dart
-    const Color sidebarBg = Colors.black;
+    final theme = Theme.of(context);
+    final Color iconColorDefault = theme.iconTheme.color!.withValues(alpha: 0.7);
+    final Color textColorDefault = theme.textTheme.bodyMedium?.color ?? theme.colorScheme.onSurface;
+    final Color accentColor = theme.colorScheme.primary;
+    final Color sidebarBg = theme.cardColor.darken(0.02);
+    final Color dividerColor = theme.dividerColor.withValues(alpha: 0.5);
 
     const double initialVerticalPadding = 48.0; // From main.dart Drawer top padding
 
     return Container(
-      color: sidebarBg, // Set drawer background to black
+      color: sidebarBg,
       child: Column(
         children: [
-          SizedBox(
-              height:
-                  initialVerticalPadding), // Initial space for status bar area
+          SizedBox(height: initialVerticalPadding),
 
           // Search Old Chats input field (styled from main.dart's InputDecorationTheme)
           Padding(
@@ -126,12 +123,26 @@ class _SidebarMobileState extends State<SidebarMobile> {
                   child: TextField(
                     controller: _searchController,
                     decoration: InputDecoration(
-                      hintText: 'Suchen', // Matching the hint text from main.dart
+                      hintText: 'Suchen',
                       prefixIcon: Icon(
                         Icons.search,
-                        color: Colors.grey.shade500,
+                        color: iconColorDefault,
                       ),
-                      // The rest of the styling comes from ThemeData.inputDecorationTheme
+                      filled: true,
+                      fillColor: sidebarBg.lighten(0.05),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: dividerColor, width: 1),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: dividerColor, width: 1),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: accentColor, width: 1.3),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 0),
                     ),
                     style: TextStyle(color: textColorDefault),
                     cursorColor: textColorDefault,
@@ -144,8 +155,14 @@ class _SidebarMobileState extends State<SidebarMobile> {
 
           // Projects entry as per main.dart's Drawer items
           _buildDrawerItem(
-              Icons.folder_open_outlined, 'Neues Projekt', widget.onProjectsTapped,
-              iconColorDefault, textColorDefault),
+              Icons.folder_open_outlined,
+              'Neues Projekt',
+              widget.onProjectsTapped,
+              iconColorDefault,
+              textColorDefault,
+              tileBg: sidebarBg.lighten(0.04),
+              dividerColor: dividerColor,
+              accentColor: accentColor),
 
           const SizedBox(height: 24.0), // Spacing between groups
 
@@ -154,7 +171,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
           ..._starredChats.map(
               (title) => _buildStarredItem(title, iconColorDefault, textColorDefault)).toList(),
           Divider(
-              color: Theme.of(context).dividerColor,
+              color: dividerColor,
               indent: _sidebarHorizontalPadding,
               endIndent: _sidebarHorizontalPadding),
 
@@ -170,7 +187,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
                         horizontal: _sidebarHorizontalPadding, vertical: 8.0),
                     child: Text(
                       'No recent chats yet.',
-                      style: TextStyle(color: iconColorDefault.withOpacity(0.5)),
+                      style: TextStyle(color: iconColorDefault.withValues(alpha: 0.4)),
                     ),
                   )
                 else if (_filteredRecentChats.isEmpty && _searchQuery.isNotEmpty)
@@ -179,7 +196,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
                         horizontal: _sidebarHorizontalPadding, vertical: 8.0),
                     child: Text(
                       'No chats found for "${_searchQuery}".',
-                      style: TextStyle(color: iconColorDefault.withOpacity(0.5)),
+                      style: TextStyle(color: iconColorDefault.withValues(alpha: 0.4)),
                     ),
                   ),
                 ..._filteredRecentChats.asMap().entries.map((entry) {
@@ -214,30 +231,38 @@ class _SidebarMobileState extends State<SidebarMobile> {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 24.0),
               child: InkWell(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
                 onTap: widget.onSettingsTapped,
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      backgroundColor: Colors.amber.shade700,
-                      child: Text('CH',
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: sidebarBg.lighten(0.05),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: dividerColor, width: 1),
+                  ),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        backgroundColor: accentColor.withValues(alpha: 0.2),
+                        child: Text('CH',
+                            style: TextStyle(
+                                color: accentColor,
+                                fontWeight: FontWeight.bold)),
+                      ),
+                      const SizedBox(width: 12.0),
+                      Expanded(
+                        child: Text(
+                          'Chuk',
                           style: TextStyle(
-                              color: textColorDefault,
-                              fontWeight: FontWeight.bold)),
-                    ),
-                    const SizedBox(width: 12.0),
-                    Expanded(
-                      child: Text(
-                        'Chuk', // User Name from main.dart
-                        style: TextStyle(
-                          color: textColorDefault,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
+                            color: textColorDefault,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
-                    ),
-                    Icon(Icons.settings, color: Colors.grey.shade500),
-                  ],
+                      Icon(Icons.settings, color: iconColorDefault),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -272,13 +297,20 @@ class _SidebarMobileState extends State<SidebarMobile> {
 
   // Modified to use the common Drawer Item style from main.dart
   Widget _buildDrawerItem(IconData icon, String title, VoidCallback onTap,
-      Color iconColor, Color textColor) {
+      Color iconColor, Color textColor,
+      {Color? tileBg, Color? dividerColor, Color? accentColor}) {
     return ListTile(
-      leading: Icon(icon, color: iconColor), // Use the provided iconColor
-      title: Text(title, style: TextStyle(color: textColor)), // Use provided textColor
+      leading: Icon(icon, color: iconColor),
+      title: Text(title, style: TextStyle(color: textColor)),
       onTap: onTap,
+      tileColor: tileBg,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: dividerColor ?? Colors.transparent, width: 1),
+      ),
+      hoverColor: accentColor?.withValues(alpha: 0.08),
       contentPadding: const EdgeInsets.symmetric(
-          horizontal: _sidebarHorizontalPadding, vertical: 0),
+          horizontal: _sidebarHorizontalPadding, vertical: 4),
       // dense and iconColor/textColor set by ListTileThemeData in main.dart
     );
   }
@@ -289,8 +321,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
       title: Text(title, style: TextStyle(color: textColor)),
       onTap: () {},
       dense: true,
-      contentPadding:
-          const EdgeInsets.only(left: _sidebarHorizontalPadding, right: 16.0),
+      tileColor: Colors.transparent,
+      contentPadding: const EdgeInsets.only(
+          left: _sidebarHorizontalPadding, right: 16.0),
       iconColor: iconColor,
       textColor: textColor,
     );

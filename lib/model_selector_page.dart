@@ -459,7 +459,7 @@ class ModelSelectionRow extends StatelessWidget {
   }
 
   Widget _buildDesktopLayout(Color inputFieldBg) {
-    const double containerHeight = 60.0;
+    const double containerHeight = 78.0;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
@@ -478,7 +478,7 @@ class ModelSelectionRow extends StatelessWidget {
   }
 
   Widget _buildMobileLayout(Color inputFieldBg) {
-    const double cardHeight = 72.0;
+    const double cardHeight = 98.0;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6.0),
       child: Column(
@@ -506,29 +506,47 @@ class ModelSelectionRow extends StatelessWidget {
   Widget _buildModelNameCard(double height, Color inputFieldBg, {required bool alignCenter}) {
     return Container(
       height: height,
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
       decoration: BoxDecoration(
         color: inputFieldBg,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: iconFgColor.withValues(alpha: 0.5)),
       ),
-      child: Row(
-        mainAxisAlignment: alignCenter ? MainAxisAlignment.center : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.center,
+      child: Column(
+        crossAxisAlignment:
+            alignCenter ? CrossAxisAlignment.center : CrossAxisAlignment.start,
         children: [
-          buildIconWidget(model.iconUrl, Icons.psychology_alt, size: 24),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              model.name,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-                fontSize: 14,
-              ),
-              overflow: TextOverflow.ellipsis,
-              maxLines: 1,
+          Text(
+            'Model',
+            style: TextStyle(
+              color: iconFgColor.lighten(0.25),
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.4,
             ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment:
+                alignCenter ? MainAxisAlignment.center : MainAxisAlignment.start,
+            children: [
+              buildIconWidget(model.iconUrl, Icons.psychology_alt, size: 24),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  model.name,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: iconFgColor,
+                    fontSize: 14,
+                    height: 1.2,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -538,51 +556,76 @@ class ModelSelectionRow extends StatelessWidget {
   Widget _buildProviderCard(double height, Color inputFieldBg, {required bool alignCenter}) {
     return Container(
       height: height,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
       decoration: BoxDecoration(
         color: inputFieldBg,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: iconFgColor.withValues(alpha: 0.5)),
       ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<ModelProviderInfo>(
-          value: selectedProvider,
-          dropdownColor: bgColor.darken(0.05).withValues(alpha: 0.9),
-          icon: Icon(Icons.arrow_drop_down, color: iconFgColor),
-          style: const TextStyle(color: Colors.white, fontSize: 13),
-          onChanged: onProviderChanged,
-          isExpanded: true,
-          items: model.providers.map((provider) {
-            return DropdownMenuItem(
-              value: provider,
-              child: Row(
-                mainAxisAlignment: alignCenter ? MainAxisAlignment.center : MainAxisAlignment.start,
-                children: [
-                  buildIconWidget(provider.iconUrl, Icons.business, size: 18),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      provider.name,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: (selectedProvider?.slug == provider.slug) ? accentColor : Colors.white,
-                        fontWeight: FontWeight.w500,
-                      ),
+    child: Column(
+        crossAxisAlignment:
+            alignCenter ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Provider',
+            style: TextStyle(
+              color: iconFgColor.lighten(0.25),
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.4,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<ModelProviderInfo>(
+                value: selectedProvider,
+                dropdownColor: bgColor.darken(0.05).withValues(alpha: 0.9),
+                icon: Icon(Icons.arrow_drop_down, color: iconFgColor),
+                style: TextStyle(color: iconFgColor, fontSize: 13),
+                onChanged: onProviderChanged,
+                isExpanded: true,
+                items: model.providers.map((provider) {
+                  return DropdownMenuItem(
+                    value: provider,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: alignCenter
+                          ? MainAxisAlignment.center
+                          : MainAxisAlignment.start,
+                      children: [
+                        buildIconWidget(provider.iconUrl, Icons.business, size: 18),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            provider.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: (selectedProvider?.slug == provider.slug)
+                                  ? accentColor
+                                  : iconFgColor,
+                              fontWeight: FontWeight.w500,
+                              height: 1.2,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                  );
+                }).toList(),
+                selectedItemBuilder: (context) {
+                  return model.providers.map<Widget>((provider) {
+                    final content = _buildProviderSelectedDisplay(provider, alignCenter);
+                    return alignCenter
+                        ? Center(child: content)
+                        : Align(alignment: Alignment.centerLeft, child: content);
+                  }).toList();
+                },
               ),
-            );
-          }).toList(),
-          selectedItemBuilder: (context) {
-            return model.providers.map<Widget>((provider) {
-              final content = _buildProviderSelectedDisplay(provider, alignCenter);
-              return alignCenter
-                  ? Center(child: content)
-                  : Align(alignment: Alignment.centerLeft, child: content);
-            }).toList();
-          },
-        ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -596,9 +639,10 @@ class ModelSelectionRow extends StatelessWidget {
         Flexible(
           child: Text(
             provider.name,
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
             textAlign: alignCenter ? TextAlign.center : TextAlign.left,
-            style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.white),
+            style: TextStyle(fontWeight: FontWeight.w500, color: iconFgColor),
           ),
         ),
       ],
@@ -608,7 +652,7 @@ class ModelSelectionRow extends StatelessWidget {
   Widget _buildPriceCard(double height, Color inputFieldBg) {
     return Container(
       height: height,
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
       decoration: BoxDecoration(
         color: inputFieldBg,
         borderRadius: BorderRadius.circular(10),
@@ -617,7 +661,7 @@ class ModelSelectionRow extends StatelessWidget {
       child: selectedProvider == null
           ? Center(
               child: Text(
-                'Price Details',
+                'Pricing',
                 style: TextStyle(
                   color: iconFgColor.lighten(0.3).withValues(alpha: 0.7),
                   fontSize: 12,
@@ -626,9 +670,18 @@ class ModelSelectionRow extends StatelessWidget {
               ),
             )
           : Column(
-              mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text(
+                  'Pricing',
+                  style: TextStyle(
+                    color: iconFgColor.lighten(0.25),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+                const SizedBox(height: 6),
                 Text(
                   'In: ${selectedProvider!.pricing.formatTokenPrice(selectedProvider!.pricing.prompt)}',
                   style: TextStyle(fontSize: 11, color: iconFgColor.lighten(0.3)),
@@ -656,7 +709,7 @@ class ModelSelectionRow extends StatelessWidget {
   Widget _buildContextCard(double height, Color inputFieldBg) {
     return Container(
       height: height,
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
       decoration: BoxDecoration(
         color: inputFieldBg,
         borderRadius: BorderRadius.circular(10),
@@ -665,7 +718,7 @@ class ModelSelectionRow extends StatelessWidget {
       child: selectedProvider == null
           ? Center(
               child: Text(
-                'Token & Context',
+                'Capabilities',
                 style: TextStyle(
                   color: iconFgColor.lighten(0.3).withValues(alpha: 0.7),
                   fontSize: 12,
@@ -674,9 +727,18 @@ class ModelSelectionRow extends StatelessWidget {
               ),
             )
           : Column(
-              mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text(
+                  'Capabilities',
+                  style: TextStyle(
+                    color: iconFgColor.lighten(0.25),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+                const SizedBox(height: 6),
                 Text(
                   'Ctx: ${formatContextLength(selectedProvider!.contextLength)}',
                   style: TextStyle(fontSize: 11, color: iconFgColor.lighten(0.2)),
