@@ -119,6 +119,28 @@ class SettingsPage extends StatelessWidget {
             iconFgColor: iconFg,
             bgColor: scaffoldBg,
           ),
+          const SizedBox(height: 32),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade600,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              onPressed: () {
+                print('Logout pressed');
+                // TODO: hook up real logout logic when available
+              },
+              child: const Text(
+                'Logout',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+              ),
+            ),
+          ),
         ],
       ),
     );

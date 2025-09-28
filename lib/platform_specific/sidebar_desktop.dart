@@ -208,66 +208,19 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
             alignment: Alignment.bottomCenter,
             child: Padding(
               padding: const EdgeInsets.all(8.0),
-              child: PopupMenuButton<String>(
-                tooltip: 'User options',
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(8),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: iconFg.withValues(alpha: 0.3),
-                      child: Text('DM',
-                          style: TextStyle(color: iconFg, fontSize: 16)),
-                    ),
-                    title: Text('User Name', style: TextStyle(color: iconFg)),
-                    trailing: Icon(Icons.keyboard_arrow_up, color: iconFg),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: _sidebarHorizontalPadding),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: widget.onSettingsTapped,
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: iconFg.withValues(alpha: 0.3),
+                    child: Text('DM',
+                        style: TextStyle(color: iconFg, fontSize: 16)),
                   ),
+                  title: Text('User Name', style: TextStyle(color: iconFg)),
+                  trailing: Icon(Icons.settings, color: iconFg),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: _sidebarHorizontalPadding),
                 ),
-                color: sidebarBg.lighten(0.05),
-                elevation: 8.0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  side: BorderSide(color: iconFg.withValues(alpha: 0.3), width: 1),
-                ),
-                offset: const Offset(0, -96),
-                constraints: const BoxConstraints(
-                  minWidth: 180,
-                  maxWidth: 220,
-                  minHeight: kButtonVisualHeight * 2 + 16,
-                ),
-                onSelected: (value) {
-                  if (value == 'settings') {
-                    widget.onSettingsTapped();
-                  } else if (value == 'logout') {
-                    print('Logout pressed');
-                  }
-                },
-                itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                  PopupMenuItem<String>(
-                    value: 'settings',
-                    height: kButtonVisualHeight,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      children: [
-                        Icon(Icons.settings, color: iconFg, size: 20),
-                        const SizedBox(width: 12),
-                        Text('Settings', style: TextStyle(color: iconFg, fontSize: 15)),
-                      ],
-                    ),
-                  ),
-                  PopupMenuItem<String>(
-                    value: 'logout',
-                    height: kButtonVisualHeight,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      children: [
-                        Icon(Icons.logout, color: iconFg, size: 20),
-                        const SizedBox(width: 12),
-                        Text('Logout', style: TextStyle(color: iconFg, fontSize: 15)),
-                      ],
-                    ),
-                  ),
-                ],
               ),
             ),
           ),

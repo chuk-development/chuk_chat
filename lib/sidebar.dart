@@ -117,82 +117,23 @@ class _CustomSidebarState extends State<CustomSidebar> {
             ),
           ),
 
-          // User profile section at the bottom - Now a PopupMenuButton with precise control
+          // User profile section at the bottom - direct navigation to settings
           Align(
             alignment: Alignment.bottomCenter,
             child: Padding(
               padding: const EdgeInsets.all(8.0),
-              child: PopupMenuButton<String>(
-                tooltip: 'User options',
-                // This child is what gets rendered, and its tap triggers the menu.
-                // It should have the same appearance as the ListTile, but allow for proper tap handling
-                // by the PopupMenuButton itself.
-                child: InkWell( // Use InkWell here to ensure the ripple effect still works
-                  borderRadius: BorderRadius.circular(8),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: iconFg.withValues(alpha: 0.3),
-                      child: Text('DM',
-                          style: TextStyle(color: iconFg, fontSize: 16)),
-                    ),
-                    title: Text('User Name', style: TextStyle(color: iconFg)),
-                    trailing: Icon(Icons.keyboard_arrow_up, color: iconFg), // Arrow pointing up
-                    contentPadding: const EdgeInsets.symmetric(horizontal: _sidebarHorizontalPadding),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: widget.onSettingsTapped,
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: iconFg.withValues(alpha: 0.3),
+                    child: Text('DM', style: TextStyle(color: iconFg, fontSize: 16)),
                   ),
+                  title: Text('User Name', style: TextStyle(color: iconFg)),
+                  trailing: Icon(Icons.settings, color: iconFg),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: _sidebarHorizontalPadding),
                 ),
-                // Custom styling for the popup menu
-                color: sidebarBg.lighten(0.05), // Slightly lighter than sidebar background for the menu card itself
-                elevation: 8.0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  side: BorderSide(color: iconFg.withValues(alpha: 0.3), width: 1),
-                ),
-                // IMPORTANT: Precise positioning and width control
-                // The offset moves the menu relative to the bottom-left corner of the `child`.
-                // For a menu of 2 items (approx 40px each + padding), total height ~96px.
-                // We want its bottom to be aligned just above the child's top.
-                // ListTile height is about 56px.
-                // So, offset.dy = -(Menu Height + small gap)
-                offset: const Offset(0, -96), // Adjusted offset: 2*40 + 2*8 + 8(gap) = 96
-                constraints: const BoxConstraints(
-                  minWidth: 180, // Minimum width of the menu
-                  maxWidth: 220, // Maximum width, prevents it from taking full sidebar width
-                  minHeight: kButtonVisualHeight * 2 + 16, // Ensure it's tall enough for content
-                ),
-                onSelected: (value) {
-                  if (value == 'settings') {
-                    widget.onSettingsTapped(); // Call parent settings handler
-                  } else if (value == 'logout') {
-                    print('Logout pressed');
-                    // TODO: Implement actual logout logic here
-                  }
-                },
-                itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                  PopupMenuItem<String>(
-                    value: 'settings',
-                    height: kButtonVisualHeight, // Consistent button height
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      children: [
-                        Icon(Icons.settings, color: iconFg, size: 20),
-                        const SizedBox(width: 12),
-                        Text('Settings', style: TextStyle(color: iconFg, fontSize: 15)),
-                      ],
-                    ),
-                  ),
-                  PopupMenuItem<String>(
-                    value: 'logout',
-                    height: kButtonVisualHeight, // Consistent button height
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      children: [
-                        Icon(Icons.logout, color: iconFg, size: 20),
-                        const SizedBox(width: 12),
-                        Text('Logout', style: TextStyle(color: iconFg, fontSize: 15)),
-                      ],
-                    ),
-                  ),
-                ],
               ),
             ),
           ),

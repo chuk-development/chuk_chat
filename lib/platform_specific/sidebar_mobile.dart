@@ -213,9 +213,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
             alignment: Alignment.bottomCenter,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 24.0),
-              child: PopupMenuButton<String>(
-                tooltip: 'User options',
-                // Mimicking the structure from main.dart's Drawer user info
+              child: InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: widget.onSettingsTapped,
                 child: Row(
                   children: [
                     CircleAvatar(
@@ -236,60 +236,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
                         ),
                       ),
                     ),
-                    Icon(Icons.keyboard_arrow_down,
-                        color: Colors.grey.shade500),
+                    Icon(Icons.settings, color: Colors.grey.shade500),
                   ],
                 ),
-                color: sidebarBg.lighten(
-                    0.05), // Using a slightly lighter black for the popup
-                elevation: 8.0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  side: BorderSide(color: iconColorDefault.withOpacity(0.3), width: 1),
-                ),
-                offset: const Offset(0, -96), // Position above the button
-                constraints: const BoxConstraints(
-                  minWidth: 180,
-                  maxWidth: 220,
-                  minHeight: kButtonVisualHeight * 2 + 16,
-                ),
-                onSelected: (value) {
-                  if (value == 'settings') {
-                    widget.onSettingsTapped();
-                  } else if (value == 'logout') {
-                    print('Logout pressed');
-                  }
-                },
-                itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                  PopupMenuItem<String>(
-                    value: 'settings',
-                    height: kButtonVisualHeight,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      children: [
-                        Icon(Icons.settings, color: iconColorDefault, size: 20),
-                        const SizedBox(width: 12),
-                        Text('Settings',
-                            style: TextStyle(
-                                color: textColorDefault, fontSize: 15)),
-                      ],
-                    ),
-                  ),
-                  PopupMenuItem<String>(
-                    value: 'logout',
-                    height: kButtonVisualHeight,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      children: [
-                        Icon(Icons.logout, color: iconColorDefault, size: 20),
-                        const SizedBox(width: 12),
-                        Text('Logout',
-                            style: TextStyle(
-                                color: textColorDefault, fontSize: 15)),
-                      ],
-                    ),
-                  ),
-                ],
               ),
             ),
           ),
