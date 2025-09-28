@@ -447,214 +447,257 @@ class ModelSelectionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color inputFieldBg = bgColor.lighten(0.05);
-    const double containerHeight = 60.0; // Consistent height for all main fields
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bool isCompact = constraints.maxWidth < 600;
+        if (isCompact) {
+          return _buildMobileLayout(inputFieldBg);
+        }
+        return _buildDesktopLayout(inputFieldBg);
+      },
+    );
+  }
 
+  Widget _buildDesktopLayout(Color inputFieldBg) {
+    const double containerHeight = 60.0;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Column 1: Model Name with Icon (One line)
-          Expanded(
-            flex: 3,
-            child: Container(
-              height: containerHeight,
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-              decoration: BoxDecoration(
-                color: inputFieldBg,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: iconFgColor.withValues(alpha: 0.5)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  buildIconWidget(model.iconUrl, Icons.psychology_alt, size: 24),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      model.name,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          fontSize: 14),
-                      textAlign: TextAlign.center,
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          Expanded(flex: 3, child: _buildModelNameCard(containerHeight, inputFieldBg, alignCenter: true)),
           const SizedBox(width: 8),
-
-          // Column 2: Provider Dropdown with Icon (Less wide)
-          Expanded(
-            flex: 3,
-            child: Container(
-              height: containerHeight,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              decoration: BoxDecoration(
-                color: inputFieldBg,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: iconFgColor.withValues(alpha: 0.5)),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<ModelProviderInfo>(
-                  value: selectedProvider,
-                  dropdownColor: bgColor.darken(0.05).withValues(alpha: 0.9),
-                  icon: Icon(Icons.arrow_drop_down, color: iconFgColor),
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
-                  onChanged: onProviderChanged,
-                  isExpanded: true,
-                  items: model.providers.map((provider) {
-                    return DropdownMenuItem(
-                      value: provider,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          buildIconWidget(provider.iconUrl, Icons.business, size: 18),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              provider.name,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: (selectedProvider?.slug == provider.slug)
-                                    ? accentColor
-                                    : Colors.white,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                  selectedItemBuilder: (context) {
-                    return model.providers.map<Widget>((provider) {
-                      return Center(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            buildIconWidget(provider.iconUrl, Icons.business, size: 18),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                provider.name,
-                                overflow: TextOverflow.ellipsis,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.white),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }).toList();
-                  },
-                ),
-              ),
-            ),
-          ),
+          Expanded(flex: 3, child: _buildProviderCard(containerHeight, inputFieldBg, alignCenter: true)),
           const SizedBox(width: 8),
-
-          // Column 3: Price Data
-          Expanded(
-            flex: 4,
-            child: Container(
-              height: containerHeight,
-              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10), // Adjusted vertical padding
-              decoration: BoxDecoration(
-                color: inputFieldBg,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: iconFgColor.withValues(alpha: 0.5)),
-              ),
-              child: selectedProvider == null
-                  ? Text(
-                      'Price Details',
-                      style: TextStyle(
-                          color: iconFgColor.lighten(0.3).withValues(alpha: 0.7),
-                          fontSize: 12),
-                      textAlign: TextAlign.center,
-                    )
-                  : Column(
-                      mainAxisAlignment: MainAxisAlignment.center, // Center content vertically
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'In: ${selectedProvider!.pricing.formatTokenPrice(selectedProvider!.pricing.prompt)}',
-                          style: TextStyle(fontSize: 11, color: iconFgColor.lighten(0.3)),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1, // Ensure single line
-                        ),
-                        Text(
-                          'Out: ${selectedProvider!.pricing.formatTokenPrice(selectedProvider!.pricing.completion)}',
-                          style: TextStyle(fontSize: 11, color: iconFgColor.lighten(0.3)),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1, // Ensure single line
-                        ),
-                        if (selectedProvider!.pricing.request > 0)
-                          Text(
-                            'Req: ${selectedProvider!.pricing.formatRequestPrice(selectedProvider!.pricing.request)}',
-                            style: TextStyle(fontSize: 11, color: iconFgColor.lighten(0.3)),
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 1, // Ensure single line
-                          ),
-                      ],
-                    ),
-            ),
-          ),
+          Expanded(flex: 4, child: _buildPriceCard(containerHeight, inputFieldBg)),
           const SizedBox(width: 8),
+          Expanded(flex: 4, child: _buildContextCard(containerHeight, inputFieldBg)),
+        ],
+      ),
+    );
+  }
 
-          // Column 4: Context/Tokens Data
+  Widget _buildMobileLayout(Color inputFieldBg) {
+    const double cardHeight = 72.0;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6.0),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(child: _buildModelNameCard(cardHeight, inputFieldBg, alignCenter: false)),
+              const SizedBox(width: 8),
+              Expanded(child: _buildProviderCard(cardHeight, inputFieldBg, alignCenter: false)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(child: _buildPriceCard(cardHeight, inputFieldBg)),
+              const SizedBox(width: 8),
+              Expanded(child: _buildContextCard(cardHeight, inputFieldBg)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModelNameCard(double height, Color inputFieldBg, {required bool alignCenter}) {
+    return Container(
+      height: height,
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+      decoration: BoxDecoration(
+        color: inputFieldBg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: iconFgColor.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        mainAxisAlignment: alignCenter ? MainAxisAlignment.center : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          buildIconWidget(model.iconUrl, Icons.psychology_alt, size: 24),
+          const SizedBox(width: 8),
           Expanded(
-            flex: 4,
-            child: Container(
-              height: containerHeight,
-              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10), // Adjusted vertical padding
-              decoration: BoxDecoration(
-                color: inputFieldBg,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: iconFgColor.withValues(alpha: 0.5)),
+            child: Text(
+              model.name,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                fontSize: 14,
               ),
-              child: selectedProvider == null
-                  ? Text(
-                      'Token & Context',
-                      style: TextStyle(
-                          color: iconFgColor.lighten(0.3).withValues(alpha: 0.7),
-                          fontSize: 12),
-                      textAlign: TextAlign.center,
-                    )
-                  : Column(
-                      mainAxisAlignment: MainAxisAlignment.center, // Center content vertically
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Ctx: ${formatContextLength(selectedProvider!.contextLength)}',
-                          style: TextStyle(fontSize: 11, color: iconFgColor.lighten(0.2)),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1, // Ensure single line
-                        ),
-                        Text(
-                          'Max Out: ${formatContextLength(selectedProvider!.maxCompletionTokens)}',
-                          style: TextStyle(fontSize: 11, color: iconFgColor.lighten(0.2)),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1, // Ensure single line
-                        ),
-                        if (selectedProvider!.isModerated != null)
-                          Text(
-                            'Moderated: ${selectedProvider!.isModerated! ? 'Yes' : 'No'}',
-                            style: TextStyle(fontSize: 10, color: iconFgColor.lighten(0.2)), // Smaller font for moderated status
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 1, // Ensure single line
-                          ),
-                      ],
-                    ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildProviderCard(double height, Color inputFieldBg, {required bool alignCenter}) {
+    return Container(
+      height: height,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: inputFieldBg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: iconFgColor.withValues(alpha: 0.5)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<ModelProviderInfo>(
+          value: selectedProvider,
+          dropdownColor: bgColor.darken(0.05).withValues(alpha: 0.9),
+          icon: Icon(Icons.arrow_drop_down, color: iconFgColor),
+          style: const TextStyle(color: Colors.white, fontSize: 13),
+          onChanged: onProviderChanged,
+          isExpanded: true,
+          items: model.providers.map((provider) {
+            return DropdownMenuItem(
+              value: provider,
+              child: Row(
+                mainAxisAlignment: alignCenter ? MainAxisAlignment.center : MainAxisAlignment.start,
+                children: [
+                  buildIconWidget(provider.iconUrl, Icons.business, size: 18),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      provider.name,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: (selectedProvider?.slug == provider.slug) ? accentColor : Colors.white,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+          selectedItemBuilder: (context) {
+            return model.providers.map<Widget>((provider) {
+              final content = _buildProviderSelectedDisplay(provider, alignCenter);
+              return alignCenter
+                  ? Center(child: content)
+                  : Align(alignment: Alignment.centerLeft, child: content);
+            }).toList();
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProviderSelectedDisplay(ModelProviderInfo provider, bool alignCenter) {
+    return Row(
+      mainAxisAlignment: alignCenter ? MainAxisAlignment.center : MainAxisAlignment.start,
+      children: [
+        buildIconWidget(provider.iconUrl, Icons.business, size: 18),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            provider.name,
+            overflow: TextOverflow.ellipsis,
+            textAlign: alignCenter ? TextAlign.center : TextAlign.left,
+            style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.white),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPriceCard(double height, Color inputFieldBg) {
+    return Container(
+      height: height,
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      decoration: BoxDecoration(
+        color: inputFieldBg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: iconFgColor.withValues(alpha: 0.5)),
+      ),
+      child: selectedProvider == null
+          ? Center(
+              child: Text(
+                'Price Details',
+                style: TextStyle(
+                  color: iconFgColor.lighten(0.3).withValues(alpha: 0.7),
+                  fontSize: 12,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            )
+          : Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'In: ${selectedProvider!.pricing.formatTokenPrice(selectedProvider!.pricing.prompt)}',
+                  style: TextStyle(fontSize: 11, color: iconFgColor.lighten(0.3)),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+                Text(
+                  'Out: ${selectedProvider!.pricing.formatTokenPrice(selectedProvider!.pricing.completion)}',
+                  style: TextStyle(fontSize: 11, color: iconFgColor.lighten(0.3)),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+                if (selectedProvider!.pricing.request > 0)
+                  Text(
+                    'Req: ${selectedProvider!.pricing.formatRequestPrice(selectedProvider!.pricing.request)}',
+                    style: TextStyle(fontSize: 11, color: iconFgColor.lighten(0.3)),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildContextCard(double height, Color inputFieldBg) {
+    return Container(
+      height: height,
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      decoration: BoxDecoration(
+        color: inputFieldBg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: iconFgColor.withValues(alpha: 0.5)),
+      ),
+      child: selectedProvider == null
+          ? Center(
+              child: Text(
+                'Token & Context',
+                style: TextStyle(
+                  color: iconFgColor.lighten(0.3).withValues(alpha: 0.7),
+                  fontSize: 12,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            )
+          : Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Ctx: ${formatContextLength(selectedProvider!.contextLength)}',
+                  style: TextStyle(fontSize: 11, color: iconFgColor.lighten(0.2)),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+                Text(
+                  'Max Out: ${formatContextLength(selectedProvider!.maxCompletionTokens)}',
+                  style: TextStyle(fontSize: 11, color: iconFgColor.lighten(0.2)),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+                if (selectedProvider!.isModerated != null)
+                  Text(
+                    'Moderated: ${selectedProvider!.isModerated! ? 'Yes' : 'No'}',
+                    style: TextStyle(fontSize: 10, color: iconFgColor.lighten(0.2)),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+              ],
+            ),
     );
   }
 }
