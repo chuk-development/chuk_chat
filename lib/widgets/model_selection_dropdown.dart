@@ -9,6 +9,7 @@ class ModelSelectionDropdown extends StatefulWidget {
   final ValueChanged<String> onModelSelected; // Callback returns model ID
   final FocusNode textFieldFocusNode;
   final bool isCompactMode; // Indicates if it should show only the icon
+  final String? compactLabel; // Optional label for compact mode (e.g., "#")
 
   const ModelSelectionDropdown({
     Key? key,
@@ -16,11 +17,13 @@ class ModelSelectionDropdown extends StatefulWidget {
     required this.onModelSelected,
     required this.textFieldFocusNode,
     this.isCompactMode = false,
+    this.compactLabel,
   }) : super(key: key);
 
   @override
   State<ModelSelectionDropdown> createState() => _ModelSelectionDropdownState();
 }
+
 
 class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
   String _selectedModelId = ''; // Stores the model ID
@@ -136,8 +139,20 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
               mainAxisSize: widget.isCompactMode ? MainAxisSize.max : MainAxisSize.min,
               mainAxisAlignment: widget.isCompactMode ? MainAxisAlignment.center : MainAxisAlignment.start,
               children: [
-                Icon(Icons.grid_3x3, color: iconFgColor, size: 20),
-                if (!widget.isCompactMode) ...[ // Only show text and arrow if not in compact mode
+                if (widget.isCompactMode) ...[
+                  widget.compactLabel != null
+                      ? Text(
+                          widget.compactLabel!,
+                          style: TextStyle(
+                            color: iconFgColor,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        )
+                      : Icon(Icons.grid_3x3, color: iconFgColor, size: 20),
+                ]
+                else ...[
+                  Icon(Icons.grid_3x3, color: iconFgColor, size: 20),
                   const SizedBox(width: 8),
                   Flexible(
                     child: Text(

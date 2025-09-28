@@ -32,6 +32,7 @@ class ChukChatUIMobile extends StatefulWidget {
   State<ChukChatUIMobile> createState() => ChukChatUIMobileState();
 }
 
+
 class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerProviderStateMixin {
   final TextEditingController _controller = TextEditingController();
   final List<Map<String, String>> _messages = [];
@@ -306,7 +307,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
 
   @override
   Widget build(BuildContext context) {
-    const bool isCompactModeForModelDropdown = false; // Setting to false so ModelSelectionDropdown shows text.
+    const bool isCompactModeForModelDropdown = true; // Mobile shows a hashtag-only trigger for model menu.
 
     final double screenWidth = MediaQuery.of(context).size.width;
     final Color bg = Theme.of(context).scaffoldBackgroundColor;
@@ -591,6 +592,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
                 },
                 textFieldFocusNode: _textFieldFocusNode,
                 isCompactMode: isCompactMode, // Corrected: Use the parameter passed to _buildSearchBar
+                compactLabel: '#',
               ),
               const SizedBox(width: 8),
               // Mic Button (for a quick toggle in the main chat UI)
