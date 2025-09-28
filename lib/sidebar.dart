@@ -112,7 +112,6 @@ class _CustomSidebarState extends State<CustomSidebar> {
                     iconFgColor: iconFg,
                   );
                 }).toList(),
-                _buildRecentItem('Herzrequenz vs. Puls', isLast: true, accentColor: accent, iconFgColor: iconFg), // Example static item
                 const SizedBox(height: 10), // Small space at the end of scrollable content
               ],
             ),

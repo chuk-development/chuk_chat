@@ -306,7 +306,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
 
   @override
   Widget build(BuildContext context) {
-    // On phones, this UI's ModelSelectionDropdown will now show text by default
     const bool isCompactModeForModelDropdown = false; // Setting to false so ModelSelectionDropdown shows text.
 
     final double screenWidth = MediaQuery.of(context).size.width;
@@ -315,11 +314,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
     final Color iconFg = Theme.of(context).iconTheme.color!;
     final Color textColor = iconFg;
 
-    final double effectiveHorizontalPadding = _kHorizontalPaddingSmall; // Always use small padding
+    final double effectiveHorizontalPadding = _kHorizontalPaddingSmall;
     final double maxPossibleChatContentWidth = math.max(0.0, screenWidth - (effectiveHorizontalPadding * 2));
     final double constrainedChatContentWidth = math.min(_kMaxChatContentWidth, maxPossibleChatContentWidth);
 
-    final double expandedInputWidth = constrainedChatContentWidth; // Input field takes available width
+    final double expandedInputWidth = constrainedChatContentWidth;
 
     double inputAreaVisualHeight = _kSearchBarContentHeight;
     if (_attachedFiles.isNotEmpty) {
@@ -327,21 +326,17 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
     }
     double inputAreaTotalHeight = inputAreaVisualHeight + (2 * effectiveHorizontalPadding);
 
-    // On mobile, the input field should always stick to the bottom,
-    // gracefully adjusting for the keyboard, not attempting to center when empty.
     final double keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
 
-    final double targetInputWidth = expandedInputWidth; // On mobile, input should always stretch to available width
+    final double targetInputWidth = expandedInputWidth;
 
     return Scaffold(
-      backgroundColor: Colors.transparent, // Background will be handled by RootWrapperMobile
-      // resizeToAvoidBottomInset is true by default in Scaffold, crucial for keyboard interaction.
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-          // Chat-Nachrichtenliste
           Positioned(
             top: 0,
-            bottom: inputAreaTotalHeight + keyboardHeight, // Adjusted for keyboard height
+            bottom: inputAreaTotalHeight + keyboardHeight,
             left: 0,
             right: 0,
             child: FadeTransition(
@@ -376,13 +371,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
             ),
           ),
 
-          // Combined Input Area (Search bar + Attachment bar)
           AnimatedPositioned(
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeOutCubic,
             left: 0,
             right: 0,
-            bottom: effectiveHorizontalPadding + keyboardHeight, // Always stick to bottom, accounting for keyboard
+            bottom: effectiveHorizontalPadding + keyboardHeight,
             child: Center(
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
@@ -586,7 +580,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
                 debugLabel: 'Image button',
               ),
               const Spacer(),
-              // Model Selection Dropdown (always compact on mobile)
+              // Model Selection Dropdown
               ModelSelectionDropdown(
                 initialSelectedModelId: _selectedModelId,
                 onModelSelected: (newModelId) {
@@ -596,7 +590,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
                   print('Selected model ID: $_selectedModelId');
                 },
                 textFieldFocusNode: _textFieldFocusNode,
-                isCompactMode: isCompactMode, // CORRECTED: Now uses the 'isCompactMode' parameter of _buildSearchBar
+                isCompactMode: isCompactMode, // Corrected: Use the parameter passed to _buildSearchBar
               ),
               const SizedBox(width: 8),
               // Mic Button (for a quick toggle in the main chat UI)

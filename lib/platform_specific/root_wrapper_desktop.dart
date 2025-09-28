@@ -76,7 +76,8 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     setState(() {
       ChatStorageService.selectedChatIndex = index;
     });
-    if (_isSidebarExpanded) _toggleSidebar();
+    // On desktop, the sidebar typically remains open after selecting a chat.
+    // if (_isSidebarExpanded) _toggleSidebar();
   }
 
   void _toggleSidebar() {

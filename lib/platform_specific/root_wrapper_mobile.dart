@@ -1,6 +1,8 @@
 // lib/platform_specific/root_wrapper_mobile.dart
-import 'package:flutter/material.dart';
+import 'dart:io' show Platform;
 import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/pages/projects_page.dart';
 import 'package:chuk_chat/pages/settings_page.dart';
@@ -8,6 +10,7 @@ import 'package:chuk_chat/platform_specific/chat/chat_ui_mobile.dart';
 import 'package:chuk_chat/platform_specific/sidebar_mobile.dart'; // UPDATED: Use mobile sidebar
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 /* ---------- ROOT WRAPPER MOBILE (for Phones) ---------- */
 class RootWrapperMobile extends StatefulWidget {
@@ -44,6 +47,32 @@ class RootWrapperMobile extends StatefulWidget {
 class _RootWrapperMobileState extends State<RootWrapperMobile> {
   bool _isSidebarExpanded = false;
   final GlobalKey<ChukChatUIMobileState> _chatUIMobileKey = GlobalKey();
+
+  @override
+  void initState() {
+    super.initState();
+    _ensureMicrophonePermission();
+  }
+
+  Future<void> _ensureMicrophonePermission() async {
+    if (!Platform.isAndroid) {
+      return;
+    }
+
+    final PermissionStatus status = await Permission.microphone.status;
+    if (status.isGranted || status.isLimited) {
+      return;
+    }
+
+    if (status.isDenied || status.isRestricted) {
+      await Permission.microphone.request();
+      return;
+    }
+
+    if (status.isPermanentlyDenied) {
+      await openAppSettings();
+    }
+  }
 
   void _toggleSidebar() {
     setState(() {
@@ -143,12 +172,12 @@ class _RootWrapperMobileState extends State<RootWrapperMobile> {
                         ),
                       ),
                       actions: [
-                        if (ChatStorageService.savedChats.isNotEmpty)
-                          IconButton(
-                            icon: Icon(Icons.edit_square, color: iconFg),
-                            onPressed: _newChatFromAppBar,
-                            tooltip: 'New Chat',
-                          ),
+                        // The "New Chat" button is now always visible on mobile
+                        IconButton(
+                          icon: Icon(Icons.edit_square, color: iconFg),
+                          onPressed: _newChatFromAppBar,
+                          tooltip: 'New Chat',
+                        ),
                       ],
                     ),
                     Expanded(
