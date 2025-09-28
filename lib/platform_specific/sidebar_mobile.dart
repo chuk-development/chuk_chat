@@ -137,32 +137,12 @@ class _SidebarMobileState extends State<SidebarMobile> {
                     cursorColor: textColorDefault,
                   ),
                 ),
-                const SizedBox(width: 8.0),
-                // The rounded edit/new icon next to the search bar from main.dart
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade800,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: IconButton(
-                    icon: Icon(Icons.edit_outlined, color: iconColorDefault),
-                    onPressed: () {
-                      // Handle edit/new action
-                    },
-                  ),
-                ),
               ],
             ),
           ),
           const SizedBox(height: 16), // Spacing after search bar
 
-          // "Neuer Chat" and "Projects" as per main.dart's Drawer items
-          _buildDrawerItem(Icons.edit_outlined, 'Neuer Chat', () {
-            // This would typically trigger a new chat creation in the main app
-            Navigator.of(context).pop(); // Close sidebar
-          }, iconColorDefault, textColorDefault),
+          // Projects entry as per main.dart's Drawer items
           _buildDrawerItem(
               Icons.folder_open_outlined, 'Neues Projekt', widget.onProjectsTapped,
               iconColorDefault, textColorDefault),
