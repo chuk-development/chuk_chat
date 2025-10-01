@@ -212,8 +212,6 @@ class _SidebarMobileState extends State<SidebarMobile> {
                     index: index,
                     onTap: () {
                       widget.onChatItemTapped(index);
-                      Navigator.of(context)
-                          .pop(); // Close sidebar after selecting chat on mobile
                     },
                     accentColor: accentColor,
                     iconColor: iconColorDefault,
