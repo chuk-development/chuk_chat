@@ -105,7 +105,7 @@ class ThemeSettingsService {
   }
 
   Future<void> save(ThemeSettings settings) async {
-    await _table.upsert(settings.toMap());
+    await _table.upsert(settings.toMap(), onConflict: 'user_id');
   }
 }
 

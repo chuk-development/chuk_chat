@@ -49,21 +49,26 @@ class _ChukChatAppState extends State<ChukChatApp> {
   static const String _kGrainEnabledKey = 'grainEnabled';
 
   StreamSubscription<AuthState>? _authSubscription;
+  bool _hasAppliedSupabaseTheme = false;
 
   @override
   void initState() {
     super.initState();
-    _loadThemeSettings();
+    if (SupabaseService.auth.currentSession != null) {
+      _loadThemeSettingsFromSupabase();
+    } else {
+      _loadThemeSettingsFromPrefs();
+    }
     ChatStorageService.loadChats();
     ChatStorageService.loadSavedChatsForSidebar();
     _authSubscription = SupabaseService.auth.onAuthStateChange.listen((event) {
       if (event.session != null) {
         _loadThemeSettingsFromSupabase();
+      } else {
+        _hasAppliedSupabaseTheme = false;
+        _loadThemeSettingsFromPrefs();
       }
     });
-    if (SupabaseService.auth.currentSession != null) {
-      _loadThemeSettingsFromSupabase();
-    }
   }
 
   @override
@@ -72,8 +77,12 @@ class _ChukChatAppState extends State<ChukChatApp> {
     super.dispose();
   }
 
-  Future<void> _loadThemeSettings() async {
+  Future<void> _loadThemeSettingsFromPrefs() async {
     final prefs = await SharedPreferences.getInstance();
+    if (SupabaseService.auth.currentSession != null &&
+        _hasAppliedSupabaseTheme) {
+      return;
+    }
     setState(() {
       _currentThemeMode = (prefs.getString(_kThemeModeKey) == 'light')
           ? Brightness.light
@@ -153,6 +162,7 @@ class _ChukChatAppState extends State<ChukChatApp> {
         _currentIconFgColor = settings.iconColor;
         _currentBgColor = settings.backgroundColor;
         _grainEnabled = settings.grainEnabled;
+        _hasAppliedSupabaseTheme = true;
       });
       await _persistThemeSettingsToPrefs();
     } catch (_) {
@@ -187,6 +197,7 @@ class _ChukChatAppState extends State<ChukChatApp> {
 
     try {
       await const ThemeSettingsService().save(settings);
+      await _persistThemeSettingsToPrefs();
     } catch (_) {
       // Ignore sync failures; preferences remain updated locally.
     }
