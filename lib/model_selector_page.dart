@@ -505,7 +505,7 @@ class ModelSelectionRow extends StatelessWidget {
 
   Widget _buildModelNameCard(double height, Color inputFieldBg, {required bool alignCenter}) {
     return Container(
-      height: height,
+      constraints: BoxConstraints(minHeight: height),
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
       decoration: BoxDecoration(
         color: inputFieldBg,
@@ -555,14 +555,14 @@ class ModelSelectionRow extends StatelessWidget {
 
   Widget _buildProviderCard(double height, Color inputFieldBg, {required bool alignCenter}) {
     return Container(
-      height: height,
+      constraints: BoxConstraints(minHeight: height),
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
       decoration: BoxDecoration(
         color: inputFieldBg,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: iconFgColor.withValues(alpha: 0.5)),
       ),
-    child: Column(
+      child: Column(
         crossAxisAlignment:
             alignCenter ? CrossAxisAlignment.center : CrossAxisAlignment.start,
         children: [
@@ -651,7 +651,7 @@ class ModelSelectionRow extends StatelessWidget {
 
   Widget _buildPriceCard(double height, Color inputFieldBg) {
     return Container(
-      height: height,
+      constraints: BoxConstraints(minHeight: height),
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
       decoration: BoxDecoration(
         color: inputFieldBg,
@@ -708,7 +708,7 @@ class ModelSelectionRow extends StatelessWidget {
 
   Widget _buildContextCard(double height, Color inputFieldBg) {
     return Container(
-      height: height,
+      constraints: BoxConstraints(minHeight: height),
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
       decoration: BoxDecoration(
         color: inputFieldBg,
