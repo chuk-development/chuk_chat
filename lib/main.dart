@@ -1,4 +1,6 @@
 // lib/main.dart
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart'; // For defaultTargetPlatform
 import 'package:shared_preferences/shared_preferences.dart';
@@ -11,7 +13,9 @@ import 'package:chuk_chat/utils/color_extensions.dart'; // Import for hex conver
 import 'package:chuk_chat/utils/grain_overlay.dart'; // Film grain overlay
 import 'package:chuk_chat/pages/login_page.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/theme_settings_service.dart';
 import 'package:chuk_chat/widgets/auth_gate.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 /* ---------- MAIN ---------- */
 Future<void> main() async {
@@ -44,12 +48,28 @@ class _ChukChatAppState extends State<ChukChatApp> {
   static const String _kBgColorKey = 'bgColor';
   static const String _kGrainEnabledKey = 'grainEnabled';
 
+  StreamSubscription<AuthState>? _authSubscription;
+
   @override
   void initState() {
     super.initState();
     _loadThemeSettings();
     ChatStorageService.loadChats();
     ChatStorageService.loadSavedChatsForSidebar();
+    _authSubscription = SupabaseService.auth.onAuthStateChange.listen((event) {
+      if (event.session != null) {
+        _loadThemeSettingsFromSupabase();
+      }
+    });
+    if (SupabaseService.auth.currentSession != null) {
+      _loadThemeSettingsFromSupabase();
+    }
+  }
+
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadThemeSettings() async {
@@ -81,6 +101,7 @@ class _ChukChatAppState extends State<ChukChatApp> {
     setState(() {
       _currentThemeMode = newMode;
     });
+    await _syncThemeSettings();
   }
 
   void _setAccentColor(Color newColor) async {
@@ -89,6 +110,7 @@ class _ChukChatAppState extends State<ChukChatApp> {
     setState(() {
       _currentAccentColor = newColor;
     });
+    await _syncThemeSettings();
   }
 
   void _setIconFgColor(Color newColor) async {
@@ -97,6 +119,7 @@ class _ChukChatAppState extends State<ChukChatApp> {
     setState(() {
       _currentIconFgColor = newColor;
     });
+    await _syncThemeSettings();
   }
 
   void _setBgColor(Color newColor) async {
@@ -105,6 +128,7 @@ class _ChukChatAppState extends State<ChukChatApp> {
     setState(() {
       _currentBgColor = newColor;
     });
+    await _syncThemeSettings();
   }
 
   void _setGrainEnabled(bool enabled) async {
@@ -113,6 +137,59 @@ class _ChukChatAppState extends State<ChukChatApp> {
     setState(() {
       _grainEnabled = enabled;
     });
+    await _syncThemeSettings();
+  }
+
+  Future<void> _loadThemeSettingsFromSupabase() async {
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) return;
+
+    try {
+      final settings = await const ThemeSettingsService().loadOrCreate();
+      if (!mounted) return;
+      setState(() {
+        _currentThemeMode = settings.themeMode;
+        _currentAccentColor = settings.accentColor;
+        _currentIconFgColor = settings.iconColor;
+        _currentBgColor = settings.backgroundColor;
+        _grainEnabled = settings.grainEnabled;
+      });
+      await _persistThemeSettingsToPrefs();
+    } catch (_) {
+      // Ignore remote load errors; keep existing local settings.
+    }
+  }
+
+  Future<void> _persistThemeSettingsToPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _kThemeModeKey,
+      _currentThemeMode == Brightness.light ? 'light' : 'dark',
+    );
+    await prefs.setString(_kAccentColorKey, _currentAccentColor.toHexString());
+    await prefs.setString(_kIconFgColorKey, _currentIconFgColor.toHexString());
+    await prefs.setString(_kBgColorKey, _currentBgColor.toHexString());
+    await prefs.setBool(_kGrainEnabledKey, _grainEnabled);
+  }
+
+  Future<void> _syncThemeSettings() async {
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) return;
+
+    final settings = ThemeSettings(
+      userId: user.id,
+      themeMode: _currentThemeMode,
+      accentColor: _currentAccentColor,
+      iconColor: _currentIconFgColor,
+      backgroundColor: _currentBgColor,
+      grainEnabled: _grainEnabled,
+    );
+
+    try {
+      await const ThemeSettingsService().save(settings);
+    } catch (_) {
+      // Ignore sync failures; preferences remain updated locally.
+    }
   }
 
   @override
