@@ -576,7 +576,8 @@ class ModelSelectionRow extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          Expanded(
+          SizedBox(
+            width: double.infinity,
             child: DropdownButtonHideUnderline(
               child: DropdownButton<ModelProviderInfo>(
                 value: selectedProvider,
