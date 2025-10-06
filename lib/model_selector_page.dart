@@ -462,8 +462,9 @@ class ModelSelectionRow extends StatelessWidget {
     const double containerHeight = 78.0;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(flex: 3, child: _buildModelNameCard(containerHeight, inputFieldBg, alignCenter: true)),
           const SizedBox(width: 8),
@@ -473,6 +474,7 @@ class ModelSelectionRow extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(flex: 4, child: _buildContextCard(containerHeight, inputFieldBg)),
         ],
+        ),
       ),
     );
   }
