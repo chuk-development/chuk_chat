@@ -4,6 +4,7 @@ import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/model_selector_page.dart';
 import 'package:chuk_chat/pages/theme_page.dart';
 import 'package:chuk_chat/pages/account_settings_page.dart';
+import 'package:chuk_chat/services/auth_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -31,8 +32,8 @@ class SettingsPage extends StatelessWidget {
     required this.setAccentColor,
     required this.setIconFgColor,
     required this.setBgColor,
-    required this.grainEnabled,          // added
-    required this.setGrainEnabled,       // added
+    required this.grainEnabled, // added
+    required this.setGrainEnabled, // added
   }) : super(key: key);
 
   @override
@@ -73,8 +74,8 @@ class SettingsPage extends StatelessWidget {
                     setAccentColor: setAccentColor,
                     setIconFgColor: setIconFgColor,
                     setBgColor: setBgColor,
-                    grainEnabled: grainEnabled,             // pass
-                    setGrainEnabled: setGrainEnabled,       // pass
+                    grainEnabled: grainEnabled, // pass
+                    setGrainEnabled: setGrainEnabled, // pass
                   ),
                 ),
               );
@@ -131,9 +132,24 @@ class SettingsPage extends StatelessWidget {
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
-              onPressed: () {
-                print('Logout pressed');
-                // TODO: hook up real logout logic when available
+              onPressed: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                final navigator = Navigator.of(context);
+                try {
+                  await const AuthService().signOut();
+                  if (!navigator.mounted) return;
+                  if (navigator.canPop()) {
+                    navigator.pop();
+                  }
+                } on AuthServiceException catch (error) {
+                  messenger.showSnackBar(
+                    SnackBar(content: Text(error.message)),
+                  );
+                } catch (error) {
+                  messenger.showSnackBar(
+                    SnackBar(content: Text('Unexpected error: $error')),
+                  );
+                }
               },
               child: const Text(
                 'Logout',

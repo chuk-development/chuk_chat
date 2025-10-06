@@ -1,6 +1,5 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart'; // For defaultTargetPlatform
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -9,10 +8,17 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/platform_specific/root_wrapper_desktop.dart';
 import 'package:chuk_chat/platform_specific/root_wrapper_mobile.dart';
 import 'package:chuk_chat/utils/color_extensions.dart'; // Import for hex conversion
-import 'package:chuk_chat/utils/grain_overlay.dart';   // Film grain overlay
+import 'package:chuk_chat/utils/grain_overlay.dart'; // Film grain overlay
+import 'package:chuk_chat/pages/login_page.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/widgets/auth_gate.dart';
 
 /* ---------- MAIN ---------- */
-void main() => runApp(const ChukChatApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await SupabaseService.initialize();
+  runApp(const ChukChatApp());
+}
 
 class ChukChatApp extends StatefulWidget {
   const ChukChatApp({Key? key}) : super(key: key);
@@ -53,11 +59,14 @@ class _ChukChatAppState extends State<ChukChatApp> {
           ? Brightness.light
           : kDefaultThemeMode; // Default to dark if not explicitly light
       _currentAccentColor = ColorExtension.fromHexString(
-          prefs.getString(_kAccentColorKey) ?? kDefaultAccentColor.toHexString());
+        prefs.getString(_kAccentColorKey) ?? kDefaultAccentColor.toHexString(),
+      );
       _currentIconFgColor = ColorExtension.fromHexString(
-          prefs.getString(_kIconFgColorKey) ?? kDefaultIconFgColor.toHexString());
+        prefs.getString(_kIconFgColorKey) ?? kDefaultIconFgColor.toHexString(),
+      );
       _currentBgColor = ColorExtension.fromHexString(
-          prefs.getString(_kBgColorKey) ?? kDefaultBgColor.toHexString());
+        prefs.getString(_kBgColorKey) ?? kDefaultBgColor.toHexString(),
+      );
       _grainEnabled = prefs.getBool(_kGrainEnabledKey) ?? kDefaultGrainEnabled;
     });
   }
@@ -65,7 +74,10 @@ class _ChukChatAppState extends State<ChukChatApp> {
   // Callbacks for ThemePage to update settings
   void _setThemeMode(Brightness newMode) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kThemeModeKey, newMode == Brightness.light ? 'light' : 'dark');
+    await prefs.setString(
+      _kThemeModeKey,
+      newMode == Brightness.light ? 'light' : 'dark',
+    );
     setState(() {
       _currentThemeMode = newMode;
     });
@@ -117,7 +129,6 @@ class _ChukChatAppState extends State<ChukChatApp> {
       title: 'chuk.chat',
       debugShowCheckedModeBanner: false,
       theme: appTheme, // Use the dynamically built theme
-
       // 👇 Apply film grain to EVERY route/page
       builder: (context, child) {
         return Stack(
@@ -138,45 +149,50 @@ class _ChukChatAppState extends State<ChukChatApp> {
         );
       },
 
-      home: Builder( // Use Builder to get a context that has MediaQuery
-        builder: (context) {
-          final double screenWidth = MediaQuery.of(context).size.width;
-          final TargetPlatform platform = defaultTargetPlatform;
+      home: AuthGate(
+        loadingBuilder: (context) =>
+            const Scaffold(body: Center(child: CircularProgressIndicator())),
+        signedOutBuilder: (context) => const LoginPage(),
+        signedInBuilder: (context) {
+          return Builder(
+            builder: (context) {
+              final double screenWidth = MediaQuery.of(context).size.width;
+              final TargetPlatform platform = defaultTargetPlatform;
 
-          // Check if it's a mobile platform (Android/iOS) AND below tablet breakpoint
-          final bool isMobilePhone =
-              (platform == TargetPlatform.android || platform == TargetPlatform.iOS) &&
-              screenWidth < kTabletBreakpoint;
+              final bool isMobilePhone =
+                  (platform == TargetPlatform.android ||
+                      platform == TargetPlatform.iOS) &&
+                  screenWidth < kTabletBreakpoint;
 
-          // If it's a mobile phone, use the mobile wrapper. Otherwise, use desktop wrapper.
-          if (isMobilePhone) {
-            return RootWrapperMobile(
-              currentThemeMode: _currentThemeMode,
-              currentAccentColor: _currentAccentColor,
-              currentIconFgColor: _currentIconFgColor,
-              currentBgColor: _currentBgColor,
-              setThemeMode: _setThemeMode,
-              setAccentColor: _setAccentColor,
-              setIconFgColor: _setIconFgColor,
-              setBgColor: _setBgColor,
-              grainEnabled: _grainEnabled,
-              setGrainEnabled: _setGrainEnabled,
-            );
-          } else {
-            // This applies to desktop (Linux, Windows, macOS), web, and tablets (Android/iOS >= kTabletBreakpoint)
-            return RootWrapperDesktop(
-              currentThemeMode: _currentThemeMode,
-              currentAccentColor: _currentAccentColor,
-              currentIconFgColor: _currentIconFgColor,
-              currentBgColor: _currentBgColor,
-              setThemeMode: _setThemeMode,
-              setAccentColor: _setAccentColor,
-              setIconFgColor: _setIconFgColor,
-              setBgColor: _setBgColor,
-              grainEnabled: _grainEnabled,
-              setGrainEnabled: _setGrainEnabled,
-            );
-          }
+              if (isMobilePhone) {
+                return RootWrapperMobile(
+                  currentThemeMode: _currentThemeMode,
+                  currentAccentColor: _currentAccentColor,
+                  currentIconFgColor: _currentIconFgColor,
+                  currentBgColor: _currentBgColor,
+                  setThemeMode: _setThemeMode,
+                  setAccentColor: _setAccentColor,
+                  setIconFgColor: _setIconFgColor,
+                  setBgColor: _setBgColor,
+                  grainEnabled: _grainEnabled,
+                  setGrainEnabled: _setGrainEnabled,
+                );
+              }
+
+              return RootWrapperDesktop(
+                currentThemeMode: _currentThemeMode,
+                currentAccentColor: _currentAccentColor,
+                currentIconFgColor: _currentIconFgColor,
+                currentBgColor: _currentBgColor,
+                setThemeMode: _setThemeMode,
+                setAccentColor: _setAccentColor,
+                setIconFgColor: _setIconFgColor,
+                setBgColor: _setBgColor,
+                grainEnabled: _grainEnabled,
+                setGrainEnabled: _setGrainEnabled,
+              );
+            },
+          );
         },
       ),
     );

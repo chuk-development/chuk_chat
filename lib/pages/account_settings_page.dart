@@ -1,6 +1,9 @@
 // lib/pages/account_settings_page.dart
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'package:chuk_chat/services/profile_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 
 class AccountSettingsPage extends StatefulWidget {
@@ -11,22 +14,21 @@ class AccountSettingsPage extends StatefulWidget {
 }
 
 class _AccountSettingsPageState extends State<AccountSettingsPage> {
-  static const _kDisplayNameKey = 'account_display_name';
-  static const _kEmailKey = 'account_email';
-  static const _kNotificationsKey = 'account_notifications_enabled';
-  static const _kWeeklySummaryKey = 'account_weekly_summary_enabled';
-
+  final ProfileService _profileService = const ProfileService();
   final TextEditingController _displayNameCtrl = TextEditingController();
   final TextEditingController _emailCtrl = TextEditingController();
 
   bool _notificationsEnabled = true;
   bool _weeklySummaryEnabled = false;
   bool _isSaving = false;
+  bool _isLoading = true;
+  ProfileRecord? _profile;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _loadAccountSettings();
+    _loadProfile();
   }
 
   @override
@@ -36,31 +38,100 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     super.dispose();
   }
 
-  Future<void> _loadAccountSettings() async {
-    final prefs = await SharedPreferences.getInstance();
+  Future<void> _loadProfile() async {
     setState(() {
-      _displayNameCtrl.text = prefs.getString(_kDisplayNameKey) ?? 'Douglas M.';
-      _emailCtrl.text = prefs.getString(_kEmailKey) ?? 'douglas@example.com';
-      _notificationsEnabled = prefs.getBool(_kNotificationsKey) ?? true;
-      _weeklySummaryEnabled = prefs.getBool(_kWeeklySummaryKey) ?? false;
+      _isLoading = true;
+      _errorMessage = null;
     });
+
+    try {
+      final record = await _profileService.loadOrCreateProfile();
+      if (!mounted) return;
+      setState(() {
+        _profile = record;
+        _displayNameCtrl.text = record.displayName;
+        _emailCtrl.text = record.email;
+        _notificationsEnabled = record.notificationsEnabled;
+        _weeklySummaryEnabled = record.weeklySummaryEnabled;
+        _isLoading = false;
+      });
+    } on ProfileServiceException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = error.message;
+        _isLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Failed to load profile: $error';
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _saveAccountSettings() async {
-    setState(() => _isSaving = true);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kDisplayNameKey, _displayNameCtrl.text.trim());
-    await prefs.setString(_kEmailKey, _emailCtrl.text.trim());
-    await prefs.setBool(_kNotificationsKey, _notificationsEnabled);
-    await prefs.setBool(_kWeeklySummaryKey, _weeklySummaryEnabled);
-    if (!mounted) return;
-    setState(() => _isSaving = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Account settings saved'),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-      ),
-    );
+    if (_profile == null) return;
+
+    setState(() {
+      _isSaving = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final updatedRecord = _profile!.copyWith(
+        displayName: _displayNameCtrl.text.trim(),
+        notificationsEnabled: _notificationsEnabled,
+        weeklySummaryEnabled: _weeklySummaryEnabled,
+      );
+
+      await _profileService.saveProfile(updatedRecord);
+
+      final newEmail = _emailCtrl.text.trim();
+      String? emailNotice;
+
+      if (newEmail.isEmpty) {
+        throw const ProfileServiceException('Email cannot be empty.');
+      }
+
+      if (newEmail != _profile!.email) {
+        await SupabaseService.auth.updateUser(UserAttributes(email: newEmail));
+        emailNotice =
+            'Email updated. Confirm the change using the link Supabase sent to $newEmail.';
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _profile = updatedRecord.copyWith(email: newEmail);
+        _isSaving = false;
+      });
+
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(emailNotice ?? 'Account settings saved'),
+          backgroundColor: Theme.of(context).colorScheme.primary,
+        ),
+      );
+    } on AuthException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isSaving = false;
+        _errorMessage = error.message;
+      });
+    } on ProfileServiceException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isSaving = false;
+        _errorMessage = error.message;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isSaving = false;
+        _errorMessage = 'Failed to save profile: $error';
+      });
+    }
   }
 
   @override
@@ -70,20 +141,55 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     final Color iconFg = theme.iconTheme.color!;
     final TextStyle? titleTextStyle = theme.appBarTheme.titleTextStyle;
 
-    return Scaffold(
-      backgroundColor: scaffoldBg,
-      appBar: AppBar(
-        title: Text('Account Settings', style: titleTextStyle),
-        backgroundColor: scaffoldBg,
-        elevation: 0,
-        iconTheme: IconThemeData(color: iconFg),
-      ),
-      body: ListView(
+    Widget bodyContent;
+
+    if (_isLoading) {
+      bodyContent = const Center(child: CircularProgressIndicator());
+    } else if (_profile == null) {
+      bodyContent = Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _errorMessage ?? 'Unable to load your profile right now.',
+                style: theme.textTheme.bodyMedium,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _loadProfile,
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    } else {
+      bodyContent = ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (_errorMessage != null)
+            Container(
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                border: Border.all(color: Colors.red.withOpacity(0.3)),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                _errorMessage!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: Colors.redAccent,
+                ),
+              ),
+            ),
           _AccountSectionCard(
             title: 'Profile',
-            description: 'Update how your name and email appear inside chuk.chat.',
+            description:
+                'Update how your name and email appear inside chuk.chat.',
             child: Column(
               children: [
                 TextFormField(
@@ -151,10 +257,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                Text(
-                  'Connected devices',
-                  style: theme.textTheme.titleMedium,
-                ),
+                Text('Connected devices', style: theme.textTheme.titleMedium),
                 const SizedBox(height: 4),
                 Text(
                   'Manage the sessions where your account is active once we ship device management.',
@@ -175,22 +278,39 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                       height: 18,
                       width: 18,
                       child: CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.onPrimary),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          theme.colorScheme.onPrimary,
+                        ),
                         strokeWidth: 2,
                       ),
                     )
                   : const Icon(Icons.check),
               label: Text(_isSaving ? 'Saving…' : 'Save changes'),
-              onPressed: _isSaving ? null : _saveAccountSettings,
+              onPressed: _isSaving || _profile == null
+                  ? null
+                  : _saveAccountSettings,
               style: ElevatedButton.styleFrom(
                 backgroundColor: theme.colorScheme.primary,
                 foregroundColor: theme.colorScheme.onPrimary,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
             ),
           ),
         ],
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: scaffoldBg,
+      appBar: AppBar(
+        title: Text('Account Settings', style: titleTextStyle),
+        backgroundColor: scaffoldBg,
+        elevation: 0,
+        iconTheme: IconThemeData(color: iconFg),
       ),
+      body: bodyContent,
     );
   }
 }
@@ -224,10 +344,7 @@ class _AccountSectionCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              title,
-              style: theme.textTheme.titleLarge,
-            ),
+            Text(title, style: theme.textTheme.titleLarge),
             const SizedBox(height: 6),
             Text(
               description,

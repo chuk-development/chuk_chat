@@ -2,6 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/constants.dart'; // Assuming this exists
 import 'package:chuk_chat/services/chat_storage_service.dart'; // Assuming this exists
+import 'package:chuk_chat/services/profile_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart'; // Assuming this exists
 
 // Local list for starred chats, as per original snippet
@@ -38,12 +40,14 @@ class _SidebarMobileState extends State<SidebarMobile> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   List<String> _filteredRecentChats = [];
+  ProfileRecord? _profile;
 
   @override
   void initState() {
     super.initState();
     _loadChatsAndRefresh();
     _searchController.addListener(_onSearchChanged);
+    _loadProfile();
   }
 
   @override
@@ -68,6 +72,47 @@ class _SidebarMobileState extends State<SidebarMobile> {
         _filterRecentChats(); // Filter after loading/refreshing chats
       });
     }
+  }
+
+  Future<void> _loadProfile() async {
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) return;
+
+    try {
+      final record = await const ProfileService().loadOrCreateProfile();
+      if (!mounted) return;
+      setState(() {
+        _profile = record;
+      });
+    } catch (_) {
+      // Ignore profile load errors; fallback text is shown instead.
+    }
+  }
+
+  String _initialsFor(ProfileRecord? profile) {
+    final source = profile?.displayName.isNotEmpty == true
+        ? profile!.displayName
+        : profile?.email ?? '';
+    if (source.trim().isEmpty) return '?';
+
+    final parts = source.trim().split(RegExp(r'\s+'));
+    if (parts.length == 1) {
+      return parts.first.substring(0, 1).toUpperCase();
+    }
+    final first = parts.first.substring(0, 1).toUpperCase();
+    final last = parts.last.substring(0, 1).toUpperCase();
+    return '$first$last';
+  }
+
+  String _displayNameFor(ProfileRecord? profile) {
+    if (profile == null) return 'Account';
+    if (profile.displayName.trim().isNotEmpty) {
+      return profile.displayName.trim();
+    }
+    if (profile.email.trim().isNotEmpty) {
+      return profile.email.trim();
+    }
+    return 'Account';
   }
 
   void _filterRecentChats() {
@@ -99,13 +144,17 @@ class _SidebarMobileState extends State<SidebarMobile> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final Color iconColorDefault = theme.iconTheme.color!.withValues(alpha: 0.7);
-    final Color textColorDefault = theme.textTheme.bodyMedium?.color ?? theme.colorScheme.onSurface;
+    final Color iconColorDefault = theme.iconTheme.color!.withValues(
+      alpha: 0.7,
+    );
+    final Color textColorDefault =
+        theme.textTheme.bodyMedium?.color ?? theme.colorScheme.onSurface;
     final Color accentColor = theme.colorScheme.primary;
     final Color sidebarBg = theme.cardColor.darken(0.02);
     final Color dividerColor = theme.dividerColor.withValues(alpha: 0.5);
 
-    const double initialVerticalPadding = 48.0; // From main.dart Drawer top padding
+    const double initialVerticalPadding =
+        48.0; // From main.dart Drawer top padding
 
     return Container(
       color: sidebarBg,
@@ -116,7 +165,8 @@ class _SidebarMobileState extends State<SidebarMobile> {
           // Search Old Chats input field (styled from main.dart's InputDecorationTheme)
           Padding(
             padding: const EdgeInsets.symmetric(
-                horizontal: _sidebarHorizontalPadding),
+              horizontal: _sidebarHorizontalPadding,
+            ),
             child: Row(
               children: [
                 Expanded(
@@ -124,10 +174,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
                     controller: _searchController,
                     decoration: InputDecoration(
                       hintText: 'Suchen',
-                      prefixIcon: Icon(
-                        Icons.search,
-                        color: iconColorDefault,
-                      ),
+                      prefixIcon: Icon(Icons.search, color: iconColorDefault),
                       filled: true,
                       fillColor: sidebarBg.lighten(0.05),
                       border: OutlineInputBorder(
@@ -142,7 +189,10 @@ class _SidebarMobileState extends State<SidebarMobile> {
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide(color: accentColor, width: 1.3),
                       ),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 0),
+                      contentPadding: const EdgeInsets.symmetric(
+                        vertical: 10,
+                        horizontal: 0,
+                      ),
                     ),
                     style: TextStyle(color: textColorDefault),
                     cursorColor: textColorDefault,
@@ -152,28 +202,35 @@ class _SidebarMobileState extends State<SidebarMobile> {
             ),
           ),
           const SizedBox(height: 16), // Spacing after search bar
-
           // Projects entry as per main.dart's Drawer items
           _buildDrawerItem(
-              Icons.folder_open_outlined,
-              'Neues Projekt',
-              widget.onProjectsTapped,
-              iconColorDefault,
-              textColorDefault,
-              tileBg: sidebarBg.lighten(0.04),
-              dividerColor: dividerColor,
-              accentColor: accentColor),
+            Icons.folder_open_outlined,
+            'Neues Projekt',
+            widget.onProjectsTapped,
+            iconColorDefault,
+            textColorDefault,
+            tileBg: sidebarBg.lighten(0.04),
+            dividerColor: dividerColor,
+            accentColor: accentColor,
+          ),
 
           const SizedBox(height: 24.0), // Spacing between groups
-
           // Starred Section - Fixed
           _buildSectionHeader('Starred', textColor: textColorDefault),
-          ..._starredChats.map(
-              (title) => _buildStarredItem(title, iconColorDefault, textColorDefault)).toList(),
+          ..._starredChats
+              .map(
+                (title) => _buildStarredItem(
+                  title,
+                  iconColorDefault,
+                  textColorDefault,
+                ),
+              )
+              .toList(),
           Divider(
-              color: dividerColor,
-              indent: _sidebarHorizontalPadding,
-              endIndent: _sidebarHorizontalPadding),
+            color: dividerColor,
+            indent: _sidebarHorizontalPadding,
+            endIndent: _sidebarHorizontalPadding,
+          ),
 
           // Recents Section - Scrollable
           Expanded(
@@ -184,24 +241,34 @@ class _SidebarMobileState extends State<SidebarMobile> {
                 if (_filteredRecentChats.isEmpty && _searchQuery.isEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: _sidebarHorizontalPadding, vertical: 8.0),
+                      horizontal: _sidebarHorizontalPadding,
+                      vertical: 8.0,
+                    ),
                     child: Text(
                       'No recent chats yet.',
-                      style: TextStyle(color: iconColorDefault.withValues(alpha: 0.4)),
+                      style: TextStyle(
+                        color: iconColorDefault.withValues(alpha: 0.4),
+                      ),
                     ),
                   )
-                else if (_filteredRecentChats.isEmpty && _searchQuery.isNotEmpty)
+                else if (_filteredRecentChats.isEmpty &&
+                    _searchQuery.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: _sidebarHorizontalPadding, vertical: 8.0),
+                      horizontal: _sidebarHorizontalPadding,
+                      vertical: 8.0,
+                    ),
                     child: Text(
                       'No chats found for "${_searchQuery}".',
-                      style: TextStyle(color: iconColorDefault.withValues(alpha: 0.4)),
+                      style: TextStyle(
+                        color: iconColorDefault.withValues(alpha: 0.4),
+                      ),
                     ),
                   ),
                 ..._filteredRecentChats.asMap().entries.map((entry) {
-                  int index = ChatStorageService.savedChats
-                      .indexOf(entry.value); // Get original index
+                  int index = ChatStorageService.savedChats.indexOf(
+                    entry.value,
+                  ); // Get original index
                   String title = entry.value.split('§').isNotEmpty
                       ? entry.value.split('§').first.split('|').last.trimLeft()
                       : 'Chat ${index != -1 ? index + 1 : 'New'}';
@@ -232,7 +299,10 @@ class _SidebarMobileState extends State<SidebarMobile> {
                 borderRadius: BorderRadius.circular(12),
                 onTap: widget.onSettingsTapped,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     color: sidebarBg.lighten(0.05),
                     borderRadius: BorderRadius.circular(12),
@@ -242,15 +312,18 @@ class _SidebarMobileState extends State<SidebarMobile> {
                     children: [
                       CircleAvatar(
                         backgroundColor: accentColor.withValues(alpha: 0.2),
-                        child: Text('CH',
-                            style: TextStyle(
-                                color: accentColor,
-                                fontWeight: FontWeight.bold)),
+                        child: Text(
+                          _initialsFor(_profile),
+                          style: TextStyle(
+                            color: accentColor,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
                       const SizedBox(width: 12.0),
                       Expanded(
                         child: Text(
-                          'Chuk',
+                          _displayNameFor(_profile),
                           style: TextStyle(
                             color: textColorDefault,
                             fontSize: 16,
@@ -284,19 +357,33 @@ class _SidebarMobileState extends State<SidebarMobile> {
   Widget _buildSectionHeader(String title, {required Color textColor}) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-          _sidebarHorizontalPadding, 16.0, _sidebarHorizontalPadding, 8.0),
+        _sidebarHorizontalPadding,
+        16.0,
+        _sidebarHorizontalPadding,
+        8.0,
+      ),
       child: Text(
         title,
         style: TextStyle(
-            color: textColor, fontSize: 14, fontWeight: FontWeight.bold),
+          color: textColor,
+          fontSize: 14,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }
 
   // Modified to use the common Drawer Item style from main.dart
-  Widget _buildDrawerItem(IconData icon, String title, VoidCallback onTap,
-      Color iconColor, Color textColor,
-      {Color? tileBg, Color? dividerColor, Color? accentColor}) {
+  Widget _buildDrawerItem(
+    IconData icon,
+    String title,
+    VoidCallback onTap,
+    Color iconColor,
+    Color textColor, {
+    Color? tileBg,
+    Color? dividerColor,
+    Color? accentColor,
+  }) {
     return ListTile(
       leading: Icon(icon, color: iconColor),
       title: Text(title, style: TextStyle(color: textColor)),
@@ -308,7 +395,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
       ),
       hoverColor: accentColor?.withValues(alpha: 0.08),
       contentPadding: const EdgeInsets.symmetric(
-          horizontal: _sidebarHorizontalPadding, vertical: 4),
+        horizontal: _sidebarHorizontalPadding,
+        vertical: 4,
+      ),
       // dense and iconColor/textColor set by ListTileThemeData in main.dart
     );
   }
@@ -321,23 +410,29 @@ class _SidebarMobileState extends State<SidebarMobile> {
       dense: true,
       tileColor: Colors.transparent,
       contentPadding: const EdgeInsets.only(
-          left: _sidebarHorizontalPadding, right: 16.0),
+        left: _sidebarHorizontalPadding,
+        right: 16.0,
+      ),
       iconColor: iconColor,
       textColor: textColor,
     );
   }
 
-  Widget _buildRecentItem(String title,
-      {int? index,
-      bool isLast = false,
-      VoidCallback? onTap,
-      required Color accentColor,
-      required Color iconColor,
-      required Color textColor}) {
+  Widget _buildRecentItem(
+    String title, {
+    int? index,
+    bool isLast = false,
+    VoidCallback? onTap,
+    required Color accentColor,
+    required Color iconColor,
+    required Color textColor,
+  }) {
     bool isSelected = index != null && index == widget.selectedChatIndex;
     return ListTile(
-      leading:
-          _leadingIconPlaceholder(Icons.chat_bubble_outline, iconColor: iconColor),
+      leading: _leadingIconPlaceholder(
+        Icons.chat_bubble_outline,
+        iconColor: iconColor,
+      ),
       title: Text(
         title,
         style: TextStyle(
@@ -349,8 +444,10 @@ class _SidebarMobileState extends State<SidebarMobile> {
       ),
       onTap: onTap,
       dense: true,
-      contentPadding:
-          const EdgeInsets.only(left: _sidebarHorizontalPadding, right: 16.0),
+      contentPadding: const EdgeInsets.only(
+        left: _sidebarHorizontalPadding,
+        right: 16.0,
+      ),
       tileColor: isSelected ? accentColor.withOpacity(0.1) : null,
       selectedTileColor: accentColor.withOpacity(0.1),
       selectedColor: accentColor,
