@@ -17,15 +17,103 @@ import 'package:chuk_chat/services/theme_settings_service.dart';
 import 'package:chuk_chat/widgets/auth_gate.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+class _InitialThemeData {
+  const _InitialThemeData({
+    required this.themeMode,
+    required this.accentColor,
+    required this.iconColor,
+    required this.backgroundColor,
+    required this.grainEnabled,
+    required this.loadedFromSupabase,
+  });
+
+  final Brightness themeMode;
+  final Color accentColor;
+  final Color iconColor;
+  final Color backgroundColor;
+  final bool grainEnabled;
+  final bool loadedFromSupabase;
+}
+
+Future<_InitialThemeData> _bootstrapThemeSettings() async {
+  final prefs = await SharedPreferences.getInstance();
+
+  Brightness themeMode =
+      (prefs.getString(_ChukChatAppState._kThemeModeKey) == 'light')
+      ? Brightness.light
+      : kDefaultThemeMode;
+  Color accentColor = ColorExtension.fromHexString(
+    prefs.getString(_ChukChatAppState._kAccentColorKey) ??
+        kDefaultAccentColor.toHexString(),
+  );
+  Color iconColor = ColorExtension.fromHexString(
+    prefs.getString(_ChukChatAppState._kIconFgColorKey) ??
+        kDefaultIconFgColor.toHexString(),
+  );
+  Color backgroundColor = ColorExtension.fromHexString(
+    prefs.getString(_ChukChatAppState._kBgColorKey) ??
+        kDefaultBgColor.toHexString(),
+  );
+  bool grainEnabled =
+      prefs.getBool(_ChukChatAppState._kGrainEnabledKey) ??
+      kDefaultGrainEnabled;
+
+  bool loadedFromSupabase = false;
+
+  if (SupabaseService.auth.currentSession != null) {
+    try {
+      final settings = await const ThemeSettingsService().loadOrCreate();
+      themeMode = settings.themeMode;
+      accentColor = settings.accentColor;
+      iconColor = settings.iconColor;
+      backgroundColor = settings.backgroundColor;
+      grainEnabled = settings.grainEnabled;
+      loadedFromSupabase = true;
+
+      await prefs.setString(
+        _ChukChatAppState._kThemeModeKey,
+        themeMode == Brightness.light ? 'light' : 'dark',
+      );
+      await prefs.setString(
+        _ChukChatAppState._kAccentColorKey,
+        accentColor.toHexString(),
+      );
+      await prefs.setString(
+        _ChukChatAppState._kIconFgColorKey,
+        iconColor.toHexString(),
+      );
+      await prefs.setString(
+        _ChukChatAppState._kBgColorKey,
+        backgroundColor.toHexString(),
+      );
+      await prefs.setBool(_ChukChatAppState._kGrainEnabledKey, grainEnabled);
+    } catch (_) {
+      // Ignore remote load errors and fall back to locally stored values.
+    }
+  }
+
+  return _InitialThemeData(
+    themeMode: themeMode,
+    accentColor: accentColor,
+    iconColor: iconColor,
+    backgroundColor: backgroundColor,
+    grainEnabled: grainEnabled,
+    loadedFromSupabase: loadedFromSupabase,
+  );
+}
+
 /* ---------- MAIN ---------- */
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SupabaseService.initialize();
-  runApp(const ChukChatApp());
+  final initialTheme = await _bootstrapThemeSettings();
+  runApp(ChukChatApp(initialTheme: initialTheme));
 }
 
 class ChukChatApp extends StatefulWidget {
-  const ChukChatApp({Key? key}) : super(key: key);
+  const ChukChatApp({Key? key, required this.initialTheme}) : super(key: key);
+
+  final _InitialThemeData initialTheme;
 
   @override
   State<ChukChatApp> createState() => _ChukChatAppState();
@@ -54,11 +142,14 @@ class _ChukChatAppState extends State<ChukChatApp> {
   @override
   void initState() {
     super.initState();
-    if (SupabaseService.auth.currentSession != null) {
-      _loadThemeSettingsFromSupabase();
-    } else {
-      _loadThemeSettingsFromPrefs();
-    }
+    final initialTheme = widget.initialTheme;
+    _currentThemeMode = initialTheme.themeMode;
+    _currentAccentColor = initialTheme.accentColor;
+    _currentIconFgColor = initialTheme.iconColor;
+    _currentBgColor = initialTheme.backgroundColor;
+    _grainEnabled = initialTheme.grainEnabled;
+    _hasAppliedSupabaseTheme = initialTheme.loadedFromSupabase;
+
     ChatStorageService.loadChats();
     ChatStorageService.loadSavedChatsForSidebar();
     _authSubscription = SupabaseService.auth.onAuthStateChange.listen((event) {
@@ -69,6 +160,11 @@ class _ChukChatAppState extends State<ChukChatApp> {
         _loadThemeSettingsFromPrefs();
       }
     });
+
+    if (SupabaseService.auth.currentSession != null &&
+        !_hasAppliedSupabaseTheme) {
+      _loadThemeSettingsFromSupabase();
+    }
   }
 
   @override
