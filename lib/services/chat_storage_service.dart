@@ -204,24 +204,24 @@ class ChatStorageService {
     });
 
     final encryptedPayload = await EncryptionService.encrypt(payload);
-    Map<String, dynamic>? updated;
+    List<dynamic> updatedRows;
     try {
-      updated = await SupabaseService.client
+      updatedRows = await SupabaseService.client
           .from('encrypted_chats')
           .update({'encrypted_payload': encryptedPayload})
           .eq('id', chatId)
           .eq('user_id', user.id)
-          .select('id, encrypted_payload, created_at, is_starred')
-          .maybeSingle();
+          .select('id, encrypted_payload, created_at, is_starred');
     } on PostgrestException catch (error) {
       throw StateError('Failed to update chat: ${error.message}');
     }
 
-    if (updated == null) {
+    if (updatedRows.isEmpty) {
       throw StateError(
         'Failed to update chat: Chat was not found or access is denied.',
       );
     }
+    final updated = updatedRows.first as Map<String, dynamic>;
 
     final stored = StoredChat.fromRow(updated, messages);
     final index = _savedChats.indexWhere((chat) => chat.id == chatId);
@@ -278,21 +278,34 @@ class ChatStorageService {
     if (user == null) {
       throw StateError('User must be signed in to update chat favorites.');
     }
+    List<dynamic> updatedRows;
     try {
-      await SupabaseService.client
+      updatedRows = await SupabaseService.client
           .from('encrypted_chats')
           .update({'is_starred': isStarred})
           .eq('id', chatId)
-          .eq('user_id', user.id);
+          .eq('user_id', user.id)
+          .select('id, is_starred');
     } on PostgrestException catch (error) {
       throw StateError('Failed to update chat star: ${error.message}');
     }
+
+    if (updatedRows.isEmpty) {
+      throw StateError(
+        'Failed to update chat star: Chat was not found or access is denied.',
+      );
+    }
+
+    final Map<String, dynamic> updatedRow =
+        updatedRows.first as Map<String, dynamic>;
+
+    final bool remoteStar = updatedRow['is_starred'] as bool? ?? isStarred;
 
     final index = _savedChats.indexWhere((chat) => chat.id == chatId);
     if (index != -1) {
       final updatedChats = List<StoredChat>.from(_savedChats);
       final current = updatedChats[index];
-      updatedChats[index] = current.copyWith(isStarred: isStarred);
+      updatedChats[index] = current.copyWith(isStarred: remoteStar);
       _savedChats = updatedChats;
     }
     _notifyChanges();
