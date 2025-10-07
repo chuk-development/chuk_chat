@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/services/password_revision_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
 class AuthService {
@@ -45,6 +46,10 @@ class AuthService {
 
   Future<void> signOut() async {
     try {
+      final userId = SupabaseService.auth.currentUser?.id;
+      if (userId != null) {
+        await PasswordRevisionService.clearCachedRevision(userId: userId);
+      }
       await SupabaseService.auth.signOut();
       await EncryptionService.clearKey();
     } on AuthException catch (error) {

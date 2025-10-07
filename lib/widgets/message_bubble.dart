@@ -43,7 +43,10 @@ class MessageBubble extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: iconFgColor.withValues(alpha: .3)),
         ),
-        child: Text(message, style: TextStyle(color: iconFgColor)),
+        child: SelectableText(
+          message,
+          style: TextStyle(color: iconFgColor),
+        ),
       ),
     );
   }

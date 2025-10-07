@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/services/password_revision_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
 class PasswordChangeService {
@@ -64,6 +65,20 @@ class PasswordChangeService {
       );
     } catch (error) {
       throw PasswordChangeException('Failed to update password: $error');
+    }
+
+    try {
+      await PasswordRevisionService.bumpRevision(user);
+    } on AuthException catch (error) {
+      await _tryRevertSupabasePassword(trimmedCurrent);
+      throw PasswordChangeException(
+        'Password update failed while notifying other sessions: ${error.message}',
+      );
+    } catch (error) {
+      await _tryRevertSupabasePassword(trimmedCurrent);
+      throw PasswordChangeException(
+        'Password update failed while notifying other sessions: $error',
+      );
     }
 
     try {

@@ -136,35 +136,50 @@ class ChatStorageService {
     if (user == null) {
       throw StateError('User must be signed in to migrate chats.');
     }
-
-    for (final chat in chats) {
-      final payload = jsonEncode({
-        'v': _kChatPayloadVersion,
-        'messages': chat.messages.map((message) => message.toJson()).toList(),
-      });
-      final encryptedPayload = await EncryptionService.encrypt(payload);
-      List<dynamic> updatedRows;
-      try {
-        updatedRows = await SupabaseService.client
-            .from('encrypted_chats')
-            .update({'encrypted_payload': encryptedPayload})
-            .eq('id', chat.id)
-            .eq('user_id', user.id)
-            .select('id');
-      } on PostgrestException catch (error) {
+    if (!EncryptionService.hasKey) {
+      final loaded = await EncryptionService.tryLoadKey();
+      if (!loaded) {
         throw StateError(
-          'Failed to re-encrypt chat ${chat.id}: ${error.message}',
-        );
-      }
-      if (updatedRows.isEmpty) {
-        throw StateError(
-          'Failed to re-encrypt chat ${chat.id}: chat was not found.',
+          'Cannot re-encrypt chats because the encryption key is missing. Please sign in again.',
         );
       }
     }
 
-    _savedChats = List<StoredChat>.from(chats);
-    _notifyChanges();
+    final List<StoredChat> updatedChats = [];
+
+    try {
+      for (final chat in chats) {
+        final payload = jsonEncode({
+          'v': _kChatPayloadVersion,
+          'messages': chat.messages.map((message) => message.toJson()).toList(),
+        });
+        final encryptedPayload = await EncryptionService.encrypt(payload);
+        List<dynamic> updatedRows;
+        try {
+          updatedRows = await SupabaseService.client
+              .from('encrypted_chats')
+              .update({'encrypted_payload': encryptedPayload})
+              .eq('id', chat.id)
+              .eq('user_id', user.id)
+              .select('id, encrypted_payload, created_at, is_starred');
+        } on PostgrestException catch (error) {
+          throw StateError(
+            'Failed to re-encrypt chat ${chat.id}: ${error.message}',
+          );
+        }
+        if (updatedRows.isEmpty) {
+          throw StateError(
+            'Failed to re-encrypt chat ${chat.id}: chat was not found.',
+          );
+        }
+        final updatedRow = updatedRows.first as Map<String, dynamic>;
+        updatedChats.add(StoredChat.fromRow(updatedRow, chat.messages));
+      }
+    } finally {
+      for (final updated in updatedChats) {
+        _upsertChatLocally(updated);
+      }
+    }
   }
 
   static Future<StoredChat?> saveChat(

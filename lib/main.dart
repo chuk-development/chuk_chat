@@ -13,6 +13,7 @@ import 'package:chuk_chat/utils/color_extensions.dart'; // Import for hex conver
 import 'package:chuk_chat/utils/grain_overlay.dart'; // Film grain overlay
 import 'package:chuk_chat/pages/login_page.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/services/password_revision_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/theme_settings_service.dart';
 import 'package:chuk_chat/widgets/auth_gate.dart';
@@ -165,6 +166,26 @@ class _ChukChatAppState extends State<ChukChatApp> {
       event,
     ) async {
       if (event.session != null) {
+        final user = event.session!.user;
+        try {
+          final shouldForceLogout =
+              await PasswordRevisionService.hasRevisionMismatch(user);
+          if (shouldForceLogout) {
+            await PasswordRevisionService.clearCachedRevision(userId: user.id);
+            await SupabaseService.auth.signOut();
+            await EncryptionService.clearKey();
+            await ChatStorageService.reset();
+            _hasAppliedSupabaseTheme = false;
+            _loadThemeSettingsFromPrefs();
+            return;
+          }
+          await PasswordRevisionService.ensureRevisionSeeded(user);
+        } catch (error, stackTrace) {
+          debugPrint('Password revision sync failed: $error');
+          debugPrint('$stackTrace');
+          await PasswordRevisionService.clearCachedRevision(userId: user.id);
+        }
+
         try {
           final hasKey = await EncryptionService.tryLoadKey();
           if (hasKey) {
@@ -191,6 +212,7 @@ class _ChukChatAppState extends State<ChukChatApp> {
         await ChatStorageService.reset();
         _hasAppliedSupabaseTheme = false;
         _loadThemeSettingsFromPrefs();
+        await PasswordRevisionService.clearCachedRevision();
       }
     });
 
