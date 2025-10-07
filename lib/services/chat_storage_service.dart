@@ -32,16 +32,31 @@ class StoredChat {
     required this.id,
     required List<ChatMessage> messages,
     required this.createdAt,
+    required this.isStarred,
   }) : messages = List<ChatMessage>.unmodifiable(messages);
 
   final String id;
   final List<ChatMessage> messages;
   final DateTime createdAt;
+  final bool isStarred;
 
   String get previewText {
     if (messages.isEmpty) return 'Chat';
     final text = messages.first.text.trim();
     return text.isEmpty ? 'Chat' : text;
+  }
+
+  StoredChat copyWith({
+    List<ChatMessage>? messages,
+    DateTime? createdAt,
+    bool? isStarred,
+  }) {
+    return StoredChat(
+      id: id,
+      messages: messages ?? this.messages,
+      createdAt: createdAt ?? this.createdAt,
+      isStarred: isStarred ?? this.isStarred,
+    );
   }
 
   factory StoredChat.fromRow(
@@ -52,6 +67,7 @@ class StoredChat {
       id: row['id'] as String,
       messages: messages,
       createdAt: DateTime.parse(row['created_at'] as String),
+      isStarred: row['is_starred'] as bool? ?? false,
     );
   }
 }
@@ -86,7 +102,7 @@ class ChatStorageService {
     try {
       data = await SupabaseService.client
           .from('encrypted_chats')
-          .select('id, encrypted_payload, created_at')
+          .select('id, encrypted_payload, created_at, is_starred')
           .eq('user_id', user.id)
           .order('created_at', ascending: false);
     } on PostgrestException catch (error) {
@@ -148,7 +164,7 @@ class ChatStorageService {
       inserted = await SupabaseService.client
           .from('encrypted_chats')
           .insert({'user_id': user.id, 'encrypted_payload': encryptedPayload})
-          .select('id, encrypted_payload, created_at')
+          .select('id, encrypted_payload, created_at, is_starred')
           .single();
     } on PostgrestException catch (error) {
       throw StateError('Failed to save chat: ${error.message}');
@@ -188,17 +204,23 @@ class ChatStorageService {
     });
 
     final encryptedPayload = await EncryptionService.encrypt(payload);
-    Map<String, dynamic> updated;
+    Map<String, dynamic>? updated;
     try {
       updated = await SupabaseService.client
           .from('encrypted_chats')
           .update({'encrypted_payload': encryptedPayload})
           .eq('id', chatId)
           .eq('user_id', user.id)
-          .select('id, encrypted_payload, created_at')
-          .single();
+          .select('id, encrypted_payload, created_at, is_starred')
+          .maybeSingle();
     } on PostgrestException catch (error) {
       throw StateError('Failed to update chat: ${error.message}');
+    }
+
+    if (updated == null) {
+      throw StateError(
+        'Failed to update chat: Chat was not found or access is denied.',
+      );
     }
 
     final stored = StoredChat.fromRow(updated, messages);
@@ -249,6 +271,31 @@ class ChatStorageService {
 
   static Future<void> loadSavedChatsForSidebar() async {
     await loadChats();
+  }
+
+  static Future<void> setChatStarred(String chatId, bool isStarred) async {
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) {
+      throw StateError('User must be signed in to update chat favorites.');
+    }
+    try {
+      await SupabaseService.client
+          .from('encrypted_chats')
+          .update({'is_starred': isStarred})
+          .eq('id', chatId)
+          .eq('user_id', user.id);
+    } on PostgrestException catch (error) {
+      throw StateError('Failed to update chat star: ${error.message}');
+    }
+
+    final index = _savedChats.indexWhere((chat) => chat.id == chatId);
+    if (index != -1) {
+      final updatedChats = List<StoredChat>.from(_savedChats);
+      final current = updatedChats[index];
+      updatedChats[index] = current.copyWith(isStarred: isStarred);
+      _savedChats = updatedChats;
+    }
+    _notifyChanges();
   }
 
   static Future<String> exportChatsAsJson() async {

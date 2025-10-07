@@ -8,10 +8,6 @@ import 'package:chuk_chat/services/profile_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart'; // Import the color extensions
 
-final List<String> _starredChats = [
-  'Book writing Per chapter',
-]; // Kept local for now
-
 class SidebarDesktop extends StatefulWidget {
   final Function(int index) onChatItemTapped;
   final Function() onSettingsTapped;
@@ -160,11 +156,40 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
     return chat.previewText;
   }
 
+  Future<void> _toggleStarred(StoredChat chat) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ChatStorageService.setChatStarred(chat.id, !chat.isStarred);
+      if (!mounted) return;
+      setState(() {
+        _filterRecentChats();
+      });
+    } on StateError catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Failed to update star: $error')),
+      );
+    }
+  }
+
+  void _openChat(StoredChat chat) {
+    final index = ChatStorageService.savedChats.indexWhere(
+      (stored) => stored.id == chat.id,
+    );
+    if (index != -1) {
+      widget.onChatItemTapped(index);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final Color iconFg = Theme.of(context).iconTheme.color!;
     final Color accent = Theme.of(context).colorScheme.primary;
     final Color sidebarBg = Theme.of(context).cardColor.darken(0.03);
+    final List<StoredChat> starredChats = ChatStorageService.savedChats
+        .where((chat) => chat.isStarred)
+        .toList();
 
     // The height of the top bar is calculated dynamically for desktop.
     // "New Chat" and "Projects" buttons are positioned *outside* this sidebar widget
@@ -233,9 +258,21 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
           const SizedBox(height: 16), // Spacing after search bar
           // Starred Section - Fixed
           _buildSectionHeader('Starred', iconFg: iconFg),
-          ..._starredChats.map(
-            (title) => _buildStarredItem(title, iconFg: iconFg),
-          ),
+          if (starredChats.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: _sidebarHorizontalPadding,
+                vertical: 8.0,
+              ),
+              child: Text(
+                'No starred chats yet.',
+                style: TextStyle(color: iconFg.withValues(alpha: 0.5)),
+              ),
+            )
+          else
+            ...starredChats.map(
+              (chat) => _buildStarredItem(chat, iconFg: iconFg, accent: accent),
+            ),
           Divider(
             color: Theme.of(context).dividerColor,
             indent: _sidebarHorizontalPadding,
@@ -279,13 +316,8 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
                   if (originalIndex == -1) {
                     return const SizedBox.shrink();
                   }
-                  String title = _deriveChatTitle(storedChat);
-                  if (title.length > 25) {
-                    title = '${title.substring(0, 22)}...';
-                  }
-
                   return _buildRecentItem(
-                    title,
+                    storedChat,
                     index: originalIndex,
                     onTap: () {
                       widget.onChatItemTapped(originalIndex);
@@ -363,28 +395,49 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
     );
   }
 
-  Widget _buildStarredItem(String title, {required Color iconFg}) {
+  Widget _buildStarredItem(
+    StoredChat chat, {
+    required Color iconFg,
+    required Color accent,
+  }) {
+    String title = _deriveChatTitle(chat);
+    if (title.length > 25) {
+      title = '${title.substring(0, 22)}...';
+    }
     return ListTile(
-      leading: _leadingIconPlaceholder(Icons.star_border, iconFgColor: iconFg),
-      title: Text(title),
-      onTap: () {},
+      leading: _leadingIconPlaceholder(Icons.star, iconFgColor: accent),
+      title: Text(title, style: TextStyle(color: iconFg)),
+      onTap: () => _openChat(chat),
       dense: true,
-      contentPadding: const EdgeInsets.only(left: _sidebarHorizontalPadding),
-      iconColor: iconFg,
+      contentPadding: const EdgeInsets.only(
+        left: _sidebarHorizontalPadding,
+        right: 8.0,
+      ),
+      iconColor: accent,
       textColor: iconFg,
+      trailing: IconButton(
+        icon: Icon(Icons.star, color: accent),
+        tooltip: 'Remove from starred',
+        onPressed: () => _toggleStarred(chat),
+      ),
     );
   }
 
   Widget _buildRecentItem(
-    String title, {
-    int? index,
+    StoredChat chat, {
+    required int index,
     bool isLast = false,
     VoidCallback? onTap,
     VoidCallback? onDelete,
     required Color accentColor,
     required Color iconFgColor,
   }) {
-    bool isSelected = index != null && index == widget.selectedChatIndex;
+    bool isSelected = index == widget.selectedChatIndex;
+    bool isStarred = chat.isStarred;
+    String title = _deriveChatTitle(chat);
+    if (title.length > 25) {
+      title = '${title.substring(0, 22)}...';
+    }
     return ListTile(
       leading: _leadingIconPlaceholder(
         Icons.chat_bubble_outline,
@@ -405,9 +458,21 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
       tileColor: isSelected ? accentColor.withValues(alpha: 0.1) : null,
       selectedTileColor: accentColor.withValues(alpha: 0.1),
       selectedColor: accentColor,
-      trailing: onDelete == null
-          ? null
-          : IconButton(
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: Icon(
+              isStarred ? Icons.star : Icons.star_border,
+              color: isStarred
+                  ? accentColor
+                  : iconFgColor.withValues(alpha: 0.7),
+            ),
+            tooltip: isStarred ? 'Remove from starred' : 'Add to starred',
+            onPressed: () => _toggleStarred(chat),
+          ),
+          if (onDelete != null)
+            IconButton(
               icon: Icon(
                 Icons.delete_outline,
                 color: iconFgColor.withValues(alpha: 0.7),
@@ -415,6 +480,8 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
               tooltip: 'Delete chat',
               onPressed: onDelete,
             ),
+        ],
+      ),
     );
   }
 
