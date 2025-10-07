@@ -218,7 +218,13 @@ class ChatStorageService {
     try {
       final dynamic decoded = jsonDecode(payload);
       if (decoded is Map<String, dynamic>) {
-        final version = decoded['v'];
+        final dynamic versionValue = decoded['v'];
+        int? version;
+        if (versionValue is int) {
+          version = versionValue;
+        } else if (versionValue is String) {
+          version = int.tryParse(versionValue);
+        }
         if (version != _kChatPayloadVersion) {
           throw StateError('Unsupported chat payload version: $version');
         }

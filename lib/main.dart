@@ -108,7 +108,13 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SupabaseService.initialize();
   if (SupabaseService.auth.currentSession != null) {
-    await EncryptionService.tryLoadKey();
+    try {
+      await EncryptionService.tryLoadKey();
+    } catch (error, stackTrace) {
+      debugPrint('Initial encryption key load failed: $error');
+      debugPrint('$stackTrace');
+      await EncryptionService.clearKey();
+    }
   }
   final initialTheme = await _bootstrapThemeSettings();
   runApp(ChukChatApp(initialTheme: initialTheme));
@@ -159,16 +165,19 @@ class _ChukChatAppState extends State<ChukChatApp> {
       event,
     ) async {
       if (event.session != null) {
-        final hasKey = await EncryptionService.tryLoadKey();
         try {
+          final hasKey = await EncryptionService.tryLoadKey();
           if (hasKey) {
             await ChatStorageService.loadSavedChatsForSidebar();
           } else {
             await EncryptionService.clearKey();
             ChatStorageService.reset();
           }
-        } catch (_) {
-          // Ignore chat sync errors here; UI will surface if interaction happens.
+        } catch (error, stackTrace) {
+          debugPrint('Post-login data sync failed: $error');
+          debugPrint('$stackTrace');
+          await EncryptionService.clearKey();
+          ChatStorageService.reset();
         }
         _loadThemeSettingsFromSupabase();
       } else {

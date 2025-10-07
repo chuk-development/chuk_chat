@@ -36,7 +36,15 @@ class EncryptionService {
       }
 
       final saltKey = '$_storageSaltPrefix${user.id}';
+      final keyKey = '$_storagePrefix${user.id}';
+      final versionKey = '$_storageVersionPrefix${user.id}';
       final storedSalt = await _storage.read(key: saltKey);
+      final storedKey = await _storage.read(key: keyKey);
+      if (storedKey != null && storedSalt == null) {
+        throw StateError(
+          'Stored encryption key is missing its salt; please sign in again.',
+        );
+      }
       final saltBytes = storedSalt != null
           ? base64Decode(storedSalt)
           : _randomNonce(_saltLength);
@@ -44,17 +52,19 @@ class EncryptionService {
         await _storage.write(key: saltKey, value: base64Encode(saltBytes));
       }
 
-      final keyBytes = await _deriveKey(password, saltBytes);
-      _cachedKey = SecretKey(keyBytes);
+      final derivedKeyBytes = await _deriveKey(password, saltBytes);
+      if (storedKey != null) {
+        final storedKeyBytes = base64Decode(storedKey);
+        if (!_constantTimeEquals(derivedKeyBytes, storedKeyBytes)) {
+          throw StateError('Incorrect password provided.');
+        }
+      } else {
+        await _storage.write(key: keyKey, value: base64Encode(derivedKeyBytes));
+      }
+
+      await _storage.write(key: versionKey, value: _payloadVersion);
+      _cachedKey = SecretKey(derivedKeyBytes);
       _cachedUserId = user.id;
-      await _storage.write(
-        key: '$_storagePrefix${user.id}',
-        value: base64Encode(keyBytes),
-      );
-      await _storage.write(
-        key: '$_storageVersionPrefix${user.id}',
-        value: _payloadVersion,
-      );
     });
   }
 
@@ -127,16 +137,24 @@ class EncryptionService {
   }
 
   static Future<SecretKey> _ensureKey() async {
-    if (_cachedKey != null) {
-      final currentUserId = SupabaseService.auth.currentUser?.id;
-      if (currentUserId != null && currentUserId != _cachedUserId) {
-        await clearKey();
-        throw StateError('Encryption key does not match active user.');
-      }
-      return _cachedKey!;
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) {
+      _cachedKey = null;
+      _cachedUserId = null;
+      throw StateError('Cannot use encryption without an authenticated user.');
     }
+
+    if (_cachedKey != null) {
+      if (_cachedUserId == user.id) {
+        return _cachedKey!;
+      }
+      _cachedKey = null;
+      _cachedUserId = null;
+      throw StateError('Encryption key does not match active user.');
+    }
+
     final loaded = await tryLoadKey();
-    if (!loaded) {
+    if (!loaded || _cachedUserId != user.id) {
       throw StateError('Encryption key is not available for the current user.');
     }
     return _cachedKey!;
@@ -172,5 +190,16 @@ class EncryptionService {
           },
         );
     return completer.future;
+  }
+
+  static bool _constantTimeEquals(List<int> a, List<int> b) {
+    if (a.length != b.length) {
+      return false;
+    }
+    var diff = 0;
+    for (var i = 0; i < a.length; i++) {
+      diff |= a[i] ^ b[i];
+    }
+    return diff == 0;
   }
 }

@@ -46,14 +46,16 @@ class _SidebarMobileState extends State<SidebarMobile> {
   List<StoredChat> _filteredRecentChats = [];
   ProfileRecord? _profile;
   Timer? _refreshTimer;
+  Future<void>? _refreshInFlight;
+  bool _refreshPending = false;
 
   @override
   void initState() {
     super.initState();
-    _loadChatsAndRefresh();
+    unawaited(_loadChatsAndRefresh());
     _startAutoRefresh();
     _searchController.addListener(_onSearchChanged);
-    _loadProfile();
+    unawaited(_loadProfile());
   }
 
   @override
@@ -80,25 +82,11 @@ class _SidebarMobileState extends State<SidebarMobile> {
   }
 
   Future<void> _refreshChatsPeriodically() async {
-    try {
-      await ChatStorageService.loadSavedChatsForSidebar();
-      if (!mounted) return;
-      setState(() {
-        _filterRecentChats();
-      });
-    } catch (_) {
-      // Ignore background sync errors; UI actions will surface them if needed.
-    }
+    await _refreshChats();
   }
 
   Future<void> _loadChatsAndRefresh() async {
-    // This method interacts with ChatStorageService, assuming it's correctly set up.
-    await ChatStorageService.loadSavedChatsForSidebar();
-    if (mounted) {
-      setState(() {
-        _filterRecentChats(); // Filter after loading/refreshing chats
-      });
-    }
+    await _refreshChats();
   }
 
   Future<void> _loadProfile() async {
@@ -111,8 +99,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
       setState(() {
         _profile = record;
       });
-    } catch (_) {
-      // Ignore profile load errors; fallback text is shown instead.
+    } catch (error, stackTrace) {
+      debugPrint('SidebarMobile profile load failed: $error');
+      debugPrint('$stackTrace');
     }
   }
 
@@ -129,6 +118,37 @@ class _SidebarMobileState extends State<SidebarMobile> {
     final first = parts.first.substring(0, 1).toUpperCase();
     final last = parts.last.substring(0, 1).toUpperCase();
     return '$first$last';
+  }
+
+  Future<void> _refreshChats() {
+    if (_refreshInFlight != null) {
+      _refreshPending = true;
+      return _refreshInFlight!;
+    }
+
+    final future = _performRefresh().whenComplete(() {
+      final shouldRepeat = _refreshPending;
+      _refreshInFlight = null;
+      _refreshPending = false;
+      if (shouldRepeat) {
+        unawaited(_refreshChats());
+      }
+    });
+    _refreshInFlight = future;
+    return future;
+  }
+
+  Future<void> _performRefresh() async {
+    try {
+      await ChatStorageService.loadSavedChatsForSidebar();
+      if (!mounted) return;
+      setState(() {
+        _filterRecentChats();
+      });
+    } catch (error, stackTrace) {
+      debugPrint('SidebarMobile chat sync failed: $error');
+      debugPrint('$stackTrace');
+    }
   }
 
   String _displayNameFor(ProfileRecord? profile) {
