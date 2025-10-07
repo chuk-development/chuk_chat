@@ -45,15 +45,15 @@ class EncryptionService {
       }
 
       final metadataUpdates = <String, dynamic>{};
-      final remoteSaltBase64 =
-          user.userMetadata?[_metadataSaltKey] as String?;
-      final remoteVersion =
-          user.userMetadata?[_metadataVersionKey] as String?;
+      final remoteSaltBase64 = user.userMetadata?[_metadataSaltKey] as String?;
+      final remoteVersion = user.userMetadata?[_metadataVersionKey] as String?;
 
       final canonicalSaltBase64 = await _resolveCanonicalSalt(
         userId: userId,
+        password: password,
         storedSaltBase64: storedSaltBase64,
         remoteSaltBase64: remoteSaltBase64,
+        storedKeyBase64: storedKeyBase64,
         metadataUpdates: metadataUpdates,
       );
 
@@ -62,8 +62,7 @@ class EncryptionService {
       }
 
       if (metadataUpdates.isNotEmpty) {
-        final updatedUser =
-            await _updateUserMetadata(user, metadataUpdates);
+        final updatedUser = await _updateUserMetadata(user, metadataUpdates);
         if (updatedUser != null) {
           user = updatedUser;
         }
@@ -84,10 +83,7 @@ class EncryptionService {
           throw StateError('Incorrect password provided.');
         }
       } else {
-        await _storage.write(
-          key: keyKey,
-          value: base64Encode(derivedKeyBytes),
-        );
+        await _storage.write(key: keyKey, value: base64Encode(derivedKeyBytes));
       }
 
       await _storage.write(key: versionKey, value: _payloadVersion);
@@ -124,10 +120,8 @@ class EncryptionService {
         return false;
       }
       final saltBase64 = await _storage.read(key: saltKey);
-      final remoteSaltBase64 =
-          user.userMetadata?[_metadataSaltKey] as String?;
-      final remoteVersion =
-          user.userMetadata?[_metadataVersionKey] as String?;
+      final remoteSaltBase64 = user.userMetadata?[_metadataSaltKey] as String?;
+      final remoteVersion = user.userMetadata?[_metadataVersionKey] as String?;
 
       final metadataUpdates = <String, dynamic>{};
 
@@ -159,10 +153,12 @@ class EncryptionService {
         await _storage.write(key: versionKey, value: _payloadVersion);
       }
 
-      _cachedKey = SecretKey(_decodeBase64OrThrow(
-        encoded,
-        'Stored encryption key is corrupted; please sign in again.',
-      ));
+      _cachedKey = SecretKey(
+        _decodeBase64OrThrow(
+          encoded,
+          'Stored encryption key is corrupted; please sign in again.',
+        ),
+      );
       _cachedUserId = user.id;
       return true;
     });
@@ -302,17 +298,54 @@ class EncryptionService {
 
   static Future<String> _resolveCanonicalSalt({
     required String userId,
+    required String password,
     required String? storedSaltBase64,
     required String? remoteSaltBase64,
+    required String? storedKeyBase64,
     required Map<String, dynamic> metadataUpdates,
   }) async {
     final saltKey = '$_storageSaltPrefix$userId';
 
     if (storedSaltBase64 != null && remoteSaltBase64 != null) {
-      if (remoteSaltBase64 != storedSaltBase64) {
-        metadataUpdates[_metadataSaltKey] = storedSaltBase64;
+      if (remoteSaltBase64 == storedSaltBase64) {
+        return storedSaltBase64;
       }
-      return storedSaltBase64;
+
+      if (storedKeyBase64 != null) {
+        final storedKeyBytes = _decodeBase64OrThrow(
+          storedKeyBase64,
+          'Stored encryption key is corrupted; please sign out and sign in again.',
+        );
+
+        final remoteSaltBytes = _decodeBase64OrThrow(
+          remoteSaltBase64,
+          'Remote encryption salt is corrupted. Sign out on other devices and retry.',
+        );
+        final derivedWithRemote = await _deriveKey(password, remoteSaltBytes);
+        if (_constantTimeEquals(derivedWithRemote, storedKeyBytes)) {
+          await _storage.write(key: saltKey, value: remoteSaltBase64);
+          metadataUpdates[_metadataSaltKey] = remoteSaltBase64;
+          return remoteSaltBase64;
+        }
+
+        final storedSaltBytes = _decodeBase64OrThrow(
+          storedSaltBase64,
+          'Stored encryption salt is corrupted; please sign out and sign in again.',
+        );
+        final derivedWithStored = await _deriveKey(password, storedSaltBytes);
+        if (_constantTimeEquals(derivedWithStored, storedKeyBytes)) {
+          metadataUpdates[_metadataSaltKey] = storedSaltBase64;
+          return storedSaltBase64;
+        }
+
+        throw StateError(
+          'Encryption data mismatch detected. Sign out everywhere, then sign back in with your password to regenerate encryption keys.',
+        );
+      }
+
+      await _storage.write(key: saltKey, value: remoteSaltBase64);
+      metadataUpdates[_metadataSaltKey] = remoteSaltBase64;
+      return remoteSaltBase64;
     }
 
     if (remoteSaltBase64 != null) {
@@ -331,10 +364,7 @@ class EncryptionService {
     return generatedSalt;
   }
 
-  static List<int> _decodeBase64OrThrow(
-    String data,
-    String errorMessage,
-  ) {
+  static List<int> _decodeBase64OrThrow(String data, String errorMessage) {
     try {
       return base64Decode(data);
     } on FormatException {
@@ -363,9 +393,7 @@ class EncryptionService {
       );
       return response.user;
     } on AuthException catch (error) {
-      throw StateError(
-        'Failed to sync encryption metadata: ${error.message}',
-      );
+      throw StateError('Failed to sync encryption metadata: ${error.message}');
     }
   }
 }

@@ -177,18 +177,18 @@ class _ChukChatAppState extends State<ChukChatApp> {
             }
           } else {
             await EncryptionService.clearKey();
-            ChatStorageService.reset();
+            await ChatStorageService.reset();
           }
         } catch (error, stackTrace) {
           debugPrint('Encryption key load failed: $error');
           debugPrint('$stackTrace');
           await EncryptionService.clearKey();
-          ChatStorageService.reset();
+          await ChatStorageService.reset();
         }
         _loadThemeSettingsFromSupabase();
       } else {
         unawaited(EncryptionService.clearKey());
-        ChatStorageService.reset();
+        await ChatStorageService.reset();
         _hasAppliedSupabaseTheme = false;
         _loadThemeSettingsFromPrefs();
       }

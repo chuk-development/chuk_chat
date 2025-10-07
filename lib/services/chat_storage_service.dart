@@ -86,18 +86,18 @@ class ChatStorageService {
   static Future<void> loadChats() async {
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
-      reset();
+      await reset();
       return;
     }
-    await _ensureRealtimeSubscription(user.id);
     if (!EncryptionService.hasKey) {
       final loaded = await EncryptionService.tryLoadKey();
       if (!loaded) {
         await EncryptionService.clearKey();
-        reset();
+        await reset();
         return;
       }
     }
+    await _ensureRealtimeSubscription(user.id);
     List<dynamic> data;
     try {
       data = await SupabaseService.client
@@ -314,11 +314,11 @@ class ChatStorageService {
     return jsonEncode(exportPayload);
   }
 
-  static void reset() {
+  static Future<void> reset() async {
     _savedChats = <StoredChat>[];
     selectedChatIndex = -1;
     _notifyChanges();
-    unawaited(_stopRealtimeSubscription());
+    await _stopRealtimeSubscription();
   }
 
   static List<ChatMessage> _mapToChatMessages(
@@ -389,7 +389,7 @@ class ChatStorageService {
     final channelName = 'public:encrypted_chats_user_$userId';
     final channel = SupabaseService.client.channel(channelName);
     void handleChange(PostgresChangePayload payload) {
-      unawaited(_reloadChatsFromRealtime());
+      unawaited(_handleRealtimeChange(payload));
     }
 
     channel
@@ -436,8 +436,11 @@ class ChatStorageService {
     try {
       await loadChats();
     } catch (error, stackTrace) {
-      debugPrint('Realtime chat sync failed: $error');
-      debugPrint('$stackTrace');
+      _reportRealtimeError(
+        error,
+        stackTrace,
+        context: 'reloading chats after realtime event',
+      );
     }
   }
 
@@ -449,11 +452,109 @@ class ChatStorageService {
     try {
       await _realtimeChannel!.unsubscribe();
     } catch (error, stackTrace) {
-      debugPrint('Failed to unsubscribe from chat realtime: $error');
-      debugPrint('$stackTrace');
+      _reportRealtimeError(
+        error,
+        stackTrace,
+        context: 'stopping realtime subscription',
+      );
     } finally {
       _realtimeChannel = null;
       _realtimeUserId = null;
     }
+  }
+
+  static Future<void> _handleRealtimeChange(
+    PostgresChangePayload payload,
+  ) async {
+    try {
+      switch (payload.eventType) {
+        case PostgresChangeEvent.delete:
+          final Map<String, dynamic> oldRecord = payload.oldRecord;
+          final chatId =
+              (oldRecord['id'] ?? payload.newRecord['id']) as String?;
+          if (chatId == null) return;
+          _removeChatLocally(chatId);
+          return;
+        case PostgresChangeEvent.insert:
+        case PostgresChangeEvent.update:
+          final Map<String, dynamic> record = payload.newRecord;
+          final encryptedPayload = record['encrypted_payload'] as String?;
+          if (encryptedPayload == null) {
+            return;
+          }
+          if (!EncryptionService.hasKey) {
+            final loaded = await EncryptionService.tryLoadKey();
+            if (!loaded) {
+              return;
+            }
+          }
+          final decrypted = await EncryptionService.decrypt(encryptedPayload);
+          final messages = _deserializeMessages(decrypted);
+          final stored = StoredChat.fromRow(record, messages);
+          _upsertChatLocally(stored);
+          return;
+        case PostgresChangeEvent.all:
+          break;
+      }
+      await _reloadChatsFromRealtime();
+    } catch (error, stackTrace) {
+      _reportRealtimeError(
+        error,
+        stackTrace,
+        context: 'processing realtime change',
+      );
+    }
+  }
+
+  static void _upsertChatLocally(StoredChat chat) {
+    final existingIndex = _savedChats.indexWhere((c) => c.id == chat.id);
+    if (existingIndex != -1) {
+      final updatedChats = List<StoredChat>.from(_savedChats);
+      updatedChats[existingIndex] = chat;
+      _savedChats = updatedChats;
+    } else {
+      _savedChats = <StoredChat>[chat, ..._savedChats];
+      if (selectedChatIndex != -1) {
+        selectedChatIndex += 1;
+      }
+    }
+    _notifyChanges();
+  }
+
+  static void _removeChatLocally(String chatId) {
+    final removedIndex = _savedChats.indexWhere((chat) => chat.id == chatId);
+    if (removedIndex == -1) {
+      return;
+    }
+    _savedChats.removeAt(removedIndex);
+    if (selectedChatIndex == removedIndex) {
+      selectedChatIndex = -1;
+    } else if (selectedChatIndex > removedIndex) {
+      selectedChatIndex -= 1;
+    }
+    if (selectedChatIndex >= _savedChats.length) {
+      selectedChatIndex = _savedChats.isEmpty ? -1 : _savedChats.length - 1;
+    }
+    _notifyChanges();
+  }
+
+  static void _reportRealtimeError(
+    Object error,
+    StackTrace stackTrace, {
+    required String context,
+  }) {
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: error,
+        stack: stackTrace,
+        library: 'ChatStorageService',
+        context: ErrorDescription(context),
+        informationCollector: () sync* {
+          yield DiagnosticsNode.message(
+            'Active realtime user: ${_realtimeUserId ?? 'none'}',
+          );
+        },
+      ),
+    );
   }
 }
