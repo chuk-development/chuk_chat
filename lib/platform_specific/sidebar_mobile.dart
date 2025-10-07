@@ -1,4 +1,6 @@
 // lib/platform_specific/sidebar_mobile.dart
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/constants.dart'; // Assuming this exists
 import 'package:chuk_chat/services/chat_storage_service.dart'; // Assuming this exists
@@ -43,17 +45,20 @@ class _SidebarMobileState extends State<SidebarMobile> {
   String _searchQuery = '';
   List<StoredChat> _filteredRecentChats = [];
   ProfileRecord? _profile;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _loadChatsAndRefresh();
+    _startAutoRefresh();
     _searchController.addListener(_onSearchChanged);
     _loadProfile();
   }
 
   @override
   void dispose() {
+    _refreshTimer?.cancel();
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     super.dispose();
@@ -64,6 +69,26 @@ class _SidebarMobileState extends State<SidebarMobile> {
       _searchQuery = _searchController.text;
       _filterRecentChats();
     });
+  }
+
+  void _startAutoRefresh() {
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _refreshChatsPeriodically(),
+    );
+  }
+
+  Future<void> _refreshChatsPeriodically() async {
+    try {
+      await ChatStorageService.loadSavedChatsForSidebar();
+      if (!mounted) return;
+      setState(() {
+        _filterRecentChats();
+      });
+    } catch (_) {
+      // Ignore background sync errors; UI actions will surface them if needed.
+    }
   }
 
   Future<void> _loadChatsAndRefresh() async {
