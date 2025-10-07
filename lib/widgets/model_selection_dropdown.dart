@@ -12,13 +12,13 @@ class ModelSelectionDropdown extends StatefulWidget {
   final String? compactLabel; // Optional label for compact mode (e.g., "#")
 
   const ModelSelectionDropdown({
-    Key? key,
+    super.key,
     required this.initialSelectedModelId,
     required this.onModelSelected,
     required this.textFieldFocusNode,
     this.isCompactMode = false,
     this.compactLabel,
-  }) : super(key: key);
+  });
 
   @override
   State<ModelSelectionDropdown> createState() => _ModelSelectionDropdownState();
@@ -83,12 +83,12 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       } else {
         _errorMessage = 'Failed to load models: ${response.statusCode}';
         _selectedModelName = 'Error Loading';
-        print('API Error: $_errorMessage');
+        debugPrint('API Error: $_errorMessage');
       }
     } catch (e) {
       _errorMessage = 'Network error: $e';
       _selectedModelName = 'Network Error';
-      print('Network Error fetching models: $e');
+      debugPrint('Network Error fetching models: $e');
     } finally {
       setState(() {
         _isLoadingModels = false;
@@ -130,7 +130,9 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
               color: bgColor,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                color: hovered ? iconFgColor : iconFgColor.withOpacity(0.3),
+                color: hovered
+                    ? iconFgColor
+                    : iconFgColor.withValues(alpha: 0.3),
                 width: hovered ? 1.2 : 0.8,
               ),
             ),
@@ -163,7 +165,11 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
                       maxLines: 1,
                     ),
                   ),
-                  Icon(Icons.keyboard_arrow_down, color: iconFgColor.withOpacity(0.8), size: 16),
+                  Icon(
+                    Icons.keyboard_arrow_down,
+                    color: iconFgColor.withValues(alpha: 0.8),
+                    size: 16,
+                  ),
                 ],
               ],
             ),
@@ -187,11 +193,10 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
     }
 
     return PopupMenuButton<String>(
-      child: _buildDropdownButtonContent(),
       color: bgColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: iconFgColor.withOpacity(0.3)),
+        side: BorderSide(color: iconFgColor.withValues(alpha: 0.3)),
       ),
       onSelected: (value) {
         setState(() {
@@ -212,13 +217,25 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
               if (m.isToggle)
                 Row(
                   children: [
-                    Switch(value: selected, onChanged: (_) {}, activeColor: iconFgColor),
+                    Switch(
+                      value: selected,
+                      onChanged: (_) {},
+                      activeThumbColor: iconFgColor,
+                      activeTrackColor: iconFgColor.withValues(alpha: 0.5),
+                    ),
                     const SizedBox(width: 6),
                     Text('Best', style: TextStyle(color: iconFgColor)),
                   ],
                 )
               else
-                Text(m.name, style: TextStyle(color: selected ? iconFgColor : iconFgColor.withOpacity(0.8))),
+                Text(
+                  m.name,
+                  style: TextStyle(
+                    color: selected
+                        ? iconFgColor
+                        : iconFgColor.withValues(alpha: 0.8),
+                  ),
+                ),
               const Spacer(),
               if (!m.isToggle && selected) Icon(Icons.check, color: iconFgColor, size: 18),
               if (m.badge != null)
@@ -235,6 +252,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
           ),
         );
       }).toList(),
+      child: _buildDropdownButtonContent(),
     );
   }
 }

@@ -18,8 +18,8 @@ import 'package:chuk_chat/services/theme_settings_service.dart';
 import 'package:chuk_chat/widgets/auth_gate.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-class _InitialThemeData {
-  const _InitialThemeData({
+class InitialThemeData {
+  const InitialThemeData({
     required this.themeMode,
     required this.accentColor,
     required this.iconColor,
@@ -36,7 +36,7 @@ class _InitialThemeData {
   final bool loadedFromSupabase;
 }
 
-Future<_InitialThemeData> _bootstrapThemeSettings() async {
+Future<InitialThemeData> _bootstrapThemeSettings() async {
   final prefs = await SharedPreferences.getInstance();
 
   Brightness themeMode =
@@ -93,7 +93,7 @@ Future<_InitialThemeData> _bootstrapThemeSettings() async {
     }
   }
 
-  return _InitialThemeData(
+  return InitialThemeData(
     themeMode: themeMode,
     accentColor: accentColor,
     iconColor: iconColor,
@@ -121,9 +121,9 @@ Future<void> main() async {
 }
 
 class ChukChatApp extends StatefulWidget {
-  const ChukChatApp({Key? key, required this.initialTheme}) : super(key: key);
+  const ChukChatApp({super.key, required this.initialTheme});
 
-  final _InitialThemeData initialTheme;
+  final InitialThemeData initialTheme;
 
   @override
   State<ChukChatApp> createState() => _ChukChatAppState();

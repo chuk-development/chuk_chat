@@ -2,7 +2,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:chuk_chat/constants.dart'; // Assuming this exists
 import 'package:chuk_chat/services/chat_storage_service.dart'; // Assuming this exists
 import 'package:chuk_chat/services/profile_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -20,14 +19,14 @@ class SidebarMobile extends StatefulWidget {
   final bool isCompactMode; // Not directly used in the UI, but kept for context
 
   const SidebarMobile({
-    Key? key,
+    super.key,
     required this.onChatItemTapped,
     required this.onSettingsTapped,
     required this.onProjectsTapped,
     this.onChatDeleted,
     required this.selectedChatIndex,
     required this.isCompactMode,
-  }) : super(key: key);
+  });
 
   @override
   State<SidebarMobile> createState() => _SidebarMobileState();
@@ -317,15 +316,13 @@ class _SidebarMobileState extends State<SidebarMobile> {
           const SizedBox(height: 24.0), // Spacing between groups
           // Starred Section - Fixed
           _buildSectionHeader('Starred', textColor: textColorDefault),
-          ..._starredChats
-              .map(
-                (title) => _buildStarredItem(
-                  title,
-                  iconColorDefault,
-                  textColorDefault,
-                ),
-              )
-              .toList(),
+          ..._starredChats.map(
+            (title) => _buildStarredItem(
+              title,
+              iconColorDefault,
+              textColorDefault,
+            ),
+          ),
           Divider(
             color: dividerColor,
             indent: _sidebarHorizontalPadding,
@@ -359,7 +356,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
                       vertical: 8.0,
                     ),
                     child: Text(
-                      'No chats found for "${_searchQuery}".',
+                      'No chats found for "$_searchQuery".',
                       style: TextStyle(
                         color: iconColorDefault.withValues(alpha: 0.4),
                       ),
@@ -389,7 +386,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
                     iconColor: iconColorDefault,
                     textColor: textColorDefault,
                   );
-                }).toList(),
+                }),
                 const SizedBox(height: 10),
               ],
             ),

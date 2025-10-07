@@ -1,11 +1,8 @@
 // lib/pages/settings_page.dart
 import 'dart:convert';
-import 'dart:typed_data';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/model_selector_page.dart';
 import 'package:chuk_chat/pages/theme_page.dart';
 import 'package:chuk_chat/pages/account_settings_page.dart';
@@ -30,7 +27,7 @@ class SettingsPage extends StatelessWidget {
   final Function(bool) setGrainEnabled;
 
   const SettingsPage({
-    Key? key,
+    super.key,
     required this.currentThemeMode,
     required this.currentAccentColor,
     required this.currentIconFgColor,
@@ -41,7 +38,7 @@ class SettingsPage extends StatelessWidget {
     required this.setBgColor,
     required this.grainEnabled, // added
     required this.setGrainEnabled, // added
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -213,10 +210,12 @@ class SettingsPage extends StatelessWidget {
           mimeType: 'application/json',
           name: fileName,
         );
-        await Share.shareXFiles(
-          [xFile],
-          subject: 'chuk.chat chat export',
-          text: 'Backup of your chuk.chat conversations.',
+        await SharePlus.instance.share(
+          ShareParams(
+            files: [xFile],
+            subject: 'chuk.chat chat export',
+            text: 'Backup of your chuk.chat conversations.',
+          ),
         );
         messenger.showSnackBar(
           const SnackBar(

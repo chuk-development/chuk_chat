@@ -17,7 +17,7 @@ class ThemePage extends StatefulWidget {
   final Function(bool) setGrainEnabled;   // NEW
 
   const ThemePage({
-    Key? key,
+    super.key,
     required this.currentThemeMode,
     required this.currentAccentColor,
     required this.currentIconFgColor,
@@ -28,7 +28,7 @@ class ThemePage extends StatefulWidget {
     required this.setBgColor,
     required this.grainEnabled,
     required this.setGrainEnabled,
-  }) : super(key: key);
+  });
 
   @override
   State<ThemePage> createState() => _ThemePageState();
@@ -103,6 +103,23 @@ class _ThemePageState extends State<ThemePage> {
     widget.setGrainEnabled(_selectedGrain); // NEW
   }
 
+  void _updateThemeMode(bool useDarkMode) {
+    setState(() {
+      _selectedThemeMode = useDarkMode ? Brightness.dark : Brightness.light;
+      _selectedBgColor =
+          useDarkMode ? kDefaultBgColor : kDefaultBgColor.lighten(0.8);
+      _bgHexController.text = _selectedBgColor.toHexString();
+      _applyThemeChanges();
+    });
+  }
+
+  void _updateGrainEnabled(bool enabled) {
+    setState(() {
+      _selectedGrain = enabled;
+      _applyThemeChanges();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -110,6 +127,7 @@ class _ThemePageState extends State<ThemePage> {
     final Color accent = theme.colorScheme.primary;
     final Color iconFg = theme.iconTheme.color!;
     final TextStyle? titleTextStyle = theme.appBarTheme.titleTextStyle;
+    final bool isDarkMode = _selectedThemeMode == Brightness.dark;
 
     return Scaffold(
       backgroundColor: scaffoldBg,
@@ -125,21 +143,23 @@ class _ThemePageState extends State<ThemePage> {
           // Dark Mode
           _card(
             context,
-            child: SwitchListTile(
-              title: Text('Dark Mode', style: TextStyle(color: iconFg, fontWeight: FontWeight.w600)),
-              subtitle: Text('Toggle between dark and light themes', style: TextStyle(color: iconFg.withValues(alpha: 0.6))),
-              value: _selectedThemeMode == Brightness.dark,
-              onChanged: (value) {
-                setState(() {
-                  _selectedThemeMode = value ? Brightness.dark : Brightness.light;
-                  _selectedBgColor = _selectedThemeMode == Brightness.dark
-                      ? kDefaultBgColor
-                      : kDefaultBgColor.lighten(0.8);
-                  _bgHexController.text = _selectedBgColor.toHexString();
-                  _applyThemeChanges();
-                });
-              },
-              activeColor: accent,
+            child: ListTile(
+              title: Text(
+                'Dark Mode',
+                style:
+                    TextStyle(color: iconFg, fontWeight: FontWeight.w600),
+              ),
+              subtitle: Text(
+                'Toggle between dark and light themes',
+                style: TextStyle(color: iconFg.withValues(alpha: 0.6)),
+              ),
+              trailing: Switch(
+                value: isDarkMode,
+                onChanged: _updateThemeMode,
+                activeThumbColor: accent,
+                activeTrackColor: accent.withValues(alpha: 0.5),
+              ),
+              onTap: () => _updateThemeMode(!isDarkMode),
             ),
           ),
           const SizedBox(height: 24),
@@ -225,17 +245,23 @@ class _ThemePageState extends State<ThemePage> {
           // Film Grain
           _card(
             context,
-            child: SwitchListTile(
-              title: Text('Film Grain Effect', style: TextStyle(color: iconFg, fontWeight: FontWeight.w600)),
-              subtitle: Text('Add a subtle shot-on-film texture', style: TextStyle(color: iconFg.withValues(alpha: 0.6))),
-              value: _selectedGrain,
-              onChanged: (value) {
-                setState(() {
-                  _selectedGrain = value;
-                  _applyThemeChanges();
-                });
-              },
-              activeColor: accent,
+            child: ListTile(
+              title: Text(
+                'Film Grain Effect',
+                style:
+                    TextStyle(color: iconFg, fontWeight: FontWeight.w600),
+              ),
+              subtitle: Text(
+                'Add a subtle shot-on-film texture',
+                style: TextStyle(color: iconFg.withValues(alpha: 0.6)),
+              ),
+              trailing: Switch(
+                value: _selectedGrain,
+                onChanged: _updateGrainEnabled,
+                activeThumbColor: accent,
+                activeTrackColor: accent.withValues(alpha: 0.5),
+              ),
+              onTap: () => _updateGrainEnabled(!_selectedGrain),
             ),
           ),
         ],
@@ -307,7 +333,7 @@ class _ThemePageState extends State<ThemePage> {
           spacing: 12.0,
           runSpacing: 12.0,
           children: options.map((color) {
-            final bool isSelected = color.value == currentColor.value;
+            final bool isSelected = color == currentColor;
             return GestureDetector(
               onTap: () => onColorSelected(color),
               child: Container(

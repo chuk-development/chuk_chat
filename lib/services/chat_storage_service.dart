@@ -56,11 +56,9 @@ class StoredChat {
 
 class ChatStorageService {
   static List<StoredChat> _savedChats = <StoredChat>[];
-  static int _selectedChatIndex = -1;
+  static int selectedChatIndex = -1;
 
   static List<StoredChat> get savedChats => List.unmodifiable(_savedChats);
-  static int get selectedChatIndex => _selectedChatIndex;
-  static set selectedChatIndex(int index) => _selectedChatIndex = index;
 
   static Future<void> loadChats() async {
     final user = SupabaseService.auth.currentUser;
@@ -177,15 +175,16 @@ class ChatStorageService {
     );
     if (removedIndex != -1) {
       _savedChats.removeAt(removedIndex);
-      if (_selectedChatIndex == removedIndex) {
-        _selectedChatIndex = -1;
-      } else if (_selectedChatIndex > removedIndex) {
-        _selectedChatIndex -= 1;
+      if (selectedChatIndex == removedIndex) {
+        selectedChatIndex = -1;
+      } else if (selectedChatIndex > removedIndex) {
+        selectedChatIndex -= 1;
       }
     }
 
-    if (_selectedChatIndex >= _savedChats.length) {
-      _selectedChatIndex = _savedChats.isEmpty ? -1 : _savedChats.length - 1;
+    if (selectedChatIndex >= _savedChats.length) {
+      selectedChatIndex =
+          _savedChats.isEmpty ? -1 : _savedChats.length - 1;
     }
   }
 
@@ -211,7 +210,7 @@ class ChatStorageService {
 
   static void reset() {
     _savedChats = <StoredChat>[];
-    _selectedChatIndex = -1;
+    selectedChatIndex = -1;
   }
 
   static List<ChatMessage> _deserializeMessages(String payload) {

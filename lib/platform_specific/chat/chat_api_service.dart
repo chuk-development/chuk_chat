@@ -1,9 +1,9 @@
 // lib/platform_specific/chat/chat_api_service.dart
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:io'; // Import for SocketException
 import 'dart:async'; // Import for TimeoutException
-import 'package:chuk_chat/models/chat_model.dart'; // For AttachedFile
 
 /// A service for handling chat-related API interactions,
 /// such as file uploads.
@@ -44,7 +44,9 @@ class ChatApiService {
           final jsonResponse = json.decode(response.body);
           onUploadStatusUpdate?.call(
               fileId, jsonResponse['markdown_content'], false, null); // Success
-          print('File "$fileName" conversion successful. Markdown content received.');
+          debugPrint(
+            'File "$fileName" conversion successful. Markdown content received.',
+          );
           uploadSuccess = true;
         } else {
           final errorBody = json.decode(response.body);
@@ -54,12 +56,12 @@ class ChatApiService {
             false,
             'Failed to upload "$fileName" (Status: ${response.statusCode}): ${errorBody['detail'] ?? response.reasonPhrase}',
           );
-          print(
+          debugPrint(
               'File upload failed for "$fileName" (Status: ${response.statusCode}): ${response.body}');
           break; // Exit retry loop for server errors
         }
       } catch (e) {
-        print(
+        debugPrint(
             'Upload attempt failed for "$fileName" (Attempt ${retryCount + 1}/$maxRetries): $e');
         retryCount++;
 

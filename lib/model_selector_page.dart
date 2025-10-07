@@ -5,7 +5,6 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_svg/flutter_svg.dart'; // Import for SVG support
 
 // Import your app constants for colors and theme
-import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/utils/color_extensions.dart'; // Import the new extension
 
 // --- Data Models (Mirroring your FastAPI Pydantic Models) ---
@@ -44,7 +43,7 @@ class PricingDetails {
     final pricePerMillion = pricePerToken * 1000000;
     String priceStr = pricePerMillion.toStringAsFixed(6);
     priceStr = priceStr.replaceAll(RegExp(r'\.?0+$'), '');
-    return '\$${priceStr}/M';
+    return '\$$priceStr/M';
   }
 
   // Helper to format request price (not per million)
@@ -228,7 +227,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
           height: size,
           fit: BoxFit.contain,
           errorBuilder: (context, error, stackTrace) {
-            print('Error loading image from $imageUrl: $error');
+            debugPrint('Error loading image from $imageUrl: $error');
             return Icon(fallbackIcon, color: iconFg.lighten(0.3), size: size); // Fallback icon is tinted
           },
         );
@@ -372,7 +371,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                             const SizedBox(height: 16),
                           ],
                         );
-                      }).toList(),
+                      }),
                       const SizedBox(height: 16),
                       Center(
                         child: ElevatedButton.icon(

@@ -20,14 +20,14 @@ class CustomSidebar extends StatefulWidget {
   final bool isCompactMode;
 
   const CustomSidebar({
-    Key? key,
+    super.key,
     required this.onChatItemTapped,
     required this.onSettingsTapped,
     required this.onProjectsTapped,
     this.onChatDeleted,
     required this.selectedChatIndex,
     required this.isCompactMode,
-  }) : super(key: key);
+  });
 
   @override
   State<CustomSidebar> createState() => _CustomSidebarState();
@@ -142,8 +142,7 @@ class _CustomSidebarState extends State<CustomSidebar> {
           // Starred Section - Fixed
           _buildSectionHeader('Starred', iconFg: iconFg),
           ..._starredChats
-              .map((title) => _buildStarredItem(title, iconFg: iconFg))
-              .toList(),
+              .map((title) => _buildStarredItem(title, iconFg: iconFg)),
           Divider(
             color: Theme.of(context).dividerColor,
             indent: _sidebarHorizontalPadding,
@@ -188,7 +187,7 @@ class _CustomSidebarState extends State<CustomSidebar> {
                     accentColor: accent,
                     iconFgColor: iconFg,
                   );
-                }).toList(),
+                }),
                 const SizedBox(
                   height: 10,
                 ), // Small space at the end of scrollable content

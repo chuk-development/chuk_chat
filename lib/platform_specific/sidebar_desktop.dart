@@ -19,14 +19,14 @@ class SidebarDesktop extends StatefulWidget {
   final bool isCompactMode;
 
   const SidebarDesktop({
-    Key? key,
+    super.key,
     required this.onChatItemTapped,
     required this.onSettingsTapped,
     required this.onProjectsTapped,
     this.onChatDeleted,
     required this.selectedChatIndex,
     required this.isCompactMode,
-  }) : super(key: key);
+  });
 
   @override
   State<SidebarDesktop> createState() => _SidebarDesktopState();
@@ -224,8 +224,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
           // Starred Section - Fixed
           _buildSectionHeader('Starred', iconFg: iconFg),
           ..._starredChats
-              .map((title) => _buildStarredItem(title, iconFg: iconFg))
-              .toList(),
+              .map((title) => _buildStarredItem(title, iconFg: iconFg)),
           Divider(
             color: Theme.of(context).dividerColor,
             indent: _sidebarHorizontalPadding,
@@ -257,7 +256,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
                       vertical: 8.0,
                     ),
                     child: Text(
-                      'No chats found for "${_searchQuery}".',
+                      'No chats found for "$_searchQuery".',
                       style: TextStyle(color: iconFg.withValues(alpha: 0.5)),
                     ),
                   ),
@@ -284,7 +283,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
                     accentColor: accent,
                     iconFgColor: iconFg,
                   );
-                }).toList(),
+                }),
                 const SizedBox(height: 10),
               ],
             ),

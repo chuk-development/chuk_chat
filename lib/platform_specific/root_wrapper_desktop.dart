@@ -1,6 +1,5 @@
 // lib/platform_specific/root_wrapper_desktop.dart
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'dart:math' as math;
 
 import 'package:chuk_chat/constants.dart';
@@ -9,7 +8,6 @@ import 'package:chuk_chat/platform_specific/chat/chat_ui_desktop.dart';
 import 'package:chuk_chat/platform_specific/sidebar_desktop.dart'; // UPDATED
 import 'package:chuk_chat/pages/projects_page.dart';
 import 'package:chuk_chat/pages/settings_page.dart';
-import 'package:chuk_chat/utils/color_extensions.dart';
 
 /* ---------- ROOT WRAPPER DESKTOP (for Desktop, Web, and Tablets) ---------- */
 class RootWrapperDesktop extends StatefulWidget {
@@ -26,7 +24,7 @@ class RootWrapperDesktop extends StatefulWidget {
   final Function(bool) setGrainEnabled;
 
   const RootWrapperDesktop({
-    Key? key,
+    super.key,
     required this.currentThemeMode,
     required this.currentAccentColor,
     required this.currentIconFgColor,
@@ -37,7 +35,7 @@ class RootWrapperDesktop extends StatefulWidget {
     required this.setBgColor,
     required this.grainEnabled,
     required this.setGrainEnabled,
-  }) : super(key: key);
+  });
 
   @override
   State<RootWrapperDesktop> createState() => _RootWrapperDesktopState();

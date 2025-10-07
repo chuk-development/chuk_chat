@@ -9,7 +9,6 @@ import 'package:chuk_chat/pages/settings_page.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_mobile.dart';
 import 'package:chuk_chat/platform_specific/sidebar_mobile.dart'; // UPDATED: Use mobile sidebar
 import 'package:chuk_chat/services/chat_storage_service.dart';
-import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 /* ---------- ROOT WRAPPER MOBILE (for Phones) ---------- */
@@ -27,7 +26,7 @@ class RootWrapperMobile extends StatefulWidget {
   final Function(bool) setGrainEnabled;
 
   const RootWrapperMobile({
-    Key? key,
+    super.key,
     required this.currentThemeMode,
     required this.currentAccentColor,
     required this.currentIconFgColor,
@@ -38,7 +37,7 @@ class RootWrapperMobile extends StatefulWidget {
     required this.setBgColor,
     required this.grainEnabled,
     required this.setGrainEnabled,
-  }) : super(key: key);
+  });
 
   @override
   State<RootWrapperMobile> createState() => _RootWrapperMobileState();
@@ -126,7 +125,6 @@ class _RootWrapperMobileState extends State<RootWrapperMobile> {
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
     final Color iconFg = Theme.of(context).iconTheme.color!;
-    final Color sidebarBg = Theme.of(context).cardColor.darken(0.03);
 
     final double sidebarVisibleWidth = math.min(screenWidth * 0.7, 280.0);
     final double titleAvailableWidth =

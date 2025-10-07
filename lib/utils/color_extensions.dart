@@ -19,7 +19,8 @@ extension ColorExtension on Color {
 
   // Converts a Color to its hex string representation (e.g., #RRGGBB)
   String toHexString() {
-    return '#${(value & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}';
+    final rgb = toARGB32() & 0xFFFFFF;
+    return '#${rgb.toRadixString(16).padLeft(6, '0').toUpperCase()}';
   }
 
   // Creates a Color from a hex string (e.g., #RRGGBB or RRGGBB)

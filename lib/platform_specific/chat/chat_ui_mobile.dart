@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:math' as math;
-import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
@@ -22,11 +21,11 @@ class ChukChatUIMobile extends StatefulWidget {
   final bool isSidebarExpanded; // Passed from RootWrapperMobile
 
   const ChukChatUIMobile({
-    Key? key,
+    super.key,
     required this.onToggleSidebar,
     required this.selectedChatIndex,
     required this.isSidebarExpanded,
-  }) : super(key: key);
+  });
 
   @override
   State<ChukChatUIMobile> createState() => ChukChatUIMobileState();
@@ -327,7 +326,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
-                  'Skipping "${fileName}": too many concurrent uploads. Try again soon.',
+                  'Skipping "$fileName": too many concurrent uploads. Try again soon.',
                 ),
               ),
             );
@@ -344,7 +343,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         _chatApiService.performFileUpload(file, fileName, fileId);
       }
     } else {
-      print('File picking canceled.');
+      debugPrint('File picking canceled.');
     }
   }
 
@@ -374,7 +373,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         true; // Mobile shows a hashtag-only trigger for model menu.
 
     final double screenWidth = MediaQuery.of(context).size.width;
-    final Color bg = Theme.of(context).scaffoldBackgroundColor;
     final Color accent = Theme.of(context).colorScheme.primary;
     final Color iconFg = Theme.of(context).iconTheme.color!;
     final Color textColor = iconFg;
@@ -424,7 +422,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                           child: Text(
                             'Start a new chat!',
                             style: TextStyle(
-                              color: iconFg.withOpacity(0.6),
+                              color: iconFg.withValues(alpha: 0.6),
                               fontSize: 18,
                             ),
                           ),
@@ -500,7 +498,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       height: _kAttachmentBarHeight,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
       decoration: BoxDecoration(
-        color: Colors.grey.shade800.withOpacity(0.9),
+        color: Colors.grey.shade800.withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.grey.shade700),
       ),
@@ -544,7 +542,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
             else
               Icon(
                 Icons.insert_drive_file,
-                color: textColor.withOpacity(0.8),
+                color: textColor.withValues(alpha: 0.8),
                 size: 16,
               ),
             const SizedBox(width: 6),
@@ -559,7 +557,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         onDeleted: file.isUploading ? null : () => _removeAttachedFile(file.id),
         deleteIcon: Icon(
           Icons.close,
-          color: textColor.withOpacity(0.8),
+          color: textColor.withValues(alpha: 0.8),
           size: 16,
         ),
         deleteButtonTooltipMessage: 'Remove "${file.fileName}"',
@@ -581,7 +579,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: iconFg.withOpacity(0.3)),
+        border: Border.all(color: iconFg.withValues(alpha: 0.3)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Column(
@@ -591,30 +589,31 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: RawKeyboardListener(
+                child: KeyboardListener(
                   focusNode: _rawKeyboardListenerFocusNode,
-                  onKey: (event) {
-                    if (event.runtimeType.toString() == 'RawKeyDownEvent') {
-                      if (event.isKeyPressed(LogicalKeyboardKey.enter)) {
-                        if (event.isShiftPressed) {
-                          final v = _controller.value;
-                          final t = v.text.replaceRange(
-                            v.selection.start,
-                            v.selection.end,
-                            '\n',
-                          );
-                          _controller.value = v.copyWith(
-                            text: t,
-                            selection: TextSelection.collapsed(
-                              offset: v.selection.start + 1,
-                            ),
-                          );
-                          return;
-                        } else {
-                          _sendMessage();
-                        }
-                      }
+                  onKeyEvent: (event) {
+                    if (event is! KeyDownEvent) return;
+                    if (event.logicalKey != LogicalKeyboardKey.enter) return;
+
+                    final isShiftPressed =
+                        HardwareKeyboard.instance.isShiftPressed;
+                    if (isShiftPressed) {
+                      final value = _controller.value;
+                      final updatedText = value.text.replaceRange(
+                        value.selection.start,
+                        value.selection.end,
+                        '\n',
+                      );
+                      _controller.value = value.copyWith(
+                        text: updatedText,
+                        selection: TextSelection.collapsed(
+                          offset: value.selection.start + 1,
+                        ),
+                      );
+                      return;
                     }
+
+                    _sendMessage();
                   },
                   child: TextField(
                     controller: _controller,
@@ -629,7 +628,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                       hintText: hasAttachments
                           ? 'Add a message or send documents'
                           : 'Ask me anything !',
-                      hintStyle: TextStyle(color: iconFg.withOpacity(0.8)),
+                      hintStyle: TextStyle(
+                        color: iconFg.withValues(alpha: 0.8),
+                      ),
                       border: InputBorder.none,
                       enabledBorder: InputBorder.none,
                       focusedBorder: InputBorder.none,
@@ -679,7 +680,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 icon: Icons.psychology,
                 onTap: () {
                   setState(() => _isBrainActive = !_isBrainActive);
-                  print('Brain button toggled: $_isBrainActive');
+                  debugPrint('Brain button toggled: $_isBrainActive');
                 },
                 isActive: _isBrainActive,
                 debugLabel: 'Brain button',
@@ -690,7 +691,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 icon: Icons.image,
                 onTap: () {
                   setState(() => _isImageActive = !_isImageActive);
-                  print('Image button toggled: $_isImageActive');
+                  debugPrint('Image button toggled: $_isImageActive');
                 },
                 isActive: _isImageActive,
                 debugLabel: 'Image button',
@@ -703,7 +704,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                   setState(() {
                     _selectedModelId = newModelId;
                   });
-                  print('Selected model ID: $_selectedModelId');
+                  debugPrint('Selected model ID: $_selectedModelId');
                 },
                 textFieldFocusNode: _textFieldFocusNode,
                 isCompactMode:
@@ -716,7 +717,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 icon: Icons.mic,
                 onTap: () {
                   setState(() => _isMicActive = !_isMicActive);
-                  print('Mic button toggled: $_isMicActive');
+                  debugPrint('Mic button toggled: $_isMicActive');
                 },
                 isActive: _isMicActive,
                 debugLabel: 'Mic button',
@@ -773,8 +774,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
             final Color effectiveBorderColor = hovered
                 ? iconFg
                 : isActive
-                ? iconFg.withOpacity(0.6)
-                : iconFg.withOpacity(0.3);
+                ? iconFg.withValues(alpha: 0.6)
+                : iconFg.withValues(alpha: 0.3);
 
             final double effectiveBorderWidth = hovered
                 ? 1.2

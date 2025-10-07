@@ -3,14 +3,13 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'dart:ui' as ui; // Import for MaskFilter
 
-import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/models/voice_mode_models.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/utils/color_extensions.dart'; // Import for color extensions
 
 ///  Voice-Mode  –  UI ONLY  –  LifeKit ready
 class VoiceModePage extends StatefulWidget {
-  const VoiceModePage({Key? key}) : super(key: key);
+  const VoiceModePage({super.key});
 
   @override
   State<VoiceModePage> createState() => _VoiceModePageState();
@@ -699,7 +698,7 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
   Widget _visualiser() {
     return AnimatedBuilder(
       animation: _barCtrl,
-      builder: (_, __) {
+      builder: (_, child) {
         // Determine the active color based on state
         Color activeColor =
             accent.withValues(alpha: 0.3); // Default idle color, subtle accent
@@ -729,7 +728,7 @@ class _VoiceModePageState extends State<VoiceModePage> with TickerProviderStateM
           height: 40,
           child: AnimatedBuilder(
             animation: _waveCtrl,
-            builder: (_, __) => CustomPaint(
+            builder: (_, child) => CustomPaint(
               painter: _WavePainter(_waveCtrl.value, accent),
               size: const Size(double.infinity, 40),
             ),

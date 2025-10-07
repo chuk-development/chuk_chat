@@ -8,11 +8,11 @@ class MessageBubble extends StatelessWidget {
   final double? maxWidth; // Neue optionale Eigenschaft für responsive Breite
 
   const MessageBubble({
-    Key? key,
+    super.key,
     required this.message,
     required this.isUser,
     this.maxWidth,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
