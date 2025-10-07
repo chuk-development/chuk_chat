@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:math' as math; // For min/max
+import 'dart:async';
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
@@ -38,6 +39,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   // RENAMED STATE
   final TextEditingController _controller = TextEditingController();
   final List<Map<String, String>> _messages = [];
+  String? _activeChatId;
   final ScrollController _scrollController = ScrollController();
   late ChatApiService _chatApiService;
   final FocusNode _textFieldFocusNode = FocusNode();
@@ -103,8 +105,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _messages.clear();
       _animCtrl.reset();
       _attachedFiles.clear();
+      _activeChatId = null;
     } else if (index >= 0 && index < ChatStorageService.savedChats.length) {
       final storedChat = ChatStorageService.savedChats[index];
+      _activeChatId = storedChat.id;
       _messages
         ..clear()
         ..addAll(
@@ -119,6 +123,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       } else {
         _animCtrl.reset();
       }
+    } else {
+      _activeChatId = null;
     }
     setState(() {
       _isBrainActive = false;
@@ -130,12 +136,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   }
 
   void newChat() async {
-    if (_messages.isNotEmpty) {
-      await ChatStorageService.saveChat(_messages);
-    }
+    await _persistChat(waitForCompletion: true);
     setState(() {
       _messages.clear();
       _animCtrl.reset();
+      _activeChatId = null;
       ChatStorageService.selectedChatIndex = -1;
       _isBrainActive = false;
       _isImageActive = false;
@@ -211,6 +216,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _controller.clear();
     });
     _textFieldFocusNode.requestFocus(); // Keep focus after sending
+    _persistChat();
 
     // Only trigger the animation/move-down effect when the FIRST message is sent
     // This also implicitly starts the chat content animation (_anim.forward())
@@ -239,6 +245,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         });
       });
       _scrollChatToBottom();
+      _persistChat();
     });
   }
 
@@ -385,6 +392,44 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         curve: Curves.easeOut,
       );
     });
+  }
+
+  Future<void> _persistChat({bool waitForCompletion = false}) async {
+    if (_messages.isEmpty) return;
+    final messagesCopy = _messages
+        .map((message) => Map<String, String>.from(message))
+        .toList(growable: false);
+    final operation = _persistChatInternal(messagesCopy, _activeChatId);
+    if (waitForCompletion) {
+      await operation;
+    } else {
+      unawaited(operation);
+    }
+  }
+
+  Future<void> _persistChatInternal(
+    List<Map<String, String>> messagesCopy,
+    String? chatId,
+  ) async {
+    try {
+      final stored = chatId == null
+          ? await ChatStorageService.saveChat(messagesCopy)
+          : await ChatStorageService.updateChat(chatId, messagesCopy);
+      if (!mounted || stored == null) return;
+      setState(() {
+        _activeChatId = stored.id;
+      });
+      final index = ChatStorageService.savedChats
+          .indexWhere((chat) => chat.id == stored.id);
+      if (index != -1) {
+        ChatStorageService.selectedChatIndex = index;
+      }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to store chat: $error')),
+      );
+    }
   }
 
   @override

@@ -1,4 +1,6 @@
 // sidebar.dart
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
@@ -40,12 +42,23 @@ class _CustomSidebarState extends State<CustomSidebar> {
       24.0; // Standard icon width for alignment
   static const double _iconTextSpacing = 16.0; // Spacing between icon and text
   ProfileRecord? _profile;
+  StreamSubscription<void>? _chatUpdatesSub;
 
   @override
   void initState() {
     super.initState();
     _loadChatsAndRefresh();
     _loadProfile();
+    _chatUpdatesSub = ChatStorageService.changes.listen((_) {
+      if (!mounted) return;
+      setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _chatUpdatesSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadChatsAndRefresh() async {
@@ -141,8 +154,9 @@ class _CustomSidebarState extends State<CustomSidebar> {
           ), // Uses the calculated constant
           // Starred Section - Fixed
           _buildSectionHeader('Starred', iconFg: iconFg),
-          ..._starredChats
-              .map((title) => _buildStarredItem(title, iconFg: iconFg)),
+          ..._starredChats.map(
+            (title) => _buildStarredItem(title, iconFg: iconFg),
+          ),
           Divider(
             color: Theme.of(context).dividerColor,
             indent: _sidebarHorizontalPadding,

@@ -4,6 +4,7 @@ import 'dart:math';
 
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:chuk_chat/services/supabase_service.dart';
 
@@ -14,6 +15,8 @@ class EncryptionService {
   static const String _storagePrefix = 'chat_key_';
   static const String _storageSaltPrefix = 'chat_salt_';
   static const String _storageVersionPrefix = 'chat_key_version_';
+  static const String _metadataSaltKey = 'chat_kdf_salt';
+  static const String _metadataVersionKey = 'chat_key_version';
   static const String _payloadVersion = '1';
   static const int _kdfIterations = 600000;
   static const int _saltLength = 16;
@@ -28,38 +31,63 @@ class EncryptionService {
 
   static Future<void> initializeForPassword(String password) async {
     await _runExclusive(() async {
-      final user = SupabaseService.auth.currentUser;
-      if (user == null) {
-        throw StateError(
-          'Cannot initialise encryption without an authenticated user.',
-        );
-      }
-
-      final saltKey = '$_storageSaltPrefix${user.id}';
-      final keyKey = '$_storagePrefix${user.id}';
-      final versionKey = '$_storageVersionPrefix${user.id}';
-      final storedSalt = await _storage.read(key: saltKey);
-      final storedKey = await _storage.read(key: keyKey);
-      if (storedKey != null && storedSalt == null) {
+      User user = await _requireAuthenticatedUser();
+      final userId = user.id;
+      final saltKey = '$_storageSaltPrefix$userId';
+      final keyKey = '$_storagePrefix$userId';
+      final versionKey = '$_storageVersionPrefix$userId';
+      final storedSaltBase64 = await _storage.read(key: saltKey);
+      final storedKeyBase64 = await _storage.read(key: keyKey);
+      if (storedKeyBase64 != null && storedSaltBase64 == null) {
         throw StateError(
           'Stored encryption key is missing its salt; please sign in again.',
         );
       }
-      final saltBytes = storedSalt != null
-          ? base64Decode(storedSalt)
-          : _randomNonce(_saltLength);
-      if (storedSalt == null) {
-        await _storage.write(key: saltKey, value: base64Encode(saltBytes));
+
+      final metadataUpdates = <String, dynamic>{};
+      final remoteSaltBase64 =
+          user.userMetadata?[_metadataSaltKey] as String?;
+      final remoteVersion =
+          user.userMetadata?[_metadataVersionKey] as String?;
+
+      final canonicalSaltBase64 = await _resolveCanonicalSalt(
+        userId: userId,
+        storedSaltBase64: storedSaltBase64,
+        remoteSaltBase64: remoteSaltBase64,
+        metadataUpdates: metadataUpdates,
+      );
+
+      if (remoteVersion != _payloadVersion) {
+        metadataUpdates[_metadataVersionKey] = _payloadVersion;
       }
 
+      if (metadataUpdates.isNotEmpty) {
+        final updatedUser =
+            await _updateUserMetadata(user, metadataUpdates);
+        if (updatedUser != null) {
+          user = updatedUser;
+        }
+      }
+
+      final saltBytes = _decodeBase64OrThrow(
+        canonicalSaltBase64,
+        'Stored encryption salt is corrupted; please sign in again.',
+      );
+
       final derivedKeyBytes = await _deriveKey(password, saltBytes);
-      if (storedKey != null) {
-        final storedKeyBytes = base64Decode(storedKey);
+      if (storedKeyBase64 != null) {
+        final storedKeyBytes = _decodeBase64OrThrow(
+          storedKeyBase64,
+          'Stored encryption key is corrupted; please sign in again.',
+        );
         if (!_constantTimeEquals(derivedKeyBytes, storedKeyBytes)) {
           throw StateError('Incorrect password provided.');
         }
       } else {
-        await _storage.write(key: keyKey, value: base64Encode(derivedKeyBytes));
+        await _storage.write(
+          key: keyKey,
+          value: base64Encode(derivedKeyBytes),
+        );
       }
 
       await _storage.write(key: versionKey, value: _payloadVersion);
@@ -70,19 +98,71 @@ class EncryptionService {
 
   static Future<bool> tryLoadKey() {
     return _runExclusive(() async {
-      final user = SupabaseService.auth.currentUser;
-      if (user == null) {
+      final currentUser = SupabaseService.auth.currentUser;
+      if (currentUser == null) {
         _cachedKey = null;
         _cachedUserId = null;
         return false;
       }
-      final encoded = await _storage.read(key: '$_storagePrefix${user.id}');
+      User user = currentUser;
+      try {
+        final response = await SupabaseService.auth.getUser();
+        user = response.user ?? user;
+      } catch (_) {
+        // Ignore refresh failures; fall back to cached metadata.
+      }
+
+      final userId = user.id;
+      final keyKey = '$_storagePrefix$userId';
+      final saltKey = '$_storageSaltPrefix$userId';
+      final versionKey = '$_storageVersionPrefix$userId';
+
+      final encoded = await _storage.read(key: keyKey);
       if (encoded == null) {
         _cachedKey = null;
         _cachedUserId = null;
         return false;
       }
-      _cachedKey = SecretKey(base64Decode(encoded));
+      final saltBase64 = await _storage.read(key: saltKey);
+      final remoteSaltBase64 =
+          user.userMetadata?[_metadataSaltKey] as String?;
+      final remoteVersion =
+          user.userMetadata?[_metadataVersionKey] as String?;
+
+      final metadataUpdates = <String, dynamic>{};
+
+      if (saltBase64 != null) {
+        if (remoteSaltBase64 == null || remoteSaltBase64 != saltBase64) {
+          metadataUpdates[_metadataSaltKey] = saltBase64;
+        }
+      } else if (remoteSaltBase64 != null) {
+        await _storage.write(key: saltKey, value: remoteSaltBase64);
+      }
+
+      if (remoteVersion != _payloadVersion) {
+        metadataUpdates[_metadataVersionKey] = _payloadVersion;
+      }
+
+      if (metadataUpdates.isNotEmpty) {
+        try {
+          final updated = await _updateUserMetadata(user, metadataUpdates);
+          if (updated != null) {
+            user = updated;
+          }
+        } catch (_) {
+          // Ignore metadata sync failures during background load.
+        }
+      }
+
+      final version = await _storage.read(key: versionKey);
+      if (version == null) {
+        await _storage.write(key: versionKey, value: _payloadVersion);
+      }
+
+      _cachedKey = SecretKey(_decodeBase64OrThrow(
+        encoded,
+        'Stored encryption key is corrupted; please sign in again.',
+      ));
       _cachedUserId = user.id;
       return true;
     });
@@ -201,5 +281,91 @@ class EncryptionService {
       diff |= a[i] ^ b[i];
     }
     return diff == 0;
+  }
+
+  static Future<User> _requireAuthenticatedUser() async {
+    final currentUser = SupabaseService.auth.currentUser;
+    if (currentUser == null) {
+      throw StateError(
+        'Cannot initialise encryption without an authenticated user.',
+      );
+    }
+    User user = currentUser;
+    try {
+      final response = await SupabaseService.auth.getUser();
+      user = response.user ?? user;
+    } catch (_) {
+      // If fetching latest metadata fails we fall back to cached user data.
+    }
+    return user;
+  }
+
+  static Future<String> _resolveCanonicalSalt({
+    required String userId,
+    required String? storedSaltBase64,
+    required String? remoteSaltBase64,
+    required Map<String, dynamic> metadataUpdates,
+  }) async {
+    final saltKey = '$_storageSaltPrefix$userId';
+
+    if (storedSaltBase64 != null && remoteSaltBase64 != null) {
+      if (remoteSaltBase64 != storedSaltBase64) {
+        metadataUpdates[_metadataSaltKey] = storedSaltBase64;
+      }
+      return storedSaltBase64;
+    }
+
+    if (remoteSaltBase64 != null) {
+      await _storage.write(key: saltKey, value: remoteSaltBase64);
+      return remoteSaltBase64;
+    }
+
+    if (storedSaltBase64 != null) {
+      metadataUpdates[_metadataSaltKey] = storedSaltBase64;
+      return storedSaltBase64;
+    }
+
+    final generatedSalt = base64Encode(_randomNonce(_saltLength));
+    await _storage.write(key: saltKey, value: generatedSalt);
+    metadataUpdates[_metadataSaltKey] = generatedSalt;
+    return generatedSalt;
+  }
+
+  static List<int> _decodeBase64OrThrow(
+    String data,
+    String errorMessage,
+  ) {
+    try {
+      return base64Decode(data);
+    } on FormatException {
+      throw StateError(errorMessage);
+    }
+  }
+
+  static Future<User?> _updateUserMetadata(
+    User user,
+    Map<String, dynamic> patch,
+  ) async {
+    if (patch.isEmpty) return null;
+    final existing = Map<String, dynamic>.from(user.userMetadata ?? {});
+    var hasChanges = false;
+    for (final entry in patch.entries) {
+      if (existing[entry.key] != entry.value) {
+        hasChanges = true;
+        existing[entry.key] = entry.value;
+      }
+    }
+    if (!hasChanges) return null;
+
+    try {
+      final response = await SupabaseService.auth.updateUser(
+        UserAttributes(data: existing),
+      );
+      return response.user;
+    } on AuthException catch (error) {
+      throw StateError(
+        'Failed to sync encryption metadata: ${error.message}',
+      );
+    }
   }
 }

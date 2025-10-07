@@ -38,6 +38,7 @@ class ChukChatUIState extends State<ChukChatUI>
     with SingleTickerProviderStateMixin {
   final TextEditingController _controller = TextEditingController();
   final List<Map<String, String>> _messages = [];
+  String? _activeChatId;
   final ScrollController _scrollController = ScrollController();
 
   final FocusNode _textFieldFocusNode = FocusNode();
@@ -102,8 +103,10 @@ class ChukChatUIState extends State<ChukChatUI>
       _messages.clear();
       _animCtrl.reset();
       _attachedFiles.clear();
+      _activeChatId = null;
     } else if (index >= 0 && index < ChatStorageService.savedChats.length) {
       final storedChat = ChatStorageService.savedChats[index];
+      _activeChatId = storedChat.id;
       _messages
         ..clear()
         ..addAll(
@@ -118,6 +121,8 @@ class ChukChatUIState extends State<ChukChatUI>
       } else {
         _animCtrl.reset();
       }
+    } else {
+      _activeChatId = null;
     }
     setState(() {
       _isBrainActive = false;
@@ -129,12 +134,11 @@ class ChukChatUIState extends State<ChukChatUI>
   }
 
   void newChat() async {
-    if (_messages.isNotEmpty) {
-      await ChatStorageService.saveChat(_messages);
-    }
+    await _persistChat(waitForCompletion: true);
     setState(() {
       _messages.clear();
       _animCtrl.reset();
+      _activeChatId = null;
       ChatStorageService.selectedChatIndex = -1;
       _isBrainActive = false;
       _isImageActive = false;
@@ -174,6 +178,8 @@ class ChukChatUIState extends State<ChukChatUI>
       _controller.clear();
     });
 
+    _persistChat();
+
     // Only trigger the animation/move-down effect when the FIRST message is sent
     // This also implicitly starts the chat content animation (_anim.forward())
     if (firstMessageInChat) _animCtrl.forward();
@@ -203,6 +209,7 @@ class ChukChatUIState extends State<ChukChatUI>
       });
       _scrollChatToBottom();
       Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+      _persistChat();
     });
   }
 
@@ -450,6 +457,44 @@ class ChukChatUIState extends State<ChukChatUI>
         curve: Curves.easeOut,
       );
     });
+  }
+
+  Future<void> _persistChat({bool waitForCompletion = false}) async {
+    if (_messages.isEmpty) return;
+    final messagesCopy = _messages
+        .map((message) => Map<String, String>.from(message))
+        .toList(growable: false);
+    final operation = _persistChatInternal(messagesCopy, _activeChatId);
+    if (waitForCompletion) {
+      await operation;
+    } else {
+      unawaited(operation);
+    }
+  }
+
+  Future<void> _persistChatInternal(
+    List<Map<String, String>> messagesCopy,
+    String? chatId,
+  ) async {
+    try {
+      final stored = chatId == null
+          ? await ChatStorageService.saveChat(messagesCopy)
+          : await ChatStorageService.updateChat(chatId, messagesCopy);
+      if (!mounted || stored == null) return;
+      setState(() {
+        _activeChatId = stored.id;
+      });
+      final index = ChatStorageService.savedChats
+          .indexWhere((chat) => chat.id == stored.id);
+      if (index != -1) {
+        ChatStorageService.selectedChatIndex = index;
+      }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to store chat: $error')),
+      );
+    }
   }
 
   @override

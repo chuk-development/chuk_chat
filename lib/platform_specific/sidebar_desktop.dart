@@ -1,4 +1,6 @@
 // lib/platform_specific/sidebar_desktop.dart
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
@@ -43,6 +45,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
   String _searchQuery = '';
   List<StoredChat> _filteredRecentChats = [];
   ProfileRecord? _profile;
+  StreamSubscription<void>? _chatUpdatesSub;
 
   @override
   void initState() {
@@ -50,10 +53,17 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
     _loadChatsAndRefresh(); // Initial load and filter
     _searchController.addListener(_onSearchChanged);
     _loadProfile();
+    _chatUpdatesSub = ChatStorageService.changes.listen((_) {
+      if (!mounted) return;
+      setState(() {
+        _filterRecentChats();
+      });
+    });
   }
 
   @override
   void dispose() {
+    _chatUpdatesSub?.cancel();
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     super.dispose();
@@ -223,8 +233,9 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
           const SizedBox(height: 16), // Spacing after search bar
           // Starred Section - Fixed
           _buildSectionHeader('Starred', iconFg: iconFg),
-          ..._starredChats
-              .map((title) => _buildStarredItem(title, iconFg: iconFg)),
+          ..._starredChats.map(
+            (title) => _buildStarredItem(title, iconFg: iconFg),
+          ),
           Divider(
             color: Theme.of(context).dividerColor,
             indent: _sidebarHorizontalPadding,

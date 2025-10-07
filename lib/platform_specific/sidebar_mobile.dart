@@ -47,6 +47,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
   Timer? _refreshTimer;
   Future<void>? _refreshInFlight;
   bool _refreshPending = false;
+  StreamSubscription<void>? _chatUpdatesSub;
 
   @override
   void initState() {
@@ -55,10 +56,17 @@ class _SidebarMobileState extends State<SidebarMobile> {
     _startAutoRefresh();
     _searchController.addListener(_onSearchChanged);
     unawaited(_loadProfile());
+    _chatUpdatesSub = ChatStorageService.changes.listen((_) {
+      if (!mounted) return;
+      setState(() {
+        _filterRecentChats();
+      });
+    });
   }
 
   @override
   void dispose() {
+    _chatUpdatesSub?.cancel();
     _refreshTimer?.cancel();
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
@@ -317,11 +325,8 @@ class _SidebarMobileState extends State<SidebarMobile> {
           // Starred Section - Fixed
           _buildSectionHeader('Starred', textColor: textColorDefault),
           ..._starredChats.map(
-            (title) => _buildStarredItem(
-              title,
-              iconColorDefault,
-              textColorDefault,
-            ),
+            (title) =>
+                _buildStarredItem(title, iconColorDefault, textColorDefault),
           ),
           Divider(
             color: dividerColor,
