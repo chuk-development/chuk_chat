@@ -1,6 +1,7 @@
 // lib/platform_specific/sidebar_mobile.dart
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart'; // Assuming this exists
 import 'package:chuk_chat/services/profile_service.dart';
@@ -36,6 +37,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
   static const double _iconLeadingWidth = 24.0;
   // Spacing between icon and text (originally in main.dart's Drawer)
   static const double _iconTextSpacing = 16.0;
+  static const Duration _searchDebounceDuration =
+      Duration(milliseconds: 300);
+  static const int _searchMessageLimit = 50;
 
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
@@ -45,6 +49,8 @@ class _SidebarMobileState extends State<SidebarMobile> {
   Future<void>? _refreshInFlight;
   bool _refreshPending = false;
   StreamSubscription<void>? _chatUpdatesSub;
+  Timer? _searchDebounce;
+  int _filterGeneration = 0;
 
   @override
   void initState() {
@@ -55,25 +61,26 @@ class _SidebarMobileState extends State<SidebarMobile> {
     unawaited(_loadProfile());
     _chatUpdatesSub = ChatStorageService.changes.listen((_) {
       if (!mounted) return;
-      setState(() {
-        _filterRecentChats();
-      });
+      unawaited(_filterRecentChats());
     });
+    unawaited(_filterRecentChats());
   }
 
   @override
   void dispose() {
     _chatUpdatesSub?.cancel();
     _refreshTimer?.cancel();
+    _searchDebounce?.cancel();
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     super.dispose();
   }
 
   void _onSearchChanged() {
-    setState(() {
-      _searchQuery = _searchController.text;
-      _filterRecentChats();
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(_searchDebounceDuration, () {
+      if (!mounted) return;
+      unawaited(_filterRecentChats());
     });
   }
 
@@ -146,9 +153,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
     try {
       await ChatStorageService.loadSavedChatsForSidebar();
       if (!mounted) return;
-      setState(() {
-        _filterRecentChats();
-      });
+      await _filterRecentChats();
     } catch (error, stackTrace) {
       debugPrint('SidebarMobile chat sync failed: $error');
       debugPrint('$stackTrace');
@@ -175,9 +180,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
     try {
       await ChatStorageService.setChatStarred(chat.id, !chat.isStarred);
       if (!mounted) return;
-      setState(() {
-        _filterRecentChats();
-      });
+      await _filterRecentChats();
     } on StateError catch (error) {
       messenger.showSnackBar(SnackBar(content: Text(error.message)));
     } catch (error) {
@@ -227,9 +230,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
       await ChatStorageService.deleteChat(chat.id);
       await ChatStorageService.loadSavedChatsForSidebar();
       if (!mounted) return;
-      setState(() {
-        _filterRecentChats();
-      });
+      await _filterRecentChats();
       if (widget.onChatDeleted != null) {
         await widget.onChatDeleted!(chat.id);
       }
@@ -245,22 +246,93 @@ class _SidebarMobileState extends State<SidebarMobile> {
     }
   }
 
-  void _filterRecentChats() {
-    if (_searchQuery.isEmpty) {
-      _filteredRecentChats = List<StoredChat>.from(
-        ChatStorageService.savedChats,
-      );
-    } else {
-      final lowerQuery = _searchQuery.toLowerCase();
-      _filteredRecentChats = ChatStorageService.savedChats.where((chat) {
-        final titleMatches =
-            _deriveChatTitle(chat).toLowerCase().contains(lowerQuery);
-        if (titleMatches) return true;
-        return chat.messages.any(
-          (message) => message.text.toLowerCase().contains(lowerQuery),
-        );
-      }).toList();
+  Future<void> _filterRecentChats() async {
+    final String query = _searchController.text.trim();
+    final List<StoredChat> savedChats = ChatStorageService.savedChats;
+    final int currentGeneration = ++_filterGeneration;
+
+    if (query.isEmpty) {
+      if (!mounted || currentGeneration != _filterGeneration) return;
+      setState(() {
+        _searchQuery = '';
+        _filteredRecentChats = List<StoredChat>.from(savedChats);
+      });
+      return;
     }
+
+    if (savedChats.isEmpty) {
+      if (!mounted || currentGeneration != _filterGeneration) return;
+      setState(() {
+        _searchQuery = query;
+        _filteredRecentChats = const <StoredChat>[];
+      });
+      return;
+    }
+
+    final String lowerQuery = query.toLowerCase();
+
+    if (kIsWeb) {
+      final List<StoredChat> filtered =
+          _filterChatsLocally(savedChats, lowerQuery);
+      if (!mounted || currentGeneration != _filterGeneration) return;
+      setState(() {
+        _searchQuery = query;
+        _filteredRecentChats = filtered;
+      });
+      return;
+    }
+
+    final List<Map<String, Object?>> payload = savedChats
+        .map((chat) => {
+              'id': chat.id,
+              'preview': _deriveChatTitle(chat).toLowerCase(),
+              'messages': chat.messages
+                  .take(_searchMessageLimit)
+                  .map((message) => message.text.toLowerCase())
+                  .toList(growable: false),
+            })
+        .toList(growable: false);
+
+    try {
+      final List<String> matchIds = await compute(
+        _filterChatsIsolate,
+        {'chats': payload, 'query': lowerQuery},
+      );
+      if (!mounted || currentGeneration != _filterGeneration) return;
+      final Set<String> matchIdSet = matchIds.toSet();
+      final List<StoredChat> latestChats = ChatStorageService.savedChats;
+      final List<StoredChat> filtered = latestChats
+          .where((chat) => matchIdSet.contains(chat.id))
+          .toList(growable: false);
+      setState(() {
+        _searchQuery = query;
+        _filteredRecentChats = filtered;
+      });
+    } catch (error, stackTrace) {
+      debugPrint('SidebarMobile filtering failed: $error');
+      debugPrint('$stackTrace');
+      if (!mounted || currentGeneration != _filterGeneration) return;
+      final List<StoredChat> fallback =
+          _filterChatsLocally(savedChats, lowerQuery);
+      setState(() {
+        _searchQuery = query;
+        _filteredRecentChats = fallback;
+      });
+    }
+  }
+
+  List<StoredChat> _filterChatsLocally(
+    List<StoredChat> chats,
+    String lowerQuery,
+  ) {
+    return chats.where((chat) {
+      final bool titleMatches =
+          _deriveChatTitle(chat).toLowerCase().contains(lowerQuery);
+      if (titleMatches) return true;
+      return chat.messages
+          .take(_searchMessageLimit)
+          .any((message) => message.text.toLowerCase().contains(lowerQuery));
+    }).toList(growable: false);
   }
 
   @override
@@ -272,7 +344,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
     // Also refresh filtered chats if the underlying ChatStorageService.savedChats list changes
     if (ChatStorageService.savedChats.length != _filteredRecentChats.length &&
         _searchQuery.isEmpty) {
-      _filterRecentChats();
+      unawaited(_filterRecentChats());
     }
   }
 
@@ -652,4 +724,37 @@ class _SidebarMobileState extends State<SidebarMobile> {
   // as per the new styling. However, for "Projects" if it needs a distinct style,
   // we could re-introduce a version of it or define it directly.
   // For now, it uses _buildDrawerItem.
+}
+
+List<String> _filterChatsIsolate(Map<String, dynamic> params) {
+  final List<dynamic> chats = params['chats'] as List<dynamic>? ?? const [];
+  final String query = params['query'] as String? ?? '';
+  if (query.isEmpty || chats.isEmpty) {
+    return const <String>[];
+  }
+
+  final List<String> matches = <String>[];
+  for (final dynamic entry in chats) {
+    final Map<dynamic, dynamic> chat = entry as Map<dynamic, dynamic>;
+    final String? id = chat['id'] as String?;
+    if (id == null) {
+      continue;
+    }
+
+    final String preview = (chat['preview'] as String?) ?? '';
+    if (preview.contains(query)) {
+      matches.add(id);
+      continue;
+    }
+
+    final List<dynamic> messages = chat['messages'] as List<dynamic>? ?? const [];
+    final bool hasMatch = messages.any(
+      (dynamic message) => (message as String).contains(query),
+    );
+    if (hasMatch) {
+      matches.add(id);
+    }
+  }
+
+  return matches;
 }

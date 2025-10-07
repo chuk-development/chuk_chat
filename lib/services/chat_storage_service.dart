@@ -131,6 +131,42 @@ class ChatStorageService {
     _notifyChanges();
   }
 
+  static Future<void> reencryptChats(List<StoredChat> chats) async {
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) {
+      throw StateError('User must be signed in to migrate chats.');
+    }
+
+    for (final chat in chats) {
+      final payload = jsonEncode({
+        'v': _kChatPayloadVersion,
+        'messages': chat.messages.map((message) => message.toJson()).toList(),
+      });
+      final encryptedPayload = await EncryptionService.encrypt(payload);
+      List<dynamic> updatedRows;
+      try {
+        updatedRows = await SupabaseService.client
+            .from('encrypted_chats')
+            .update({'encrypted_payload': encryptedPayload})
+            .eq('id', chat.id)
+            .eq('user_id', user.id)
+            .select('id');
+      } on PostgrestException catch (error) {
+        throw StateError(
+          'Failed to re-encrypt chat ${chat.id}: ${error.message}',
+        );
+      }
+      if (updatedRows.isEmpty) {
+        throw StateError(
+          'Failed to re-encrypt chat ${chat.id}: chat was not found.',
+        );
+      }
+    }
+
+    _savedChats = List<StoredChat>.from(chats);
+    _notifyChanges();
+  }
+
   static Future<StoredChat?> saveChat(
     List<Map<String, String>> messagesMaps,
   ) async {

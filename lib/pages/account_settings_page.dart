@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:chuk_chat/services/password_change_service.dart';
 import 'package:chuk_chat/services/profile_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
@@ -17,13 +18,22 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
   final ProfileService _profileService = const ProfileService();
   final TextEditingController _displayNameCtrl = TextEditingController();
   final TextEditingController _emailCtrl = TextEditingController();
+  final TextEditingController _currentPasswordCtrl = TextEditingController();
+  final TextEditingController _newPasswordCtrl = TextEditingController();
+  final TextEditingController _confirmPasswordCtrl = TextEditingController();
 
   bool _notificationsEnabled = true;
   bool _weeklySummaryEnabled = false;
   bool _isSaving = false;
   bool _isLoading = true;
+  bool _isChangingPassword = false;
+  bool _obscureCurrentPassword = true;
+  bool _obscureNewPassword = true;
+  bool _obscureConfirmPassword = true;
   ProfileRecord? _profile;
   String? _errorMessage;
+  String? _passwordChangeError;
+  String? _passwordChangeNotice;
 
   @override
   void initState() {
@@ -35,6 +45,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
   void dispose() {
     _displayNameCtrl.dispose();
     _emailCtrl.dispose();
+    _currentPasswordCtrl.dispose();
+    _newPasswordCtrl.dispose();
+    _confirmPasswordCtrl.dispose();
     super.dispose();
   }
 
@@ -130,6 +143,61 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       setState(() {
         _isSaving = false;
         _errorMessage = 'Failed to save profile: $error';
+      });
+    }
+  }
+
+  Future<void> _changePassword() async {
+    if (_isChangingPassword) return;
+
+    final newPassword = _newPasswordCtrl.text;
+    final confirmPassword = _confirmPasswordCtrl.text;
+    if (newPassword.trim() != confirmPassword.trim()) {
+      setState(() {
+        _passwordChangeError = 'New passwords do not match.';
+        _passwordChangeNotice = null;
+      });
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _isChangingPassword = true;
+      _passwordChangeError = null;
+      _passwordChangeNotice = null;
+    });
+
+    const service = PasswordChangeService();
+    try {
+      final notice = await service.changePassword(
+        currentPassword: _currentPasswordCtrl.text,
+        newPassword: newPassword,
+      );
+      if (!mounted) return;
+      _currentPasswordCtrl.clear();
+      _newPasswordCtrl.clear();
+      _confirmPasswordCtrl.clear();
+      setState(() {
+        _isChangingPassword = false;
+        _passwordChangeNotice = notice;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(notice),
+          backgroundColor: Theme.of(context).colorScheme.primary,
+        ),
+      );
+    } on PasswordChangeException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isChangingPassword = false;
+        _passwordChangeError = error.message;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isChangingPassword = false;
+        _passwordChangeError = 'Failed to change password: $error';
       });
     }
   }
@@ -245,6 +313,151 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text('Change password', style: theme.textTheme.titleMedium),
+                const SizedBox(height: 6),
+                Text(
+                  'Update your Supabase password and re-encrypt your saved chats.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: iconFg.withValues(alpha: 0.7),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (_passwordChangeError != null)
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: Colors.red.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: Text(
+                      _passwordChangeError!,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: Colors.redAccent,
+                      ),
+                    ),
+                  ),
+                if (_passwordChangeNotice != null)
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: Colors.green.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: Text(
+                      _passwordChangeNotice!,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: Colors.green.shade400,
+                      ),
+                    ),
+                  ),
+                TextField(
+                  controller: _currentPasswordCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Current password',
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscureCurrentPassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscureCurrentPassword = !_obscureCurrentPassword;
+                        });
+                      },
+                    ),
+                  ),
+                  obscureText: _obscureCurrentPassword,
+                  textInputAction: TextInputAction.next,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _newPasswordCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'New password',
+                    helperText: 'Minimum 8 characters.',
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscureNewPassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscureNewPassword = !_obscureNewPassword;
+                        });
+                      },
+                    ),
+                  ),
+                  obscureText: _obscureNewPassword,
+                  textInputAction: TextInputAction.next,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _confirmPasswordCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Confirm new password',
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscureConfirmPassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscureConfirmPassword = !_obscureConfirmPassword;
+                        });
+                      },
+                    ),
+                  ),
+                  obscureText: _obscureConfirmPassword,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) {
+                    if (!_isChangingPassword) {
+                      _changePassword();
+                    }
+                  },
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    onPressed: _isChangingPassword ? null : _changePassword,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: theme.colorScheme.primary,
+                      foregroundColor: theme.colorScheme.onPrimary,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: _isChangingPassword
+                        ? SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                theme.colorScheme.onPrimary,
+                              ),
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text('Update password'),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                const Divider(height: 1),
+                const SizedBox(height: 24),
                 Text(
                   'Two-factor authentication',
                   style: theme.textTheme.titleMedium,

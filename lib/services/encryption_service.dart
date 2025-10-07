@@ -164,6 +164,104 @@ class EncryptionService {
     });
   }
 
+  static Future<void> rotateKeyForPasswordChange({
+    required String currentPassword,
+    required String newPassword,
+    required Future<void> Function() migrateWithNewKey,
+    required Future<void> Function() rollbackWithOldKey,
+  }) {
+    return _runExclusive(() async {
+      User user = await _requireAuthenticatedUser();
+      final userId = user.id;
+      final saltStorageKey = '$_storageSaltPrefix$userId';
+      final keyStorageKey = '$_storagePrefix$userId';
+      final versionStorageKey = '$_storageVersionPrefix$userId';
+
+      final storedSaltBase64 = await _storage.read(key: saltStorageKey);
+      final storedKeyBase64 = await _storage.read(key: keyStorageKey);
+
+      if (storedSaltBase64 == null || storedKeyBase64 == null) {
+        throw StateError(
+          'Encryption data is incomplete. Please sign out and sign in again before changing your password.',
+        );
+      }
+
+      final saltBytes = _decodeBase64OrThrow(
+        storedSaltBase64,
+        'Stored encryption salt is corrupted; please sign in again.',
+      );
+      final storedKeyBytes = _decodeBase64OrThrow(
+        storedKeyBase64,
+        'Stored encryption key is corrupted; please sign in again.',
+      );
+
+      final currentDerivedKey = await _deriveKey(currentPassword, saltBytes);
+      if (!_constantTimeEquals(currentDerivedKey, storedKeyBytes)) {
+        throw StateError('Current password is incorrect.');
+      }
+
+      final oldKey = SecretKey(currentDerivedKey);
+
+      final newSaltBytes = _randomNonce(_saltLength);
+      final newSaltBase64 = base64Encode(newSaltBytes);
+      final newKeyBytes = await _deriveKey(newPassword, newSaltBytes);
+      final newKeyBase64 = base64Encode(newKeyBytes);
+      final newKey = SecretKey(newKeyBytes);
+
+      final previousCachedKey = _cachedKey;
+      final previousCachedUserId = _cachedUserId;
+
+      _cachedKey = newKey;
+      _cachedUserId = userId;
+
+      try {
+        await migrateWithNewKey();
+      } catch (error) {
+        _cachedKey = oldKey;
+        _cachedUserId = userId;
+        try {
+          await rollbackWithOldKey();
+        } catch (_) {
+          // We already failed the migration; keep propagating the original error.
+        }
+        _cachedKey = previousCachedKey ?? oldKey;
+        _cachedUserId = previousCachedUserId ?? userId;
+        rethrow;
+      }
+
+      try {
+        await _storage.write(key: keyStorageKey, value: newKeyBase64);
+        await _storage.write(key: saltStorageKey, value: newSaltBase64);
+        await _storage.write(key: versionStorageKey, value: _payloadVersion);
+        final metadataUpdates = <String, dynamic>{
+          _metadataSaltKey: newSaltBase64,
+          _metadataVersionKey: _payloadVersion,
+        };
+        final updatedUser = await _updateUserMetadata(user, metadataUpdates);
+        if (updatedUser != null) {
+          user = updatedUser;
+        }
+      } catch (error) {
+        _cachedKey = oldKey;
+        _cachedUserId = userId;
+        try {
+          await rollbackWithOldKey();
+        } catch (_) {
+          // If rollback fails we cannot do much else; we still rethrow the original error.
+        }
+        await _storage.write(key: keyStorageKey, value: storedKeyBase64);
+        await _storage.write(key: saltStorageKey, value: storedSaltBase64);
+        await _storage.write(key: versionStorageKey, value: _payloadVersion);
+        _cachedKey = previousCachedKey ?? oldKey;
+        _cachedUserId = previousCachedUserId ?? userId;
+        rethrow;
+      }
+
+      _cachedKey = newKey;
+      _cachedUserId = userId;
+    });
+  }
+
   static Future<void> clearKey() {
     return _runExclusive(() async {
       final userId = SupabaseService.auth.currentUser?.id ?? _cachedUserId;
