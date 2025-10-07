@@ -143,16 +143,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
   }
 
   String _deriveChatTitle(StoredChat chat) {
-    final segments = chat.content.split('§');
-    if (segments.isEmpty || segments.first.isEmpty) {
-      return 'Chat';
-    }
-    final parts = segments.first.split('|');
-    if (parts.length < 2) {
-      return 'Chat';
-    }
-    final text = parts[1].trim();
-    return text.isEmpty ? 'Chat' : text;
+    return chat.previewText;
   }
 
   Future<void> _confirmAndDeleteChat(StoredChat chat) async {
@@ -359,6 +350,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
                   final index = ChatStorageService.savedChats.indexOf(
                     storedChat,
                   );
+                  if (index == -1) {
+                    return const SizedBox.shrink();
+                  }
                   String title = _deriveChatTitle(storedChat);
                   if (title.length > 25) {
                     title = '${title.substring(0, 22)}...';

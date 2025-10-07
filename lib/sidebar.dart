@@ -97,16 +97,7 @@ class _CustomSidebarState extends State<CustomSidebar> {
   }
 
   String _deriveChatTitle(StoredChat chat) {
-    final segments = chat.content.split('§');
-    if (segments.isEmpty || segments.first.isEmpty) {
-      return 'Chat';
-    }
-    final parts = segments.first.split('|');
-    if (parts.length < 2) {
-      return 'Chat';
-    }
-    final text = parts[1].trim();
-    return text.isEmpty ? 'Chat' : text;
+    return chat.previewText;
   }
 
   @override
@@ -182,6 +173,10 @@ class _CustomSidebarState extends State<CustomSidebar> {
                   String title = _deriveChatTitle(storedChat);
                   if (title.length > 25) {
                     title = '${title.substring(0, 22)}...';
+                  }
+                  if (index < 0 ||
+                      index >= ChatStorageService.savedChats.length) {
+                    return const SizedBox.shrink();
                   }
                   return _buildRecentItem(
                     title,

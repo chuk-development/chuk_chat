@@ -104,17 +104,16 @@ class ChukChatUIState extends State<ChukChatUI>
       _animCtrl.reset();
       _attachedFiles.clear();
     } else if (index >= 0 && index < ChatStorageService.savedChats.length) {
-      final chatJson = ChatStorageService.savedChats[index].content;
-      _messages.clear();
-      final messageParts = chatJson.split('§');
-      for (var part in messageParts) {
-        if (part.isNotEmpty) {
-          final components = part.split('|');
-          if (components.length == 2) {
-            _messages.add({'sender': components[0], 'text': components[1]});
-          }
-        }
-      }
+      final storedChat = ChatStorageService.savedChats[index];
+      _messages
+        ..clear()
+        ..addAll(
+          storedChat.messages
+              .map(
+                (message) => {'sender': message.sender, 'text': message.text},
+              )
+              .toList(),
+        );
       if (_messages.isNotEmpty) {
         _animCtrl.forward();
       } else {
@@ -132,10 +131,7 @@ class ChukChatUIState extends State<ChukChatUI>
 
   void newChat() async {
     if (_messages.isNotEmpty) {
-      final json = _messages
-          .map((m) => '${m['sender']}|${m['text']}')
-          .join('§');
-      await ChatStorageService.saveChat(json);
+      await ChatStorageService.saveChat(_messages);
     }
     setState(() {
       _messages.clear();

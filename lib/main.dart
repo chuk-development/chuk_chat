@@ -155,12 +155,18 @@ class _ChukChatAppState extends State<ChukChatApp> {
     _hasAppliedSupabaseTheme = initialTheme.loadedFromSupabase;
 
     unawaited(ChatStorageService.loadSavedChatsForSidebar());
-    _authSubscription =
-        SupabaseService.auth.onAuthStateChange.listen((event) async {
+    _authSubscription = SupabaseService.auth.onAuthStateChange.listen((
+      event,
+    ) async {
       if (event.session != null) {
-        await EncryptionService.tryLoadKey();
+        final hasKey = await EncryptionService.tryLoadKey();
         try {
-          await ChatStorageService.loadSavedChatsForSidebar();
+          if (hasKey) {
+            await ChatStorageService.loadSavedChatsForSidebar();
+          } else {
+            await EncryptionService.clearKey();
+            ChatStorageService.reset();
+          }
         } catch (_) {
           // Ignore chat sync errors here; UI will surface if interaction happens.
         }

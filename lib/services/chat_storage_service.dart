@@ -7,21 +7,48 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
+const _kChatPayloadVersion = 1;
+
+class ChatMessage {
+  const ChatMessage({required this.sender, required this.text});
+
+  final String sender;
+  final String text;
+
+  Map<String, String> toJson() => {'sender': sender, 'text': text};
+
+  factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    return ChatMessage(
+      sender: json['sender'] as String? ?? 'user',
+      text: json['text'] as String? ?? '',
+    );
+  }
+}
+
 class StoredChat {
-  const StoredChat({
+  StoredChat({
     required this.id,
-    required this.content,
+    required List<ChatMessage> messages,
     required this.createdAt,
-  });
+  }) : messages = List<ChatMessage>.unmodifiable(messages);
 
   final String id;
-  final String content;
+  final List<ChatMessage> messages;
   final DateTime createdAt;
 
-  factory StoredChat.fromRow(Map<String, dynamic> row, String decrypted) {
+  String get previewText {
+    if (messages.isEmpty) return 'Chat';
+    final text = messages.first.text.trim();
+    return text.isEmpty ? 'Chat' : text;
+  }
+
+  factory StoredChat.fromRow(
+    Map<String, dynamic> row,
+    List<ChatMessage> messages,
+  ) {
     return StoredChat(
       id: row['id'] as String,
-      content: decrypted,
+      messages: messages,
       createdAt: DateTime.parse(row['created_at'] as String),
     );
   }
@@ -67,18 +94,21 @@ class ChatStorageService {
       if (encryptedPayload == null) continue;
       try {
         final decrypted = await EncryptionService.decrypt(encryptedPayload);
-        chats.add(StoredChat.fromRow(map, decrypted));
+        final messages = _deserializeMessages(decrypted);
+        chats.add(StoredChat.fromRow(map, messages));
       } on SecretBoxAuthenticationError {
         // Skip corrupted rows silently to keep UI responsive.
         continue;
       } on FormatException {
+        continue;
+      } on StateError {
         continue;
       }
     }
     _savedChats = chats;
   }
 
-  static Future<void> saveChat(String json) async {
+  static Future<void> saveChat(List<Map<String, String>> messagesMaps) async {
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
       throw StateError('User must be signed in to store chats.');
@@ -91,7 +121,27 @@ class ChatStorageService {
         );
       }
     }
-    final encryptedPayload = await EncryptionService.encrypt(json);
+
+    final messages = messagesMaps
+        .map(
+          (entry) => ChatMessage(
+            sender: entry['sender'] ?? 'user',
+            text: entry['text'] ?? '',
+          ),
+        )
+        .where((message) => message.text.trim().isNotEmpty)
+        .toList();
+
+    if (messages.isEmpty) {
+      return;
+    }
+
+    final payload = jsonEncode({
+      'v': _kChatPayloadVersion,
+      'messages': messages.map((message) => message.toJson()).toList(),
+    });
+
+    final encryptedPayload = await EncryptionService.encrypt(payload);
     Map<String, dynamic> inserted;
     try {
       inserted = await SupabaseService.client
@@ -103,7 +153,7 @@ class ChatStorageService {
       throw StateError('Failed to save chat: ${error.message}');
     }
 
-    final StoredChat stored = StoredChat.fromRow(inserted, json);
+    final StoredChat stored = StoredChat.fromRow(inserted, messages);
     _savedChats = <StoredChat>[stored, ..._savedChats];
   }
 
@@ -150,7 +200,9 @@ class ChatStorageService {
           (chat) => {
             'id': chat.id,
             'createdAt': chat.createdAt.toIso8601String(),
-            'messages': _decodeMessages(chat.content),
+            'messages': chat.messages
+                .map((message) => message.toJson())
+                .toList(),
           },
         )
         .toList();
@@ -162,15 +214,35 @@ class ChatStorageService {
     _selectedChatIndex = -1;
   }
 
-  static List<Map<String, String>> _decodeMessages(String content) {
-    final segments = content.split('§');
-    final messages = <Map<String, String>>[];
-    for (final segment in segments) {
-      if (segment.isEmpty) continue;
-      final parts = segment.split('|');
-      if (parts.length != 2) continue;
-      messages.add({'sender': parts[0], 'text': parts[1]});
+  static List<ChatMessage> _deserializeMessages(String payload) {
+    try {
+      final dynamic decoded = jsonDecode(payload);
+      if (decoded is Map<String, dynamic>) {
+        final version = decoded['v'];
+        if (version != _kChatPayloadVersion) {
+          throw StateError('Unsupported chat payload version: $version');
+        }
+        final rawMessages =
+            decoded['messages'] as List<dynamic>? ?? <dynamic>[];
+        return rawMessages
+            .whereType<Map<String, dynamic>>()
+            .map(ChatMessage.fromJson)
+            .toList();
+      }
+    } catch (_) {
+      // Fall back to legacy pipe/section delimited format.
     }
-    return messages;
+
+    final legacySegments = payload.split('§');
+    final legacyMessages = <ChatMessage>[];
+    for (final segment in legacySegments) {
+      if (segment.isEmpty) continue;
+      final separatorIndex = segment.indexOf('|');
+      if (separatorIndex == -1) continue;
+      final sender = segment.substring(0, separatorIndex);
+      final text = segment.substring(separatorIndex + 1);
+      legacyMessages.add(ChatMessage(sender: sender, text: text));
+    }
+    return legacyMessages;
   }
 }

@@ -183,13 +183,14 @@ class SettingsPage extends StatelessWidget {
   Future<void> _exportChats(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final jsonPayload = await ChatStorageService.exportChatsAsJson();
+      await ChatStorageService.loadSavedChatsForSidebar();
       if (ChatStorageService.savedChats.isEmpty) {
         messenger.showSnackBar(
           const SnackBar(content: Text('No chats available to export yet.')),
         );
         return;
       }
+      final jsonPayload = await ChatStorageService.exportChatsAsJson();
       final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
       final fileName = 'chuk_chat_export_$timestamp.json';
       final data = Uint8List.fromList(utf8.encode(jsonPayload));
