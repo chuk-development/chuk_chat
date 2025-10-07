@@ -1,5 +1,7 @@
 // lib/pages/settings_page.dart
 import 'dart:convert';
+import 'dart:io' show Directory, File, Platform;
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -204,6 +206,22 @@ class SettingsPage extends StatelessWidget {
         return;
       }
 
+      if (Platform.isLinux) {
+        final savedPath = await _saveExportToLinux(data, fileName);
+        if (savedPath != null) {
+          messenger.showSnackBar(
+            SnackBar(content: Text('Chats saved to $savedPath')),
+          );
+        } else {
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('Export cancelled before selecting a destination.'),
+            ),
+          );
+        }
+        return;
+      }
+
       try {
         final xFile = XFile.fromData(
           data,
@@ -241,6 +259,46 @@ class SettingsPage extends StatelessWidget {
         SnackBar(content: Text('Failed to export chats: $error')),
       );
     }
+  }
+
+  Future<String?> _saveExportToLinux(Uint8List data, String fileName) async {
+    final Directory? initialDirectory = await _linuxInitialDirectory();
+    final String? outputPath = await FilePicker.platform.saveFile(
+      dialogTitle: 'Save chat export',
+      fileName: fileName,
+      initialDirectory: initialDirectory?.path,
+      type: FileType.custom,
+      allowedExtensions: const ['json'],
+    );
+
+    if (outputPath == null) {
+      return null;
+    }
+
+    final file = File(outputPath);
+    await file.writeAsBytes(data, flush: true);
+    return file.path;
+  }
+
+  Future<Directory?> _linuxInitialDirectory() async {
+    final String? homeDir = Platform.environment['HOME'];
+    if (homeDir == null || homeDir.isEmpty) {
+      return null;
+    }
+
+    final List<String> candidateFolders = <String>[
+      '$homeDir/Downloads',
+      '$homeDir/Documents',
+      homeDir,
+    ];
+
+    for (final path in candidateFolders) {
+      final directory = Directory(path);
+      if (await directory.exists()) {
+        return directory;
+      }
+    }
+    return null;
   }
 
   Widget _buildSettingsCard(

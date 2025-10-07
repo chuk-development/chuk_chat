@@ -56,48 +56,55 @@ class PasswordChangeService {
         .toList();
 
     try {
+      await _rotateChatsForPasswordChange(
+        chatsSnapshot: chatsSnapshot,
+        fromPassword: trimmedCurrent,
+        toPassword: trimmedNew,
+      );
+    } on StateError catch (error) {
+      throw PasswordChangeException(error.message);
+    } catch (error) {
+      throw PasswordChangeException(
+        'Failed to prepare encrypted chats for the new password: $error',
+      );
+    }
+
+    try {
       await SupabaseService.auth.updateUser(
         UserAttributes(password: trimmedNew),
       );
     } on AuthException catch (error) {
-      throw PasswordChangeException(
-        'Supabase rejected the password change: ${error.message}',
+      final restored = await _tryRestoreEncryption(
+        chatsSnapshot: chatsSnapshot,
+        currentPassword: trimmedNew,
+        previousPassword: trimmedCurrent,
       );
+      final reason = restored
+          ? 'Supabase rejected the password change: ${error.message}'
+          : 'Supabase rejected the password change and the encrypted chats could not be restored: ${error.message}';
+      throw PasswordChangeException(reason);
     } catch (error) {
-      throw PasswordChangeException('Failed to update password: $error');
+      final restored = await _tryRestoreEncryption(
+        chatsSnapshot: chatsSnapshot,
+        currentPassword: trimmedNew,
+        previousPassword: trimmedCurrent,
+      );
+      final reason = restored
+          ? 'Failed to update password: $error'
+          : 'Failed to update password and the encrypted chats could not be restored: $error';
+      throw PasswordChangeException(reason);
     }
 
     try {
       await PasswordRevisionService.bumpRevision(user);
     } on AuthException catch (error) {
-      await _tryRevertSupabasePassword(trimmedCurrent);
       throw PasswordChangeException(
-        'Password update failed while notifying other sessions: ${error.message}',
+        'Password was updated but notifying other sessions failed: ${error.message}',
       );
     } catch (error) {
-      await _tryRevertSupabasePassword(trimmedCurrent);
       throw PasswordChangeException(
-        'Password update failed while notifying other sessions: $error',
+        'Password was updated but notifying other sessions failed: $error',
       );
-    }
-
-    try {
-      await EncryptionService.rotateKeyForPasswordChange(
-        currentPassword: trimmedCurrent,
-        newPassword: trimmedNew,
-        migrateWithNewKey: () async {
-          await ChatStorageService.reencryptChats(chatsSnapshot);
-        },
-        rollbackWithOldKey: () async {
-          await ChatStorageService.reencryptChats(chatsSnapshot);
-        },
-      );
-    } on StateError catch (error) {
-      await _tryRevertSupabasePassword(trimmedCurrent);
-      throw PasswordChangeException(error.message);
-    } catch (error) {
-      await _tryRevertSupabasePassword(trimmedCurrent);
-      throw PasswordChangeException('Failed to update encrypted chats: $error');
     }
 
     final email = user.email;
@@ -123,11 +130,37 @@ class PasswordChangeService {
     return 'Password updated. Check $email to confirm the change.';
   }
 
-  Future<void> _tryRevertSupabasePassword(String password) async {
+  Future<void> _rotateChatsForPasswordChange({
+    required List<StoredChat> chatsSnapshot,
+    required String fromPassword,
+    required String toPassword,
+  }) async {
+    await EncryptionService.rotateKeyForPasswordChange(
+      currentPassword: fromPassword,
+      newPassword: toPassword,
+      migrateWithNewKey: () async {
+        await ChatStorageService.reencryptChats(chatsSnapshot);
+      },
+      rollbackWithOldKey: () async {
+        await ChatStorageService.reencryptChats(chatsSnapshot);
+      },
+    );
+  }
+
+  Future<bool> _tryRestoreEncryption({
+    required List<StoredChat> chatsSnapshot,
+    required String currentPassword,
+    required String previousPassword,
+  }) async {
     try {
-      await SupabaseService.auth.updateUser(UserAttributes(password: password));
+      await _rotateChatsForPasswordChange(
+        chatsSnapshot: chatsSnapshot,
+        fromPassword: currentPassword,
+        toPassword: previousPassword,
+      );
+      return true;
     } catch (_) {
-      // Ignore failures while trying to undo a partial change.
+      return false;
     }
   }
 }

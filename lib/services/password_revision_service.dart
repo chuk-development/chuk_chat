@@ -12,7 +12,7 @@ class PasswordRevisionService {
   static const FlutterSecureStorage _storage = FlutterSecureStorage();
   static const String _metadataRevisionKey = 'password_revision';
   static const String _storageRevisionPrefix = 'password_revision_';
-  static final Uuid _uuid = const Uuid();
+  static final _uuid = Uuid();
 
   static String? _lastCachedUserId;
 
