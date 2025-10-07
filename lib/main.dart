@@ -168,13 +168,19 @@ class _ChukChatAppState extends State<ChukChatApp> {
         try {
           final hasKey = await EncryptionService.tryLoadKey();
           if (hasKey) {
-            await ChatStorageService.loadSavedChatsForSidebar();
+            try {
+              await ChatStorageService.loadSavedChatsForSidebar();
+            } catch (error, stackTrace) {
+              debugPrint('Chat loading failed: $error');
+              debugPrint('$stackTrace');
+              // Keep the key so a transient chat load issue does not force re-authentication.
+            }
           } else {
             await EncryptionService.clearKey();
             ChatStorageService.reset();
           }
         } catch (error, stackTrace) {
-          debugPrint('Post-login data sync failed: $error');
+          debugPrint('Encryption key load failed: $error');
           debugPrint('$stackTrace');
           await EncryptionService.clearKey();
           ChatStorageService.reset();
