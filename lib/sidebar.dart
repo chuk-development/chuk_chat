@@ -94,6 +94,19 @@ class _CustomSidebarState extends State<CustomSidebar> {
     return 'Account';
   }
 
+  String _deriveChatTitle(StoredChat chat) {
+    final segments = chat.content.split('§');
+    if (segments.isEmpty || segments.first.isEmpty) {
+      return 'Chat';
+    }
+    final parts = segments.first.split('|');
+    if (parts.length < 2) {
+      return 'Chat';
+    }
+    final text = parts[1].trim();
+    return text.isEmpty ? 'Chat' : text;
+  }
+
   @override
   void didUpdateWidget(covariant CustomSidebar oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -162,8 +175,12 @@ class _CustomSidebarState extends State<CustomSidebar> {
                     ),
                   ),
                 ...ChatStorageService.savedChats.asMap().entries.map((entry) {
-                  int index = entry.key;
-                  String title = 'Chat ${index + 1}'; // Placeholder
+                  final index = entry.key;
+                  final storedChat = entry.value;
+                  String title = _deriveChatTitle(storedChat);
+                  if (title.length > 25) {
+                    title = '${title.substring(0, 22)}...';
+                  }
                   return _buildRecentItem(
                     title,
                     index: index,

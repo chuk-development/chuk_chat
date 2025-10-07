@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
 class AuthService {
@@ -45,6 +46,7 @@ class AuthService {
   Future<void> signOut() async {
     try {
       await SupabaseService.auth.signOut();
+      await EncryptionService.clearKey();
     } on AuthException catch (error) {
       throw AuthServiceException(message: error.message);
     } catch (error) {

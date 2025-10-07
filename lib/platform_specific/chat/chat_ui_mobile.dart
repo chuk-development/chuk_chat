@@ -32,8 +32,8 @@ class ChukChatUIMobile extends StatefulWidget {
   State<ChukChatUIMobile> createState() => ChukChatUIMobileState();
 }
 
-
-class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerProviderStateMixin {
+class ChukChatUIMobileState extends State<ChukChatUIMobile>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _controller = TextEditingController();
   final List<Map<String, String>> _messages = [];
   final ScrollController _scrollController = ScrollController();
@@ -56,14 +56,20 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
   static const double _kSearchBarContentHeight = 135.0;
   static const double _kAttachmentBarHeight = 40.0;
   static const double _kAttachmentBarMarginBottom = 8.0;
-  static const double _kHorizontalPaddingSmall = 8.0; // Always use small padding for phones
+  static const double _kHorizontalPaddingSmall =
+      8.0; // Always use small padding for phones
 
   @override
   void initState() {
     super.initState();
-    _animCtrl = AnimationController(duration: const Duration(milliseconds: 200), vsync: this);
+    _animCtrl = AnimationController(
+      duration: const Duration(milliseconds: 200),
+      vsync: this,
+    );
     _anim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic);
-    _chatApiService = ChatApiService(onUploadStatusUpdate: _handleFileUploadUpdate);
+    _chatApiService = ChatApiService(
+      onUploadStatusUpdate: _handleFileUploadUpdate,
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
     });
@@ -94,7 +100,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
       _animCtrl.reset();
       _attachedFiles.clear();
     } else if (index >= 0 && index < ChatStorageService.savedChats.length) {
-      final chatJson = ChatStorageService.savedChats[index];
+      final chatJson = ChatStorageService.savedChats[index].content;
       _messages.clear();
       final messageParts = chatJson.split('§');
       for (var part in messageParts) {
@@ -106,7 +112,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
         }
       }
       if (_messages.isNotEmpty) {
-         _animCtrl.forward();
+        _animCtrl.forward();
       } else {
         _animCtrl.reset();
       }
@@ -122,7 +128,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
 
   void newChat() async {
     if (_messages.isNotEmpty) {
-      final json = _messages.map((m) => '${m['sender']}|${m['text']}').join('§');
+      final json = _messages
+          .map((m) => '${m['sender']}|${m['text']}')
+          .join('§');
       await ChatStorageService.saveChat(json);
     }
     setState(() {
@@ -140,7 +148,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
   }
 
   void _handleFileUploadUpdate(
-      String fileId, String? markdownContent, bool isUploading, String? snackBarMessage) {
+    String fileId,
+    String? markdownContent,
+    bool isUploading,
+    String? snackBarMessage,
+  ) {
     if (!mounted) return;
     setState(() {
       int index = _attachedFiles.indexWhere((f) => f.id == fileId);
@@ -153,19 +165,25 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
         } else if (!isUploading) {
           _attachedFiles.removeAt(index);
         } else {
-          _attachedFiles[index] = _attachedFiles[index].copyWith(isUploading: isUploading);
+          _attachedFiles[index] = _attachedFiles[index].copyWith(
+            isUploading: isUploading,
+          );
         }
       }
     });
     if (snackBarMessage != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(snackBarMessage)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(snackBarMessage)));
     }
     _scrollChatToBottom();
   }
 
   void _sendMessage() {
     final bool hasText = _controller.text.trim().isNotEmpty;
-    final bool hasAttachments = _attachedFiles.any((f) => f.markdownContent != null);
+    final bool hasAttachments = _attachedFiles.any(
+      (f) => f.markdownContent != null,
+    );
 
     if (!hasText && !hasAttachments) return;
 
@@ -173,9 +191,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
 
     String userMessageText = _controller.text;
     if (hasAttachments) {
-      final attachedFileNames = _attachedFiles.map((f) => '"${f.fileName}"').join(', ');
+      final attachedFileNames = _attachedFiles
+          .map((f) => '"${f.fileName}"')
+          .join(', ');
       if (userMessageText.isNotEmpty) {
-        userMessageText = 'Uploaded documents: $attachedFileNames\n\n$userMessageText';
+        userMessageText =
+            'Uploaded documents: $attachedFileNames\n\n$userMessageText';
       } else {
         userMessageText = 'Uploaded documents: $attachedFileNames';
       }
@@ -194,7 +215,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
     if (hasAttachments) {
       final markdownSections = _attachedFiles
           .where((f) => f.markdownContent != null)
-          .map((f) => "Document: \"${f.fileName}\"\n```\n${f.markdownContent}\n```")
+          .map(
+            (f) =>
+                "Document: \"${f.fileName}\"\n```\n${f.markdownContent}\n```",
+          )
           .join('\n\n');
       aiPrompt = "$markdownSections\n\nUser query: $aiPrompt";
       _attachedFiles.clear();
@@ -202,7 +226,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
 
     Future.delayed(const Duration(milliseconds: 300), () {
       setState(() {
-        _messages.add({'sender': 'ai', 'text': 'You said: "${_messages.last['text']}"\n(Model ID: $_selectedModelId)'});
+        _messages.add({
+          'sender': 'ai',
+          'text':
+              'You said: "${_messages.last['text']}"\n(Model ID: $_selectedModelId)',
+        });
       });
       _scrollChatToBottom();
     });
@@ -213,15 +241,45 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
     const int maxConcurrentUploads = 5;
 
     final allowedExtensions = [
-      'wav', 'mp3', 'm4a', 'mp4', 'html', 'htm', 'csv', 'docx', 'pptx', 'xlsx',
-      'pdf', 'jpg', 'jpeg', 'png', 'bmp', 'tiff', 'epub', 'ipynb', 'msg', 'txt',
-      'text', 'md', 'markdown', 'json', 'jsonl', 'rss', 'atom', 'xml', 'xls', 'zip'
+      'wav',
+      'mp3',
+      'm4a',
+      'mp4',
+      'html',
+      'htm',
+      'csv',
+      'docx',
+      'pptx',
+      'xlsx',
+      'pdf',
+      'jpg',
+      'jpeg',
+      'png',
+      'bmp',
+      'tiff',
+      'epub',
+      'ipynb',
+      'msg',
+      'txt',
+      'text',
+      'md',
+      'markdown',
+      'json',
+      'jsonl',
+      'rss',
+      'atom',
+      'xml',
+      'xls',
+      'zip',
     ];
 
-    if (_attachedFiles.where((f) => f.isUploading).length >= maxConcurrentUploads) {
+    if (_attachedFiles.where((f) => f.isUploading).length >=
+        maxConcurrentUploads) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please wait for current uploads to complete')),
+          const SnackBar(
+            content: Text('Please wait for current uploads to complete'),
+          ),
         );
       }
       return;
@@ -241,7 +299,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
         if (platformFile.size > maxFileSize) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('File "${platformFile.name}" exceeds 10MB limit')),
+              SnackBar(
+                content: Text('File "${platformFile.name}" exceeds 10MB limit'),
+              ),
             );
           }
           continue;
@@ -255,27 +315,34 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
         if (!allowedExtensions.contains(fileExtension)) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Unsupported file type for "$fileName": .$fileExtension')),
+              SnackBar(
+                content: Text(
+                  'Unsupported file type for "$fileName": .$fileExtension',
+                ),
+              ),
             );
           }
           continue;
         }
 
-        if (_attachedFiles.where((f) => f.isUploading).length >= maxConcurrentUploads) {
+        if (_attachedFiles.where((f) => f.isUploading).length >=
+            maxConcurrentUploads) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Skipping "${fileName}": too many concurrent uploads. Try again soon.')),
+              SnackBar(
+                content: Text(
+                  'Skipping "${fileName}": too many concurrent uploads. Try again soon.',
+                ),
+              ),
             );
           }
           continue;
         }
 
         setState(() {
-          _attachedFiles.add(AttachedFile(
-            id: fileId,
-            fileName: fileName,
-            isUploading: true,
-          ));
+          _attachedFiles.add(
+            AttachedFile(id: fileId, fileName: fileName, isUploading: true),
+          );
         });
         _scrollChatToBottom();
         _chatApiService.performFileUpload(file, fileName, fileId);
@@ -307,7 +374,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
 
   @override
   Widget build(BuildContext context) {
-    const bool isCompactModeForModelDropdown = true; // Mobile shows a hashtag-only trigger for model menu.
+    const bool isCompactModeForModelDropdown =
+        true; // Mobile shows a hashtag-only trigger for model menu.
 
     final double screenWidth = MediaQuery.of(context).size.width;
     final Color bg = Theme.of(context).scaffoldBackgroundColor;
@@ -316,16 +384,24 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
     final Color textColor = iconFg;
 
     final double effectiveHorizontalPadding = _kHorizontalPaddingSmall;
-    final double maxPossibleChatContentWidth = math.max(0.0, screenWidth - (effectiveHorizontalPadding * 2));
-    final double constrainedChatContentWidth = math.min(_kMaxChatContentWidth, maxPossibleChatContentWidth);
+    final double maxPossibleChatContentWidth = math.max(
+      0.0,
+      screenWidth - (effectiveHorizontalPadding * 2),
+    );
+    final double constrainedChatContentWidth = math.min(
+      _kMaxChatContentWidth,
+      maxPossibleChatContentWidth,
+    );
 
     final double expandedInputWidth = constrainedChatContentWidth;
 
     double inputAreaVisualHeight = _kSearchBarContentHeight;
     if (_attachedFiles.isNotEmpty) {
-      inputAreaVisualHeight += _kAttachmentBarHeight + _kAttachmentBarMarginBottom;
+      inputAreaVisualHeight +=
+          _kAttachmentBarHeight + _kAttachmentBarMarginBottom;
     }
-    double inputAreaTotalHeight = inputAreaVisualHeight + (2 * effectiveHorizontalPadding);
+    double inputAreaTotalHeight =
+        inputAreaVisualHeight + (2 * effectiveHorizontalPadding);
 
     final double keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
 
@@ -351,12 +427,18 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
                       ? Center(
                           child: Text(
                             'Start a new chat!',
-                            style: TextStyle(color: iconFg.withOpacity(0.6), fontSize: 18),
+                            style: TextStyle(
+                              color: iconFg.withOpacity(0.6),
+                              fontSize: 18,
+                            ),
                           ),
                         )
                       : ListView.builder(
                           controller: _scrollController,
-                          padding: EdgeInsets.symmetric(horizontal: effectiveHorizontalPadding, vertical: 10),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: effectiveHorizontalPadding,
+                            vertical: 10,
+                          ),
                           itemCount: _messages.length,
                           itemBuilder: (_, i) {
                             final m = _messages[i];
@@ -388,10 +470,19 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
                   children: [
                     if (_attachedFiles.isNotEmpty)
                       Padding(
-                        padding: const EdgeInsets.only(bottom: _kAttachmentBarMarginBottom),
-                        child: _buildAttachmentBar(targetInputWidth, effectiveHorizontalPadding, textColor, accent),
+                        padding: const EdgeInsets.only(
+                          bottom: _kAttachmentBarMarginBottom,
+                        ),
+                        child: _buildAttachmentBar(
+                          targetInputWidth,
+                          effectiveHorizontalPadding,
+                          textColor,
+                          accent,
+                        ),
                       ),
-                    _buildSearchBar(isCompactMode: isCompactModeForModelDropdown), // Pass the local variable
+                    _buildSearchBar(
+                      isCompactMode: isCompactModeForModelDropdown,
+                    ), // Pass the local variable
                   ],
                 ),
               ),
@@ -403,7 +494,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
   }
 
   Widget _buildAttachmentBar(
-      double contentWidth, double horizontalPadding, Color textColor, Color accentColor) {
+    double contentWidth,
+    double horizontalPadding,
+    Color textColor,
+    Color accentColor,
+  ) {
     return Container(
       width: contentWidth,
       height: _kAttachmentBarHeight,
@@ -418,19 +513,26 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
         child: Row(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.start,
-          children:
-              _attachedFiles.map((file) => _buildAttachmentChip(file, textColor, accentColor)).toList(),
+          children: _attachedFiles
+              .map((file) => _buildAttachmentChip(file, textColor, accentColor))
+              .toList(),
         ),
       ),
     );
   }
 
-  Widget _buildAttachmentChip(AttachedFile file, Color textColor, Color accentColor) {
+  Widget _buildAttachmentChip(
+    AttachedFile file,
+    Color textColor,
+    Color accentColor,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4.0),
       child: Chip(
         padding: EdgeInsets.zero,
-        backgroundColor: file.isUploading ? Colors.blueGrey.shade700 : Colors.grey.shade700,
+        backgroundColor: file.isUploading
+            ? Colors.blueGrey.shade700
+            : Colors.grey.shade700,
         label: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -444,7 +546,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
                 ),
               )
             else
-              Icon(Icons.insert_drive_file, color: textColor.withOpacity(0.8), size: 16),
+              Icon(
+                Icons.insert_drive_file,
+                color: textColor.withOpacity(0.8),
+                size: 16,
+              ),
             const SizedBox(width: 6),
             Text(
               file.fileName,
@@ -455,7 +561,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
           ],
         ),
         onDeleted: file.isUploading ? null : () => _removeAttachedFile(file.id),
-        deleteIcon: Icon(Icons.close, color: textColor.withOpacity(0.8), size: 16),
+        deleteIcon: Icon(
+          Icons.close,
+          color: textColor.withOpacity(0.8),
+          size: 16,
+        ),
         deleteButtonTooltipMessage: 'Remove "${file.fileName}"',
       ),
     );
@@ -492,10 +602,16 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
                       if (event.isKeyPressed(LogicalKeyboardKey.enter)) {
                         if (event.isShiftPressed) {
                           final v = _controller.value;
-                          final t = v.text.replaceRange(v.selection.start, v.selection.end, '\n');
+                          final t = v.text.replaceRange(
+                            v.selection.start,
+                            v.selection.end,
+                            '\n',
+                          );
                           _controller.value = v.copyWith(
                             text: t,
-                            selection: TextSelection.collapsed(offset: v.selection.start + 1),
+                            selection: TextSelection.collapsed(
+                              offset: v.selection.start + 1,
+                            ),
                           );
                           return;
                         } else {
@@ -526,7 +642,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
                       disabledBorder: InputBorder.none,
                       filled: false,
                       fillColor: Colors.transparent,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 0),
+                      contentPadding: const EdgeInsets.symmetric(
+                        vertical: 8,
+                        horizontal: 0,
+                      ),
                       isDense: true,
                     ),
                     cursorColor: iconFg,
@@ -591,7 +710,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
                   print('Selected model ID: $_selectedModelId');
                 },
                 textFieldFocusNode: _textFieldFocusNode,
-                isCompactMode: isCompactMode, // Corrected: Use the parameter passed to _buildSearchBar
+                isCompactMode:
+                    isCompactMode, // Corrected: Use the parameter passed to _buildSearchBar
                 compactLabel: '#',
               ),
               const SizedBox(width: 8),
@@ -657,14 +777,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> with SingleTickerPro
             final Color effectiveBorderColor = hovered
                 ? iconFg
                 : isActive
-                    ? iconFg.withOpacity(0.6)
-                    : iconFg.withOpacity(0.3);
+                ? iconFg.withOpacity(0.6)
+                : iconFg.withOpacity(0.3);
 
             final double effectiveBorderWidth = hovered
                 ? 1.2
                 : isActive
-                    ? 1.0
-                    : 0.8;
+                ? 1.0
+                : 0.8;
 
             return AnimatedContainer(
               duration: const Duration(milliseconds: 150),

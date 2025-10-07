@@ -12,6 +12,7 @@ import 'package:chuk_chat/platform_specific/root_wrapper_mobile.dart';
 import 'package:chuk_chat/utils/color_extensions.dart'; // Import for hex conversion
 import 'package:chuk_chat/utils/grain_overlay.dart'; // Film grain overlay
 import 'package:chuk_chat/pages/login_page.dart';
+import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/theme_settings_service.dart';
 import 'package:chuk_chat/widgets/auth_gate.dart';
@@ -106,6 +107,9 @@ Future<_InitialThemeData> _bootstrapThemeSettings() async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SupabaseService.initialize();
+  if (SupabaseService.auth.currentSession != null) {
+    await EncryptionService.tryLoadKey();
+  }
   final initialTheme = await _bootstrapThemeSettings();
   runApp(ChukChatApp(initialTheme: initialTheme));
 }
@@ -150,12 +154,15 @@ class _ChukChatAppState extends State<ChukChatApp> {
     _grainEnabled = initialTheme.grainEnabled;
     _hasAppliedSupabaseTheme = initialTheme.loadedFromSupabase;
 
-    ChatStorageService.loadChats();
-    ChatStorageService.loadSavedChatsForSidebar();
+    unawaited(ChatStorageService.loadChats());
     _authSubscription = SupabaseService.auth.onAuthStateChange.listen((event) {
       if (event.session != null) {
+        unawaited(EncryptionService.tryLoadKey());
+        unawaited(ChatStorageService.loadChats());
         _loadThemeSettingsFromSupabase();
       } else {
+        unawaited(EncryptionService.clearKey());
+        ChatStorageService.reset();
         _hasAppliedSupabaseTheme = false;
         _loadThemeSettingsFromPrefs();
       }

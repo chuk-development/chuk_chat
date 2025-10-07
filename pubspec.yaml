@@ -41,6 +41,9 @@ dependencies:
   uuid: ^4.3.0
   permission_handler: ^11.3.1
   supabase_flutter: ^2.5.2
+  cryptography: ^2.7.0
+  flutter_secure_storage: ^9.2.2
+  share_plus: ^7.2.2
 
 
 dev_dependencies:

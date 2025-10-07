@@ -1,11 +1,18 @@
 // lib/pages/settings_page.dart
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/model_selector_page.dart';
 import 'package:chuk_chat/pages/theme_page.dart';
 import 'package:chuk_chat/pages/account_settings_page.dart';
 import 'package:chuk_chat/services/auth_service.dart';
+import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
+import 'package:share_plus/share_plus.dart';
 
 class SettingsPage extends StatelessWidget {
   final Brightness currentThemeMode;
@@ -121,6 +128,17 @@ class SettingsPage extends StatelessWidget {
             bgColor: scaffoldBg,
           ),
           const SizedBox(height: 32),
+          _buildSettingsCard(
+            context,
+            title: 'Export Chats',
+            subtitle: 'Download your conversations as JSON',
+            icon: Icons.download_outlined,
+            onTap: () => _exportChats(context),
+            accentColor: accent,
+            iconFgColor: iconFg,
+            bgColor: scaffoldBg,
+          ),
+          const SizedBox(height: 32),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
@@ -160,6 +178,69 @@ class SettingsPage extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _exportChats(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final jsonPayload = await ChatStorageService.exportChatsAsJson();
+      if (ChatStorageService.savedChats.isEmpty) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('No chats available to export yet.')),
+        );
+        return;
+      }
+      final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
+      final fileName = 'chuk_chat_export_$timestamp.json';
+      final data = Uint8List.fromList(utf8.encode(jsonPayload));
+
+      if (kIsWeb) {
+        await Clipboard.setData(ClipboardData(text: jsonPayload));
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Chats copied to clipboard. Paste into a file to complete the export.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      try {
+        final xFile = XFile.fromData(
+          data,
+          mimeType: 'application/json',
+          name: fileName,
+        );
+        await Share.shareXFiles(
+          [xFile],
+          subject: 'chuk.chat chat export',
+          text: 'Backup of your chuk.chat conversations.',
+        );
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Share sheet opened. Pick a destination to finish exporting.',
+            ),
+          ),
+        );
+      } on Exception {
+        await Clipboard.setData(ClipboardData(text: jsonPayload));
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not open the share sheet. Chats copied to clipboard instead.',
+            ),
+          ),
+        );
+      }
+    } on StateError catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Failed to export chats: $error')),
+      );
+    }
   }
 
   Widget _buildSettingsCard(

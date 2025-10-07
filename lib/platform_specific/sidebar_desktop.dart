@@ -39,7 +39,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
 
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  List<String> _filteredRecentChats = [];
+  List<StoredChat> _filteredRecentChats = [];
   ProfileRecord? _profile;
 
   @override
@@ -77,15 +77,13 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
   // Filters ChatStorageService.savedChats based on _searchQuery
   void _filterRecentChats() {
     if (_searchQuery.isEmpty) {
-      _filteredRecentChats = List.from(
+      _filteredRecentChats = List<StoredChat>.from(
         ChatStorageService.savedChats,
       ); // Use List.from to create a mutable copy
     } else {
-      _filteredRecentChats = ChatStorageService.savedChats.where((chatJson) {
-        String title = chatJson.split('§').isNotEmpty
-            ? chatJson.split('§').first.split('|').last.trimLeft()
-            : ''; // Get text from first message, or empty string if no messages
-        return title.toLowerCase().contains(_searchQuery.toLowerCase());
+      _filteredRecentChats = ChatStorageService.savedChats.where((chat) {
+        final title = _deriveChatTitle(chat).toLowerCase();
+        return title.contains(_searchQuery.toLowerCase());
       }).toList();
     }
   }
@@ -144,6 +142,19 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
       return profile.email.trim();
     }
     return 'Account';
+  }
+
+  String _deriveChatTitle(StoredChat chat) {
+    final segments = chat.content.split('§');
+    if (segments.isEmpty || segments.first.isEmpty) {
+      return 'Chat';
+    }
+    final parts = segments.first.split('|');
+    if (parts.length < 2) {
+      return 'Chat';
+    }
+    final text = parts[1].trim();
+    return text.isEmpty ? 'Chat' : text;
   }
 
   @override
@@ -258,20 +269,18 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
                     ),
                   ),
                 ..._filteredRecentChats.asMap().entries.map((entry) {
-                  // Get the original index from ChatStorageService.savedChats for selection logic
-                  int originalIndex = ChatStorageService.savedChats.indexOf(
-                    entry.value,
+                  final storedChat = entry.value;
+                  final originalIndex = ChatStorageService.savedChats.indexOf(
+                    storedChat,
                   );
-                  // Extract the title, which is the content of the first message in the chat
-                  String title = entry.value.split('§').isNotEmpty
-                      ? entry.value.split('§').first.split('|').last.trimLeft()
-                      : 'Chat ${originalIndex != -1 ? originalIndex + 1 : 'New'}'; // Fallback title
-                  if (title.length > 25) title = '${title.substring(0, 22)}...';
+                  String title = _deriveChatTitle(storedChat);
+                  if (title.length > 25) {
+                    title = '${title.substring(0, 22)}...';
+                  }
 
                   return _buildRecentItem(
                     title,
-                    index:
-                        originalIndex, // Pass the original index for selection
+                    index: originalIndex,
                     onTap: () {
                       widget.onChatItemTapped(originalIndex);
                     },

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/services/auth_service.dart';
+import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/supabase_config.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 
@@ -48,6 +49,7 @@ class _LoginPageState extends State<LoginPage> {
 
       if (_isSignInMode) {
         await _authService.signInWithPassword(email: email, password: password);
+        await EncryptionService.initializeForPassword(password);
       } else {
         final displayName = _displayNameCtrl.text.trim();
         await _authService.signUpWithPassword(
@@ -69,6 +71,14 @@ class _LoginPageState extends State<LoginPage> {
     } on AuthServiceException catch (error) {
       setState(() {
         _errorMessage = error.message;
+      });
+    } on StateError catch (error) {
+      setState(() {
+        _errorMessage = error.message;
+      });
+    } catch (error) {
+      setState(() {
+        _errorMessage = 'Unexpected error: $error';
       });
     } finally {
       if (mounted) {

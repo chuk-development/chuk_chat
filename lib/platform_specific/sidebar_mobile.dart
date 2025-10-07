@@ -39,7 +39,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
 
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  List<String> _filteredRecentChats = [];
+  List<StoredChat> _filteredRecentChats = [];
   ProfileRecord? _profile;
 
   @override
@@ -115,15 +115,28 @@ class _SidebarMobileState extends State<SidebarMobile> {
     return 'Account';
   }
 
+  String _deriveChatTitle(StoredChat chat) {
+    final segments = chat.content.split('§');
+    if (segments.isEmpty || segments.first.isEmpty) {
+      return 'Chat';
+    }
+    final parts = segments.first.split('|');
+    if (parts.length < 2) {
+      return 'Chat';
+    }
+    final text = parts[1].trim();
+    return text.isEmpty ? 'Chat' : text;
+  }
+
   void _filterRecentChats() {
     if (_searchQuery.isEmpty) {
-      _filteredRecentChats = ChatStorageService.savedChats;
+      _filteredRecentChats = List<StoredChat>.from(
+        ChatStorageService.savedChats,
+      );
     } else {
-      _filteredRecentChats = ChatStorageService.savedChats.where((chatJson) {
-        String title = chatJson.split('§').isNotEmpty
-            ? chatJson.split('§').first.split('|').last.trimLeft()
-            : ''; // Get text from first message, or empty
-        return title.toLowerCase().contains(_searchQuery.toLowerCase());
+      _filteredRecentChats = ChatStorageService.savedChats.where((chat) {
+        final title = _deriveChatTitle(chat).toLowerCase();
+        return title.contains(_searchQuery.toLowerCase());
       }).toList();
     }
   }
@@ -266,13 +279,14 @@ class _SidebarMobileState extends State<SidebarMobile> {
                     ),
                   ),
                 ..._filteredRecentChats.asMap().entries.map((entry) {
-                  int index = ChatStorageService.savedChats.indexOf(
-                    entry.value,
-                  ); // Get original index
-                  String title = entry.value.split('§').isNotEmpty
-                      ? entry.value.split('§').first.split('|').last.trimLeft()
-                      : 'Chat ${index != -1 ? index + 1 : 'New'}';
-                  if (title.length > 25) title = '${title.substring(0, 22)}...';
+                  final storedChat = entry.value;
+                  final index = ChatStorageService.savedChats.indexOf(
+                    storedChat,
+                  );
+                  String title = _deriveChatTitle(storedChat);
+                  if (title.length > 25) {
+                    title = '${title.substring(0, 22)}...';
+                  }
 
                   return _buildRecentItem(
                     title,
