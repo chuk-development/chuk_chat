@@ -15,6 +15,7 @@ class CustomSidebar extends StatefulWidget {
   final Function() onSettingsTapped;
   final Function()
   onProjectsTapped; // Still passed, though Projects is now a top-level button
+  final Future<void> Function(String chatId)? onChatDeleted;
   final int selectedChatIndex;
   final bool isCompactMode;
 
@@ -23,6 +24,7 @@ class CustomSidebar extends StatefulWidget {
     required this.onChatItemTapped,
     required this.onSettingsTapped,
     required this.onProjectsTapped,
+    this.onChatDeleted,
     required this.selectedChatIndex,
     required this.isCompactMode,
   }) : super(key: key);
@@ -187,6 +189,7 @@ class _CustomSidebarState extends State<CustomSidebar> {
                     onTap: () {
                       widget.onChatItemTapped(index);
                     },
+                    onDelete: () => _confirmAndDeleteChat(storedChat),
                     accentColor: accent,
                     iconFgColor: iconFg,
                   );
@@ -285,6 +288,7 @@ class _CustomSidebarState extends State<CustomSidebar> {
     int? index,
     bool isLast = false,
     VoidCallback? onTap,
+    VoidCallback? onDelete,
     required Color accentColor,
     required Color iconFgColor,
   }) {
@@ -311,6 +315,63 @@ class _CustomSidebarState extends State<CustomSidebar> {
       tileColor: isSelected ? accentColor.withValues(alpha: 0.1) : null,
       selectedTileColor: accentColor.withValues(alpha: 0.1),
       selectedColor: accentColor,
+      trailing: onDelete == null
+          ? null
+          : IconButton(
+              icon: Icon(
+                Icons.delete_outline,
+                color: iconFgColor.withValues(alpha: 0.7),
+              ),
+              tooltip: 'Delete chat',
+              onPressed: onDelete,
+            ),
     );
+  }
+
+  Future<void> _confirmAndDeleteChat(StoredChat chat) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete chat?'),
+          content: const Text(
+            'Deleting this chat removes it forever. This cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldDelete != true) return;
+
+    try {
+      await ChatStorageService.deleteChat(chat.id);
+      await ChatStorageService.loadSavedChatsForSidebar();
+      if (!mounted) return;
+      setState(() {});
+      if (widget.onChatDeleted != null) {
+        await widget.onChatDeleted!(chat.id);
+      }
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Chat deleted permanently.')),
+      );
+    } on StateError catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Failed to delete chat: $error')),
+      );
+    }
   }
 }

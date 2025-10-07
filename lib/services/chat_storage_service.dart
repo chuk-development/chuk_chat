@@ -44,9 +44,9 @@ class ChatStorageService {
     if (!EncryptionService.hasKey) {
       final loaded = await EncryptionService.tryLoadKey();
       if (!loaded) {
-        throw StateError(
-          'Encrypted chats could not be loaded because the encryption key is missing. Please sign in again.',
-        );
+        await EncryptionService.clearKey();
+        reset();
+        return;
       }
     }
     List<dynamic> data;
@@ -68,7 +68,7 @@ class ChatStorageService {
       try {
         final decrypted = await EncryptionService.decrypt(encryptedPayload);
         chats.add(StoredChat.fromRow(map, decrypted));
-      } on MacVerificationException {
+      } on SecretBoxAuthenticationError {
         // Skip corrupted rows silently to keep UI responsive.
         continue;
       } on FormatException {
@@ -105,6 +105,38 @@ class ChatStorageService {
 
     final StoredChat stored = StoredChat.fromRow(inserted, json);
     _savedChats = <StoredChat>[stored, ..._savedChats];
+  }
+
+  static Future<void> deleteChat(String chatId) async {
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) {
+      throw StateError('User must be signed in to delete chats.');
+    }
+    try {
+      await SupabaseService.client
+          .from('encrypted_chats')
+          .delete()
+          .eq('id', chatId)
+          .eq('user_id', user.id);
+    } on PostgrestException catch (error) {
+      throw StateError('Failed to delete chat: ${error.message}');
+    }
+
+    final removedIndex = _savedChats.indexWhere(
+      (storedChat) => storedChat.id == chatId,
+    );
+    if (removedIndex != -1) {
+      _savedChats.removeAt(removedIndex);
+      if (_selectedChatIndex == removedIndex) {
+        _selectedChatIndex = -1;
+      } else if (_selectedChatIndex > removedIndex) {
+        _selectedChatIndex -= 1;
+      }
+    }
+
+    if (_selectedChatIndex >= _savedChats.length) {
+      _selectedChatIndex = _savedChats.isEmpty ? -1 : _savedChats.length - 1;
+    }
   }
 
   static Future<void> loadSavedChatsForSidebar() async {

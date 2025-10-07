@@ -108,7 +108,7 @@ class EncryptionService {
     );
     final salt = utf8.encode('chukchat:$userId');
     final newSecretKey = await pbkdf2.deriveKeyFromPassword(
-      password,
+      password: password,
       nonce: salt,
     );
     return newSecretKey.extractBytes();

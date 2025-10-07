@@ -82,25 +82,29 @@ class _RootWrapperMobileState extends State<RootWrapperMobile> {
 
   void _openSettingsPage() {
     if (_isSidebarExpanded) _toggleSidebar();
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => SettingsPage(
-        currentThemeMode: widget.currentThemeMode,
-        currentAccentColor: widget.currentAccentColor,
-        currentIconFgColor: widget.currentIconFgColor,
-        currentBgColor: widget.currentBgColor,
-        setThemeMode: widget.setThemeMode,
-        setAccentColor: widget.setAccentColor,
-        setIconFgColor: widget.setIconFgColor,
-        setBgColor: widget.setBgColor,
-        grainEnabled: widget.grainEnabled,
-        setGrainEnabled: widget.setGrainEnabled,
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SettingsPage(
+          currentThemeMode: widget.currentThemeMode,
+          currentAccentColor: widget.currentAccentColor,
+          currentIconFgColor: widget.currentIconFgColor,
+          currentBgColor: widget.currentBgColor,
+          setThemeMode: widget.setThemeMode,
+          setAccentColor: widget.setAccentColor,
+          setIconFgColor: widget.setIconFgColor,
+          setBgColor: widget.setBgColor,
+          grainEnabled: widget.grainEnabled,
+          setGrainEnabled: widget.setGrainEnabled,
+        ),
       ),
-    ));
+    );
   }
 
   void _openProjectsPage() {
     if (_isSidebarExpanded) _toggleSidebar();
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProjectsPage()));
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const ProjectsPage()));
   }
 
   void _handleChatTapped(int index) {
@@ -108,6 +112,10 @@ class _RootWrapperMobileState extends State<RootWrapperMobile> {
       ChatStorageService.selectedChatIndex = index;
     });
     if (_isSidebarExpanded) _toggleSidebar();
+  }
+
+  Future<void> _handleChatDeleted(String _) async {
+    setState(() {});
   }
 
   void _newChatFromAppBar() {
@@ -121,7 +129,8 @@ class _RootWrapperMobileState extends State<RootWrapperMobile> {
     final Color sidebarBg = Theme.of(context).cardColor.darken(0.03);
 
     final double sidebarVisibleWidth = math.min(screenWidth * 0.7, 280.0);
-    final double titleAvailableWidth = screenWidth -
+    final double titleAvailableWidth =
+        screenWidth -
         kFixedLeftPadding -
         kMenuButtonHeight -
         (3 * kFixedLeftPadding) -
@@ -145,7 +154,9 @@ class _RootWrapperMobileState extends State<RootWrapperMobile> {
                 child: Column(
                   children: [
                     AppBar(
-                      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+                      backgroundColor: Theme.of(
+                        context,
+                      ).scaffoldBackgroundColor,
                       elevation: 0,
                       leading: IconButton(
                         icon: Icon(Icons.menu, color: iconFg, size: 24),
@@ -157,7 +168,9 @@ class _RootWrapperMobileState extends State<RootWrapperMobile> {
                         curve: Curves.easeOutCubic,
                         width: _isSidebarExpanded ? 0 : titleAvailableWidth,
                         constraints: BoxConstraints(
-                          minWidth: _isSidebarExpanded ? 0 : math.min(100, titleAvailableWidth),
+                          minWidth: _isSidebarExpanded
+                              ? 0
+                              : math.min(100, titleAvailableWidth),
                         ),
                         child: ClipRect(
                           child: Padding(
@@ -201,10 +214,12 @@ class _RootWrapperMobileState extends State<RootWrapperMobile> {
             top: 0,
             bottom: 0,
             width: sidebarVisibleWidth,
-            child: SidebarMobile( // UPDATED: Use SidebarMobile
+            child: SidebarMobile(
+              // UPDATED: Use SidebarMobile
               onChatItemTapped: _handleChatTapped,
               onSettingsTapped: _openSettingsPage,
               onProjectsTapped: _openProjectsPage,
+              onChatDeleted: _handleChatDeleted,
               selectedChatIndex: ChatStorageService.selectedChatIndex,
               isCompactMode: true,
             ),

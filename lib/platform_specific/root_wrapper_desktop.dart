@@ -50,26 +50,29 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
 
   void _openSettingsPage() {
     if (_isSidebarExpanded) _toggleSidebar();
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => SettingsPage(
-        currentThemeMode: widget.currentThemeMode,
-        currentAccentColor: widget.currentAccentColor,
-        currentIconFgColor: widget.currentIconFgColor,
-        currentBgColor: widget.currentBgColor,
-        setThemeMode: widget.setThemeMode,
-        setAccentColor: widget.setAccentColor,
-        setIconFgColor: widget.setIconFgColor,
-        setBgColor: widget.setBgColor,
-        grainEnabled: widget.grainEnabled,
-        setGrainEnabled: widget.setGrainEnabled,
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SettingsPage(
+          currentThemeMode: widget.currentThemeMode,
+          currentAccentColor: widget.currentAccentColor,
+          currentIconFgColor: widget.currentIconFgColor,
+          currentBgColor: widget.currentBgColor,
+          setThemeMode: widget.setThemeMode,
+          setAccentColor: widget.setAccentColor,
+          setIconFgColor: widget.setIconFgColor,
+          setBgColor: widget.setBgColor,
+          grainEnabled: widget.grainEnabled,
+          setGrainEnabled: widget.setGrainEnabled,
+        ),
       ),
-    ));
+    );
   }
 
   void _openProjectsPage() {
     if (_isSidebarExpanded) _toggleSidebar();
-    Navigator.of(context)
-        .push(MaterialPageRoute(builder: (_) => const ProjectsPage()));
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const ProjectsPage()));
   }
 
   void _handleChatTapped(int index) {
@@ -86,6 +89,10 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     });
   }
 
+  Future<void> _handleChatDeleted(String _) async {
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
@@ -93,8 +100,13 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
 
     final bool isCompactMode = screenWidth < kCompactModeBreakpoint;
 
-    final double sidebarVisibleWidth = isCompactMode ? screenWidth * 0.8 : 280.0;
-    final double effectiveSidebarWidth = math.min(screenWidth, sidebarVisibleWidth);
+    final double sidebarVisibleWidth = isCompactMode
+        ? screenWidth * 0.8
+        : 280.0;
+    final double effectiveSidebarWidth = math.min(
+      screenWidth,
+      sidebarVisibleWidth,
+    );
 
     return Scaffold(
       body: Stack(
@@ -104,7 +116,9 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
             child: AnimatedPositioned(
               duration: const Duration(milliseconds: 250),
               curve: Curves.easeOutCubic,
-              left: (!isCompactMode && _isSidebarExpanded) ? effectiveSidebarWidth : 0,
+              left: (!isCompactMode && _isSidebarExpanded)
+                  ? effectiveSidebarWidth
+                  : 0,
               right: 0,
               top: 0,
               bottom: 0,
@@ -131,10 +145,12 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
             top: 0,
             bottom: 0,
             width: effectiveSidebarWidth,
-            child: SidebarDesktop( // Use the desktop-specific sidebar
+            child: SidebarDesktop(
+              // Use the desktop-specific sidebar
               onChatItemTapped: _handleChatTapped,
               onSettingsTapped: _openSettingsPage,
               onProjectsTapped: _openProjectsPage,
+              onChatDeleted: _handleChatDeleted,
               selectedChatIndex: ChatStorageService.selectedChatIndex,
               isCompactMode: isCompactMode,
             ),
@@ -152,7 +168,9 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
 
           // Layer 4: Title
           Positioned(
-            top: kTopInitialSpacing + (kMenuButtonHeight - kButtonVisualHeight) / 2,
+            top:
+                kTopInitialSpacing +
+                (kMenuButtonHeight - kButtonVisualHeight) / 2,
             left: kFixedLeftPadding + kMenuButtonHeight + 16,
             child: InkWell(
               onTap: () {},
@@ -191,7 +209,10 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
           // Layer 5: New Chat (External for Desktop)
           if (!isCompactMode || _isSidebarExpanded)
             Positioned(
-              top: kTopInitialSpacing + kMenuButtonHeight + kSpacingBetweenTopButtons,
+              top:
+                  kTopInitialSpacing +
+                  kMenuButtonHeight +
+                  kSpacingBetweenTopButtons,
               left: kFixedLeftPadding,
               child: InkWell(
                 onTap: () {
@@ -201,7 +222,10 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                 borderRadius: BorderRadius.circular(8),
                 child: Container(
                   height: kButtonVisualHeight,
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -234,7 +258,8 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
           // Layer 6: Projects (External for Desktop)
           if (!isCompactMode || _isSidebarExpanded)
             Positioned(
-              top: kTopInitialSpacing +
+              top:
+                  kTopInitialSpacing +
                   kMenuButtonHeight +
                   kSpacingBetweenTopButtons +
                   kButtonVisualHeight +
@@ -245,7 +270,10 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                 borderRadius: BorderRadius.circular(8),
                 child: Container(
                   height: kButtonVisualHeight,
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [

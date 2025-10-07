@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/services/auth_service.dart';
+import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/supabase_config.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
@@ -50,6 +51,15 @@ class _LoginPageState extends State<LoginPage> {
       if (_isSignInMode) {
         await _authService.signInWithPassword(email: email, password: password);
         await EncryptionService.initializeForPassword(password);
+        try {
+          await ChatStorageService.loadSavedChatsForSidebar();
+          ChatStorageService.selectedChatIndex = -1;
+        } catch (error) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not sync chats: $error')),
+          );
+        }
       } else {
         final displayName = _displayNameCtrl.text.trim();
         await _authService.signUpWithPassword(

@@ -13,6 +13,7 @@ class SidebarMobile extends StatefulWidget {
   final Function(int index) onChatItemTapped;
   final Function() onSettingsTapped;
   final Function() onProjectsTapped;
+  final Future<void> Function(String chatId)? onChatDeleted;
   final int selectedChatIndex;
   final bool isCompactMode; // Not directly used in the UI, but kept for context
 
@@ -21,6 +22,7 @@ class SidebarMobile extends StatefulWidget {
     required this.onChatItemTapped,
     required this.onSettingsTapped,
     required this.onProjectsTapped,
+    this.onChatDeleted,
     required this.selectedChatIndex,
     required this.isCompactMode,
   }) : super(key: key);
@@ -126,6 +128,55 @@ class _SidebarMobileState extends State<SidebarMobile> {
     }
     final text = parts[1].trim();
     return text.isEmpty ? 'Chat' : text;
+  }
+
+  Future<void> _confirmAndDeleteChat(StoredChat chat) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete chat?'),
+          content: const Text(
+            'Deleting this chat removes it forever. This action cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldDelete != true) return;
+
+    try {
+      await ChatStorageService.deleteChat(chat.id);
+      await ChatStorageService.loadSavedChatsForSidebar();
+      if (!mounted) return;
+      setState(() {
+        _filterRecentChats();
+      });
+      if (widget.onChatDeleted != null) {
+        await widget.onChatDeleted!(chat.id);
+      }
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Chat deleted permanently.')),
+      );
+    } on StateError catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Failed to delete chat: $error')),
+      );
+    }
   }
 
   void _filterRecentChats() {
@@ -294,6 +345,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
                     onTap: () {
                       widget.onChatItemTapped(index);
                     },
+                    onDelete: () => _confirmAndDeleteChat(storedChat),
                     accentColor: accentColor,
                     iconColor: iconColorDefault,
                     textColor: textColorDefault,
@@ -437,6 +489,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
     int? index,
     bool isLast = false,
     VoidCallback? onTap,
+    VoidCallback? onDelete,
     required Color accentColor,
     required Color iconColor,
     required Color textColor,
@@ -451,7 +504,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
         title,
         style: TextStyle(
           color: isLast
-              ? textColor.withOpacity(0.38)
+              ? textColor.withValues(alpha: 0.38)
               : (isSelected ? accentColor : textColor),
           fontSize: 15,
         ),
@@ -462,11 +515,21 @@ class _SidebarMobileState extends State<SidebarMobile> {
         left: _sidebarHorizontalPadding,
         right: 16.0,
       ),
-      tileColor: isSelected ? accentColor.withOpacity(0.1) : null,
-      selectedTileColor: accentColor.withOpacity(0.1),
+      tileColor: isSelected ? accentColor.withValues(alpha: 0.1) : null,
+      selectedTileColor: accentColor.withValues(alpha: 0.1),
       selectedColor: accentColor,
       iconColor: iconColor,
       textColor: textColor,
+      trailing: onDelete == null
+          ? null
+          : IconButton(
+              icon: Icon(
+                Icons.delete_outline,
+                color: iconColor.withValues(alpha: 0.7),
+              ),
+              tooltip: 'Delete chat',
+              onPressed: onDelete,
+            ),
     );
   }
 
