@@ -171,8 +171,7 @@ class ChatStorageService {
     }
 
     final stored = StoredChat.fromRow(inserted, messages);
-    _savedChats = <StoredChat>[stored, ..._savedChats];
-    _notifyChanges();
+    _upsertChatLocally(stored);
     return stored;
   }
 
@@ -224,15 +223,7 @@ class ChatStorageService {
     final updated = updatedRows.first as Map<String, dynamic>;
 
     final stored = StoredChat.fromRow(updated, messages);
-    final index = _savedChats.indexWhere((chat) => chat.id == chatId);
-    if (index != -1) {
-      final updatedChats = List<StoredChat>.from(_savedChats);
-      updatedChats[index] = stored;
-      _savedChats = updatedChats;
-    } else {
-      _savedChats = <StoredChat>[stored, ..._savedChats];
-    }
-    _notifyChanges();
+    _upsertChatLocally(stored);
     return stored;
   }
 
@@ -520,16 +511,36 @@ class ChatStorageService {
   }
 
   static void _upsertChatLocally(StoredChat chat) {
-    final existingIndex = _savedChats.indexWhere((c) => c.id == chat.id);
+    final bool hadValidSelection =
+        selectedChatIndex >= 0 && selectedChatIndex < _savedChats.length;
+    final bool hadAnySelection = selectedChatIndex >= 0;
+    final String? selectedChatId = hadValidSelection
+        ? _savedChats[selectedChatIndex].id
+        : null;
+
+    final updatedChats = List<StoredChat>.from(_savedChats);
+    final existingIndex = updatedChats.indexWhere((c) => c.id == chat.id);
     if (existingIndex != -1) {
-      final updatedChats = List<StoredChat>.from(_savedChats);
       updatedChats[existingIndex] = chat;
-      _savedChats = updatedChats;
     } else {
-      _savedChats = <StoredChat>[chat, ..._savedChats];
-      if (selectedChatIndex != -1) {
-        selectedChatIndex += 1;
-      }
+      updatedChats.add(chat);
+    }
+    updatedChats.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    _savedChats = updatedChats;
+
+    if (selectedChatId != null) {
+      final newIndex = _savedChats.indexWhere(
+        (storedChat) => storedChat.id == selectedChatId,
+      );
+      selectedChatIndex = newIndex >= 0 ? newIndex : -1;
+    } else if (!hadAnySelection) {
+      selectedChatIndex = -1;
+    }
+
+    if (selectedChatIndex >= _savedChats.length) {
+      selectedChatIndex = _savedChats.isEmpty ? -1 : _savedChats.length - 1;
+    } else if (selectedChatIndex < 0) {
+      selectedChatIndex = -1;
     }
     _notifyChanges();
   }

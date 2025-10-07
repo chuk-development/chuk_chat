@@ -187,7 +187,7 @@ class _ChukChatAppState extends State<ChukChatApp> {
         }
         _loadThemeSettingsFromSupabase();
       } else {
-        unawaited(EncryptionService.clearKey());
+        await EncryptionService.clearKey();
         await ChatStorageService.reset();
         _hasAppliedSupabaseTheme = false;
         _loadThemeSettingsFromPrefs();

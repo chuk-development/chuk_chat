@@ -89,9 +89,14 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
         ChatStorageService.savedChats,
       ); // Use List.from to create a mutable copy
     } else {
+      final lowerQuery = _searchQuery.toLowerCase();
       _filteredRecentChats = ChatStorageService.savedChats.where((chat) {
-        final title = _deriveChatTitle(chat).toLowerCase();
-        return title.contains(_searchQuery.toLowerCase());
+        final titleMatches =
+            _deriveChatTitle(chat).toLowerCase().contains(lowerQuery);
+        if (titleMatches) return true;
+        return chat.messages.any(
+          (message) => message.text.toLowerCase().contains(lowerQuery),
+        );
       }).toList();
     }
   }
