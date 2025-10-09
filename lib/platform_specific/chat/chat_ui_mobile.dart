@@ -7,6 +7,7 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/pages/voice_mode_page.dart';
+import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart'; // NEW API SERVICE
 
@@ -610,7 +611,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
         setState(() {
           _attachedFiles.add(
-            AttachedFile(id: fileId, fileName: fileName, isUploading: true),
+            AttachedFile(
+              id: fileId,
+              fileName: fileName,
+              isUploading: true,
+              localPath: file.path,
+              fileSizeBytes: platformFile.size,
+            ),
           );
         });
         _scrollChatToBottom();
@@ -686,9 +693,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         true; // Mobile shows a hashtag-only trigger for model menu.
 
     final double screenWidth = MediaQuery.of(context).size.width;
-    final Color accent = Theme.of(context).colorScheme.primary;
     final Color iconFg = Theme.of(context).iconTheme.color!;
-    final Color textColor = iconFg;
 
     final double effectiveHorizontalPadding = _kHorizontalPaddingSmall;
     final double maxPossibleChatContentWidth = math.max(
@@ -780,11 +785,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                         padding: const EdgeInsets.only(
                           bottom: _kAttachmentBarMarginBottom,
                         ),
-                        child: _buildAttachmentBar(
-                          targetInputWidth,
-                          effectiveHorizontalPadding,
-                          textColor,
-                          accent,
+                        child: SizedBox(
+                          width: targetInputWidth,
+                          child: AttachmentPreviewBar(
+                            files: _attachedFiles,
+                            onRemove: _removeAttachedFile,
+                          ),
                         ),
                       ),
                     _buildSearchBar(
@@ -796,84 +802,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildAttachmentBar(
-    double contentWidth,
-    double horizontalPadding,
-    Color textColor,
-    Color accentColor,
-  ) {
-    return Container(
-      width: contentWidth,
-      height: _kAttachmentBarHeight,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade800.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade700),
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.start,
-          children: _attachedFiles
-              .map((file) => _buildAttachmentChip(file, textColor, accentColor))
-              .toList(),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAttachmentChip(
-    AttachedFile file,
-    Color textColor,
-    Color accentColor,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4.0),
-      child: Chip(
-        padding: EdgeInsets.zero,
-        backgroundColor: file.isUploading
-            ? Colors.blueGrey.shade700
-            : Colors.grey.shade700,
-        label: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (file.isUploading)
-              SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(accentColor),
-                ),
-              )
-            else
-              Icon(
-                Icons.insert_drive_file,
-                color: textColor.withValues(alpha: 0.8),
-                size: 16,
-              ),
-            const SizedBox(width: 6),
-            Text(
-              file.fileName,
-              style: TextStyle(color: textColor, fontSize: 12),
-              overflow: TextOverflow.ellipsis,
-              maxLines: 1,
-            ),
-          ],
-        ),
-        onDeleted: file.isUploading ? null : () => _removeAttachedFile(file.id),
-        deleteIcon: Icon(
-          Icons.close,
-          color: textColor.withValues(alpha: 0.8),
-          size: 16,
-        ),
-        deleteButtonTooltipMessage: 'Remove "${file.fileName}"',
       ),
     );
   }

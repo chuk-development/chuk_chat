@@ -7,6 +7,7 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/pages/voice_mode_page.dart';
+import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 
 import 'package:file_picker/file_picker.dart';
@@ -38,7 +39,7 @@ class ChukChatUI extends StatefulWidget {
 class ChukChatUIState extends State<ChukChatUI>
     with SingleTickerProviderStateMixin {
   final TextEditingController _controller = TextEditingController();
-  final List<Map<String, String>> _messages = [];
+  final List<Map<String, dynamic>> _messages = [];
   String? _activeChatId;
   final ScrollController _scrollController = ScrollController();
 
@@ -112,11 +113,18 @@ class ChukChatUIState extends State<ChukChatUI>
       _messages
         ..clear()
         ..addAll(
-          storedChat.messages
-              .map(
-                (message) => {'sender': message.sender, 'text': message.text},
-              )
-              .toList(),
+          storedChat.messages.map(
+            (message) => {
+              'id': _uuid.v4(),
+              'sender': message.sender,
+              'text': message.text,
+              'rawText': message.sender == 'user' ? message.text : null,
+              'attachments': <Map<String, dynamic>>[],
+              'modelId': null,
+              'status': 'sent',
+              'timestamp': DateTime.now().toIso8601String(),
+            },
+          ),
         );
       if (_messages.isNotEmpty) {
         _animCtrl.forward();
@@ -194,7 +202,10 @@ class ChukChatUIState extends State<ChukChatUI>
     return fallback;
   }
 
-  void _sendMessage() async {
+  Future<void> _sendMessage({
+    Map<String, dynamic>? _resendSource,
+    String? overrideModelId,
+  }) async {
     if (_isSending) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -226,6 +237,7 @@ class ChukChatUIState extends State<ChukChatUI>
     if (!hasText && !hasAttachments) return;
 
     final bool firstMessageInChat = _messages.isEmpty;
+    final String modelIdForSend = overrideModelId ?? _selectedModelId;
 
     String displayMessageText = originalUserInput;
     String aiPromptContent = originalUserInput;
@@ -254,8 +266,30 @@ class ChukChatUIState extends State<ChukChatUI>
       aiPromptContent = '$markdownSections\n\nUser query: $queryText';
     }
 
+    final List<Map<String, dynamic>> attachmentSnapshots =
+        List<Map<String, dynamic>>.unmodifiable(
+          _attachedFiles
+              .where((f) => f.markdownContent != null)
+              .map(
+                (f) => {
+                  'fileName': f.fileName,
+                  'markdownContent': f.markdownContent,
+                },
+              ),
+        );
+    final String userMessageId = _uuid.v4();
+
     setState(() {
-      _messages.add({'sender': 'user', 'text': displayMessageText});
+      _messages.add({
+        'id': userMessageId,
+        'sender': 'user',
+        'text': displayMessageText,
+        'rawText': originalUserInput,
+        'attachments': attachmentSnapshots,
+        'modelId': modelIdForSend,
+        'status': 'sent',
+        'timestamp': DateTime.now().toIso8601String(),
+      });
       _controller.clear();
       _isSending = true;
       if (hasAttachments) {
@@ -271,7 +305,16 @@ class ChukChatUIState extends State<ChukChatUI>
 
     int placeholderIndex = -1;
     setState(() {
-      _messages.add({'sender': 'ai', 'text': 'Thinking...'});
+      final String aiMessageId = _uuid.v4();
+      _messages.add({
+        'id': aiMessageId,
+        'sender': 'ai',
+        'text': 'Thinking...',
+        'status': 'pending',
+        'relatedMessageId': userMessageId,
+        'modelId': modelIdForSend,
+        'timestamp': DateTime.now().toIso8601String(),
+      });
       placeholderIndex = _messages.length - 1;
     });
     _scrollChatToBottom();
@@ -284,7 +327,14 @@ class ChukChatUIState extends State<ChukChatUI>
       }
       setState(() {
         if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
-          _messages[placeholderIndex] = {'sender': 'ai', 'text': text};
+          final Map<String, dynamic> existing = Map<String, dynamic>.from(
+            _messages[placeholderIndex],
+          );
+          existing['text'] = text;
+          existing['status'] = 'sent';
+          existing['modelId'] = modelIdForSend;
+          existing['timestamp'] = DateTime.now().toIso8601String();
+          _messages[placeholderIndex] = existing;
         } else {
           debugPrint('AI response arrived after chat reset, dropping message.');
         }
@@ -323,9 +373,276 @@ class ChukChatUIState extends State<ChukChatUI>
       return;
     }
 
-    final String mirroredText =
-        originalUserInput.isNotEmpty ? originalUserInput : displayMessageText;
-    finalizeAiMessage('Model: $_selectedModelId\n\n$mirroredText');
+    final String mirroredText = originalUserInput.isNotEmpty
+        ? originalUserInput
+        : displayMessageText;
+    finalizeAiMessage('Model: $modelIdForSend\n\n$mirroredText');
+  }
+
+  void _showSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _copyTextToClipboard(String text, {String? label}) async {
+    if (text.isEmpty) {
+      _showSnack('Nothing to copy.');
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: text));
+    _showSnack(label ?? 'Copied to clipboard.');
+  }
+
+  Future<void> _copyAttachment(AttachedFile file) async {
+    final String? markdown = file.markdownContent;
+    if (markdown != null && markdown.isNotEmpty) {
+      await _copyTextToClipboard(
+        markdown,
+        label: '"${file.fileName}" copied to clipboard.',
+      );
+      return;
+    }
+    final String? path = file.localPath;
+    if (path != null) {
+      try {
+        final String content = await File(path).readAsString();
+        await _copyTextToClipboard(
+          content,
+          label: '"${file.fileName}" copied to clipboard.',
+        );
+        return;
+      } catch (_) {
+        _showSnack('Unable to copy "${file.fileName}".');
+        return;
+      }
+    }
+    _showSnack('No copyable content for "${file.fileName}".');
+  }
+
+  Map<String, dynamic>? _findMessageById(String id) {
+    try {
+      return _messages.firstWhere((message) => message['id'] == id);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  List<Map<String, dynamic>> _messageAttachments(Map<String, dynamic> message) {
+    final dynamic attachments = message['attachments'];
+    if (attachments is List) {
+      return attachments
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    }
+    return <Map<String, dynamic>>[];
+  }
+
+  Future<void> _prepareMessageAndSend(
+    Map<String, dynamic> source, {
+    String? overrideModelId,
+  }) async {
+    if (_isSending) {
+      _showSnack('Please wait for the current response to finish.');
+      return;
+    }
+
+    final String rawInput =
+        (source['rawText'] as String?) ?? (source['text'] as String? ?? '');
+    final List<Map<String, dynamic>> attachments = _messageAttachments(source)
+        .where(
+          (attachment) =>
+              (attachment['markdownContent'] as String?)?.isNotEmpty ?? false,
+        )
+        .toList();
+
+    setState(() {
+      _controller
+        ..text = rawInput
+        ..selection = TextSelection.fromPosition(
+          TextPosition(offset: rawInput.length),
+        );
+      _attachedFiles
+        ..clear()
+        ..addAll(
+          attachments.map(
+            (attachment) => AttachedFile(
+              id: _uuid.v4(),
+              fileName: attachment['fileName'] as String? ?? 'attachment',
+              markdownContent: attachment['markdownContent'] as String?,
+              isUploading: false,
+            ),
+          ),
+        );
+    });
+
+    await _sendMessage(
+      _resendSource: source,
+      overrideModelId:
+          overrideModelId ?? source['modelId'] as String? ?? _selectedModelId,
+    );
+  }
+
+  Future<void> _resendMessage(Map<String, dynamic> message) async {
+    await _prepareMessageAndSend(message);
+  }
+
+  Future<void> _retryMessage(Map<String, dynamic> message) async {
+    await _prepareMessageAndSend(message);
+  }
+
+  Future<void> _resendMessageToDifferentModel(
+    Map<String, dynamic> message,
+  ) async {
+    final String currentModel =
+        (message['modelId'] as String?) ?? _selectedModelId;
+    final String? selectedModel = await _promptModelSelection(currentModel);
+    if (selectedModel == null) return;
+    await _prepareMessageAndSend(message, overrideModelId: selectedModel);
+  }
+
+  Future<void> _retryRelatedMessage(String relatedMessageId) async {
+    final Map<String, dynamic>? source = _findMessageById(relatedMessageId);
+    if (source == null) {
+      _showSnack('Original message not found.');
+      return;
+    }
+    await _prepareMessageAndSend(source);
+  }
+
+  Future<void> _resendRelatedMessageToDifferentModel(
+    String relatedMessageId,
+  ) async {
+    final Map<String, dynamic>? source = _findMessageById(relatedMessageId);
+    if (source == null) {
+      _showSnack('Original message not found.');
+      return;
+    }
+    final String currentModel =
+        (source['modelId'] as String?) ?? _selectedModelId;
+    final String? selectedModel = await _promptModelSelection(currentModel);
+    if (selectedModel == null) return;
+    await _prepareMessageAndSend(source, overrideModelId: selectedModel);
+  }
+
+  List<MessageBubbleAction> _buildMessageActions(Map<String, dynamic> message) {
+    final String text = (message['text'] as String?) ?? '';
+    final bool isUserMessage =
+        (message['sender'] as String?)?.toLowerCase() == 'user';
+    final String status = (message['status'] as String?) ?? 'sent';
+    final List<MessageBubbleAction> actions = [];
+    final bool isPending = status == 'pending';
+
+    if (text.isNotEmpty) {
+      actions.add(
+        MessageBubbleAction(
+          icon: Icons.copy,
+          tooltip: 'Copy message',
+          onPressed: () => _copyTextToClipboard(text),
+          isEnabled: !isPending || isUserMessage,
+        ),
+      );
+    }
+
+    if (isUserMessage) {
+      actions.add(
+        MessageBubbleAction(
+          icon: Icons.replay,
+          tooltip: 'Resend',
+          onPressed: () => _resendMessage(message),
+        ),
+      );
+      actions.add(
+        MessageBubbleAction(
+          icon: Icons.model_training,
+          tooltip: 'Send with different model',
+          onPressed: () => _resendMessageToDifferentModel(message),
+        ),
+      );
+      actions.add(
+        MessageBubbleAction(
+          icon: Icons.refresh,
+          tooltip: 'Retry send',
+          onPressed: () => _retryMessage(message),
+          isEnabled: status != 'pending',
+        ),
+      );
+    } else {
+      final String? relatedId = message['relatedMessageId'] as String?;
+      if (relatedId != null) {
+        actions.add(
+          MessageBubbleAction(
+            icon: Icons.refresh,
+            tooltip: 'Retry send',
+            onPressed: () => _retryRelatedMessage(relatedId),
+            isEnabled: !isPending,
+          ),
+        );
+        actions.add(
+          MessageBubbleAction(
+            icon: Icons.model_training,
+            tooltip: 'Send with different model',
+            onPressed: () => _resendRelatedMessageToDifferentModel(relatedId),
+            isEnabled: !isPending,
+          ),
+        );
+      }
+    }
+
+    return actions;
+  }
+
+  Future<String?> _promptModelSelection(String currentModelId) async {
+    try {
+      final response = await http.get(Uri.parse('$_apiBaseUrl/models_info'));
+      if (response.statusCode != 200) {
+        _showSnack('Failed to load models (${response.statusCode}).');
+        return null;
+      }
+      final List<dynamic> jsonList =
+          json.decode(response.body) as List<dynamic>;
+      if (jsonList.isEmpty) {
+        _showSnack('No models available.');
+        return null;
+      }
+      final List<ModelItem> models =
+          jsonList
+              .map((item) => ModelItem.fromJson(item as Map<String, dynamic>))
+              .toList()
+            ..sort((a, b) => a.name.compareTo(b.name));
+      if (!mounted) return null;
+      return showDialog<String>(
+        context: context,
+        builder: (context) {
+          return SimpleDialog(
+            title: const Text('Send with model'),
+            children: [
+              ...models.map(
+                (model) => SimpleDialogOption(
+                  onPressed: () => Navigator.of(context).pop(model.value),
+                  child: Row(
+                    children: [
+                      Expanded(child: Text(model.name)),
+                      if (model.value == currentModelId)
+                        const Icon(Icons.check, size: 16),
+                    ],
+                  ),
+                ),
+              ),
+              SimpleDialogOption(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
+              ),
+            ],
+          );
+        },
+      );
+    } catch (error) {
+      _showSnack('Failed to load models.');
+      return null;
+    }
   }
 
   Future<void> _uploadFiles() async {
@@ -437,7 +754,13 @@ class ChukChatUIState extends State<ChukChatUI>
 
         setState(() {
           _attachedFiles.add(
-            AttachedFile(id: fileId, fileName: fileName, isUploading: true),
+            AttachedFile(
+              id: fileId,
+              fileName: fileName,
+              isUploading: true,
+              localPath: file.path,
+              fileSizeBytes: platformFile.size,
+            ),
           );
         });
         _scrollChatToBottom(); // Scroll to ensure attachment bar is visible
@@ -577,7 +900,12 @@ class ChukChatUIState extends State<ChukChatUI>
   Future<void> _persistChat({bool waitForCompletion = false}) async {
     if (_messages.isEmpty) return;
     final messagesCopy = _messages
-        .map((message) => Map<String, String>.from(message))
+        .map(
+          (message) => <String, String>{
+            'sender': (message['sender'] as String?) ?? 'user',
+            'text': (message['text'] as String?) ?? '',
+          },
+        )
         .toList(growable: false);
     final operation = _persistChatInternal(messagesCopy, _activeChatId);
     if (waitForCompletion) {
@@ -616,9 +944,7 @@ class ChukChatUIState extends State<ChukChatUI>
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
-    final Color accent = Theme.of(context).colorScheme.primary;
     final Color iconFg = Theme.of(context).iconTheme.color!;
-    final Color textColor = iconFg;
 
     final double effectiveHorizontalPadding = widget.isCompactMode
         ? _kHorizontalPaddingSmall
@@ -689,13 +1015,18 @@ class ChukChatUIState extends State<ChukChatUI>
                       ),
                       itemCount: _messages.length,
                       itemBuilder: (_, i) {
-                        final m = _messages[i];
+                        final Map<String, dynamic> message = _messages[i];
+                        final String messageText =
+                            (message['text'] as String?) ?? '';
+                        final bool isUserMessage =
+                            (message['sender'] as String?) == 'user';
                         return MessageBubble(
-                          message: m['text']!,
-                          isUser: m['sender'] == 'user',
+                          message: messageText,
+                          isUser: isUserMessage,
                           maxWidth:
                               expandedInputWidth *
                               0.7, // Message bubbles also use expanded width
+                          actions: _buildMessageActions(message),
                         );
                       },
                     ),
@@ -734,12 +1065,14 @@ class ChukChatUIState extends State<ChukChatUI>
                         padding: const EdgeInsets.only(
                           bottom: _kAttachmentBarMarginBottom,
                         ), // Margin below chips
-                        child: _buildAttachmentBar(
-                          targetInputWidth,
-                          effectiveHorizontalPadding,
-                          textColor,
-                          accent,
-                        ), // Pass targetInputWidth
+                        child: SizedBox(
+                          width: targetInputWidth,
+                          child: AttachmentPreviewBar(
+                            files: _attachedFiles,
+                            onRemove: _removeAttachedFile,
+                            onCopy: _copyAttachment,
+                          ),
+                        ),
                       ),
                     // Search Bar
                     _buildSearchBar(isCompactMode: widget.isCompactMode),
@@ -749,85 +1082,6 @@ class ChukChatUIState extends State<ChukChatUI>
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  // NEW: Extracted Attachment Bar Widget
-  Widget _buildAttachmentBar(
-    double contentWidth,
-    double horizontalPadding,
-    Color textColor,
-    Color accentColor,
-  ) {
-    return Container(
-      width: contentWidth, // Use the passed contentWidth
-      height: _kAttachmentBarHeight,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade800.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade700),
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.start,
-          children: _attachedFiles
-              .map((file) => _buildAttachmentChip(file, textColor, accentColor))
-              .toList(),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAttachmentChip(
-    AttachedFile file,
-    Color textColor,
-    Color accentColor,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4.0),
-      child: Chip(
-        padding: EdgeInsets.zero,
-        backgroundColor: file.isUploading
-            ? Colors.blueGrey.shade700
-            : Colors.grey.shade700,
-        label: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (file.isUploading)
-              SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(accentColor),
-                ),
-              )
-            else
-              Icon(
-                Icons.insert_drive_file,
-                color: textColor.withValues(alpha: 0.8),
-                size: 16,
-              ),
-            const SizedBox(width: 6),
-            Text(
-              file.fileName,
-              style: TextStyle(color: textColor, fontSize: 12),
-              overflow: TextOverflow.ellipsis,
-              maxLines: 1,
-            ),
-          ],
-        ),
-        onDeleted: file.isUploading ? null : () => _removeAttachedFile(file.id),
-        deleteIcon: Icon(
-          Icons.close,
-          color: textColor.withValues(alpha: 0.8),
-          size: 16,
-        ),
-        deleteButtonTooltipMessage: 'Remove "${file.fileName}"',
       ),
     );
   }
