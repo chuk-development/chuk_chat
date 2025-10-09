@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:chuk_chat/model_selector_page.dart';
 import 'package:chuk_chat/pages/theme_page.dart';
 import 'package:chuk_chat/pages/account_settings_page.dart';
+import 'package:chuk_chat/pages/about_page.dart';
 import 'package:chuk_chat/services/auth_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
@@ -133,6 +134,24 @@ class SettingsPage extends StatelessWidget {
             subtitle: 'Download your conversations as JSON',
             icon: Icons.download_outlined,
             onTap: () => _exportChats(context),
+            accentColor: accent,
+            iconFgColor: iconFg,
+            bgColor: scaffoldBg,
+          ),
+          const SizedBox(height: 32),
+          _buildSettingsCard(
+            context,
+            title: 'About',
+            subtitle: 'Version details and open source licenses',
+            icon: Icons.info_outline,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const AboutPage(),
+                ),
+              );
+            },
             accentColor: accent,
             iconFgColor: iconFg,
             bgColor: scaffoldBg,
