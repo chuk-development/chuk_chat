@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:chuk_chat/supabase_config.dart';
@@ -37,4 +38,24 @@ class SupabaseService {
   }
 
   static GoTrueClient get auth => client.auth;
+
+  static Future<Session?> refreshSession() async {
+    try {
+      final current = auth.currentSession;
+      if (current == null) return null;
+      final response = await auth.refreshSession();
+      return response.session ?? auth.currentSession;
+    } on AuthException catch (error) {
+      debugPrint('Failed to refresh session: ${error.message}');
+      return null;
+    }
+  }
+
+  static Future<void> signOut() async {
+    try {
+      await auth.signOut();
+    } on AuthException catch (error) {
+      debugPrint('Failed to sign out: ${error.message}');
+    }
+  }
 }

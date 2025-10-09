@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'dart:math' as math;
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/pages/voice_mode_page.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
@@ -51,6 +52,7 @@ class ChukChatUIState extends State<ChukChatUI>
   bool _isBrainActive = false;
   bool _isImageActive = false;
   bool _isMicActive = false;
+  bool _isSending = false;
 
   final List<AttachedFile> _attachedFiles = [];
   final Uuid _uuid = Uuid();
@@ -150,67 +152,180 @@ class ChukChatUIState extends State<ChukChatUI>
     await ChatStorageService.loadSavedChatsForSidebar();
   }
 
-  void _sendMessage() {
-    final bool hasText = _controller.text.trim().isNotEmpty;
+  String? _providerNameForModel(String modelId) {
+    final parts = modelId.split('/');
+    if (parts.length >= 3 && parts.first == 'openrouter') {
+      final providerSlug = parts[1].toLowerCase();
+      const knownProviders = <String, String>{
+        'anthropic': 'Anthropic',
+        'openai': 'OpenAI',
+        'google': 'Google',
+        'meta': 'Meta',
+        'mistralai': 'Mistral',
+        'perplexity': 'Perplexity',
+        'x-ai': 'x.ai',
+        'cohere': 'Cohere',
+        'deepseek': 'DeepSeek',
+        'moonshot': 'Moonshot',
+      };
+      return knownProviders[providerSlug] ?? parts[1];
+    }
+    return null;
+  }
+
+  String _errorMessageFromResponse(
+    Map<String, dynamic>? decodedBody,
+    String fallback,
+  ) {
+    if (decodedBody == null || decodedBody.isEmpty) return fallback;
+    final dynamic detail = decodedBody['detail'];
+    if (detail is String && detail.isNotEmpty) return detail;
+    if (detail is List && detail.isNotEmpty) {
+      final first = detail.first;
+      if (first is Map<String, dynamic>) {
+        final dynamic msg = first['msg'];
+        if (msg is String && msg.isNotEmpty) return msg;
+      } else if (first is String && first.isNotEmpty) {
+        return first;
+      }
+    }
+    final dynamic message = decodedBody['message'];
+    if (message is String && message.isNotEmpty) return message;
+    return fallback;
+  }
+
+  void _sendMessage() async {
+    if (_isSending) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please wait for the current response to finish.'),
+          ),
+        );
+      }
+      return;
+    }
+
+    if (_attachedFiles.any((f) => f.isUploading)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please wait for file uploads to finish.'),
+          ),
+        );
+      }
+      return;
+    }
+
+    final String originalUserInput = _controller.text.trim();
+    final bool hasText = originalUserInput.isNotEmpty;
     final bool hasAttachments = _attachedFiles.any(
       (f) => f.markdownContent != null,
     );
 
     if (!hasText && !hasAttachments) return;
 
-    final firstMessageInChat = _messages.isEmpty;
+    final bool firstMessageInChat = _messages.isEmpty;
 
-    String userMessageText = _controller.text;
+    String displayMessageText = originalUserInput;
+    String aiPromptContent = originalUserInput;
+
     if (hasAttachments) {
       final attachedFileNames = _attachedFiles
+          .where((f) => f.markdownContent != null)
           .map((f) => '"${f.fileName}"')
           .join(', ');
-      if (userMessageText.isNotEmpty) {
-        userMessageText =
-            'Uploaded documents: $attachedFileNames\n\n$userMessageText';
+      final String attachmentsLine = 'Uploaded documents: $attachedFileNames';
+      if (displayMessageText.isNotEmpty) {
+        displayMessageText = '$attachmentsLine\n\n$displayMessageText';
       } else {
-        userMessageText = 'Uploaded documents: $attachedFileNames';
+        displayMessageText = attachmentsLine;
       }
+
+      final markdownSections = _attachedFiles
+          .where((f) => f.markdownContent != null)
+          .map(
+            (f) => 'Document: "${f.fileName}"\n```\n${f.markdownContent}\n```',
+          )
+          .join('\n\n');
+      final String queryText = originalUserInput.isNotEmpty
+          ? originalUserInput
+          : 'Please review the uploaded documents.';
+      aiPromptContent = '$markdownSections\n\nUser query: $queryText';
     }
 
     setState(() {
-      _messages.add({'sender': 'user', 'text': userMessageText});
+      _messages.add({'sender': 'user', 'text': displayMessageText});
       _controller.clear();
+      _isSending = true;
+      if (hasAttachments) {
+        _attachedFiles.clear();
+      }
     });
 
     _persistChat();
 
-    // Only trigger the animation/move-down effect when the FIRST message is sent
-    // This also implicitly starts the chat content animation (_anim.forward())
     if (firstMessageInChat) _animCtrl.forward();
     _scrollChatToBottom();
     Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
 
-    String aiPrompt = userMessageText;
-    if (hasAttachments) {
-      final markdownSections = _attachedFiles
-          .where((f) => f.markdownContent != null)
-          .map(
-            (f) =>
-                "Document: \"${f.fileName}\"\n```\n${f.markdownContent}\n```",
-          )
-          .join('\n\n');
-      aiPrompt = "$markdownSections\n\nUser query: $aiPrompt";
-      _attachedFiles.clear(); // Clear all attachments after sending
-    }
+    int placeholderIndex = -1;
+    setState(() {
+      _messages.add({'sender': 'ai', 'text': 'Thinking...'});
+      placeholderIndex = _messages.length - 1;
+    });
+    _scrollChatToBottom();
 
-    Future.delayed(const Duration(milliseconds: 300), () {
+    bool responseHandled = false;
+    void finalizeAiMessage(String text) {
+      responseHandled = true;
+      if (!mounted) {
+        return;
+      }
       setState(() {
-        _messages.add({
-          'sender': 'ai',
-          'text':
-              'You said: "${_messages.last['text']}"\n(Model ID: $_selectedModelId)',
-        });
+        if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
+          _messages[placeholderIndex] = {'sender': 'ai', 'text': text};
+        } else {
+          debugPrint('AI response arrived after chat reset, dropping message.');
+        }
+        _isSending = false;
       });
       _scrollChatToBottom();
       Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
       _persistChat();
-    });
+    }
+
+    final session =
+        await SupabaseService.refreshSession() ??
+        SupabaseService.auth.currentSession;
+    if (session == null) {
+      _isSending = false;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Session expired. Please sign in again.'),
+          ),
+        );
+      }
+      await SupabaseService.signOut();
+      finalizeAiMessage('Please sign in to continue the conversation.');
+      return;
+    }
+    final accessToken = session.accessToken;
+    if (accessToken.isEmpty) {
+      _isSending = false;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to authenticate your session.')),
+        );
+      }
+      finalizeAiMessage('Authentication required. Please sign in again.');
+      return;
+    }
+
+    final String mirroredText =
+        originalUserInput.isNotEmpty ? originalUserInput : displayMessageText;
+    finalizeAiMessage('Model: $_selectedModelId\n\n$mirroredText');
   }
 
   Future<void> _uploadFiles() async {
@@ -484,16 +599,17 @@ class ChukChatUIState extends State<ChukChatUI>
       setState(() {
         _activeChatId = stored.id;
       });
-      final index = ChatStorageService.savedChats
-          .indexWhere((chat) => chat.id == stored.id);
+      final index = ChatStorageService.savedChats.indexWhere(
+        (chat) => chat.id == stored.id,
+      );
       if (index != -1) {
         ChatStorageService.selectedChatIndex = index;
       }
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to store chat: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to store chat: $error')));
     }
   }
 
