@@ -72,6 +72,10 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
     });
   }
 
+  void _clearSearchQuery() {
+    _searchController.clear();
+  }
+
   // Refreshes chats from storage and re-filters
   Future<void> _loadChatsAndRefresh() async {
     await ChatStorageService.loadSavedChatsForSidebar();
@@ -255,6 +259,17 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
                   horizontal: 12,
                 ),
                 isDense: true,
+                suffixIcon: _searchQuery.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: 'Clear search',
+                        splashRadius: 18,
+                        icon: Icon(
+                          Icons.clear,
+                          color: iconFg.withValues(alpha: 0.7),
+                        ),
+                        onPressed: _clearSearchQuery,
+                      ),
               ),
               style: TextStyle(color: iconFg),
               cursorColor: accent,

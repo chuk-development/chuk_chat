@@ -84,6 +84,18 @@ class _SidebarMobileState extends State<SidebarMobile> {
     });
   }
 
+  void _clearSearchQuery() {
+    _searchDebounce?.cancel();
+    _filterGeneration++;
+    _searchController.clear();
+    if (!mounted) return;
+    setState(() {
+      _searchQuery = '';
+      _filteredRecentChats =
+          List<StoredChat>.from(ChatStorageService.savedChats);
+    });
+  }
+
   void _startAutoRefresh() {
     _refreshTimer?.cancel();
     _refreshTimer = Timer.periodic(
@@ -403,6 +415,17 @@ class _SidebarMobileState extends State<SidebarMobile> {
                         vertical: 10,
                         horizontal: 0,
                       ),
+                      suffixIcon: _searchQuery.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: 'Eingabe löschen',
+                              splashRadius: 18,
+                              icon: Icon(
+                                Icons.clear,
+                                color: iconColorDefault,
+                              ),
+                              onPressed: _clearSearchQuery,
+                            ),
                     ),
                     style: TextStyle(color: textColorDefault),
                     cursorColor: textColorDefault,
