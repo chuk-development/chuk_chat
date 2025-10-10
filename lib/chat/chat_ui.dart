@@ -6,7 +6,7 @@ import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
-import 'package:chuk_chat/pages/voice_mode_page.dart';
+import 'package:chuk_chat/pages/coming_soon_page.dart';
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 
@@ -203,7 +203,7 @@ class ChukChatUIState extends State<ChukChatUI>
   }
 
   Future<void> _sendMessage({
-    Map<String, dynamic>? _resendSource,
+    Map<String, dynamic>? resendSource,
     String? overrideModelId,
   }) async {
     if (_isSending) {
@@ -386,6 +386,18 @@ class ChukChatUIState extends State<ChukChatUI>
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  void _openComingSoonFeature(String featureName) {
+    if (!mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ComingSoonPage(
+          title: featureName,
+          message: 'Stay tuned for $featureName.',
+        ),
+      ),
+    );
+  }
+
   Future<void> _copyTextToClipboard(String text, {String? label}) async {
     if (text.isEmpty) {
       _showSnack('Nothing to copy.');
@@ -479,7 +491,7 @@ class ChukChatUIState extends State<ChukChatUI>
     });
 
     await _sendMessage(
-      _resendSource: source,
+      resendSource: source,
       overrideModelId:
           overrideModelId ?? source['modelId'] as String? ?? _selectedModelId,
     );
@@ -1076,6 +1088,15 @@ class ChukChatUIState extends State<ChukChatUI>
                       ),
                     // Search Bar
                     _buildSearchBar(isCompactMode: widget.isCompactMode),
+                    const SizedBox(height: 8),
+                    Text(
+                      'AI/LLMs can make mistakes — double-check important info.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: iconFg.withValues(alpha: 0.7),
+                        fontSize: 11,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1243,11 +1264,9 @@ class ChukChatUIState extends State<ChukChatUI>
                 debugLabel: 'Mic button',
               ),
               const SizedBox(width: 8),
-              // Voice Mode Button (navigates to VoiceModePage)
+              // Voice Mode Button (placeholder)
               GestureDetector(
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const VoiceModePage()),
-                ),
+                onTap: () => _openComingSoonFeature('Voice Mode'),
                 child: Container(
                   width: 44,
                   height: 36,

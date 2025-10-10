@@ -190,11 +190,7 @@ class _CustomSidebarState extends State<CustomSidebar> {
             )
           else
             ...starredChats.map(
-              (chat) => _buildStarredItem(
-                chat,
-                iconFg: iconFg,
-                accent: accent,
-              ),
+              (chat) => _buildStarredItem(chat, iconFg: iconFg, accent: accent),
             ),
           Divider(
             color: Theme.of(context).dividerColor,
@@ -319,10 +315,7 @@ class _CustomSidebarState extends State<CustomSidebar> {
       title = '${title.substring(0, 22)}...';
     }
     return ListTile(
-      leading: _leadingIconPlaceholder(
-        Icons.star,
-        iconFgColor: accent,
-      ),
+      leading: _leadingIconPlaceholder(Icons.star, iconFgColor: accent),
       title: Text(title, style: TextStyle(color: iconFg)),
       onTap: () => _openChat(chat),
       dense: true,

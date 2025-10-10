@@ -34,10 +34,7 @@ class MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Determine alignment based on whether it's a user message or not.
-    // In voice_mode, isUser=true means it's a bot message on the left.
-    // In chat_ui, isUser=true means it's a user message on the right.
-    // The `isUser` flag's meaning is inverted in `voice_mode_page.dart`
-    // to match the visual design, so we respect that here.
+    // Historically voice mode inverted this flag, so we keep compatibility.
     final bool alignRight =
         isUser; // User messages (regular chat) go right, bot messages go left.
 

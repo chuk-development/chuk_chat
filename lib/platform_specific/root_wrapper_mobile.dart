@@ -10,6 +10,7 @@ import 'package:chuk_chat/platform_specific/chat/chat_ui_mobile.dart';
 import 'package:chuk_chat/platform_specific/sidebar_mobile.dart'; // UPDATED: Use mobile sidebar
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:chuk_chat/pages/coming_soon_page.dart';
 
 /* ---------- ROOT WRAPPER MOBILE (for Phones) ---------- */
 class RootWrapperMobile extends StatefulWidget {
@@ -104,6 +105,18 @@ class _RootWrapperMobileState extends State<RootWrapperMobile> {
     Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => const ProjectsPage()));
+  }
+
+  void _openAssistantsPage() {
+    if (_isSidebarExpanded) _toggleSidebar();
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const ComingSoonPage(
+          title: 'Assistants',
+          message: 'Assistants are coming soon.',
+        ),
+      ),
+    );
   }
 
   void _handleChatTapped(int index) {
@@ -217,6 +230,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile> {
               onChatItemTapped: _handleChatTapped,
               onSettingsTapped: _openSettingsPage,
               onProjectsTapped: _openProjectsPage,
+              onAssistantsTapped: _openAssistantsPage,
               onChatDeleted: _handleChatDeleted,
               selectedChatIndex: ChatStorageService.selectedChatIndex,
               isCompactMode: true,

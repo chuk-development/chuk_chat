@@ -15,6 +15,7 @@ class SidebarDesktop extends StatefulWidget {
   final Future<void> Function(String chatId)? onChatDeleted;
   final int selectedChatIndex;
   final bool isCompactMode;
+  final bool showAssistantsButton;
 
   const SidebarDesktop({
     super.key,
@@ -24,6 +25,7 @@ class SidebarDesktop extends StatefulWidget {
     this.onChatDeleted,
     required this.selectedChatIndex,
     required this.isCompactMode,
+    required this.showAssistantsButton,
   });
 
   @override
@@ -95,8 +97,9 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
     } else {
       final lowerQuery = _searchQuery.toLowerCase();
       _filteredRecentChats = ChatStorageService.savedChats.where((chat) {
-        final titleMatches =
-            _deriveChatTitle(chat).toLowerCase().contains(lowerQuery);
+        final titleMatches = _deriveChatTitle(
+          chat,
+        ).toLowerCase().contains(lowerQuery);
         if (titleMatches) return true;
         return chat.messages.any(
           (message) => message.text.toLowerCase().contains(lowerQuery),
@@ -204,7 +207,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
     // "New Chat" and "Projects" buttons are positioned *outside* this sidebar widget
     // in `root_wrapper_desktop.dart`. This spacing accounts for them so sidebar
     // content doesn't overlap those fixed overlay buttons.
-    final double topSpacingForSidebarContent =
+    double topSpacingForSidebarContent =
         kTopInitialSpacing +
         kMenuButtonHeight +
         kSpacingBetweenTopButtons +
@@ -212,6 +215,12 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
         kSpacingBetweenTopButtons +
         kButtonVisualHeight + // Projects button
         kSpacingBetweenTopButtons;
+
+    if (widget.showAssistantsButton) {
+      topSpacingForSidebarContent +=
+          kButtonVisualHeight + // Assistants button
+          kSpacingBetweenTopButtons;
+    }
 
     return Container(
       color: sidebarBg,

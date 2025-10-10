@@ -12,6 +12,7 @@ class SidebarMobile extends StatefulWidget {
   final Function(int index) onChatItemTapped;
   final Function() onSettingsTapped;
   final Function() onProjectsTapped;
+  final Function() onAssistantsTapped;
   final Future<void> Function(String chatId)? onChatDeleted;
   final int selectedChatIndex;
   final bool isCompactMode; // Not directly used in the UI, but kept for context
@@ -21,6 +22,7 @@ class SidebarMobile extends StatefulWidget {
     required this.onChatItemTapped,
     required this.onSettingsTapped,
     required this.onProjectsTapped,
+    required this.onAssistantsTapped,
     this.onChatDeleted,
     required this.selectedChatIndex,
     required this.isCompactMode,
@@ -37,8 +39,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
   static const double _iconLeadingWidth = 24.0;
   // Spacing between icon and text (originally in main.dart's Drawer)
   static const double _iconTextSpacing = 16.0;
-  static const Duration _searchDebounceDuration =
-      Duration(milliseconds: 300);
+  static const Duration _searchDebounceDuration = Duration(milliseconds: 300);
   static const int _searchMessageLimit = 50;
 
   final TextEditingController _searchController = TextEditingController();
@@ -91,8 +92,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
     if (!mounted) return;
     setState(() {
       _searchQuery = '';
-      _filteredRecentChats =
-          List<StoredChat>.from(ChatStorageService.savedChats);
+      _filteredRecentChats = List<StoredChat>.from(
+        ChatStorageService.savedChats,
+      );
     });
   }
 
@@ -284,8 +286,10 @@ class _SidebarMobileState extends State<SidebarMobile> {
     final String lowerQuery = query.toLowerCase();
 
     if (kIsWeb) {
-      final List<StoredChat> filtered =
-          _filterChatsLocally(savedChats, lowerQuery);
+      final List<StoredChat> filtered = _filterChatsLocally(
+        savedChats,
+        lowerQuery,
+      );
       if (!mounted || currentGeneration != _filterGeneration) return;
       setState(() {
         _searchQuery = query;
@@ -295,21 +299,23 @@ class _SidebarMobileState extends State<SidebarMobile> {
     }
 
     final List<Map<String, Object?>> payload = savedChats
-        .map((chat) => {
-              'id': chat.id,
-              'preview': _deriveChatTitle(chat).toLowerCase(),
-              'messages': chat.messages
-                  .take(_searchMessageLimit)
-                  .map((message) => message.text.toLowerCase())
-                  .toList(growable: false),
-            })
+        .map(
+          (chat) => {
+            'id': chat.id,
+            'preview': _deriveChatTitle(chat).toLowerCase(),
+            'messages': chat.messages
+                .take(_searchMessageLimit)
+                .map((message) => message.text.toLowerCase())
+                .toList(growable: false),
+          },
+        )
         .toList(growable: false);
 
     try {
-      final List<String> matchIds = await compute(
-        _filterChatsIsolate,
-        {'chats': payload, 'query': lowerQuery},
-      );
+      final List<String> matchIds = await compute(_filterChatsIsolate, {
+        'chats': payload,
+        'query': lowerQuery,
+      });
       if (!mounted || currentGeneration != _filterGeneration) return;
       final Set<String> matchIdSet = matchIds.toSet();
       final List<StoredChat> latestChats = ChatStorageService.savedChats;
@@ -324,8 +330,10 @@ class _SidebarMobileState extends State<SidebarMobile> {
       debugPrint('SidebarMobile filtering failed: $error');
       debugPrint('$stackTrace');
       if (!mounted || currentGeneration != _filterGeneration) return;
-      final List<StoredChat> fallback =
-          _filterChatsLocally(savedChats, lowerQuery);
+      final List<StoredChat> fallback = _filterChatsLocally(
+        savedChats,
+        lowerQuery,
+      );
       setState(() {
         _searchQuery = query;
         _filteredRecentChats = fallback;
@@ -337,14 +345,19 @@ class _SidebarMobileState extends State<SidebarMobile> {
     List<StoredChat> chats,
     String lowerQuery,
   ) {
-    return chats.where((chat) {
-      final bool titleMatches =
-          _deriveChatTitle(chat).toLowerCase().contains(lowerQuery);
-      if (titleMatches) return true;
-      return chat.messages
-          .take(_searchMessageLimit)
-          .any((message) => message.text.toLowerCase().contains(lowerQuery));
-    }).toList(growable: false);
+    return chats
+        .where((chat) {
+          final bool titleMatches = _deriveChatTitle(
+            chat,
+          ).toLowerCase().contains(lowerQuery);
+          if (titleMatches) return true;
+          return chat.messages
+              .take(_searchMessageLimit)
+              .any(
+                (message) => message.text.toLowerCase().contains(lowerQuery),
+              );
+        })
+        .toList(growable: false);
   }
 
   @override
@@ -420,10 +433,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
                           : IconButton(
                               tooltip: 'Eingabe löschen',
                               splashRadius: 18,
-                              icon: Icon(
-                                Icons.clear,
-                                color: iconColorDefault,
-                              ),
+                              icon: Icon(Icons.clear, color: iconColorDefault),
                               onPressed: _clearSearchQuery,
                             ),
                     ),
@@ -440,6 +450,17 @@ class _SidebarMobileState extends State<SidebarMobile> {
             Icons.folder_open_outlined,
             'Neues Projekt',
             widget.onProjectsTapped,
+            iconColorDefault,
+            textColorDefault,
+            tileBg: sidebarBg.lighten(0.04),
+            dividerColor: dividerColor,
+            accentColor: accentColor,
+          ),
+          const SizedBox(height: 12),
+          _buildDrawerItem(
+            Icons.auto_awesome,
+            'Assistants',
+            widget.onAssistantsTapped,
             iconColorDefault,
             textColorDefault,
             tileBg: sidebarBg.lighten(0.04),
@@ -465,11 +486,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
             )
           else
             ...starredChats.map(
-              (chat) => _buildStarredItem(
-                chat,
-                textColorDefault,
-                accentColor,
-              ),
+              (chat) => _buildStarredItem(chat, textColorDefault, accentColor),
             ),
           Divider(
             color: dividerColor,
@@ -770,7 +787,8 @@ List<String> _filterChatsIsolate(Map<String, dynamic> params) {
       continue;
     }
 
-    final List<dynamic> messages = chat['messages'] as List<dynamic>? ?? const [];
+    final List<dynamic> messages =
+        chat['messages'] as List<dynamic>? ?? const [];
     final bool hasMatch = messages.any(
       (dynamic message) => (message as String).contains(query),
     );

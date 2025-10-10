@@ -8,6 +8,7 @@ import 'package:chuk_chat/platform_specific/chat/chat_ui_desktop.dart';
 import 'package:chuk_chat/platform_specific/sidebar_desktop.dart'; // UPDATED
 import 'package:chuk_chat/pages/projects_page.dart';
 import 'package:chuk_chat/pages/settings_page.dart';
+import 'package:chuk_chat/pages/coming_soon_page.dart';
 
 /* ---------- ROOT WRAPPER DESKTOP (for Desktop, Web, and Tablets) ---------- */
 class RootWrapperDesktop extends StatefulWidget {
@@ -71,6 +72,18 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => const ProjectsPage()));
+  }
+
+  void _openAssistantsPage() {
+    if (_isSidebarExpanded) _toggleSidebar();
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const ComingSoonPage(
+          title: 'Assistants',
+          message: 'Assistants are coming soon.',
+        ),
+      ),
+    );
   }
 
   void _handleChatTapped(int index) {
@@ -151,6 +164,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
               onChatDeleted: _handleChatDeleted,
               selectedChatIndex: ChatStorageService.selectedChatIndex,
               isCompactMode: isCompactMode,
+              showAssistantsButton: !isCompactMode || _isSidebarExpanded,
             ),
           ),
 
@@ -288,6 +302,56 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                             padding: const EdgeInsets.only(left: 12.0),
                             child: Text(
                               'Projects',
+                              style: TextStyle(color: iconFg, fontSize: 16),
+                              softWrap: false,
+                              overflow: TextOverflow.clip,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+          // Layer 7: Assistants (External for Desktop)
+          if (!isCompactMode || _isSidebarExpanded)
+            Positioned(
+              top:
+                  kTopInitialSpacing +
+                  kMenuButtonHeight +
+                  kSpacingBetweenTopButtons +
+                  kButtonVisualHeight +
+                  kSpacingBetweenTopButtons +
+                  kButtonVisualHeight +
+                  kSpacingBetweenTopButtons,
+              left: kFixedLeftPadding,
+              child: InkWell(
+                onTap: _openAssistantsPage,
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  height: kButtonVisualHeight,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.auto_awesome, color: iconFg),
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        curve: Curves.easeOut,
+                        width: _isSidebarExpanded ? 100 : 0,
+                        constraints: BoxConstraints(
+                          minWidth: _isSidebarExpanded ? 100 : 0,
+                        ),
+                        child: ClipRect(
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: 12.0),
+                            child: Text(
+                              'Assistants',
                               style: TextStyle(color: iconFg, fontSize: 16),
                               softWrap: false,
                               overflow: TextOverflow.clip,

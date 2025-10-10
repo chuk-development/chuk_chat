@@ -253,6 +253,16 @@ class _LoginPageState extends State<LoginPage> {
                               ),
                       ),
                     ),
+                    if (!_isSignInMode) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        'By signing up, you acknowledge that you have read, understood, and agree to chuk.chat Terms of Service and Privacy Policy.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: iconFg.withValues(alpha: 0.7),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     TextButton(
                       onPressed: _isSubmitting ? null : _toggleMode,

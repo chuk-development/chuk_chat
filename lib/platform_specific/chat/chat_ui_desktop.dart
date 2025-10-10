@@ -7,7 +7,7 @@ import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
-import 'package:chuk_chat/pages/voice_mode_page.dart';
+import 'package:chuk_chat/pages/coming_soon_page.dart';
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart'; // NEW
@@ -156,6 +156,18 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _scrollChatToBottom();
     Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
     await ChatStorageService.loadSavedChatsForSidebar();
+  }
+
+  void _openComingSoonFeature(String featureName) {
+    if (!mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ComingSoonPage(
+          title: featureName,
+          message: 'Stay tuned for $featureName.',
+        ),
+      ),
+    );
   }
 
   String? _providerNameForModel(String modelId) {
@@ -834,6 +846,15 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                       ),
                     // Search Bar
                     _buildSearchBar(isCompactMode: widget.isCompactMode),
+                    const SizedBox(height: 8),
+                    Text(
+                      'AI/LLMs can make mistakes — double-check important info.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: iconFg.withValues(alpha: 0.7),
+                        fontSize: 11,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1002,11 +1023,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 debugLabel: 'Mic button',
               ),
               const SizedBox(width: 8),
-              // Voice Mode Button (navigates to VoiceModePage)
+              // Voice Mode Button (placeholder)
               GestureDetector(
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const VoiceModePage()),
-                ),
+                onTap: () => _openComingSoonFeature('Voice Mode'),
                 child: Container(
                   width: 44,
                   height: 36,
