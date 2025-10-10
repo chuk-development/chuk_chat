@@ -9,6 +9,7 @@ import 'package:chuk_chat/model_selector_page.dart';
 import 'package:chuk_chat/pages/theme_page.dart';
 import 'package:chuk_chat/pages/account_settings_page.dart';
 import 'package:chuk_chat/pages/about_page.dart';
+import 'package:chuk_chat/pages/pricing_page.dart';
 import 'package:chuk_chat/services/auth_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
@@ -103,6 +104,24 @@ class SettingsPage extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const ModelSelectorPage()),
+              );
+            },
+            accentColor: accent,
+            iconFgColor: iconFg,
+            bgColor: scaffoldBg,
+          ),
+          const SizedBox(height: 16),
+
+          // Pricing Plans
+          _buildSettingsCard(
+            context,
+            title: 'Pricing Plans',
+            subtitle: 'View our subscription plans and pricing',
+            icon: Icons.credit_card,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PricingPage()),
               );
             },
             accentColor: accent,
