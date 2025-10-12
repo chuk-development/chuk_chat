@@ -7,6 +7,7 @@ import 'package:chuk_chat/services/chat_storage_service.dart'; // Assuming this 
 import 'package:chuk_chat/services/profile_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart'; // Assuming this exists
+import 'package:chuk_chat/widgets/credit_display.dart';
 
 class SidebarMobile extends StatefulWidget {
   final Function(int index) onChatItemTapped;
@@ -573,20 +574,10 @@ class _SidebarMobileState extends State<SidebarMobile> {
                   ),
                   child: Row(
                     children: [
-                      CircleAvatar(
-                        backgroundColor: accentColor.withValues(alpha: 0.2),
-                        child: Text(
-                          _initialsFor(_profile),
-                          style: TextStyle(
-                            color: accentColor,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12.0),
                       Expanded(
                         child: Text(
                           _displayNameFor(_profile),
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: textColorDefault,
                             fontSize: 16,
@@ -594,6 +585,22 @@ class _SidebarMobileState extends State<SidebarMobile> {
                           ),
                         ),
                       ),
+                      const SizedBox(width: 12),
+                      CreditBadge(
+                        textStyle: TextStyle(
+                          color: accentColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        placeholderStyle: TextStyle(
+                          color: textColorDefault.withValues(alpha: 0.6),
+                          fontWeight: FontWeight.w600,
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
                       Icon(Icons.settings, color: iconColorDefault),
                     ],
                   ),

@@ -7,6 +7,7 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/profile_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart'; // Import the color extensions
+import 'package:chuk_chat/widgets/credit_display.dart';
 
 class SidebarDesktop extends StatefulWidget {
   final Function(int index) onChatItemTapped;
@@ -370,16 +371,31 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
                 borderRadius: BorderRadius.circular(8),
                 onTap: widget.onSettingsTapped,
                 child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: iconFg.withValues(alpha: 0.3),
-                    child: Text(
-                      _initialsFor(_profile),
-                      style: TextStyle(color: iconFg, fontSize: 16),
-                    ),
-                  ),
-                  title: Text(
-                    _displayNameFor(_profile),
-                    style: TextStyle(color: iconFg),
+                  title: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _displayNameFor(_profile),
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: iconFg),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      CreditBadge(
+                        textStyle: TextStyle(
+                          color: accent,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        placeholderStyle: TextStyle(
+                          color: iconFg.withValues(alpha: 0.6),
+                          fontWeight: FontWeight.w600,
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                      ),
+                    ],
                   ),
                   trailing: Icon(Icons.settings, color: iconFg),
                   contentPadding: const EdgeInsets.symmetric(
