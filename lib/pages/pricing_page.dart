@@ -1,6 +1,38 @@
 // lib/pages/pricing_page.dart
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart' show LaunchMode;
+import 'package:url_launcher/url_launcher_string.dart';
+
+final SupabaseClient _supabase = Supabase.instance.client;
+const String _starterPriceId = 'price_1SHRmD4RznxB1MLdyNEhp4On';
+const String _plusPriceId = 'price_1SHRnc4RznxB1MLdckKKLgvg';
+const String _proPriceId = 'price_1SHRo84RznxB1MLdixi99wLf';
+
+Future<void> startCheckout(String priceId) async {
+  // Ensure the user exists
+  final user = _supabase.auth.currentUser;
+  if (user == null) {
+    throw Exception('User not signed in');
+  }
+
+  // Create or fetch customer
+  await _supabase.functions.invoke('get_or_create_customer');
+
+  // Create checkout session
+  final res = await _supabase.functions.invoke(
+    'create_checkout_session',
+    body: {'priceId': priceId},
+  );
+
+  final data = res.data;
+  if (data is! Map || data['url'] is! String) {
+    throw Exception('Checkout session could not be created');
+  }
+  final url = data['url'] as String;
+  await launchUrlString(url, mode: LaunchMode.externalApplication);
+}
 
 class PricingPage extends StatelessWidget {
   const PricingPage({super.key});
@@ -44,6 +76,35 @@ class PricingPage extends StatelessWidget {
                 fontSize: 16,
               ),
             ),
+            if (isMobile) ...[
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: scaffoldBg.lighten(0.05),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: iconFg.withValues(alpha: 0.2)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.info_outline, color: accent, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Checkout is currently available on desktop or web only. '
+                        'Please switch devices to complete your subscription.',
+                        style: TextStyle(
+                          color: iconFg.withValues(alpha: 0.75),
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 32),
 
             // Pricing Cards
@@ -59,6 +120,7 @@ class PricingPage extends StatelessWidget {
                       'Text Chat',
                       'Basic Support',
                     ],
+                    priceId: _starterPriceId,
                     accent: accent,
                     iconFg: iconFg,
                     scaffoldBg: scaffoldBg,
@@ -76,6 +138,7 @@ class PricingPage extends StatelessWidget {
                       'Priority Support',
                       'Extended Features',
                     ],
+                    priceId: _plusPriceId,
                     accent: accent,
                     iconFg: iconFg,
                     scaffoldBg: scaffoldBg,
@@ -94,6 +157,7 @@ class PricingPage extends StatelessWidget {
                       'Advanced Features',
                       'API Access',
                     ],
+                    priceId: _proPriceId,
                     accent: accent,
                     iconFg: iconFg,
                     scaffoldBg: scaffoldBg,
@@ -117,6 +181,7 @@ class PricingPage extends StatelessWidget {
                           'Text Chat',
                           'Basic Support',
                         ],
+                        priceId: _starterPriceId,
                         accent: accent,
                         iconFg: iconFg,
                         scaffoldBg: scaffoldBg,
@@ -136,6 +201,7 @@ class PricingPage extends StatelessWidget {
                           'Priority Support',
                           'Extended Features',
                         ],
+                        priceId: _plusPriceId,
                         accent: accent,
                         iconFg: iconFg,
                         scaffoldBg: scaffoldBg,
@@ -156,6 +222,7 @@ class PricingPage extends StatelessWidget {
                           'Advanced Features',
                           'API Access',
                         ],
+                        priceId: _proPriceId,
                         accent: accent,
                         iconFg: iconFg,
                         scaffoldBg: scaffoldBg,
@@ -252,6 +319,7 @@ class _PricingCard extends StatelessWidget {
   final String title;
   final int price;
   final List<String> features;
+  final String priceId;
   final Color accent;
   final Color iconFg;
   final Color scaffoldBg;
@@ -265,6 +333,7 @@ class _PricingCard extends StatelessWidget {
     required this.title,
     required this.price,
     required this.features,
+    required this.priceId,
     required this.accent,
     required this.iconFg,
     required this.scaffoldBg,
@@ -279,18 +348,6 @@ class _PricingCard extends StatelessWidget {
         : isPopular
         ? 'Get Started'
         : 'Choose Plan';
-    final VoidCallback? buttonHandler = isMobile
-        ? null
-        : () {
-            // TODO: Implement subscription logic
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Subscription for $title plan will be available soon',
-                ),
-              ),
-            );
-          };
     final int missingFeatures = features.length >= _maxFeatureCount
         ? 0
         : _maxFeatureCount - features.length;
@@ -414,7 +471,24 @@ class _PricingCard extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: buttonHandler,
+                  onPressed: isMobile
+                      ? null
+                      : () async {
+                          try {
+                            await startCheckout(priceId);
+                          } catch (error) {
+                            final String message = error is Exception
+                                ? error.toString().replaceFirst('Exception: ', '')
+                                : 'Unexpected error starting checkout';
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Unable to start checkout: $message',
+                                ),
+                              ),
+                            );
+                          }
+                        },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: isPopular ? accent : scaffoldBg.lighten(0.1),
                     foregroundColor: isPopular ? Colors.white : iconFg,
