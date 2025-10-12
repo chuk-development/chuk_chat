@@ -390,7 +390,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
         .toList();
 
     const double topQuickActionSpacing =
-        20.0; // Roughly 5mm offset to clear the phone status bar
+        40.0; // ~1cm offset to clear the phone status bar comfortably
 
     return Container(
       color: sidebarBg,
@@ -411,18 +411,14 @@ class _SidebarMobileState extends State<SidebarMobile> {
                   onTap: widget.onProjectsTapped,
                   iconColor: iconColorDefault,
                   textColor: textColorDefault,
-                  backgroundColor: sidebarBg.lighten(0.05),
-                  borderColor: dividerColor,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 6),
                 _buildQuickActionButton(
                   icon: Icons.auto_awesome,
                   label: 'Assistants',
                   onTap: widget.onAssistantsTapped,
                   iconColor: iconColorDefault,
                   textColor: textColorDefault,
-                  backgroundColor: sidebarBg.lighten(0.05),
-                  borderColor: dividerColor,
                 ),
               ],
             ),
@@ -637,10 +633,27 @@ class _SidebarMobileState extends State<SidebarMobile> {
     required VoidCallback onTap,
     required Color iconColor,
     required Color textColor,
-    required Color backgroundColor,
-    required Color borderColor,
+    Color? backgroundColor,
+    Color? borderColor,
   }) {
     final BorderRadius radius = BorderRadius.circular(12);
+    final Widget content = Row(
+      mainAxisAlignment: MainAxisAlignment.start,
+      children: [
+        Icon(icon, color: iconColor, size: 20),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            label,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: textColor,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
     return SizedBox(
       height: 48,
       child: Material(
@@ -650,29 +663,17 @@ class _SidebarMobileState extends State<SidebarMobile> {
           borderRadius: radius,
           child: Ink(
             width: double.infinity,
-            decoration: BoxDecoration(
-              color: backgroundColor,
-              borderRadius: radius,
-              border: Border.all(color: borderColor, width: 1),
-            ),
+            decoration: (backgroundColor != null || borderColor != null)
+                ? BoxDecoration(
+                    color: backgroundColor,
+                    borderRadius: radius,
+                    border: borderColor != null
+                        ? Border.all(color: borderColor, width: 1)
+                        : null,
+                  )
+                : null,
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, color: iconColor, size: 20),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    label,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: textColor,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            child: content,
           ),
         ),
       ),

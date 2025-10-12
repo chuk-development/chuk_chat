@@ -197,10 +197,13 @@ class _RootWrapperMobileState extends State<RootWrapperMobile> {
                       ),
                       actions: [
                         // The "New Chat" button is now always visible on mobile
-                        IconButton(
-                          icon: Icon(Icons.edit_square, color: iconFg),
-                          onPressed: _newChatFromAppBar,
-                          tooltip: 'New Chat',
+                        Padding(
+                          padding: const EdgeInsets.only(right: 12),
+                          child: IconButton(
+                            icon: Icon(Icons.edit_square, color: iconFg),
+                            onPressed: _newChatFromAppBar,
+                            tooltip: 'New Chat',
+                          ),
                         ),
                       ],
                     ),

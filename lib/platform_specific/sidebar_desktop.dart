@@ -200,6 +200,9 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
     final Color iconFg = Theme.of(context).iconTheme.color!;
     final Color accent = Theme.of(context).colorScheme.primary;
     final Color sidebarBg = Theme.of(context).cardColor.darken(0.03);
+    final Color dividerColor = Theme.of(context).dividerColor.withValues(
+      alpha: 0.5,
+    );
     final List<StoredChat> starredChats = ChatStorageService.savedChats
         .where((chat) => chat.isStarred)
         .toList();
@@ -304,7 +307,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
               (chat) => _buildStarredItem(chat, iconFg: iconFg, accent: accent),
             ),
           Divider(
-            color: Theme.of(context).dividerColor,
+            color: dividerColor,
             indent: _sidebarHorizontalPadding,
             endIndent: _sidebarHorizontalPadding,
           ),
@@ -366,18 +369,31 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
           Align(
             alignment: Alignment.bottomCenter,
             child: Padding(
-              padding: const EdgeInsets.all(8.0),
+              padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 24.0),
               child: InkWell(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(12),
                 onTap: widget.onSettingsTapped,
-                child: ListTile(
-                  title: Row(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: sidebarBg.lighten(0.05),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: dividerColor, width: 1),
+                  ),
+                  child: Row(
                     children: [
                       Expanded(
                         child: Text(
                           _displayNameFor(_profile),
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: iconFg),
+                          style: TextStyle(
+                            color: iconFg,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -395,11 +411,9 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
                           vertical: 6,
                         ),
                       ),
+                      const SizedBox(width: 12),
+                      Icon(Icons.settings, color: iconFg),
                     ],
-                  ),
-                  trailing: Icon(Icons.settings, color: iconFg),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: _sidebarHorizontalPadding,
                   ),
                 ),
               ),
