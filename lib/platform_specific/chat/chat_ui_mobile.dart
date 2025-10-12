@@ -12,6 +12,7 @@ import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart'; // NEW API SERVICE
 
 import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:io';
@@ -44,6 +45,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   final FocusNode _textFieldFocusNode = FocusNode();
   final FocusNode _rawKeyboardListenerFocusNode = FocusNode();
   final Uuid _uuid = Uuid();
+  final ImagePicker _imagePicker = ImagePicker();
 
   late ChatApiService _chatApiService;
   final List<AttachedFile> _attachedFiles = [];
@@ -52,10 +54,46 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   late AnimationController _animCtrl;
   late Animation<double> _anim;
 
-  bool _isBrainActive = false;
   bool _isImageActive = false;
   bool _isMicActive = false;
   bool _isSending = false;
+
+  static const int _kMaxFileSizeBytes = 10 * 1024 * 1024; // 10MB
+  static const int _kMaxConcurrentUploads = 5;
+  static const List<String> _kAllowedExtensions = [
+    'wav',
+    'mp3',
+    'm4a',
+    'mp4',
+    'html',
+    'htm',
+    'csv',
+    'docx',
+    'pptx',
+    'xlsx',
+    'pdf',
+    'jpg',
+    'jpeg',
+    'png',
+    'bmp',
+    'tiff',
+    'epub',
+    'ipynb',
+    'msg',
+    'txt',
+    'text',
+    'md',
+    'markdown',
+    'json',
+    'jsonl',
+    'rss',
+    'atom',
+    'xml',
+    'xls',
+    'zip',
+    'heic',
+    'heif',
+  ];
 
   static const double _kMaxChatContentWidth = 760.0;
   static const double _kSearchBarContentHeight = 135.0;
@@ -80,6 +118,132 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
     });
     _loadChatFromIndex(widget.selectedChatIndex);
+  }
+
+  void _handleAddAttachmentTap() {
+    if (!mounted) return;
+    final theme = Theme.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: theme.colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        final Color indicatorColor = theme.dividerColor.withValues(alpha: 0.3);
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: indicatorColor,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'Wie kann ich dir helfen?',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    _buildAttachmentSheetOption(
+                      context: sheetContext,
+                      icon: Icons.photo_camera_outlined,
+                      label: 'Camera',
+                      onTap: () {
+                        Navigator.of(sheetContext).pop();
+                        unawaited(_pickImageFromSource(ImageSource.camera));
+                      },
+                    ),
+                    const SizedBox(width: 12),
+                    _buildAttachmentSheetOption(
+                      context: sheetContext,
+                      icon: Icons.photo_library_outlined,
+                      label: 'Photos',
+                      onTap: () {
+                        Navigator.of(sheetContext).pop();
+                        unawaited(_pickImagesFromGallery());
+                      },
+                    ),
+                    const SizedBox(width: 12),
+                    _buildAttachmentSheetOption(
+                      context: sheetContext,
+                      icon: Icons.attach_file,
+                      label: 'Files',
+                      onTap: () {
+                        Navigator.of(sheetContext).pop();
+                        unawaited(_uploadFiles());
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _pickImageFromSource(ImageSource source) async {
+    try {
+      final XFile? pickedFile = await _imagePicker.pickImage(
+        source: source,
+        imageQuality: 90,
+      );
+      if (pickedFile == null) return;
+
+      final File file = File(pickedFile.path);
+      final int fileSize = await pickedFile.length();
+      final String fileName = pickedFile.name.isNotEmpty
+          ? pickedFile.name
+          : pickedFile.path.split('/').last;
+
+      await _handleFileAttachment(
+        file: file,
+        fileName: fileName,
+        fileSizeBytes: fileSize,
+      );
+    } catch (error) {
+      final String sourceName = source == ImageSource.camera
+          ? 'camera'
+          : 'photo picker';
+      _showAttachmentError('Unable to open $sourceName: $error');
+    }
+  }
+
+  Future<void> _pickImagesFromGallery() async {
+    try {
+      final List<XFile> pickedImages = await _imagePicker.pickMultiImage(
+        imageQuality: 90,
+      );
+      if (pickedImages.isEmpty) return;
+
+      for (final XFile image in pickedImages) {
+        final File file = File(image.path);
+        final int fileSize = await image.length();
+        final String fileName = image.name.isNotEmpty
+            ? image.name
+            : image.path.split('/').last;
+        await _handleFileAttachment(
+          file: file,
+          fileName: fileName,
+          fileSizeBytes: fileSize,
+        );
+      }
+    } catch (error) {
+      _showAttachmentError('Unable to access photo library: $error');
+    }
   }
 
   @override
@@ -127,7 +291,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       _activeChatId = null;
     }
     setState(() {
-      _isBrainActive = false;
       _isImageActive = false;
       _isMicActive = false;
     });
@@ -142,7 +305,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       _animCtrl.reset();
       _activeChatId = null;
       ChatStorageService.selectedChatIndex = -1;
-      _isBrainActive = false;
       _isImageActive = false;
       _isMicActive = false;
       _attachedFiles.clear();
@@ -519,125 +681,131 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   }
 
   Future<void> _uploadFiles() async {
-    const int maxFileSize = 10 * 1024 * 1024; // 10MB
-    const int maxConcurrentUploads = 5;
-
-    final allowedExtensions = [
-      'wav',
-      'mp3',
-      'm4a',
-      'mp4',
-      'html',
-      'htm',
-      'csv',
-      'docx',
-      'pptx',
-      'xlsx',
-      'pdf',
-      'jpg',
-      'jpeg',
-      'png',
-      'bmp',
-      'tiff',
-      'epub',
-      'ipynb',
-      'msg',
-      'txt',
-      'text',
-      'md',
-      'markdown',
-      'json',
-      'jsonl',
-      'rss',
-      'atom',
-      'xml',
-      'xls',
-      'zip',
-    ];
-
     if (_attachedFiles.where((f) => f.isUploading).length >=
-        maxConcurrentUploads) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please wait for current uploads to complete'),
-          ),
-        );
-      }
+        _kMaxConcurrentUploads) {
+      _showAttachmentError('Please wait for current uploads to complete');
       return;
     }
 
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: allowedExtensions,
+      allowedExtensions: _kAllowedExtensions,
       allowMultiple: true,
     );
 
-    if (result != null && result.files.isNotEmpty) {
-      List<PlatformFile> selectedPlatformFiles = result.files;
-
-      for (PlatformFile platformFile in selectedPlatformFiles) {
-        if (platformFile.path == null) continue;
-        if (platformFile.size > maxFileSize) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('File "${platformFile.name}" exceeds 10MB limit'),
-              ),
-            );
-          }
-          continue;
-        }
-
-        File file = File(platformFile.path!);
-        String fileName = platformFile.name;
-        String fileExtension = fileName.split('.').last.toLowerCase();
-        String fileId = _uuid.v4();
-
-        if (!allowedExtensions.contains(fileExtension)) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Unsupported file type for "$fileName": .$fileExtension',
-                ),
-              ),
-            );
-          }
-          continue;
-        }
-
-        if (_attachedFiles.where((f) => f.isUploading).length >=
-            maxConcurrentUploads) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Skipping "$fileName": too many concurrent uploads. Try again soon.',
-                ),
-              ),
-            );
-          }
-          continue;
-        }
-
-        setState(() {
-          _attachedFiles.add(
-            AttachedFile(
-              id: fileId,
-              fileName: fileName,
-              isUploading: true,
-              localPath: file.path,
-              fileSizeBytes: platformFile.size,
-            ),
-          );
-        });
-        _scrollChatToBottom();
-        _chatApiService.performFileUpload(file, fileName, fileId);
-      }
-    } else {
+    if (result == null || result.files.isEmpty) {
       debugPrint('File picking canceled.');
+      return;
     }
+
+    for (final platformFile in result.files) {
+      final String? path = platformFile.path;
+      if (path == null) continue;
+
+      await _handleFileAttachment(
+        file: File(path),
+        fileName: platformFile.name,
+        fileSizeBytes: platformFile.size,
+      );
+    }
+  }
+
+  Future<void> _handleFileAttachment({
+    required File file,
+    required String fileName,
+    required int fileSizeBytes,
+  }) async {
+    final String extension = fileName.contains('.')
+        ? fileName.split('.').last.toLowerCase()
+        : '';
+
+    if (fileSizeBytes > _kMaxFileSizeBytes) {
+      _showAttachmentError('File "$fileName" exceeds 10MB limit');
+      return;
+    }
+
+    if (extension.isEmpty || !_kAllowedExtensions.contains(extension)) {
+      final String detail = extension.isEmpty ? '' : ': .$extension';
+      _showAttachmentError('Unsupported file type for "$fileName"$detail');
+      return;
+    }
+
+    if (_attachedFiles.where((f) => f.isUploading).length >=
+        _kMaxConcurrentUploads) {
+      _showAttachmentError(
+        'Skipping "$fileName": too many concurrent uploads. Try again soon.',
+      );
+      return;
+    }
+
+    final String fileId = _uuid.v4();
+    setState(() {
+      _attachedFiles.add(
+        AttachedFile(
+          id: fileId,
+          fileName: fileName,
+          isUploading: true,
+          localPath: file.path,
+          fileSizeBytes: fileSizeBytes,
+        ),
+      );
+    });
+    _scrollChatToBottom();
+    _chatApiService.performFileUpload(file, fileName, fileId);
+  }
+
+  void _showAttachmentError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Widget _buildAttachmentSheetOption({
+    required BuildContext context,
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+    final Color background = theme.colorScheme.surfaceVariant.withValues(
+      alpha: 0.6,
+    );
+    final Color borderColor = theme.dividerColor.withValues(alpha: 0.2);
+    final Color foreground = theme.colorScheme.onSurface;
+
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Ink(
+            height: 84,
+            decoration: BoxDecoration(
+              color: background,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: borderColor),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: foreground),
+                const SizedBox(height: 8),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: foreground,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   void _removeAttachedFile(String fileId) {
@@ -932,20 +1100,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               // Add Button (File Upload)
               _buildIconBtn(
                 icon: Icons.add,
-                onTap: _uploadFiles,
+                onTap: _handleAddAttachmentTap,
                 isActive: hasAttachments,
                 debugLabel: 'Add button',
-              ),
-              const SizedBox(width: 8),
-              // Brain Button
-              _buildIconBtn(
-                icon: Icons.psychology,
-                onTap: () {
-                  setState(() => _isBrainActive = !_isBrainActive);
-                  debugPrint('Brain button toggled: $_isBrainActive');
-                },
-                isActive: _isBrainActive,
-                debugLabel: 'Brain button',
               ),
               const SizedBox(width: 8),
               // Image Button

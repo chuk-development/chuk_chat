@@ -389,14 +389,45 @@ class _SidebarMobileState extends State<SidebarMobile> {
         .where((chat) => chat.isStarred)
         .toList();
 
-    const double initialVerticalPadding =
-        48.0; // From main.dart Drawer top padding
+    const double topQuickActionSpacing =
+        20.0; // Roughly 5mm offset to clear the phone status bar
 
     return Container(
       color: sidebarBg,
       child: Column(
         children: [
-          SizedBox(height: initialVerticalPadding),
+          SizedBox(height: topQuickActionSpacing),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: _sidebarHorizontalPadding,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildQuickActionButton(
+                  icon: Icons.folder_open_outlined,
+                  label: 'Projects',
+                  onTap: widget.onProjectsTapped,
+                  iconColor: iconColorDefault,
+                  textColor: textColorDefault,
+                  backgroundColor: sidebarBg.lighten(0.05),
+                  borderColor: dividerColor,
+                ),
+                const SizedBox(height: 12),
+                _buildQuickActionButton(
+                  icon: Icons.auto_awesome,
+                  label: 'Assistants',
+                  onTap: widget.onAssistantsTapped,
+                  iconColor: iconColorDefault,
+                  textColor: textColorDefault,
+                  backgroundColor: sidebarBg.lighten(0.05),
+                  borderColor: dividerColor,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
 
           // Search Old Chats input field (styled from main.dart's InputDecorationTheme)
           Padding(
@@ -446,30 +477,6 @@ class _SidebarMobileState extends State<SidebarMobile> {
             ),
           ),
           const SizedBox(height: 16), // Spacing after search bar
-          // Projects entry as per main.dart's Drawer items
-          _buildDrawerItem(
-            Icons.folder_open_outlined,
-            'Neues Projekt',
-            widget.onProjectsTapped,
-            iconColorDefault,
-            textColorDefault,
-            tileBg: sidebarBg.lighten(0.04),
-            dividerColor: dividerColor,
-            accentColor: accentColor,
-          ),
-          const SizedBox(height: 12),
-          _buildDrawerItem(
-            Icons.auto_awesome,
-            'Assistants',
-            widget.onAssistantsTapped,
-            iconColorDefault,
-            textColorDefault,
-            tileBg: sidebarBg.lighten(0.04),
-            dividerColor: dividerColor,
-            accentColor: accentColor,
-          ),
-
-          const SizedBox(height: 24.0), // Spacing between groups
           // Starred Section - Fixed
           _buildSectionHeader('Starred', textColor: textColorDefault),
           if (starredChats.isEmpty)
@@ -624,6 +631,54 @@ class _SidebarMobileState extends State<SidebarMobile> {
     );
   }
 
+  Widget _buildQuickActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    required Color iconColor,
+    required Color textColor,
+    required Color backgroundColor,
+    required Color borderColor,
+  }) {
+    final BorderRadius radius = BorderRadius.circular(12);
+    return SizedBox(
+      height: 48,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: radius,
+          child: Ink(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: backgroundColor,
+              borderRadius: radius,
+              border: Border.all(color: borderColor, width: 1),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: iconColor, size: 20),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    label,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: textColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSectionHeader(String title, {required Color textColor}) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -640,35 +695,6 @@ class _SidebarMobileState extends State<SidebarMobile> {
           fontWeight: FontWeight.bold,
         ),
       ),
-    );
-  }
-
-  // Modified to use the common Drawer Item style from main.dart
-  Widget _buildDrawerItem(
-    IconData icon,
-    String title,
-    VoidCallback onTap,
-    Color iconColor,
-    Color textColor, {
-    Color? tileBg,
-    Color? dividerColor,
-    Color? accentColor,
-  }) {
-    return ListTile(
-      leading: Icon(icon, color: iconColor),
-      title: Text(title, style: TextStyle(color: textColor)),
-      onTap: onTap,
-      tileColor: tileBg,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: dividerColor ?? Colors.transparent, width: 1),
-      ),
-      hoverColor: accentColor?.withValues(alpha: 0.08),
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: _sidebarHorizontalPadding,
-        vertical: 4,
-      ),
-      // dense and iconColor/textColor set by ListTileThemeData in main.dart
     );
   }
 
@@ -766,11 +792,6 @@ class _SidebarMobileState extends State<SidebarMobile> {
       ),
     );
   }
-
-  // The original _buildSidebarButton is replaced by _buildDrawerItem for consistency
-  // as per the new styling. However, for "Projects" if it needs a distinct style,
-  // we could re-introduce a version of it or define it directly.
-  // For now, it uses _buildDrawerItem.
 }
 
 List<String> _filterChatsIsolate(Map<String, dynamic> params) {

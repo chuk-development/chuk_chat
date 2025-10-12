@@ -53,7 +53,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   late Animation<double> _anim;
   String _selectedModelId = 'deepseek/deepseek-chat-v3.1';
 
-  bool _isBrainActive = false;
   bool _isImageActive = false;
   bool _isMicActive = false;
   bool _isSending = false;
@@ -133,7 +132,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _activeChatId = null;
     }
     setState(() {
-      _isBrainActive = false;
       _isImageActive = false;
       _isMicActive = false;
     });
@@ -148,7 +146,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _animCtrl.reset();
       _activeChatId = null;
       ChatStorageService.selectedChatIndex = -1;
-      _isBrainActive = false;
       _isImageActive = false;
       _isMicActive = false;
       _attachedFiles.clear();
@@ -975,17 +972,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 onTap: _uploadFiles,
                 isActive: hasAttachments,
                 debugLabel: 'Add button',
-              ),
-              const SizedBox(width: 8),
-              // Brain Button
-              _buildIconBtn(
-                icon: Icons.psychology,
-                onTap: () {
-                  setState(() => _isBrainActive = !_isBrainActive);
-                  debugPrint('Brain button toggled: $_isBrainActive');
-                },
-                isActive: _isBrainActive,
-                debugLabel: 'Brain button',
               ),
               const SizedBox(width: 8),
               // Image Button
