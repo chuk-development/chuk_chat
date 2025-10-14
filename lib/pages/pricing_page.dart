@@ -1,9 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/widgets/credit_display.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:url_launcher/url_launcher.dart' show LaunchMode;
-import 'package:url_launcher/url_launcher_string.dart';
 
 final SupabaseClient _supabase = Supabase.instance.client;
 
@@ -44,7 +43,10 @@ Future<void> startCheckout(String priceId) async {
     throw Exception('Checkout session could not be created');
   }
   final url = data['url'] as String;
-  await launchUrlString(url, mode: LaunchMode.externalApplication);
+  await launchUrl(
+    Uri.parse(url),
+    mode: LaunchMode.externalApplication,
+  );
 }
 
 Future<void> cancelSubscription() async {
@@ -106,7 +108,7 @@ class _PricingPageState extends State<PricingPage> {
       try {
         await _supabase.functions.invoke('sync_subscription');
       } catch (e) {
-        print('Sync error (not critical): $e');
+        debugPrint('Sync error (not critical): $e');
       }
 
       final response = await _supabase
@@ -125,7 +127,7 @@ class _PricingPageState extends State<PricingPage> {
     } catch (e) {
       if (!mounted || requestToken != _loadRequestToken) return;
       setState(() => _isLoading = false);
-      print('Error loading subscription: $e');
+      debugPrint('Error loading subscription: $e');
     }
   }
 
@@ -141,7 +143,10 @@ class _PricingPageState extends State<PricingPage> {
         throw Exception('Billing portal could not be created');
       }
       final String url = data['url'] as String;
-      await launchUrlString(url, mode: LaunchMode.externalApplication);
+      await launchUrl(
+        Uri.parse(url),
+        mode: LaunchMode.externalApplication,
+      );
 
       // Wait a bit and then refresh to get updated subscription status
       Future.delayed(Duration(seconds: 3), () {
@@ -345,7 +350,7 @@ class _PricingPageState extends State<PricingPage> {
                     Text(
                       '€${_getCurrentPlanPrice()}/month',
                       style: TextStyle(
-                        color: iconFg.withOpacity(0.7),
+                        color: iconFg.withValues(alpha: 0.7),
                         fontSize: 18,
                       ),
                     ),
@@ -356,7 +361,7 @@ class _PricingPageState extends State<PricingPage> {
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: Colors.orange.withOpacity(0.2),
+                            color: Colors.orange.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(color: Colors.orange),
                           ),
@@ -384,7 +389,7 @@ class _PricingPageState extends State<PricingPage> {
                                     Text(
                                       'Cancels on: ${_formatDate(_currentSubscription!['current_period_end'])}',
                                       style: TextStyle(
-                                        color: iconFg.withOpacity(0.8),
+                                        color: iconFg.withValues(alpha: 0.8),
                                         fontSize: 12,
                                       ),
                                     ),
@@ -398,7 +403,7 @@ class _PricingPageState extends State<PricingPage> {
                         Text(
                           'Renews on: ${_formatDate(_currentSubscription!['current_period_end'])}',
                           style: TextStyle(
-                            color: iconFg.withOpacity(0.6),
+                            color: iconFg.withValues(alpha: 0.6),
                             fontSize: 14,
                           ),
                         ),
@@ -408,7 +413,7 @@ class _PricingPageState extends State<PricingPage> {
                       Text(
                         'Monthly AI credits: €${currentPlanCredits.toStringAsFixed(2)} (90% of your plan)',
                         style: TextStyle(
-                          color: iconFg.withOpacity(0.7),
+                          color: iconFg.withValues(alpha: 0.7),
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
                         ),
@@ -503,9 +508,9 @@ class _PricingPageState extends State<PricingPage> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: accent.withOpacity(0.1),
+                          color: accent.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: accent.withOpacity(0.3)),
+                          border: Border.all(color: accent.withValues(alpha: 0.3)),
                         ),
                         child: Row(
                           children: [
@@ -517,7 +522,7 @@ class _PricingPageState extends State<PricingPage> {
                                     ? 'Your subscription is set to cancel. You can renew it in the billing portal.'
                                     : 'Use the billing portal to change your plan or manage payment methods.',
                                 style: TextStyle(
-                                  color: iconFg.withOpacity(0.8),
+                                  color: iconFg.withValues(alpha: 0.8),
                                   fontSize: 12,
                                 ),
                               ),
@@ -544,7 +549,7 @@ class _PricingPageState extends State<PricingPage> {
             if (isSubscribed && !isMobile) ...[
               Text(
                 'Click on a plan card to upgrade or downgrade your subscription.',
-                style: TextStyle(color: iconFg.withOpacity(0.7), fontSize: 14),
+                style: TextStyle(color: iconFg.withValues(alpha: 0.7), fontSize: 14),
               ),
             ],
             const SizedBox(height: 16),
@@ -555,7 +560,7 @@ class _PricingPageState extends State<PricingPage> {
                 decoration: BoxDecoration(
                   color: scaffoldBg.lighten(0.05),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: accent.withOpacity(0.4)),
+                  border: Border.all(color: accent.withValues(alpha: 0.4)),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -567,7 +572,7 @@ class _PricingPageState extends State<PricingPage> {
                         'Subscription management is only available on desktop. '
                         'Plan details and credits are shown below.',
                         style: TextStyle(
-                          color: iconFg.withOpacity(0.7),
+                          color: iconFg.withValues(alpha: 0.7),
                           fontSize: 14,
                         ),
                       ),
@@ -704,7 +709,10 @@ class _PlanCardState extends State<_PlanCard> {
           throw Exception('Billing portal could not be created');
         }
         final String url = data['url'] as String;
-        await launchUrlString(url, mode: LaunchMode.externalApplication);
+        await launchUrl(
+          Uri.parse(url),
+          mode: LaunchMode.externalApplication,
+        );
 
         // Wait and refresh
         Future.delayed(Duration(seconds: 3), () {
@@ -776,19 +784,19 @@ class _PlanCardState extends State<_PlanCard> {
         : (isCurrentPlan ? widget.iconFg : Colors.white);
     final BorderSide? buttonBorder =
         isCurrentPlan && !isCurrentPlanAndSubscribed
-        ? BorderSide(color: widget.iconFg.withOpacity(0.3))
+        ? BorderSide(color: widget.iconFg.withValues(alpha: 0.3))
         : null;
 
     return Card(
       elevation: widget.isCurrentPlan ? 8 : 4,
-      shadowColor: Colors.black.withOpacity(0.1),
+      shadowColor: Colors.black.withValues(alpha: 0.1),
       color: widget.scaffoldBg.lighten(0.05),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(
           color: widget.isCurrentPlan
               ? widget.accent
-              : widget.iconFg.withOpacity(0.3),
+              : widget.iconFg.withValues(alpha: 0.3),
           width: widget.isCurrentPlan ? 2 : 1,
         ),
       ),
@@ -830,7 +838,7 @@ class _PlanCardState extends State<_PlanCard> {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.green.withOpacity(0.2),
+                          color: Colors.green.withValues(alpha: 0.2),
                           border: Border.all(color: Colors.green),
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -879,7 +887,7 @@ class _PlanCardState extends State<_PlanCard> {
                 Text(
                   '/month',
                   style: TextStyle(
-                    color: widget.iconFg.withOpacity(0.7),
+                    color: widget.iconFg.withValues(alpha: 0.7),
                     fontSize: 14,
                   ),
                 ),
@@ -897,7 +905,7 @@ class _PlanCardState extends State<_PlanCard> {
                       child: Text(
                         feature,
                         style: TextStyle(
-                          color: widget.iconFg.withOpacity(0.8),
+                          color: widget.iconFg.withValues(alpha: 0.8),
                           fontSize: 14,
                         ),
                       ),
@@ -918,7 +926,7 @@ class _PlanCardState extends State<_PlanCard> {
             Text(
               '90% of your subscription is converted to spendable credits.',
               style: TextStyle(
-                color: widget.iconFg.withOpacity(0.7),
+                color: widget.iconFg.withValues(alpha: 0.7),
                 fontSize: 12,
               ),
             ),
@@ -963,7 +971,7 @@ class _PlanCardState extends State<_PlanCard> {
               Text(
                 'Manage your subscription from a desktop device.',
                 style: TextStyle(
-                  color: widget.iconFg.withOpacity(0.6),
+                  color: widget.iconFg.withValues(alpha: 0.6),
                   fontSize: 12,
                 ),
               ),

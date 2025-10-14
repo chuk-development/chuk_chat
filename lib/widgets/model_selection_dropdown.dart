@@ -328,25 +328,24 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
         } catch (error) {
           debugPrint('Failed to save selected model: $error');
 
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Failed to save model selection. Please try again.',
-                ),
-                backgroundColor: Colors.red,
-                duration: Duration(seconds: 3),
-              ),
-            );
-          }
+          if (!mounted) return;
 
-          if (mounted) {
-            setState(() {
-              _selectedModelId = previousModelId;
-            });
-            _updateSelectedModelName();
-            widget.onModelSelected(previousModelId);
-          }
+          final messenger = ScaffoldMessenger.of(context);
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Failed to save model selection. Please try again.',
+              ),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 3),
+            ),
+          );
+
+          setState(() {
+            _selectedModelId = previousModelId;
+          });
+          _updateSelectedModelName();
+          widget.onModelSelected(previousModelId);
         }
 
         Future.delayed(

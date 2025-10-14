@@ -33,9 +33,8 @@ class AttachmentPreviewBar extends StatelessWidget {
     final theme = Theme.of(context);
     final Color baseTextColor =
         theme.iconTheme.color ?? theme.colorScheme.onSurface;
-    final Color containerColor = theme.colorScheme.surfaceVariant.withOpacity(
-      0.25,
-    );
+    final Color containerColor = theme.colorScheme.surfaceContainerHighest
+        .withValues(alpha: 0.25);
 
     return Container(
       width: double.infinity,
@@ -43,7 +42,7 @@ class AttachmentPreviewBar extends StatelessWidget {
       decoration: BoxDecoration(
         color: containerColor,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: theme.dividerColor.withOpacity(0.35)),
+        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.35)),
       ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -56,7 +55,7 @@ class AttachmentPreviewBar extends StatelessWidget {
                   onCopy: onCopy,
                   textColor: baseTextColor,
                   accentColor: theme.colorScheme.primary,
-                  cardColor: theme.colorScheme.surface.withOpacity(0.9),
+                  cardColor: theme.colorScheme.surface.withValues(alpha: 0.9),
                 ),
               )
               .toList(),
@@ -87,7 +86,7 @@ class _AttachmentTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final BorderRadius cardRadius = BorderRadius.circular(12);
     final bool isUploading = file.isUploading;
-    final Color metaTextColor = textColor.withOpacity(isUploading ? 0.5 : 0.65);
+    final Color metaTextColor = textColor.withValues(alpha: isUploading ? 0.5 : 0.65);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -104,7 +103,7 @@ class _AttachmentTile extends StatelessWidget {
             decoration: BoxDecoration(
               color: cardColor,
               borderRadius: cardRadius,
-              border: Border.all(color: textColor.withOpacity(0.1)),
+              border: Border.all(color: textColor.withValues(alpha: 0.1)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -174,7 +173,7 @@ class _AttachmentTile extends StatelessWidget {
                     splashRadius: 18,
                     icon: Icon(
                       Icons.copy,
-                      color: textColor.withOpacity(isUploading ? 0.25 : 0.7),
+                      color: textColor.withValues(alpha: isUploading ? 0.25 : 0.7),
                     ),
                     tooltip: 'Copy ${file.fileName}',
                     onPressed: isUploading ? null : () => onCopy?.call(file),
@@ -191,7 +190,7 @@ class _AttachmentTile extends StatelessWidget {
                   splashRadius: 18,
                   icon: Icon(
                     Icons.close,
-                    color: textColor.withOpacity(isUploading ? 0.25 : 0.7),
+                    color: textColor.withValues(alpha: isUploading ? 0.25 : 0.7),
                   ),
                   tooltip: 'Remove ${file.fileName}',
                   onPressed: isUploading ? null : () => onRemove(file.id),
@@ -236,7 +235,7 @@ class _AttachmentThumbnail extends StatelessWidget {
       width: _kChipThumbnailSize,
       height: _kChipThumbnailSize,
       decoration: BoxDecoration(
-        color: accentColor.withOpacity(0.12),
+        color: accentColor.withValues(alpha: 0.12),
         borderRadius: radius,
       ),
       alignment: Alignment.center,
@@ -328,16 +327,18 @@ void _showAttachmentPreview(
 ) {
   showDialog<void>(
     context: context,
-    barrierColor: Colors.black.withOpacity(0.6),
+    barrierColor: Colors.black.withValues(alpha: 0.6),
     builder: (context) {
       final theme = Theme.of(context);
       final bool isImage = _isImageFile(file.fileName);
       final bool isPlainText = _isPlainTextFile(file.fileName);
-      final File? localFile = file.localPath != null
+      final File? candidateFile = file.localPath != null
           ? File(file.localPath!)
           : null;
-      final bool canShowImage =
-          isImage && localFile != null && localFile.existsSync();
+      final File? imageFile =
+          isImage && candidateFile != null && candidateFile.existsSync()
+              ? candidateFile
+              : null;
       final bool hasMarkdown =
           file.markdownContent != null && file.markdownContent!.isNotEmpty;
 
@@ -377,7 +378,7 @@ void _showAttachmentPreview(
                               child: Text(
                                 _formatBytes(file.fileSizeBytes!),
                                 style: theme.textTheme.bodySmall?.copyWith(
-                                  color: textColor.withOpacity(0.7),
+                                  color: textColor.withValues(alpha: 0.7),
                                 ),
                               ),
                             ),
@@ -396,13 +397,13 @@ void _showAttachmentPreview(
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.all(24),
-                  child: canShowImage
+                  child: imageFile != null
                       ? ClipRRect(
                           borderRadius: BorderRadius.circular(12),
                           child: InteractiveViewer(
                             minScale: 0.5,
                             maxScale: 4.0,
-                            child: Image.file(localFile!, fit: BoxFit.contain),
+                            child: Image.file(imageFile, fit: BoxFit.contain),
                           ),
                         )
                       : isPlainText
@@ -426,7 +427,7 @@ Widget _buildNoPreviewMessage(BuildContext context, {String? message}) {
     width: double.infinity,
     padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
     decoration: BoxDecoration(
-      color: theme.colorScheme.surfaceVariant.withOpacity(0.4),
+      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
       borderRadius: BorderRadius.circular(12),
     ),
     child: Column(

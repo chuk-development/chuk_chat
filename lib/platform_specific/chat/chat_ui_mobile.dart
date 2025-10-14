@@ -1014,7 +1014,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     required VoidCallback onTap,
   }) {
     final theme = Theme.of(context);
-    final Color background = theme.colorScheme.surfaceVariant.withValues(
+    final Color background =
+        theme.colorScheme.surfaceContainerHighest.withValues(
       alpha: 0.6,
     );
     final Color borderColor = theme.dividerColor.withValues(alpha: 0.2);

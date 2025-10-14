@@ -79,26 +79,19 @@ class UserPreferencesService {
 
       final userId = session.user.id;
 
-      final response = await SupabaseService.client
+      final List<dynamic> response = await SupabaseService.client
           .from('user_preferences')
           .delete()
           .eq('user_id', userId)
           .select();
 
-      // Check for errors in the response
-      if (response is List) {
-        final deletedCount = response.length;
-        if (deletedCount > 0) {
-          debugPrint('Cleared $deletedCount model preference(s) for user');
-          return true;
-        } else {
-          debugPrint('No model preferences found to clear for user');
-          return false;
-        }
-      } else {
-        debugPrint('Unexpected response format from delete operation');
-        return false;
+      final int deletedCount = response.length;
+      if (deletedCount > 0) {
+        debugPrint('Cleared $deletedCount model preference(s) for user');
+        return true;
       }
+      debugPrint('No model preferences found to clear for user');
+      return false;
     } catch (e) {
       debugPrint('Error clearing model preference: $e');
       return false;
@@ -216,26 +209,19 @@ class UserPreferencesService {
 
       final userId = session.user.id;
 
-      final response = await SupabaseService.client
+      final List<dynamic> response = await SupabaseService.client
           .from('user_model_providers')
           .delete()
           .eq('user_id', userId)
           .select();
 
-      // Check for errors in the response
-      if (response is List) {
-        final deletedCount = response.length;
-        if (deletedCount > 0) {
-          debugPrint('Cleared $deletedCount provider preference(s) for user');
-          return true;
-        } else {
-          debugPrint('No provider preferences found to clear for user');
-          return false;
-        }
-      } else {
-        debugPrint('Unexpected response format from delete operation');
-        return false;
+      final int deletedCount = response.length;
+      if (deletedCount > 0) {
+        debugPrint('Cleared $deletedCount provider preference(s) for user');
+        return true;
       }
+      debugPrint('No provider preferences found to clear for user');
+      return false;
     } catch (e) {
       debugPrint('Error clearing provider preferences: $e');
       return false;

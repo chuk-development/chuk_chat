@@ -131,21 +131,6 @@ class _SidebarMobileState extends State<SidebarMobile> {
     }
   }
 
-  String _initialsFor(ProfileRecord? profile) {
-    final source = profile?.displayName.isNotEmpty == true
-        ? profile!.displayName
-        : profile?.email ?? '';
-    if (source.trim().isEmpty) return '?';
-
-    final parts = source.trim().split(RegExp(r'\s+'));
-    if (parts.length == 1) {
-      return parts.first.substring(0, 1).toUpperCase();
-    }
-    final first = parts.first.substring(0, 1).toUpperCase();
-    final last = parts.last.substring(0, 1).toUpperCase();
-    return '$first$last';
-  }
-
   Future<void> _refreshChats() {
     if (_refreshInFlight != null) {
       _refreshPending = true;

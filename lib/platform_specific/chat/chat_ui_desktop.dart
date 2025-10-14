@@ -1261,18 +1261,20 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                             ),
                             const Spacer(),
                             // Model Selection Dropdown
-                            ModelSelectionDropdown(
-                              initialSelectedModelId: _selectedModelId,
-                              onModelSelected: (newModelId) {
-                                setState(() {
-                                  _selectedModelId = newModelId;
-                                });
-                                debugPrint(
-                                  'Selected model ID: $_selectedModelId',
-                                );
-                              },
-                              textFieldFocusNode: _textFieldFocusNode,
-                              isCompactMode: isCompactMode,
+                            Flexible(
+                              child: ModelSelectionDropdown(
+                                initialSelectedModelId: _selectedModelId,
+                                onModelSelected: (newModelId) {
+                                  setState(() {
+                                    _selectedModelId = newModelId;
+                                  });
+                                  debugPrint(
+                                    'Selected model ID: $_selectedModelId',
+                                  );
+                                },
+                                textFieldFocusNode: _textFieldFocusNode,
+                                isCompactMode: isCompactMode,
+                              ),
                             ),
                           ],
                         ),

@@ -174,48 +174,6 @@ class ChukChatUIState extends State<ChukChatUI>
     await ChatStorageService.loadSavedChatsForSidebar();
   }
 
-  String? _providerNameForModel(String modelId) {
-    final parts = modelId.split('/');
-    if (parts.length >= 3 && parts.first == 'openrouter') {
-      final providerSlug = parts[1].toLowerCase();
-      const knownProviders = <String, String>{
-        'anthropic': 'Anthropic',
-        'openai': 'OpenAI',
-        'google': 'Google',
-        'meta': 'Meta',
-        'mistralai': 'Mistral',
-        'perplexity': 'Perplexity',
-        'x-ai': 'x.ai',
-        'cohere': 'Cohere',
-        'deepseek': 'DeepSeek',
-        'moonshot': 'Moonshot',
-      };
-      return knownProviders[providerSlug] ?? parts[1];
-    }
-    return null;
-  }
-
-  String _errorMessageFromResponse(
-    Map<String, dynamic>? decodedBody,
-    String fallback,
-  ) {
-    if (decodedBody == null || decodedBody.isEmpty) return fallback;
-    final dynamic detail = decodedBody['detail'];
-    if (detail is String && detail.isNotEmpty) return detail;
-    if (detail is List && detail.isNotEmpty) {
-      final first = detail.first;
-      if (first is Map<String, dynamic>) {
-        final dynamic msg = first['msg'];
-        if (msg is String && msg.isNotEmpty) return msg;
-      } else if (first is String && first.isNotEmpty) {
-        return first;
-      }
-    }
-    final dynamic message = decodedBody['message'];
-    if (message is String && message.isNotEmpty) return message;
-    return fallback;
-  }
-
   Future<void> _sendMessage({
     Map<String, dynamic>? resendSource,
     String? overrideModelId,
@@ -254,7 +212,6 @@ class ChukChatUIState extends State<ChukChatUI>
     final String modelIdForSend = overrideModelId ?? _selectedModelId;
 
     String displayMessageText = originalUserInput;
-    String aiPromptContent = originalUserInput;
 
     if (hasAttachments) {
       final attachedFileNames = _attachedFiles
@@ -277,7 +234,6 @@ class ChukChatUIState extends State<ChukChatUI>
       final String queryText = originalUserInput.isNotEmpty
           ? originalUserInput
           : 'Please review the uploaded documents.';
-      aiPromptContent = '$markdownSections\n\nUser query: $queryText';
     }
 
     final List<Map<String, dynamic>> attachmentSnapshots =
@@ -333,9 +289,7 @@ class ChukChatUIState extends State<ChukChatUI>
     });
     _scrollChatToBottom();
 
-    bool responseHandled = false;
     void finalizeAiMessage(String text) {
-      responseHandled = true;
       if (!mounted) {
         return;
       }
