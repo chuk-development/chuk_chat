@@ -18,6 +18,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
 import 'package:uuid/uuid.dart';
+import 'package:record/record.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:path_provider/path_provider.dart';
 
 /* ---------- CHAT UI MOBILE (Phone-specific rendering) ---------- */
 class ChukChatUIMobile extends StatefulWidget {
@@ -56,6 +59,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
   bool _isImageActive = false;
   bool _isMicActive = false;
+  final List<double> _audioLevels = List<double>.filled(
+    32,
+    0.0,
+    growable: true,
+  );
+  final AudioRecorder _audioRecorder = AudioRecorder();
+  StreamSubscription<Amplitude>? _amplitudeSub;
+  String? _lastRecordedFilePath;
+  String? _activeRecordingPath;
   bool _isSending = false;
 
   static const int _kMaxFileSizeBytes = 10 * 1024 * 1024; // 10MB
@@ -187,6 +199,245 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     );
   }
 
+  Future<void> _handleMicTap() async {
+    if (_isMicActive) {
+      await _stopMicRecording();
+      if (!mounted) return;
+      setState(() {
+        _isMicActive = false;
+        _resetAudioLevels();
+      });
+    } else {
+      final bool started = await _startMicRecording();
+      if (!mounted) return;
+      if (started) {
+        setState(() {
+          _isMicActive = true;
+          _resetAudioLevels();
+        });
+      }
+    }
+    debugPrint('Mic button toggled: $_isMicActive');
+  }
+
+  Future<void> _handleAudioSend() async {
+    if (!_isMicActive) {
+      return;
+    }
+    await _stopMicRecording(keepFile: true);
+    if (!mounted) return;
+    setState(() {
+      _isMicActive = false;
+      _resetAudioLevels();
+    });
+    debugPrint('Audio message ready (path: $_lastRecordedFilePath)');
+    _showSnackBar('Audio message ready — API integration coming soon.');
+  }
+
+  Future<bool> _startMicRecording() async {
+    try {
+      if (!await _ensureMicPermission()) {
+        return false;
+      }
+
+      if (!await _audioRecorder.hasPermission()) {
+        _showSnackBar('Microphone permission is required to record audio.');
+        return false;
+      }
+
+      if (await _audioRecorder.isRecording()) {
+        return true;
+      }
+
+      final String path = await _createRecordingPath();
+      _activeRecordingPath = path;
+
+      _resetAudioLevels();
+      _amplitudeSub?.cancel();
+
+      await _audioRecorder.start(
+        const RecordConfig(
+          encoder: AudioEncoder.aacLc,
+          sampleRate: 16000,
+          bitRate: 64000,
+        ),
+        path: path,
+      );
+
+      _amplitudeSub = _audioRecorder
+          .onAmplitudeChanged(const Duration(milliseconds: 80))
+          .listen(_handleAmplitudeSample);
+
+      return true;
+    } catch (error, stackTrace) {
+      debugPrint('Failed to start microphone: $error\n$stackTrace');
+      _showSnackBar('Unable to access microphone. Please try again.');
+      return false;
+    }
+  }
+
+  Future<void> _stopMicRecording({bool keepFile = false}) async {
+    _amplitudeSub?.cancel();
+    _amplitudeSub = null;
+    try {
+      if (!await _audioRecorder.isRecording()) {
+        if (!keepFile) {
+          _lastRecordedFilePath = null;
+          await _deleteRecordingFile(_activeRecordingPath);
+        }
+        _activeRecordingPath = null;
+        return;
+      }
+
+      final String? path = await _audioRecorder.stop();
+      final String? effectivePath = path ?? _activeRecordingPath;
+      _activeRecordingPath = null;
+
+      if (keepFile) {
+        _lastRecordedFilePath = effectivePath;
+      } else {
+        _lastRecordedFilePath = null;
+        await _deleteRecordingFile(effectivePath);
+      }
+    } catch (error, stackTrace) {
+      debugPrint('Failed to stop microphone: $error\n$stackTrace');
+    }
+  }
+
+  Future<bool> _ensureMicPermission() async {
+    final PermissionStatus status = await Permission.microphone.request();
+    if (status.isGranted) {
+      return true;
+    }
+    if (status.isPermanentlyDenied) {
+      _showSnackBar(
+        'Microphone permission denied. Please enable it in settings.',
+      );
+      return false;
+    }
+    _showSnackBar('Microphone permission is required to record audio.');
+    return false;
+  }
+
+  void _handleAmplitudeSample(Amplitude amplitude) {
+    final double decibels = amplitude.current;
+    if (!mounted) return;
+
+    const double minDb = -60.0;
+    const double maxDb = 0.0;
+    final double normalized = ((decibels - minDb) / (maxDb - minDb)).clamp(
+      0.0,
+      1.0,
+    );
+
+    setState(() {
+      if (_audioLevels.isNotEmpty) {
+        _audioLevels.removeAt(0);
+      }
+      _audioLevels.add(normalized);
+    });
+  }
+
+  void _resetAudioLevels() {
+    for (int i = 0; i < _audioLevels.length; i++) {
+      _audioLevels[i] = 0.0;
+    }
+  }
+
+  Future<String> _createRecordingPath() async {
+    final Directory tempDir = await getTemporaryDirectory();
+    final Directory audioDir = Directory('${tempDir.path}/chuk_chat_audio');
+    if (!await audioDir.exists()) {
+      await audioDir.create(recursive: true);
+    }
+    final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+    return '${audioDir.path}/rec_$timestamp.m4a';
+  }
+
+  Future<void> _deleteRecordingFile(String? path) async {
+    if (path == null) return;
+    try {
+      final file = File(path);
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } catch (error, stackTrace) {
+      debugPrint('Failed to delete audio file: $error\n$stackTrace');
+    }
+  }
+
+  void _showSnackBar(String message) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.showSnackBar(
+      SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
+    );
+  }
+
+  Widget _buildAudioVisualizer({required Color accent, required Color iconFg}) {
+    return SizedBox(
+      key: const ValueKey<String>('audio-visualizer'),
+      height: 44,
+      child: Row(
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final int barCount = _audioLevels.length;
+                if (barCount == 0) {
+                  return const SizedBox.shrink();
+                }
+                final double maxHeight = constraints.maxHeight;
+
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: List.generate(barCount, (int index) {
+                    final double level = _audioLevels[index];
+                    final double clampedLevel = level.clamp(0.0, 1.0);
+                    final double barHeight = math.max(
+                      4.0,
+                      clampedLevel * maxHeight,
+                    );
+                    return Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 1.2),
+                        child: Align(
+                          alignment: Alignment.bottomCenter,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 90),
+                            height: barHeight,
+                            decoration: BoxDecoration(
+                              color: accent,
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                );
+              },
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            'Recording...',
+            style: TextStyle(
+              color: iconFg.withValues(alpha: 0.8),
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _pickImageFromSource(ImageSource source) async {
     try {
       final XFile? pickedFile = await _imagePicker.pickImage(
@@ -253,6 +504,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     _textFieldFocusNode.dispose();
     _rawKeyboardListenerFocusNode.dispose();
     _animCtrl.dispose();
+    unawaited(_stopMicRecording());
+    _amplitudeSub?.cancel();
+    unawaited(_audioRecorder.dispose());
     super.dispose();
   }
 
@@ -1089,63 +1343,101 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           ),
           Row(
             children: <Widget>[
-              // Add Button (File Upload)
-              _buildIconBtn(
-                icon: Icons.add,
-                onTap: _handleAddAttachmentTap,
-                isActive: hasAttachments,
-                debugLabel: 'Add button',
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  child: _isMicActive
+                      ? _buildAudioVisualizer(accent: accent, iconFg: iconFg)
+                      : Row(
+                          key: const ValueKey<String>('default-mic-controls'),
+                          children: [
+                            // Add Button (File Upload)
+                            _buildIconBtn(
+                              icon: Icons.add,
+                              onTap: _handleAddAttachmentTap,
+                              isActive: hasAttachments,
+                              debugLabel: 'Add button',
+                            ),
+                            const SizedBox(width: 8),
+                            // Image Button
+                            _buildIconBtn(
+                              icon: Icons.image,
+                              onTap: () {
+                                setState(
+                                  () => _isImageActive = !_isImageActive,
+                                );
+                                debugPrint(
+                                  'Image button toggled: $_isImageActive',
+                                );
+                              },
+                              isActive: _isImageActive,
+                              debugLabel: 'Image button',
+                            ),
+                            const Spacer(),
+                            // Model Selection Dropdown
+                            ModelSelectionDropdown(
+                              initialSelectedModelId: _selectedModelId,
+                              onModelSelected: (newModelId) {
+                                setState(() {
+                                  _selectedModelId = newModelId;
+                                });
+                                debugPrint(
+                                  'Selected model ID: $_selectedModelId',
+                                );
+                              },
+                              textFieldFocusNode: _textFieldFocusNode,
+                              isCompactMode: isCompactMode,
+                              compactLabel: '#',
+                            ),
+                          ],
+                        ),
+                ),
               ),
               const SizedBox(width: 8),
-              // Image Button
+              // Mic Button (acts as record/stop toggle)
               _buildIconBtn(
-                icon: Icons.image,
-                onTap: () {
-                  setState(() => _isImageActive = !_isImageActive);
-                  debugPrint('Image button toggled: $_isImageActive');
-                },
-                isActive: _isImageActive,
-                debugLabel: 'Image button',
-              ),
-              const Spacer(),
-              // Model Selection Dropdown
-              ModelSelectionDropdown(
-                initialSelectedModelId: _selectedModelId,
-                onModelSelected: (newModelId) {
-                  setState(() {
-                    _selectedModelId = newModelId;
-                  });
-                  debugPrint('Selected model ID: $_selectedModelId');
-                },
-                textFieldFocusNode: _textFieldFocusNode,
-                isCompactMode:
-                    isCompactMode, // Corrected: Use the parameter passed to _buildSearchBar
-                compactLabel: '#',
-              ),
-              const SizedBox(width: 8),
-              // Mic Button (for a quick toggle in the main chat UI)
-              _buildIconBtn(
-                icon: Icons.mic,
-                onTap: () {
-                  setState(() => _isMicActive = !_isMicActive);
-                  debugPrint('Mic button toggled: $_isMicActive');
-                },
+                icon: _isMicActive ? Icons.stop : Icons.mic,
+                onTap: _handleMicTap,
                 isActive: _isMicActive,
                 debugLabel: 'Mic button',
               ),
               const SizedBox(width: 8),
-              // Voice Mode Button (placeholder)
-              GestureDetector(
-                onTap: () => _openComingSoonFeature('Voice Mode'),
-                child: Container(
-                  width: 44,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: accent,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.graphic_eq, color: Colors.black),
-                ),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                child: _isMicActive
+                    ? GestureDetector(
+                        key: const ValueKey<String>('audio-send-button'),
+                        onTap: _handleAudioSend,
+                        child: Container(
+                          width: 44,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: accent,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.send, color: Colors.black),
+                        ),
+                      )
+                    : GestureDetector(
+                        key: const ValueKey<String>('voice-mode-button'),
+                        onTap: () => _openComingSoonFeature('Voice Mode'),
+                        child: Container(
+                          width: 44,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: accent,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.graphic_eq,
+                            color: Colors.black,
+                          ),
+                        ),
+                      ),
               ),
             ],
           ),
