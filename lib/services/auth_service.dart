@@ -38,7 +38,17 @@ class AuthService {
         },
       );
     } on AuthException catch (error) {
-      throw AuthServiceException(message: error.message);
+      final message = error.message;
+      final normalized = message.toLowerCase();
+      if (normalized.contains('already registered') ||
+          normalized.contains('already been registered')) {
+        throw const AuthServiceException(
+          message:
+              'An account with this email already exists. Try signing in instead.',
+          code: AuthServiceException.codeEmailAlreadyRegistered,
+        );
+      }
+      throw AuthServiceException(message: message);
     } catch (error) {
       throw AuthServiceException(message: 'Unexpected error: $error');
     }
@@ -61,9 +71,12 @@ class AuthService {
 }
 
 class AuthServiceException implements Exception {
-  const AuthServiceException({required this.message});
+  const AuthServiceException({required this.message, this.code});
 
   final String message;
+  final String? code;
+
+  static const String codeEmailAlreadyRegistered = 'email_already_registered';
 
   @override
   String toString() => message;

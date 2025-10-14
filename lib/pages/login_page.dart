@@ -79,7 +79,17 @@ class _LoginPageState extends State<LoginPage> {
         });
       }
     } on AuthServiceException catch (error) {
+      final bool isEmailAlreadyRegistered =
+          !_isSignInMode &&
+          error.code == AuthServiceException.codeEmailAlreadyRegistered;
+      if (isEmailAlreadyRegistered && mounted) {
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.showSnackBar(SnackBar(content: Text(error.message)));
+      }
       setState(() {
+        if (isEmailAlreadyRegistered) {
+          _isSignInMode = true;
+        }
         _errorMessage = error.message;
       });
     } on StateError catch (error) {
@@ -104,6 +114,35 @@ class _LoginPageState extends State<LoginPage> {
       _isSignInMode = !_isSignInMode;
       _errorMessage = null;
     });
+  }
+
+  bool _isPasswordSecure(String password) {
+    final hasMinLength = password.length >= 12;
+    final hasUppercase = password.contains(RegExp(r'[A-Z]'));
+    final hasLowercase = password.contains(RegExp(r'[a-z]'));
+    final hasDigit = password.contains(RegExp(r'\d'));
+    final hasSpecial = password.contains(RegExp(r'[^A-Za-z0-9]'));
+    return hasMinLength &&
+        hasUppercase &&
+        hasLowercase &&
+        hasDigit &&
+        hasSpecial;
+  }
+
+  String? _validatePassword(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Enter your password.';
+    }
+    if (_isSignInMode) {
+      if (value.length < 6) {
+        return 'Password must be at least 6 characters.';
+      }
+      return null;
+    }
+    if (!_isPasswordSecure(value)) {
+      return 'Password must be at least 12 characters and include uppercase, lowercase, number, and symbol.';
+    }
+    return null;
   }
 
   @override
@@ -216,15 +255,7 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                       ),
                       obscureText: _obscurePassword,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Enter your password.';
-                        }
-                        if (value.length < 6) {
-                          return 'Password must be at least 6 characters.';
-                        }
-                        return null;
-                      },
+                      validator: _validatePassword,
                     ),
                     if (_errorMessage != null) ...[
                       const SizedBox(height: 16),

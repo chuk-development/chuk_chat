@@ -146,14 +146,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                   ),
                 ),
                 const SizedBox(height: 20),
-                Text(
-                  'Wie kann ich dir helfen?',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 20),
                 Row(
                   children: [
                     _buildAttachmentSheetOption(
