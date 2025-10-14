@@ -225,15 +225,6 @@ class ChukChatUIState extends State<ChukChatUI>
         displayMessageText = attachmentsLine;
       }
 
-      final markdownSections = _attachedFiles
-          .where((f) => f.markdownContent != null)
-          .map(
-            (f) => 'Document: "${f.fileName}"\n```\n${f.markdownContent}\n```',
-          )
-          .join('\n\n');
-      final String queryText = originalUserInput.isNotEmpty
-          ? originalUserInput
-          : 'Please review the uploaded documents.';
     }
 
     final List<Map<String, dynamic>> attachmentSnapshots =

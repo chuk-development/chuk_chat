@@ -328,7 +328,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
         } catch (error) {
           debugPrint('Failed to save selected model: $error');
 
-          if (!mounted) return;
+          if (!context.mounted) return;
 
           final messenger = ScaffoldMessenger.of(context);
           messenger.showSnackBar(

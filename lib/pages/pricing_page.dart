@@ -1,8 +1,8 @@
-import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/widgets/credit_display.dart';
+import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 final SupabaseClient _supabase = Supabase.instance.client;
 
@@ -27,6 +27,21 @@ const Map<String, Map<String, dynamic>> _plans = {
   },
 };
 
+Future<void> _launchExternalUrl(String url) async {
+  final Uri? uri = Uri.tryParse(url);
+  if (uri == null) {
+    throw Exception('Invalid URL provided.');
+  }
+
+  final bool didLaunch = await launchUrl(
+    uri,
+    mode: LaunchMode.externalApplication,
+  );
+  if (!didLaunch) {
+    throw Exception('Unable to open the requested link.');
+  }
+}
+
 Future<void> startCheckout(String priceId) async {
   final user = _supabase.auth.currentUser;
   if (user == null) {
@@ -42,11 +57,7 @@ Future<void> startCheckout(String priceId) async {
   if (data is! Map || data['url'] is! String) {
     throw Exception('Checkout session could not be created');
   }
-  final url = data['url'] as String;
-  await launchUrl(
-    Uri.parse(url),
-    mode: LaunchMode.externalApplication,
-  );
+  await _launchExternalUrl(data['url'] as String);
 }
 
 Future<void> cancelSubscription() async {
@@ -142,11 +153,7 @@ class _PricingPageState extends State<PricingPage> {
       if (data is! Map || data['url'] is! String) {
         throw Exception('Billing portal could not be created');
       }
-      final String url = data['url'] as String;
-      await launchUrl(
-        Uri.parse(url),
-        mode: LaunchMode.externalApplication,
-      );
+      await _launchExternalUrl(data['url'] as String);
 
       // Wait a bit and then refresh to get updated subscription status
       Future.delayed(Duration(seconds: 3), () {
@@ -708,11 +715,7 @@ class _PlanCardState extends State<_PlanCard> {
         if (data is! Map || data['url'] is! String) {
           throw Exception('Billing portal could not be created');
         }
-        final String url = data['url'] as String;
-        await launchUrl(
-          Uri.parse(url),
-          mode: LaunchMode.externalApplication,
-        );
+        await _launchExternalUrl(data['url'] as String);
 
         // Wait and refresh
         Future.delayed(Duration(seconds: 3), () {
