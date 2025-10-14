@@ -16,12 +16,13 @@ class UserPreferencesService {
       final userId = session.user.id;
 
       // Upsert the user's model preference
-      final response =
-          await SupabaseService.client.from('user_preferences').upsert({
+      final response = await SupabaseService.client
+          .from('user_preferences')
+          .upsert({
             'user_id': userId,
             'selected_model_id': modelId,
-            'updated_at': DateTime.now().toIso8601String(),
-          }, onConflict: 'user_id').select();
+          }, onConflict: 'user_id')
+          .select();
 
       if (response.isNotEmpty) {
         debugPrint('Successfully saved model preference: $modelId');
@@ -78,13 +79,26 @@ class UserPreferencesService {
 
       final userId = session.user.id;
 
-      await SupabaseService.client
+      final response = await SupabaseService.client
           .from('user_preferences')
           .delete()
-          .eq('user_id', userId);
+          .eq('user_id', userId)
+          .select();
 
-      debugPrint('Cleared model preference for user');
-      return true;
+      // Check for errors in the response
+      if (response is List) {
+        final deletedCount = response.length;
+        if (deletedCount > 0) {
+          debugPrint('Cleared $deletedCount model preference(s) for user');
+          return true;
+        } else {
+          debugPrint('No model preferences found to clear for user');
+          return false;
+        }
+      } else {
+        debugPrint('Unexpected response format from delete operation');
+        return false;
+      }
     } catch (e) {
       debugPrint('Error clearing model preference: $e');
       return false;
@@ -106,13 +120,14 @@ class UserPreferencesService {
       final userId = session.user.id;
 
       // Upsert the user's provider preference for the model
-      final response =
-          await SupabaseService.client.from('user_model_providers').upsert({
+      final response = await SupabaseService.client
+          .from('user_model_providers')
+          .upsert({
             'user_id': userId,
             'model_id': modelId,
             'provider_slug': providerSlug,
-            'updated_at': DateTime.now().toIso8601String(),
-          }, onConflict: 'user_id,model_id').select();
+          }, onConflict: 'user_id,model_id')
+          .select();
 
       if (response.isNotEmpty) {
         debugPrint(
@@ -201,13 +216,26 @@ class UserPreferencesService {
 
       final userId = session.user.id;
 
-      await SupabaseService.client
+      final response = await SupabaseService.client
           .from('user_model_providers')
           .delete()
-          .eq('user_id', userId);
+          .eq('user_id', userId)
+          .select();
 
-      debugPrint('Cleared all provider preferences for user');
-      return true;
+      // Check for errors in the response
+      if (response is List) {
+        final deletedCount = response.length;
+        if (deletedCount > 0) {
+          debugPrint('Cleared $deletedCount provider preference(s) for user');
+          return true;
+        } else {
+          debugPrint('No provider preferences found to clear for user');
+          return false;
+        }
+      } else {
+        debugPrint('Unexpected response format from delete operation');
+        return false;
+      }
     } catch (e) {
       debugPrint('Error clearing provider preferences: $e');
       return false;

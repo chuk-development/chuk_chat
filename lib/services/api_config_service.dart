@@ -1,0 +1,105 @@
+// lib/services/api_config_service.dart
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+
+/// Service for managing API configuration across different environments and platforms.
+class ApiConfigService {
+  // Environment variable keys
+  static const String _envApiUrl = String.fromEnvironment('API_BASE_URL');
+  static const String _envApiHost = String.fromEnvironment('API_HOST');
+  static const String _envApiPort = String.fromEnvironment('API_PORT');
+
+  // Default configuration
+  static const String _defaultPort = '8000';
+  static const String _defaultProtocol = 'http';
+
+  // Production configuration (should be set via environment variables)
+  static const String _productionUrl = String.fromEnvironment(
+    'PRODUCTION_API_URL',
+  );
+
+  /// Gets the appropriate API base URL based on the current environment and platform.
+  static String get apiBaseUrl {
+    // 1. Check for explicit production URL from environment
+    if (_productionUrl.isNotEmpty) {
+      return _productionUrl;
+    }
+
+    // 2. Check for custom API URL from environment
+    if (_envApiUrl.isNotEmpty) {
+      return _envApiUrl;
+    }
+
+    // 3. Build URL from host and port environment variables
+    if (_envApiHost.isNotEmpty) {
+      final port = _envApiPort.isNotEmpty ? _envApiPort : _defaultPort;
+      return '$_defaultProtocol://$_envApiHost:$port';
+    }
+
+    // 4. Use platform-specific development URLs
+    return _getDevelopmentUrl();
+  }
+
+  /// Gets the development URL based on the current platform.
+  static String _getDevelopmentUrl() {
+    if (kDebugMode) {
+      // Development mode - use platform-specific localhost alternatives
+      if (Platform.isAndroid) {
+        // Android emulator uses 10.0.2.2 to access host machine's localhost
+        return '$_defaultProtocol://10.0.2.2:$_defaultPort';
+      } else if (Platform.isIOS) {
+        // iOS simulator can use localhost directly
+        return '$_defaultProtocol://localhost:$_defaultPort';
+      } else if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+        // Desktop platforms can use localhost
+        return '$_defaultProtocol://localhost:$_defaultPort';
+      }
+    }
+
+    // Fallback for production or unknown platforms
+    // This should be overridden with environment variables in production
+    return '$_defaultProtocol://localhost:$_defaultPort';
+  }
+
+  /// Gets the current environment type.
+  static String get environment {
+    if (kDebugMode) {
+      return 'development';
+    } else {
+      return 'production';
+    }
+  }
+
+  /// Gets the current platform name.
+  static String get platform {
+    if (Platform.isAndroid) return 'android';
+    if (Platform.isIOS) return 'ios';
+    if (Platform.isWindows) return 'windows';
+    if (Platform.isLinux) return 'linux';
+    if (Platform.isMacOS) return 'macos';
+    return 'unknown';
+  }
+
+  /// Validates that the API configuration is properly set up.
+  static bool get isConfigured {
+    if (kDebugMode) {
+      // In debug mode, we can use development URLs
+      return true;
+    } else {
+      // In production, we need explicit configuration
+      return _productionUrl.isNotEmpty ||
+          _envApiUrl.isNotEmpty ||
+          _envApiHost.isNotEmpty;
+    }
+  }
+
+  /// Gets a human-readable description of the current configuration.
+  static String get configurationDescription {
+    final env = environment;
+    final platform = ApiConfigService.platform;
+    final url = apiBaseUrl;
+    final configured = isConfigured;
+
+    return 'Environment: $env, Platform: $platform, URL: $url, Configured: $configured';
+  }
+}

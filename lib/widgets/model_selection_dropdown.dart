@@ -66,9 +66,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       final savedModelId = await UserPreferencesService.loadSelectedModel();
       if (savedModelId != null && savedModelId.isNotEmpty) {
         _selectedModelId = savedModelId;
-        widget.onModelSelected(
-          _selectedModelId,
-        ); // Notify parent of the loaded preference
+        // Don't notify parent yet - wait until models are fetched and validated
       }
 
       // Then fetch the available models
@@ -96,19 +94,21 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
         // Sort models alphabetically by name
         _allModels.sort((a, b) => a.name.compareTo(b.name));
 
-        // Ensure the selected model is in the fetched list
+        // Validate the selected model against the fetched list
         if (!_allModels.any((m) => m.value == _selectedModelId)) {
           // If selected model is not in the fetched list,
           // default to the first available model or a placeholder.
           if (_allModels.isNotEmpty) {
             _selectedModelId = _allModels.first.value;
-            widget.onModelSelected(_selectedModelId); // Notify parent of change
             // Save the new default selection
             await UserPreferencesService.saveSelectedModel(_selectedModelId);
           } else {
             _selectedModelId = ''; // No models available
           }
         }
+
+        // Now notify parent with the validated selection (exactly once)
+        widget.onModelSelected(_selectedModelId);
         _updateSelectedModelName();
       } else {
         _errorMessage = 'Failed to load models: ${response.statusCode}';
@@ -231,15 +231,46 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
         side: BorderSide(color: iconFgColor.withValues(alpha: 0.3)),
       ),
       onSelected: (value) async {
+        // Store the previous state for potential rollback
+        final previousModelId = _selectedModelId;
+
         setState(() {
           _selectedModelId = value;
           _updateSelectedModelName(); // Update name after ID changes
         });
         widget.onModelSelected(value); // Notify parent with the model ID
 
-        // Save the selection to Supabase
-        await UserPreferencesService.saveSelectedModel(value);
+        // Save the selection to Supabase with error handling
+        try {
+          await UserPreferencesService.saveSelectedModel(value);
+        } catch (e) {
+          // Log the error
+          debugPrint('Failed to save selected model: $e');
 
+          // Show user-facing error
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Failed to save model selection. Please try again.',
+                ),
+                backgroundColor: Colors.red,
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+
+          // Revert the in-memory selection if persistence fails
+          setState(() {
+            _selectedModelId = previousModelId;
+            _updateSelectedModelName(); // Update name after reverting ID
+          });
+
+          // Notify parent with the reverted model ID
+          widget.onModelSelected(previousModelId);
+        }
+
+        // Request focus regardless of save success/failure
         Future.delayed(
           Duration.zero,
           () => widget.textFieldFocusNode.requestFocus(),

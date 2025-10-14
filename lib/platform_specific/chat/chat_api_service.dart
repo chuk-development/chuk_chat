@@ -4,12 +4,14 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:io'; // Import for SocketException
 import 'dart:async'; // Import for TimeoutException
+import 'package:chuk_chat/services/api_config_service.dart';
 
 /// A service for handling chat-related API interactions,
 /// such as file uploads.
 class ChatApiService {
-  static const String _apiBaseUrl =
-      'http://127.0.0.1:8000'; // Adjust if your server is elsewhere
+  /// Gets the API base URL from the configuration service.
+  /// This URL is environment-aware and works across different platforms.
+  static String get _apiBaseUrl => ApiConfigService.apiBaseUrl;
 
   // Callback for UI updates: (fileId, markdownContent, isUploading, snackBarMessage)
   final void Function(
@@ -20,7 +22,13 @@ class ChatApiService {
   )?
   onUploadStatusUpdate;
 
-  ChatApiService({this.onUploadStatusUpdate});
+  ChatApiService({this.onUploadStatusUpdate}) {
+    // Log the current API configuration for debugging
+    debugPrint('ChatApiService initialized with API URL: $_apiBaseUrl');
+    debugPrint(
+      'API Configuration: ${ApiConfigService.configurationDescription}',
+    );
+  }
 
   /// Uploads a file to the API and processes its content.
   /// Reports status updates via the `onUploadStatusUpdate` callback.
