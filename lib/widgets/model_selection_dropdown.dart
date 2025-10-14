@@ -1,16 +1,32 @@
 // lib/widgets/model_selection_dropdown.dart
+import 'dart:convert';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+
+const double _menuHorizontalPadding = 32.0; // 16 left + 16 right
+const double _menuTrailingAllowance = 64.0; // Checkmark + internal spacing
+const double _menuExtraAllowance = 12.0; // Safety margin against glyph clipping
+const double _buttonHorizontalPadding = 20.0; // 10 left + 10 right
+const double _buttonTrailingAllowance = 44.0; // Icon + arrow + spacing
+
+class _WidthMetrics {
+  final double menuWidth;
+  final double buttonWidth;
+
+  const _WidthMetrics({required this.menuWidth, required this.buttonWidth});
+}
 
 class ModelSelectionDropdown extends StatefulWidget {
-  final String initialSelectedModelId; // Now expects model ID
-  final ValueChanged<String> onModelSelected; // Callback returns model ID
+  final String initialSelectedModelId;
+  final ValueChanged<String> onModelSelected;
   final FocusNode textFieldFocusNode;
-  final bool isCompactMode; // Indicates if it should show only the icon
-  final String? compactLabel; // Optional label for compact mode (e.g., "#")
+  final bool isCompactMode;
+  final String? compactLabel;
 
   const ModelSelectionDropdown({
     super.key,
@@ -26,15 +42,16 @@ class ModelSelectionDropdown extends StatefulWidget {
 }
 
 class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
-  String _selectedModelId = ''; // Stores the model ID
-  String _selectedModelName = 'Loading Models...'; // Stores the display name
+  String _selectedModelId = '';
+  String _selectedModelName = 'Loading Models...';
   List<ModelItem> _allModels = [];
   bool _isLoadingModels = true;
   String _errorMessage = '';
 
-  // NEW: Base URL for your FastAPI server
-  static const String _apiBaseUrl =
-      'http://127.0.0.1:8000'; // Adjust if your server is elsewhere
+  double _menuWidth = 260.0;
+  double _buttonWidth = 180.0;
+
+  static const String _apiBaseUrl = 'http://127.0.0.1:8000';
 
   @override
   void initState() {
@@ -48,13 +65,11 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
     super.didUpdateWidget(oldWidget);
     if (widget.initialSelectedModelId != oldWidget.initialSelectedModelId ||
         widget.isCompactMode != oldWidget.isCompactMode) {
-      // React to compact mode changes
       _selectedModelId = widget.initialSelectedModelId;
-      _updateSelectedModelName(); // Update display name if ID changes
+      _updateSelectedModelName();
     }
   }
 
-  // Initialize model selection by loading saved preference and fetching models
   Future<void> _initializeModelSelection() async {
     setState(() {
       _isLoadingModels = true;
@@ -62,82 +77,150 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
     });
 
     try {
-      // First, try to load the saved model preference
       final savedModelId = await UserPreferencesService.loadSelectedModel();
       if (savedModelId != null && savedModelId.isNotEmpty) {
         _selectedModelId = savedModelId;
-        // Don't notify parent yet - wait until models are fetched and validated
       }
 
-      // Then fetch the available models
       await _fetchModels();
-    } catch (e) {
-      _errorMessage = 'Error initializing model selection: $e';
+    } catch (error) {
+      _errorMessage = 'Error initializing model selection: $error';
       _selectedModelName = 'Error Loading';
-      debugPrint('Error initializing model selection: $e');
+      debugPrint('Error initializing model selection: $error');
     } finally {
-      setState(() {
-        _isLoadingModels = false;
-      });
+      if (mounted) {
+        setState(() => _isLoadingModels = false);
+      }
     }
   }
 
-  // NEW: Fetch models from FastAPI backend
   Future<void> _fetchModels() async {
     try {
       final response = await http.get(Uri.parse('$_apiBaseUrl/models_info'));
 
       if (response.statusCode == 200) {
         final List<dynamic> jsonList = json.decode(response.body);
-        _allModels = jsonList.map((json) => ModelItem.fromJson(json)).toList();
+        _allModels = jsonList.map((json) => ModelItem.fromJson(json)).toList()
+          ..sort((a, b) => a.name.compareTo(b.name));
 
-        // Sort models alphabetically by name
-        _allModels.sort((a, b) => a.name.compareTo(b.name));
-
-        // Validate the selected model against the fetched list
-        if (!_allModels.any((m) => m.value == _selectedModelId)) {
-          // If selected model is not in the fetched list,
-          // default to the first available model or a placeholder.
+        if (!_allModels.any((model) => model.value == _selectedModelId)) {
           if (_allModels.isNotEmpty) {
             _selectedModelId = _allModels.first.value;
-            // Save the new default selection
             await UserPreferencesService.saveSelectedModel(_selectedModelId);
           } else {
-            _selectedModelId = ''; // No models available
+            _selectedModelId = '';
           }
         }
 
-        // Now notify parent with the validated selection (exactly once)
         widget.onModelSelected(_selectedModelId);
         _updateSelectedModelName();
       } else {
-        _errorMessage = 'Failed to load models: ${response.statusCode}';
+        _errorMessage =
+            'Failed to load models: ${response.statusCode} - ${response.body}';
         _selectedModelName = 'Error Loading';
         debugPrint('API Error: $_errorMessage');
+        if (mounted) setState(() {});
       }
-    } catch (e) {
-      _errorMessage = 'Network error: $e';
+    } catch (error) {
+      _errorMessage = 'Network error: $error';
       _selectedModelName = 'Network Error';
-      debugPrint('Network Error fetching models: $e');
+      debugPrint('Network Error fetching models: $error');
+      if (mounted) setState(() {});
     }
   }
 
-  // Helper to update the displayed model name based on the selected ID
   void _updateSelectedModelName() {
     final selectedItem = _allModels.firstWhere(
-      (m) => m.value == _selectedModelId,
-      orElse: () => ModelItem(name: 'Select Model', value: ''), // Fallback
+      (model) => model.value == _selectedModelId,
+      orElse: () => ModelItem(name: 'Select Model', value: ''),
     );
-    setState(() {
-      _selectedModelName = selectedItem.name;
-    });
+
+    final metrics = _calculateWidthMetrics(selectedItem.name);
+
+    if (mounted) {
+      setState(() {
+        _selectedModelName = selectedItem.name;
+        _menuWidth = metrics.menuWidth;
+        _buttonWidth = metrics.buttonWidth;
+      });
+    }
   }
 
-  // Hilfsfunktion für den visuellen Inhalt des Dropdown-Buttons, einschließlich Text und Hover-Effekt.
+  _WidthMetrics _calculateWidthMetrics(String selectedLabel) {
+    if (!mounted) {
+      return const _WidthMetrics(menuWidth: 260.0, buttonWidth: 180.0);
+    }
+
+    final mediaQuery = MediaQuery.of(context);
+    final textStyle =
+        Theme.of(context).textTheme.bodyMedium ?? const TextStyle(fontSize: 14);
+    final textDirection = Directionality.of(context);
+    final textScaler = mediaQuery.textScaler;
+
+    double measure(String text) =>
+        _measureTextWidth(text, textStyle, textDirection, textScaler);
+
+    double longestTextWidth = measure(selectedLabel);
+    for (final model in _allModels.where((m) => !m.isToggle)) {
+      longestTextWidth =
+          math.max(longestTextWidth, measure(model.name));
+    }
+
+    final selectedTextWidth = measure(selectedLabel);
+
+    final desiredMenuWidth = _menuWidthFromTextWidth(longestTextWidth);
+    final desiredButtonWidth = _buttonWidthFromTextWidth(selectedTextWidth);
+
+    final double safeMaxWidth =
+        math.max(160.0, mediaQuery.size.width - 32.0); // padding to screen edge
+
+    final double menuLowerBound = math.min(220.0, safeMaxWidth);
+    final double menuUpperBound = safeMaxWidth;
+    final double menuWidth = desiredMenuWidth
+        .clamp(menuLowerBound, menuUpperBound)
+        .toDouble();
+
+    final double buttonLowerBound = math.min(140.0, menuWidth);
+    final double buttonWidth = desiredButtonWidth
+        .clamp(buttonLowerBound, menuWidth)
+        .toDouble();
+
+    return _WidthMetrics(menuWidth: menuWidth, buttonWidth: buttonWidth);
+  }
+
+  double _measureTextWidth(
+    String text,
+    TextStyle textStyle,
+    TextDirection textDirection,
+    TextScaler textScaler,
+  ) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: textStyle),
+      textDirection: textDirection,
+      maxLines: 1,
+      textScaler: textScaler,
+    )..layout();
+    return painter.width;
+  }
+
+  double _menuWidthFromTextWidth(double textWidth) {
+    return textWidth +
+        _menuHorizontalPadding +
+        _menuTrailingAllowance +
+        _menuExtraAllowance;
+  }
+
+  double _buttonWidthFromTextWidth(double textWidth) {
+    return textWidth + _buttonHorizontalPadding + _buttonTrailingAllowance;
+  }
+
   Widget _buildDropdownButtonContent() {
     final ValueNotifier<bool> isHovered = ValueNotifier<bool>(false);
     final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
     final Color iconFgColor = Theme.of(context).iconTheme.color!;
+
+    final double effectiveWidth =
+        widget.isCompactMode ? 44.0 : _buttonWidth;
 
     return MouseRegion(
       onEnter: (_) => isHovered.value = true,
@@ -151,10 +234,15 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
             padding: widget.isCompactMode
                 ? EdgeInsets.zero
                 : const EdgeInsets.symmetric(horizontal: 10),
-            width: widget.isCompactMode
-                ? 44
-                : null, // Fixed width for compact mode
             height: 36,
+            constraints: widget.isCompactMode
+                ? const BoxConstraints.tightFor(width: 44.0, height: 36.0)
+                : BoxConstraints(
+                    minWidth: 120.0,
+                    maxWidth: effectiveWidth,
+                    minHeight: 36.0,
+                    maxHeight: 36.0,
+                  ),
             decoration: BoxDecoration(
               color: bgColor,
               borderRadius: BorderRadius.circular(10),
@@ -165,16 +253,16 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
                 width: hovered ? 1.2 : 0.8,
               ),
             ),
-            alignment: widget.isCompactMode ? Alignment.center : null,
+            alignment:
+                widget.isCompactMode ? Alignment.center : Alignment.centerLeft,
             child: Row(
-              mainAxisSize: widget.isCompactMode
-                  ? MainAxisSize.max
-                  : MainAxisSize.min,
+              mainAxisSize:
+                  widget.isCompactMode ? MainAxisSize.max : MainAxisSize.min,
               mainAxisAlignment: widget.isCompactMode
                   ? MainAxisAlignment.center
                   : MainAxisAlignment.start,
               children: [
-                if (widget.isCompactMode) ...[
+                if (widget.isCompactMode)
                   widget.compactLabel != null
                       ? Text(
                           widget.compactLabel!,
@@ -184,13 +272,13 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
                             fontWeight: FontWeight.w600,
                           ),
                         )
-                      : Icon(Icons.grid_3x3, color: iconFgColor, size: 20),
-                ] else ...[
+                      : Icon(Icons.grid_3x3, color: iconFgColor, size: 20)
+                else ...[
                   Icon(Icons.grid_3x3, color: iconFgColor, size: 20),
                   const SizedBox(width: 8),
                   Flexible(
                     child: Text(
-                      _selectedModelName, // Displays the currently selected model name
+                      _selectedModelName,
                       style: TextStyle(color: iconFgColor, fontSize: 14),
                       softWrap: false,
                       overflow: TextOverflow.ellipsis,
@@ -213,44 +301,36 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
 
   @override
   Widget build(BuildContext context) {
-    final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
-    final Color iconFgColor = Theme.of(context).iconTheme.color!;
-
-    if (_isLoadingModels) {
-      return _buildDropdownButtonContent(); // Show "Loading Models..."
-    }
-
-    if (_errorMessage.isNotEmpty) {
-      return _buildDropdownButtonContent(); // Show "Error Loading"
+    if (_isLoadingModels || _errorMessage.isNotEmpty) {
+      return _buildDropdownButtonContent();
     }
 
     return PopupMenuButton<String>(
-      color: bgColor,
+      color: Theme.of(context).scaffoldBackgroundColor,
+      constraints: BoxConstraints.tightFor(width: _menuWidth),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: iconFgColor.withValues(alpha: 0.3)),
+        side: BorderSide(
+          color: Theme.of(context).iconTheme.color!.withValues(alpha: 0.3),
+        ),
       ),
       onSelected: (value) async {
-        // Store the previous state for potential rollback
         final previousModelId = _selectedModelId;
 
         setState(() {
           _selectedModelId = value;
-          _updateSelectedModelName(); // Update name after ID changes
         });
-        widget.onModelSelected(value); // Notify parent with the model ID
+        _updateSelectedModelName();
+        widget.onModelSelected(value);
 
-        // Save the selection to Supabase with error handling
         try {
           await UserPreferencesService.saveSelectedModel(value);
-        } catch (e) {
-          // Log the error
-          debugPrint('Failed to save selected model: $e');
+        } catch (error) {
+          debugPrint('Failed to save selected model: $error');
 
-          // Show user-facing error
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
+              const SnackBar(
                 content: Text(
                   'Failed to save model selection. Please try again.',
                 ),
@@ -260,79 +340,81 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
             );
           }
 
-          // Revert the in-memory selection if persistence fails
-          setState(() {
-            _selectedModelId = previousModelId;
-            _updateSelectedModelName(); // Update name after reverting ID
-          });
-
-          // Notify parent with the reverted model ID
-          widget.onModelSelected(previousModelId);
+          if (mounted) {
+            setState(() {
+              _selectedModelId = previousModelId;
+            });
+            _updateSelectedModelName();
+            widget.onModelSelected(previousModelId);
+          }
         }
 
-        // Request focus regardless of save success/failure
         Future.delayed(
           Duration.zero,
           () => widget.textFieldFocusNode.requestFocus(),
         );
       },
-      itemBuilder: (BuildContext context) => _allModels.map((m) {
-        final selected = _selectedModelId == m.value;
-        return PopupMenuItem<String>(
-          value: m.value,
-          height: 40,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              if (m.isToggle)
-                Row(
-                  children: [
-                    Switch(
-                      value: selected,
-                      onChanged: (_) {},
-                      activeThumbColor: iconFgColor,
-                      activeTrackColor: iconFgColor.withValues(alpha: 0.5),
+      itemBuilder: (context) {
+        final iconFgColor = Theme.of(context).iconTheme.color!;
+        return _allModels.map((model) {
+          final selected = _selectedModelId == model.value;
+          return PopupMenuItem<String>(
+            value: model.value,
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                if (model.isToggle)
+                  Row(
+                    children: [
+                      Switch(
+                        value: selected,
+                        onChanged: (_) {},
+                        activeThumbColor: iconFgColor,
+                        activeTrackColor: iconFgColor.withValues(alpha: 0.5),
+                      ),
+                      const SizedBox(width: 6),
+                      Text('Best', style: TextStyle(color: iconFgColor)),
+                    ],
+                  )
+                else
+                  Expanded(
+                    child: Text(
+                      model.name,
+                      style: TextStyle(
+                        color: selected
+                            ? iconFgColor
+                            : iconFgColor.withValues(alpha: 0.8),
+                      ),
+                      softWrap: false,
                     ),
-                    const SizedBox(width: 6),
-                    Text('Best', style: TextStyle(color: iconFgColor)),
-                  ],
-                )
-              else
-                Expanded(
-                  child: Text(
-                    m.name,
-                    style: TextStyle(
-                      color: selected
-                          ? iconFgColor
-                          : iconFgColor.withValues(alpha: 0.8),
+                  ),
+                const SizedBox(width: 12),
+                if (!model.isToggle && selected)
+                  Icon(Icons.check, color: iconFgColor, size: 18),
+                if (model.badge != null)
+                  Container(
+                    margin: const EdgeInsets.only(left: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
                     ),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
+                    decoration: BoxDecoration(
+                      color: model.badge == 'new'
+                          ? Colors.teal
+                          : Colors.orange,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      model.badge!,
+                      style: const TextStyle(color: Colors.white, fontSize: 10),
+                    ),
                   ),
-                ),
-              const Spacer(),
-              if (!m.isToggle && selected)
-                Icon(Icons.check, color: iconFgColor, size: 18),
-              if (m.badge != null)
-                Container(
-                  margin: const EdgeInsets.only(left: 8),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: m.badge == 'new' ? Colors.teal : Colors.orange,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    m.badge!,
-                    style: const TextStyle(color: Colors.white, fontSize: 10),
-                  ),
-                ),
-            ],
-          ),
-        );
-      }).toList(),
+              ],
+            ),
+          );
+        }).toList();
+      },
       child: _buildDropdownButtonContent(),
     );
   }
