@@ -59,7 +59,7 @@ Future<void> cancelSubscription() async {
   if (data is! Map) {
     throw Exception('Failed to cancel subscription');
   }
-  
+
   if (data['error'] != null) {
     throw Exception(data['error']);
   }
@@ -77,6 +77,7 @@ class _PricingPageState extends State<PricingPage> {
   bool _isLoading = true;
   bool _isManagingBilling = false;
   bool _isCancelling = false;
+  int _loadRequestToken = 0;
 
   @override
   void initState() {
@@ -85,11 +86,21 @@ class _PricingPageState extends State<PricingPage> {
   }
 
   Future<void> _loadSubscription() async {
+    final int requestToken = ++_loadRequestToken;
+    if (!mounted) return;
+
     setState(() => _isLoading = true);
 
     try {
       final user = _supabase.auth.currentUser;
-      if (user == null) return;
+      if (user == null) {
+        if (!mounted || requestToken != _loadRequestToken) return;
+        setState(() {
+          _currentSubscription = null;
+          _isLoading = false;
+        });
+        return;
+      }
 
       // Sync subscription from Stripe first
       try {
@@ -106,11 +117,13 @@ class _PricingPageState extends State<PricingPage> {
           .eq('id', user.id)
           .single();
 
+      if (!mounted || requestToken != _loadRequestToken) return;
       setState(() {
         _currentSubscription = response;
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted || requestToken != _loadRequestToken) return;
       setState(() => _isLoading = false);
       print('Error loading subscription: $e');
     }
@@ -129,7 +142,7 @@ class _PricingPageState extends State<PricingPage> {
       }
       final String url = data['url'] as String;
       await launchUrlString(url, mode: LaunchMode.externalApplication);
-      
+
       // Wait a bit and then refresh to get updated subscription status
       Future.delayed(Duration(seconds: 3), () {
         if (mounted) _loadSubscription();
@@ -180,15 +193,17 @@ class _PricingPageState extends State<PricingPage> {
     setState(() => _isCancelling = true);
     try {
       await cancelSubscription();
-      
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Subscription will be cancelled at the end of the billing period'),
+          content: Text(
+            'Subscription will be cancelled at the end of the billing period',
+          ),
           backgroundColor: Colors.orange,
         ),
       );
-      
+
       await _loadSubscription();
     } catch (error) {
       if (!mounted) return;
@@ -330,7 +345,7 @@ class _PricingPageState extends State<PricingPage> {
                     Text(
                       '€${_getCurrentPlanPrice()}/month',
                       style: TextStyle(
-                        color: iconFg.withValues(alpha: 0.7),
+                        color: iconFg.withOpacity(0.7),
                         fontSize: 18,
                       ),
                     ),
@@ -341,13 +356,17 @@ class _PricingPageState extends State<PricingPage> {
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: Colors.orange.withValues(alpha: 0.2),
+                            color: Colors.orange.withOpacity(0.2),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(color: Colors.orange),
                           ),
                           child: Row(
                             children: [
-                              Icon(Icons.warning_amber, color: Colors.orange, size: 20),
+                              Icon(
+                                Icons.warning_amber,
+                                color: Colors.orange,
+                                size: 20,
+                              ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Column(
@@ -365,7 +384,7 @@ class _PricingPageState extends State<PricingPage> {
                                     Text(
                                       'Cancels on: ${_formatDate(_currentSubscription!['current_period_end'])}',
                                       style: TextStyle(
-                                        color: iconFg.withValues(alpha: 0.8),
+                                        color: iconFg.withOpacity(0.8),
                                         fontSize: 12,
                                       ),
                                     ),
@@ -379,7 +398,7 @@ class _PricingPageState extends State<PricingPage> {
                         Text(
                           'Renews on: ${_formatDate(_currentSubscription!['current_period_end'])}',
                           style: TextStyle(
-                            color: iconFg.withValues(alpha: 0.6),
+                            color: iconFg.withOpacity(0.6),
                             fontSize: 14,
                           ),
                         ),
@@ -389,7 +408,7 @@ class _PricingPageState extends State<PricingPage> {
                       Text(
                         'Monthly AI credits: €${currentPlanCredits.toStringAsFixed(2)} (90% of your plan)',
                         style: TextStyle(
-                          color: iconFg.withValues(alpha: 0.7),
+                          color: iconFg.withOpacity(0.7),
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
                         ),
@@ -484,9 +503,9 @@ class _PricingPageState extends State<PricingPage> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: accent.withValues(alpha: 0.1),
+                          color: accent.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: accent.withValues(alpha: 0.3)),
+                          border: Border.all(color: accent.withOpacity(0.3)),
                         ),
                         child: Row(
                           children: [
@@ -494,11 +513,11 @@ class _PricingPageState extends State<PricingPage> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                willCancel 
-                                  ? 'Your subscription is set to cancel. You can renew it in the billing portal.'
-                                  : 'Use the billing portal to change your plan or manage payment methods.',
+                                willCancel
+                                    ? 'Your subscription is set to cancel. You can renew it in the billing portal.'
+                                    : 'Use the billing portal to change your plan or manage payment methods.',
                                 style: TextStyle(
-                                  color: iconFg.withValues(alpha: 0.8),
+                                  color: iconFg.withOpacity(0.8),
                                   fontSize: 12,
                                 ),
                               ),
@@ -525,10 +544,7 @@ class _PricingPageState extends State<PricingPage> {
             if (isSubscribed && !isMobile) ...[
               Text(
                 'Click on a plan card to upgrade or downgrade your subscription.',
-                style: TextStyle(
-                  color: iconFg.withValues(alpha: 0.7),
-                  fontSize: 14,
-                ),
+                style: TextStyle(color: iconFg.withOpacity(0.7), fontSize: 14),
               ),
             ],
             const SizedBox(height: 16),
@@ -539,7 +555,7 @@ class _PricingPageState extends State<PricingPage> {
                 decoration: BoxDecoration(
                   color: scaffoldBg.lighten(0.05),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: accent.withValues(alpha: 0.4)),
+                  border: Border.all(color: accent.withOpacity(0.4)),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -551,7 +567,7 @@ class _PricingPageState extends State<PricingPage> {
                         'Subscription management is only available on desktop. '
                         'Plan details and credits are shown below.',
                         style: TextStyle(
-                          color: iconFg.withValues(alpha: 0.7),
+                          color: iconFg.withOpacity(0.7),
                           fontSize: 14,
                         ),
                       ),
@@ -676,7 +692,7 @@ class _PlanCardState extends State<_PlanCard> {
   bool _isLoading = false;
 
   Future<void> _handleAction() async {
-    if (_isLoading || !widget.actionsEnabled || widget.isCurrentPlan) return;
+    if (_isLoading || !widget.actionsEnabled) return;
 
     // If user already has a subscription, open billing portal for upgrades/downgrades
     if (widget.isSubscribed) {
@@ -689,7 +705,7 @@ class _PlanCardState extends State<_PlanCard> {
         }
         final String url = data['url'] as String;
         await launchUrlString(url, mode: LaunchMode.externalApplication);
-        
+
         // Wait and refresh
         Future.delayed(Duration(seconds: 3), () {
           if (mounted) widget.onChanged();
@@ -731,36 +747,48 @@ class _PlanCardState extends State<_PlanCard> {
   @override
   Widget build(BuildContext context) {
     final bool showActions = widget.actionsEnabled;
+    final bool isCurrentPlan = widget.isCurrentPlan;
+    final bool isSubscribed = widget.isSubscribed;
+    final bool isCurrentPlanAndSubscribed = isCurrentPlan && isSubscribed;
+
     String buttonText = 'Subscribe';
-    
-    if (widget.isCurrentPlan) {
+
+    if (isCurrentPlanAndSubscribed) {
+      buttonText = 'Manage Billing';
+    } else if (isCurrentPlan) {
       buttonText = 'Current Plan';
-    } else if (widget.isSubscribed) {
+    } else if (isSubscribed) {
       if (widget.isUpgrade) {
         buttonText = 'Upgrade';
       } else if (widget.isDowngrade) {
         buttonText = 'Downgrade';
       }
     }
-    
-    final bool canPressButton = showActions && !widget.isCurrentPlan && !_isLoading;
+
+    final bool canPressButton =
+        showActions && (!isCurrentPlan || isSubscribed) && !_isLoading;
     final Color neutralButtonBg = widget.scaffoldBg.lighten(0.1);
-    final Color buttonBackground = widget.isCurrentPlan ? neutralButtonBg : widget.accent;
-    final Color buttonForeground = widget.isCurrentPlan ? widget.iconFg : Colors.white;
-    final BorderSide? buttonBorder = widget.isCurrentPlan
-        ? BorderSide(color: widget.iconFg.withValues(alpha: 0.3))
+    final Color buttonBackground = isCurrentPlanAndSubscribed
+        ? widget.accent
+        : (isCurrentPlan ? neutralButtonBg : widget.accent);
+    final Color buttonForeground = isCurrentPlanAndSubscribed
+        ? Colors.white
+        : (isCurrentPlan ? widget.iconFg : Colors.white);
+    final BorderSide? buttonBorder =
+        isCurrentPlan && !isCurrentPlanAndSubscribed
+        ? BorderSide(color: widget.iconFg.withOpacity(0.3))
         : null;
 
     return Card(
       elevation: widget.isCurrentPlan ? 8 : 4,
-      shadowColor: Colors.black.withValues(alpha: 0.1),
+      shadowColor: Colors.black.withOpacity(0.1),
       color: widget.scaffoldBg.lighten(0.05),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(
           color: widget.isCurrentPlan
               ? widget.accent
-              : widget.iconFg.withValues(alpha: 0.3),
+              : widget.iconFg.withOpacity(0.3),
           width: widget.isCurrentPlan ? 2 : 1,
         ),
       ),
@@ -794,29 +822,29 @@ class _PlanCardState extends State<_PlanCard> {
                       ),
                     )
                   : widget.isUpgrade && widget.isSubscribed
-                      ? Align(
-                          alignment: Alignment.centerLeft,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.green.withValues(alpha: 0.2),
-                              border: Border.all(color: Colors.green),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              'UPGRADE',
-                              style: TextStyle(
-                                color: Colors.green,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
+                  ? Align(
+                      alignment: Alignment.centerLeft,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withOpacity(0.2),
+                          border: Border.all(color: Colors.green),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          'UPGRADE',
+                          style: TextStyle(
+                            color: Colors.green,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
                           ),
-                        )
-                      : const SizedBox.shrink(),
+                        ),
+                      ),
+                    )
+                  : const SizedBox.shrink(),
             ),
             const SizedBox(height: 12),
             Text(
@@ -851,7 +879,7 @@ class _PlanCardState extends State<_PlanCard> {
                 Text(
                   '/month',
                   style: TextStyle(
-                    color: widget.iconFg.withValues(alpha: 0.7),
+                    color: widget.iconFg.withOpacity(0.7),
                     fontSize: 14,
                   ),
                 ),
@@ -869,7 +897,7 @@ class _PlanCardState extends State<_PlanCard> {
                       child: Text(
                         feature,
                         style: TextStyle(
-                          color: widget.iconFg.withValues(alpha: 0.8),
+                          color: widget.iconFg.withOpacity(0.8),
                           fontSize: 14,
                         ),
                       ),
@@ -890,7 +918,7 @@ class _PlanCardState extends State<_PlanCard> {
             Text(
               '90% of your subscription is converted to spendable credits.',
               style: TextStyle(
-                color: widget.iconFg.withValues(alpha: 0.7),
+                color: widget.iconFg.withOpacity(0.7),
                 fontSize: 12,
               ),
             ),
@@ -916,7 +944,9 @@ class _PlanCardState extends State<_PlanCard> {
                           width: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              buttonForeground,
+                            ),
                           ),
                         )
                       : Text(
@@ -933,7 +963,7 @@ class _PlanCardState extends State<_PlanCard> {
               Text(
                 'Manage your subscription from a desktop device.',
                 style: TextStyle(
-                  color: widget.iconFg.withValues(alpha: 0.6),
+                  color: widget.iconFg.withOpacity(0.6),
                   fontSize: 12,
                 ),
               ),
