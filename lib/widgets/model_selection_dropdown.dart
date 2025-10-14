@@ -267,12 +267,16 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
                   ],
                 )
               else
-                Text(
-                  m.name,
-                  style: TextStyle(
-                    color: selected
-                        ? iconFgColor
-                        : iconFgColor.withValues(alpha: 0.8),
+                Expanded(
+                  child: Text(
+                    m.name,
+                    style: TextStyle(
+                      color: selected
+                          ? iconFgColor
+                          : iconFgColor.withValues(alpha: 0.8),
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
                   ),
                 ),
               const Spacer(),

@@ -21,7 +21,7 @@ class UserPreferencesService {
             'user_id': userId,
             'selected_model_id': modelId,
             'updated_at': DateTime.now().toIso8601String(),
-          }).select();
+          }, onConflict: 'user_id').select();
 
       if (response.isNotEmpty) {
         debugPrint('Successfully saved model preference: $modelId');
@@ -112,7 +112,7 @@ class UserPreferencesService {
             'model_id': modelId,
             'provider_slug': providerSlug,
             'updated_at': DateTime.now().toIso8601String(),
-          }).select();
+          }, onConflict: 'user_id,model_id').select();
 
       if (response.isNotEmpty) {
         debugPrint(
