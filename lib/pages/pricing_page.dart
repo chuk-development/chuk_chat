@@ -58,7 +58,6 @@ class _PricingPageState extends State<PricingPage> {
   Map<String, dynamic>? _currentSubscription;
   bool _isLoading = true;
   bool _isManagingBilling = false;
-  bool _isCancelling = false;
 
   @override
   void initState() {
@@ -111,6 +110,11 @@ class _PricingPageState extends State<PricingPage> {
       }
       final String url = data['url'] as String;
       await launchUrlString(url, mode: LaunchMode.externalApplication);
+      
+      // Wait a bit and then refresh to get updated subscription status
+      Future.delayed(Duration(seconds: 3), () {
+        if (mounted) _loadSubscription();
+      });
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -122,73 +126,6 @@ class _PricingPageState extends State<PricingPage> {
     } finally {
       if (mounted) {
         setState(() => _isManagingBilling = false);
-      }
-    }
-  }
-
-  Future<void> _cancelSubscription() async {
-    if (_isCancelling) return;
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Cancel Subscription'),
-        content: const Text(
-          'Are you sure you want to cancel your subscription? '
-          'You will retain access until the end of the current billing period.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Keep Plan'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Cancel Plan'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) {
-      return;
-    }
-
-    setState(() => _isCancelling = true);
-    try {
-      final res = await _supabase.functions.invoke('cancel_subscription');
-      final data = res.data;
-      final bool success = data is Map<String, dynamic>
-          ? (data['success'] == true)
-          : false;
-      if (!success) {
-        final String errorMessage = data is Map && data['error'] is String
-            ? data['error'] as String
-            : 'Failed to cancel subscription';
-        throw Exception(errorMessage);
-      }
-
-      if (!mounted) return;
-      await _loadSubscription();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Subscription will cancel at the end of the billing period.'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error cancelling subscription: $error'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isCancelling = false);
       }
     }
   }
@@ -384,87 +321,68 @@ class _PricingPageState extends State<PricingPage> {
                     ],
                     if (!isMobile) ...[
                       const SizedBox(height: 20),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              onPressed: _isManagingBilling
-                                  ? null
-                                  : _manageBilling,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: accent,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 14,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              icon: _isManagingBilling
-                                  ? SizedBox(
-                                      height: 18,
-                                      width: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        valueColor:
-                                            AlwaysStoppedAnimation<Color>(
-                                              Colors.white,
-                                            ),
-                                      ),
-                                    )
-                                  : const Icon(Icons.credit_card),
-                              label: Text(
-                                _isManagingBilling
-                                    ? 'Opening...'
-                                    : 'Manage Billing',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: _isManagingBilling
+                              ? null
+                              : _manageBilling,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: accent,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 14,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          if (_currentSubscription?['cancel_at_period_end'] != true)
+                          icon: _isManagingBilling
+                              ? SizedBox(
+                                  height: 18,
+                                  width: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor:
+                                        AlwaysStoppedAnimation<Color>(
+                                          Colors.white,
+                                        ),
+                                  ),
+                                )
+                              : const Icon(Icons.credit_card),
+                          label: Text(
+                            _isManagingBilling
+                                ? 'Opening...'
+                                : 'Manage Subscription & Billing',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: accent.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: accent.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.info_outline, color: accent, size: 18),
+                            const SizedBox(width: 8),
                             Expanded(
-                              child: OutlinedButton(
-                                onPressed: _isCancelling
-                                    ? null
-                                    : _cancelSubscription,
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: Colors.red,
-                                  side: const BorderSide(
-                                    color: Colors.red,
-                                    width: 1.5,
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 14,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
+                              child: Text(
+                                'Use the billing portal to upgrade, downgrade, or cancel your subscription.',
+                                style: TextStyle(
+                                  color: iconFg.withValues(alpha: 0.8),
+                                  fontSize: 12,
                                 ),
-                                child: _isCancelling
-                                    ? SizedBox(
-                                        height: 18,
-                                        width: 18,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          valueColor:
-                                              AlwaysStoppedAnimation<Color>(
-                                                Colors.red,
-                                              ),
-                                        ),
-                                      )
-                                    : const Text(
-                                        'Cancel Plan',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
                               ),
                             ),
-                        ],
+                          ],
+                        ),
                       ),
                     ],
                   ],
@@ -474,13 +392,23 @@ class _PricingPageState extends State<PricingPage> {
 
             // Plans Header
             Text(
-              isSubscribed ? 'Change Plan' : 'Choose a Plan',
+              isSubscribed ? 'Available Plans' : 'Choose a Plan',
               style: TextStyle(
                 color: iconFg,
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
               ),
             ),
+            const SizedBox(height: 8),
+            if (isSubscribed && !isMobile) ...[
+              Text(
+                'To change your plan, click "Manage Subscription & Billing" above.',
+                style: TextStyle(
+                  color: iconFg.withValues(alpha: 0.7),
+                  fontSize: 14,
+                ),
+              ),
+            ],
             const SizedBox(height: 16),
             if (isMobile) ...[
               Container(
@@ -498,7 +426,7 @@ class _PricingPageState extends State<PricingPage> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Payments and upgrades are only available on desktop. '
+                        'Subscription management is only available on desktop. '
                         'Plan details and credits are shown below.',
                         style: TextStyle(
                           color: iconFg.withValues(alpha: 0.7),
@@ -526,13 +454,11 @@ class _PricingPageState extends State<PricingPage> {
                       features: List<String>.from(entry.value['features']),
                       creditValue: _getPlanCredits(priceId),
                       isCurrentPlan: _isCurrentPlan(priceId),
-                      isUpgrade: _isUpgrade(priceId),
-                      isDowngrade: _isDowngrade(priceId),
+                      isSubscribed: isSubscribed,
                       actionsEnabled: !isMobile,
                       accent: accent,
                       iconFg: iconFg,
                       scaffoldBg: scaffoldBg,
-                      currentPlanPrice: _getCurrentPlanPrice(),
                       onChanged: _loadSubscription,
                     ),
                   );
@@ -556,13 +482,11 @@ class _PricingPageState extends State<PricingPage> {
                         features: List<String>.from(entry.value['features']),
                         creditValue: _getPlanCredits(priceId),
                         isCurrentPlan: _isCurrentPlan(priceId),
-                        isUpgrade: _isUpgrade(priceId),
-                        isDowngrade: _isDowngrade(priceId),
+                        isSubscribed: isSubscribed,
                         actionsEnabled: !isMobile,
                         accent: accent,
                         iconFg: iconFg,
                         scaffoldBg: scaffoldBg,
-                        currentPlanPrice: _getCurrentPlanPrice(),
                         onChanged: _loadSubscription,
                       ),
                     ),
@@ -592,13 +516,11 @@ class _PlanCard extends StatefulWidget {
   final List<String> features;
   final double creditValue;
   final bool isCurrentPlan;
-  final bool isUpgrade;
-  final bool isDowngrade;
+  final bool isSubscribed;
   final bool actionsEnabled;
   final Color accent;
   final Color iconFg;
   final Color scaffoldBg;
-  final int currentPlanPrice;
   final VoidCallback onChanged;
 
   const _PlanCard({
@@ -608,13 +530,11 @@ class _PlanCard extends StatefulWidget {
     required this.features,
     required this.creditValue,
     required this.isCurrentPlan,
-    required this.isUpgrade,
-    required this.isDowngrade,
+    required this.isSubscribed,
     required this.actionsEnabled,
     required this.accent,
     required this.iconFg,
     required this.scaffoldBg,
-    required this.currentPlanPrice,
     required this.onChanged,
   });
 
@@ -625,17 +545,23 @@ class _PlanCard extends StatefulWidget {
 class _PlanCardState extends State<_PlanCard> {
   bool _isLoading = false;
 
-  Future<void> _handleUpgrade() async {
-    if (_isLoading || !widget.actionsEnabled) return;
+  Future<void> _handleAction() async {
+    if (_isLoading || !widget.actionsEnabled || widget.isCurrentPlan) return;
 
-    final currentPlanPrice = _getCurrentPlanPrice();
-
-    // If user has no subscription, go to checkout
-    if (!widget.isCurrentPlan && widget.price > 0 && currentPlanPrice == 0) {
+    // If user already has a subscription, open billing portal instead
+    if (widget.isSubscribed) {
       setState(() => _isLoading = true);
       try {
-        await startCheckout(widget.priceId);
-        Future.delayed(Duration(seconds: 2), () {
+        final res = await _supabase.functions.invoke('manage_billing');
+        final data = res.data;
+        if (data is! Map || data['url'] is! String) {
+          throw Exception('Billing portal could not be created');
+        }
+        final String url = data['url'] as String;
+        await launchUrlString(url, mode: LaunchMode.externalApplication);
+        
+        // Wait and refresh
+        Future.delayed(Duration(seconds: 3), () {
           if (mounted) widget.onChanged();
         });
       } catch (error) {
@@ -647,77 +573,19 @@ class _PlanCardState extends State<_PlanCard> {
       return;
     }
 
-    // Existing subscription: upgrade or downgrade
-    if (!widget.isCurrentPlan && currentPlanPrice > 0) {
-      final confirmed = await _showConfirmDialog();
-      if (!confirmed) return;
-
-      setState(() => _isLoading = true);
-      try {
-        final res = await _supabase.functions.invoke(
-          'change_subscription',
-          body: {'newPriceId': widget.priceId},
-        );
-
-        if (res.data?['success'] == true) {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Subscription updated successfully!'),
-              backgroundColor: Colors.green,
-            ),
-          );
-          widget.onChanged();
-        } else {
-          throw Exception(
-            res.data?['error'] ?? 'Failed to update subscription',
-          );
-        }
-      } catch (error) {
-        if (!mounted) return;
-        _showError(error);
-      } finally {
-        if (mounted) setState(() => _isLoading = false);
-      }
+    // New user - go to checkout
+    setState(() => _isLoading = true);
+    try {
+      await startCheckout(widget.priceId);
+      Future.delayed(Duration(seconds: 2), () {
+        if (mounted) widget.onChanged();
+      });
+    } catch (error) {
+      if (!mounted) return;
+      _showError(error);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  Future<bool> _showConfirmDialog() async {
-    final String action = widget.isUpgrade ? 'upgrade' : 'downgrade';
-    final String message = widget.isUpgrade
-        ? 'You will be charged the prorated amount for the upgraded plan immediately.'
-        : 'Your plan will be downgraded. The difference will be credited to your account.';
-
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Confirm ${action.toUpperCase()}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Are you sure you want to $action to ${widget.name}?'),
-            const SizedBox(height: 12),
-            Text(
-              message,
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Confirm'),
-          ),
-        ],
-      ),
-    );
-
-    return result ?? false;
   }
 
   void _showError(dynamic error) {
@@ -730,47 +598,21 @@ class _PlanCardState extends State<_PlanCard> {
     );
   }
 
-  int _getCurrentPlanPrice() {
-    return widget.currentPlanPrice;
-  }
-
   @override
   Widget build(BuildContext context) {
     final bool showActions = widget.actionsEnabled;
-    String buttonText = 'Select Plan';
+    String buttonText = 'Subscribe';
     if (widget.isCurrentPlan) {
       buttonText = 'Current Plan';
-    } else if (widget.isUpgrade) {
-      buttonText = 'Upgrade';
-    } else if (widget.isDowngrade) {
-      buttonText = 'Downgrade';
     }
-    final bool canPressButton =
-        showActions && !widget.isCurrentPlan && !_isLoading;
-    final bool highlightAsUpgrade = showActions && widget.isUpgrade;
+    
+    final bool canPressButton = showActions && !widget.isCurrentPlan && !widget.isSubscribed && !_isLoading;
     final Color neutralButtonBg = widget.scaffoldBg.lighten(0.1);
-    final Color buttonBackground;
-    if (widget.isCurrentPlan) {
-      buttonBackground = neutralButtonBg;
-    } else if (highlightAsUpgrade) {
-      buttonBackground = widget.accent;
-    } else {
-      buttonBackground = neutralButtonBg;
-    }
-    final Color buttonForeground = highlightAsUpgrade
-        ? Colors.white
-        : widget.iconFg;
-    final BorderSide? buttonBorder = highlightAsUpgrade
-        ? null
-        : BorderSide(color: widget.iconFg.withValues(alpha: 0.3));
-    final double buttonElevation;
-    if (widget.isCurrentPlan) {
-      buttonElevation = 2;
-    } else if (highlightAsUpgrade) {
-      buttonElevation = 4;
-    } else {
-      buttonElevation = 2;
-    }
+    final Color buttonBackground = widget.isCurrentPlan ? neutralButtonBg : widget.accent;
+    final Color buttonForeground = widget.isCurrentPlan ? widget.iconFg : Colors.white;
+    final BorderSide? buttonBorder = widget.isCurrentPlan
+        ? BorderSide(color: widget.iconFg.withValues(alpha: 0.3))
+        : null;
 
     return Card(
       elevation: widget.isCurrentPlan ? 8 : 4,
@@ -897,7 +739,7 @@ class _PlanCardState extends State<_PlanCard> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: canPressButton ? _handleUpgrade : null,
+                  onPressed: canPressButton ? _handleCheckout : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: buttonBackground,
                     foregroundColor: buttonForeground,
@@ -906,7 +748,7 @@ class _PlanCardState extends State<_PlanCard> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     side: buttonBorder,
-                    elevation: buttonElevation,
+                    elevation: widget.isCurrentPlan ? 2 : 4,
                   ),
                   child: _isLoading
                       ? SizedBox(
@@ -914,9 +756,7 @@ class _PlanCardState extends State<_PlanCard> {
                           width: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              widget.isUpgrade ? Colors.white : widget.iconFg,
-                            ),
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                           ),
                         )
                       : Text(
@@ -931,7 +771,7 @@ class _PlanCardState extends State<_PlanCard> {
             ] else ...[
               const SizedBox(height: 16),
               Text(
-                'Manage or upgrade your plan from a desktop device.',
+                'Manage your subscription from a desktop device.',
                 style: TextStyle(
                   color: widget.iconFg.withValues(alpha: 0.6),
                   fontSize: 12,
