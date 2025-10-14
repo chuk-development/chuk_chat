@@ -1,6 +1,7 @@
 // lib/widgets/model_selection_dropdown.dart
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/models/chat_model.dart';
+import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
@@ -24,7 +25,6 @@ class ModelSelectionDropdown extends StatefulWidget {
   State<ModelSelectionDropdown> createState() => _ModelSelectionDropdownState();
 }
 
-
 class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
   String _selectedModelId = ''; // Stores the model ID
   String _selectedModelName = 'Loading Models...'; // Stores the display name
@@ -33,31 +33,59 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
   String _errorMessage = '';
 
   // NEW: Base URL for your FastAPI server
-  static const String _apiBaseUrl = 'https://api.chuk.chat'; // Adjust if your server is elsewhere
+  static const String _apiBaseUrl =
+      'http://127.0.0.1:8000'; // Adjust if your server is elsewhere
 
   @override
   void initState() {
     super.initState();
     _selectedModelId = widget.initialSelectedModelId;
-    _fetchModels();
+    _initializeModelSelection();
   }
 
   @override
   void didUpdateWidget(covariant ModelSelectionDropdown oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.initialSelectedModelId != oldWidget.initialSelectedModelId ||
-        widget.isCompactMode != oldWidget.isCompactMode) { // React to compact mode changes
+        widget.isCompactMode != oldWidget.isCompactMode) {
+      // React to compact mode changes
       _selectedModelId = widget.initialSelectedModelId;
       _updateSelectedModelName(); // Update display name if ID changes
     }
   }
 
-  // NEW: Fetch models from FastAPI backend
-  Future<void> _fetchModels() async {
+  // Initialize model selection by loading saved preference and fetching models
+  Future<void> _initializeModelSelection() async {
     setState(() {
       _isLoadingModels = true;
       _errorMessage = '';
     });
+
+    try {
+      // First, try to load the saved model preference
+      final savedModelId = await UserPreferencesService.loadSelectedModel();
+      if (savedModelId != null && savedModelId.isNotEmpty) {
+        _selectedModelId = savedModelId;
+        widget.onModelSelected(
+          _selectedModelId,
+        ); // Notify parent of the loaded preference
+      }
+
+      // Then fetch the available models
+      await _fetchModels();
+    } catch (e) {
+      _errorMessage = 'Error initializing model selection: $e';
+      _selectedModelName = 'Error Loading';
+      debugPrint('Error initializing model selection: $e');
+    } finally {
+      setState(() {
+        _isLoadingModels = false;
+      });
+    }
+  }
+
+  // NEW: Fetch models from FastAPI backend
+  Future<void> _fetchModels() async {
     try {
       final response = await http.get(Uri.parse('$_apiBaseUrl/models_info'));
 
@@ -68,13 +96,15 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
         // Sort models alphabetically by name
         _allModels.sort((a, b) => a.name.compareTo(b.name));
 
-        // Ensure the initially selected model is in the fetched list
+        // Ensure the selected model is in the fetched list
         if (!_allModels.any((m) => m.value == _selectedModelId)) {
-          // If initialSelectedModelId is not in the fetched list,
+          // If selected model is not in the fetched list,
           // default to the first available model or a placeholder.
           if (_allModels.isNotEmpty) {
             _selectedModelId = _allModels.first.value;
             widget.onModelSelected(_selectedModelId); // Notify parent of change
+            // Save the new default selection
+            await UserPreferencesService.saveSelectedModel(_selectedModelId);
           } else {
             _selectedModelId = ''; // No models available
           }
@@ -89,10 +119,6 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       _errorMessage = 'Network error: $e';
       _selectedModelName = 'Network Error';
       debugPrint('Network Error fetching models: $e');
-    } finally {
-      setState(() {
-        _isLoadingModels = false;
-      });
     }
   }
 
@@ -106,7 +132,6 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       _selectedModelName = selectedItem.name;
     });
   }
-
 
   // Hilfsfunktion für den visuellen Inhalt des Dropdown-Buttons, einschließlich Text und Hover-Effekt.
   Widget _buildDropdownButtonContent() {
@@ -123,8 +148,12 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
           return AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             curve: Curves.easeOutCubic,
-            padding: widget.isCompactMode ? EdgeInsets.zero : const EdgeInsets.symmetric(horizontal: 10),
-            width: widget.isCompactMode ? 44 : null, // Fixed width for compact mode
+            padding: widget.isCompactMode
+                ? EdgeInsets.zero
+                : const EdgeInsets.symmetric(horizontal: 10),
+            width: widget.isCompactMode
+                ? 44
+                : null, // Fixed width for compact mode
             height: 36,
             decoration: BoxDecoration(
               color: bgColor,
@@ -138,8 +167,12 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
             ),
             alignment: widget.isCompactMode ? Alignment.center : null,
             child: Row(
-              mainAxisSize: widget.isCompactMode ? MainAxisSize.max : MainAxisSize.min,
-              mainAxisAlignment: widget.isCompactMode ? MainAxisAlignment.center : MainAxisAlignment.start,
+              mainAxisSize: widget.isCompactMode
+                  ? MainAxisSize.max
+                  : MainAxisSize.min,
+              mainAxisAlignment: widget.isCompactMode
+                  ? MainAxisAlignment.center
+                  : MainAxisAlignment.start,
               children: [
                 if (widget.isCompactMode) ...[
                   widget.compactLabel != null
@@ -152,8 +185,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
                           ),
                         )
                       : Icon(Icons.grid_3x3, color: iconFgColor, size: 20),
-                ]
-                else ...[
+                ] else ...[
                   Icon(Icons.grid_3x3, color: iconFgColor, size: 20),
                   const SizedBox(width: 8),
                   Flexible(
@@ -198,13 +230,20 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(color: iconFgColor.withValues(alpha: 0.3)),
       ),
-      onSelected: (value) {
+      onSelected: (value) async {
         setState(() {
           _selectedModelId = value;
           _updateSelectedModelName(); // Update name after ID changes
         });
         widget.onModelSelected(value); // Notify parent with the model ID
-        Future.delayed(Duration.zero, () => widget.textFieldFocusNode.requestFocus());
+
+        // Save the selection to Supabase
+        await UserPreferencesService.saveSelectedModel(value);
+
+        Future.delayed(
+          Duration.zero,
+          () => widget.textFieldFocusNode.requestFocus(),
+        );
       },
       itemBuilder: (BuildContext context) => _allModels.map((m) {
         final selected = _selectedModelId == m.value;
@@ -237,16 +276,23 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
                   ),
                 ),
               const Spacer(),
-              if (!m.isToggle && selected) Icon(Icons.check, color: iconFgColor, size: 18),
+              if (!m.isToggle && selected)
+                Icon(Icons.check, color: iconFgColor, size: 18),
               if (m.badge != null)
                 Container(
                   margin: const EdgeInsets.only(left: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: m.badge == 'new' ? Colors.teal : Colors.orange,
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: Text(m.badge!, style: const TextStyle(color: Colors.white, fontSize: 10)),
+                  child: Text(
+                    m.badge!,
+                    style: const TextStyle(color: Colors.white, fontSize: 10),
+                  ),
                 ),
             ],
           ),

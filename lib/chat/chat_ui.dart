@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/pages/coming_soon_page.dart';
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
@@ -58,7 +59,7 @@ class ChukChatUIState extends State<ChukChatUI>
   final Uuid _uuid = Uuid();
 
   static const String _apiBaseUrl =
-      'https://api.chuk.chat'; // Adjust if your server is elsewhere
+      'http://127.0.0.1:8000'; // Adjust if your server is elsewhere
 
   static const double _kMaxChatContentWidth = 760.0;
   static const double _kSearchBarContentHeight = 135.0;
@@ -80,6 +81,7 @@ class ChukChatUIState extends State<ChukChatUI>
       Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
     });
     _loadChatFromIndex(widget.selectedChatIndex);
+    _loadSavedModelPreference();
   }
 
   @override
@@ -139,6 +141,21 @@ class ChukChatUIState extends State<ChukChatUI>
     });
     _scrollChatToBottom();
     Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+  }
+
+  /// Load the user's saved model preference from Supabase
+  Future<void> _loadSavedModelPreference() async {
+    try {
+      final savedModelId = await UserPreferencesService.loadSelectedModel();
+      if (savedModelId != null && savedModelId.isNotEmpty) {
+        setState(() {
+          _selectedModelId = savedModelId;
+        });
+        debugPrint('Loaded saved model preference: $savedModelId');
+      }
+    } catch (e) {
+      debugPrint('Error loading saved model preference: $e');
+    }
   }
 
   void newChat() async {

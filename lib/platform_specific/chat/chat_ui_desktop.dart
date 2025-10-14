@@ -1,4 +1,5 @@
 // lib/platform_specific/chat/chat_ui_desktop.dart
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:math' as math; // For min/max
@@ -58,7 +59,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   bool _isImageActive = false;
   bool _isMicActive = false;
-  final List<double> _audioLevels = List<double>.filled(32, 0.0, growable: true);
+  final List<double> _audioLevels = List<double>.filled(
+    32,
+    0.0,
+    growable: true,
+  );
   final AudioRecorder _audioRecorder = AudioRecorder();
   StreamSubscription<Amplitude>? _amplitudeSub;
   String? _lastRecordedFilePath;
@@ -75,7 +80,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       8.0; // Margin between attachment bar and search bar
   static const double _kHorizontalPaddingLarge = 16.0;
   static const double _kHorizontalPaddingSmall = 8.0;
-  static const String _apiBaseUrl = 'https://api.chuk.chat';
+  static const String _apiBaseUrl = 'http://127.0.0.1:8000';
 
   @override
   void initState() {
@@ -286,18 +291,31 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   }
 
   Future<bool> _ensureMicPermission() async {
-    final PermissionStatus status = await Permission.microphone.request();
-    if (status.isGranted) {
+    if (!(kIsWeb ||
+        Platform.isAndroid ||
+        Platform.isIOS ||
+        Platform.isMacOS ||
+        Platform.isWindows)) {
       return true;
     }
-    if (status.isPermanentlyDenied) {
-      _showSnackBar(
-        'Microphone permission denied. Please enable it in settings.',
-      );
+
+    try {
+      final PermissionStatus status = await Permission.microphone.request();
+      if (status.isGranted) {
+        return true;
+      }
+      if (status.isPermanentlyDenied) {
+        _showSnackBar(
+          'Microphone permission denied. Please enable it in settings.',
+        );
+        return false;
+      }
+      _showSnackBar('Microphone permission is required to record audio.');
       return false;
+    } on MissingPluginException {
+      debugPrint('permission_handler plugin unavailable; skipping request.');
+      return true;
     }
-    _showSnackBar('Microphone permission is required to record audio.');
-    return false;
   }
 
   void _handleAmplitudeSample(Amplitude amplitude) {
@@ -354,10 +372,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     );
   }
 
-  Widget _buildAudioVisualizer({
-    required Color accent,
-    required Color iconFg,
-  }) {
+  Widget _buildAudioVisualizer({required Color accent, required Color iconFg}) {
     return SizedBox(
       key: const ValueKey<String>('audio-visualizer'),
       height: 44,
@@ -1234,7 +1249,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                             _buildIconBtn(
                               icon: Icons.image,
                               onTap: () {
-                                setState(() => _isImageActive = !_isImageActive);
+                                setState(
+                                  () => _isImageActive = !_isImageActive,
+                                );
                                 debugPrint(
                                   'Image button toggled: $_isImageActive',
                                 );

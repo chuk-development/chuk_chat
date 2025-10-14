@@ -113,7 +113,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   static const double _kAttachmentBarMarginBottom = 8.0;
   static const double _kHorizontalPaddingSmall =
       8.0; // Always use small padding for phones
-  static const String _apiBaseUrl = 'https://api.chuk.chat';
+  static const String _apiBaseUrl = 'http://127.0.0.1:8000';
 
   @override
   void initState() {
