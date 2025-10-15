@@ -162,8 +162,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
 
     double longestTextWidth = measure(selectedLabel);
     for (final model in _allModels.where((m) => !m.isToggle)) {
-      longestTextWidth =
-          math.max(longestTextWidth, measure(model.name));
+      longestTextWidth = math.max(longestTextWidth, measure(model.name));
     }
 
     final selectedTextWidth = measure(selectedLabel);
@@ -171,8 +170,10 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
     final desiredMenuWidth = _menuWidthFromTextWidth(longestTextWidth);
     final desiredButtonWidth = _buttonWidthFromTextWidth(selectedTextWidth);
 
-    final double safeMaxWidth =
-        math.max(160.0, mediaQuery.size.width - 32.0); // padding to screen edge
+    final double safeMaxWidth = math.max(
+      160.0,
+      mediaQuery.size.width - 32.0,
+    ); // padding to screen edge
 
     final double menuLowerBound = math.min(220.0, safeMaxWidth);
     final double menuUpperBound = safeMaxWidth;
@@ -214,13 +215,24 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
     return textWidth + _buttonHorizontalPadding + _buttonTrailingAllowance;
   }
 
-  Widget _buildDropdownButtonContent() {
+  double _effectiveButtonWidth(double maxAvailableWidth) {
+    if (widget.isCompactMode) {
+      return 44.0;
+    }
+
+    double width = math.max(120.0, _buttonWidth);
+    if (maxAvailableWidth.isFinite) {
+      width = math.min(width, maxAvailableWidth);
+    }
+    return width;
+  }
+
+  Widget _buildDropdownButtonContent(double buttonWidth) {
     final ValueNotifier<bool> isHovered = ValueNotifier<bool>(false);
     final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
     final Color iconFgColor = Theme.of(context).iconTheme.color!;
 
-    final double effectiveWidth =
-        widget.isCompactMode ? 44.0 : _buttonWidth;
+    final double effectiveWidth = widget.isCompactMode ? 44.0 : buttonWidth;
 
     return MouseRegion(
       onEnter: (_) => isHovered.value = true,
@@ -235,14 +247,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
                 ? EdgeInsets.zero
                 : const EdgeInsets.symmetric(horizontal: 10),
             height: 36,
-            constraints: widget.isCompactMode
-                ? const BoxConstraints.tightFor(width: 44.0, height: 36.0)
-                : BoxConstraints(
-                    minWidth: 120.0,
-                    maxWidth: effectiveWidth,
-                    minHeight: 36.0,
-                    maxHeight: 36.0,
-                  ),
+            width: effectiveWidth,
             decoration: BoxDecoration(
               color: bgColor,
               borderRadius: BorderRadius.circular(10),
@@ -253,11 +258,13 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
                 width: hovered ? 1.2 : 0.8,
               ),
             ),
-            alignment:
-                widget.isCompactMode ? Alignment.center : Alignment.centerLeft,
+            alignment: widget.isCompactMode
+                ? Alignment.center
+                : Alignment.centerLeft,
             child: Row(
-              mainAxisSize:
-                  widget.isCompactMode ? MainAxisSize.max : MainAxisSize.min,
+              mainAxisSize: widget.isCompactMode
+                  ? MainAxisSize.max
+                  : MainAxisSize.min,
               mainAxisAlignment: widget.isCompactMode
                   ? MainAxisAlignment.center
                   : MainAxisAlignment.start,
@@ -281,7 +288,6 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
                       _selectedModelName,
                       style: TextStyle(color: iconFgColor, fontSize: 14),
                       softWrap: false,
-                      overflow: TextOverflow.ellipsis,
                       maxLines: 1,
                     ),
                   ),
@@ -301,120 +307,134 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoadingModels || _errorMessage.isNotEmpty) {
-      return _buildDropdownButtonContent();
-    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double buttonWidth = _effectiveButtonWidth(constraints.maxWidth);
+        final Widget buttonContent = _buildDropdownButtonContent(buttonWidth);
 
-    return PopupMenuButton<String>(
-      color: Theme.of(context).scaffoldBackgroundColor,
-      constraints: BoxConstraints.tightFor(width: _menuWidth),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: Theme.of(context).iconTheme.color!.withValues(alpha: 0.3),
-        ),
-      ),
-      onSelected: (value) async {
-        final previousModelId = _selectedModelId;
-
-        setState(() {
-          _selectedModelId = value;
-        });
-        _updateSelectedModelName();
-        widget.onModelSelected(value);
-
-        try {
-          await UserPreferencesService.saveSelectedModel(value);
-        } catch (error) {
-          debugPrint('Failed to save selected model: $error');
-
-          if (!context.mounted) return;
-
-          final messenger = ScaffoldMessenger.of(context);
-          messenger.showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Failed to save model selection. Please try again.',
-              ),
-              backgroundColor: Colors.red,
-              duration: Duration(seconds: 3),
-            ),
-          );
-
-          setState(() {
-            _selectedModelId = previousModelId;
-          });
-          _updateSelectedModelName();
-          widget.onModelSelected(previousModelId);
+        if (_isLoadingModels || _errorMessage.isNotEmpty) {
+          return buttonContent;
         }
 
-        Future.delayed(
-          Duration.zero,
-          () => widget.textFieldFocusNode.requestFocus(),
+        final double popupWidth = math.max(buttonWidth, _menuWidth);
+
+        return PopupMenuButton<String>(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          constraints: BoxConstraints.tightFor(width: popupWidth),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(
+              color: Theme.of(context).iconTheme.color!.withValues(alpha: 0.3),
+            ),
+          ),
+          onSelected: (value) async {
+            final previousModelId = _selectedModelId;
+
+            setState(() {
+              _selectedModelId = value;
+            });
+            _updateSelectedModelName();
+            widget.onModelSelected(value);
+
+            try {
+              await UserPreferencesService.saveSelectedModel(value);
+            } catch (error) {
+              debugPrint('Failed to save selected model: $error');
+
+              if (!context.mounted) return;
+
+              final messenger = ScaffoldMessenger.of(context);
+              messenger.showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Failed to save model selection. Please try again.',
+                  ),
+                  backgroundColor: Colors.red,
+                  duration: Duration(seconds: 3),
+                ),
+              );
+
+              setState(() {
+                _selectedModelId = previousModelId;
+              });
+              _updateSelectedModelName();
+              widget.onModelSelected(previousModelId);
+            }
+
+            Future.delayed(
+              Duration.zero,
+              () => widget.textFieldFocusNode.requestFocus(),
+            );
+          },
+          itemBuilder: (context) {
+            final iconFgColor = Theme.of(context).iconTheme.color!;
+            return _allModels.map((model) {
+              final selected = _selectedModelId == model.value;
+              return PopupMenuItem<String>(
+                value: model.value,
+                height: 40,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    if (model.isToggle)
+                      Row(
+                        children: [
+                          Switch(
+                            value: selected,
+                            onChanged: (_) {},
+                            activeThumbColor: iconFgColor,
+                            activeTrackColor: iconFgColor.withValues(
+                              alpha: 0.5,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text('Best', style: TextStyle(color: iconFgColor)),
+                        ],
+                      )
+                    else
+                      Expanded(
+                        child: Text(
+                          model.name,
+                          style: TextStyle(
+                            color: selected
+                                ? iconFgColor
+                                : iconFgColor.withValues(alpha: 0.8),
+                          ),
+                          softWrap: false,
+                        ),
+                      ),
+                    const SizedBox(width: 12),
+                    if (!model.isToggle && selected)
+                      Icon(Icons.check, color: iconFgColor, size: 18),
+                    if (model.badge != null)
+                      Container(
+                        margin: const EdgeInsets.only(left: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: model.badge == 'new'
+                              ? Colors.teal
+                              : Colors.orange,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          model.badge!,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            }).toList();
+          },
+          child: buttonContent,
         );
       },
-      itemBuilder: (context) {
-        final iconFgColor = Theme.of(context).iconTheme.color!;
-        return _allModels.map((model) {
-          final selected = _selectedModelId == model.value;
-          return PopupMenuItem<String>(
-            value: model.value,
-            height: 40,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                if (model.isToggle)
-                  Row(
-                    children: [
-                      Switch(
-                        value: selected,
-                        onChanged: (_) {},
-                        activeThumbColor: iconFgColor,
-                        activeTrackColor: iconFgColor.withValues(alpha: 0.5),
-                      ),
-                      const SizedBox(width: 6),
-                      Text('Best', style: TextStyle(color: iconFgColor)),
-                    ],
-                  )
-                else
-                  Expanded(
-                    child: Text(
-                      model.name,
-                      style: TextStyle(
-                        color: selected
-                            ? iconFgColor
-                            : iconFgColor.withValues(alpha: 0.8),
-                      ),
-                      softWrap: false,
-                    ),
-                  ),
-                const SizedBox(width: 12),
-                if (!model.isToggle && selected)
-                  Icon(Icons.check, color: iconFgColor, size: 18),
-                if (model.badge != null)
-                  Container(
-                    margin: const EdgeInsets.only(left: 8),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: model.badge == 'new'
-                          ? Colors.teal
-                          : Colors.orange,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      model.badge!,
-                      style: const TextStyle(color: Colors.white, fontSize: 10),
-                    ),
-                  ),
-              ],
-            ),
-          );
-        }).toList();
-      },
-      child: _buildDropdownButtonContent(),
     );
   }
 }

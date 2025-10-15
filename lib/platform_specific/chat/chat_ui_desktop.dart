@@ -1259,21 +1259,24 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                               isActive: _isImageActive,
                               debugLabel: 'Image button',
                             ),
-                            const Spacer(),
-                            // Model Selection Dropdown
-                            Flexible(
-                              child: ModelSelectionDropdown(
-                                initialSelectedModelId: _selectedModelId,
-                                onModelSelected: (newModelId) {
-                                  setState(() {
-                                    _selectedModelId = newModelId;
-                                  });
-                                  debugPrint(
-                                    'Selected model ID: $_selectedModelId',
-                                  );
-                                },
-                                textFieldFocusNode: _textFieldFocusNode,
-                                isCompactMode: isCompactMode,
+                            // Spacer to push the dropdown to the right edge while
+                            // still letting it grow with longer model names.
+                            Expanded(
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: ModelSelectionDropdown(
+                                  initialSelectedModelId: _selectedModelId,
+                                  onModelSelected: (newModelId) {
+                                    setState(() {
+                                      _selectedModelId = newModelId;
+                                    });
+                                    debugPrint(
+                                      'Selected model ID: $_selectedModelId',
+                                    );
+                                  },
+                                  textFieldFocusNode: _textFieldFocusNode,
+                                  isCompactMode: isCompactMode,
+                                ),
                               ),
                             ),
                           ],
