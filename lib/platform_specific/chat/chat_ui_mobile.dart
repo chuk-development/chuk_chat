@@ -22,6 +22,7 @@ import 'package:record/record.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
 
+
 /* ---------- CHAT UI MOBILE (Phone-specific rendering) ---------- */
 class ChukChatUIMobile extends StatefulWidget {
   final VoidCallback onToggleSidebar;
@@ -53,6 +54,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   late ChatApiService _chatApiService;
   final List<AttachedFile> _attachedFiles = [];
   String _selectedModelId = 'deepseek/deepseek-chat-v3.1'; // Default model
+  late final VoidCallback _modelSelectionListener;
 
   late AnimationController _animCtrl;
   late Animation<double> _anim;
@@ -130,6 +132,18 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
     });
     _loadChatFromIndex(widget.selectedChatIndex);
+    _modelSelectionListener = () {
+      final String newModelId =
+          ModelSelectionDropdown.selectedModelNotifier.value;
+      if (newModelId != _selectedModelId) {
+        setState(() {
+          _selectedModelId = newModelId;
+        });
+      }
+    };
+    ModelSelectionDropdown.selectedModelListenable.addListener(
+      _modelSelectionListener,
+    );
   }
 
   void _handleAddAttachmentTap() {
@@ -507,6 +521,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     unawaited(_stopMicRecording());
     _amplitudeSub?.cancel();
     unawaited(_audioRecorder.dispose());
+    ModelSelectionDropdown.selectedModelListenable.removeListener(
+      _modelSelectionListener,
+    );
     super.dispose();
   }
 
@@ -1014,10 +1031,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     required VoidCallback onTap,
   }) {
     final theme = Theme.of(context);
-    final Color background =
-        theme.colorScheme.surfaceContainerHighest.withValues(
-      alpha: 0.6,
-    );
+    final Color background = theme.colorScheme.surfaceContainerHighest
+        .withValues(alpha: 0.6);
     final Color borderColor = theme.dividerColor.withValues(alpha: 0.2);
     final Color foreground = theme.colorScheme.onSurface;
 

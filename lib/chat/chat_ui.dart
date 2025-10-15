@@ -50,6 +50,7 @@ class ChukChatUIState extends State<ChukChatUI>
   late AnimationController _animCtrl;
   late Animation<double> _anim;
   String _selectedModelId = 'deepseek/deepseek-chat-v3.1';
+  late final VoidCallback _modelSelectionListener;
 
   bool _isImageActive = false;
   bool _isMicActive = false;
@@ -82,6 +83,18 @@ class ChukChatUIState extends State<ChukChatUI>
     });
     _loadChatFromIndex(widget.selectedChatIndex);
     _loadSavedModelPreference();
+    _modelSelectionListener = () {
+      final String newModelId =
+          ModelSelectionDropdown.selectedModelNotifier.value;
+      if (newModelId != _selectedModelId) {
+        setState(() {
+          _selectedModelId = newModelId;
+        });
+      }
+    };
+    ModelSelectionDropdown.selectedModelListenable.addListener(
+      _modelSelectionListener,
+    );
   }
 
   @override
@@ -100,6 +113,9 @@ class ChukChatUIState extends State<ChukChatUI>
     _rawKeyboardListenerFocusNode.dispose();
     _animCtrl.dispose();
     super.dispose();
+    ModelSelectionDropdown.selectedModelListenable.removeListener(
+      _modelSelectionListener,
+    );
   }
 
   void _loadChatFromIndex(int index) {
@@ -224,7 +240,6 @@ class ChukChatUIState extends State<ChukChatUI>
       } else {
         displayMessageText = attachmentsLine;
       }
-
     }
 
     final List<Map<String, dynamic>> attachmentSnapshots =

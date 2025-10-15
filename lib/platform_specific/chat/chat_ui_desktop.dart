@@ -56,6 +56,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   late AnimationController _animCtrl;
   late Animation<double> _anim;
   String _selectedModelId = 'deepseek/deepseek-chat-v3.1';
+  late final VoidCallback _modelSelectionListener;
 
   bool _isImageActive = false;
   bool _isMicActive = false;
@@ -97,6 +98,18 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
     });
     _loadChatFromIndex(widget.selectedChatIndex);
+    _modelSelectionListener = () {
+      final String newModelId =
+          ModelSelectionDropdown.selectedModelNotifier.value;
+      if (newModelId != _selectedModelId) {
+        setState(() {
+          _selectedModelId = newModelId;
+        });
+      }
+    };
+    ModelSelectionDropdown.selectedModelListenable.addListener(
+      _modelSelectionListener,
+    );
   }
 
   @override
@@ -118,6 +131,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     unawaited(_stopMicRecording());
     _amplitudeSub?.cancel();
     unawaited(_audioRecorder.dispose());
+    ModelSelectionDropdown.selectedModelListenable.removeListener(
+      _modelSelectionListener,
+    );
     super.dispose();
   }
 

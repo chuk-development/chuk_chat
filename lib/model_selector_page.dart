@@ -176,32 +176,33 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
             .toList();
 
         Map<String, ModelProviderInfo?> initialSelections = {};
+        final List<Future<void>> cleanupFutures = [];
         for (var model in fetchedModels) {
           // Try to find the saved provider for this model
           final savedProviderSlug = savedPreferences[model.id];
           ModelProviderInfo? selectedProvider;
 
           if (savedProviderSlug != null) {
-            // Find the provider with the saved slug
-            try {
-              selectedProvider = model.providers.firstWhere(
-                (provider) => provider.slug == savedProviderSlug,
-              );
-            } catch (e) {
-              // Saved provider not found, use first available
-              selectedProvider = model.providers.isNotEmpty
-                  ? model.providers.first
-                  : null;
+            for (final provider in model.providers) {
+              if (provider.slug == savedProviderSlug) {
+                selectedProvider = provider;
+                break;
+              }
             }
-          } else {
-            // No saved preference, use first available provider
-            selectedProvider = model.providers.isNotEmpty
-                ? model.providers.first
-                : null;
+
+            if (selectedProvider == null) {
+              cleanupFutures.add(
+                UserPreferencesService.clearSelectedProvider(model.id),
+              );
+            }
           }
 
           initialSelections[model.id] = selectedProvider;
           _expandedDescriptions[model.id] = false;
+        }
+
+        if (cleanupFutures.isNotEmpty) {
+          await Future.wait(cleanupFutures);
         }
 
         setState(() {
@@ -229,10 +230,13 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
       _selectedProviders[modelId] = provider;
     });
 
-    // Save the provider selection to Supabase
     if (provider != null) {
       UserPreferencesService.saveSelectedProvider(modelId, provider.slug);
+    } else {
+      UserPreferencesService.clearSelectedProvider(modelId);
     }
+
+    UserPreferencesService.refreshModelSelections();
   }
 
   void _toggleDescription(String modelId) {
@@ -734,65 +738,135 @@ class ModelSelectionRow extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: DropdownButtonHideUnderline(
-              child: DropdownButton<ModelProviderInfo>(
+              child: DropdownButton<ModelProviderInfo?>(
                 value: selectedProvider,
                 dropdownColor: bgColor.darken(0.05).withValues(alpha: 0.9),
                 icon: Icon(Icons.arrow_drop_down, color: iconFgColor),
                 style: TextStyle(color: iconFgColor, fontSize: 13),
                 onChanged: onProviderChanged,
                 isExpanded: true,
-                items: model.providers.map((provider) {
-                  return DropdownMenuItem(
-                    value: provider,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: alignCenter
-                          ? MainAxisAlignment.center
-                          : MainAxisAlignment.start,
-                      children: [
-                        buildIconWidget(
-                          provider.iconUrl,
-                          Icons.business,
-                          size: 18,
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            provider.name,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: (selectedProvider?.slug == provider.slug)
-                                  ? accentColor
-                                  : iconFgColor,
-                              fontWeight: FontWeight.w500,
-                              height: 1.2,
-                            ),
-                          ),
-                        ),
-                      ],
+                hint: _buildDisabledSelectedDisplay(alignCenter),
+                items: [
+                  DropdownMenuItem<ModelProviderInfo?>(
+                    value: null,
+                    child: _buildDisabledMenuItem(alignCenter),
+                  ),
+                  ...model.providers.map(
+                    (provider) => DropdownMenuItem<ModelProviderInfo?>(
+                      value: provider,
+                      child: _buildProviderMenuItem(
+                        provider,
+                        alignCenter,
+                        isSelected: selectedProvider?.slug == provider.slug,
+                      ),
                     ),
-                  );
-                }).toList(),
+                  ),
+                ],
                 selectedItemBuilder: (context) {
-                  return model.providers.map<Widget>((provider) {
-                    final content = _buildProviderSelectedDisplay(
-                      provider,
+                  final items = <Widget>[
+                    _wrapSelectedBuilderChild(
+                      _buildDisabledSelectedDisplay(alignCenter),
                       alignCenter,
-                    );
-                    return alignCenter
-                        ? Center(child: content)
-                        : Align(
-                            alignment: Alignment.centerLeft,
-                            child: content,
-                          );
-                  }).toList();
+                    ),
+                    ...model.providers.map(
+                      (provider) => _wrapSelectedBuilderChild(
+                        _buildProviderSelectedDisplay(provider, alignCenter),
+                        alignCenter,
+                      ),
+                    ),
+                  ];
+                  return items;
                 },
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _wrapSelectedBuilderChild(Widget child, bool alignCenter) {
+    return alignCenter
+        ? Center(child: child)
+        : Align(alignment: Alignment.centerLeft, child: child);
+  }
+
+  Widget _buildDisabledMenuItem(bool alignCenter) {
+    return Row(
+      mainAxisAlignment: alignCenter
+          ? MainAxisAlignment.center
+          : MainAxisAlignment.start,
+      children: [
+        Icon(Icons.block, color: iconFgColor.withValues(alpha: 0.6), size: 16),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            'Disabled',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: iconFgColor.withValues(alpha: 0.6),
+              fontWeight: FontWeight.w500,
+            ),
+            textAlign: alignCenter ? TextAlign.center : TextAlign.left,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildProviderMenuItem(
+    ModelProviderInfo provider,
+    bool alignCenter, {
+    required bool isSelected,
+  }) {
+    final Color textColor = isSelected ? accentColor : iconFgColor;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: alignCenter
+          ? MainAxisAlignment.center
+          : MainAxisAlignment.start,
+      children: [
+        buildIconWidget(provider.iconUrl, Icons.business, size: 18),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            provider.name,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: textColor,
+              fontWeight: FontWeight.w500,
+              height: 1.2,
+            ),
+            textAlign: alignCenter ? TextAlign.center : TextAlign.left,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDisabledSelectedDisplay(bool alignCenter) {
+    return Row(
+      mainAxisAlignment: alignCenter
+          ? MainAxisAlignment.center
+          : MainAxisAlignment.start,
+      children: [
+        Icon(Icons.block, color: iconFgColor.withValues(alpha: 0.6), size: 16),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            'Disabled',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: alignCenter ? TextAlign.center : TextAlign.left,
+            style: TextStyle(
+              fontWeight: FontWeight.w500,
+              color: iconFgColor.withValues(alpha: 0.6),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

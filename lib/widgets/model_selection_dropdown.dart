@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
@@ -37,6 +38,35 @@ class ModelSelectionDropdown extends StatefulWidget {
     this.compactLabel,
   });
 
+  static final ValueNotifier<String> selectedModelNotifier =
+      ValueNotifier<String>('');
+  static final Set<_ModelSelectionDropdownState> _activeStates =
+      <_ModelSelectionDropdownState>{};
+  static bool _isRefreshingAll = false;
+
+  static ValueListenable<String> get selectedModelListenable =>
+      selectedModelNotifier;
+
+  static void _registerState(_ModelSelectionDropdownState state) {
+    _activeStates.add(state);
+  }
+
+  static void _unregisterState(_ModelSelectionDropdownState state) {
+    _activeStates.remove(state);
+  }
+
+  static Future<void> refreshActiveDropdowns() async {
+    if (_isRefreshingAll) return;
+    _isRefreshingAll = true;
+    try {
+      final List<_ModelSelectionDropdownState> states =
+          List<_ModelSelectionDropdownState>.from(_activeStates);
+      await Future.wait(states.map((state) => state.refreshModels()));
+    } finally {
+      _isRefreshingAll = false;
+    }
+  }
+
   @override
   State<ModelSelectionDropdown> createState() => _ModelSelectionDropdownState();
 }
@@ -45,6 +75,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
   String _selectedModelId = '';
   String _selectedModelName = 'Loading Models...';
   List<ModelItem> _allModels = [];
+  final Map<String, String> _enabledModelProviders = {};
   bool _isLoadingModels = true;
   String _errorMessage = '';
 
@@ -56,6 +87,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
   @override
   void initState() {
     super.initState();
+    ModelSelectionDropdown._registerState(this);
     _selectedModelId = widget.initialSelectedModelId;
     _initializeModelSelection();
   }
@@ -94,25 +126,97 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
     }
   }
 
+  Future<void> refreshModels() async {
+    if (!mounted) return;
+    await _initializeModelSelection();
+  }
+
   Future<void> _fetchModels() async {
     try {
       final response = await http.get(Uri.parse('$_apiBaseUrl/models_info'));
 
       if (response.statusCode == 200) {
         final List<dynamic> jsonList = json.decode(response.body);
-        _allModels = jsonList.map((json) => ModelItem.fromJson(json)).toList()
-          ..sort((a, b) => a.name.compareTo(b.name));
+        final Map<String, String> savedProviders =
+            await UserPreferencesService.loadAllProviderPreferences();
 
-        if (!_allModels.any((model) => model.value == _selectedModelId)) {
+        _enabledModelProviders.clear();
+        final List<Future<void>> cleanupFutures = [];
+        final List<ModelItem> filteredModels = [];
+
+        for (final dynamic entry in jsonList) {
+          final modelJson = entry as Map<String, dynamic>;
+          final ModelItem modelItem = ModelItem.fromJson(modelJson);
+
+          if (modelItem.value.isEmpty) {
+            continue;
+          }
+
+          final String? savedProviderSlug = savedProviders[modelItem.value];
+          if (savedProviderSlug == null || savedProviderSlug.isEmpty) {
+            continue;
+          }
+
+          final List<dynamic>? providers =
+              modelJson['providers'] as List<dynamic>?;
+          if (providers == null || providers.isEmpty) {
+            cleanupFutures.add(
+              UserPreferencesService.clearSelectedProvider(modelItem.value),
+            );
+            continue;
+          }
+
+          final bool providerExists = providers.any((providerEntry) {
+            if (providerEntry is! Map<String, dynamic>) return false;
+            return providerEntry['slug'] == savedProviderSlug;
+          });
+
+          if (providerExists) {
+            filteredModels.add(modelItem);
+            _enabledModelProviders[modelItem.value] = savedProviderSlug;
+          } else {
+            cleanupFutures.add(
+              UserPreferencesService.clearSelectedProvider(modelItem.value),
+            );
+          }
+        }
+
+        if (cleanupFutures.isNotEmpty) {
+          await Future.wait(cleanupFutures);
+        }
+
+        filteredModels.sort((a, b) => a.name.compareTo(b.name));
+        _allModels = filteredModels;
+
+        if (!_enabledModelProviders.containsKey(_selectedModelId)) {
+          if (_enabledModelProviders.isEmpty) {
+            if (_selectedModelId.isNotEmpty) {
+              await UserPreferencesService.clearSelectedModel();
+            }
+            _selectedModelId = '';
+            ModelSelectionDropdown.selectedModelNotifier.value = '';
+          } else {
+            _selectedModelId = _enabledModelProviders.keys.first;
+            await UserPreferencesService.saveSelectedModel(_selectedModelId);
+            ModelSelectionDropdown.selectedModelNotifier.value =
+                _selectedModelId;
+          }
+        } else if (!_allModels.any(
+          (model) => model.value == _selectedModelId,
+        )) {
           if (_allModels.isNotEmpty) {
             _selectedModelId = _allModels.first.value;
             await UserPreferencesService.saveSelectedModel(_selectedModelId);
+            ModelSelectionDropdown.selectedModelNotifier.value =
+                _selectedModelId;
           } else {
             _selectedModelId = '';
+            ModelSelectionDropdown.selectedModelNotifier.value = '';
           }
         }
 
         widget.onModelSelected(_selectedModelId);
+        ModelSelectionDropdown.selectedModelNotifier.value = _selectedModelId;
         _updateSelectedModelName();
       } else {
         _errorMessage =
@@ -130,9 +234,13 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
   }
 
   void _updateSelectedModelName() {
-    final selectedItem = _allModels.firstWhere(
+    final bool hasModels = _allModels.isNotEmpty;
+    final ModelItem selectedItem = _allModels.firstWhere(
       (model) => model.value == _selectedModelId,
-      orElse: () => ModelItem(name: 'Select Model', value: ''),
+      orElse: () => ModelItem(
+        name: hasModels ? 'Select Model' : 'No Enabled Models',
+        value: '',
+      ),
     );
 
     final metrics = _calculateWidthMetrics(selectedItem.name);
@@ -316,6 +424,10 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
           return buttonContent;
         }
 
+        if (_allModels.isEmpty) {
+          return buttonContent;
+        }
+
         final double popupWidth = math.max(buttonWidth, _menuWidth);
 
         return PopupMenuButton<String>(
@@ -335,6 +447,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
             });
             _updateSelectedModelName();
             widget.onModelSelected(value);
+            ModelSelectionDropdown.selectedModelNotifier.value = value;
 
             try {
               await UserPreferencesService.saveSelectedModel(value);
@@ -436,5 +549,11 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
         );
       },
     );
+  }
+
+  @override
+  void dispose() {
+    ModelSelectionDropdown._unregisterState(this);
+    super.dispose();
   }
 }

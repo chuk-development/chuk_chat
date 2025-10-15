@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 
 class UserPreferencesService {
   const UserPreferencesService._();
@@ -35,6 +36,11 @@ class UserPreferencesService {
       debugPrint('Error saving model preference: $e');
       return false;
     }
+  }
+
+  /// Force all active model dropdowns to re-query preferences and models.
+  static Future<void> refreshModelSelections() async {
+    await ModelSelectionDropdown.refreshActiveDropdowns();
   }
 
   /// Load the user's selected model from Supabase
@@ -133,6 +139,38 @@ class UserPreferencesService {
       }
     } catch (e) {
       debugPrint('Error saving provider preference: $e');
+      return false;
+    }
+  }
+
+  /// Remove the saved provider preference for a specific model
+  static Future<bool> clearSelectedProvider(String modelId) async {
+    try {
+      final session = SupabaseService.auth.currentSession;
+      if (session == null) {
+        debugPrint('No authenticated session found');
+        return false;
+      }
+
+      final userId = session.user.id;
+
+      final List<dynamic> response = await SupabaseService.client
+          .from('user_model_providers')
+          .delete()
+          .eq('user_id', userId)
+          .eq('model_id', modelId)
+          .select();
+
+      final int deletedCount = response.length;
+      if (deletedCount > 0) {
+        debugPrint('Cleared provider preference for model: $modelId');
+        return true;
+      }
+
+      debugPrint('No provider preference found to clear for model: $modelId');
+      return false;
+    } catch (e) {
+      debugPrint('Error clearing provider preference for $modelId: $e');
       return false;
     }
   }
