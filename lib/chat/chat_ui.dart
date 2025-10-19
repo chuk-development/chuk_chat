@@ -60,7 +60,7 @@ class ChukChatUIState extends State<ChukChatUI>
   final Uuid _uuid = Uuid();
 
   static const String _apiBaseUrl =
-      'http://127.0.0.1:8000'; // Adjust if your server is elsewhere
+      'https://api.chuk.chat'; // Adjust if your server is elsewhere
 
   static const double _kMaxChatContentWidth = 760.0;
   static const double _kSearchBarContentHeight = 135.0;
@@ -79,7 +79,7 @@ class ChukChatUIState extends State<ChukChatUI>
     );
     _anim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+      _refocusTextField(delay: true);
     });
     _loadChatFromIndex(widget.selectedChatIndex);
     _loadSavedModelPreference();
@@ -116,6 +116,23 @@ class ChukChatUIState extends State<ChukChatUI>
     ModelSelectionDropdown.selectedModelListenable.removeListener(
       _modelSelectionListener,
     );
+  }
+
+  void _refocusTextField({bool delay = false}) {
+    if (!mounted) return;
+
+    void request() {
+      if (_textFieldFocusNode.canRequestFocus &&
+          !_textFieldFocusNode.hasPrimaryFocus) {
+        FocusScope.of(context).requestFocus(_textFieldFocusNode);
+      }
+    }
+
+    if (delay) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => request());
+    } else {
+      request();
+    }
   }
 
   void _loadChatFromIndex(int index) {
@@ -156,7 +173,7 @@ class ChukChatUIState extends State<ChukChatUI>
       _isMicActive = false;
     });
     _scrollChatToBottom();
-    Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+    _refocusTextField(delay: true);
   }
 
   /// Load the user's saved model preference from Supabase
@@ -186,7 +203,7 @@ class ChukChatUIState extends State<ChukChatUI>
       _attachedFiles.clear();
     });
     _scrollChatToBottom();
-    Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+    _refocusTextField(delay: true);
     await ChatStorageService.loadSavedChatsForSidebar();
   }
 
@@ -277,7 +294,7 @@ class ChukChatUIState extends State<ChukChatUI>
 
     if (firstMessageInChat) _animCtrl.forward();
     _scrollChatToBottom();
-    Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+    _refocusTextField(delay: true);
 
     int placeholderIndex = -1;
     setState(() {
@@ -315,7 +332,7 @@ class ChukChatUIState extends State<ChukChatUI>
         _isSending = false;
       });
       _scrollChatToBottom();
-      Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+      _refocusTextField(delay: true);
       _persistChat();
     }
 
@@ -756,7 +773,7 @@ class ChukChatUIState extends State<ChukChatUI>
     } else {
       debugPrint('File picking canceled.');
     }
-    Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+    _refocusTextField(delay: true);
   }
 
   Future<void> _performFileUpload(
@@ -1131,6 +1148,7 @@ class ChukChatUIState extends State<ChukChatUI>
                     }
 
                     _sendMessage();
+                    _refocusTextField();
                   },
                   child: TextField(
                     controller: _controller,
@@ -1169,7 +1187,10 @@ class ChukChatUIState extends State<ChukChatUI>
               const SizedBox(width: 8),
               // Send Message Button
               GestureDetector(
-                onTap: _sendMessage,
+                onTap: () {
+                  _sendMessage();
+                  _refocusTextField();
+                },
                 child: Container(
                   width: btnW,
                   height: btnH,

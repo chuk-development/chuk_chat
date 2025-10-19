@@ -1,4 +1,5 @@
 // lib/model_selector_page.dart
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -7,6 +8,8 @@ import 'package:flutter_svg/flutter_svg.dart'; // Import for SVG support
 // Import your app constants for colors and theme
 import 'package:chuk_chat/utils/color_extensions.dart'; // Import the new extension
 import 'package:chuk_chat/services/user_preferences_service.dart';
+import 'package:chuk_chat/services/api_status_service.dart';
+import 'package:chuk_chat/services/network_status_service.dart';
 
 // --- Data Models (Mirroring your FastAPI Pydantic Models) ---
 
@@ -128,12 +131,16 @@ class ModelSelectorPage extends StatefulWidget {
 
 class _ModelSelectorPageState extends State<ModelSelectorPage> {
   final String _baseUrl =
-      'http://127.0.0.1:8000'; // <--- IMPORTANT: SET YOUR FASTAPI SERVER URL HERE
+      'https://api.chuk.chat'; // <--- IMPORTANT: SET YOUR FASTAPI SERVER URL HERE
   List<CustomModelInfo> _models = [];
   Map<String, ModelProviderInfo?> _selectedProviders = {};
   bool _isLoading = true;
   String? _error;
   final Map<String, bool> _expandedDescriptions = {};
+  Map<String, String> _lastSavedPreferences = {};
+  Timer? _apiAvailabilityTimer;
+
+  static const Duration _apiPollInterval = Duration(seconds: 8);
 
   @override
   void initState() {
@@ -151,35 +158,30 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
     });
 
     try {
-      // First, load saved provider preferences
-      final savedPreferences =
-          await UserPreferencesService.loadAllProviderPreferences();
-
-      // Then fetch models from API
-      await _fetchModels(savedPreferences);
-    } catch (e) {
-      setState(() {
-        _error = 'Error initializing model selections: $e';
-        _isLoading = false;
-      });
+      await _fetchModels();
+    } catch (error) {
+      await _handleApiUnavailable('Initialization failed: $error');
     }
   }
 
-  Future<void> _fetchModels(Map<String, String> savedPreferences) async {
+  Future<void> _fetchModels() async {
     try {
+      _lastSavedPreferences =
+          await UserPreferencesService.loadAllProviderPreferences();
       final response = await http.get(Uri.parse('$_baseUrl/models_info'));
 
       if (response.statusCode == 200) {
+        _stopApiAvailabilityPolling();
         List<dynamic> modelsJson = json.decode(response.body);
         List<CustomModelInfo> fetchedModels = modelsJson
             .map((json) => CustomModelInfo.fromJson(json))
             .toList();
 
-        Map<String, ModelProviderInfo?> initialSelections = {};
+        final Map<String, ModelProviderInfo?> initialSelections = {};
         final List<Future<void>> cleanupFutures = [];
         for (var model in fetchedModels) {
           // Try to find the saved provider for this model
-          final savedProviderSlug = savedPreferences[model.id];
+          final savedProviderSlug = _lastSavedPreferences[model.id];
           ModelProviderInfo? selectedProvider;
 
           if (savedProviderSlug != null) {
@@ -203,26 +205,78 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
 
         if (cleanupFutures.isNotEmpty) {
           await Future.wait(cleanupFutures);
+          _lastSavedPreferences =
+              await UserPreferencesService.loadAllProviderPreferences();
         }
 
+        if (!mounted) return;
         setState(() {
           _models = fetchedModels;
           _selectedProviders = initialSelections;
           _isLoading = false;
+          _error = null;
         });
-      } else {
+      } else if (response.statusCode == 401) {
+        if (!mounted) return;
         setState(() {
-          _error =
-              'Failed to load models: ${response.statusCode} - ${response.body}';
+          _error = 'Authentication required to load models.';
           _isLoading = false;
         });
+        _showSnackBar(
+          'Session expired. Please sign in again to manage models.',
+        );
+      } else {
+        await _handleApiUnavailable(
+          'Status ${response.statusCode} - ${response.body}',
+        );
       }
-    } catch (e) {
-      setState(() {
-        _error = 'Error fetching models: $e';
-        _isLoading = false;
-      });
+    } catch (error) {
+      await _handleApiUnavailable('Fetch failed: $error');
     }
+  }
+
+  Future<void> _handleApiUnavailable(String debugDetails) async {
+    debugPrint('Model selector API unavailable: $debugDetails');
+    final bool hasConnectivity =
+        await NetworkStatusService.hasInternetConnection();
+    final String message = hasConnectivity
+        ? 'We are currently doing maintenance and will be right back.'
+        : 'You appear to be offline. Please check your internet connection.';
+    if (!mounted) return;
+    setState(() {
+      _error = message;
+      _isLoading = false;
+    });
+    _showSnackBar(message);
+    _startApiAvailabilityPolling();
+  }
+
+  void _showSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _startApiAvailabilityPolling() {
+    _apiAvailabilityTimer ??= Timer.periodic(_apiPollInterval, (_) async {
+      final bool reachable = await ApiStatusService.isApiReachable(
+        baseUrl: _baseUrl,
+      );
+      if (!reachable) return;
+      if (!mounted) return;
+      _stopApiAvailabilityPolling();
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
+      await _fetchModels();
+    });
+  }
+
+  void _stopApiAvailabilityPolling() {
+    _apiAvailabilityTimer?.cancel();
+    _apiAvailabilityTimer = null;
   }
 
   void _onProviderSelect(String modelId, ModelProviderInfo? provider) {
@@ -231,8 +285,10 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
     });
 
     if (provider != null) {
+      _lastSavedPreferences[modelId] = provider.slug;
       UserPreferencesService.saveSelectedProvider(modelId, provider.slug);
     } else {
+      _lastSavedPreferences.remove(modelId);
       UserPreferencesService.clearSelectedProvider(modelId);
     }
 
@@ -532,6 +588,12 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
               ),
             ),
     );
+  }
+
+  @override
+  void dispose() {
+    _stopApiAvailabilityPolling();
+    super.dispose();
   }
 }
 

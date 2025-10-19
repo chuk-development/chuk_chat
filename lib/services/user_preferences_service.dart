@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
-import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
+import 'package:chuk_chat/core/model_selection_events.dart';
 
 class UserPreferencesService {
   const UserPreferencesService._();
@@ -27,6 +27,8 @@ class UserPreferencesService {
 
       if (response.isNotEmpty) {
         debugPrint('Successfully saved model preference: $modelId');
+        // Notify via event bus instead of direct widget reference
+        ModelSelectionEventBus().notifyModelSelected(modelId);
         return true;
       } else {
         debugPrint('Failed to save model preference: empty response');
@@ -40,7 +42,8 @@ class UserPreferencesService {
 
   /// Force all active model dropdowns to re-query preferences and models.
   static Future<void> refreshModelSelections() async {
-    await ModelSelectionDropdown.refreshActiveDropdowns();
+    // Notify via event bus instead of direct widget reference
+    ModelSelectionEventBus().notifyRefresh();
   }
 
   /// Load the user's selected model from Supabase

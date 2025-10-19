@@ -1,4 +1,5 @@
 // lib/widgets/model_selection_dropdown.dart
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -8,6 +9,9 @@ import 'package:http/http.dart' as http;
 
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
+import 'package:chuk_chat/core/model_selection_events.dart';
+import 'package:chuk_chat/services/network_status_service.dart';
+import 'package:chuk_chat/services/api_status_service.dart';
 
 const double _menuHorizontalPadding = 32.0; // 16 left + 16 right
 const double _menuTrailingAllowance = 64.0; // Checkmark + internal spacing
@@ -43,16 +47,42 @@ class ModelSelectionDropdown extends StatefulWidget {
   static final Set<_ModelSelectionDropdownState> _activeStates =
       <_ModelSelectionDropdownState>{};
   static bool _isRefreshingAll = false;
+  static StreamSubscription<void>? _refreshSubscription;
+  static StreamSubscription<String>? _modelSelectedSubscription;
 
   static ValueListenable<String> get selectedModelListenable =>
       selectedModelNotifier;
 
   static void _registerState(_ModelSelectionDropdownState state) {
     _activeStates.add(state);
+    _initializeEventBus();
   }
 
   static void _unregisterState(_ModelSelectionDropdownState state) {
     _activeStates.remove(state);
+    if (_activeStates.isEmpty) {
+      _disposeEventBus();
+    }
+  }
+
+  static void _initializeEventBus() {
+    if (_refreshSubscription != null) return; // Already initialized
+
+    final eventBus = ModelSelectionEventBus();
+    _refreshSubscription = eventBus.refreshStream.listen((_) async {
+      await refreshActiveDropdowns();
+    });
+
+    _modelSelectedSubscription = eventBus.modelSelectedStream.listen((modelId) {
+      selectedModelNotifier.value = modelId;
+    });
+  }
+
+  static void _disposeEventBus() {
+    _refreshSubscription?.cancel();
+    _modelSelectedSubscription?.cancel();
+    _refreshSubscription = null;
+    _modelSelectedSubscription = null;
   }
 
   static Future<void> refreshActiveDropdowns() async {
@@ -78,11 +108,14 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
   final Map<String, String> _enabledModelProviders = {};
   bool _isLoadingModels = true;
   String _errorMessage = '';
+  Timer? _apiAvailabilityTimer;
+  Map<String, String> _lastSavedPreferences = {};
 
   double _menuWidth = 260.0;
   double _buttonWidth = 180.0;
 
-  static const String _apiBaseUrl = 'http://127.0.0.1:8000';
+  static const String _apiBaseUrl = 'https://api.chuk.chat';
+  static const Duration _apiPollInterval = Duration(seconds: 8);
 
   @override
   void initState() {
@@ -133,12 +166,14 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
 
   Future<void> _fetchModels() async {
     try {
+      _lastSavedPreferences =
+          await UserPreferencesService.loadAllProviderPreferences();
       final response = await http.get(Uri.parse('$_apiBaseUrl/models_info'));
 
       if (response.statusCode == 200) {
+        _stopApiAvailabilityPolling();
         final List<dynamic> jsonList = json.decode(response.body);
-        final Map<String, String> savedProviders =
-            await UserPreferencesService.loadAllProviderPreferences();
+        final Map<String, String> savedProviders = _lastSavedPreferences;
 
         _enabledModelProviders.clear();
         final List<Future<void>> cleanupFutures = [];
@@ -183,6 +218,8 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
 
         if (cleanupFutures.isNotEmpty) {
           await Future.wait(cleanupFutures);
+          _lastSavedPreferences =
+              await UserPreferencesService.loadAllProviderPreferences();
         }
 
         filteredModels.sort((a, b) => a.name.compareTo(b.name));
@@ -217,20 +254,79 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
 
         widget.onModelSelected(_selectedModelId);
         ModelSelectionDropdown.selectedModelNotifier.value = _selectedModelId;
+        if (mounted) {
+          setState(() {
+            _isLoadingModels = false;
+            _errorMessage = '';
+          });
+        }
         _updateSelectedModelName();
+      } else if (response.statusCode == 401) {
+        _errorMessage = 'Authentication required to load models.';
+        _selectedModelName = 'Sign In Required';
+        debugPrint(
+          'Model fetch failed: ${response.statusCode} - ${response.body}',
+        );
+        if (!mounted) return;
+        setState(() {
+          _isLoadingModels = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Session expired. Please sign in again to load models.',
+            ),
+          ),
+        );
       } else {
-        _errorMessage =
-            'Failed to load models: ${response.statusCode} - ${response.body}';
-        _selectedModelName = 'Error Loading';
-        debugPrint('API Error: $_errorMessage');
-        if (mounted) setState(() {});
+        await _handleApiUnavailable(
+          debugDetails: 'Status ${response.statusCode} - ${response.body}'
+              .trim(),
+        );
       }
     } catch (error) {
-      _errorMessage = 'Network error: $error';
-      _selectedModelName = 'Network Error';
-      debugPrint('Network Error fetching models: $error');
-      if (mounted) setState(() {});
+      await _handleApiUnavailable(debugDetails: '$error');
     }
+  }
+
+  Future<void> _handleApiUnavailable({required String debugDetails}) async {
+    debugPrint('Model fetch unavailable: $debugDetails');
+    final bool hasConnectivity =
+        await NetworkStatusService.hasInternetConnection();
+    final String message = hasConnectivity
+        ? 'We are currently doing maintenance and will be right back.'
+        : 'You appear to be offline. Please check your internet connection.';
+    if (!mounted) return;
+    setState(() {
+      _errorMessage = message;
+      _selectedModelName = message;
+      _isLoadingModels = false;
+    });
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+    _startApiAvailabilityPolling();
+  }
+
+  void _startApiAvailabilityPolling() {
+    _apiAvailabilityTimer ??= Timer.periodic(_apiPollInterval, (_) async {
+      final bool reachable = await ApiStatusService.isApiReachable(
+        baseUrl: _apiBaseUrl,
+      );
+      if (!reachable) return;
+      if (!mounted) return;
+      _stopApiAvailabilityPolling();
+      setState(() {
+        _isLoadingModels = true;
+        _errorMessage = '';
+      });
+      await _fetchModels();
+    });
+  }
+
+  void _stopApiAvailabilityPolling() {
+    _apiAvailabilityTimer?.cancel();
+    _apiAvailabilityTimer = null;
   }
 
   void _updateSelectedModelName() {
@@ -554,6 +650,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
   @override
   void dispose() {
     ModelSelectionDropdown._unregisterState(this);
+    _stopApiAvailabilityPolling();
     super.dispose();
   }
 }

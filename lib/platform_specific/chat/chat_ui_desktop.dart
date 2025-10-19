@@ -21,6 +21,7 @@ import 'package:uuid/uuid.dart';
 import 'package:record/record.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:chuk_chat/services/network_status_service.dart';
 
 class ChukChatUIDesktop extends StatefulWidget {
   // RENAMED CLASS
@@ -81,7 +82,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       8.0; // Margin between attachment bar and search bar
   static const double _kHorizontalPaddingLarge = 16.0;
   static const double _kHorizontalPaddingSmall = 8.0;
-  static const String _apiBaseUrl = 'http://127.0.0.1:8000';
+  static const String _apiBaseUrl = 'https://api.chuk.chat';
 
   @override
   void initState() {
@@ -780,13 +781,16 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         );
       }
     } on SocketException {
-      finalizeAiMessage('Network error. Check your internet connection.');
+      final bool hasConnectivity =
+          await NetworkStatusService.hasInternetConnection();
+      final String message = hasConnectivity
+          ? 'We are currently doing maintenance and will be right back.'
+          : 'You appear to be offline. Please check your internet connection.';
+      finalizeAiMessage(message);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Network error while contacting the AI.'),
-          ),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
       }
     } catch (error) {
       finalizeAiMessage('Failed to reach the AI service: $error');
