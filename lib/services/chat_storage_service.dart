@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
 const _kChatPayloadVersion = 1;
@@ -98,20 +99,45 @@ class ChatStorageService {
       }
     }
     await _ensureRealtimeSubscription(user.id);
-    List<dynamic> data;
+
+    List<Map<String, dynamic>> rows = <Map<String, dynamic>>[];
+    bool loadedFromCache = false;
+    Object? remoteError;
+    StackTrace? remoteStack;
+
     try {
-      data = await SupabaseService.client
+      final data = await SupabaseService.client
           .from('encrypted_chats')
           .select('id, encrypted_payload, created_at, is_starred')
           .eq('user_id', user.id)
           .order('created_at', ascending: false);
-    } on PostgrestException catch (error) {
-      throw StateError('Failed to load chats: ${error.message}');
+      rows = data
+          .whereType<Map<String, dynamic>>()
+          .map((raw) => Map<String, dynamic>.from(raw))
+          .toList(growable: false);
+      await LocalChatCacheService.replaceAll(user.id, rows);
+    } catch (error, stackTrace) {
+      remoteError = error;
+      remoteStack = stackTrace;
+      try {
+        rows = await LocalChatCacheService.load(user.id);
+        if (rows.isEmpty) {
+          if (error is PostgrestException) {
+            throw StateError('Failed to load chats: ${error.message}');
+          }
+          throw StateError('Failed to load chats.');
+        }
+        loadedFromCache = true;
+      } catch (_) {
+        if (error is PostgrestException) {
+          throw StateError('Failed to load chats: ${error.message}');
+        }
+        rethrow;
+      }
     }
 
     final List<StoredChat> chats = [];
-    for (final row in data) {
-      final map = row as Map<String, dynamic>;
+    for (final map in rows) {
       final encryptedPayload = map['encrypted_payload'] as String?;
       if (encryptedPayload == null) continue;
       try {
@@ -129,6 +155,15 @@ class ChatStorageService {
     }
     _savedChats = chats;
     _notifyChanges();
+
+    if (loadedFromCache && remoteError != null) {
+      debugPrint(
+        'ChatStorageService loaded chats from offline cache: $remoteError',
+      );
+      if (remoteStack != null) {
+        debugPrint('$remoteStack');
+      }
+    }
   }
 
   static Future<void> reencryptChats(List<StoredChat> chats) async {
@@ -223,6 +258,7 @@ class ChatStorageService {
 
     final stored = StoredChat.fromRow(inserted, messages);
     _upsertChatLocally(stored);
+    unawaited(LocalChatCacheService.upsert(user.id, inserted));
     return stored;
   }
 
@@ -275,6 +311,7 @@ class ChatStorageService {
 
     final stored = StoredChat.fromRow(updated, messages);
     _upsertChatLocally(stored);
+    unawaited(LocalChatCacheService.upsert(user.id, updated));
     return stored;
   }
 
@@ -293,6 +330,8 @@ class ChatStorageService {
       throw StateError('Failed to delete chat: ${error.message}');
     }
 
+    unawaited(LocalChatCacheService.delete(user.id, chatId));
+
     final removedIndex = _savedChats.indexWhere(
       (storedChat) => storedChat.id == chatId,
     );
@@ -309,6 +348,11 @@ class ChatStorageService {
       selectedChatIndex = _savedChats.isEmpty ? -1 : _savedChats.length - 1;
     }
     _notifyChanges();
+
+    final userId = SupabaseService.auth.currentUser?.id;
+    if (userId != null) {
+      unawaited(LocalChatCacheService.delete(userId, chatId));
+    }
   }
 
   static Future<void> loadSavedChatsForSidebar() async {
@@ -350,6 +394,7 @@ class ChatStorageService {
       updatedChats[index] = current.copyWith(isStarred: remoteStar);
       _savedChats = updatedChats;
     }
+    unawaited(LocalChatCacheService.updateStarred(user.id, chatId, remoteStar));
     _notifyChanges();
   }
 
@@ -537,6 +582,10 @@ class ChatStorageService {
           if (encryptedPayload == null) {
             return;
           }
+          final userId = SupabaseService.auth.currentUser?.id;
+          if (userId != null) {
+            unawaited(LocalChatCacheService.upsert(userId, record));
+          }
           if (!EncryptionService.hasKey) {
             final loaded = await EncryptionService.tryLoadKey();
             if (!loaded) {
@@ -611,6 +660,11 @@ class ChatStorageService {
       selectedChatIndex = _savedChats.isEmpty ? -1 : _savedChats.length - 1;
     }
     _notifyChanges();
+
+    final userId = SupabaseService.auth.currentUser?.id;
+    if (userId != null) {
+      unawaited(LocalChatCacheService.delete(userId, chatId));
+    }
   }
 
   static void _reportRealtimeError(

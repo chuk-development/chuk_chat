@@ -291,6 +291,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
 
   Future<void> _handleApiUnavailable({required String debugDetails}) async {
     debugPrint('Model fetch unavailable: $debugDetails');
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
     final bool hasConnectivity =
         await NetworkStatusService.hasInternetConnection();
     final String message = hasConnectivity
@@ -302,9 +303,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       _selectedModelName = message;
       _isLoadingModels = false;
     });
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    scaffoldMessenger.showSnackBar(SnackBar(content: Text(message)));
     _startApiAvailabilityPolling();
   }
 

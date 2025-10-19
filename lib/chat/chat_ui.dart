@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'dart:math' as math;
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/model_cache_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
@@ -597,55 +598,138 @@ class ChukChatUIState extends State<ChukChatUI>
     return actions;
   }
 
+  List<ModelItem> _filterModelsForProviders(
+    List<Map<String, dynamic>> payload,
+    Map<String, String> providerPrefs,
+  ) {
+    final List<ModelItem> filtered = [];
+    if (providerPrefs.isEmpty) {
+      return filtered;
+    }
+    for (final modelJson in payload) {
+      final ModelItem modelItem = ModelItem.fromJson(modelJson);
+      if (modelItem.value.isEmpty) continue;
+      final String? providerSlug = providerPrefs[modelItem.value];
+      if (providerSlug == null || providerSlug.isEmpty) {
+        continue;
+      }
+      final List<dynamic>? providers = modelJson['providers'] as List<dynamic>?;
+      if (providers == null || providers.isEmpty) {
+        continue;
+      }
+      final bool providerExists = providers.any(
+        (entry) =>
+            entry is Map<String, dynamic> && entry['slug'] == providerSlug,
+      );
+      if (providerExists) {
+        filtered.add(modelItem);
+      }
+    }
+    filtered.sort((a, b) => a.name.compareTo(b.name));
+    return filtered;
+  }
+
+  Future<List<ModelItem>> _loadCachedModelsForPrompt(
+    Map<String, String> providerPrefs,
+  ) async {
+    final String? userId =
+        SupabaseService.auth.currentSession?.user.id ??
+        SupabaseService.auth.currentUser?.id;
+    Map<String, String> effectivePrefs = providerPrefs;
+    if (effectivePrefs.isEmpty && userId != null) {
+      effectivePrefs = await ModelCacheService.loadProviderPreferences(userId);
+    }
+    final List<Map<String, dynamic>> payload =
+        await ModelCacheService.loadAvailableModels();
+    if (payload.isEmpty || effectivePrefs.isEmpty) {
+      return const <ModelItem>[];
+    }
+    return _filterModelsForProviders(payload, effectivePrefs);
+  }
+
   Future<String?> _promptModelSelection(String currentModelId) async {
+    Map<String, String> providerPrefs =
+        await UserPreferencesService.loadAllProviderPreferences();
+    List<ModelItem> models = const <ModelItem>[];
+    final String? userId =
+        SupabaseService.auth.currentSession?.user.id ??
+        SupabaseService.auth.currentUser?.id;
+
     try {
       final response = await http.get(Uri.parse('$_apiBaseUrl/models_info'));
-      if (response.statusCode != 200) {
-        _showSnack('Failed to load models (${response.statusCode}).');
-        return null;
+      if (response.statusCode == 200) {
+        final dynamic decoded = json.decode(response.body);
+        if (decoded is List) {
+          final List<Map<String, dynamic>> payload = decoded
+              .whereType<Map<String, dynamic>>()
+              .map((entry) => Map<String, dynamic>.from(entry))
+              .toList(growable: false);
+          models = _filterModelsForProviders(payload, providerPrefs);
+          await ModelCacheService.saveAvailableModels(payload);
+          if (userId != null) {
+            await ModelCacheService.saveProviderPreferences(
+              userId,
+              Map<String, String>.from(providerPrefs),
+            );
+          }
+        } else {
+          throw const FormatException('Unexpected models payload');
+        }
+      } else {
+        debugPrint(
+          'Model fetch failed: ${response.statusCode} - ${response.body}',
+        );
       }
-      final List<dynamic> jsonList =
-          json.decode(response.body) as List<dynamic>;
-      if (jsonList.isEmpty) {
-        _showSnack('No models available.');
-        return null;
+    } on SocketException catch (error) {
+      debugPrint('Model selection fetch offline: $error');
+    } on FormatException catch (error) {
+      debugPrint('Model selection payload error: $error');
+    } on http.ClientException catch (error) {
+      debugPrint('Model selection client error: $error');
+    } catch (error, stackTrace) {
+      debugPrint('Model selection fetch failed: $error');
+      debugPrint('$stackTrace');
+    }
+
+    if (models.isEmpty) {
+      models = await _loadCachedModelsForPrompt(providerPrefs);
+      if (models.isNotEmpty && mounted) {
+        _showSnack('Using your saved models while offline.');
       }
-      final List<ModelItem> models =
-          jsonList
-              .map((item) => ModelItem.fromJson(item as Map<String, dynamic>))
-              .toList()
-            ..sort((a, b) => a.name.compareTo(b.name));
-      if (!mounted) return null;
-      return showDialog<String>(
-        context: context,
-        builder: (context) {
-          return SimpleDialog(
-            title: const Text('Send with model'),
-            children: [
-              ...models.map(
-                (model) => SimpleDialogOption(
-                  onPressed: () => Navigator.of(context).pop(model.value),
-                  child: Row(
-                    children: [
-                      Expanded(child: Text(model.name)),
-                      if (model.value == currentModelId)
-                        const Icon(Icons.check, size: 16),
-                    ],
-                  ),
-                ),
-              ),
-              SimpleDialogOption(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-            ],
-          );
-        },
-      );
-    } catch (error) {
-      _showSnack('Failed to load models.');
+    }
+
+    if (models.isEmpty) {
+      _showSnack('No models available.');
       return null;
     }
+
+    if (!mounted) return null;
+    return showDialog<String>(
+      context: context,
+      builder: (context) {
+        return SimpleDialog(
+          title: const Text('Send with model'),
+          children: [
+            ...models.map(
+              (model) => SimpleDialogOption(
+                onPressed: () => Navigator.of(context).pop(model.value),
+                child: Row(
+                  children: [
+                    Expanded(child: Text(model.name)),
+                    if (model.value == currentModelId)
+                      const Icon(Icons.check, size: 16),
+                  ],
+                ),
+              ),
+            ),
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _uploadFiles() async {

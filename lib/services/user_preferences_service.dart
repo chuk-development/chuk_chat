@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:chuk_chat/services/model_cache_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/core/model_selection_events.dart';
 
@@ -27,6 +28,7 @@ class UserPreferencesService {
 
       if (response.isNotEmpty) {
         debugPrint('Successfully saved model preference: $modelId');
+        await ModelCacheService.saveSelectedModel(userId, modelId);
         // Notify via event bus instead of direct widget reference
         ModelSelectionEventBus().notifyModelSelected(modelId);
         return true;
@@ -35,6 +37,10 @@ class UserPreferencesService {
         return false;
       }
     } catch (e) {
+      final userId = SupabaseService.auth.currentUser?.id;
+      if (userId != null) {
+        await ModelCacheService.saveSelectedModel(userId, modelId);
+      }
       debugPrint('Error saving model preference: $e');
       return false;
     }
@@ -66,12 +72,22 @@ class UserPreferencesService {
       if (response != null && response['selected_model_id'] != null) {
         final modelId = response['selected_model_id'] as String;
         debugPrint('Loaded model preference: $modelId');
+        await ModelCacheService.saveSelectedModel(userId, modelId);
         return modelId;
       } else {
+        await ModelCacheService.saveSelectedModel(userId, '');
         debugPrint('No model preference found for user');
         return null;
       }
     } catch (e) {
+      final userId = SupabaseService.auth.currentUser?.id;
+      if (userId != null) {
+        final cached = await ModelCacheService.loadSelectedModel(userId);
+        if (cached != null && cached.isNotEmpty) {
+          debugPrint('Loaded cached model preference: $cached');
+          return cached;
+        }
+      }
       debugPrint('Error loading model preference: $e');
       return null;
     }
@@ -97,6 +113,7 @@ class UserPreferencesService {
       final int deletedCount = response.length;
       if (deletedCount > 0) {
         debugPrint('Cleared $deletedCount model preference(s) for user');
+        await ModelCacheService.saveSelectedModel(userId, '');
         return true;
       }
       debugPrint('No model preferences found to clear for user');
@@ -135,12 +152,27 @@ class UserPreferencesService {
         debugPrint(
           'Successfully saved provider preference: $modelId -> $providerSlug',
         );
+        await ModelCacheService.updateProviderPreference(
+          userId,
+          modelId,
+          providerSlug,
+        );
         return true;
       } else {
         debugPrint('Failed to save provider preference: empty response');
         return false;
       }
     } catch (e) {
+      final userId =
+          SupabaseService.auth.currentSession?.user.id ??
+          SupabaseService.auth.currentUser?.id;
+      if (userId != null) {
+        await ModelCacheService.updateProviderPreference(
+          userId,
+          modelId,
+          providerSlug,
+        );
+      }
       debugPrint('Error saving provider preference: $e');
       return false;
     }
@@ -167,12 +199,17 @@ class UserPreferencesService {
       final int deletedCount = response.length;
       if (deletedCount > 0) {
         debugPrint('Cleared provider preference for model: $modelId');
+        await ModelCacheService.clearProviderPreference(userId, modelId);
         return true;
       }
 
       debugPrint('No provider preference found to clear for model: $modelId');
       return false;
     } catch (e) {
+      final userId = SupabaseService.auth.currentUser?.id;
+      if (userId != null) {
+        await ModelCacheService.clearProviderPreference(userId, modelId);
+      }
       debugPrint('Error clearing provider preference for $modelId: $e');
       return false;
     }
@@ -199,12 +236,28 @@ class UserPreferencesService {
       if (response != null && response['provider_slug'] != null) {
         final providerSlug = response['provider_slug'] as String;
         debugPrint('Loaded provider preference: $modelId -> $providerSlug');
+        await ModelCacheService.updateProviderPreference(
+          userId,
+          modelId,
+          providerSlug,
+        );
         return providerSlug;
       } else {
         debugPrint('No provider preference found for model: $modelId');
         return null;
       }
     } catch (e) {
+      final userId = SupabaseService.auth.currentUser?.id;
+      if (userId != null) {
+        final cached = await ModelCacheService.loadProviderPreferences(userId);
+        if (cached.containsKey(modelId)) {
+          final providerSlug = cached[modelId]!;
+          debugPrint(
+            'Loaded cached provider preference: $modelId -> $providerSlug',
+          );
+          return providerSlug;
+        }
+      }
       debugPrint('Error loading provider preference: $e');
       return null;
     }
@@ -232,8 +285,19 @@ class UserPreferencesService {
       }
 
       debugPrint('Loaded ${preferences.length} provider preferences');
+      await ModelCacheService.saveProviderPreferences(userId, preferences);
       return preferences;
     } catch (e) {
+      final userId = SupabaseService.auth.currentUser?.id;
+      if (userId != null) {
+        final cached = await ModelCacheService.loadProviderPreferences(userId);
+        if (cached.isNotEmpty) {
+          debugPrint(
+            'Loaded ${cached.length} cached provider preferences for offline use',
+          );
+          return cached;
+        }
+      }
       debugPrint('Error loading all provider preferences: $e');
       return {};
     }
