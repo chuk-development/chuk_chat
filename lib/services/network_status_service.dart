@@ -28,11 +28,18 @@ class NetworkStatusService {
   static Future<bool> hasInternetConnection({
     Duration timeout = _defaultTimeout,
   }) async {
+    final DateTime deadline = DateTime.now().add(timeout);
+
     for (final _ConnectivityProbe probe in _probes) {
+      final Duration remaining = deadline.difference(DateTime.now());
+      if (remaining <= Duration.zero) {
+        throw TimeoutException('Network connectivity check timed out', timeout);
+      }
+
       try {
         final http.Response response = await http
             .get(probe.uri, headers: probe.headers)
-            .timeout(timeout);
+            .timeout(remaining);
         if (probe.expectedStatusCodes.contains(response.statusCode)) {
           return true;
         }

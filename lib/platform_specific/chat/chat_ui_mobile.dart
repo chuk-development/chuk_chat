@@ -920,11 +920,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           const SnackBar(content: Text('Request timed out. Please try again.')),
         );
       }
-    } on SocketException {
+    } on SocketException catch (error) {
+      debugPrint('SocketException occurred: $error');
       final bool hasConnectivity =
           await NetworkStatusService.hasInternetConnection();
       final String message = hasConnectivity
-          ? 'We are currently doing maintenance and will be right back.'
+          ? 'We\'re having trouble reaching the server. Please try again or check your connection.'
           : 'You appear to be offline. Please check your internet connection.';
       finalizeAiMessage(message);
       if (mounted) {

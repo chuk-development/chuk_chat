@@ -28,10 +28,4 @@ class ModelSelectionEventBus {
   void notifyModelSelected(String modelId) {
     _modelSelectedController.add(modelId);
   }
-
-  /// Dispose the event bus
-  void dispose() {
-    _refreshController.close();
-    _modelSelectedController.close();
-  }
 }

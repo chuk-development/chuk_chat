@@ -1,6 +1,7 @@
 // lib/model_selector_page.dart
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_svg/flutter_svg.dart'; // Import for SVG support
@@ -159,8 +160,27 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
 
     try {
       await _fetchModels();
-    } catch (error) {
-      await _handleApiUnavailable('Initialization failed: $error');
+    } on TimeoutException catch (error, stackTrace) {
+      debugPrint('Model selector initialization timeout: $error');
+      debugPrint('Stack trace: $stackTrace');
+      await _handleApiUnavailable('Request timed out: $error');
+    } on SocketException catch (error, stackTrace) {
+      debugPrint('Model selector initialization network error: $error');
+      debugPrint('Stack trace: $stackTrace');
+      await _handleApiUnavailable('Network error: $error');
+    } on HttpException catch (error, stackTrace) {
+      debugPrint('Model selector initialization HTTP error: $error');
+      debugPrint('Stack trace: $stackTrace');
+      await _handleApiUnavailable('HTTP error: $error');
+    } on FormatException catch (error, stackTrace) {
+      debugPrint('Model selector initialization format error: $error');
+      debugPrint('Stack trace: $stackTrace');
+      await _handleApiUnavailable('Data format error: $error');
+    } catch (error, stackTrace) {
+      // Rethrow non-Exception/unknown errors so programming errors are not swallowed
+      debugPrint('Model selector initialization unexpected error: $error');
+      debugPrint('Stack trace: $stackTrace');
+      rethrow;
     }
   }
 
@@ -230,8 +250,17 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
           'Status ${response.statusCode} - ${response.body}',
         );
       }
+    } on TimeoutException catch (error) {
+      await _handleApiUnavailable('Request timed out: $error');
+    } on SocketException catch (error) {
+      await _handleApiUnavailable('Network error: $error');
+    } on HttpException catch (error) {
+      await _handleApiUnavailable('HTTP error: $error');
+    } on FormatException catch (error) {
+      await _handleApiUnavailable('Data format error: $error');
     } catch (error) {
-      await _handleApiUnavailable('Fetch failed: $error');
+      // Rethrow non-Exception/unknown errors so programming errors are not swallowed
+      rethrow;
     }
   }
 
