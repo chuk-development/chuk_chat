@@ -8,6 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:chuk_chat/models/chat_model.dart';
+import 'package:chuk_chat/services/api_config_service.dart';
+import 'package:chuk_chat/services/model_cache_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
@@ -29,6 +31,18 @@ class _WidthMetrics {
 
 class _AuthRequiredException implements Exception {
   const _AuthRequiredException();
+}
+
+class _FilteredModelResult {
+  const _FilteredModelResult({
+    required this.models,
+    required this.enabledProviders,
+    required this.invalidModelIds,
+  });
+
+  final List<ModelItem> models;
+  final Map<String, String> enabledProviders;
+  final Set<String> invalidModelIds;
 }
 
 class ModelSelectionDropdown extends StatefulWidget {
@@ -129,8 +143,8 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
   double _menuWidth = 260.0;
   double _buttonWidth = 180.0;
 
-  static const String _apiBaseUrl = 'https://api.chuk.chat';
   static const Duration _apiPollInterval = Duration(seconds: 8);
+  String get _apiBaseUrl => ApiConfigService.apiBaseUrl;
 
   @override
   void initState() {
@@ -152,7 +166,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
 
   Future<void> _initializeModelSelection() async {
     setState(() {
-      _isLoadingModels = true;
+      _isLoadingModels = _allModels.isEmpty;
       _errorMessage = '';
     });
 
@@ -162,6 +176,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
         _selectedModelId = savedModelId;
       }
 
+      await _hydrateFromCache();
       await _fetchModels();
     } catch (error) {
       _errorMessage = 'Error initializing model selection: $error';
@@ -172,6 +187,118 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
         setState(() => _isLoadingModels = false);
       }
     }
+  }
+
+  Future<void> _hydrateFromCache() async {
+    final String? userId =
+        SupabaseService.auth.currentSession?.user.id ??
+        SupabaseService.auth.currentUser?.id;
+    if (userId == null) return;
+
+    final List<Map<String, dynamic>> cachedModels =
+        await ModelCacheService.loadAvailableModels();
+    if (cachedModels.isEmpty) return;
+
+    final Map<String, String> cachedProviders =
+        await ModelCacheService.loadProviderPreferences(userId);
+    if (cachedProviders.isEmpty) return;
+
+    final _FilteredModelResult result =
+        _filterModels(cachedModels, cachedProviders);
+    if (result.models.isEmpty) return;
+
+    await _applyModels(
+      models: result.models,
+      enabledProviders: result.enabledProviders,
+      savedPreferences: cachedProviders,
+    );
+  }
+
+  _FilteredModelResult _filterModels(
+    List<Map<String, dynamic>> payload,
+    Map<String, String> providerPrefs,
+  ) {
+    final Map<String, String> enabledProviders = {};
+    final Set<String> invalidModelIds = <String>{};
+    final List<ModelItem> filteredModels = [];
+
+    for (final Map<String, dynamic> modelJson in payload) {
+      final ModelItem modelItem = ModelItem.fromJson(modelJson);
+      if (modelItem.value.isEmpty) {
+        continue;
+      }
+      final String? savedProviderSlug = providerPrefs[modelItem.value];
+      if (savedProviderSlug == null || savedProviderSlug.isEmpty) {
+        continue;
+      }
+      final List<dynamic>? providers =
+          modelJson['providers'] as List<dynamic>?;
+      if (providers == null || providers.isEmpty) {
+        invalidModelIds.add(modelItem.value);
+        continue;
+      }
+      final bool providerExists = providers.any((providerEntry) {
+        if (providerEntry is! Map<String, dynamic>) return false;
+        return providerEntry['slug'] == savedProviderSlug;
+      });
+      if (providerExists) {
+        filteredModels.add(modelItem);
+        enabledProviders[modelItem.value] = savedProviderSlug;
+      } else {
+        invalidModelIds.add(modelItem.value);
+      }
+    }
+
+    filteredModels.sort((a, b) => a.name.compareTo(b.name));
+
+    return _FilteredModelResult(
+      models: filteredModels,
+      enabledProviders: enabledProviders,
+      invalidModelIds: invalidModelIds,
+    );
+  }
+
+  Future<void> _applyModels({
+    required List<ModelItem> models,
+    required Map<String, String> enabledProviders,
+    required Map<String, String> savedPreferences,
+  }) async {
+    final String previousModelId = _selectedModelId;
+    String newModelId = previousModelId;
+
+    final bool selectionValid =
+        enabledProviders.containsKey(newModelId) &&
+        models.any((model) => model.value == newModelId);
+
+    if (!selectionValid) {
+      if (models.isEmpty) {
+        if (newModelId.isNotEmpty) {
+          await UserPreferencesService.clearSelectedModel();
+        }
+        newModelId = '';
+      } else {
+        newModelId = models.first.value;
+        if (newModelId != previousModelId && newModelId.isNotEmpty) {
+          await UserPreferencesService.saveSelectedModel(newModelId);
+        }
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _lastSavedPreferences = Map<String, String>.from(savedPreferences);
+      _allModels = models;
+      _enabledModelProviders
+        ..clear()
+        ..addAll(enabledProviders);
+      _selectedModelId = newModelId;
+      _isLoadingModels = false;
+      _errorMessage = '';
+    });
+
+    ModelSelectionDropdown.selectedModelNotifier.value = _selectedModelId;
+    widget.onModelSelected(_selectedModelId);
+    _updateSelectedModelName();
   }
 
   String? providerSlugFor(String modelId) {
@@ -195,8 +322,10 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       if (accessToken.isEmpty) {
         throw const _AuthRequiredException();
       }
-      _lastSavedPreferences =
-          await UserPreferencesService.loadAllProviderPreferences();
+      if (_lastSavedPreferences.isEmpty) {
+        _lastSavedPreferences =
+            await UserPreferencesService.loadAllProviderPreferences();
+      }
       final response = await http.get(
         Uri.parse('$_apiBaseUrl/models_info'),
         headers: {'Authorization': 'Bearer $accessToken'},
@@ -204,95 +333,41 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
 
       if (response.statusCode == 200) {
         _stopApiAvailabilityPolling();
-        final List<dynamic> jsonList = json.decode(response.body);
-        final Map<String, String> savedProviders = _lastSavedPreferences;
+        final dynamic decoded = response.body.isNotEmpty
+            ? json.decode(response.body)
+            : const <dynamic>[];
+        final List<Map<String, dynamic>> payload = decoded is List
+            ? decoded
+                .whereType<Map<String, dynamic>>()
+                .map((entry) => Map<String, dynamic>.from(entry))
+                .toList(growable: false)
+            : const <Map<String, dynamic>>[];
 
-        _enabledModelProviders.clear();
-        final List<Future<void>> cleanupFutures = [];
-        final List<ModelItem> filteredModels = [];
+        final _FilteredModelResult result =
+            _filterModels(payload, _lastSavedPreferences);
 
-        for (final dynamic entry in jsonList) {
-          final modelJson = entry as Map<String, dynamic>;
-          final ModelItem modelItem = ModelItem.fromJson(modelJson);
-
-          if (modelItem.value.isEmpty) {
-            continue;
-          }
-
-          final String? savedProviderSlug = savedProviders[modelItem.value];
-          if (savedProviderSlug == null || savedProviderSlug.isEmpty) {
-            continue;
-          }
-
-          final List<dynamic>? providers =
-              modelJson['providers'] as List<dynamic>?;
-          if (providers == null || providers.isEmpty) {
-            cleanupFutures.add(
-              UserPreferencesService.clearSelectedProvider(modelItem.value),
-            );
-            continue;
-          }
-
-          final bool providerExists = providers.any((providerEntry) {
-            if (providerEntry is! Map<String, dynamic>) return false;
-            return providerEntry['slug'] == savedProviderSlug;
-          });
-
-          if (providerExists) {
-            filteredModels.add(modelItem);
-            _enabledModelProviders[modelItem.value] = savedProviderSlug;
-          } else {
-            cleanupFutures.add(
-              UserPreferencesService.clearSelectedProvider(modelItem.value),
-            );
-          }
-        }
-
-        if (cleanupFutures.isNotEmpty) {
-          await Future.wait(cleanupFutures);
+        if (result.invalidModelIds.isNotEmpty) {
+          await Future.wait(
+            result.invalidModelIds
+                .map(UserPreferencesService.clearSelectedProvider),
+          );
           _lastSavedPreferences =
               await UserPreferencesService.loadAllProviderPreferences();
         }
 
-        filteredModels.sort((a, b) => a.name.compareTo(b.name));
-        _allModels = filteredModels;
-
-        if (!_enabledModelProviders.containsKey(_selectedModelId)) {
-          if (_enabledModelProviders.isEmpty) {
-            if (_selectedModelId.isNotEmpty) {
-              await UserPreferencesService.clearSelectedModel();
-            }
-            _selectedModelId = '';
-            ModelSelectionDropdown.selectedModelNotifier.value = '';
-          } else {
-            _selectedModelId = _enabledModelProviders.keys.first;
-            await UserPreferencesService.saveSelectedModel(_selectedModelId);
-            ModelSelectionDropdown.selectedModelNotifier.value =
-                _selectedModelId;
-          }
-        } else if (!_allModels.any(
-          (model) => model.value == _selectedModelId,
-        )) {
-          if (_allModels.isNotEmpty) {
-            _selectedModelId = _allModels.first.value;
-            await UserPreferencesService.saveSelectedModel(_selectedModelId);
-            ModelSelectionDropdown.selectedModelNotifier.value =
-                _selectedModelId;
-          } else {
-            _selectedModelId = '';
-            ModelSelectionDropdown.selectedModelNotifier.value = '';
-          }
+        if (payload.isNotEmpty) {
+          await ModelCacheService.saveAvailableModels(payload);
+          await ModelCacheService.saveProviderPreferences(
+            session.user.id,
+            _lastSavedPreferences,
+          );
         }
 
-        widget.onModelSelected(_selectedModelId);
-        ModelSelectionDropdown.selectedModelNotifier.value = _selectedModelId;
-        if (mounted) {
-          setState(() {
-            _isLoadingModels = false;
-            _errorMessage = '';
-          });
-        }
-        _updateSelectedModelName();
+        await _applyModels(
+          models: result.models,
+          enabledProviders: result.enabledProviders,
+          savedPreferences: _lastSavedPreferences,
+        );
       } else if (response.statusCode == 401) {
         throw const _AuthRequiredException();
       } else {

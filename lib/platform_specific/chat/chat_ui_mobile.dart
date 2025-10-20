@@ -879,7 +879,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       if (hasAttachments) {
         _attachedFiles.clear();
       }
-      _messages.add({'sender': 'ai', 'text': '', 'reasoning': ''});
+      _messages.add({'sender': 'ai', 'text': 'Thinking...', 'reasoning': ''});
       placeholderIndex = _messages.length - 1;
     });
     _textFieldFocusNode.requestFocus();

@@ -772,7 +772,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       if (hasAttachments) {
         _attachedFiles.clear();
       }
-      _messages.add({'sender': 'ai', 'text': '', 'reasoning': ''});
+      _messages.add({'sender': 'ai', 'text': 'Thinking...', 'reasoning': ''});
       placeholderIndex = _messages.length - 1;
     });
 

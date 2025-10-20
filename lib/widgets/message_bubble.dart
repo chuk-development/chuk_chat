@@ -15,7 +15,7 @@ class MessageBubbleAction {
   final bool isEnabled;
 }
 
-class MessageBubble extends StatelessWidget {
+class MessageBubble extends StatefulWidget {
   const MessageBubble({
     super.key,
     required this.message,
@@ -34,11 +34,21 @@ class MessageBubble extends StatelessWidget {
   final String? reasoning;
 
   @override
+  State<MessageBubble> createState() => _MessageBubbleState();
+}
+
+class _MessageBubbleState extends State<MessageBubble> {
+  bool _isReasoningExpanded = false;
+
+  bool get _hasReasoning =>
+      widget.reasoning != null && widget.reasoning!.trim().isNotEmpty;
+
+  @override
   Widget build(BuildContext context) {
     // Determine alignment based on whether it's a user message or not.
     // Historically voice mode inverted this flag, so we keep compatibility.
     final bool alignRight =
-        isUser; // User messages (regular chat) go right, bot messages go left.
+        widget.isUser; // User messages (regular chat) go right, bot messages go left.
 
     // Get colors from theme
     final Color accentColor = Theme.of(context).colorScheme.primary;
@@ -47,9 +57,9 @@ class MessageBubble extends StatelessWidget {
 
     // Nutze die übergebene maxWidth, falls vorhanden, ansonsten den Standardwert von 70% der Bildschirmbreite
     final double effectiveMaxWidth =
-        maxWidth ?? MediaQuery.of(context).size.width * 0.7;
+        widget.maxWidth ?? MediaQuery.of(context).size.width * 0.7;
 
-    final bool hasActions = actions.isNotEmpty;
+    final bool hasActions = widget.actions.isNotEmpty;
 
     return Align(
       alignment: alignRight ? Alignment.centerRight : Alignment.centerLeft,
@@ -70,14 +80,39 @@ class MessageBubble extends StatelessWidget {
               ? CrossAxisAlignment.end
               : CrossAxisAlignment.start,
           children: [
-            SelectableText(message, style: TextStyle(color: iconFgColor)),
+            if (_hasReasoning) ...[
+              _buildReasoningToggle(iconFgColor, alignRight),
+              const SizedBox(height: 4),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                child: _isReasoningExpanded
+                    ? Padding(
+                        key: const ValueKey('reasoning-expanded'),
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: SelectableText(
+                          widget.reasoning!,
+                          style: TextStyle(
+                            color: iconFgColor.withValues(alpha: 0.85),
+                            fontStyle: FontStyle.italic,
+                            height: 1.35,
+                          ),
+                        ),
+                      )
+                    : const SizedBox(
+                        key: ValueKey('reasoning-collapsed'),
+                      ),
+              ),
+            ],
+            SelectableText(widget.message, style: TextStyle(color: iconFgColor)),
             if (hasActions) ...[
               const SizedBox(height: 8),
               Wrap(
                 alignment: alignRight ? WrapAlignment.end : WrapAlignment.start,
                 spacing: 4,
                 runSpacing: 4,
-                children: actions
+                children: widget.actions
                     .map(
                       (action) => IconButton(
                         iconSize: 18,
@@ -94,28 +129,42 @@ class MessageBubble extends StatelessWidget {
                     .toList(),
               ),
             ],
-            if (reasoning != null && reasoning!.trim().isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Text(
-                'Reasoning',
-                style: TextStyle(
-                  color: iconFgColor.withValues(alpha: 0.6),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 4),
-              SelectableText(
-                reasoning!,
-                style: TextStyle(
-                  color: iconFgColor.withValues(alpha: 0.85),
-                  fontStyle: FontStyle.italic,
-                  height: 1.35,
-                ),
-              ),
-            ],
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildReasoningToggle(Color iconFgColor, bool alignRight) {
+    final bool expanded = _isReasoningExpanded;
+    final IconData icon =
+        expanded ? Icons.expand_less : Icons.expand_more;
+    final String label = expanded ? 'Hide reasoning' : 'Show reasoning';
+
+    return InkWell(
+      onTap: () {
+        setState(() => _isReasoningExpanded = !expanded);
+      },
+      child: Row(
+        mainAxisAlignment:
+            alignRight ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 16,
+            color: iconFgColor.withValues(alpha: 0.6),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: iconFgColor.withValues(alpha: 0.7),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }

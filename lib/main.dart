@@ -14,6 +14,7 @@ import 'package:chuk_chat/utils/grain_overlay.dart'; // Film grain overlay
 import 'package:chuk_chat/pages/login_page.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/password_revision_service.dart';
+import 'package:chuk_chat/services/model_prefetch_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/theme_settings_service.dart';
 import 'package:chuk_chat/widgets/auth_gate.dart';
@@ -116,6 +117,7 @@ Future<void> main() async {
       debugPrint('$stackTrace');
       await EncryptionService.clearKey();
     }
+    unawaited(ModelPrefetchService.prefetch());
   }
   final initialTheme = await _bootstrapThemeSettings();
   runApp(ChukChatApp(initialTheme: initialTheme));
@@ -207,6 +209,7 @@ class _ChukChatAppState extends State<ChukChatApp> {
           await ChatStorageService.reset();
         }
         _loadThemeSettingsFromSupabase();
+        unawaited(ModelPrefetchService.prefetch());
       } else {
         await EncryptionService.clearKey();
         await ChatStorageService.reset();
