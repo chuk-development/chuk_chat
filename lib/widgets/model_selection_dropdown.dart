@@ -204,8 +204,10 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
         await ModelCacheService.loadProviderPreferences(userId);
     if (cachedProviders.isEmpty) return;
 
-    final _FilteredModelResult result =
-        _filterModels(cachedModels, cachedProviders);
+    final _FilteredModelResult result = _filterModels(
+      cachedModels,
+      cachedProviders,
+    );
     if (result.models.isEmpty) return;
 
     await _applyModels(
@@ -232,8 +234,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       if (savedProviderSlug == null || savedProviderSlug.isEmpty) {
         continue;
       }
-      final List<dynamic>? providers =
-          modelJson['providers'] as List<dynamic>?;
+      final List<dynamic>? providers = modelJson['providers'] as List<dynamic>?;
       if (providers == null || providers.isEmpty) {
         invalidModelIds.add(modelItem.value);
         continue;
@@ -312,6 +313,9 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
   }
 
   Future<void> _fetchModels() async {
+    // Capture ScaffoldMessenger before any async operations to avoid context issues
+    final messenger = ScaffoldMessenger.of(context);
+
     try {
       final session =
           await SupabaseService.refreshSession() ??
@@ -339,29 +343,48 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
             : const <dynamic>[];
         final List<Map<String, dynamic>> payload = decoded is List
             ? decoded
-                .whereType<Map<String, dynamic>>()
-                .map((entry) => Map<String, dynamic>.from(entry))
-                .toList(growable: false)
+                  .whereType<Map<String, dynamic>>()
+                  .map((entry) => Map<String, dynamic>.from(entry))
+                  .toList(growable: false)
             : const <Map<String, dynamic>>[];
 
-        final _FilteredModelResult result =
-            _filterModels(payload, _lastSavedPreferences);
+        final _FilteredModelResult result = _filterModels(
+          payload,
+          _lastSavedPreferences,
+        );
 
         if (result.invalidModelIds.isNotEmpty) {
           await Future.wait(
-            result.invalidModelIds
-                .map(UserPreferencesService.clearSelectedProvider),
+            result.invalidModelIds.map(
+              UserPreferencesService.clearSelectedProvider,
+            ),
           );
           _lastSavedPreferences =
               await UserPreferencesService.loadAllProviderPreferences();
         }
 
         if (payload.isNotEmpty) {
-          await ModelCacheService.saveAvailableModels(payload);
-          await ModelCacheService.saveProviderPreferences(
-            session.user.id,
-            _lastSavedPreferences,
-          );
+          // Launch cache save operations in background without blocking
+          Future(() async {
+            try {
+              await ModelCacheService.saveAvailableModels(payload);
+            } catch (error) {
+              debugPrint('Failed to save available models to cache: $error');
+            }
+          });
+
+          Future(() async {
+            try {
+              await ModelCacheService.saveProviderPreferences(
+                session.user.id,
+                _lastSavedPreferences,
+              );
+            } catch (error) {
+              debugPrint(
+                'Failed to save provider preferences to cache: $error',
+              );
+            }
+          });
         }
 
         await _applyModels(
@@ -385,7 +408,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
         _selectedModelName = 'Sign In Required';
       });
       await SupabaseService.signOut();
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(content: Text('Session expired. Please sign in again.')),
       );
     } catch (error) {
@@ -635,9 +658,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
             side: BorderSide(
-              color: Theme.of(context)
-                  .resolvedIconColor
-                  .withValues(alpha: 0.3),
+              color: Theme.of(context).resolvedIconColor.withValues(alpha: 0.3),
             ),
           ),
           onSelected: (value) async {

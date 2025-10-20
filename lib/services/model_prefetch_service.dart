@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -13,25 +14,29 @@ class ModelPrefetchService {
 
   static bool _isPrefetching = false;
 
+  /// Timeout duration for HTTP requests in the prefetch service.
+  /// This prevents the prefetch operation from hanging indefinitely.
+  static const Duration _httpTimeout = Duration(seconds: 5);
+
   /// Prefetch the user's model/provider preferences and cache the available
   /// models early in the app lifecycle so dropdowns can render instantly.
   static Future<void> prefetch() async {
     if (_isPrefetching) return;
-
-    final session =
-        await SupabaseService.refreshSession() ??
-        SupabaseService.auth.currentSession;
-    if (session == null) {
-      return;
-    }
-
-    final String accessToken = session.accessToken;
-    if (accessToken.isEmpty) {
-      return;
-    }
-
     _isPrefetching = true;
+
     try {
+      final session =
+          await SupabaseService.refreshSession() ??
+          SupabaseService.auth.currentSession;
+      if (session == null) {
+        return;
+      }
+
+      final String accessToken = session.accessToken;
+      if (accessToken.isEmpty) {
+        return;
+      }
+
       final String userId = session.user.id;
 
       // Load and cache provider preferences.
@@ -42,10 +47,12 @@ class ModelPrefetchService {
       }
 
       // Fetch models list and cache for quick reuse.
-      final response = await http.get(
-        Uri.parse('${ApiConfigService.apiBaseUrl}/models_info'),
-        headers: {'Authorization': 'Bearer $accessToken'},
-      );
+      final response = await http
+          .get(
+            Uri.parse('${ApiConfigService.apiBaseUrl}/models_info'),
+            headers: {'Authorization': 'Bearer $accessToken'},
+          )
+          .timeout(_httpTimeout);
 
       if (response.statusCode == 200 && response.body.isNotEmpty) {
         final dynamic decoded = jsonDecode(response.body);
@@ -57,6 +64,12 @@ class ModelPrefetchService {
           await ModelCacheService.saveAvailableModels(payload);
         }
       }
+    } on TimeoutException catch (error, stackTrace) {
+      debugPrint(
+        'Model prefetch timed out after ${_httpTimeout.inSeconds} seconds: $error',
+      );
+      debugPrint('$stackTrace');
+      // TimeoutException is handled gracefully - no retry needed as this is a prefetch operation
     } catch (error, stackTrace) {
       debugPrint('Model prefetch failed: $error');
       debugPrint('$stackTrace');

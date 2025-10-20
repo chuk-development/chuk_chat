@@ -6,7 +6,9 @@ extension ColorExtension on Color {
   Color lighten([double amount = .1]) {
     assert(amount >= 0 && amount <= 1); // amount should be between 0.0 and 1.0
     final hsl = HSLColor.fromColor(this);
-    final hslLight = hsl.withLightness((hsl.lightness + amount).clamp(0.0, 1.0));
+    final hslLight = hsl.withLightness(
+      (hsl.lightness + amount).clamp(0.0, 1.0),
+    );
     return hslLight.toColor();
   }
 
@@ -23,11 +25,10 @@ extension ColorExtension on Color {
     return '#${rgb.toRadixString(16).padLeft(6, '0').toUpperCase()}';
   }
 
-  // Creates a Color from a hex string (e.g., #RRGGBB or RRGGBB)
-  static Color fromHexString(
-    String? hexString, {
-    Color? fallback,
-  }) {
+  // Creates a Color from a hex string (e.g., #RRGGBB, RRGGBB, #AARRGGBB, or AARRGGBB)
+  // Supports both 6-digit (#RRGGBB or RRGGBB) and 8-digit (#AARRGGBB or AARRGGBB) formats.
+  // 8-digit values include an alpha channel (AARRGGBB) to specify opacity.
+  static Color fromHexString(String? hexString, {Color? fallback}) {
     if (hexString == null) {
       if (fallback != null) return fallback;
       throw const FormatException('Color hex string was null.');

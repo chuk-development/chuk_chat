@@ -29,6 +29,10 @@ class MessageBubble extends StatefulWidget {
     this.reasoning,
     this.isReasoningStreaming = false,
     this.modelLabel,
+    this.isEditing = false,
+    this.initialEditText,
+    this.onSubmitEdit,
+    this.onCancelEdit,
   });
 
   final String message;
@@ -40,6 +44,10 @@ class MessageBubble extends StatefulWidget {
   final String? reasoning;
   final bool isReasoningStreaming;
   final String? modelLabel;
+  final bool isEditing;
+  final String? initialEditText;
+  final ValueChanged<String>? onSubmitEdit;
+  final VoidCallback? onCancelEdit;
 
   @override
   State<MessageBubble> createState() => _MessageBubbleState();
@@ -47,9 +55,115 @@ class MessageBubble extends StatefulWidget {
 
 class _MessageBubbleState extends State<MessageBubble> {
   bool _isReasoningExpanded = false;
+  final TextEditingController _editController = TextEditingController();
+  final FocusNode _editFocusNode = FocusNode();
+  bool _shouldFocusEditField = false;
 
   bool get _hasReasoning =>
       widget.reasoning != null && widget.reasoning!.trim().isNotEmpty;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.isEditing) {
+      _configureEditController();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant MessageBubble oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isEditing && !oldWidget.isEditing) {
+      _configureEditController();
+    } else if (!widget.isEditing && oldWidget.isEditing) {
+      _editController.clear();
+      _shouldFocusEditField = false;
+    } else if (widget.isEditing &&
+        oldWidget.isEditing &&
+        widget.initialEditText != oldWidget.initialEditText) {
+      _configureEditController();
+    }
+  }
+
+  @override
+  void dispose() {
+    _editController.dispose();
+    _editFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _configureEditController() {
+    final String sourceText =
+        widget.initialEditText ?? widget.message;
+    _editController
+      ..text = sourceText
+      ..selection = TextSelection.fromPosition(
+        TextPosition(offset: sourceText.length),
+      );
+    _shouldFocusEditField = true;
+  }
+
+  void _maybeRequestEditFocus() {
+    if (!_shouldFocusEditField) return;
+    _shouldFocusEditField = false;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_editFocusNode.canRequestFocus) {
+        _editFocusNode.requestFocus();
+      }
+    });
+  }
+
+  Widget _buildActionButtons(Color iconFgColor, bool alignRight) {
+    return Wrap(
+      alignment: alignRight ? WrapAlignment.end : WrapAlignment.start,
+      spacing: 4,
+      runSpacing: 4,
+      children: widget.actions.map((action) {
+        return Tooltip(
+          message: action.tooltip,
+          child: IconButton(
+            icon: Icon(action.icon, color: iconFgColor),
+            padding: const EdgeInsets.all(8),
+            constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
+            onPressed: action.isEnabled ? action.onPressed : null,
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildEditingControls(Color iconFgColor, bool alignRight) {
+    final bool canSubmit = widget.onSubmitEdit != null;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment:
+          alignRight ? MainAxisAlignment.end : MainAxisAlignment.start,
+      children: [
+        Tooltip(
+          message: 'Resend edited message',
+          child: IconButton(
+            icon: Icon(Icons.send, color: iconFgColor),
+            padding: const EdgeInsets.all(8),
+            constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
+            onPressed: canSubmit
+                ? () => widget.onSubmitEdit?.call(_editController.text)
+                : null,
+          ),
+        ),
+        const SizedBox(width: 4),
+        Tooltip(
+          message: 'Cancel edit',
+          child: IconButton(
+            icon: Icon(Icons.close, color: iconFgColor),
+            padding: const EdgeInsets.all(8),
+            constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
+            onPressed: widget.onCancelEdit,
+          ),
+        ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -69,7 +183,8 @@ class _MessageBubbleState extends State<MessageBubble> {
     final double effectiveMaxWidth =
         widget.maxWidth ?? MediaQuery.of(context).size.width * 0.7;
 
-    final bool hasActions = widget.actions.isNotEmpty;
+    final bool hasActions =
+        widget.actions.isNotEmpty && !(widget.isEditing && isUserMessage);
 
     final EdgeInsetsGeometry containerPadding = isUserMessage
         ? const EdgeInsets.all(12)
@@ -83,97 +198,73 @@ class _MessageBubbleState extends State<MessageBubble> {
           )
         : null;
 
+    _maybeRequestEditFocus();
+
+    final Widget bubbleContent = Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      padding: containerPadding,
+      decoration: decoration,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment:
+            alignRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          if (_hasReasoning) ...[
+            _buildReasoningToggle(iconFgColor, alignRight),
+            const SizedBox(height: 4),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              child: _isReasoningExpanded
+                  ? _buildReasoningBox(iconFgColor, alignRight)
+                  : const SizedBox(key: ValueKey('reasoning-collapsed')),
+            ),
+          ],
+          if (widget.modelLabel != null && widget.modelLabel!.isNotEmpty)
+            Padding(
+              padding: EdgeInsets.only(bottom: isUserMessage ? 4 : 8),
+              child: Text(
+                widget.modelLabel!,
+                style: TextStyle(
+                  color: iconFgColor.withValues(alpha: 0.6),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+                textAlign: alignRight ? TextAlign.right : TextAlign.left,
+              ),
+            ),
+          _buildMessageBody(
+            iconFgColor: iconFgColor,
+            accentColor: accentColor,
+            bgColor: bgColor,
+            isUserMessage: isUserMessage,
+          ),
+        ],
+      ),
+    );
+
     return Align(
       alignment: alignRight ? Alignment.centerRight : Alignment.centerLeft,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: effectiveMaxWidth),
-        child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 8),
-          padding: containerPadding,
-          decoration: decoration,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: alignRight
-                ? CrossAxisAlignment.end
-                : CrossAxisAlignment.start,
-            children: [
-              if (_hasReasoning) ...[
-                _buildReasoningToggle(iconFgColor, alignRight),
-                const SizedBox(height: 4),
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 200),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  child: _isReasoningExpanded
-                      ? _buildReasoningBox(iconFgColor, alignRight)
-                      : const SizedBox(key: ValueKey('reasoning-collapsed')),
-                ),
-              ],
-              if (widget.modelLabel != null && widget.modelLabel!.isNotEmpty)
-                Padding(
-                  padding: EdgeInsets.only(bottom: isUserMessage ? 4 : 8),
-                  child: Text(
-                    widget.modelLabel!,
-                    style: TextStyle(
-                      color: iconFgColor.withValues(alpha: 0.6),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    textAlign: alignRight ? TextAlign.right : TextAlign.left,
-                  ),
-                ),
-              _buildMessageBody(
-                iconFgColor: iconFgColor,
-                accentColor: accentColor,
-                bgColor: bgColor,
-                isUserMessage: isUserMessage,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment:
+              alignRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          children: [
+            bubbleContent,
+            if (widget.isEditing && isUserMessage)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: _buildEditingControls(iconFgColor, alignRight),
               ),
-              if (hasActions) ...[
-                const SizedBox(height: 8),
-                Wrap(
-                  alignment: alignRight
-                      ? WrapAlignment.end
-                      : WrapAlignment.start,
-                  spacing: 4,
-                  runSpacing: 4,
-                  children: widget.actions.map((action) {
-                    final bool hasLabel =
-                        action.label != null && action.label!.trim().isNotEmpty;
-                    if (hasLabel) {
-                      return TextButton.icon(
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          foregroundColor: iconFgColor,
-                          textStyle: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        onPressed:
-                            action.isEnabled ? action.onPressed : null,
-                        icon: Icon(action.icon, size: 16),
-                        label: Text(action.label!),
-                      );
-                    }
-                    return IconButton(
-                      iconSize: 18,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(
-                        minWidth: 32,
-                        minHeight: 32,
-                      ),
-                      tooltip: action.tooltip,
-                      onPressed: action.isEnabled ? action.onPressed : null,
-                      icon: Icon(action.icon, color: iconFgColor),
-                    );
-                  }).toList(),
-                ),
-              ],
-            ],
-          ),
+            if (hasActions)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: _buildActionButtons(iconFgColor, alignRight),
+              ),
+          ],
         ),
       ),
     );
@@ -280,6 +371,31 @@ class _MessageBubbleState extends State<MessageBubble> {
     required Color bgColor,
     required bool isUserMessage,
   }) {
+    if (widget.isEditing && isUserMessage) {
+      return TextField(
+        controller: _editController,
+        focusNode: _editFocusNode,
+        minLines: 1,
+        maxLines: null,
+        keyboardType: TextInputType.multiline,
+        style: TextStyle(
+          color: iconFgColor,
+          fontSize: 14,
+          height: 1.35,
+        ),
+        cursorColor: iconFgColor,
+        decoration: InputDecoration(
+          isDense: true,
+          isCollapsed: true,
+          border: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          hintText: 'Edit your message',
+          hintStyle: TextStyle(color: iconFgColor.withValues(alpha: 0.6)),
+        ),
+      );
+    }
+
     final Widget messageWidget = MarkdownMessage(
       text: widget.message,
       textColor: iconFgColor,

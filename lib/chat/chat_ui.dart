@@ -674,12 +674,54 @@ class ChukChatUIState extends State<ChukChatUI>
     await _prepareMessageAndSend(source, overrideModelId: selectedModel);
   }
 
-  Future<void> _editMessage(Map<String, dynamic> message) async {
-    await _prepareMessageAndSend(
-      message,
-      overrideModelId: message['modelId'] as String?,
-      autoSend: false,
-    );
+  void _startEditingMessage(Map<String, dynamic> message) {
+    if ((message['sender'] as String?)?.toLowerCase() != 'user') {
+      return;
+    }
+    setState(() {
+      for (final Map<String, dynamic> entry in _messages) {
+        if (identical(entry, message)) {
+          entry['isEditing'] = true;
+        } else {
+          entry.remove('isEditing');
+        }
+      }
+    });
+  }
+
+  void _cancelEditingMessage(Map<String, dynamic> message) {
+    setState(() {
+      message.remove('isEditing');
+    });
+  }
+
+  Future<void> _submitEditedMessage(
+    Map<String, dynamic> message,
+    String updatedText,
+  ) async {
+    final String trimmed = updatedText.trim();
+    if (trimmed.isEmpty) {
+      _showSnack('Message cannot be empty.');
+      return;
+    }
+    if (_isSending) {
+      _showSnack('Please wait for the current response to finish.');
+      return;
+    }
+
+    setState(() {
+      message['text'] = trimmed;
+      message['rawText'] = trimmed;
+      message.remove('isEditing');
+    });
+    _persistChat();
+
+    final Map<String, dynamic> payload = Map<String, dynamic>.from(message)
+      ..remove('isEditing')
+      ..['text'] = trimmed
+      ..['rawText'] = trimmed;
+
+    await _prepareMessageAndSend(payload);
   }
 
   List<MessageBubbleAction> _buildMessageActions(Map<String, dynamic> message) {
@@ -687,15 +729,19 @@ class ChukChatUIState extends State<ChukChatUI>
     final bool isUserMessage =
         (message['sender'] as String?)?.toLowerCase() == 'user';
     final String status = (message['status'] as String?) ?? 'sent';
+    final bool isEditing = (message['isEditing'] as bool?) ?? false;
     final List<MessageBubbleAction> actions = [];
     final bool isPending = status == 'pending';
+
+    if (isEditing) {
+      return actions;
+    }
 
     if (text.isNotEmpty) {
       actions.add(
         MessageBubbleAction(
           icon: Icons.copy,
           tooltip: 'Copy message',
-          label: 'Copy',
           onPressed: () => _copyTextToClipboard(text),
           isEnabled: !isPending || isUserMessage,
         ),
@@ -707,17 +753,16 @@ class ChukChatUIState extends State<ChukChatUI>
         MessageBubbleAction(
           icon: Icons.edit,
           tooltip: 'Edit & resend',
-          label: 'Edit',
-          onPressed: () => _editMessage(message),
-          isEnabled: !isPending,
+          onPressed: () => _startEditingMessage(message),
+          isEnabled: !isPending && !_isSending,
         ),
       );
       actions.add(
         MessageBubbleAction(
           icon: Icons.replay,
           tooltip: 'Resend',
-          label: 'Resend',
           onPressed: () => _resendMessage(message),
+          isEnabled: !_isSending,
         ),
       );
       actions.add(
@@ -1297,6 +1342,18 @@ class ChukChatUIState extends State<ChukChatUI>
                             maxWidth: expandedInputWidth *
                                 0.7, // Message bubbles also use expanded width
                             actions: _buildMessageActions(message),
+                            isEditing: isUserMessage &&
+                                ((message['isEditing'] as bool?) ?? false),
+                            initialEditText:
+                                (message['rawText'] as String?) ?? messageText,
+                            onSubmitEdit: isUserMessage
+                                ? (updated) => unawaited(
+                                      _submitEditedMessage(message, updated),
+                                    )
+                                : null,
+                            onCancelEdit: isUserMessage
+                                ? () => _cancelEditingMessage(message)
+                                : null,
                             modelLabel: modelInfo,
                           ),
                         );
