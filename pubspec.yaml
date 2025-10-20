@@ -26,7 +26,7 @@ dependencies:
   record: ^6.1.2
   url_launcher: ^6.3.0
   path_provider: ^2.1.4
-  flutter_markdown: ^0.6.20
+  markdown_widget: ^2.3.2+8
   markdown: ^7.3.0
   highlight: ^0.7.0
 

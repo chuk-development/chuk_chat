@@ -7,6 +7,7 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/model_cache_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
+import 'package:chuk_chat/services/streaming_chat_service.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/pages/coming_soon_page.dart';
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
@@ -434,13 +435,67 @@ class ChukChatUIState extends State<ChukChatUI>
       return;
     }
 
-    final String mirroredText = originalUserInput.isNotEmpty
+    // Build message history for API call
+    final List<Map<String, String>> apiHistory = [];
+    for (int i = 0; i < _messages.length - 1; i++) {
+      final message = _messages[i];
+      final sender = message['sender'];
+      final text = message['text'];
+      if (text == null || text.trim().isEmpty) continue;
+
+      if (sender == 'user') {
+        apiHistory.add({'role': 'user', 'content': text});
+      } else if (sender == 'ai' || sender == 'assistant') {
+        apiHistory.add({'role': 'assistant', 'content': text});
+      }
+    }
+
+    final String aiPromptContent = originalUserInput.isNotEmpty
         ? originalUserInput
         : displayMessageText;
-    final String providerLine = providerSlug != null && providerSlug.isNotEmpty
-        ? 'Provider: $providerSlug\n'
-        : '';
-    finalizeAiMessage('Model: $modelIdForSend\n$providerLine\n$mirroredText');
+
+    // Make actual API call using StreamingChatService
+    try {
+      final stream = StreamingChatService.sendStreamingChat(
+        accessToken: accessToken,
+        message: aiPromptContent,
+        modelId: modelIdForSend,
+        providerSlug: providerSlug ?? '',
+        history: apiHistory.isEmpty ? null : apiHistory,
+      );
+
+      final StringBuffer contentBuffer = StringBuffer();
+      final StringBuffer reasoningBuffer = StringBuffer();
+
+      await for (final event in stream) {
+        if (!mounted) break;
+
+        switch (event) {
+          case ContentEvent(text: final text):
+            contentBuffer.write(text);
+            finalizeAiMessage(contentBuffer.toString());
+            break;
+          case ReasoningEvent(text: final text):
+            reasoningBuffer.write(text);
+            break;
+          case DoneEvent():
+            // Finalize with complete content
+            finalizeAiMessage(contentBuffer.toString());
+            break;
+          case ErrorEvent(message: final message):
+            finalizeAiMessage('Error: $message');
+            break;
+          case UsageEvent():
+          case MetaEvent():
+            // Handle usage and meta events if needed
+            break;
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        finalizeAiMessage('Error: Failed to get AI response - $e');
+      }
+    }
   }
 
   void _showSnack(String message) {

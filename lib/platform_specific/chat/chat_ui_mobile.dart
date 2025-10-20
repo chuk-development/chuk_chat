@@ -28,11 +28,13 @@ class _MobileMessageRenderData {
     required this.sender,
     required this.displayText,
     required this.reasoning,
+    required this.isReasoningStreaming,
   });
 
   final String sender;
   final String displayText;
   final String reasoning;
+  final bool isReasoningStreaming;
 
   bool get isUser => sender == 'user';
 }
@@ -1356,10 +1358,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     final List<_MobileMessageRenderData> renderMessages =
         List<_MobileMessageRenderData>.generate(_messages.length, (int index) {
           final Map<String, String> raw = _messages[index];
+          final String sender = raw['sender'] ?? 'ai';
+          final bool isAiMessage = sender != 'user';
+          final bool isStreamingMessage =
+              _isStreaming && index == _messages.length - 1 && isAiMessage;
           return _MobileMessageRenderData(
-            sender: raw['sender'] ?? 'ai',
+            sender: sender,
             displayText: (raw['text'] ?? '').trimRight(),
             reasoning: raw['reasoning'] ?? '',
+            isReasoningStreaming: isStreamingMessage,
           );
         });
 
@@ -1413,6 +1420,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                   reasoning: reasoningText,
                                   isUser: data.isUser,
                                   maxWidth: expandedInputWidth * 0.7,
+                                  isReasoningStreaming:
+                                      data.isReasoningStreaming,
                                 ),
                               ],
                             );

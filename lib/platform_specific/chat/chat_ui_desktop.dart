@@ -28,11 +28,13 @@ class _MessageRenderData {
     required this.sender,
     required this.displayText,
     required this.reasoning,
+    required this.isReasoningStreaming,
   });
 
   final String sender;
   final String displayText;
   final String reasoning;
+  final bool isReasoningStreaming;
 
   bool get isUser => sender == 'user';
 }
@@ -1263,11 +1265,16 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     final List<_MessageRenderData> renderMessages =
         List<_MessageRenderData>.generate(_messages.length, (int index) {
           final Map<String, String> raw = _messages[index];
+          final String sender = raw['sender'] ?? 'ai';
           final String displayText = (raw['text'] ?? '').trimRight();
+          final bool isAiMessage = sender != 'user';
+          final bool isStreamingMessage =
+              _isStreaming && index == _messages.length - 1 && isAiMessage;
           return _MessageRenderData(
-            sender: raw['sender'] ?? 'ai',
+            sender: sender,
             displayText: displayText,
             reasoning: raw['reasoning'] ?? '',
+            isReasoningStreaming: isStreamingMessage,
           );
         });
 
@@ -1316,6 +1323,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                 reasoning: reasoningText,
                                 isUser: data.isUser,
                                 maxWidth: expandedInputWidth * 0.7,
+                                isReasoningStreaming:
+                                    data.isReasoningStreaming,
                               ),
                             ],
                           );
