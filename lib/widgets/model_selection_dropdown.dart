@@ -12,6 +12,7 @@ import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/api_status_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 
 const double _menuHorizontalPadding = 32.0; // 16 left + 16 right
 const double _menuTrailingAllowance = 64.0; // Checkmark + internal spacing
@@ -24,6 +25,10 @@ class _WidthMetrics {
   final double buttonWidth;
 
   const _WidthMetrics({required this.menuWidth, required this.buttonWidth});
+}
+
+class _AuthRequiredException implements Exception {
+  const _AuthRequiredException();
 }
 
 class ModelSelectionDropdown extends StatefulWidget {
@@ -180,9 +185,22 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
 
   Future<void> _fetchModels() async {
     try {
+      final session =
+          await SupabaseService.refreshSession() ??
+          SupabaseService.auth.currentSession;
+      if (session == null) {
+        throw const _AuthRequiredException();
+      }
+      final String accessToken = session.accessToken;
+      if (accessToken.isEmpty) {
+        throw const _AuthRequiredException();
+      }
       _lastSavedPreferences =
           await UserPreferencesService.loadAllProviderPreferences();
-      final response = await http.get(Uri.parse('$_apiBaseUrl/models_info'));
+      final response = await http.get(
+        Uri.parse('$_apiBaseUrl/models_info'),
+        headers: {'Authorization': 'Bearer $accessToken'},
+      );
 
       if (response.statusCode == 200) {
         _stopApiAvailabilityPolling();
@@ -276,28 +294,24 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
         }
         _updateSelectedModelName();
       } else if (response.statusCode == 401) {
-        _errorMessage = 'Authentication required to load models.';
-        _selectedModelName = 'Sign In Required';
-        debugPrint(
-          'Model fetch failed: ${response.statusCode} - ${response.body}',
-        );
-        if (!mounted) return;
-        setState(() {
-          _isLoadingModels = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Session expired. Please sign in again to load models.',
-            ),
-          ),
-        );
+        throw const _AuthRequiredException();
       } else {
         await _handleApiUnavailable(
           debugDetails: 'Status ${response.statusCode} - ${response.body}'
               .trim(),
         );
       }
+    } on _AuthRequiredException {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingModels = false;
+        _errorMessage = 'Session expired. Please sign in again.';
+        _selectedModelName = 'Sign In Required';
+      });
+      await SupabaseService.signOut();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Session expired. Please sign in again.')),
+      );
     } catch (error) {
       await _handleApiUnavailable(debugDetails: '$error');
     }

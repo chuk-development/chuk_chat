@@ -12,18 +12,16 @@ import 'package:chuk_chat/pages/coming_soon_page.dart';
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart'; // NEW API SERVICE
+import 'package:chuk_chat/services/streaming_chat_service.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
 import 'package:uuid/uuid.dart';
 import 'package:record/record.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:chuk_chat/services/network_status_service.dart';
 
 /* ---------- CHAT UI MOBILE (Phone-specific rendering) ---------- */
 class ChukChatUIMobile extends StatefulWidget {
@@ -74,6 +72,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   String? _lastRecordedFilePath;
   String? _activeRecordingPath;
   bool _isSending = false;
+  bool _isTranscribingAudio = false;
+  StreamSubscription<ChatStreamEvent>? _streamSubscription;
+  bool _isStreaming = false;
 
   static const int _kMaxFileSizeBytes = 10 * 1024 * 1024; // 10MB
   static const int _kMaxConcurrentUploads = 5;
@@ -129,8 +130,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   static const double _kAttachmentBarMarginBottom = 8.0;
   static const double _kHorizontalPaddingSmall =
       8.0; // Always use small padding for phones
-  static const String _apiBaseUrl = 'https://api.chuk.chat';
-
   @override
   void initState() {
     super.initState();
@@ -253,7 +252,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   }
 
   Future<void> _handleAudioSend() async {
-    if (!_isMicActive) {
+    if (!_isMicActive || _isTranscribingAudio) {
       return;
     }
     await _stopMicRecording(keepFile: true);
@@ -262,8 +261,91 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       _isMicActive = false;
       _resetAudioLevels();
     });
-    debugPrint('Audio message ready (path: $_lastRecordedFilePath)');
-    _showSnackBar('Audio message ready — API integration coming soon.');
+    final String? audioPath = _lastRecordedFilePath;
+    if (audioPath == null) {
+      _showSnackBar('No audio recording available.');
+      return;
+    }
+    final File audioFile = File(audioPath);
+    if (!await audioFile.exists()) {
+      _showSnackBar('Recorded audio file is missing.');
+      await _deleteRecordingFile(audioPath);
+      _lastRecordedFilePath = null;
+      return;
+    }
+
+    final session =
+        await SupabaseService.refreshSession() ??
+        SupabaseService.auth.currentSession;
+    if (session == null) {
+      await _deleteRecordingFile(audioPath);
+      _lastRecordedFilePath = null;
+      _showSnackBar('Session expired. Please sign in again.');
+      await SupabaseService.signOut();
+      return;
+    }
+    final accessToken = session.accessToken;
+    if (accessToken.isEmpty) {
+      await _deleteRecordingFile(audioPath);
+      _lastRecordedFilePath = null;
+      _showSnackBar('Unable to authenticate your session.');
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _isTranscribingAudio = true;
+    });
+    _showSnackBar('Transcribing audio…');
+
+    try {
+      final transcription = await _chatApiService.transcribeAudioFile(
+        file: audioFile,
+        accessToken: accessToken,
+      );
+      final String text = transcription.text.trim();
+      if (text.isEmpty) {
+        _showSnackBar('Transcription returned no text.');
+      } else {
+        setState(() {
+          _controller.text = text;
+          _controller.selection = TextSelection.fromPosition(
+            TextPosition(offset: text.length),
+          );
+        });
+        _textFieldFocusNode.requestFocus();
+        _showSnackBar('Transcription ready. Tap send to share it.');
+      }
+    } on TranscriptionException catch (error) {
+      switch (error.statusCode) {
+        case 401:
+          _showSnackBar('Session expired. Please sign in again.');
+          await SupabaseService.signOut();
+          break;
+        case 502:
+          _showSnackBar(
+            'Transcription service is unavailable. Please try again shortly.',
+          );
+          break;
+        default:
+          final String message = error.message.isNotEmpty
+              ? error.message
+              : 'Failed to transcribe audio.';
+          _showSnackBar(message);
+      }
+    } on TimeoutException {
+      _showSnackBar('Transcription timed out. Please try again.');
+    } catch (error) {
+      _showSnackBar('Unexpected transcription error: $error');
+    } finally {
+      await _deleteRecordingFile(audioPath);
+      _lastRecordedFilePath = null;
+      if (mounted) {
+        setState(() {
+          _isTranscribingAudio = false;
+        });
+      }
+    }
   }
 
   Future<bool> _startMicRecording() async {
@@ -533,6 +615,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
   @override
   void dispose() {
+    _streamSubscription?.cancel();
     _controller.dispose();
     _scrollController.dispose();
     _textFieldFocusNode.dispose();
@@ -671,56 +754,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     return _kImageExtensions.contains(extension);
   }
 
-  String? _extractReasoning(Map<String, dynamic>? decodedBody) {
-    if (decodedBody == null || decodedBody.isEmpty) return null;
-    final dynamic reasoning = decodedBody['reasoning'];
-    if (reasoning is String) {
-      final String trimmed = reasoning.trim();
-      return trimmed.isEmpty ? null : trimmed;
-    }
-    if (reasoning is List) {
-      final String combined = reasoning
-          .whereType<String>()
-          .map((entry) => entry.trim())
-          .where((entry) => entry.isNotEmpty)
-          .join('\n');
-      return combined.isEmpty ? null : combined;
-    }
-    if (reasoning is Map) {
-      final List<String> segments = [];
-      reasoning.forEach((key, value) {
-        final String formattedValue = value?.toString().trim() ?? '';
-        if (formattedValue.isNotEmpty) {
-          segments.add('$key: $formattedValue');
-        }
-      });
-      final String combined = segments.join('\n');
-      return combined.isEmpty ? null : combined;
-    }
-    return null;
-  }
-
-  String _errorMessageFromResponse(
-    Map<String, dynamic>? decodedBody,
-    String fallback,
-  ) {
-    if (decodedBody == null || decodedBody.isEmpty) return fallback;
-    final dynamic detail = decodedBody['detail'];
-    if (detail is String && detail.isNotEmpty) return detail;
-    if (detail is List && detail.isNotEmpty) {
-      final first = detail.first;
-      if (first is Map<String, dynamic>) {
-        final dynamic msg = first['msg'];
-        if (msg is String && msg.isNotEmpty) return msg;
-      } else if (first is String && first.isNotEmpty) {
-        return first;
-      }
-    }
-    final dynamic message = decodedBody['message'];
-    if (message is String && message.isNotEmpty) return message;
-    return fallback;
-  }
-
   void _handleFileUploadUpdate(
     String fileId,
     String? markdownContent,
@@ -753,26 +786,47 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     _scrollChatToBottom();
   }
 
+  void _cancelStream() {
+    if (_streamSubscription != null && _isStreaming) {
+      debugPrint('Cancelling stream...');
+      _streamSubscription?.cancel();
+      _streamSubscription = null;
+
+      setState(() {
+        _isStreaming = false;
+        _isSending = false;
+        if (_messages.isNotEmpty &&
+            (_messages.last['sender'] == 'ai' ||
+                _messages.last['sender'] == 'assistant')) {
+          final lastMessage = Map<String, String>.from(_messages.last);
+          final currentText = lastMessage['text'] ?? '';
+          if (currentText.isEmpty || currentText == 'Thinking...') {
+            lastMessage['text'] = '[Cancelled]';
+          } else {
+            lastMessage['text'] = '$currentText\n\n[Response cancelled]';
+          }
+          _messages[_messages.length - 1] = lastMessage;
+        }
+      });
+
+      _persistChat();
+      _showSnackBar('Response cancelled');
+    }
+  }
+
   void _sendMessage() async {
-    if (_isSending) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please wait for the current response to finish.'),
-          ),
-        );
-      }
+    if (_isSending && !_isStreaming) {
+      _showSnackBar('Please wait for the current response to finish.');
+      return;
+    }
+
+    if (_isStreaming) {
+      _cancelStream();
       return;
     }
 
     if (_attachedFiles.any((f) => f.isUploading)) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please wait for file uploads to finish.'),
-          ),
-        );
-      }
+      _showSnackBar('Please wait for file uploads to finish.');
       return;
     }
 
@@ -813,6 +867,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       aiPromptContent = '$markdownSections\n\nUser query: $queryText';
     }
 
+    int placeholderIndex = -1;
     setState(() {
       _messages.add({
         'sender': 'user',
@@ -824,6 +879,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       if (hasAttachments) {
         _attachedFiles.clear();
       }
+      _messages.add({'sender': 'ai', 'text': '', 'reasoning': ''});
+      placeholderIndex = _messages.length - 1;
     });
     _textFieldFocusNode.requestFocus();
 
@@ -832,236 +889,228 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     if (firstMessageInChat) _animCtrl.forward();
     _scrollChatToBottom();
 
-    int placeholderIndex = -1;
-    setState(() {
-      _messages.add({'sender': 'ai', 'text': 'Thinking...', 'reasoning': ''});
-      placeholderIndex = _messages.length - 1;
-    });
-    _scrollChatToBottom();
-
-    bool responseHandled = false;
-    void finalizeAiMessage(String text, {String? reasoning}) {
-      responseHandled = true;
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
-          final Map<String, String> existing = Map<String, String>.from(
-            _messages[placeholderIndex],
-          );
-          existing['text'] = text;
-          existing['reasoning'] = reasoning ?? '';
-          _messages[placeholderIndex] = existing;
-        } else {
-          debugPrint('AI response arrived after chat reset, dropping message.');
-        }
-        _isSending = false;
-      });
-      _scrollChatToBottom();
-      Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
-      _persistChat();
-    }
-
     final session =
         await SupabaseService.refreshSession() ??
         SupabaseService.auth.currentSession;
     if (session == null) {
-      _isSending = false;
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Session expired. Please sign in again.'),
-          ),
-        );
-      }
+      _finalizeAiMessage(
+        placeholderIndex,
+        'Please sign in to continue the conversation.',
+      );
+      _showSnackBar('Session expired. Please sign in again.');
       await SupabaseService.signOut();
-      finalizeAiMessage('Please sign in to continue the conversation.');
       return;
     }
+
     final accessToken = session.accessToken;
     if (accessToken.isEmpty) {
-      _isSending = false;
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Unable to authenticate your session.')),
-        );
-      }
-      finalizeAiMessage('Authentication required. Please sign in again.');
+      _finalizeAiMessage(
+        placeholderIndex,
+        'Authentication required. Please sign in again.',
+      );
+      _showSnackBar('Unable to authenticate your session.');
       return;
     }
 
     final String? providerSlug = await _ensureProviderSlugForCurrentModel();
     if (providerSlug == null || providerSlug.isEmpty) {
-      _isSending = false;
       final String message =
           'No provider is configured for $_selectedModelId. Select a provider in Settings and try again.';
-      finalizeAiMessage(message);
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(message)));
-      }
+      _finalizeAiMessage(placeholderIndex, message);
+      _showSnackBar(message);
       return;
     }
 
+    final List<Map<String, String>> apiHistory = [];
+    for (int i = 0; i < _messages.length - 1; i++) {
+      final message = _messages[i];
+      final sender = message['sender'];
+      final text = message['text'];
+      if (text == null || text.trim().isEmpty) continue;
+
+      if (sender == 'user') {
+        apiHistory.add({'role': 'user', 'content': text});
+      } else if (sender == 'ai' || sender == 'assistant') {
+        apiHistory.add({'role': 'assistant', 'content': text});
+      }
+    }
+
+    setState(() {
+      _isStreaming = true;
+    });
+
+    final StringBuffer contentBuffer = StringBuffer();
+    final StringBuffer reasoningBuffer = StringBuffer();
+
     try {
-      final requestPayload = <String, dynamic>{
-        'model': _selectedModelId,
-        'prompt': aiPromptContent,
-        'max_tokens': 512,
-        'temperature': 0.7,
-        'metadata': {
-          'source': 'flutter-chat-ui',
-          'provider_slug': providerSlug,
+      final stream = StreamingChatService.sendStreamingChat(
+        accessToken: accessToken,
+        message: aiPromptContent,
+        modelId: _selectedModelId,
+        providerSlug: providerSlug,
+        history: apiHistory.isEmpty ? null : apiHistory,
+      );
+
+      _streamSubscription = stream.listen(
+        (event) {
+          if (!mounted) return;
+
+          if (event is ContentEvent) {
+            contentBuffer.write(event.text);
+            _updateAiMessage(
+              placeholderIndex,
+              contentBuffer.toString(),
+              reasoningBuffer.toString(),
+            );
+            _scrollChatToBottom();
+          } else if (event is ReasoningEvent) {
+            reasoningBuffer.write(event.text);
+            _updateAiMessage(
+              placeholderIndex,
+              contentBuffer.toString(),
+              reasoningBuffer.toString(),
+            );
+          } else if (event is UsageEvent) {
+            debugPrint('Usage: ${event.usage}');
+          } else if (event is MetaEvent) {
+            debugPrint('Meta: ${event.meta}');
+          } else if (event is ErrorEvent) {
+            debugPrint('Stream error: ${event.message}');
+            _finalizeAiMessage(placeholderIndex, 'Error: ${event.message}');
+            _showSnackBar(event.message);
+          } else if (event is DoneEvent) {
+            debugPrint('Stream completed successfully');
+            final String finalContent = contentBuffer.toString().trim();
+            final String finalReasoning = reasoningBuffer.toString().trim();
+            if (finalContent.isEmpty) {
+              _finalizeAiMessage(
+                placeholderIndex,
+                'The model returned an empty response.',
+              );
+            } else {
+              _finalizeAiMessage(
+                placeholderIndex,
+                finalContent,
+                reasoning: finalReasoning,
+              );
+            }
+          }
         },
-      };
-      requestPayload['provider'] = providerSlug;
+        onError: (error) {
+          debugPrint('Stream error: $error');
+          if (!mounted) return;
 
-      final response = await http
-          .post(
-            Uri.parse('$_apiBaseUrl/relay_completion'),
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer $accessToken',
-            },
-            body: jsonEncode(requestPayload),
-          )
-          .timeout(const Duration(seconds: 60));
-
-      Map<String, dynamic>? decodedBody;
-      if (response.body.isNotEmpty) {
-        try {
-          final dynamic parsed = jsonDecode(response.body);
-          if (parsed is Map<String, dynamic>) {
-            decodedBody = parsed;
+          String errorMessage = 'Failed to reach the AI service';
+          if (error is StreamingChatException) {
+            errorMessage = error.message;
           }
-        } catch (error) {
-          debugPrint('Failed to parse relay response: $error');
-        }
-      }
 
-      final String? reasoningFromBody = _extractReasoning(decodedBody);
+          _finalizeAiMessage(placeholderIndex, errorMessage);
+          _showSnackBar(errorMessage);
+        },
+        onDone: () {
+          debugPrint('Stream closed');
+          if (!mounted) return;
 
-      if (response.statusCode == 200) {
-        final data = decodedBody ?? <String, dynamic>{};
-        if (data['insufficient_credits'] == true) {
-          final String message =
-              data['message'] as String? ??
-              'Insufficient balance. Please top up your credits.';
-          finalizeAiMessage(message, reasoning: reasoningFromBody);
-          if (mounted) {
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(SnackBar(content: Text(message)));
+          if (!_isStreaming) {
+            _streamSubscription = null;
+            return;
           }
-          return;
-        }
 
-        final String? content = data['content'] as String?;
-        if (content != null && content.isNotEmpty) {
-          finalizeAiMessage(content, reasoning: reasoningFromBody);
-          final dynamic remainingCredits = data['remaining_credits'];
-          if (remainingCredits != null) {
-            debugPrint('Remaining credits: $remainingCredits');
+          setState(() {
+            _isStreaming = false;
+            _isSending = false;
+          });
+
+          final String finalContent = contentBuffer.toString().trim();
+          final String currentText =
+              (placeholderIndex >= 0 && placeholderIndex < _messages.length)
+              ? (_messages[placeholderIndex]['text'] ?? '')
+              : '';
+
+          if (currentText.contains('[Cancelled]') ||
+              currentText.contains('[Response cancelled]')) {
+            _streamSubscription = null;
+            return;
           }
-          return;
-        }
 
-        finalizeAiMessage(
-          'The model returned an empty response.',
-          reasoning: reasoningFromBody,
-        );
-        return;
-      }
+          if (finalContent.isNotEmpty) {
+            _finalizeAiMessage(
+              placeholderIndex,
+              finalContent,
+              reasoning: reasoningBuffer.toString().trim(),
+            );
+          } else if (_messages.isNotEmpty &&
+              placeholderIndex < _messages.length &&
+              (_messages[placeholderIndex]['text'] ?? '').trim().isEmpty) {
+            _finalizeAiMessage(
+              placeholderIndex,
+              'No response received from the model.',
+            );
+          }
 
-      if (response.statusCode == 401) {
-        await SupabaseService.signOut();
-        finalizeAiMessage('Your session expired. Please sign in again.');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Session expired. Please sign in again.'),
-            ),
-          );
-        }
-        return;
-      }
-
-      if (response.statusCode == 402) {
-        final String message =
-            decodedBody?['message'] as String? ??
-            'Insufficient credits. Please top up your credits.';
-        finalizeAiMessage(message);
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(message)));
-        }
-        return;
-      }
-
-      if (response.statusCode == 429) {
-        finalizeAiMessage(
-          'You have been rate limited. Please wait a moment and try again.',
-        );
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('You are sending requests too quickly.'),
-            ),
-          );
-        }
-        return;
-      }
-
-      final String fallbackMessage =
-          'Request failed with status ${response.statusCode}.';
-      final String detailedMessage = _errorMessageFromResponse(
-        decodedBody,
-        fallbackMessage,
+          _streamSubscription = null;
+        },
+        cancelOnError: true,
       );
-      debugPrint(
-        'Relay error body (status ${response.statusCode}): '
-        '${jsonEncode(decodedBody ?? {})}',
-      );
-      finalizeAiMessage(detailedMessage);
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(detailedMessage)));
-      }
-    } on TimeoutException {
-      finalizeAiMessage('Request timed out. Please try again.');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Request timed out. Please try again.')),
-        );
-      }
-    } on SocketException catch (error) {
-      debugPrint('SocketException occurred: $error');
-      final bool hasConnectivity =
-          await NetworkStatusService.hasInternetConnection();
-      final String message = hasConnectivity
-          ? 'We\'re having trouble reaching the server. Please try again or check your connection.'
-          : 'You appear to be offline. Please check your internet connection.';
-      finalizeAiMessage(message);
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(message)));
-      }
     } catch (error) {
-      finalizeAiMessage('Failed to reach the AI service: $error');
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Unexpected error: $error')));
-      }
-    } finally {
-      if (!responseHandled) {
-        finalizeAiMessage('Something went wrong. Please try again.');
-      }
+      debugPrint('Failed to start stream: $error');
+      _finalizeAiMessage(placeholderIndex, 'Failed to start streaming: $error');
+      _showSnackBar('Failed to start streaming: $error');
+    }
+  }
+
+  void _updateAiMessage(int index, String content, String reasoning) {
+    if (!mounted || index < 0 || index >= _messages.length) return;
+
+    setState(() {
+      final Map<String, String> message = Map<String, String>.from(
+        _messages[index],
+      );
+      message['text'] = content;
+      message['reasoning'] = reasoning;
+      _messages[index] = message;
+    });
+  }
+
+  void _finalizeAiMessage(int index, String content, {String? reasoning}) {
+    if (index < 0 || index >= _messages.length) {
+      _streamSubscription?.cancel();
+      _streamSubscription = null;
+      _isSending = false;
+      _isStreaming = false;
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        final Map<String, String> message = Map<String, String>.from(
+          _messages[index],
+        );
+        message['text'] = content;
+        message['reasoning'] = reasoning ?? '';
+        _messages[index] = message;
+        _isSending = false;
+        _isStreaming = false;
+      });
+    } else {
+      final Map<String, String> message = Map<String, String>.from(
+        _messages[index],
+      );
+      message['text'] = content;
+      message['reasoning'] = reasoning ?? '';
+      _messages[index] = message;
+      _isSending = false;
+      _isStreaming = false;
+    }
+
+    _streamSubscription?.cancel();
+    _streamSubscription = null;
+
+    if (mounted) {
+      _scrollChatToBottom();
+      Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+      _persistChat();
     }
   }
 
@@ -1478,17 +1527,20 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 ),
               ),
               const SizedBox(width: 8),
-              // Send Message Button
+              // Send/Cancel Message Button
               GestureDetector(
                 onTap: _sendMessage,
                 child: Container(
                   width: btnW,
                   height: btnH,
                   decoration: BoxDecoration(
-                    color: accent,
+                    color: _isStreaming ? Colors.red : accent,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.arrow_upward, color: Colors.black),
+                  child: Icon(
+                    _isStreaming ? Icons.stop : Icons.arrow_upward,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ],

@@ -11,6 +11,7 @@ import 'package:chuk_chat/utils/color_extensions.dart'; // Import the new extens
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/services/api_status_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 
 // --- Data Models (Mirroring your FastAPI Pydantic Models) ---
 
@@ -186,33 +187,41 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
 
   Future<void> _fetchModels() async {
     try {
+      final session =
+          await SupabaseService.refreshSession() ??
+          SupabaseService.auth.currentSession;
+      if (session == null || session.accessToken.isEmpty) {
+        throw const _AuthRequiredException();
+      }
+      final String accessToken = session.accessToken;
+
       _lastSavedPreferences =
           await UserPreferencesService.loadAllProviderPreferences();
-      final response = await http.get(Uri.parse('$_baseUrl/models_info'));
+      final response = await http.get(
+        Uri.parse('$_baseUrl/models_info'),
+        headers: {'Authorization': 'Bearer $accessToken'},
+      );
 
       if (response.statusCode == 200) {
         _stopApiAvailabilityPolling();
-        List<dynamic> modelsJson = json.decode(response.body);
-        List<CustomModelInfo> fetchedModels = modelsJson
+        final List<dynamic> modelsJson = json.decode(response.body);
+        final List<CustomModelInfo> fetchedModels = modelsJson
             .map((json) => CustomModelInfo.fromJson(json))
             .toList();
 
         final Map<String, ModelProviderInfo?> initialSelections = {};
         final List<Future<void>> cleanupFutures = [];
-        for (var model in fetchedModels) {
-          // Try to find the saved provider for this model
-          final savedProviderSlug = _lastSavedPreferences[model.id];
+        for (final model in fetchedModels) {
+          final String? savedProviderSlug = _lastSavedPreferences[model.id];
           ModelProviderInfo? selectedProvider;
 
           if (savedProviderSlug != null) {
-            for (final provider in model.providers) {
-              if (provider.slug == savedProviderSlug) {
-                selectedProvider = provider;
-                break;
-              }
-            }
-
-            if (selectedProvider == null) {
+            try {
+              selectedProvider = model.providers.firstWhere(
+                (provider) => provider.slug == savedProviderSlug,
+              );
+            } on StateError {
+              selectedProvider = null;
               cleanupFutures.add(
                 UserPreferencesService.clearSelectedProvider(model.id),
               );
@@ -236,20 +245,16 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
           _isLoading = false;
           _error = null;
         });
-      } else if (response.statusCode == 401) {
-        if (!mounted) return;
-        setState(() {
-          _error = 'Authentication required to load models.';
-          _isLoading = false;
-        });
-        _showSnackBar(
-          'Session expired. Please sign in again to manage models.',
-        );
-      } else {
-        await _handleApiUnavailable(
-          'Status ${response.statusCode} - ${response.body}',
-        );
+        return;
       }
+
+      if (response.statusCode == 401) {
+        throw const _AuthRequiredException();
+      }
+
+      await _handleApiUnavailable(
+        'Status ${response.statusCode} - ${response.body}',
+      );
     } on TimeoutException catch (error) {
       await _handleApiUnavailable('Request timed out: $error');
     } on SocketException catch (error) {
@@ -258,8 +263,17 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
       await _handleApiUnavailable('HTTP error: $error');
     } on FormatException catch (error) {
       await _handleApiUnavailable('Data format error: $error');
+    } on _AuthRequiredException {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _error = 'Session expired. Please sign in again.';
+        _models = [];
+        _selectedProviders.clear();
+      });
+      await SupabaseService.signOut();
+      _showSnackBar('Session expired. Please sign in again.');
     } catch (error) {
-      // Rethrow non-Exception/unknown errors so programming errors are not swallowed
       rethrow;
     }
   }
@@ -1116,4 +1130,8 @@ class ModelSelectionRow extends StatelessWidget {
             ),
     );
   }
+}
+
+class _AuthRequiredException implements Exception {
+  const _AuthRequiredException();
 }
