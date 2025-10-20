@@ -22,6 +22,7 @@ import 'package:uuid/uuid.dart';
 import 'package:record/record.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 
 class _MessageRenderData {
   const _MessageRenderData({
@@ -591,6 +592,128 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     );
   }
 
+  bool _isValidMessageIndex(int index) =>
+      index >= 0 && index < _messages.length;
+
+  Future<void> _copyTextToClipboard(String text, {String? label}) async {
+    if (text.trim().isEmpty) {
+      _showSnackBar('Nothing to copy.');
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: text));
+    _showSnackBar(label ?? 'Copied to clipboard.');
+  }
+
+  void _editMessageAt(int index) {
+    if (!_isValidMessageIndex(index)) return;
+    final String text = _messages[index]['text'] ?? '';
+    _controller
+      ..text = text
+      ..selection = TextSelection.fromPosition(
+        TextPosition(offset: text.length),
+      );
+    Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+  }
+
+  Future<void> _resendMessageAt(int index) async {
+    if (!_isValidMessageIndex(index)) return;
+    if (_isStreaming) {
+      _showSnackBar('Please wait for the current response to finish.');
+      return;
+    }
+    if (_isSending) {
+      _showSnackBar('Please wait for the current send to finish.');
+      return;
+    }
+
+    final String text = (_messages[index]['text'] ?? '').trim();
+    if (text.isEmpty) {
+      _showSnackBar('Nothing to resend.');
+      return;
+    }
+
+    final String previousInput = _controller.text;
+    final TextSelection previousSelection = _controller.selection;
+    final List<AttachedFile> previousAttachments =
+        List<AttachedFile>.from(_attachedFiles);
+
+    setState(() {
+      _controller
+        ..text = text
+        ..selection = TextSelection.fromPosition(
+          TextPosition(offset: text.length),
+        );
+      _attachedFiles.clear();
+    });
+
+    await _sendMessage();
+
+    if (!mounted) return;
+
+    setState(() {
+      _attachedFiles
+        ..clear()
+        ..addAll(previousAttachments);
+    });
+
+    if (previousInput.isNotEmpty) {
+      _controller
+        ..text = previousInput
+        ..selection = previousSelection;
+    } else {
+      _controller.clear();
+    }
+  }
+
+  List<MessageBubbleAction> _buildMessageActionsForIndex(
+    int index,
+    _MessageRenderData data,
+  ) {
+    if (!_isValidMessageIndex(index)) {
+      return const <MessageBubbleAction>[];
+    }
+
+    final Map<String, String> rawMessage = _messages[index];
+    final String messageText = rawMessage['text'] ?? '';
+    final bool isUserMessage = data.isUser;
+    final bool isAssistantPending =
+        !isUserMessage && data.isReasoningStreaming;
+    final List<MessageBubbleAction> actions = [];
+
+    if (messageText.trim().isNotEmpty) {
+      actions.add(
+        MessageBubbleAction(
+          icon: Icons.copy,
+          tooltip: 'Copy message',
+          label: 'Copy',
+          onPressed: () => _copyTextToClipboard(messageText),
+          isEnabled: !isAssistantPending || isUserMessage,
+        ),
+      );
+    }
+
+    if (isUserMessage) {
+      actions.add(
+        MessageBubbleAction(
+          icon: Icons.edit,
+          tooltip: 'Edit message',
+          label: 'Edit',
+          onPressed: () => _editMessageAt(index),
+        ),
+      );
+      actions.add(
+        MessageBubbleAction(
+          icon: Icons.replay,
+          tooltip: 'Resend message',
+          label: 'Resend',
+          onPressed: () => _resendMessageAt(index),
+        ),
+      );
+    }
+
+    return actions;
+  }
+
   Widget _buildAudioVisualizer({required Color accent, required Color iconFg}) {
     return SizedBox(
       key: const ValueKey<String>('audio-visualizer'),
@@ -711,7 +834,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     }
   }
 
-  void _sendMessage() async {
+  Future<void> _sendMessage() async {
     if (_isSending && !_isStreaming) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1220,7 +1343,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
-    final Color iconFg = Theme.of(context).iconTheme.color!;
+    final Color iconFg = Theme.of(context).resolvedIconColor;
 
     final double effectiveHorizontalPadding = widget.isCompactMode
         ? _kHorizontalPaddingSmall
@@ -1325,6 +1448,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                 maxWidth: expandedInputWidth * 0.7,
                                 isReasoningStreaming:
                                     data.isReasoningStreaming,
+                                actions: _buildMessageActionsForIndex(i, data),
                               ),
                             ],
                           );
@@ -1396,7 +1520,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     const btnH = 36.0, btnW = 44.0;
     final Color bg = Theme.of(context).scaffoldBackgroundColor;
     final Color accent = Theme.of(context).colorScheme.primary;
-    final Color iconFg = Theme.of(context).iconTheme.color!;
+    final Color iconFg = Theme.of(context).resolvedIconColor;
 
     final bool hasAttachments = _attachedFiles.isNotEmpty;
 
@@ -1441,7 +1565,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                       return;
                     }
 
-                    _sendMessage();
+                    unawaited(_sendMessage());
                   },
                   child: TextField(
                     controller: _controller,
@@ -1480,7 +1604,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               const SizedBox(width: 8),
               // Send/Cancel Message Button
               GestureDetector(
-                onTap: _sendMessage,
+                onTap: () => _sendMessage(),
                 child: Container(
                   width: btnW,
                   height: btnH,
@@ -1612,7 +1736,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     String? debugLabel,
   }) {
     final Color bg = Theme.of(context).scaffoldBackgroundColor;
-    final Color iconFg = Theme.of(context).iconTheme.color!;
+    final Color iconFg = Theme.of(context).resolvedIconColor;
 
     final ValueNotifier<bool> isHovered = ValueNotifier<bool>(false);
 

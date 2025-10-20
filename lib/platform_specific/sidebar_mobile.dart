@@ -8,6 +8,7 @@ import 'package:chuk_chat/services/profile_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart'; // Assuming this exists
 import 'package:chuk_chat/widgets/credit_display.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 
 class SidebarMobile extends StatefulWidget {
   final Function(int index) onChatItemTapped;
@@ -362,7 +363,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final Color iconColorDefault = theme.iconTheme.color!.withValues(
+    final Color iconColorDefault = theme.resolvedIconColor.withValues(
       alpha: 0.7,
     );
     final Color textColorDefault =

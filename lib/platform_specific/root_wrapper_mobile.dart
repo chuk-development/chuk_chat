@@ -11,6 +11,7 @@ import 'package:chuk_chat/platform_specific/sidebar_mobile.dart'; // UPDATED: Us
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:chuk_chat/pages/coming_soon_page.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 
 /* ---------- ROOT WRAPPER MOBILE (for Phones) ---------- */
 class RootWrapperMobile extends StatefulWidget {
@@ -137,7 +138,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile> {
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
-    final Color iconFg = Theme.of(context).iconTheme.color!;
+    final Color iconFg = Theme.of(context).resolvedIconColor;
 
     final double sidebarVisibleWidth = math.min(screenWidth * 0.7, 280.0);
     final double titleAvailableWidth =

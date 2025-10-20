@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:highlight/highlight.dart' as hi;
 import 'package:markdown_widget/markdown_widget.dart';
 
-class MarkdownMessage extends StatelessWidget {
+class MarkdownMessage extends StatefulWidget {
   const MarkdownMessage({
     super.key,
     required this.text,
@@ -17,7 +17,58 @@ class MarkdownMessage extends StatelessWidget {
   final Color backgroundColor;
 
   @override
+  State<MarkdownMessage> createState() => _MarkdownMessageState();
+}
+
+class _MarkdownMessageState extends State<MarkdownMessage> {
+  List<Widget>? _cachedContent;
+  String? _lastText;
+  Color? _lastTextColor;
+  Color? _lastBackgroundColor;
+  Brightness? _lastBrightness;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _ensureCache();
+  }
+
+  @override
+  void didUpdateWidget(covariant MarkdownMessage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.text != _lastText ||
+        widget.textColor != _lastTextColor ||
+        widget.backgroundColor != _lastBackgroundColor) {
+      _rebuildCache();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final List<Widget> renderedContent = _ensureCache();
+
+    return SelectionArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: renderedContent,
+      ),
+    );
+  }
+
+  List<Widget> _ensureCache() {
+    final ThemeData theme = Theme.of(context);
+    final Brightness currentBrightness = theme.brightness;
+    final bool themeChanged = _lastBrightness != currentBrightness;
+
+    if (_cachedContent == null || themeChanged) {
+      _rebuildCache();
+    }
+
+    return _cachedContent!;
+  }
+
+  void _rebuildCache() {
     final ThemeData theme = Theme.of(context);
     final Color codeBackground = _codeBackground();
     final Map<String, TextStyle> syntaxTheme = _getSyntaxTheme(context);
@@ -25,33 +76,30 @@ class MarkdownMessage extends StatelessWidget {
       fontFamily: 'monospace',
       fontSize: 13,
       height: 1.4,
-      color: textColor,
+      color: widget.textColor,
     );
-    final Color codeBorderColor = textColor.withValues(alpha: 0.2);
+    final Color codeBorderColor = widget.textColor.withValues(alpha: 0.2);
 
-    // Create custom configuration for markdown_widget
-    final config = MarkdownConfig(
+    final MarkdownConfig config = MarkdownConfig(
       configs: [
-        // Text styling
         PConfig(
           textStyle:
               (theme.textTheme.bodyMedium?.copyWith(
-                color: textColor,
+                color: widget.textColor,
                 height: 1.45,
                 fontSize: 14,
               )) ??
-              TextStyle(color: textColor, height: 1.45, fontSize: 14),
+              TextStyle(color: widget.textColor, height: 1.45, fontSize: 14),
         ),
-        // Headers
         H1Config(
           style:
               (theme.textTheme.headlineSmall?.copyWith(
-                color: textColor,
+                color: widget.textColor,
                 height: 1.3,
                 fontWeight: FontWeight.w700,
               )) ??
               TextStyle(
-                color: textColor,
+                color: widget.textColor,
                 height: 1.3,
                 fontWeight: FontWeight.w700,
               ),
@@ -59,12 +107,12 @@ class MarkdownMessage extends StatelessWidget {
         H2Config(
           style:
               (theme.textTheme.titleLarge?.copyWith(
-                color: textColor,
+                color: widget.textColor,
                 height: 1.3,
                 fontWeight: FontWeight.w700,
               )) ??
               TextStyle(
-                color: textColor,
+                color: widget.textColor,
                 height: 1.3,
                 fontWeight: FontWeight.w700,
               ),
@@ -72,12 +120,12 @@ class MarkdownMessage extends StatelessWidget {
         H3Config(
           style:
               (theme.textTheme.titleMedium?.copyWith(
-                color: textColor,
+                color: widget.textColor,
                 height: 1.3,
                 fontWeight: FontWeight.w700,
               )) ??
               TextStyle(
-                color: textColor,
+                color: widget.textColor,
                 height: 1.3,
                 fontWeight: FontWeight.w700,
               ),
@@ -85,12 +133,12 @@ class MarkdownMessage extends StatelessWidget {
         H4Config(
           style:
               (theme.textTheme.titleSmall?.copyWith(
-                color: textColor,
+                color: widget.textColor,
                 height: 1.35,
                 fontWeight: FontWeight.w600,
               )) ??
               TextStyle(
-                color: textColor,
+                color: widget.textColor,
                 height: 1.35,
                 fontWeight: FontWeight.w600,
               ),
@@ -98,12 +146,12 @@ class MarkdownMessage extends StatelessWidget {
         H5Config(
           style:
               (theme.textTheme.bodyLarge?.copyWith(
-                color: textColor,
+                color: widget.textColor,
                 height: 1.35,
                 fontWeight: FontWeight.w600,
               )) ??
               TextStyle(
-                color: textColor,
+                color: widget.textColor,
                 height: 1.35,
                 fontWeight: FontWeight.w600,
               ),
@@ -111,21 +159,20 @@ class MarkdownMessage extends StatelessWidget {
         H6Config(
           style:
               (theme.textTheme.bodyMedium?.copyWith(
-                color: textColor,
+                color: widget.textColor,
                 height: 1.35,
                 fontWeight: FontWeight.w600,
               )) ??
               TextStyle(
-                color: textColor,
+                color: widget.textColor,
                 height: 1.35,
                 fontWeight: FontWeight.w600,
               ),
         ),
-        // Code styling
         CodeConfig(
-          style: codeTextStyle.copyWith(backgroundColor: codeBackground),
+          style:
+              codeTextStyle.copyWith(backgroundColor: codeBackground),
         ),
-        // Code block styling
         PreConfig(
           padding: EdgeInsets.zero,
           margin: EdgeInsets.zero,
@@ -141,35 +188,36 @@ class MarkdownMessage extends StatelessWidget {
             theme: syntaxTheme,
           ),
         ),
-        // Blockquote styling
         BlockquoteConfig(
-          textColor: textColor,
-          sideColor: textColor.withValues(alpha: 0.35),
+          textColor: widget.textColor,
+          sideColor: widget.textColor.withValues(alpha: 0.35),
           sideWith: 3.0,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         ),
-        // Table styling
         TableConfig(
           columnWidths: const <int, TableColumnWidth>{0: FlexColumnWidth()},
           border: TableBorder.all(
-            color: textColor.withValues(alpha: 0.2),
+            color: widget.textColor.withValues(alpha: 0.2),
             width: 1,
           ),
           defaultColumnWidth: const FlexColumnWidth(),
           headerStyle:
               (theme.textTheme.bodyMedium?.copyWith(
-                color: textColor,
+                color: widget.textColor,
                 fontWeight: FontWeight.w600,
               )) ??
-              TextStyle(color: textColor, fontWeight: FontWeight.w600),
+              TextStyle(
+                color: widget.textColor,
+                fontWeight: FontWeight.w600,
+              ),
           bodyStyle:
-              (theme.textTheme.bodyMedium?.copyWith(color: textColor)) ??
-              TextStyle(color: textColor),
+              (theme.textTheme.bodyMedium?.copyWith(
+                color: widget.textColor,
+              )) ??
+              TextStyle(color: widget.textColor),
         ),
-        // List styling
         ListConfig(),
-        // Horizontal rule
-        HrConfig(color: textColor.withValues(alpha: 0.2), height: 1),
+        HrConfig(color: widget.textColor.withValues(alpha: 0.2), height: 1),
       ],
     );
 
@@ -184,30 +232,33 @@ class MarkdownMessage extends StatelessWidget {
     );
 
     final List<Widget> builtWidgets = generator.buildWidgets(
-      text,
+      widget.text,
       config: config,
     );
 
-    return SelectionArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: builtWidgets.isEmpty
-            ? <Widget>[
-                SelectableText(
-                  text,
-                  style:
-                      (theme.textTheme.bodyMedium?.copyWith(
-                        color: textColor,
-                        height: 1.45,
-                        fontSize: 14,
-                      )) ??
-                      TextStyle(color: textColor, height: 1.45, fontSize: 14),
-                ),
-              ]
-            : builtWidgets,
-      ),
-    );
+    _cachedContent = builtWidgets.isEmpty
+        ? <Widget>[
+            SelectableText(
+              widget.text,
+              style:
+                  (theme.textTheme.bodyMedium?.copyWith(
+                    color: widget.textColor,
+                    height: 1.45,
+                    fontSize: 14,
+                  )) ??
+                  TextStyle(
+                    color: widget.textColor,
+                    height: 1.45,
+                    fontSize: 14,
+                  ),
+            ),
+          ]
+        : builtWidgets;
+
+    _lastText = widget.text;
+    _lastTextColor = widget.textColor;
+    _lastBackgroundColor = widget.backgroundColor;
+    _lastBrightness = theme.brightness;
   }
 
   Widget _buildCodeBlock({
@@ -315,8 +366,8 @@ class MarkdownMessage extends StatelessWidget {
   }
 
   Color _codeBackground() {
-    final HSLColor hsl = HSLColor.fromColor(backgroundColor);
-    final double luminance = backgroundColor.computeLuminance();
+    final HSLColor hsl = HSLColor.fromColor(widget.backgroundColor);
+    final double luminance = widget.backgroundColor.computeLuminance();
     if (luminance > 0.6) {
       return hsl
           .withLightness((hsl.lightness - 0.1).clamp(0.0, 1.0))

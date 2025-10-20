@@ -8,6 +8,7 @@ import 'package:chuk_chat/services/profile_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart'; // Import the color extensions
 import 'package:chuk_chat/widgets/credit_display.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 
 class CustomSidebar extends StatefulWidget {
   final Function(int index) onChatItemTapped;
@@ -130,7 +131,7 @@ class _CustomSidebarState extends State<CustomSidebar> {
   @override
   Widget build(BuildContext context) {
     // Access theme colors dynamically
-    final Color iconFg = Theme.of(context).iconTheme.color!;
+    final Color iconFg = Theme.of(context).resolvedIconColor;
     final Color accent = Theme.of(context).colorScheme.primary;
     final Color sidebarBg = Theme.of(
       context,

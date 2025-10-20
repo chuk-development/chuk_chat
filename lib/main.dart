@@ -46,16 +46,16 @@ Future<InitialThemeData> _bootstrapThemeSettings() async {
       ? Brightness.light
       : kDefaultThemeMode;
   Color accentColor = ColorExtension.fromHexString(
-    prefs.getString(_ChukChatAppState._kAccentColorKey) ??
-        kDefaultAccentColor.toHexString(),
+    prefs.getString(_ChukChatAppState._kAccentColorKey),
+    fallback: kDefaultAccentColor,
   );
   Color iconColor = ColorExtension.fromHexString(
-    prefs.getString(_ChukChatAppState._kIconFgColorKey) ??
-        kDefaultIconFgColor.toHexString(),
+    prefs.getString(_ChukChatAppState._kIconFgColorKey),
+    fallback: kDefaultIconFgColor,
   );
   Color backgroundColor = ColorExtension.fromHexString(
-    prefs.getString(_ChukChatAppState._kBgColorKey) ??
-        kDefaultBgColor.toHexString(),
+    prefs.getString(_ChukChatAppState._kBgColorKey),
+    fallback: kDefaultBgColor,
   );
   bool grainEnabled =
       prefs.getBool(_ChukChatAppState._kGrainEnabledKey) ??
@@ -242,13 +242,16 @@ class _ChukChatAppState extends State<ChukChatApp> {
           ? Brightness.light
           : kDefaultThemeMode; // Default to dark if not explicitly light
       _currentAccentColor = ColorExtension.fromHexString(
-        prefs.getString(_kAccentColorKey) ?? kDefaultAccentColor.toHexString(),
+        prefs.getString(_kAccentColorKey),
+        fallback: kDefaultAccentColor,
       );
       _currentIconFgColor = ColorExtension.fromHexString(
-        prefs.getString(_kIconFgColorKey) ?? kDefaultIconFgColor.toHexString(),
+        prefs.getString(_kIconFgColorKey),
+        fallback: kDefaultIconFgColor,
       );
       _currentBgColor = ColorExtension.fromHexString(
-        prefs.getString(_kBgColorKey) ?? kDefaultBgColor.toHexString(),
+        prefs.getString(_kBgColorKey),
+        fallback: kDefaultBgColor,
       );
       _grainEnabled = prefs.getBool(_kGrainEnabledKey) ?? kDefaultGrainEnabled;
     });

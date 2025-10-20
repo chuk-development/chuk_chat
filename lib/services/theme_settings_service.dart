@@ -68,13 +68,16 @@ class ThemeSettings {
       userId: userId,
       themeMode: modeRaw == 'light' ? Brightness.light : Brightness.dark,
       accentColor: ColorExtension.fromHexString(
-        (map['accent_color'] as String?) ?? kDefaultAccentColor.toHexString(),
+        map['accent_color'] as String?,
+        fallback: kDefaultAccentColor,
       ),
       iconColor: ColorExtension.fromHexString(
-        (map['icon_color'] as String?) ?? kDefaultIconFgColor.toHexString(),
+        map['icon_color'] as String?,
+        fallback: kDefaultIconFgColor,
       ),
       backgroundColor: ColorExtension.fromHexString(
-        (map['background_color'] as String?) ?? kDefaultBgColor.toHexString(),
+        map['background_color'] as String?,
+        fallback: kDefaultBgColor,
       ),
       grainEnabled: (map['grain_enabled'] as bool?) ?? kDefaultGrainEnabled,
     );

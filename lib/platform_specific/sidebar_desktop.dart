@@ -8,6 +8,7 @@ import 'package:chuk_chat/services/profile_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart'; // Import the color extensions
 import 'package:chuk_chat/widgets/credit_display.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 
 class SidebarDesktop extends StatefulWidget {
   final Function(int index) onChatItemTapped;
@@ -182,7 +183,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
 
   @override
   Widget build(BuildContext context) {
-    final Color iconFg = Theme.of(context).iconTheme.color!;
+    final Color iconFg = Theme.of(context).resolvedIconColor;
     final Color accent = Theme.of(context).colorScheme.primary;
     final Color sidebarBg = Theme.of(context).cardColor.darken(0.03);
     final Color dividerColor = Theme.of(context).dividerColor.withValues(

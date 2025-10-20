@@ -15,6 +15,7 @@ import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/api_status_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 
 const double _menuHorizontalPadding = 32.0; // 16 left + 16 right
 const double _menuTrailingAllowance = 64.0; // Checkmark + internal spacing
@@ -536,7 +537,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
   Widget _buildDropdownButtonContent(double buttonWidth) {
     final ValueNotifier<bool> isHovered = ValueNotifier<bool>(false);
     final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
-    final Color iconFgColor = Theme.of(context).iconTheme.color!;
+    final Color iconFgColor = Theme.of(context).resolvedIconColor;
 
     final double effectiveWidth = widget.isCompactMode ? 44.0 : buttonWidth;
 
@@ -634,7 +635,9 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
             side: BorderSide(
-              color: Theme.of(context).iconTheme.color!.withValues(alpha: 0.3),
+              color: Theme.of(context)
+                  .resolvedIconColor
+                  .withValues(alpha: 0.3),
             ),
           ),
           onSelected: (value) async {
@@ -678,7 +681,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
             );
           },
           itemBuilder: (context) {
-            final iconFgColor = Theme.of(context).iconTheme.color!;
+            final iconFgColor = Theme.of(context).resolvedIconColor;
             return _allModels.map((model) {
               final selected = _selectedModelId == model.value;
               return PopupMenuItem<String>(

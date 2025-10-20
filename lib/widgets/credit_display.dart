@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 
 final SupabaseClient _supabase = Supabase.instance.client;
 
@@ -150,7 +151,7 @@ class _CreditDisplayState extends State<CreditDisplay>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final Color iconFg = theme.iconTheme.color!;
+    final Color iconFg = theme.resolvedIconColor;
     final Color accent = theme.colorScheme.primary;
 
     if (creditLoading) {

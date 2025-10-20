@@ -6,6 +6,7 @@ import 'package:chuk_chat/services/password_change_service.dart';
 import 'package:chuk_chat/services/profile_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 
 class AccountSettingsPage extends StatefulWidget {
   const AccountSettingsPage({super.key});
@@ -206,7 +207,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final Color scaffoldBg = theme.scaffoldBackgroundColor;
-    final Color iconFg = theme.iconTheme.color!;
+    final Color iconFg = theme.resolvedIconColor;
     final TextStyle? titleTextStyle = theme.appBarTheme.titleTextStyle;
 
     Widget bodyContent;
@@ -543,7 +544,8 @@ class _AccountSectionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final Color bg = theme.scaffoldBackgroundColor.lighten(0.05);
-    final Color border = theme.iconTheme.color!.withValues(alpha: 0.25);
+    final Color iconFg = theme.resolvedIconColor;
+    final Color border = iconFg.withValues(alpha: 0.25);
 
     return Card(
       color: bg,
@@ -562,7 +564,7 @@ class _AccountSectionCard extends StatelessWidget {
             Text(
               description,
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.iconTheme.color!.withValues(alpha: 0.7),
+                color: iconFg.withValues(alpha: 0.7),
               ),
             ),
             const SizedBox(height: 20),

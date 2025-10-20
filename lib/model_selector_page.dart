@@ -8,6 +8,7 @@ import 'package:flutter_svg/flutter_svg.dart'; // Import for SVG support
 
 // Import your app constants for colors and theme
 import 'package:chuk_chat/utils/color_extensions.dart'; // Import the new extension
+import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/services/api_status_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
@@ -361,7 +362,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
     IconData fallbackIcon, {
     double size = 24,
   }) {
-    final Color iconFg = Theme.of(context).iconTheme.color!;
+    final Color iconFg = Theme.of(context).resolvedIconColor;
     if (imageUrl != null && imageUrl.isNotEmpty) {
       final isSvg = imageUrl.toLowerCase().endsWith('.svg');
       if (isSvg) {
@@ -413,7 +414,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
     // Access theme colors dynamically
     final Color scaffoldBg = Theme.of(context).scaffoldBackgroundColor;
     final Color accent = Theme.of(context).colorScheme.primary;
-    final Color iconFg = Theme.of(context).iconTheme.color!;
+    final Color iconFg = Theme.of(context).resolvedIconColor;
     final TextStyle? titleTextStyle = Theme.of(
       context,
     ).appBarTheme.titleTextStyle;

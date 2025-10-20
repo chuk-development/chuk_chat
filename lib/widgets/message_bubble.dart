@@ -1,6 +1,7 @@
 // lib/widgets/message_bubble.dart
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 
 class MessageBubbleAction {
   const MessageBubbleAction({
@@ -62,7 +63,7 @@ class _MessageBubbleState extends State<MessageBubble> {
     // Get colors from theme
     final Color accentColor = Theme.of(context).colorScheme.primary;
     final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
-    final Color iconFgColor = Theme.of(context).iconTheme.color!;
+    final Color iconFgColor = Theme.of(context).resolvedIconColor;
 
     // Nutze die übergebene maxWidth, falls vorhanden, ansonsten den Standardwert von 70% der Bildschirmbreite
     final double effectiveMaxWidth =

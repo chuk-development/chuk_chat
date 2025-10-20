@@ -14,6 +14,7 @@ import 'package:chuk_chat/services/auth_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 
 class SettingsPage extends StatelessWidget {
   final Brightness currentThemeMode;
@@ -49,7 +50,7 @@ class SettingsPage extends StatelessWidget {
     final theme = Theme.of(context);
     final Color scaffoldBg = theme.scaffoldBackgroundColor;
     final Color accent = theme.colorScheme.primary;
-    final Color iconFg = theme.iconTheme.color!;
+    final Color iconFg = theme.resolvedIconColor;
     final TextStyle? titleTextStyle = theme.appBarTheme.titleTextStyle;
 
     return Scaffold(

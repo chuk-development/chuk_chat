@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 
 class ThemePage extends StatefulWidget {
   final Brightness currentThemeMode;
@@ -125,7 +126,7 @@ class _ThemePageState extends State<ThemePage> {
     final theme = Theme.of(context);
     final Color scaffoldBg = theme.scaffoldBackgroundColor;
     final Color accent = theme.colorScheme.primary;
-    final Color iconFg = theme.iconTheme.color!;
+    final Color iconFg = theme.resolvedIconColor;
     final TextStyle? titleTextStyle = theme.appBarTheme.titleTextStyle;
     final bool isDarkMode = _selectedThemeMode == Brightness.dark;
 
@@ -274,7 +275,7 @@ class _ThemePageState extends State<ThemePage> {
   Widget _card(BuildContext context, {required Widget child}) {
     final theme = Theme.of(context);
     final Color scaffoldBg = theme.scaffoldBackgroundColor;
-    final Color iconFg = theme.iconTheme.color!;
+    final Color iconFg = theme.resolvedIconColor;
     return Card(
       color: scaffoldBg.lighten(0.05),
       margin: EdgeInsets.zero,

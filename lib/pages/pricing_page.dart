@@ -3,6 +3,7 @@ import 'package:chuk_chat/widgets/credit_display.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 
 final SupabaseClient _supabase = Supabase.instance.client;
 
@@ -272,7 +273,7 @@ class _PricingPageState extends State<PricingPage> {
     final theme = Theme.of(context);
     final Color scaffoldBg = theme.scaffoldBackgroundColor;
     final Color accent = theme.colorScheme.primary;
-    final Color iconFg = theme.iconTheme.color!;
+    final Color iconFg = theme.resolvedIconColor;
     final TextStyle? titleTextStyle = theme.appBarTheme.titleTextStyle;
     final bool isMobile = MediaQuery.of(context).size.width < 720;
 

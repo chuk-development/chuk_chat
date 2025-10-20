@@ -24,11 +24,37 @@ extension ColorExtension on Color {
   }
 
   // Creates a Color from a hex string (e.g., #RRGGBB or RRGGBB)
-  static Color fromHexString(String hexString) {
-    String hex = hexString.replaceAll('#', '');
+  static Color fromHexString(
+    String? hexString, {
+    Color? fallback,
+  }) {
+    if (hexString == null) {
+      if (fallback != null) return fallback;
+      throw const FormatException('Color hex string was null.');
+    }
+
+    String hex = hexString.trim();
+    if (hex.startsWith('#')) {
+      hex = hex.substring(1);
+    } else if (hex.toLowerCase().startsWith('0x')) {
+      hex = hex.substring(2);
+    }
+
+    if (hex.isEmpty) {
+      if (fallback != null) return fallback;
+      throw const FormatException('Color hex string was empty.');
+    }
+
+    final isValidHex = RegExp(r'^[0-9a-fA-F]{6,8}$').hasMatch(hex);
+    if (!isValidHex) {
+      if (fallback != null) return fallback;
+      throw FormatException('Invalid hex colour value: $hexString');
+    }
+
     if (hex.length == 6) {
       hex = 'FF$hex'; // Add alpha for opaque color
     }
+
     return Color(int.parse(hex, radix: 16));
   }
 }

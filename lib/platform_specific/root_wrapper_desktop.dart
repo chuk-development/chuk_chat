@@ -9,6 +9,7 @@ import 'package:chuk_chat/platform_specific/sidebar_desktop.dart'; // UPDATED
 import 'package:chuk_chat/pages/projects_page.dart';
 import 'package:chuk_chat/pages/settings_page.dart';
 import 'package:chuk_chat/pages/coming_soon_page.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 
 /* ---------- ROOT WRAPPER DESKTOP (for Desktop, Web, and Tablets) ---------- */
 class RootWrapperDesktop extends StatefulWidget {
@@ -107,7 +108,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
-    final Color iconFg = Theme.of(context).iconTheme.color!;
+    final Color iconFg = Theme.of(context).resolvedIconColor;
 
     final bool isCompactMode = screenWidth < kCompactModeBreakpoint;
 

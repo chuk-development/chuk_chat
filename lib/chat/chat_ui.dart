@@ -19,6 +19,7 @@ import 'dart:convert';
 import 'dart:io'; // Import for SocketException
 import 'dart:async'; // Import for TimeoutException
 import 'package:uuid/uuid.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 
 /* ---------- CHAT UI ---------- */
 class ChukChatUI extends StatefulWidget {
@@ -1205,7 +1206,7 @@ class ChukChatUIState extends State<ChukChatUI>
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
-    final Color iconFg = Theme.of(context).iconTheme.color!;
+    final Color iconFg = Theme.of(context).resolvedIconColor;
 
     final double effectiveHorizontalPadding = widget.isCompactMode
         ? _kHorizontalPaddingSmall
@@ -1274,8 +1275,9 @@ class ChukChatUIState extends State<ChukChatUI>
                         horizontal: effectiveHorizontalPadding,
                         vertical: 10,
                       ),
+                      cacheExtent: 240,
                       itemCount: _messages.length,
-                      itemBuilder: (_, i) {
+                      itemBuilder: (context, i) {
                         final Map<String, dynamic> message = _messages[i];
                         final String messageText =
                             (message['text'] as String?) ?? '';
@@ -1285,14 +1287,18 @@ class ChukChatUIState extends State<ChukChatUI>
                           message['modelId'] as String?,
                           message['provider'] as String?,
                         );
-                        return MessageBubble(
-                          message: messageText,
-                          isUser: isUserMessage,
-                          maxWidth:
-                              expandedInputWidth *
-                              0.7, // Message bubbles also use expanded width
-                          actions: _buildMessageActions(message),
-                          modelLabel: modelInfo,
+                        final String bubbleId =
+                            (message['id'] as String?) ?? 'message-$i';
+                        return RepaintBoundary(
+                          child: MessageBubble(
+                            key: ValueKey<String>(bubbleId),
+                            message: messageText,
+                            isUser: isUserMessage,
+                            maxWidth: expandedInputWidth *
+                                0.7, // Message bubbles also use expanded width
+                            actions: _buildMessageActions(message),
+                            modelLabel: modelInfo,
+                          ),
                         );
                       },
                     ),
@@ -1365,7 +1371,7 @@ class ChukChatUIState extends State<ChukChatUI>
     const btnH = 36.0, btnW = 44.0;
     final Color bg = Theme.of(context).scaffoldBackgroundColor;
     final Color accent = Theme.of(context).colorScheme.primary;
-    final Color iconFg = Theme.of(context).iconTheme.color!;
+    final Color iconFg = Theme.of(context).resolvedIconColor;
 
     final bool hasAttachments = _attachedFiles.isNotEmpty;
 
@@ -1538,7 +1544,7 @@ class ChukChatUIState extends State<ChukChatUI>
     String? debugLabel,
   }) {
     final Color bg = Theme.of(context).scaffoldBackgroundColor;
-    final Color iconFg = Theme.of(context).iconTheme.color!;
+    final Color iconFg = Theme.of(context).resolvedIconColor;
 
     final ValueNotifier<bool> isHovered = ValueNotifier<bool>(false);
 
