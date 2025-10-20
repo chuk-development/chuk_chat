@@ -8,12 +8,14 @@ class MessageBubbleAction {
     required this.tooltip,
     required this.onPressed,
     this.isEnabled = true,
+    this.label,
   });
 
   final IconData icon;
   final String tooltip;
   final VoidCallback onPressed;
   final bool isEnabled;
+  final String? label;
 }
 
 class MessageBubble extends StatefulWidget {
@@ -133,21 +135,40 @@ class _MessageBubbleState extends State<MessageBubble> {
                       : WrapAlignment.start,
                   spacing: 4,
                   runSpacing: 4,
-                  children: widget.actions
-                      .map(
-                        (action) => IconButton(
-                          iconSize: 18,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(
-                            minWidth: 32,
-                            minHeight: 32,
+                  children: widget.actions.map((action) {
+                    final bool hasLabel =
+                        action.label != null && action.label!.trim().isNotEmpty;
+                    if (hasLabel) {
+                      return TextButton.icon(
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
                           ),
-                          tooltip: action.tooltip,
-                          onPressed: action.isEnabled ? action.onPressed : null,
-                          icon: Icon(action.icon, color: iconFgColor),
+                          foregroundColor: iconFgColor,
+                          textStyle: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      )
-                      .toList(),
+                        onPressed:
+                            action.isEnabled ? action.onPressed : null,
+                        icon: Icon(action.icon, size: 16),
+                        label: Text(action.label!),
+                      );
+                    }
+                    return IconButton(
+                      iconSize: 18,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 32,
+                        minHeight: 32,
+                      ),
+                      tooltip: action.tooltip,
+                      onPressed: action.isEnabled ? action.onPressed : null,
+                      icon: Icon(action.icon, color: iconFgColor),
+                    );
+                  }).toList(),
                 ),
               ],
             ],

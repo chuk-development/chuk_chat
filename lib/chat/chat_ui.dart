@@ -694,6 +694,7 @@ class ChukChatUIState extends State<ChukChatUI>
         MessageBubbleAction(
           icon: Icons.copy,
           tooltip: 'Copy message',
+          label: 'Copy',
           onPressed: () => _copyTextToClipboard(text),
           isEnabled: !isPending || isUserMessage,
         ),
@@ -705,6 +706,7 @@ class ChukChatUIState extends State<ChukChatUI>
         MessageBubbleAction(
           icon: Icons.edit,
           tooltip: 'Edit & resend',
+          label: 'Edit',
           onPressed: () => _editMessage(message),
           isEnabled: !isPending,
         ),
@@ -713,6 +715,7 @@ class ChukChatUIState extends State<ChukChatUI>
         MessageBubbleAction(
           icon: Icons.replay,
           tooltip: 'Resend',
+          label: 'Resend',
           onPressed: () => _resendMessage(message),
         ),
       );
