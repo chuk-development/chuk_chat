@@ -1,6 +1,7 @@
 // lib/widgets/markdown_message.dart
 
 import 'package:flutter/material.dart';
+import 'package:highlight/highlight.dart' as hi;
 import 'package:markdown_widget/markdown_widget.dart';
 
 class MarkdownMessage extends StatelessWidget {
@@ -18,6 +19,15 @@ class MarkdownMessage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    final Color codeBackground = _codeBackground();
+    final Map<String, TextStyle> syntaxTheme = _getSyntaxTheme(context);
+    final TextStyle codeTextStyle = TextStyle(
+      fontFamily: 'monospace',
+      fontSize: 13,
+      height: 1.4,
+      color: textColor,
+    );
+    final Color codeBorderColor = textColor.withValues(alpha: 0.2);
 
     // Create custom configuration for markdown_widget
     final config = MarkdownConfig(
@@ -113,29 +123,23 @@ class MarkdownMessage extends StatelessWidget {
         ),
         // Code styling
         CodeConfig(
-          style: TextStyle(
-            fontFamily: 'monospace',
-            fontSize: 13,
-            height: 1.4,
-            color: textColor,
-            backgroundColor: _codeBackground(),
-          ),
+          style: codeTextStyle.copyWith(backgroundColor: codeBackground),
         ),
         // Code block styling
         PreConfig(
-          decoration: BoxDecoration(
-            color: _codeBackground(),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: textColor.withValues(alpha: 0.2)),
+          padding: EdgeInsets.zero,
+          margin: EdgeInsets.zero,
+          textStyle: codeTextStyle,
+          styleNotMatched: codeTextStyle,
+          theme: syntaxTheme,
+          builder: (code, language) => _buildCodeBlock(
+            code: code,
+            language: language,
+            textStyle: codeTextStyle,
+            backgroundColor: codeBackground,
+            borderColor: codeBorderColor,
+            theme: syntaxTheme,
           ),
-          padding: const EdgeInsets.all(12),
-          textStyle: TextStyle(
-            fontFamily: 'monospace',
-            fontSize: 13,
-            height: 1.4,
-            color: textColor,
-          ),
-          theme: _getSyntaxTheme(context),
         ),
         // Blockquote styling
         BlockquoteConfig(
@@ -169,12 +173,145 @@ class MarkdownMessage extends StatelessWidget {
       ],
     );
 
-    return MarkdownWidget(
-      data: text,
-      config: config,
-      selectable: true,
-      shrinkWrap: true,
+    final MarkdownGenerator generator = MarkdownGenerator(
+      linesMargin: const EdgeInsets.symmetric(vertical: 4),
+      richTextBuilder: (span) {
+        final TextSpan textSpan = span is TextSpan
+            ? span
+            : TextSpan(children: <InlineSpan>[span]);
+        return SelectableText.rich(textSpan, textAlign: TextAlign.left);
+      },
     );
+
+    final List<Widget> builtWidgets = generator.buildWidgets(
+      text,
+      config: config,
+    );
+
+    return SelectionArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: builtWidgets.isEmpty
+            ? <Widget>[
+                SelectableText(
+                  text,
+                  style:
+                      (theme.textTheme.bodyMedium?.copyWith(
+                        color: textColor,
+                        height: 1.45,
+                        fontSize: 14,
+                      )) ??
+                      TextStyle(color: textColor, height: 1.45, fontSize: 14),
+                ),
+              ]
+            : builtWidgets,
+      ),
+    );
+  }
+
+  Widget _buildCodeBlock({
+    required String code,
+    required String language,
+    required TextStyle textStyle,
+    required Color backgroundColor,
+    required Color borderColor,
+    required Map<String, TextStyle> theme,
+  }) {
+    final List<InlineSpan> spans = _highlightSafely(
+      code.replaceAll('\r\n', '\n'),
+      language,
+      theme,
+      textStyle,
+    );
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: borderColor),
+      ),
+      padding: const EdgeInsets.all(12),
+      width: double.infinity,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: SelectableText.rich(TextSpan(children: spans), style: textStyle),
+      ),
+    );
+  }
+
+  List<InlineSpan> _highlightSafely(
+    String code,
+    String language,
+    Map<String, TextStyle> theme,
+    TextStyle baseStyle,
+  ) {
+    final String normalizedLanguage = language.trim();
+    final bool autoDetect = normalizedLanguage.isEmpty;
+
+    try {
+      final hi.Result result = hi.highlight.parse(
+        code,
+        language: autoDetect ? null : normalizedLanguage,
+        autoDetection: autoDetect,
+      );
+      final List<hi.Node>? nodes = result.nodes;
+      if (nodes == null || nodes.isEmpty) {
+        return <InlineSpan>[TextSpan(text: code, style: baseStyle)];
+      }
+      return _convertNodesSafely(nodes, theme, baseStyle);
+    } catch (error, stackTrace) {
+      debugPrint(
+        'Code highlight failed for language "$normalizedLanguage": $error',
+      );
+      debugPrint('$stackTrace');
+      return <InlineSpan>[TextSpan(text: code, style: baseStyle)];
+    }
+  }
+
+  List<TextSpan> _convertNodesSafely(
+    List<hi.Node> nodes,
+    Map<String, TextStyle> theme,
+    TextStyle baseStyle,
+  ) {
+    final List<TextSpan> spans = <TextSpan>[];
+    for (final hi.Node node in nodes) {
+      spans.addAll(_collectSpans(node, theme, baseStyle, null));
+    }
+    return spans;
+  }
+
+  List<TextSpan> _collectSpans(
+    hi.Node node,
+    Map<String, TextStyle> theme,
+    TextStyle baseStyle,
+    TextStyle? parentThemeStyle,
+  ) {
+    final String className = node.className ?? '';
+    final TextStyle? themeStyle = className.isNotEmpty
+        ? theme[className]
+        : parentThemeStyle;
+    final TextStyle effectiveStyle = (themeStyle != null
+        ? themeStyle.merge(baseStyle)
+        : baseStyle);
+
+    if (node.value != null) {
+      return <TextSpan>[TextSpan(text: node.value, style: effectiveStyle)];
+    }
+
+    final List<hi.Node>? children = node.children;
+    if (children == null || children.isEmpty) {
+      return <TextSpan>[];
+    }
+
+    final List<TextSpan> childSpans = <TextSpan>[];
+    for (final hi.Node child in children) {
+      childSpans.addAll(
+        _collectSpans(child, theme, baseStyle, themeStyle ?? parentThemeStyle),
+      );
+    }
+    return <TextSpan>[TextSpan(children: childSpans, style: effectiveStyle)];
   }
 
   Color _codeBackground() {
