@@ -1,5 +1,6 @@
 // lib/widgets/message_bubble.dart
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/widgets/markdown_message.dart';
 
 class MessageBubbleAction {
   const MessageBubbleAction({
@@ -23,6 +24,7 @@ class MessageBubble extends StatefulWidget {
     this.maxWidth,
     this.actions = const <MessageBubbleAction>[],
     this.reasoning,
+    this.modelLabel,
   });
 
   final String message;
@@ -32,6 +34,7 @@ class MessageBubble extends StatefulWidget {
   final double? maxWidth; // Neue optionale Eigenschaft für responsive Breite
   final List<MessageBubbleAction> actions;
   final String? reasoning;
+  final String? modelLabel;
 
   @override
   State<MessageBubble> createState() => _MessageBubbleState();
@@ -47,8 +50,8 @@ class _MessageBubbleState extends State<MessageBubble> {
   Widget build(BuildContext context) {
     // Determine alignment based on whether it's a user message or not.
     // Historically voice mode inverted this flag, so we keep compatibility.
-    final bool alignRight =
-        widget.isUser; // User messages (regular chat) go right, bot messages go left.
+    final bool alignRight = widget
+        .isUser; // User messages (regular chat) go right, bot messages go left.
 
     // Get colors from theme
     final Color accentColor = Theme.of(context).colorScheme.primary;
@@ -100,12 +103,29 @@ class _MessageBubbleState extends State<MessageBubble> {
                           ),
                         ),
                       )
-                    : const SizedBox(
-                        key: ValueKey('reasoning-collapsed'),
-                      ),
+                    : const SizedBox(key: ValueKey('reasoning-collapsed')),
               ),
             ],
-            SelectableText(widget.message, style: TextStyle(color: iconFgColor)),
+            if (widget.modelLabel != null && widget.modelLabel!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  widget.modelLabel!,
+                  style: TextStyle(
+                    color: iconFgColor.withValues(alpha: 0.6),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  textAlign: alignRight ? TextAlign.right : TextAlign.left,
+                ),
+              ),
+            MarkdownMessage(
+              text: widget.message,
+              textColor: iconFgColor,
+              backgroundColor: alignRight
+                  ? accentColor.withValues(alpha: .8)
+                  : bgColor,
+            ),
             if (hasActions) ...[
               const SizedBox(height: 8),
               Wrap(
@@ -137,8 +157,7 @@ class _MessageBubbleState extends State<MessageBubble> {
 
   Widget _buildReasoningToggle(Color iconFgColor, bool alignRight) {
     final bool expanded = _isReasoningExpanded;
-    final IconData icon =
-        expanded ? Icons.expand_less : Icons.expand_more;
+    final IconData icon = expanded ? Icons.expand_less : Icons.expand_more;
     final String label = expanded ? 'Hide reasoning' : 'Show reasoning';
 
     return InkWell(
@@ -146,15 +165,12 @@ class _MessageBubbleState extends State<MessageBubble> {
         setState(() => _isReasoningExpanded = !expanded);
       },
       child: Row(
-        mainAxisAlignment:
-            alignRight ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: alignRight
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            size: 16,
-            color: iconFgColor.withValues(alpha: 0.6),
-          ),
+          Icon(icon, size: 16, color: iconFgColor.withValues(alpha: 0.6)),
           const SizedBox(width: 4),
           Text(
             label,

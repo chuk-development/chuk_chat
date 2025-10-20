@@ -17,25 +17,43 @@ class ChatMessage {
     required this.sender,
     required this.text,
     this.reasoning = '',
+    this.modelId,
+    this.provider,
   });
 
   final String sender;
   final String text;
   final String reasoning;
+  final String? modelId;
+  final String? provider;
 
   Map<String, String> toJson() {
     final Map<String, String> json = {'sender': sender, 'text': text};
     if (reasoning.isNotEmpty) {
       json['reasoning'] = reasoning;
     }
+    if (modelId != null && modelId!.isNotEmpty) {
+      json['modelId'] = modelId!;
+    }
+    if (provider != null && provider!.isNotEmpty) {
+      json['provider'] = provider!;
+    }
     return json;
   }
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    String? normalize(String? value) {
+      if (value == null) return null;
+      final trimmed = value.trim();
+      return trimmed.isEmpty ? null : trimmed;
+    }
+
     return ChatMessage(
       sender: json['sender'] as String? ?? 'user',
       text: json['text'] as String? ?? '',
       reasoning: json['reasoning'] as String? ?? '',
+      modelId: normalize(json['modelId'] as String?),
+      provider: normalize(json['provider'] as String?),
     );
   }
 }
@@ -442,6 +460,8 @@ class ChatStorageService {
             sender: entry['sender'] ?? 'user',
             text: entry['text'] ?? '',
             reasoning: entry['reasoning'] ?? '',
+            modelId: entry['modelId'],
+            provider: entry['provider'],
           ),
         )
         .where((message) => message.text.trim().isNotEmpty)

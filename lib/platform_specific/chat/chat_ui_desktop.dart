@@ -15,6 +15,10 @@ import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart'; // NEW
 import 'package:chuk_chat/services/streaming_chat_service.dart';
+import 'package:chuk_chat/models/code_artifact.dart';
+import 'package:chuk_chat/utils/code_artifact_parser.dart';
+import 'package:chuk_chat/widgets/code_artifact_panel.dart';
+import 'package:chuk_chat/widgets/code_artifact_preview_list.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
@@ -22,6 +26,22 @@ import 'package:uuid/uuid.dart';
 import 'package:record/record.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
+
+class _MessageRenderData {
+  const _MessageRenderData({
+    required this.sender,
+    required this.displayText,
+    required this.reasoning,
+    required this.artifacts,
+  });
+
+  final String sender;
+  final String displayText;
+  final String reasoning;
+  final List<CodeArtifact> artifacts;
+
+  bool get isUser => sender == 'user';
+}
 
 class ChukChatUIDesktop extends StatefulWidget {
   // RENAMED CLASS
@@ -78,6 +98,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   final List<AttachedFile> _attachedFiles = [];
   final Uuid _uuid = Uuid();
+  CodeArtifactRef? _activeArtifact;
 
   static const List<String> _kAllowedExtensions = [
     'wav',
@@ -219,6 +240,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     } else {
       _activeChatId = null;
     }
+    _activeArtifact = null;
     setState(() {
       _isImageActive = false;
       _isMicActive = false;
@@ -238,6 +260,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _isImageActive = false;
       _isMicActive = false;
       _attachedFiles.clear();
+      _activeArtifact = null;
       _resetAudioLevels();
     });
     _scrollChatToBottom();
@@ -1162,6 +1185,41 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     });
   }
 
+  void _handleArtifactSelection(CodeArtifact artifact) {
+    final CodeArtifactRef selection = CodeArtifactRef(
+      messageIndex: artifact.messageIndex,
+      blockIndex: artifact.blockIndex,
+    );
+    setState(() {
+      if (_activeArtifact == selection) {
+        _activeArtifact = null;
+      } else {
+        _activeArtifact = selection;
+      }
+    });
+  }
+
+  void _closeArtifactPanel() {
+    if (_activeArtifact == null) return;
+    setState(() {
+      _activeArtifact = null;
+    });
+  }
+
+  String _bubbleTextFor(_MessageRenderData data) {
+    final String trimmed = data.displayText.trim();
+    if (trimmed.isNotEmpty) {
+      return data.displayText;
+    }
+    if (data.artifacts.isEmpty) {
+      return data.displayText;
+    }
+    if (data.artifacts.length == 1) {
+      return data.artifacts.first.placeholderLabel;
+    }
+    return 'View ${data.artifacts.length} code artifacts below.';
+  }
+
   Future<void> _persistChat({bool waitForCompletion = false}) async {
     if (_messages.isEmpty) return;
     final messagesCopy = _messages
@@ -1246,59 +1304,172 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         ? centeredInputWidth
         : expandedInputWidth;
 
+    final List<_MessageRenderData> renderMessages =
+        List<_MessageRenderData>.generate(_messages.length, (int index) {
+          final Map<String, String> raw = _messages[index];
+          final CodeArtifactExtraction extraction = CodeArtifactParser.extract(
+            raw['text'] ?? '',
+          );
+          final List<CodeArtifact> artifacts = extraction.blocks
+              .map((block) => block.toArtifact(index))
+              .toList();
+          return _MessageRenderData(
+            sender: raw['sender'] ?? 'ai',
+            displayText: extraction.displayText,
+            reasoning: raw['reasoning'] ?? '',
+            artifacts: artifacts,
+          );
+        });
+
+    CodeArtifact? activeArtifactData;
+    bool shouldClearActiveArtifact = false;
+    final CodeArtifactRef? activeRef = _activeArtifact;
+    if (activeRef != null) {
+      if (activeRef.messageIndex >= 0 &&
+          activeRef.messageIndex < renderMessages.length) {
+        final List<CodeArtifact> candidate =
+            renderMessages[activeRef.messageIndex].artifacts;
+        for (final CodeArtifact artifact in candidate) {
+          if (artifact.blockIndex == activeRef.blockIndex) {
+            activeArtifactData = artifact;
+            break;
+          }
+        }
+        if (activeArtifactData == null) {
+          shouldClearActiveArtifact = true;
+        }
+      } else {
+        shouldClearActiveArtifact = true;
+      }
+    }
+
+    if (shouldClearActiveArtifact) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _activeArtifact = null;
+          });
+        }
+      });
+    }
+
+    final bool hasActiveArtifact = activeArtifactData != null;
+    final bool dockArtifactPanel = hasActiveArtifact && screenWidth >= 1024;
+    final double artifactPanelWidth = math.min(
+      520.0,
+      math.max(280.0, screenWidth * 0.4),
+    );
+    final double availableFloatingWidth =
+        screenWidth - (effectiveHorizontalPadding * 2);
+    final double floatingArtifactWidth = math.min(
+      artifactPanelWidth,
+      availableFloatingWidth <= 0 ? artifactPanelWidth : availableFloatingWidth,
+    );
+    final double chatRightPadding = dockArtifactPanel
+        ? artifactPanelWidth + effectiveHorizontalPadding
+        : 0;
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-          // Chat-Nachrichtenliste (only shown if there are messages)
           if (!isChatEmpty)
             Positioned(
               top: 0,
-              bottom:
-                  inputAreaTotalHeight, // Chat list is positioned above the entire input area
+              bottom: inputAreaTotalHeight,
               left: 0,
               right: 0,
               child: FadeTransition(
                 opacity: _anim,
-                child: Center(
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
+                child: AnimatedPadding(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeOutCubic,
+                  padding: EdgeInsets.only(right: chatRightPadding),
+                  child: AnimatedAlign(
+                    duration: const Duration(milliseconds: 300),
                     curve: Curves.easeOutCubic,
-                    constraints: BoxConstraints(
-                      maxWidth: expandedInputWidth,
-                    ), // Chat list itself uses expanded width
-                    child: ListView.builder(
-                      controller: _scrollController,
-                      padding: EdgeInsets.symmetric(
-                        horizontal: effectiveHorizontalPadding,
-                        vertical: 10,
+                    alignment: dockArtifactPanel
+                        ? Alignment.centerLeft
+                        : Alignment.center,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeOutCubic,
+                      constraints: BoxConstraints(maxWidth: expandedInputWidth),
+                      child: ListView.builder(
+                        controller: _scrollController,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: effectiveHorizontalPadding,
+                          vertical: 10,
+                        ),
+                        itemCount: renderMessages.length,
+                        itemBuilder: (_, int i) {
+                          final _MessageRenderData data = renderMessages[i];
+                          final String bubbleText = _bubbleTextFor(data);
+                          final String? reasoningText =
+                              data.reasoning.trim().isEmpty
+                              ? null
+                              : data.reasoning;
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              MessageBubble(
+                                message: bubbleText,
+                                reasoning: reasoningText,
+                                isUser: data.isUser,
+                                maxWidth: expandedInputWidth * 0.7,
+                              ),
+                              if (data.artifacts.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Align(
+                                    alignment: data.isUser
+                                        ? Alignment.centerRight
+                                        : Alignment.centerLeft,
+                                    child: CodeArtifactPreviewList(
+                                      artifacts: data.artifacts,
+                                      onArtifactPressed:
+                                          _handleArtifactSelection,
+                                      activeSelection: _activeArtifact,
+                                      alignRight: data.isUser,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          );
+                        },
                       ),
-                      itemCount: _messages.length,
-                      itemBuilder: (_, i) {
-                        final m = _messages[i];
-                        return MessageBubble(
-                          message: m['text'] ?? '',
-                          reasoning: () {
-                            final String? value = m['reasoning'];
-                            if (value == null || value.trim().isEmpty) {
-                              return null;
-                            }
-                            return value;
-                          }(),
-                          isUser: m['sender'] == 'user',
-                          maxWidth:
-                              expandedInputWidth *
-                              0.7, // Message bubbles also use expanded width
-                        );
-                      },
                     ),
                   ),
                 ),
               ),
             ),
 
-          // Combined Input Area (Search bar + Attachment bar)
-          // Uses AnimatedPositioned to smoothly move from center to bottom
+          if (hasActiveArtifact)
+            Positioned(
+              top: dockArtifactPanel ? 0 : effectiveHorizontalPadding,
+              right: effectiveHorizontalPadding,
+              bottom: dockArtifactPanel
+                  ? inputAreaTotalHeight
+                  : inputAreaTotalHeight + effectiveHorizontalPadding,
+              child: SizedBox(
+                width: dockArtifactPanel
+                    ? artifactPanelWidth
+                    : floatingArtifactWidth,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  child: CodeArtifactPanel(
+                    key: ValueKey<String>(
+                      '${activeArtifactData.messageIndex}-${activeArtifactData.blockIndex}',
+                    ),
+                    artifact: activeArtifactData,
+                    onClose: _closeArtifactPanel,
+                  ),
+                ),
+              ),
+            ),
+
           AnimatedPositioned(
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeOutCubic,

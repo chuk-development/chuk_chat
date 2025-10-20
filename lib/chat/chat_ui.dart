@@ -51,6 +51,8 @@ class ChukChatUIState extends State<ChukChatUI>
   late AnimationController _animCtrl;
   late Animation<double> _anim;
   String _selectedModelId = 'deepseek/deepseek-chat-v3.1';
+  final Map<String, String> _modelProviderCache = {};
+  bool _providerPreferencesLoaded = false;
   late final VoidCallback _modelSelectionListener;
 
   bool _isImageActive = false;
@@ -155,12 +157,23 @@ class ChukChatUIState extends State<ChukChatUI>
               'text': message.text,
               'rawText': message.sender == 'user' ? message.text : null,
               'attachments': <Map<String, dynamic>>[],
-              'modelId': null,
+              'modelId': message.modelId,
+              'provider': message.provider,
               'status': 'sent',
               'timestamp': DateTime.now().toIso8601String(),
             },
           ),
         );
+      for (final chatMessage in storedChat.messages) {
+        final String? modelId = chatMessage.modelId;
+        final String? provider = chatMessage.provider;
+        if (modelId != null &&
+            modelId.isNotEmpty &&
+            provider != null &&
+            provider.isNotEmpty) {
+          _modelProviderCache[modelId] = provider;
+        }
+      }
       if (_messages.isNotEmpty) {
         _animCtrl.forward();
       } else {
@@ -190,6 +203,58 @@ class ChukChatUIState extends State<ChukChatUI>
     } catch (e) {
       debugPrint('Error loading saved model preference: $e');
     }
+  }
+
+  Future<String?> _resolveProviderForModel(String modelId) async {
+    if (modelId.isEmpty) return null;
+
+    final String? dropdownProvider =
+        ModelSelectionDropdown.providerSlugForModel(modelId);
+    if (dropdownProvider != null && dropdownProvider.isNotEmpty) {
+      _modelProviderCache[modelId] = dropdownProvider;
+      return dropdownProvider;
+    }
+
+    final String? cached = _modelProviderCache[modelId];
+    if (cached != null && cached.isNotEmpty) {
+      return cached;
+    }
+
+    if (!_providerPreferencesLoaded) {
+      try {
+        final Map<String, String> prefs =
+            await UserPreferencesService.loadAllProviderPreferences();
+        if (prefs.isNotEmpty) {
+          _modelProviderCache.addAll(prefs);
+        }
+      } catch (error) {
+        debugPrint('Failed to load provider preferences: $error');
+      } finally {
+        _providerPreferencesLoaded = true;
+      }
+    }
+
+    final String? hydrated = _modelProviderCache[modelId];
+    if (hydrated != null && hydrated.isNotEmpty) {
+      return hydrated;
+    }
+
+    return null;
+  }
+
+  String? _formatModelInfo(String? modelId, String? provider) {
+    final String normalizedModel = (modelId ?? '').trim();
+    final String normalizedProvider = (provider ?? '').trim();
+    if (normalizedModel.isEmpty && normalizedProvider.isEmpty) {
+      return null;
+    }
+    if (normalizedModel.isEmpty) {
+      return 'Provider: $normalizedProvider';
+    }
+    if (normalizedProvider.isEmpty) {
+      return 'Model: $normalizedModel';
+    }
+    return 'Model: $normalizedModel • Provider: $normalizedProvider';
   }
 
   void newChat() async {
@@ -244,6 +309,7 @@ class ChukChatUIState extends State<ChukChatUI>
 
     final bool firstMessageInChat = _messages.isEmpty;
     final String modelIdForSend = overrideModelId ?? _selectedModelId;
+    final String? providerSlug = await _resolveProviderForModel(modelIdForSend);
 
     String displayMessageText = originalUserInput;
 
@@ -281,6 +347,7 @@ class ChukChatUIState extends State<ChukChatUI>
         'rawText': originalUserInput,
         'attachments': attachmentSnapshots,
         'modelId': modelIdForSend,
+        'provider': providerSlug,
         'status': 'sent',
         'timestamp': DateTime.now().toIso8601String(),
       });
@@ -307,6 +374,7 @@ class ChukChatUIState extends State<ChukChatUI>
         'status': 'pending',
         'relatedMessageId': userMessageId,
         'modelId': modelIdForSend,
+        'provider': providerSlug,
         'timestamp': DateTime.now().toIso8601String(),
       });
       placeholderIndex = _messages.length - 1;
@@ -325,6 +393,7 @@ class ChukChatUIState extends State<ChukChatUI>
           existing['text'] = text;
           existing['status'] = 'sent';
           existing['modelId'] = modelIdForSend;
+          existing['provider'] = providerSlug;
           existing['timestamp'] = DateTime.now().toIso8601String();
           _messages[placeholderIndex] = existing;
         } else {
@@ -368,7 +437,10 @@ class ChukChatUIState extends State<ChukChatUI>
     final String mirroredText = originalUserInput.isNotEmpty
         ? originalUserInput
         : displayMessageText;
-    finalizeAiMessage('Model: $modelIdForSend\n\n$mirroredText');
+    final String providerLine = providerSlug != null && providerSlug.isNotEmpty
+        ? 'Provider: $providerSlug\n'
+        : '';
+    finalizeAiMessage('Model: $modelIdForSend\n$providerLine\n$mirroredText');
   }
 
   void _showSnack(String message) {
@@ -447,8 +519,9 @@ class ChukChatUIState extends State<ChukChatUI>
   Future<void> _prepareMessageAndSend(
     Map<String, dynamic> source, {
     String? overrideModelId,
+    bool autoSend = true,
   }) async {
-    if (_isSending) {
+    if (autoSend && _isSending) {
       _showSnack('Please wait for the current response to finish.');
       return;
     }
@@ -461,6 +534,10 @@ class ChukChatUIState extends State<ChukChatUI>
               (attachment['markdownContent'] as String?)?.isNotEmpty ?? false,
         )
         .toList();
+    final String? targetModelId =
+        overrideModelId ??
+        (source['modelId'] as String?) ??
+        (_selectedModelId.isNotEmpty ? _selectedModelId : null);
 
     setState(() {
       _controller
@@ -480,13 +557,23 @@ class ChukChatUIState extends State<ChukChatUI>
             ),
           ),
         );
+      if (targetModelId != null &&
+          targetModelId.isNotEmpty &&
+          _selectedModelId != targetModelId) {
+        _selectedModelId = targetModelId;
+      }
     });
 
-    await _sendMessage(
-      resendSource: source,
-      overrideModelId:
-          overrideModelId ?? source['modelId'] as String? ?? _selectedModelId,
-    );
+    if (targetModelId != null && targetModelId.isNotEmpty) {
+      ModelSelectionDropdown.selectedModelNotifier.value = targetModelId;
+    }
+    _refocusTextField(delay: true);
+
+    if (!autoSend) {
+      return;
+    }
+
+    await _sendMessage(resendSource: source, overrideModelId: targetModelId);
   }
 
   Future<void> _resendMessage(Map<String, dynamic> message) async {
@@ -531,6 +618,14 @@ class ChukChatUIState extends State<ChukChatUI>
     await _prepareMessageAndSend(source, overrideModelId: selectedModel);
   }
 
+  Future<void> _editMessage(Map<String, dynamic> message) async {
+    await _prepareMessageAndSend(
+      message,
+      overrideModelId: message['modelId'] as String?,
+      autoSend: false,
+    );
+  }
+
   List<MessageBubbleAction> _buildMessageActions(Map<String, dynamic> message) {
     final String text = (message['text'] as String?) ?? '';
     final bool isUserMessage =
@@ -551,6 +646,14 @@ class ChukChatUIState extends State<ChukChatUI>
     }
 
     if (isUserMessage) {
+      actions.add(
+        MessageBubbleAction(
+          icon: Icons.edit,
+          tooltip: 'Edit & resend',
+          onPressed: () => _editMessage(message),
+          isEnabled: !isPending,
+        ),
+      );
       actions.add(
         MessageBubbleAction(
           icon: Icons.replay,
@@ -987,12 +1090,25 @@ class ChukChatUIState extends State<ChukChatUI>
   Future<void> _persistChat({bool waitForCompletion = false}) async {
     if (_messages.isEmpty) return;
     final messagesCopy = _messages
-        .map(
-          (message) => <String, String>{
+        .map((message) {
+          final Map<String, String> entry = {
             'sender': (message['sender'] as String?) ?? 'user',
             'text': (message['text'] as String?) ?? '',
-          },
-        )
+          };
+          final String? modelId = message['modelId'] as String?;
+          if (modelId != null && modelId.isNotEmpty) {
+            entry['modelId'] = modelId;
+          }
+          final String? provider = message['provider'] as String?;
+          if (provider != null && provider.isNotEmpty) {
+            entry['provider'] = provider;
+          }
+          final String? reasoning = message['reasoning'] as String?;
+          if (reasoning != null && reasoning.isNotEmpty) {
+            entry['reasoning'] = reasoning;
+          }
+          return entry;
+        })
         .toList(growable: false);
     final operation = _persistChatInternal(messagesCopy, _activeChatId);
     if (waitForCompletion) {
@@ -1107,6 +1223,10 @@ class ChukChatUIState extends State<ChukChatUI>
                             (message['text'] as String?) ?? '';
                         final bool isUserMessage =
                             (message['sender'] as String?) == 'user';
+                        final String? modelInfo = _formatModelInfo(
+                          message['modelId'] as String?,
+                          message['provider'] as String?,
+                        );
                         return MessageBubble(
                           message: messageText,
                           isUser: isUserMessage,
@@ -1114,6 +1234,7 @@ class ChukChatUIState extends State<ChukChatUI>
                               expandedInputWidth *
                               0.7, // Message bubbles also use expanded width
                           actions: _buildMessageActions(message),
+                          modelLabel: modelInfo,
                         );
                       },
                     ),
