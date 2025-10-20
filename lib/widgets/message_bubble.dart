@@ -22,6 +22,7 @@ class MessageBubble extends StatelessWidget {
     required this.isUser,
     this.maxWidth,
     this.actions = const <MessageBubbleAction>[],
+    this.reasoning,
   });
 
   final String message;
@@ -30,6 +31,7 @@ class MessageBubble extends StatelessWidget {
   // In regular chat, true for user, false for AI.
   final double? maxWidth; // Neue optionale Eigenschaft für responsive Breite
   final List<MessageBubbleAction> actions;
+  final String? reasoning;
 
   @override
   Widget build(BuildContext context) {
@@ -90,6 +92,26 @@ class MessageBubble extends StatelessWidget {
                       ),
                     )
                     .toList(),
+              ),
+            ],
+            if (reasoning != null && reasoning!.trim().isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                'Reasoning',
+                style: TextStyle(
+                  color: iconFgColor.withValues(alpha: 0.6),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 4),
+              SelectableText(
+                reasoning!,
+                style: TextStyle(
+                  color: iconFgColor.withValues(alpha: 0.85),
+                  fontStyle: FontStyle.italic,
+                  height: 1.35,
+                ),
               ),
             ],
           ],

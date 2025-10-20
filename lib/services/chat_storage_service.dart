@@ -13,17 +13,29 @@ import 'package:chuk_chat/services/supabase_service.dart';
 const _kChatPayloadVersion = 1;
 
 class ChatMessage {
-  const ChatMessage({required this.sender, required this.text});
+  const ChatMessage({
+    required this.sender,
+    required this.text,
+    this.reasoning = '',
+  });
 
   final String sender;
   final String text;
+  final String reasoning;
 
-  Map<String, String> toJson() => {'sender': sender, 'text': text};
+  Map<String, String> toJson() {
+    final Map<String, String> json = {'sender': sender, 'text': text};
+    if (reasoning.isNotEmpty) {
+      json['reasoning'] = reasoning;
+    }
+    return json;
+  }
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
     return ChatMessage(
       sender: json['sender'] as String? ?? 'user',
       text: json['text'] as String? ?? '',
+      reasoning: json['reasoning'] as String? ?? '',
     );
   }
 }
@@ -429,6 +441,7 @@ class ChatStorageService {
           (entry) => ChatMessage(
             sender: entry['sender'] ?? 'user',
             text: entry['text'] ?? '',
+            reasoning: entry['reasoning'] ?? '',
           ),
         )
         .where((message) => message.text.trim().isNotEmpty)

@@ -5,6 +5,8 @@ import 'dart:math' as math;
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/user_preferences_service.dart';
+import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/pages/coming_soon_page.dart';
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
@@ -54,6 +56,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   late ChatApiService _chatApiService;
   final List<AttachedFile> _attachedFiles = [];
   String _selectedModelId = 'deepseek/deepseek-chat-v3.1'; // Default model
+  String? _selectedProviderSlug;
   late final VoidCallback _modelSelectionListener;
 
   late AnimationController _animCtrl;
@@ -108,6 +111,17 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     'heic',
     'heif',
   ];
+  static const Set<String> _kImageExtensions = <String>{
+    'jpg',
+    'jpeg',
+    'png',
+    'bmp',
+    'tiff',
+    'gif',
+    'webp',
+    'heic',
+    'heif',
+  };
 
   static const double _kMaxChatContentWidth = 760.0;
   static const double _kSearchBarContentHeight = 135.0;
@@ -132,6 +146,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
     });
     _loadChatFromIndex(widget.selectedChatIndex);
+    unawaited(_loadProviderSlugForModel(_selectedModelId));
     _modelSelectionListener = () {
       final String newModelId =
           ModelSelectionDropdown.selectedModelNotifier.value;
@@ -140,6 +155,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           _selectedModelId = newModelId;
         });
       }
+      unawaited(_loadProviderSlugForModel(newModelId));
     };
     ModelSelectionDropdown.selectedModelListenable.addListener(
       _modelSelectionListener,
@@ -179,6 +195,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                       icon: Icons.photo_camera_outlined,
                       label: 'Camera',
                       onTap: () {
+                        if (!_ensureImageUploadsSupported()) return;
                         Navigator.of(sheetContext).pop();
                         unawaited(_pickImageFromSource(ImageSource.camera));
                       },
@@ -189,6 +206,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                       icon: Icons.photo_library_outlined,
                       label: 'Photos',
                       onTap: () {
+                        if (!_ensureImageUploadsSupported()) return;
                         Navigator.of(sheetContext).pop();
                         unawaited(_pickImagesFromGallery());
                       },
@@ -453,6 +471,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   }
 
   Future<void> _pickImageFromSource(ImageSource source) async {
+    if (!_ensureImageUploadsSupported()) return;
     try {
       final XFile? pickedFile = await _imagePicker.pickImage(
         source: source,
@@ -480,6 +499,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   }
 
   Future<void> _pickImagesFromGallery() async {
+    if (!_ensureImageUploadsSupported()) return;
     try {
       final List<XFile> pickedImages = await _imagePicker.pickMultiImage(
         imageQuality: 90,
@@ -541,7 +561,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         ..addAll(
           storedChat.messages
               .map(
-                (message) => {'sender': message.sender, 'text': message.text},
+                (message) => {
+                  'sender': message.sender,
+                  'text': message.text,
+                  'reasoning': message.reasoning,
+                },
               )
               .toList(),
         );
@@ -589,23 +613,89 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     );
   }
 
-  String? _providerNameForModel(String modelId) {
-    final parts = modelId.split('/');
-    if (parts.length >= 3 && parts.first == 'openrouter') {
-      final providerSlug = parts[1].toLowerCase();
-      const knownProviders = <String, String>{
-        'anthropic': 'Anthropic',
-        'openai': 'OpenAI',
-        'google': 'Google',
-        'meta': 'Meta',
-        'mistralai': 'Mistral',
-        'perplexity': 'Perplexity',
-        'x-ai': 'x.ai',
-        'cohere': 'Cohere',
-        'deepseek': 'DeepSeek',
-        'moonshot': 'Moonshot',
-      };
-      return knownProviders[providerSlug] ?? parts[1];
+  Future<void> _loadProviderSlugForModel(String modelId) async {
+    if (modelId.isEmpty) {
+      if (_selectedProviderSlug != null) {
+        setState(() {
+          _selectedProviderSlug = null;
+        });
+      }
+      return;
+    }
+
+    final String? dropdownSlug = ModelSelectionDropdown.providerSlugForModel(
+      modelId,
+    );
+    if (dropdownSlug != null && dropdownSlug.isNotEmpty) {
+      if (_selectedProviderSlug != dropdownSlug) {
+        setState(() {
+          _selectedProviderSlug = dropdownSlug;
+        });
+      }
+      return;
+    }
+
+    final String? loadedSlug =
+        await UserPreferencesService.loadSelectedProvider(modelId);
+    if (!mounted) return;
+    if (_selectedProviderSlug != loadedSlug) {
+      setState(() {
+        _selectedProviderSlug = loadedSlug;
+      });
+    }
+  }
+
+  Future<String?> _ensureProviderSlugForCurrentModel() async {
+    if (_selectedModelId.isEmpty) return null;
+    if (_selectedProviderSlug != null && _selectedProviderSlug!.isNotEmpty) {
+      return _selectedProviderSlug;
+    }
+    await _loadProviderSlugForModel(_selectedModelId);
+    return _selectedProviderSlug;
+  }
+
+  bool get _modelSupportsImageInput =>
+      ModelCapabilitiesService.supportsImageInput(_selectedModelId);
+
+  bool _ensureImageUploadsSupported() {
+    if (_modelSupportsImageInput) {
+      return true;
+    }
+    _showAttachmentError(
+      'Image uploads are not supported by the selected model. Choose a vision-capable model in Settings.',
+    );
+    return false;
+  }
+
+  bool _isImageExtension(String extension) {
+    return _kImageExtensions.contains(extension);
+  }
+
+  String? _extractReasoning(Map<String, dynamic>? decodedBody) {
+    if (decodedBody == null || decodedBody.isEmpty) return null;
+    final dynamic reasoning = decodedBody['reasoning'];
+    if (reasoning is String) {
+      final String trimmed = reasoning.trim();
+      return trimmed.isEmpty ? null : trimmed;
+    }
+    if (reasoning is List) {
+      final String combined = reasoning
+          .whereType<String>()
+          .map((entry) => entry.trim())
+          .where((entry) => entry.isNotEmpty)
+          .join('\n');
+      return combined.isEmpty ? null : combined;
+    }
+    if (reasoning is Map) {
+      final List<String> segments = [];
+      reasoning.forEach((key, value) {
+        final String formattedValue = value?.toString().trim() ?? '';
+        if (formattedValue.isNotEmpty) {
+          segments.add('$key: $formattedValue');
+        }
+      });
+      final String combined = segments.join('\n');
+      return combined.isEmpty ? null : combined;
     }
     return null;
   }
@@ -724,7 +814,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     }
 
     setState(() {
-      _messages.add({'sender': 'user', 'text': displayMessageText});
+      _messages.add({
+        'sender': 'user',
+        'text': displayMessageText,
+        'reasoning': '',
+      });
       _controller.clear();
       _isSending = true;
       if (hasAttachments) {
@@ -740,20 +834,25 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     int placeholderIndex = -1;
     setState(() {
-      _messages.add({'sender': 'ai', 'text': 'Thinking...'});
+      _messages.add({'sender': 'ai', 'text': 'Thinking...', 'reasoning': ''});
       placeholderIndex = _messages.length - 1;
     });
     _scrollChatToBottom();
 
     bool responseHandled = false;
-    void finalizeAiMessage(String text) {
+    void finalizeAiMessage(String text, {String? reasoning}) {
       responseHandled = true;
       if (!mounted) {
         return;
       }
       setState(() {
         if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
-          _messages[placeholderIndex] = {'sender': 'ai', 'text': text};
+          final Map<String, String> existing = Map<String, String>.from(
+            _messages[placeholderIndex],
+          );
+          existing['text'] = text;
+          existing['reasoning'] = reasoning ?? '';
+          _messages[placeholderIndex] = existing;
         } else {
           debugPrint('AI response arrived after chat reset, dropping message.');
         }
@@ -792,18 +891,32 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       return;
     }
 
+    final String? providerSlug = await _ensureProviderSlugForCurrentModel();
+    if (providerSlug == null || providerSlug.isEmpty) {
+      _isSending = false;
+      final String message =
+          'No provider is configured for $_selectedModelId. Select a provider in Settings and try again.';
+      finalizeAiMessage(message);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
+      }
+      return;
+    }
+
     try {
       final requestPayload = <String, dynamic>{
         'model': _selectedModelId,
         'prompt': aiPromptContent,
         'max_tokens': 512,
         'temperature': 0.7,
-        'metadata': {'source': 'flutter-chat-ui'},
+        'metadata': {
+          'source': 'flutter-chat-ui',
+          'provider_slug': providerSlug,
+        },
       };
-      final String? providerName = _providerNameForModel(_selectedModelId);
-      if (providerName != null) {
-        requestPayload['provider'] = providerName;
-      }
+      requestPayload['provider'] = providerSlug;
 
       final response = await http
           .post(
@@ -828,13 +941,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         }
       }
 
+      final String? reasoningFromBody = _extractReasoning(decodedBody);
+
       if (response.statusCode == 200) {
         final data = decodedBody ?? <String, dynamic>{};
         if (data['insufficient_credits'] == true) {
           final String message =
               data['message'] as String? ??
               'Insufficient balance. Please top up your credits.';
-          finalizeAiMessage(message);
+          finalizeAiMessage(message, reasoning: reasoningFromBody);
           if (mounted) {
             ScaffoldMessenger.of(
               context,
@@ -845,7 +960,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
         final String? content = data['content'] as String?;
         if (content != null && content.isNotEmpty) {
-          finalizeAiMessage(content);
+          finalizeAiMessage(content, reasoning: reasoningFromBody);
           final dynamic remainingCredits = data['remaining_credits'];
           if (remainingCredits != null) {
             debugPrint('Remaining credits: $remainingCredits');
@@ -853,7 +968,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           return;
         }
 
-        finalizeAiMessage('The model returned an empty response.');
+        finalizeAiMessage(
+          'The model returned an empty response.',
+          reasoning: reasoningFromBody,
+        );
         return;
       }
 
@@ -994,6 +1112,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     if (extension.isEmpty || !_kAllowedExtensions.contains(extension)) {
       final String detail = extension.isEmpty ? '' : ': .$extension';
       _showAttachmentError('Unsupported file type for "$fileName"$detail');
+      return;
+    }
+
+    if (_isImageExtension(extension) && !_modelSupportsImageInput) {
+      _showAttachmentError(
+        'Image uploads are not supported by the selected model.',
+      );
       return;
     }
 
@@ -1201,7 +1326,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                           itemBuilder: (_, i) {
                             final m = _messages[i];
                             return MessageBubble(
-                              message: m['text']!,
+                              message: m['text'] ?? '',
+                              reasoning: () {
+                                final String? value = m['reasoning'];
+                                if (value == null || value.trim().isEmpty) {
+                                  return null;
+                                }
+                                return value;
+                              }(),
                               isUser: m['sender'] == 'user',
                               maxWidth: expandedInputWidth * 0.7,
                             );

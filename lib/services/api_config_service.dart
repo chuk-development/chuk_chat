@@ -12,6 +12,7 @@ class ApiConfigService {
   // Default configuration
   static const String _defaultPort = '8000';
   static const String _defaultProtocol = 'http';
+  static const String _defaultProductionUrl = 'https://api.chuk.chat';
 
   // Production configuration (should be set via environment variables)
   static const String _productionUrl = String.fromEnvironment(
@@ -21,44 +22,33 @@ class ApiConfigService {
   /// Gets the appropriate API base URL based on the current environment and platform.
   static String get apiBaseUrl {
     // 1. Check for explicit production URL from environment
+    final String? configuredUrl = _configuredUrl;
+    if (configuredUrl != null && configuredUrl.isNotEmpty) {
+      return configuredUrl;
+    }
+
+    // Fall back to the production API when no environment overrides are present.
+    return _defaultProductionUrl;
+  }
+
+  static String? get _configuredUrl {
+    // 1. Explicit production URL from environment variables.
     if (_productionUrl.isNotEmpty) {
       return _productionUrl;
     }
 
-    // 2. Check for custom API URL from environment
+    // 2. Custom API URL override.
     if (_envApiUrl.isNotEmpty) {
       return _envApiUrl;
     }
 
-    // 3. Build URL from host and port environment variables
+    // 3. Host/port combination.
     if (_envApiHost.isNotEmpty) {
       final port = _envApiPort.isNotEmpty ? _envApiPort : _defaultPort;
       return '$_defaultProtocol://$_envApiHost:$port';
     }
 
-    // 4. Use platform-specific development URLs
-    return _getDevelopmentUrl();
-  }
-
-  /// Gets the development URL based on the current platform.
-  static String _getDevelopmentUrl() {
-    if (kDebugMode) {
-      // Development mode - use platform-specific localhost alternatives
-      if (Platform.isAndroid) {
-        // Android emulator uses 10.0.2.2 to access host machine's localhost
-        return '$_defaultProtocol://10.0.2.2:$_defaultPort';
-      } else if (Platform.isIOS) {
-        // iOS simulator can use localhost directly
-        return '$_defaultProtocol://localhost:$_defaultPort';
-      } else if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-        // Desktop platforms can use localhost
-        return '$_defaultProtocol://localhost:$_defaultPort';
-      }
-    }
-
-    // Fallback for production or unknown platforms
-    // This should be overridden with environment variables in production
-    return '$_defaultProtocol://localhost:$_defaultPort';
+    return null;
   }
 
   /// Gets the current environment type.
@@ -82,15 +72,9 @@ class ApiConfigService {
 
   /// Validates that the API configuration is properly set up.
   static bool get isConfigured {
-    if (kDebugMode) {
-      // In debug mode, we can use development URLs
-      return true;
-    } else {
-      // In production, we need explicit configuration
-      return _productionUrl.isNotEmpty ||
-          _envApiUrl.isNotEmpty ||
-          _envApiHost.isNotEmpty;
-    }
+    // Consider the API configured when an explicit environment override is
+    // provided or when we fall back to the production endpoint.
+    return _configuredUrl != null || _defaultProductionUrl.isNotEmpty;
   }
 
   /// Gets a human-readable description of the current configuration.

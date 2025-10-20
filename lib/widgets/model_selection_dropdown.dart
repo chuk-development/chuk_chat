@@ -97,6 +97,16 @@ class ModelSelectionDropdown extends StatefulWidget {
     }
   }
 
+  static String? providerSlugForModel(String modelId) {
+    for (final _ModelSelectionDropdownState state in _activeStates) {
+      final String? slug = state.providerSlugFor(modelId);
+      if (slug != null && slug.isNotEmpty) {
+        return slug;
+      }
+    }
+    return null;
+  }
+
   @override
   State<ModelSelectionDropdown> createState() => _ModelSelectionDropdownState();
 }
@@ -157,6 +167,10 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
         setState(() => _isLoadingModels = false);
       }
     }
+  }
+
+  String? providerSlugFor(String modelId) {
+    return _enabledModelProviders[modelId];
   }
 
   Future<void> refreshModels() async {
