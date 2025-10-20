@@ -28,6 +28,7 @@ dependencies:
   path_provider: ^2.1.4
   flutter_markdown: ^0.6.20
   markdown: ^7.3.0
+  highlight: ^0.7.0
 
 
 dev_dependencies:

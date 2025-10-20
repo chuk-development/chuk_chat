@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:url_launcher/url_launcher_string.dart';
+import 'package:chuk_chat/utils/chuk_syntax_highlighter.dart';
 
 class MarkdownMessage extends StatelessWidget {
   const MarkdownMessage({
@@ -64,6 +65,12 @@ class MarkdownMessage extends StatelessWidget {
         color: textColor,
         backgroundColor: _codeBackground(),
       ),
+      codeblockPadding: const EdgeInsets.all(12),
+      codeblockDecoration: BoxDecoration(
+        color: _codeBackground(),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: textColor.withValues(alpha: 0.2)),
+      ),
       blockquotePadding: const EdgeInsets.symmetric(
         horizontal: 12,
         vertical: 4,
@@ -99,6 +106,7 @@ class MarkdownMessage extends StatelessWidget {
       softLineBreak: true,
       styleSheet: baseSheet,
       extensionSet: md.ExtensionSet.gitHubWeb,
+      syntaxHighlighter: ChukSyntaxHighlighter(context, textColor),
       listItemCrossAxisAlignment: MarkdownListItemCrossAxisAlignment.start,
       onTapLink: (text, href, title) {
         if (href == null || href.trim().isEmpty) return;

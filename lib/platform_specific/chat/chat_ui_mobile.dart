@@ -13,10 +13,6 @@ import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart'; // NEW API SERVICE
 import 'package:chuk_chat/services/streaming_chat_service.dart';
-import 'package:chuk_chat/models/code_artifact.dart';
-import 'package:chuk_chat/utils/code_artifact_parser.dart';
-import 'package:chuk_chat/widgets/code_artifact_preview_list.dart';
-import 'package:chuk_chat/widgets/code_artifact_panel.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
@@ -32,13 +28,11 @@ class _MobileMessageRenderData {
     required this.sender,
     required this.displayText,
     required this.reasoning,
-    required this.artifacts,
   });
 
   final String sender;
   final String displayText;
   final String reasoning;
-  final List<CodeArtifact> artifacts;
 
   bool get isUser => sender == 'user';
 }
@@ -1288,48 +1282,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     });
   }
 
-  Future<void> _openArtifactSheet(CodeArtifact artifact) async {
-    if (!mounted) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (BuildContext sheetContext) {
-        final EdgeInsets viewInsets = MediaQuery.of(sheetContext).viewInsets;
-        final double maxHeight = MediaQuery.of(sheetContext).size.height * 0.8;
-        return Padding(
-          padding: EdgeInsets.fromLTRB(
-            16,
-            16,
-            16,
-            math.max(viewInsets.bottom, 16),
-          ),
-          child: SizedBox(
-            height: maxHeight,
-            child: CodeArtifactPanel(
-              artifact: artifact,
-              onClose: () => Navigator.of(sheetContext).pop(),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  String _bubbleTextFor(_MobileMessageRenderData data) {
-    final String trimmed = data.displayText.trim();
-    if (trimmed.isNotEmpty) {
-      return data.displayText;
-    }
-    if (data.artifacts.isEmpty) {
-      return data.displayText;
-    }
-    if (data.artifacts.length == 1) {
-      return data.artifacts.first.placeholderLabel;
-    }
-    return 'View ${data.artifacts.length} code artifacts below.';
-  }
-
   Future<void> _persistChat({bool waitForCompletion = false}) async {
     if (_messages.isEmpty) return;
     final messagesCopy = _messages
@@ -1404,17 +1356,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     final List<_MobileMessageRenderData> renderMessages =
         List<_MobileMessageRenderData>.generate(_messages.length, (int index) {
           final Map<String, String> raw = _messages[index];
-          final CodeArtifactExtraction extraction = CodeArtifactParser.extract(
-            raw['text'] ?? '',
-          );
-          final List<CodeArtifact> artifacts = extraction.blocks
-              .map((block) => block.toArtifact(index))
-              .toList();
           return _MobileMessageRenderData(
             sender: raw['sender'] ?? 'ai',
-            displayText: extraction.displayText,
+            displayText: (raw['text'] ?? '').trimRight(),
             reasoning: raw['reasoning'] ?? '',
-            artifacts: artifacts,
           );
         });
 
@@ -1456,7 +1401,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                           itemBuilder: (_, int i) {
                             final _MobileMessageRenderData data =
                                 renderMessages[i];
-                            final String bubbleText = _bubbleTextFor(data);
                             final String? reasoningText =
                                 data.reasoning.trim().isEmpty
                                 ? null
@@ -1465,29 +1409,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                                 MessageBubble(
-                                  message: bubbleText,
+                                  message: data.displayText,
                                   reasoning: reasoningText,
                                   isUser: data.isUser,
                                   maxWidth: expandedInputWidth * 0.7,
                                 ),
-                                if (data.artifacts.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 8),
-                                    child: Align(
-                                      alignment: data.isUser
-                                          ? Alignment.centerRight
-                                          : Alignment.centerLeft,
-                                      child: CodeArtifactPreviewList(
-                                        artifacts: data.artifacts,
-                                        onArtifactPressed:
-                                            (CodeArtifact artifact) {
-                                              _openArtifactSheet(artifact);
-                                            },
-                                        activeSelection: null,
-                                        alignRight: data.isUser,
-                                      ),
-                                    ),
-                                  ),
                               ],
                             );
                           },

@@ -15,10 +15,6 @@ import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart'; // NEW
 import 'package:chuk_chat/services/streaming_chat_service.dart';
-import 'package:chuk_chat/models/code_artifact.dart';
-import 'package:chuk_chat/utils/code_artifact_parser.dart';
-import 'package:chuk_chat/widgets/code_artifact_panel.dart';
-import 'package:chuk_chat/widgets/code_artifact_preview_list.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
@@ -32,13 +28,11 @@ class _MessageRenderData {
     required this.sender,
     required this.displayText,
     required this.reasoning,
-    required this.artifacts,
   });
 
   final String sender;
   final String displayText;
   final String reasoning;
-  final List<CodeArtifact> artifacts;
 
   bool get isUser => sender == 'user';
 }
@@ -98,7 +92,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   final List<AttachedFile> _attachedFiles = [];
   final Uuid _uuid = Uuid();
-  CodeArtifactRef? _activeArtifact;
 
   static const List<String> _kAllowedExtensions = [
     'wav',
@@ -240,7 +233,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     } else {
       _activeChatId = null;
     }
-    _activeArtifact = null;
     setState(() {
       _isImageActive = false;
       _isMicActive = false;
@@ -260,7 +252,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _isImageActive = false;
       _isMicActive = false;
       _attachedFiles.clear();
-      _activeArtifact = null;
       _resetAudioLevels();
     });
     _scrollChatToBottom();
@@ -1185,41 +1176,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     });
   }
 
-  void _handleArtifactSelection(CodeArtifact artifact) {
-    final CodeArtifactRef selection = CodeArtifactRef(
-      messageIndex: artifact.messageIndex,
-      blockIndex: artifact.blockIndex,
-    );
-    setState(() {
-      if (_activeArtifact == selection) {
-        _activeArtifact = null;
-      } else {
-        _activeArtifact = selection;
-      }
-    });
-  }
-
-  void _closeArtifactPanel() {
-    if (_activeArtifact == null) return;
-    setState(() {
-      _activeArtifact = null;
-    });
-  }
-
-  String _bubbleTextFor(_MessageRenderData data) {
-    final String trimmed = data.displayText.trim();
-    if (trimmed.isNotEmpty) {
-      return data.displayText;
-    }
-    if (data.artifacts.isEmpty) {
-      return data.displayText;
-    }
-    if (data.artifacts.length == 1) {
-      return data.artifacts.first.placeholderLabel;
-    }
-    return 'View ${data.artifacts.length} code artifacts below.';
-  }
-
   Future<void> _persistChat({bool waitForCompletion = false}) async {
     if (_messages.isEmpty) return;
     final messagesCopy = _messages
@@ -1307,67 +1263,13 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     final List<_MessageRenderData> renderMessages =
         List<_MessageRenderData>.generate(_messages.length, (int index) {
           final Map<String, String> raw = _messages[index];
-          final CodeArtifactExtraction extraction = CodeArtifactParser.extract(
-            raw['text'] ?? '',
-          );
-          final List<CodeArtifact> artifacts = extraction.blocks
-              .map((block) => block.toArtifact(index))
-              .toList();
+          final String displayText = (raw['text'] ?? '').trimRight();
           return _MessageRenderData(
             sender: raw['sender'] ?? 'ai',
-            displayText: extraction.displayText,
+            displayText: displayText,
             reasoning: raw['reasoning'] ?? '',
-            artifacts: artifacts,
           );
         });
-
-    CodeArtifact? activeArtifactData;
-    bool shouldClearActiveArtifact = false;
-    final CodeArtifactRef? activeRef = _activeArtifact;
-    if (activeRef != null) {
-      if (activeRef.messageIndex >= 0 &&
-          activeRef.messageIndex < renderMessages.length) {
-        final List<CodeArtifact> candidate =
-            renderMessages[activeRef.messageIndex].artifacts;
-        for (final CodeArtifact artifact in candidate) {
-          if (artifact.blockIndex == activeRef.blockIndex) {
-            activeArtifactData = artifact;
-            break;
-          }
-        }
-        if (activeArtifactData == null) {
-          shouldClearActiveArtifact = true;
-        }
-      } else {
-        shouldClearActiveArtifact = true;
-      }
-    }
-
-    if (shouldClearActiveArtifact) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          setState(() {
-            _activeArtifact = null;
-          });
-        }
-      });
-    }
-
-    final bool hasActiveArtifact = activeArtifactData != null;
-    final bool dockArtifactPanel = hasActiveArtifact && screenWidth >= 1024;
-    final double artifactPanelWidth = math.min(
-      520.0,
-      math.max(280.0, screenWidth * 0.4),
-    );
-    final double availableFloatingWidth =
-        screenWidth - (effectiveHorizontalPadding * 2);
-    final double floatingArtifactWidth = math.min(
-      artifactPanelWidth,
-      availableFloatingWidth <= 0 ? artifactPanelWidth : availableFloatingWidth,
-    );
-    final double chatRightPadding = dockArtifactPanel
-        ? artifactPanelWidth + effectiveHorizontalPadding
-        : 0;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -1384,13 +1286,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 child: AnimatedPadding(
                   duration: const Duration(milliseconds: 300),
                   curve: Curves.easeOutCubic,
-                  padding: EdgeInsets.only(right: chatRightPadding),
+                  padding: EdgeInsets.zero,
                   child: AnimatedAlign(
                     duration: const Duration(milliseconds: 300),
                     curve: Curves.easeOutCubic,
-                    alignment: dockArtifactPanel
-                        ? Alignment.centerLeft
-                        : Alignment.center,
+                    alignment: Alignment.center,
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
                       curve: Curves.easeOutCubic,
@@ -1404,7 +1304,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                         itemCount: renderMessages.length,
                         itemBuilder: (_, int i) {
                           final _MessageRenderData data = renderMessages[i];
-                          final String bubbleText = _bubbleTextFor(data);
                           final String? reasoningText =
                               data.reasoning.trim().isEmpty
                               ? null
@@ -1413,27 +1312,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               MessageBubble(
-                                message: bubbleText,
+                                message: data.displayText,
                                 reasoning: reasoningText,
                                 isUser: data.isUser,
                                 maxWidth: expandedInputWidth * 0.7,
                               ),
-                              if (data.artifacts.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 8),
-                                  child: Align(
-                                    alignment: data.isUser
-                                        ? Alignment.centerRight
-                                        : Alignment.centerLeft,
-                                    child: CodeArtifactPreviewList(
-                                      artifacts: data.artifacts,
-                                      onArtifactPressed:
-                                          _handleArtifactSelection,
-                                      activeSelection: _activeArtifact,
-                                      alignRight: data.isUser,
-                                    ),
-                                  ),
-                                ),
                             ],
                           );
                         },
@@ -1443,33 +1326,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 ),
               ),
             ),
-
-          if (hasActiveArtifact)
-            Positioned(
-              top: dockArtifactPanel ? 0 : effectiveHorizontalPadding,
-              right: effectiveHorizontalPadding,
-              bottom: dockArtifactPanel
-                  ? inputAreaTotalHeight
-                  : inputAreaTotalHeight + effectiveHorizontalPadding,
-              child: SizedBox(
-                width: dockArtifactPanel
-                    ? artifactPanelWidth
-                    : floatingArtifactWidth,
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 250),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  child: CodeArtifactPanel(
-                    key: ValueKey<String>(
-                      '${activeArtifactData.messageIndex}-${activeArtifactData.blockIndex}',
-                    ),
-                    artifact: activeArtifactData,
-                    onClose: _closeArtifactPanel,
-                  ),
-                ),
-              ),
-            ),
-
           AnimatedPositioned(
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeOutCubic,
