@@ -63,6 +63,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   final List<Map<String, String>> _messages = [];
   String? _activeChatId;
   final ScrollController _scrollController = ScrollController();
+  final ScrollController _composerScrollController = ScrollController();
   final FocusNode _textFieldFocusNode = FocusNode();
   final FocusNode _rawKeyboardListenerFocusNode = FocusNode();
   final Uuid _uuid = Uuid();
@@ -546,8 +547,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     final String previousInput = _controller.text;
     final TextSelection previousSelection = _controller.selection;
-    final List<AttachedFile> previousAttachments =
-        List<AttachedFile>.from(_attachedFiles);
+    final List<AttachedFile> previousAttachments = List<AttachedFile>.from(
+      _attachedFiles,
+    );
 
     setState(() {
       _controller
@@ -588,8 +590,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     final Map<String, String> rawMessage = _messages[index];
     final String messageText = rawMessage['text'] ?? '';
     final bool isUserMessage = data.isUser;
-    final bool isAssistantPending =
-        !isUserMessage && data.isReasoningStreaming;
+    final bool isAssistantPending = !isUserMessage && data.isReasoningStreaming;
     final List<MessageBubbleAction> actions = [];
 
     if (messageText.trim().isNotEmpty) {
@@ -757,6 +758,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     _streamSubscription?.cancel();
     _controller.dispose();
     _scrollController.dispose();
+    _composerScrollController.dispose();
     _textFieldFocusNode.dispose();
     _rawKeyboardListenerFocusNode.dispose();
     _animCtrl.dispose();
@@ -1542,7 +1544,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                   message: data.displayText,
                                   reasoning: reasoningText,
                                   isUser: data.isUser,
-                                  maxWidth: expandedInputWidth * 0.7,
+                                  maxWidth: data.isUser
+                                      ? expandedInputWidth * 0.7
+                                      : expandedInputWidth,
                                   isReasoningStreaming:
                                       data.isReasoningStreaming,
                                   actions: _buildMessageActionsForIndex(
@@ -1626,91 +1630,103 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: KeyboardListener(
-                  focusNode: _rawKeyboardListenerFocusNode,
-                  onKeyEvent: (event) {
-                    if (event is! KeyDownEvent) return;
-                    if (event.logicalKey != LogicalKeyboardKey.enter) return;
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: KeyboardListener(
+                    focusNode: _rawKeyboardListenerFocusNode,
+                    onKeyEvent: (event) {
+                      if (event is! KeyDownEvent) return;
+                      if (event.logicalKey != LogicalKeyboardKey.enter) return;
 
-                    final isShiftPressed =
-                        HardwareKeyboard.instance.isShiftPressed;
-                    if (isShiftPressed) {
-                      final value = _controller.value;
-                      final updatedText = value.text.replaceRange(
-                        value.selection.start,
-                        value.selection.end,
-                        '\n',
-                      );
-                      _controller.value = value.copyWith(
-                        text: updatedText,
-                        selection: TextSelection.collapsed(
-                          offset: value.selection.start + 1,
+                      final isShiftPressed =
+                          HardwareKeyboard.instance.isShiftPressed;
+                      if (isShiftPressed) {
+                        final value = _controller.value;
+                        final updatedText = value.text.replaceRange(
+                          value.selection.start,
+                          value.selection.end,
+                          '\n',
+                        );
+                        _controller.value = value.copyWith(
+                          text: updatedText,
+                          selection: TextSelection.collapsed(
+                            offset: value.selection.start + 1,
+                          ),
+                        );
+                        return;
+                      }
+
+                      unawaited(_sendMessage());
+                    },
+                    child: Scrollbar(
+                      controller: _composerScrollController,
+                      thumbVisibility: false,
+                      child: TextField(
+                        controller: _controller,
+                        focusNode: _textFieldFocusNode,
+                        autofocus: false,
+                        keyboardType: TextInputType.multiline,
+                        textInputAction: TextInputAction.send,
+                        style: TextStyle(color: iconFg),
+                        expands: true,
+                        maxLines: null,
+                        minLines: null,
+                        scrollController: _composerScrollController,
+                        textAlignVertical: TextAlignVertical.top,
+                        decoration: InputDecoration(
+                          hintText: hasAttachments
+                              ? 'Add a message or send documents'
+                              : 'Ask me anything !',
+                          hintStyle: TextStyle(
+                            color: iconFg.withValues(alpha: 0.8),
+                          ),
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          errorBorder: InputBorder.none,
+                          focusedErrorBorder: InputBorder.none,
+                          disabledBorder: InputBorder.none,
+                          filled: false,
+                          fillColor: Colors.transparent,
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 8,
+                            horizontal: 0,
+                          ),
+                          isDense: true,
                         ),
-                      );
-                      return;
-                    }
-
-                    unawaited(_sendMessage());
-                  },
-                  child: TextField(
-                    controller: _controller,
-                    focusNode: _textFieldFocusNode,
-                    autofocus: false,
-                    minLines: 1,
-                    maxLines: 5,
-                    keyboardType: TextInputType.multiline,
-                    textInputAction: TextInputAction.send,
-                    style: TextStyle(color: iconFg),
-                    decoration: InputDecoration(
-                      hintText: hasAttachments
-                          ? 'Add a message or send documents'
-                          : 'Ask me anything !',
-                      hintStyle: TextStyle(
-                        color: iconFg.withValues(alpha: 0.8),
+                        cursorColor: iconFg,
                       ),
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      errorBorder: InputBorder.none,
-                      focusedErrorBorder: InputBorder.none,
-                      disabledBorder: InputBorder.none,
-                      filled: false,
-                      fillColor: Colors.transparent,
-                      contentPadding: const EdgeInsets.symmetric(
-                        vertical: 8,
-                        horizontal: 0,
-                      ),
-                      isDense: true,
                     ),
-                    cursorColor: iconFg,
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              // Send/Cancel Message Button
-              GestureDetector(
-                onTap: () => _sendMessage(),
-                child: Container(
-                  width: btnW,
-                  height: btnH,
-                  decoration: BoxDecoration(
-                    color: _isStreaming ? Colors.red : accent,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(
-                    _isStreaming ? Icons.stop : Icons.arrow_upward,
-                    color: Colors.white,
+                const SizedBox(width: 8),
+                Align(
+                  alignment: Alignment.topCenter,
+                  child: GestureDetector(
+                    onTap: () => _sendMessage(),
+                    child: Container(
+                      width: btnW,
+                      height: btnH,
+                      decoration: BoxDecoration(
+                        color: _isStreaming ? Colors.red : accent,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        _isStreaming ? Icons.stop : Icons.arrow_upward,
+                        color: Colors.black,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
+          const SizedBox(height: 12),
           Row(
             children: <Widget>[
               Expanded(
