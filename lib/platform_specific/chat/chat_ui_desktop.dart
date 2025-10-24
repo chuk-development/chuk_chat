@@ -1446,14 +1446,18 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           final Map<String, String> raw = _messages[index];
           final String sender = raw['sender'] ?? 'ai';
           final String displayText = (raw['text'] ?? '').trimRight();
+          final String reasoning = raw['reasoning'] ?? '';
           final bool isAiMessage = sender != 'user';
           final bool isStreamingMessage =
               _isStreaming && index == _messages.length - 1 && isAiMessage;
+          // Check if reasoning has content (meaning reasoning exists)
+          final bool hasReasoning = reasoning.isNotEmpty;
           return _MessageRenderData(
             sender: sender,
             displayText: displayText,
-            reasoning: raw['reasoning'] ?? '',
-            isReasoningStreaming: isStreamingMessage,
+            reasoning: reasoning,
+            // Show loading icon if: streaming AND (has reasoning OR might get reasoning)
+            isReasoningStreaming: isStreamingMessage && (hasReasoning || displayText.isNotEmpty),
           );
         });
 
@@ -1666,7 +1670,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                   ),
                   child: Icon(
                     _isStreaming ? Icons.stop : Icons.arrow_upward,
-                    color: Colors.white,
+                    color: Colors.black,
                   ),
                 ),
               ),

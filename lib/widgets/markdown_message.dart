@@ -1,6 +1,7 @@
 // lib/widgets/markdown_message.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:highlight/highlight.dart' as hi;
 import 'package:markdown_widget/markdown_widget.dart';
 
@@ -271,11 +272,49 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: borderColor),
       ),
-      padding: const EdgeInsets.all(12),
-      width: double.infinity,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: SelectableText.rich(TextSpan(children: spans), style: textStyle),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header with language and copy button
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: widget.textColor.withValues(alpha: 0.05),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(7),
+                topRight: Radius.circular(7),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  language.isEmpty ? 'code' : language,
+                  style: TextStyle(
+                    color: widget.textColor.withValues(alpha: 0.7),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                _CopyButton(
+                  code: code,
+                  textColor: widget.textColor,
+                ),
+              ],
+            ),
+          ),
+          // Code content
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SelectableText.rich(
+                TextSpan(children: spans),
+                style: textStyle,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -423,5 +462,73 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
       'property': const TextStyle(color: Color(0xFFAF3D00)),
       'variable': const TextStyle(color: Color(0xFF1A237E)),
     };
+  }
+}
+
+/// Copy button widget for code blocks
+class _CopyButton extends StatefulWidget {
+  final String code;
+  final Color textColor;
+
+  const _CopyButton({
+    required this.code,
+    required this.textColor,
+  });
+
+  @override
+  State<_CopyButton> createState() => _CopyButtonState();
+}
+
+class _CopyButtonState extends State<_CopyButton> {
+  bool _copied = false;
+
+  Future<void> _copyToClipboard() async {
+    await Clipboard.setData(ClipboardData(text: widget.code));
+    setState(() {
+      _copied = true;
+    });
+
+    // Reset after 2 seconds
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() {
+          _copied = false;
+        });
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: _copyToClipboard,
+      borderRadius: BorderRadius.circular(4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: widget.textColor.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              _copied ? Icons.check : Icons.content_copy,
+              size: 14,
+              color: widget.textColor.withValues(alpha: 0.8),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              _copied ? 'Copied!' : 'Copy',
+              style: TextStyle(
+                color: widget.textColor.withValues(alpha: 0.8),
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
