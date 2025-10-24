@@ -1425,34 +1425,46 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                       duration: const Duration(milliseconds: 200),
                       curve: Curves.easeOutCubic,
                       constraints: BoxConstraints(maxWidth: expandedInputWidth),
-                      child: ListView.builder(
-                        controller: _scrollController,
-                        padding: EdgeInsets.symmetric(
-                          horizontal: effectiveHorizontalPadding,
-                          vertical: 10,
-                        ),
-                        itemCount: renderMessages.length,
-                        itemBuilder: (_, int i) {
-                          final _MessageRenderData data = renderMessages[i];
-                          final String? reasoningText =
-                              data.reasoning.trim().isEmpty
-                              ? null
-                              : data.reasoning;
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              MessageBubble(
-                                message: data.displayText,
-                                reasoning: reasoningText,
-                                isUser: data.isUser,
-                                maxWidth: expandedInputWidth * 0.7,
-                                isReasoningStreaming:
-                                    data.isReasoningStreaming,
-                                actions: _buildMessageActionsForIndex(i, data),
+                      child: Directionality(
+                        textDirection: TextDirection.rtl,
+                        child: Scrollbar(
+                          controller: _scrollController,
+                          thumbVisibility: true,
+                          thickness: 8.0,
+                          radius: const Radius.circular(4),
+                          child: Directionality(
+                            textDirection: TextDirection.ltr,
+                            child: ListView.builder(
+                              controller: _scrollController,
+                              padding: EdgeInsets.symmetric(
+                                horizontal: effectiveHorizontalPadding,
+                                vertical: 10,
                               ),
-                            ],
-                          );
-                        },
+                              itemCount: renderMessages.length,
+                              itemBuilder: (_, int i) {
+                                final _MessageRenderData data = renderMessages[i];
+                                final String? reasoningText =
+                                    data.reasoning.trim().isEmpty
+                                    ? null
+                                    : data.reasoning;
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    MessageBubble(
+                                      message: data.displayText,
+                                      reasoning: reasoningText,
+                                      isUser: data.isUser,
+                                      maxWidth: expandedInputWidth * 0.7,
+                                      isReasoningStreaming:
+                                          data.isReasoningStreaming,
+                                      actions: _buildMessageActionsForIndex(i, data),
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
