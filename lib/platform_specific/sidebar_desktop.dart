@@ -300,54 +300,64 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
 
           // Recents Section - Scrollable
           Expanded(
-            child: ListView(
+            child: ListView.builder(
               padding: EdgeInsets.zero,
-              children: [
-                _buildSectionHeader('Recents', iconFg: iconFg),
-                if (_filteredRecentChats.isEmpty && _searchQuery.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: _sidebarHorizontalPadding,
-                      vertical: 8.0,
-                    ),
-                    child: Text(
-                      'No recent chats yet.',
-                      style: TextStyle(color: iconFg.withValues(alpha: 0.5)),
-                    ),
-                  )
-                else if (_filteredRecentChats.isEmpty &&
-                    _searchQuery.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: _sidebarHorizontalPadding,
-                      vertical: 8.0,
-                    ),
-                    child: Text(
-                      'No chats found for "$_searchQuery".',
-                      style: TextStyle(color: iconFg.withValues(alpha: 0.5)),
-                    ),
-                  ),
-                ..._filteredRecentChats.asMap().entries.map((entry) {
-                  final storedChat = entry.value;
-                  final originalIndex = ChatStorageService.savedChats.indexOf(
-                    storedChat,
-                  );
-                  if (originalIndex == -1) {
-                    return const SizedBox.shrink();
+              addAutomaticKeepAlives: false,
+              addRepaintBoundaries: false,
+              cacheExtent: 200.0,
+              itemCount: _filteredRecentChats.length + 2,
+              itemBuilder: (context, index) {
+                if (index == 0) {
+                  return _buildSectionHeader('Recents', iconFg: iconFg);
+                }
+                if (index == 1) {
+                  if (_filteredRecentChats.isEmpty && _searchQuery.isEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: _sidebarHorizontalPadding,
+                        vertical: 8.0,
+                      ),
+                      child: Text(
+                        'No recent chats yet.',
+                        style: TextStyle(color: iconFg.withValues(alpha: 0.5)),
+                      ),
+                    );
+                  } else if (_filteredRecentChats.isEmpty &&
+                      _searchQuery.isNotEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: _sidebarHorizontalPadding,
+                        vertical: 8.0,
+                      ),
+                      child: Text(
+                        'No chats found for "$_searchQuery".',
+                        style: TextStyle(color: iconFg.withValues(alpha: 0.5)),
+                      ),
+                    );
                   }
-                  return _buildRecentItem(
-                    storedChat,
-                    index: originalIndex,
-                    onTap: () {
-                      widget.onChatItemTapped(originalIndex);
-                    },
-                    onDelete: () => _confirmAndDeleteChat(storedChat),
-                    accentColor: accent,
-                    iconFgColor: iconFg,
-                  );
-                }),
-                const SizedBox(height: 10),
-              ],
+                }
+                final chatIndex = index - 1;
+                if (chatIndex < 0 || chatIndex >= _filteredRecentChats.length) {
+                  return const SizedBox(height: 10);
+                }
+                final storedChat = _filteredRecentChats[chatIndex];
+                final originalIndex = ChatStorageService.savedChats.indexOf(
+                  storedChat,
+                );
+                if (originalIndex == -1) {
+                  return const SizedBox.shrink();
+                }
+                return _buildRecentItem(
+                  storedChat,
+                  index: originalIndex,
+                  onTap: () {
+                    widget.onChatItemTapped(originalIndex);
+                  },
+                  onDelete: () => _confirmAndDeleteChat(storedChat),
+                  accentColor: accent,
+                  iconFgColor: iconFg,
+                );
+              },
             ),
           ),
 
@@ -445,25 +455,29 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
     required Color iconFg,
     required Color accent,
   }) {
-    String title = _deriveChatTitle(chat);
-    if (title.length > 25) {
-      title = '${title.substring(0, 22)}...';
-    }
-    return ListTile(
-      leading: _leadingIconPlaceholder(Icons.star, iconFgColor: accent),
-      title: Text(title, style: TextStyle(color: iconFg)),
-      onTap: () => _openChat(chat),
-      dense: true,
-      contentPadding: const EdgeInsets.only(
-        left: _sidebarHorizontalPadding,
-        right: 8.0,
-      ),
-      iconColor: accent,
-      textColor: iconFg,
-      trailing: IconButton(
-        icon: Icon(Icons.star, color: accent),
-        tooltip: 'Remove from starred',
-        onPressed: () => _toggleStarred(chat),
+    final String title = _deriveChatTitle(chat);
+    return RepaintBoundary(
+      child: ListTile(
+        leading: _leadingIconPlaceholder(Icons.star, iconFgColor: accent),
+        title: Text(
+          title,
+          style: TextStyle(color: iconFg),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        onTap: () => _openChat(chat),
+        dense: true,
+        contentPadding: const EdgeInsets.only(
+          left: _sidebarHorizontalPadding,
+          right: 8.0,
+        ),
+        iconColor: accent,
+        textColor: iconFg,
+        trailing: IconButton(
+          icon: Icon(Icons.star, color: accent),
+          tooltip: 'Remove from starred',
+          onPressed: () => _toggleStarred(chat),
+        ),
       ),
     );
   }
@@ -477,26 +491,26 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
     required Color accentColor,
     required Color iconFgColor,
   }) {
-    bool isSelected = index == widget.selectedChatIndex;
-    bool isStarred = chat.isStarred;
-    String title = _deriveChatTitle(chat);
-    if (title.length > 25) {
-      title = '${title.substring(0, 22)}...';
-    }
-    return ListTile(
-      leading: _leadingIconPlaceholder(
-        Icons.chat_bubble_outline,
-        iconFgColor: iconFgColor,
-      ),
-      title: Text(
-        title,
-        style: TextStyle(
-          color: isLast
-              ? iconFgColor.withValues(alpha: 0.38)
-              : (isSelected ? accentColor : iconFgColor),
-          fontSize: 15,
+    final bool isSelected = index == widget.selectedChatIndex;
+    final bool isStarred = chat.isStarred;
+    final String title = _deriveChatTitle(chat);
+    return RepaintBoundary(
+      child: ListTile(
+        leading: _leadingIconPlaceholder(
+          Icons.chat_bubble_outline,
+          iconFgColor: iconFgColor,
         ),
-      ),
+        title: Text(
+          title,
+          style: TextStyle(
+            color: isLast
+                ? iconFgColor.withValues(alpha: 0.38)
+                : (isSelected ? accentColor : iconFgColor),
+            fontSize: 15,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
       onTap: onTap,
       dense: true,
       contentPadding: const EdgeInsets.only(left: _sidebarHorizontalPadding),
@@ -526,6 +540,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
               onPressed: onDelete,
             ),
         ],
+      ),
       ),
     );
   }

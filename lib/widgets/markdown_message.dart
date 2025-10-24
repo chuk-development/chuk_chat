@@ -22,50 +22,41 @@ class MarkdownMessage extends StatefulWidget {
 
 class _MarkdownMessageState extends State<MarkdownMessage> {
   List<Widget>? _cachedContent;
-  String? _lastText;
-  Color? _lastTextColor;
-  Color? _lastBackgroundColor;
   Brightness? _lastBrightness;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _ensureCache();
+    final ThemeData theme = Theme.of(context);
+    final Brightness currentBrightness = theme.brightness;
+    if (_lastBrightness != currentBrightness) {
+      _rebuildCache();
+    }
   }
 
   @override
   void didUpdateWidget(covariant MarkdownMessage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.text != _lastText ||
-        widget.textColor != _lastTextColor ||
-        widget.backgroundColor != _lastBackgroundColor) {
+    if (widget.text != oldWidget.text ||
+        widget.textColor != oldWidget.textColor ||
+        widget.backgroundColor != oldWidget.backgroundColor) {
       _rebuildCache();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final List<Widget> renderedContent = _ensureCache();
+    if (_cachedContent == null) {
+      _rebuildCache();
+    }
 
     return SelectionArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: renderedContent,
+        children: _cachedContent!,
       ),
     );
-  }
-
-  List<Widget> _ensureCache() {
-    final ThemeData theme = Theme.of(context);
-    final Brightness currentBrightness = theme.brightness;
-    final bool themeChanged = _lastBrightness != currentBrightness;
-
-    if (_cachedContent == null || themeChanged) {
-      _rebuildCache();
-    }
-
-    return _cachedContent!;
   }
 
   void _rebuildCache() {
@@ -255,9 +246,6 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
           ]
         : builtWidgets;
 
-    _lastText = widget.text;
-    _lastTextColor = widget.textColor;
-    _lastBackgroundColor = widget.backgroundColor;
     _lastBrightness = theme.brightness;
   }
 

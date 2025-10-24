@@ -187,12 +187,18 @@ class _CustomSidebarState extends State<CustomSidebar> {
 
           // Recents Section - Scrollable
           Expanded(
-            child: ListView(
-              padding: EdgeInsets.zero, // Remove default ListView padding
-              children: [
-                _buildSectionHeader('Recents', iconFg: iconFg),
-                if (ChatStorageService.savedChats.isEmpty)
-                  Padding(
+            child: ListView.builder(
+              padding: EdgeInsets.zero,
+              addAutomaticKeepAlives: false,
+              addRepaintBoundaries: false,
+              cacheExtent: 200.0,
+              itemCount: ChatStorageService.savedChats.length + 2,
+              itemBuilder: (context, index) {
+                if (index == 0) {
+                  return _buildSectionHeader('Recents', iconFg: iconFg);
+                }
+                if (index == 1 && ChatStorageService.savedChats.isEmpty) {
+                  return Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: _sidebarHorizontalPadding,
                       vertical: 8.0,
@@ -201,29 +207,25 @@ class _CustomSidebarState extends State<CustomSidebar> {
                       'No recent chats yet.',
                       style: TextStyle(color: iconFg.withValues(alpha: 0.5)),
                     ),
-                  ),
-                ...ChatStorageService.savedChats.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final storedChat = entry.value;
-                  if (index < 0 ||
-                      index >= ChatStorageService.savedChats.length) {
-                    return const SizedBox.shrink();
-                  }
-                  return _buildRecentItem(
-                    storedChat,
-                    index: index,
-                    onTap: () {
-                      widget.onChatItemTapped(index);
-                    },
-                    onDelete: () => _confirmAndDeleteChat(storedChat),
-                    accentColor: accent,
-                    iconFgColor: iconFg,
                   );
-                }),
-                const SizedBox(
-                  height: 10,
-                ), // Small space at the end of scrollable content
-              ],
+                }
+                final chatIndex = index - 1;
+                if (chatIndex < 0 ||
+                    chatIndex >= ChatStorageService.savedChats.length) {
+                  return const SizedBox(height: 10);
+                }
+                final storedChat = ChatStorageService.savedChats[chatIndex];
+                return _buildRecentItem(
+                  storedChat,
+                  index: chatIndex,
+                  onTap: () {
+                    widget.onChatItemTapped(chatIndex);
+                  },
+                  onDelete: () => _confirmAndDeleteChat(storedChat),
+                  accentColor: accent,
+                  iconFgColor: iconFg,
+                );
+              },
             ),
           ),
 
@@ -312,25 +314,29 @@ class _CustomSidebarState extends State<CustomSidebar> {
     required Color iconFg,
     required Color accent,
   }) {
-    String title = _deriveChatTitle(chat);
-    if (title.length > 25) {
-      title = '${title.substring(0, 22)}...';
-    }
-    return ListTile(
-      leading: _leadingIconPlaceholder(Icons.star, iconFgColor: accent),
-      title: Text(title, style: TextStyle(color: iconFg)),
-      onTap: () => _openChat(chat),
-      dense: true,
-      contentPadding: const EdgeInsets.only(
-        left: _sidebarHorizontalPadding,
-        right: 8.0,
-      ),
-      iconColor: accent,
-      textColor: iconFg,
-      trailing: IconButton(
-        icon: Icon(Icons.star, color: accent),
-        tooltip: 'Remove from starred',
-        onPressed: () => _toggleStarred(chat),
+    final String title = _deriveChatTitle(chat);
+    return RepaintBoundary(
+      child: ListTile(
+        leading: _leadingIconPlaceholder(Icons.star, iconFgColor: accent),
+        title: Text(
+          title,
+          style: TextStyle(color: iconFg),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        onTap: () => _openChat(chat),
+        dense: true,
+        contentPadding: const EdgeInsets.only(
+          left: _sidebarHorizontalPadding,
+          right: 8.0,
+        ),
+        iconColor: accent,
+        textColor: iconFg,
+        trailing: IconButton(
+          icon: Icon(Icons.star, color: accent),
+          tooltip: 'Remove from starred',
+          onPressed: () => _toggleStarred(chat),
+        ),
       ),
     );
   }
@@ -344,57 +350,58 @@ class _CustomSidebarState extends State<CustomSidebar> {
     required Color accentColor,
     required Color iconFgColor,
   }) {
-    bool isSelected = index == widget.selectedChatIndex;
-    bool isStarred = chat.isStarred;
-    String title = _deriveChatTitle(chat);
-    if (title.length > 25) {
-      title = '${title.substring(0, 22)}...';
-    }
-    return ListTile(
-      leading: _leadingIconPlaceholder(
-        Icons.chat_bubble_outline,
-        iconFgColor: iconFgColor,
-      ), // Placeholder for alignment
-      title: Text(
-        title,
-        style: TextStyle(
-          color: isLast
-              ? iconFgColor.withValues(alpha: 0.38)
-              : (isSelected ? accentColor : iconFgColor),
-          fontSize: 15,
+    final bool isSelected = index == widget.selectedChatIndex;
+    final bool isStarred = chat.isStarred;
+    final String title = _deriveChatTitle(chat);
+    return RepaintBoundary(
+      child: ListTile(
+        leading: _leadingIconPlaceholder(
+          Icons.chat_bubble_outline,
+          iconFgColor: iconFgColor,
         ),
-      ),
-      onTap: onTap,
-      dense: true,
-      contentPadding: const EdgeInsets.only(
-        left: _sidebarHorizontalPadding,
-      ), // Only left padding as leading handles space
-      tileColor: isSelected ? accentColor.withValues(alpha: 0.1) : null,
-      selectedTileColor: accentColor.withValues(alpha: 0.1),
-      selectedColor: accentColor,
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            icon: Icon(
-              isStarred ? Icons.star : Icons.star_border,
-              color: isStarred
-                  ? accentColor
-                  : iconFgColor.withValues(alpha: 0.7),
-            ),
-            tooltip: isStarred ? 'Remove from starred' : 'Add to starred',
-            onPressed: () => _toggleStarred(chat),
+        title: Text(
+          title,
+          style: TextStyle(
+            color: isLast
+                ? iconFgColor.withValues(alpha: 0.38)
+                : (isSelected ? accentColor : iconFgColor),
+            fontSize: 15,
           ),
-          if (onDelete != null)
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        onTap: onTap,
+        dense: true,
+        contentPadding: const EdgeInsets.only(
+          left: _sidebarHorizontalPadding,
+        ),
+        tileColor: isSelected ? accentColor.withValues(alpha: 0.1) : null,
+        selectedTileColor: accentColor.withValues(alpha: 0.1),
+        selectedColor: accentColor,
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
             IconButton(
               icon: Icon(
-                Icons.delete_outline,
-                color: iconFgColor.withValues(alpha: 0.7),
+                isStarred ? Icons.star : Icons.star_border,
+                color: isStarred
+                    ? accentColor
+                    : iconFgColor.withValues(alpha: 0.7),
               ),
-              tooltip: 'Delete chat',
-              onPressed: onDelete,
+              tooltip: isStarred ? 'Remove from starred' : 'Add to starred',
+              onPressed: () => _toggleStarred(chat),
             ),
-        ],
+            if (onDelete != null)
+              IconButton(
+                icon: Icon(
+                  Icons.delete_outline,
+                  color: iconFgColor.withValues(alpha: 0.7),
+                ),
+                tooltip: 'Delete chat',
+                onPressed: onDelete,
+              ),
+          ],
+        ),
       ),
     );
   }
