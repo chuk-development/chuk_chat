@@ -295,6 +295,19 @@ class _MessageBubbleState extends State<MessageBubble> {
               fontWeight: FontWeight.w600,
             ),
           ),
+          if (widget.isReasoningStreaming) ...[
+            const SizedBox(width: 6),
+            SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  iconFgColor.withValues(alpha: 0.6),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

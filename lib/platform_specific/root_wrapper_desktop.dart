@@ -134,18 +134,12 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
               right: 0,
               top: 0,
               bottom: 0,
-              child: GestureDetector(
-                onTap: _isSidebarExpanded ? _toggleSidebar : null,
-                child: AbsorbPointer(
-                  absorbing: _isSidebarExpanded,
-                  child: ChukChatUIDesktop(
-                    key: _chatUIKey,
-                    onToggleSidebar: _toggleSidebar,
-                    selectedChatIndex: ChatStorageService.selectedChatIndex,
-                    isSidebarExpanded: _isSidebarExpanded,
-                    isCompactMode: isCompactMode,
-                  ),
-                ),
+              child: ChukChatUIDesktop(
+                key: _chatUIKey,
+                onToggleSidebar: _toggleSidebar,
+                selectedChatIndex: ChatStorageService.selectedChatIndex,
+                isSidebarExpanded: _isSidebarExpanded,
+                isCompactMode: isCompactMode,
               ),
             ),
           ),

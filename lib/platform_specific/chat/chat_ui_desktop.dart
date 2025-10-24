@@ -15,6 +15,7 @@ import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart'; // NEW
 import 'package:chuk_chat/services/streaming_chat_service.dart';
+import 'package:chuk_chat/services/streaming_manager.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
@@ -92,6 +93,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   bool _isTranscribingAudio = false;
   StreamSubscription<ChatStreamEvent>? _streamSubscription;
   bool _isStreaming = false;
+  final StreamingManager _streamingManager = StreamingManager();
 
   final List<AttachedFile> _attachedFiles = [];
   final Uuid _uuid = Uuid();
@@ -1413,17 +1415,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               right: 0,
               child: FadeTransition(
                 opacity: _anim,
-                child: AnimatedPadding(
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeOutCubic,
+                child: Padding(
                   padding: EdgeInsets.zero,
-                  child: AnimatedAlign(
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeOutCubic,
+                  child: Align(
                     alignment: Alignment.center,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      curve: Curves.easeOutCubic,
+                    child: Container(
                       constraints: BoxConstraints(maxWidth: expandedInputWidth),
                       child: Scrollbar(
                         controller: _scrollController,
@@ -1466,9 +1462,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 ),
               ),
             ),
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOutCubic,
+          Positioned(
             left: 0,
             right: 0,
             // Position at the bottom if not empty, otherwise calculate center position
@@ -1478,10 +1472,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 : effectiveHorizontalPadding, // Always keep padding from bottom edge
             child: Center(
               // Centers horizontally
-              child: AnimatedContainer(
-                // NEW: AnimatedContainer for width transition
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOutCubic,
+              child: Container(
                 width: targetInputWidth, // Dynamically changes width
                 child: Column(
                   mainAxisSize: MainAxisSize

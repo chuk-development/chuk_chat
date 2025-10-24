@@ -1509,9 +1509,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
             child: FadeTransition(
               opacity: _anim,
               child: Center(
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  curve: Curves.easeOutCubic,
+                child: Container(
                   constraints: BoxConstraints(maxWidth: expandedInputWidth),
                   child: !hasMessages
                       ? Center(
@@ -1570,16 +1568,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
             ),
           ),
 
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOutCubic,
+          Positioned(
             left: 0,
             right: 0,
             bottom: effectiveHorizontalPadding + keyboardHeight,
             child: Center(
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOutCubic,
+              child: Container(
                 width: targetInputWidth,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
