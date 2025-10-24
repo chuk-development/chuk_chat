@@ -94,6 +94,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   StreamSubscription<ChatStreamEvent>? _streamSubscription;
   bool _isStreaming = false;
   final StreamingManager _streamingManager = StreamingManager();
+  Timer? _autoSaveTimer;
 
   final List<AttachedFile> _attachedFiles = [];
   final Uuid _uuid = Uuid();
@@ -187,12 +188,24 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // RENAMED WIDGET TYPE
     super.didUpdateWidget(oldWidget);
     if (widget.selectedChatIndex != oldWidget.selectedChatIndex) {
+      // Save current chat before switching
+      if (_activeChatId != null) {
+        _persistChat(waitForCompletion: false);
+      }
       _loadChatFromIndex(widget.selectedChatIndex);
+      // Update UI based on new chat's streaming status
+      setState(() {
+        _isStreaming = _activeChatId != null &&
+                       _streamingManager.isStreaming(_activeChatId!);
+      });
     }
   }
 
   @override
   void dispose() {
+    // Don't cancel streams - they continue in background
+    // _streamingManager handles all streams globally
+    _autoSaveTimer?.cancel();
     _streamSubscription?.cancel();
     _controller.dispose();
     _scrollController.dispose();
@@ -999,25 +1012,47 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         history: apiHistory.isEmpty ? null : apiHistory,
       );
 
+      // Start auto-save timer during streaming
+      _autoSaveTimer?.cancel();
+      _autoSaveTimer = Timer.periodic(
+        const Duration(seconds: 2),
+        (_) => _persistChat(waitForCompletion: false),
+      );
+
       _streamSubscription = stream.listen(
         (event) {
-          if (!mounted) return;
+          // Continue processing even if not mounted - stream runs in background
+          final bool canUpdateUI = mounted;
 
           if (event is ContentEvent) {
             contentBuffer.write(event.text);
-            _updateAiMessage(
-              placeholderIndex,
-              contentBuffer.toString(),
-              reasoningBuffer.toString(),
-            );
-            _scrollChatToBottom();
+            // Always update messages, even if not mounted
+            if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
+              _messages[placeholderIndex]['text'] = contentBuffer.toString();
+              _messages[placeholderIndex]['reasoning'] = reasoningBuffer.toString();
+            }
+            if (canUpdateUI) {
+              _updateAiMessage(
+                placeholderIndex,
+                contentBuffer.toString(),
+                reasoningBuffer.toString(),
+              );
+              _scrollChatToBottom();
+            }
           } else if (event is ReasoningEvent) {
             reasoningBuffer.write(event.text);
-            _updateAiMessage(
-              placeholderIndex,
-              contentBuffer.toString(),
-              reasoningBuffer.toString(),
-            );
+            // Always update messages, even if not mounted
+            if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
+              _messages[placeholderIndex]['text'] = contentBuffer.toString();
+              _messages[placeholderIndex]['reasoning'] = reasoningBuffer.toString();
+            }
+            if (canUpdateUI) {
+              _updateAiMessage(
+                placeholderIndex,
+                contentBuffer.toString(),
+                reasoningBuffer.toString(),
+              );
+            }
           } else if (event is UsageEvent) {
             debugPrint('Usage: ${event.usage}');
           } else if (event is MetaEvent) {
@@ -1050,7 +1085,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         },
         onError: (error) {
           debugPrint('Stream error: $error');
-          if (!mounted) return;
+          _autoSaveTimer?.cancel();
+          if (!mounted) {
+            // Save even if not mounted
+            _persistChat(waitForCompletion: false);
+            return;
+          }
 
           String errorMessage = 'Failed to reach the AI service';
           if (error is StreamingChatException) {
@@ -1064,7 +1104,20 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         },
         onDone: () {
           debugPrint('Stream closed');
-          if (!mounted) return;
+          _autoSaveTimer?.cancel();
+
+          if (!mounted) {
+            // Finalize and save even if not mounted
+            if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
+              _messages[placeholderIndex]['text'] = contentBuffer.toString();
+              _messages[placeholderIndex]['reasoning'] = reasoningBuffer.toString();
+            }
+            _persistChat(waitForCompletion: false);
+            _isStreaming = false;
+            _isSending = false;
+            _streamSubscription = null;
+            return;
+          }
 
           if (!_isStreaming) {
             _streamSubscription = null;
@@ -1132,6 +1185,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   }
 
   void _finalizeAiMessage(int index, String content, {String? reasoning}) {
+    _autoSaveTimer?.cancel();
     if (index < 0 || index >= _messages.length) {
       _streamSubscription?.cancel();
       _streamSubscription = null;

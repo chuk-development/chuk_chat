@@ -13,6 +13,7 @@ import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart'; // NEW API SERVICE
 import 'package:chuk_chat/services/streaming_chat_service.dart';
+import 'package:chuk_chat/services/streaming_manager.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
@@ -93,6 +94,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   bool _isTranscribingAudio = false;
   StreamSubscription<ChatStreamEvent>? _streamSubscription;
   bool _isStreaming = false;
+  final StreamingManager _streamingManager = StreamingManager();
+  Timer? _autoSaveTimer;
 
   static const int _kMaxFileSizeBytes = 10 * 1024 * 1024; // 10MB
   static const int _kMaxConcurrentUploads = 5;
@@ -749,7 +752,16 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   void didUpdateWidget(covariant ChukChatUIMobile oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.selectedChatIndex != oldWidget.selectedChatIndex) {
+      // Save current chat before switching
+      if (_activeChatId != null) {
+        _persistChat(waitForCompletion: false);
+      }
       _loadChatFromIndex(widget.selectedChatIndex);
+      // Update UI based on new chat's streaming status
+      setState(() {
+        _isStreaming = _activeChatId != null &&
+                       _streamingManager.isStreaming(_activeChatId!);
+      });
     }
   }
 
