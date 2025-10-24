@@ -43,5 +43,25 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Build artifacts and packages
+releases/
+*.deb
+*.rpm
+*.AppImage
+*.apk
+*.dmg
+*.exe
+*.msi
+*.zip
+*.tar.gz
+*.tar.bz2
+
+# Build directories
+debian/
+rpm/
+AppDir/
+
+# Generated files
 combined_code_for_llm.txt
 generate_llm_input.sh
