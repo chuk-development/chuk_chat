@@ -223,10 +223,33 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
       },
     );
 
-    final List<Widget> builtWidgets = generator.buildWidgets(
-      widget.text,
-      config: config,
-    );
+    List<Widget> builtWidgets;
+    try {
+      builtWidgets = generator.buildWidgets(
+        widget.text,
+        config: config,
+      );
+    } catch (error, stackTrace) {
+      // Handle markdown parsing errors gracefully (e.g., incomplete code blocks during streaming)
+      debugPrint('Markdown parsing error: $error');
+      debugPrint('Stack trace: $stackTrace');
+      builtWidgets = <Widget>[
+        SelectableText(
+          widget.text,
+          style:
+              (theme.textTheme.bodyMedium?.copyWith(
+                color: widget.textColor,
+                height: 1.45,
+                fontSize: 14,
+              )) ??
+              TextStyle(
+                color: widget.textColor,
+                height: 1.45,
+                fontSize: 14,
+              ),
+        ),
+      ];
+    }
 
     _cachedContent = builtWidgets.isEmpty
         ? <Widget>[
@@ -366,30 +389,41 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
     TextStyle baseStyle,
     TextStyle? parentThemeStyle,
   ) {
-    final String className = node.className ?? '';
-    final TextStyle? themeStyle = className.isNotEmpty
-        ? theme[className]
-        : parentThemeStyle;
-    final TextStyle effectiveStyle = (themeStyle != null
-        ? themeStyle.merge(baseStyle)
-        : baseStyle);
+    try {
+      final String className = node.className ?? '';
+      final TextStyle? themeStyle = className.isNotEmpty
+          ? theme[className]
+          : parentThemeStyle;
+      final TextStyle effectiveStyle = (themeStyle != null
+          ? themeStyle.merge(baseStyle)
+          : baseStyle);
 
-    if (node.value != null) {
-      return <TextSpan>[TextSpan(text: node.value, style: effectiveStyle)];
-    }
+      if (node.value != null) {
+        return <TextSpan>[TextSpan(text: node.value, style: effectiveStyle)];
+      }
 
-    final List<hi.Node>? children = node.children;
-    if (children == null || children.isEmpty) {
-      return <TextSpan>[];
-    }
+      final List<hi.Node>? children = node.children;
+      if (children == null || children.isEmpty) {
+        return <TextSpan>[];
+      }
 
-    final List<TextSpan> childSpans = <TextSpan>[];
-    for (final hi.Node child in children) {
-      childSpans.addAll(
-        _collectSpans(child, theme, baseStyle, themeStyle ?? parentThemeStyle),
-      );
+      final List<TextSpan> childSpans = <TextSpan>[];
+      for (final hi.Node child in children) {
+        childSpans.addAll(
+          _collectSpans(child, theme, baseStyle, themeStyle ?? parentThemeStyle),
+        );
+      }
+      return <TextSpan>[TextSpan(children: childSpans, style: effectiveStyle)];
+    } catch (error) {
+      debugPrint('Error collecting spans: $error');
+      // Return a safe fallback span
+      return <TextSpan>[
+        TextSpan(
+          text: node.value ?? '',
+          style: baseStyle,
+        ),
+      ];
     }
-    return <TextSpan>[TextSpan(children: childSpans, style: effectiveStyle)];
   }
 
   Color _codeBackground() {
