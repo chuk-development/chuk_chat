@@ -25,8 +25,8 @@ print_error() { echo -e "${RED}❌ $1${NC}"; }
 extract_app_info() {
     print_info "Extracting app information from pubspec.yaml..."
     
-    APP_NAME=$(grep '^name:' pubspec.yaml | sed 's/name: *//' | tr -d ' ')
-    VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: *//' | sed 's/+.*//')
+    APP_NAME=$(grep '^name:' pubspec.yaml | sed 's/^name:[[:space:]]*//' | sed 's/[[:space:]]*$//')
+    VERSION=$(grep '^version:' pubspec.yaml | sed 's/^version:[[:space:]]*//' | sed 's/+.*//' | sed 's/[[:space:]]*$//')
     
     if [ -z "$APP_NAME" ] || [ -z "$VERSION" ]; then
         print_error "Could not extract app name or version from pubspec.yaml"
@@ -75,8 +75,8 @@ find_app_icon() {
 # Clean up previous builds
 cleanup() {
     print_info "Cleaning up previous builds..."
-    rm -rf debian rpm releases build/linux build/app AppDir
     flutter clean
+    rm -rf debian rpm build/linux build/app AppDir
     mkdir -p releases/linux releases/android
 }
 
@@ -124,25 +124,25 @@ create_deb() {
     fi
     
     # Fix permissions on the executable
-    chmod +x "debian/usr/local/bin/$APP_NAME/chuk_chat"
+    chmod +x "debian/usr/local/bin/$APP_NAME/${APP_NAME//-/_}"
     
     # Copy app icon if available
     if [ -n "$ICON_PATH" ] && [ -f "$ICON_PATH" ]; then
-        cp "$ICON_PATH" "debian/usr/share/icons/hicolor/256x256/apps/chuk-chat.png"
+        cp "$ICON_PATH" "debian/usr/share/icons/hicolor/256x256/apps/$PACKAGE_NAME.png"
     fi
     
     # Create desktop file
-    cat > "debian/usr/share/applications/chuk-chat.desktop" <<EOF
+    cat > "debian/usr/share/applications/$PACKAGE_NAME.desktop" <<EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
 Name=Chuk Chat
 Comment=Modern chat application
-Exec=/usr/local/bin/$APP_NAME/chuk_chat
-Icon=chuk-chat
+Exec=/usr/local/bin/$APP_NAME/${APP_NAME//-/_}
+Icon=$PACKAGE_NAME
 Terminal=false
 Categories=Network;Chat;
-StartupWMClass=chuk_chat
+StartupWMClass=${APP_NAME//-/_}
 EOF
     
     # Create control file

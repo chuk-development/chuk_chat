@@ -88,6 +88,40 @@ sudo apt install rpm
 # Download from: https://github.com/AppImage/AppImageKit/releases
 ```
 
+### Android Development Requirements
+
+#### Environment Variables
+```bash
+# Set Android SDK home
+export ANDROID_HOME=/path/to/android-sdk
+
+# Add Android tools to PATH
+export PATH=$PATH:$ANDROID_HOME/tools:$ANDROID_HOME/platform-tools
+```
+
+#### Minimum Version Requirements
+- **compileSdkVersion**: 36
+- **minSdkVersion**: 24
+- **targetSdkVersion**: 36
+- **ndkVersion**: 26.3.11579264 or newer
+- **Android Gradle Plugin**: 8.1.0+
+
+#### SDK/NDK Installation
+Android SDK and NDK can be installed via:
+- **Android Studio**: Recommended for GUI-based development
+- **Command Line Tools**: For CI/CD and headless environments
+
+#### NDK Version Conflicts
+If you encounter NDK version conflicts with plugins, override the NDK version in `android/app/build.gradle`:
+```gradle
+android {
+    ndkVersion "26.3.11579264"
+}
+```
+
+#### Flutter Android Setup
+For detailed setup instructions and compatibility information, refer to the [official Flutter Android setup guide](https://docs.flutter.dev/get-started/install/linux#android-setup).
+
 ### Flutter Setup
 ```bash
 flutter doctor
