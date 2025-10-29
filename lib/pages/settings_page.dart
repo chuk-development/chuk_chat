@@ -10,9 +10,9 @@ import 'package:chuk_chat/pages/theme_page.dart';
 import 'package:chuk_chat/pages/account_settings_page.dart';
 import 'package:chuk_chat/pages/about_page.dart';
 import 'package:chuk_chat/pages/pricing_page.dart';
+import 'package:chuk_chat/pages/system_prompt_page.dart';
 import 'package:chuk_chat/services/auth_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
-import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
@@ -120,7 +120,12 @@ class SettingsPage extends StatelessWidget {
             title: 'System Prompt',
             subtitle: 'Set a default system prompt for all conversations',
             icon: Icons.code,
-            onTap: () => _showSystemPromptDialog(context, accent, iconFg, scaffoldBg),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SystemPromptPage()),
+              );
+            },
             accentColor: accent,
             iconFgColor: iconFg,
             bgColor: scaffoldBg,
@@ -352,99 +357,6 @@ class SettingsPage extends StatelessWidget {
       }
     }
     return null;
-  }
-
-  Future<void> _showSystemPromptDialog(
-    BuildContext context,
-    Color accent,
-    Color iconFg,
-    Color bgColor,
-  ) async {
-    // Load current system prompt
-    String? currentSystemPrompt;
-    try {
-      currentSystemPrompt = await UserPreferencesService.loadSystemPrompt();
-    } catch (e) {
-      debugPrint('Error loading system prompt: $e');
-    }
-
-    if (!context.mounted) return;
-
-    final controller = TextEditingController(text: currentSystemPrompt ?? '');
-    final messenger = ScaffoldMessenger.of(context);
-
-    await showDialog(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('System Prompt'),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: TextField(
-              controller: controller,
-              maxLines: 10,
-              decoration: const InputDecoration(
-                hintText: 'Enter a system prompt that will be sent with every conversation...\n\nExample: You are a helpful assistant that provides concise and accurate responses.',
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancel'),
-            ),
-            if (currentSystemPrompt != null && currentSystemPrompt.isNotEmpty)
-              TextButton(
-                onPressed: () async {
-                  try {
-                    await UserPreferencesService.clearSystemPrompt();
-                    controller.clear();
-                    if (dialogContext.mounted) {
-                      Navigator.of(dialogContext).pop();
-                    }
-                    messenger.showSnackBar(
-                      const SnackBar(content: Text('System prompt cleared')),
-                    );
-                  } catch (e) {
-                    messenger.showSnackBar(
-                      SnackBar(content: Text('Error clearing system prompt: $e')),
-                    );
-                  }
-                },
-                child: const Text('Clear'),
-              ),
-            TextButton(
-              onPressed: () async {
-                final prompt = controller.text.trim();
-                try {
-                  if (prompt.isEmpty) {
-                    await UserPreferencesService.clearSystemPrompt();
-                    messenger.showSnackBar(
-                      const SnackBar(content: Text('System prompt cleared')),
-                    );
-                  } else {
-                    await UserPreferencesService.saveSystemPrompt(prompt);
-                    messenger.showSnackBar(
-                      const SnackBar(content: Text('System prompt saved')),
-                    );
-                  }
-                  if (dialogContext.mounted) {
-                    Navigator.of(dialogContext).pop();
-                  }
-                } catch (e) {
-                  messenger.showSnackBar(
-                    SnackBar(content: Text('Error saving system prompt: $e')),
-                  );
-                }
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
-    );
-    controller.dispose();
   }
 
   Widget _buildSettingsCard(
