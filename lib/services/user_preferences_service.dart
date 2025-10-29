@@ -310,7 +310,9 @@ class UserPreferencesService {
       } catch (e) {
         final userId = SupabaseService.auth.currentUser?.id;
         if (userId != null) {
-          final cached = await ModelCacheService.loadProviderPreferences(userId);
+          final cached = await ModelCacheService.loadProviderPreferences(
+            userId,
+          );
           if (cached.isNotEmpty) {
             debugPrint(
               'Loaded ${cached.length} cached provider preferences for offline use',
