@@ -46,6 +46,7 @@ class ChukChatUIState extends State<ChukChatUI>
   final List<Map<String, dynamic>> _messages = [];
   String? _activeChatId;
   final ScrollController _scrollController = ScrollController();
+  final ScrollController _composerScrollController = ScrollController();
 
   final FocusNode _textFieldFocusNode = FocusNode();
   final FocusNode _rawKeyboardListenerFocusNode = FocusNode();
@@ -53,6 +54,7 @@ class ChukChatUIState extends State<ChukChatUI>
   late AnimationController _animCtrl;
   late Animation<double> _anim;
   String _selectedModelId = 'deepseek/deepseek-chat-v3.1';
+  String? _systemPrompt;
   final Map<String, String> _modelProviderCache = {};
   bool _providerPreferencesLoaded = false;
   late final VoidCallback _modelSelectionListener;
@@ -88,6 +90,7 @@ class ChukChatUIState extends State<ChukChatUI>
     });
     _loadChatFromIndex(widget.selectedChatIndex);
     _loadSavedModelPreference();
+    _loadSystemPrompt();
     _modelSelectionListener = () {
       final String newModelId =
           ModelSelectionDropdown.selectedModelNotifier.value;
@@ -114,6 +117,7 @@ class ChukChatUIState extends State<ChukChatUI>
   void dispose() {
     _controller.dispose();
     _scrollController.dispose();
+    _composerScrollController.dispose();
     _textFieldFocusNode.dispose();
     _rawKeyboardListenerFocusNode.dispose();
     _animCtrl.dispose();
@@ -204,6 +208,39 @@ class ChukChatUIState extends State<ChukChatUI>
       }
     } catch (e) {
       debugPrint('Error loading saved model preference: $e');
+    }
+  }
+
+  Future<void> _loadSystemPrompt() async {
+    try {
+      final systemPrompt = await UserPreferencesService.loadSystemPrompt();
+      if (!mounted) return;
+      setState(() {
+        _systemPrompt = systemPrompt;
+      });
+      if (systemPrompt != null && systemPrompt.isNotEmpty) {
+        debugPrint('Loaded system prompt: ${systemPrompt.length} characters');
+      }
+    } catch (error) {
+      debugPrint('Error loading system prompt: $error');
+    }
+  }
+
+  Future<String?> _resolveSystemPromptForSend() async {
+    if (_systemPrompt != null) return _systemPrompt;
+    try {
+      final prompt = await UserPreferencesService.loadSystemPrompt();
+      if (mounted) {
+        setState(() {
+          _systemPrompt = prompt;
+        });
+      } else {
+        _systemPrompt = prompt;
+      }
+      return prompt;
+    } catch (error) {
+      debugPrint('Error resolving system prompt for send: $error');
+      return _systemPrompt;
     }
   }
 
@@ -455,6 +492,8 @@ class ChukChatUIState extends State<ChukChatUI>
         ? originalUserInput
         : displayMessageText;
 
+    final String? systemPrompt = await _resolveSystemPromptForSend();
+
     // Make actual API call using StreamingChatService
     try {
       final stream = StreamingChatService.sendStreamingChat(
@@ -463,6 +502,7 @@ class ChukChatUIState extends State<ChukChatUI>
         modelId: modelIdForSend,
         providerSlug: providerSlug ?? '',
         history: apiHistory.isEmpty ? null : apiHistory,
+        systemPrompt: systemPrompt,
       );
 
       final StringBuffer contentBuffer = StringBuffer();
@@ -1476,37 +1516,45 @@ class ChukChatUIState extends State<ChukChatUI>
                     _sendMessage();
                     _refocusTextField();
                   },
-                  child: TextField(
-                    controller: _controller,
-                    focusNode: _textFieldFocusNode,
-                    autofocus: false,
-                    minLines: 1,
-                    maxLines: 5,
-                    keyboardType: TextInputType.multiline,
-                    textInputAction: TextInputAction.send,
-                    style: TextStyle(color: iconFg),
-                    decoration: InputDecoration(
-                      hintText: hasAttachments
-                          ? 'Add a message or send documents'
-                          : 'Ask me anything !',
-                      hintStyle: TextStyle(
-                        color: iconFg.withValues(alpha: 0.8),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 160),
+                    child: Scrollbar(
+                      controller: _composerScrollController,
+                      child: TextField(
+                        controller: _controller,
+                        focusNode: _textFieldFocusNode,
+                        autofocus: false,
+                        minLines: 1,
+                        maxLines: null,
+                        keyboardType: TextInputType.multiline,
+                        textInputAction: TextInputAction.send,
+                        scrollController: _composerScrollController,
+                        textAlignVertical: TextAlignVertical.top,
+                        style: TextStyle(color: iconFg),
+                        decoration: InputDecoration(
+                          hintText: hasAttachments
+                              ? 'Add a message or send documents'
+                              : 'Ask me anything !',
+                          hintStyle: TextStyle(
+                            color: iconFg.withValues(alpha: 0.8),
+                          ),
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          errorBorder: InputBorder.none,
+                          focusedErrorBorder: InputBorder.none,
+                          disabledBorder: InputBorder.none,
+                          filled: false,
+                          fillColor: Colors.transparent,
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 8,
+                            horizontal: 0,
+                          ),
+                          isDense: true,
+                        ),
+                        cursorColor: iconFg,
                       ),
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      errorBorder: InputBorder.none,
-                      focusedErrorBorder: InputBorder.none,
-                      disabledBorder: InputBorder.none,
-                      filled: false,
-                      fillColor: Colors.transparent,
-                      contentPadding: const EdgeInsets.symmetric(
-                        vertical: 8,
-                        horizontal: 0,
-                      ),
-                      isDense: true,
                     ),
-                    cursorColor: iconFg,
                   ),
                 ),
               ),

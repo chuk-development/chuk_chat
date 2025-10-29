@@ -350,15 +350,13 @@ class UserPreferencesService {
       final encryptedPrompt = await EncryptionService.encrypt(systemPrompt);
 
       String? selectedModelId;
-      // Ensure we preserve a non-null selected_model_id when upserting.
       try {
         final response = await SupabaseService.client
             .from('user_preferences')
             .select('selected_model_id')
             .eq('user_id', userId)
             .maybeSingle();
-        selectedModelId =
-            (response?['selected_model_id'] as String?)?.trim();
+        selectedModelId = (response?['selected_model_id'] as String?)?.trim();
       } catch (error) {
         debugPrint('Unable to load existing model preference: $error');
       }
@@ -369,14 +367,16 @@ class UserPreferencesService {
       }
       selectedModelId ??= _kFallbackModelId;
 
+      final Map<String, dynamic> upsertData = {
+        'user_id': userId,
+        'selected_model_id': selectedModelId,
+        'system_prompt': encryptedPrompt,
+      };
+
       // Upsert the encrypted system prompt
       final response = await SupabaseService.client
           .from('user_preferences')
-          .upsert({
-            'user_id': userId,
-            'selected_model_id': selectedModelId,
-            'system_prompt': encryptedPrompt,
-          }, onConflict: 'user_id')
+          .upsert(upsertData, onConflict: 'user_id')
           .select();
 
       if (response.isNotEmpty) {
@@ -413,9 +413,13 @@ class UserPreferencesService {
         final encryptedPrompt = response['system_prompt'] as String;
 
         // Decrypt the system prompt
-        final decryptedPrompt = await EncryptionService.decrypt(encryptedPrompt);
+        final decryptedPrompt = await EncryptionService.decrypt(
+          encryptedPrompt,
+        );
 
-        debugPrint('Loaded encrypted system prompt: ${decryptedPrompt.length} characters');
+        debugPrint(
+          'Loaded encrypted system prompt: ${decryptedPrompt.length} characters',
+        );
         return decryptedPrompt;
       } else {
         debugPrint('No system prompt found for user');

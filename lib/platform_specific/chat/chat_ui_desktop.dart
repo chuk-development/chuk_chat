@@ -68,6 +68,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   final List<Map<String, String>> _messages = [];
   String? _activeChatId;
   final ScrollController _scrollController = ScrollController();
+  final ScrollController _composerScrollController = ScrollController();
   late ChatApiService _chatApiService;
   final FocusNode _textFieldFocusNode = FocusNode();
   final FocusNode _rawKeyboardListenerFocusNode = FocusNode();
@@ -271,6 +272,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _streamSubscription?.cancel();
     _controller.dispose();
     _scrollController.dispose();
+    _composerScrollController.dispose();
     _textFieldFocusNode.dispose();
     _rawKeyboardListenerFocusNode.dispose();
     _animCtrl.dispose();
@@ -404,6 +406,24 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       }
     } catch (e) {
       debugPrint('Error loading system prompt: $e');
+    }
+  }
+
+  Future<String?> _resolveSystemPromptForSend() async {
+    if (_systemPrompt != null) return _systemPrompt;
+    try {
+      final prompt = await UserPreferencesService.loadSystemPrompt();
+      if (mounted) {
+        setState(() {
+          _systemPrompt = prompt;
+        });
+      } else {
+        _systemPrompt = prompt;
+      }
+      return prompt;
+    } catch (error) {
+      debugPrint('Error resolving system prompt for send: $error');
+      return _systemPrompt;
     }
   }
 
@@ -794,6 +814,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       }
     }
 
+    final String? systemPrompt = await _resolveSystemPromptForSend();
+
     try {
       setState(() => _isStreaming = true);
 
@@ -804,6 +826,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         modelId: _selectedModelId,
         providerSlug: _selectedProviderSlug ?? 'openai',
         history: conversationHistory,
+        systemPrompt: systemPrompt,
         maxTokens: 4096,
         temperature: 0.7,
       );
@@ -1186,6 +1209,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       }
     }
 
+    final String? systemPrompt = await _resolveSystemPromptForSend();
+
     setState(() {
       _isStreaming = true;
     });
@@ -1200,7 +1225,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         modelId: _selectedModelId,
         providerSlug: providerSlug,
         history: apiHistory.isEmpty ? null : apiHistory,
-        systemPrompt: _systemPrompt,
+        systemPrompt: systemPrompt,
       );
 
       // Start auto-save timer during streaming
@@ -1821,37 +1846,45 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
                     unawaited(_sendMessage());
                   },
-                  child: TextField(
-                    controller: _controller,
-                    focusNode: _textFieldFocusNode,
-                    autofocus: false,
-                    minLines: 1,
-                    maxLines: 5,
-                    keyboardType: TextInputType.multiline,
-                    textInputAction: TextInputAction.send,
-                    style: TextStyle(color: iconFg),
-                    decoration: InputDecoration(
-                      hintText: hasAttachments
-                          ? 'Add a message or send documents'
-                          : 'Ask me anything !',
-                      hintStyle: TextStyle(
-                        color: iconFg.withValues(alpha: 0.8),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 160),
+                    child: Scrollbar(
+                      controller: _composerScrollController,
+                      child: TextField(
+                        controller: _controller,
+                        focusNode: _textFieldFocusNode,
+                        autofocus: false,
+                        minLines: 1,
+                        maxLines: null,
+                        keyboardType: TextInputType.multiline,
+                        textInputAction: TextInputAction.send,
+                        scrollController: _composerScrollController,
+                        textAlignVertical: TextAlignVertical.top,
+                        style: TextStyle(color: iconFg),
+                        decoration: InputDecoration(
+                          hintText: hasAttachments
+                              ? 'Add a message or send documents'
+                              : 'Ask me anything !',
+                          hintStyle: TextStyle(
+                            color: iconFg.withValues(alpha: 0.8),
+                          ),
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          errorBorder: InputBorder.none,
+                          focusedErrorBorder: InputBorder.none,
+                          disabledBorder: InputBorder.none,
+                          filled: false,
+                          fillColor: Colors.transparent,
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 8,
+                            horizontal: 0,
+                          ),
+                          isDense: true,
+                        ),
+                        cursorColor: iconFg,
                       ),
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      errorBorder: InputBorder.none,
-                      focusedErrorBorder: InputBorder.none,
-                      disabledBorder: InputBorder.none,
-                      filled: false,
-                      fillColor: Colors.transparent,
-                      contentPadding: const EdgeInsets.symmetric(
-                        vertical: 8,
-                        horizontal: 0,
-                      ),
-                      isDense: true,
                     ),
-                    cursorColor: iconFg,
                   ),
                 ),
               ),
