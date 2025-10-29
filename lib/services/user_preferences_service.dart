@@ -332,4 +332,99 @@ class UserPreferencesService {
       return false;
     }
   }
+
+  /// Save the user's system prompt
+  static Future<bool> saveSystemPrompt(String systemPrompt) async {
+    try {
+      final session = SupabaseService.auth.currentSession;
+      if (session == null) {
+        debugPrint('No authenticated session found');
+        return false;
+      }
+
+      final userId = session.user.id;
+
+      // Upsert the user's system prompt
+      final response = await SupabaseService.client
+          .from('user_preferences')
+          .upsert({
+            'user_id': userId,
+            'system_prompt': systemPrompt,
+          }, onConflict: 'user_id')
+          .select();
+
+      if (response.isNotEmpty) {
+        debugPrint('Successfully saved system prompt');
+        return true;
+      } else {
+        debugPrint('Failed to save system prompt: empty response');
+        return false;
+      }
+    } catch (e) {
+      debugPrint('Error saving system prompt: $e');
+      return false;
+    }
+  }
+
+  /// Load the user's system prompt
+  static Future<String?> loadSystemPrompt() async {
+    try {
+      final session = SupabaseService.auth.currentSession;
+      if (session == null) {
+        debugPrint('No authenticated session found');
+        return null;
+      }
+
+      final userId = session.user.id;
+
+      final response = await SupabaseService.client
+          .from('user_preferences')
+          .select('system_prompt')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      if (response != null && response['system_prompt'] != null) {
+        final systemPrompt = response['system_prompt'] as String;
+        debugPrint('Loaded system prompt: ${systemPrompt.length} characters');
+        return systemPrompt;
+      } else {
+        debugPrint('No system prompt found for user');
+        return null;
+      }
+    } catch (e) {
+      debugPrint('Error loading system prompt: $e');
+      return null;
+    }
+  }
+
+  /// Clear the user's system prompt
+  static Future<bool> clearSystemPrompt() async {
+    try {
+      final session = SupabaseService.auth.currentSession;
+      if (session == null) {
+        debugPrint('No authenticated session found');
+        return false;
+      }
+
+      final userId = session.user.id;
+
+      // Update the system_prompt field to null
+      final response = await SupabaseService.client
+          .from('user_preferences')
+          .update({'system_prompt': null})
+          .eq('user_id', userId)
+          .select();
+
+      if (response.isNotEmpty) {
+        debugPrint('Successfully cleared system prompt');
+        return true;
+      } else {
+        debugPrint('No system prompt found to clear');
+        return false;
+      }
+    } catch (e) {
+      debugPrint('Error clearing system prompt: $e');
+      return false;
+    }
+  }
 }

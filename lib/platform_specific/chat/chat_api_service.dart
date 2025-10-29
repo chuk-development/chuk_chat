@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:chuk_chat/services/api_config_service.dart';
+import 'package:chuk_chat/services/file_conversion_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
 /// A service for handling chat-related API interactions,
@@ -33,8 +34,9 @@ class ChatApiService {
     );
   }
 
-  /// Uploads a file to the API and processes its content.
-  /// Reports status updates via the `onUploadStatusUpdate` callback.
+  /// Uploads a file to the API and processes its content using the new
+  /// /ai/convert-file endpoint. Reports status updates via the
+  /// `onUploadStatusUpdate` callback.
   Future<void> performFileUpload(
     File file,
     String fileName,
@@ -54,81 +56,46 @@ class ChatApiService {
       return;
     }
     final String accessToken = session.accessToken;
-    const int maxRetries = 3;
-    const Duration timeoutDuration = Duration(seconds: 30);
-    int retryCount = 0;
-    bool uploadSuccess = false;
 
     // Report initial uploading state
     onUploadStatusUpdate?.call(fileId, null, true, null);
 
-    while (retryCount < maxRetries && !uploadSuccess) {
-      try {
-        final request =
-            http.MultipartRequest(
-                'POST',
-                Uri.parse('$_apiBaseUrl/protected/upload_file'),
-              )
-              ..headers['Authorization'] = 'Bearer $accessToken'
-              ..files.add(await http.MultipartFile.fromPath('file', file.path));
+    try {
+      // Use the new FileConversionService which supports more file types
+      // and uses the /ai/convert-file endpoint with proper timeout handling
+      final result = await FileConversionService.convertFile(
+        filePath: file.path,
+        accessToken: accessToken,
+      );
 
-        var streamedResponse = await request.send().timeout(timeoutDuration);
-        var response = await http.Response.fromStream(streamedResponse);
-
-        if (response.statusCode == 200) {
-          final jsonResponse = json.decode(response.body);
-          onUploadStatusUpdate?.call(
-            fileId,
-            jsonResponse['markdown_content'],
-            false,
-            null,
-          ); // Success
-          debugPrint(
-            'File "$fileName" conversion successful. Markdown content received.',
-          );
-          uploadSuccess = true;
-        } else {
-          final errorBody = json.decode(response.body);
-          onUploadStatusUpdate?.call(
-            fileId,
-            null,
-            false,
-            'Failed to upload "$fileName" (Status: ${response.statusCode}): ${errorBody['detail'] ?? response.reasonPhrase}',
-          );
-          debugPrint(
-            'File upload failed for "$fileName" (Status: ${response.statusCode}): ${response.body}',
-          );
-          break; // Exit retry loop for server errors
-        }
-      } catch (e) {
-        debugPrint(
-          'Upload attempt failed for "$fileName" (Attempt ${retryCount + 1}/$maxRetries): $e',
+      if (result['success'] == true) {
+        onUploadStatusUpdate?.call(
+          fileId,
+          result['markdown'],
+          false,
+          null,
         );
-        retryCount++;
-
-        if (retryCount >= maxRetries) {
-          String errorMessage =
-              'Error uploading "$fileName" after $maxRetries attempts.';
-          if (e is TimeoutException) {
-            errorMessage =
-                'Upload of "$fileName" timed out after $maxRetries attempts.';
-          } else if (e is SocketException) {
-            errorMessage =
-                'Network error uploading "$fileName" after $maxRetries attempts.';
-          } else {
-            errorMessage =
-                'Error uploading "$fileName" after $maxRetries attempts: $e';
-          }
-          onUploadStatusUpdate?.call(
-            fileId,
-            null,
-            false,
-            errorMessage,
-          ); // Final failure
-        } else {
-          await Future.delayed(Duration(seconds: retryCount * 2));
-        }
+        debugPrint(
+          'File "$fileName" conversion successful. Markdown content received.',
+        );
+      } else {
+        final errorMessage = result['error'] ?? 'Unknown conversion error';
+        onUploadStatusUpdate?.call(
+          fileId,
+          null,
+          false,
+          'Failed to convert "$fileName": $errorMessage',
+        );
+        debugPrint('File conversion failed for "$fileName": $errorMessage');
       }
+    } catch (e) {
+      debugPrint('Unexpected error converting "$fileName": $e');
+      onUploadStatusUpdate?.call(
+        fileId,
+        null,
+        false,
+        'Error converting "$fileName": ${e.toString()}',
+      );
     }
   }
 

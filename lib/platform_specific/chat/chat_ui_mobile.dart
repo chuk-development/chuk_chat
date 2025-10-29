@@ -74,6 +74,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   final List<AttachedFile> _attachedFiles = [];
   String _selectedModelId = 'deepseek/deepseek-chat-v3.1'; // Default model
   String? _selectedProviderSlug;
+  String? _systemPrompt;
   late final VoidCallback _modelSelectionListener;
 
   late AnimationController _animCtrl;
@@ -101,46 +102,105 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   static const int _kMaxFileSizeBytes = 10 * 1024 * 1024; // 10MB
   static const int _kMaxConcurrentUploads = 5;
   static const List<String> _kAllowedExtensions = [
+    // Audio (with transcription)
     'wav',
     'mp3',
     'm4a',
+    'aac',
+    'flac',
+    'ogg',
+    // Video
     'mp4',
-    'html',
-    'htm',
-    'csv',
-    'docx',
-    'pptx',
-    'xlsx',
+    // Documents (PDF, Word, PowerPoint, Excel, OpenDocument)
     'pdf',
-    'jpg',
-    'jpeg',
-    'png',
-    'bmp',
-    'tiff',
-    'epub',
-    'ipynb',
-    'msg',
-    'txt',
-    'text',
-    'md',
-    'markdown',
+    'doc',
+    'docx',
+    'ppt',
+    'pptx',
+    'xls',
+    'xlsx',
+    'odt',
+    'ods',
+    'odp',
+    'odg',
+    'odf',
+    // Text (CSV, JSON, XML, HTML, Markdown)
+    'csv',
     'json',
     'jsonl',
-    'rss',
-    'atom',
     'xml',
-    'xls',
-    'zip',
+    'html',
+    'htm',
+    'md',
+    'markdown',
+    'txt',
+    'text',
+    // Images (PNG, JPEG, GIF, BMP, TIFF, WebP with EXIF and OCR)
+    'png',
+    'jpg',
+    'jpeg',
+    'gif',
+    'bmp',
+    'tiff',
+    'tif',
+    'webp',
     'heic',
     'heif',
+    // Archives (ZIP)
+    'zip',
+    // E-books (EPUB)
+    'epub',
+    // Email (MSG, EML)
+    'msg',
+    'eml',
+    // Code and other formats
+    'py',
+    'js',
+    'ts',
+    'jsx',
+    'tsx',
+    'java',
+    'c',
+    'cpp',
+    'h',
+    'hpp',
+    'go',
+    'rs',
+    'rb',
+    'php',
+    'swift',
+    'kt',
+    'cs',
+    'sh',
+    'bash',
+    'yaml',
+    'yml',
+    'toml',
+    'ini',
+    'cfg',
+    'conf',
+    'sql',
+    'prisma',
+    'graphql',
+    'proto',
+    'css',
+    'scss',
+    'sass',
+    'less',
+    'vue',
+    'svelte',
+    'ipynb',
+    'rss',
+    'atom',
   ];
   static const Set<String> _kImageExtensions = <String>{
     'jpg',
     'jpeg',
     'png',
+    'gif',
     'bmp',
     'tiff',
-    'gif',
+    'tif',
     'webp',
     'heic',
     'heif',
@@ -168,6 +228,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     });
     _loadChatFromIndex(widget.selectedChatIndex);
     unawaited(_loadProviderSlugForModel(_selectedModelId));
+    unawaited(_loadSystemPrompt());
     _modelSelectionListener = () {
       final String newModelId =
           ModelSelectionDropdown.selectedModelNotifier.value;
@@ -629,6 +690,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         modelId: _selectedModelId,
         providerSlug: _selectedProviderSlug ?? 'openai',
         history: conversationHistory,
+        systemPrompt: _systemPrompt,
         maxTokens: 4096,
         temperature: 0.7,
       );
@@ -1003,6 +1065,21 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     return _selectedProviderSlug;
   }
 
+  Future<void> _loadSystemPrompt() async {
+    try {
+      final systemPrompt = await UserPreferencesService.loadSystemPrompt();
+      if (!mounted) return;
+      setState(() {
+        _systemPrompt = systemPrompt;
+      });
+      if (systemPrompt != null && systemPrompt.isNotEmpty) {
+        debugPrint('Loaded system prompt: ${systemPrompt.length} characters');
+      }
+    } catch (e) {
+      debugPrint('Error loading system prompt: $e');
+    }
+  }
+
   bool get _modelSupportsImageInput =>
       ModelCapabilitiesService.supportsImageInput(_selectedModelId);
 
@@ -1215,6 +1292,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         modelId: _selectedModelId,
         providerSlug: providerSlug,
         history: apiHistory.isEmpty ? null : apiHistory,
+        systemPrompt: _systemPrompt,
       );
 
       _streamSubscription = stream.listen(

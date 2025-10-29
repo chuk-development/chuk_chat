@@ -12,6 +12,7 @@ import 'package:chuk_chat/pages/about_page.dart';
 import 'package:chuk_chat/pages/pricing_page.dart';
 import 'package:chuk_chat/services/auth_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
@@ -107,6 +108,19 @@ class SettingsPage extends StatelessWidget {
                 MaterialPageRoute(builder: (_) => const ModelSelectorPage()),
               );
             },
+            accentColor: accent,
+            iconFgColor: iconFg,
+            bgColor: scaffoldBg,
+          ),
+          const SizedBox(height: 16),
+
+          // System Prompt
+          _buildSettingsCard(
+            context,
+            title: 'System Prompt',
+            subtitle: 'Set a default system prompt for all conversations',
+            icon: Icons.code,
+            onTap: () => _showSystemPromptDialog(context, accent, iconFg, scaffoldBg),
             accentColor: accent,
             iconFgColor: iconFg,
             bgColor: scaffoldBg,

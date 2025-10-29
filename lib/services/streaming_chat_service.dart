@@ -17,6 +17,7 @@ class StreamingChatService {
     required String modelId,
     required String providerSlug,
     List<Map<String, String>>? history,
+    String? systemPrompt,
     int maxTokens = 512,
     double temperature = 0.7,
   }) async* {
@@ -43,6 +44,10 @@ class StreamingChatService {
         requestPayload['history'] = jsonEncode(history);
       }
 
+      if (systemPrompt != null && systemPrompt.isNotEmpty) {
+        requestPayload['system_prompt'] = systemPrompt;
+      }
+
       final request = http.MultipartRequest(
         'POST',
         Uri.parse('$_apiBaseUrl/ai/chat'),
@@ -67,6 +72,7 @@ class StreamingChatService {
       debugPrint('  - Max Tokens: $maxTokens');
       debugPrint('  - Temperature: $temperature');
       debugPrint('  - History: ${history?.length ?? 0} messages');
+      debugPrint('  - System Prompt: ${systemPrompt != null ? '${systemPrompt.length} chars' : 'none'}');
       debugPrint('  - Accept: text/event-stream');
       debugPrint('═══════════════════════════════════════════════════════════');
 

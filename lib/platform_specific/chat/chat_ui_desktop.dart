@@ -76,6 +76,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   late Animation<double> _anim;
   String _selectedModelId = 'deepseek/deepseek-chat-v3.1';
   String? _selectedProviderSlug;
+  String? _systemPrompt;
   late final VoidCallback _modelSelectionListener;
 
   bool _isImageActive = false;
@@ -101,46 +102,105 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   final Uuid _uuid = Uuid();
 
   static const List<String> _kAllowedExtensions = [
+    // Audio (with transcription)
     'wav',
     'mp3',
     'm4a',
+    'aac',
+    'flac',
+    'ogg',
+    // Video
     'mp4',
-    'html',
-    'htm',
-    'csv',
-    'docx',
-    'pptx',
-    'xlsx',
+    // Documents (PDF, Word, PowerPoint, Excel, OpenDocument)
     'pdf',
-    'jpg',
-    'jpeg',
-    'png',
-    'bmp',
-    'tiff',
-    'epub',
-    'ipynb',
-    'msg',
-    'txt',
-    'text',
-    'md',
-    'markdown',
+    'doc',
+    'docx',
+    'ppt',
+    'pptx',
+    'xls',
+    'xlsx',
+    'odt',
+    'ods',
+    'odp',
+    'odg',
+    'odf',
+    // Text (CSV, JSON, XML, HTML, Markdown)
+    'csv',
     'json',
     'jsonl',
-    'rss',
-    'atom',
     'xml',
-    'xls',
-    'zip',
+    'html',
+    'htm',
+    'md',
+    'markdown',
+    'txt',
+    'text',
+    // Images (PNG, JPEG, GIF, BMP, TIFF, WebP with EXIF and OCR)
+    'png',
+    'jpg',
+    'jpeg',
+    'gif',
+    'bmp',
+    'tiff',
+    'tif',
+    'webp',
     'heic',
     'heif',
+    // Archives (ZIP)
+    'zip',
+    // E-books (EPUB)
+    'epub',
+    // Email (MSG, EML)
+    'msg',
+    'eml',
+    // Code and other formats
+    'py',
+    'js',
+    'ts',
+    'jsx',
+    'tsx',
+    'java',
+    'c',
+    'cpp',
+    'h',
+    'hpp',
+    'go',
+    'rs',
+    'rb',
+    'php',
+    'swift',
+    'kt',
+    'cs',
+    'sh',
+    'bash',
+    'yaml',
+    'yml',
+    'toml',
+    'ini',
+    'cfg',
+    'conf',
+    'sql',
+    'prisma',
+    'graphql',
+    'proto',
+    'css',
+    'scss',
+    'sass',
+    'less',
+    'vue',
+    'svelte',
+    'ipynb',
+    'rss',
+    'atom',
   ];
   static const Set<String> _kImageExtensions = <String>{
     'jpg',
     'jpeg',
     'png',
+    'gif',
     'bmp',
     'tiff',
-    'gif',
+    'tif',
     'webp',
     'heic',
     'heif',
@@ -169,6 +229,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     });
     _loadChatFromIndex(widget.selectedChatIndex);
     unawaited(_loadProviderSlugForModel(_selectedModelId));
+    unawaited(_loadSystemPrompt());
     _modelSelectionListener = () {
       final String newModelId =
           ModelSelectionDropdown.selectedModelNotifier.value;
@@ -329,6 +390,21 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     }
     await _loadProviderSlugForModel(_selectedModelId);
     return _selectedProviderSlug;
+  }
+
+  Future<void> _loadSystemPrompt() async {
+    try {
+      final systemPrompt = await UserPreferencesService.loadSystemPrompt();
+      if (!mounted) return;
+      setState(() {
+        _systemPrompt = systemPrompt;
+      });
+      if (systemPrompt != null && systemPrompt.isNotEmpty) {
+        debugPrint('Loaded system prompt: ${systemPrompt.length} characters');
+      }
+    } catch (e) {
+      debugPrint('Error loading system prompt: $e');
+    }
   }
 
   bool get _modelSupportsImageInput =>
@@ -1124,6 +1200,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         modelId: _selectedModelId,
         providerSlug: providerSlug,
         history: apiHistory.isEmpty ? null : apiHistory,
+        systemPrompt: _systemPrompt,
       );
 
       // Start auto-save timer during streaming
