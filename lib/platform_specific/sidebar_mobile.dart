@@ -690,13 +690,15 @@ class _SidebarMobileState extends State<SidebarMobile> {
     Color textColor,
     Color accentColor,
   ) {
-    String title = _deriveChatTitle(chat);
-    if (title.length > 25) {
-      title = '${title.substring(0, 22)}...';
-    }
+    final String title = _deriveChatTitle(chat);
     return ListTile(
       leading: _leadingIconPlaceholder(Icons.star, iconColor: accentColor),
-      title: Text(title, style: TextStyle(color: textColor)),
+      title: Text(
+        title,
+        style: TextStyle(color: textColor),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
       onTap: () => _openChat(chat),
       dense: true,
       tileColor: Colors.transparent,
@@ -726,10 +728,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
   }) {
     bool isSelected = index == widget.selectedChatIndex;
     bool isStarred = chat.isStarred;
-    String title = _deriveChatTitle(chat);
-    if (title.length > 25) {
-      title = '${title.substring(0, 22)}...';
-    }
+    final String title = _deriveChatTitle(chat);
     return ListTile(
       leading: _leadingIconPlaceholder(
         Icons.chat_bubble_outline,
@@ -743,6 +742,8 @@ class _SidebarMobileState extends State<SidebarMobile> {
               : (isSelected ? accentColor : textColor),
           fontSize: 15,
         ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
       ),
       onTap: onTap,
       dense: true,
