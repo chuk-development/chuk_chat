@@ -31,12 +31,14 @@ class _MobileMessageRenderData {
     required this.displayText,
     required this.reasoning,
     required this.isReasoningStreaming,
+    this.modelLabel,
   });
 
   final String sender;
   final String displayText;
   final String reasoning;
   final bool isReasoningStreaming;
+  final String? modelLabel;
 
   bool get isUser => sender == 'user';
 }
@@ -970,15 +972,22 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       _messages
         ..clear()
         ..addAll(
-          storedChat.messages
-              .map(
-                (message) => {
-                  'sender': message.sender,
-                  'text': message.text,
-                  'reasoning': message.reasoning,
-                },
-              )
-              .toList(),
+          storedChat.messages.map((message) {
+            final map = <String, String>{
+              'sender': message.sender,
+              'text': message.text,
+              'reasoning': message.reasoning,
+            };
+            final String? modelId = message.modelId;
+            if (modelId != null && modelId.isNotEmpty) {
+              map['modelId'] = modelId;
+            }
+            final String? provider = message.provider;
+            if (provider != null && provider.isNotEmpty) {
+              map['provider'] = provider;
+            }
+            return map;
+          }),
         );
       if (_messages.isNotEmpty) {
         _animCtrl.forward();
@@ -1216,18 +1225,22 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         'sender': 'user',
         'text': displayMessageText,
         'reasoning': '',
+        'modelId': _selectedModelId,
       });
       _controller.clear();
       _isSending = true;
       if (hasAttachments) {
         _attachedFiles.clear();
       }
-      _messages.add({'sender': 'ai', 'text': 'Thinking...', 'reasoning': ''});
+      _messages.add({
+        'sender': 'ai',
+        'text': 'Thinking...',
+        'reasoning': '',
+        'modelId': _selectedModelId,
+      });
       placeholderIndex = _messages.length - 1;
     });
     _textFieldFocusNode.requestFocus();
-
-    _persistChat();
 
     if (firstMessageInChat) _animCtrl.forward();
     _scrollChatToBottom();
@@ -1263,6 +1276,26 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       _showSnackBar(message);
       return;
     }
+
+    void updateMessageMetadata(int messageIndex) {
+      if (messageIndex < 0 || messageIndex >= _messages.length) return;
+      final Map<String, String> updated =
+          Map<String, String>.from(_messages[messageIndex]);
+      updated['modelId'] = _selectedModelId;
+      if (providerSlug.isNotEmpty) {
+        updated['provider'] = providerSlug;
+      } else {
+        updated.remove('provider');
+      }
+      _messages[messageIndex] = updated;
+    }
+
+    setState(() {
+      updateMessageMetadata(placeholderIndex);
+      updateMessageMetadata(placeholderIndex - 1);
+    });
+
+    _persistChat();
 
     final List<Map<String, String>> apiHistory = [];
     for (int i = 0; i < _messages.length - 1; i++) {
@@ -1651,6 +1684,21 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     }
   }
 
+  String? _formatModelInfo(String? modelId, String? provider) {
+    final String normalizedModel = (modelId ?? '').trim();
+    final String normalizedProvider = (provider ?? '').trim();
+    if (normalizedModel.isEmpty && normalizedProvider.isEmpty) {
+      return null;
+    }
+    if (normalizedModel.isEmpty) {
+      return 'Provider: $normalizedProvider';
+    }
+    if (normalizedProvider.isEmpty) {
+      return 'Model: $normalizedModel';
+    }
+    return 'Model: $normalizedModel • Provider: $normalizedProvider';
+  }
+
   @override
   Widget build(BuildContext context) {
     const bool isCompactModeForModelDropdown =
@@ -1679,7 +1727,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     double inputAreaTotalHeight =
         inputAreaVisualHeight + (2 * effectiveHorizontalPadding);
 
-    final double keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+    final MediaQueryData mediaQuery = MediaQuery.of(context);
+    final double keyboardHeight = mediaQuery.viewInsets.bottom;
+    final double bottomSafeArea =
+        keyboardHeight > 0 ? 0.0 : mediaQuery.padding.bottom;
+    final double chatListBottomInset =
+        inputAreaTotalHeight + keyboardHeight + bottomSafeArea;
+    final double composerBottomInset =
+        effectiveHorizontalPadding + keyboardHeight + bottomSafeArea;
 
     final double targetInputWidth = expandedInputWidth;
 
@@ -1690,11 +1745,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           final bool isAiMessage = sender != 'user';
           final bool isStreamingMessage =
               _isStreaming && index == _messages.length - 1 && isAiMessage;
+          final String? modelLabel =
+              isAiMessage ? _formatModelInfo(raw['modelId'], raw['provider']) : null;
           return _MobileMessageRenderData(
             sender: sender,
             displayText: (raw['text'] ?? '').trimRight(),
             reasoning: raw['reasoning'] ?? '',
             isReasoningStreaming: isStreamingMessage,
+            modelLabel: modelLabel,
           );
         });
 
@@ -1706,7 +1764,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         children: [
           Positioned(
             top: 0,
-            bottom: inputAreaTotalHeight + keyboardHeight,
+            bottom: chatListBottomInset,
             left: 0,
             right: 0,
             child: FadeTransition(
@@ -1758,6 +1816,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                       : expandedInputWidth,
                                   isReasoningStreaming:
                                       data.isReasoningStreaming,
+                                  modelLabel: data.modelLabel,
                                   actions: _buildMessageActionsForIndex(
                                     i,
                                     data,
@@ -1781,12 +1840,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           Positioned(
             left: 0,
             right: 0,
-            bottom: effectiveHorizontalPadding + keyboardHeight,
+            bottom: composerBottomInset,
             child: Center(
               child: Container(
                 width: targetInputWidth,
                 child: Column(
-                  mainAxisSize: MainAxisSize.min,
                   children: [
                     if (_attachedFiles.isNotEmpty)
                       Padding(
@@ -1843,39 +1901,41 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  child: KeyboardListener(
-                    focusNode: _rawKeyboardListenerFocusNode,
-                    onKeyEvent: (event) {
-                      if (event is! KeyDownEvent) return;
-                      if (event.logicalKey != LogicalKeyboardKey.enter) return;
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: KeyboardListener(
+                  focusNode: _rawKeyboardListenerFocusNode,
+                  onKeyEvent: (event) {
+                    if (event is! KeyDownEvent) return;
+                    if (event.logicalKey != LogicalKeyboardKey.enter) return;
 
-                      final isShiftPressed =
-                          HardwareKeyboard.instance.isShiftPressed;
-                      if (isShiftPressed) {
-                        final value = _controller.value;
-                        final updatedText = value.text.replaceRange(
-                          value.selection.start,
-                          value.selection.end,
-                          '\n',
-                        );
-                        _controller.value = value.copyWith(
-                          text: updatedText,
-                          selection: TextSelection.collapsed(
-                            offset: value.selection.start + 1,
-                          ),
-                        );
-                        return;
-                      }
+                    final isShiftPressed =
+                        HardwareKeyboard.instance.isShiftPressed;
+                    if (isShiftPressed) {
+                      final value = _controller.value;
+                      final updatedText = value.text.replaceRange(
+                        value.selection.start,
+                        value.selection.end,
+                        '\n',
+                      );
+                      _controller.value = value.copyWith(
+                        text: updatedText,
+                        selection: TextSelection.collapsed(
+                          offset: value.selection.start + 1,
+                        ),
+                      );
+                      return;
+                    }
 
-                      unawaited(_sendMessage());
-                    },
+                    unawaited(_sendMessage());
+                  },
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 160),
                     child: Scrollbar(
                       controller: _composerScrollController,
                       thumbVisibility: false,
@@ -1886,9 +1946,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                         keyboardType: TextInputType.multiline,
                         textInputAction: TextInputAction.send,
                         style: TextStyle(color: iconFg),
-                        expands: true,
+                        minLines: 1,
                         maxLines: null,
-                        minLines: null,
                         scrollController: _composerScrollController,
                         textAlignVertical: TextAlignVertical.top,
                         decoration: InputDecoration(
@@ -1917,27 +1976,27 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                Align(
-                  alignment: Alignment.topCenter,
-                  child: GestureDetector(
-                    onTap: () => _sendMessage(),
-                    child: Container(
-                      width: btnW,
-                      height: btnH,
-                      decoration: BoxDecoration(
-                        color: _isStreaming ? Colors.red : accent,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(
-                        _isStreaming ? Icons.stop : Icons.arrow_upward,
-                        color: Colors.black,
-                      ),
+              ),
+              const SizedBox(width: 8),
+              Align(
+                alignment: Alignment.topCenter,
+                child: GestureDetector(
+                  onTap: () => _sendMessage(),
+                  child: Container(
+                    width: btnW,
+                    height: btnH,
+                    decoration: BoxDecoration(
+                      color: _isStreaming ? Colors.red : accent,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      _isStreaming ? Icons.stop : Icons.arrow_upward,
+                      color: Colors.black,
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           Row(
