@@ -45,7 +45,7 @@ class SupabaseService {
   static Future<Session?> refreshSession() async {
     final DateTime now = DateTime.now();
     if (_inFlightRefresh != null) {
-      return _inFlightRefresh;
+      return await _inFlightRefresh!;
     }
     if (_lastRefreshTime != null &&
         now.difference(_lastRefreshTime!) < _kMinRefreshInterval) {
@@ -53,14 +53,19 @@ class SupabaseService {
     }
 
     Future<Session?> _performRefresh() async {
+      final DateTime startedAt = DateTime.now();
       try {
         final current = auth.currentSession;
-        if (current == null) return null;
+        if (current == null) {
+          _lastRefreshTime = startedAt;
+          return null;
+        }
         final response = await auth.refreshSession();
         _lastRefreshTime = DateTime.now();
         return response.session ?? auth.currentSession;
       } on AuthException catch (error) {
         debugPrint('Failed to refresh session: ${error.message}');
+        _lastRefreshTime = DateTime.now();
         return null;
       }
     }

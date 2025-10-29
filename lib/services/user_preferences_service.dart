@@ -7,6 +7,10 @@ import 'package:chuk_chat/core/model_selection_events.dart';
 class UserPreferencesService {
   const UserPreferencesService._();
   static const String _kFallbackModelId = 'deepseek/deepseek-chat-v3.1';
+  static Map<String, String>? _cachedProviderPreferences;
+  static DateTime? _providerPrefsFetchedAt;
+  static Future<Map<String, String>>? _providerPrefsInFlight;
+  static const Duration _kProviderPreferencesTtl = Duration(minutes: 1);
 
   /// Save the user's selected model to Supabase
   static Future<bool> saveSelectedModel(String modelId) async {
@@ -267,41 +271,65 @@ class UserPreferencesService {
 
   /// Load all user's provider preferences
   static Future<Map<String, String>> loadAllProviderPreferences() async {
-    try {
-      final session = SupabaseService.auth.currentSession;
-      if (session == null) {
-        debugPrint('No authenticated session found');
+    final DateTime now = DateTime.now();
+    if (_providerPrefsInFlight != null) {
+      return await _providerPrefsInFlight!;
+    }
+    if (_cachedProviderPreferences != null &&
+        _providerPrefsFetchedAt != null &&
+        now.difference(_providerPrefsFetchedAt!) < _kProviderPreferencesTtl) {
+      return Map<String, String>.from(_cachedProviderPreferences!);
+    }
+
+    Future<Map<String, String>> _performFetch() async {
+      try {
+        final session = SupabaseService.auth.currentSession;
+        if (session == null) {
+          debugPrint('No authenticated session found');
+          return {};
+        }
+
+        final userId = session.user.id;
+
+        final response = await SupabaseService.client
+            .from('user_model_providers')
+            .select('model_id, provider_slug')
+            .eq('user_id', userId);
+
+        final Map<String, String> preferences = {};
+        for (final row in response) {
+          preferences[row['model_id'] as String] =
+              row['provider_slug'] as String;
+        }
+
+        debugPrint('Loaded ${preferences.length} provider preferences');
+        await ModelCacheService.saveProviderPreferences(userId, preferences);
+        _cachedProviderPreferences = preferences;
+        _providerPrefsFetchedAt = DateTime.now();
+        return Map<String, String>.from(preferences);
+      } catch (e) {
+        final userId = SupabaseService.auth.currentUser?.id;
+        if (userId != null) {
+          final cached = await ModelCacheService.loadProviderPreferences(userId);
+          if (cached.isNotEmpty) {
+            debugPrint(
+              'Loaded ${cached.length} cached provider preferences for offline use',
+            );
+            _cachedProviderPreferences = cached;
+            _providerPrefsFetchedAt = DateTime.now();
+            return Map<String, String>.from(cached);
+          }
+        }
+        debugPrint('Error loading all provider preferences: $e');
         return {};
       }
+    }
 
-      final userId = session.user.id;
-
-      final response = await SupabaseService.client
-          .from('user_model_providers')
-          .select('model_id, provider_slug')
-          .eq('user_id', userId);
-
-      final Map<String, String> preferences = {};
-      for (final row in response) {
-        preferences[row['model_id'] as String] = row['provider_slug'] as String;
-      }
-
-      debugPrint('Loaded ${preferences.length} provider preferences');
-      await ModelCacheService.saveProviderPreferences(userId, preferences);
-      return preferences;
-    } catch (e) {
-      final userId = SupabaseService.auth.currentUser?.id;
-      if (userId != null) {
-        final cached = await ModelCacheService.loadProviderPreferences(userId);
-        if (cached.isNotEmpty) {
-          debugPrint(
-            'Loaded ${cached.length} cached provider preferences for offline use',
-          );
-          return cached;
-        }
-      }
-      debugPrint('Error loading all provider preferences: $e');
-      return {};
+    try {
+      _providerPrefsInFlight = _performFetch();
+      return await _providerPrefsInFlight!;
+    } finally {
+      _providerPrefsInFlight = null;
     }
   }
 
