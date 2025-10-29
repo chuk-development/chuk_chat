@@ -250,6 +250,23 @@ class ChatApiService {
         }
       });
 
+      // Detailed request logging
+      debugPrint('═══════════════════════════════════════════════════════════');
+      debugPrint('📤 CHAT API REQUEST');
+      debugPrint('Provider: ${payload['provider'] ?? 'N/A'}');
+      debugPrint('Model ID: ${payload['model_id'] ?? payload['model'] ?? 'N/A'}');
+      debugPrint('Endpoint: $_apiBaseUrl/ai/chat');
+      debugPrint('───────────────────────────────────────────────────────────');
+      debugPrint('Request Details:');
+      debugPrint('  - Messages: ${payload['messages'] != null ? (payload['messages'] is List ? (payload['messages'] as List).length : 'N/A') : (payload['message'] != null ? '1' : '0')}');
+      debugPrint('  - Max Tokens: ${payload['max_tokens'] ?? 'default'}');
+      debugPrint('  - Temperature: ${payload['temperature'] ?? 'default'}');
+      debugPrint('  - Stream: ${payload['stream'] ?? 'true'}');
+      if (payload.containsKey('metadata')) {
+        debugPrint('  - Metadata: ${payload['metadata']}');
+      }
+      debugPrint('═══════════════════════════════════════════════════════════');
+
       final http.StreamedResponse streamedResponse;
       try {
         streamedResponse = await client
@@ -261,11 +278,14 @@ class ChatApiService {
         );
       }
 
+      debugPrint('📥 Response Status: ${streamedResponse.statusCode}');
+
       if (streamedResponse.statusCode == 401) {
         final body = await streamedResponse.stream.bytesToString();
         final message =
             _messageFromErrorPayload(_tryDecodeJson(body)) ??
             'Session expired. Please sign in again.';
+        debugPrint('❌ Authentication Error: $message');
         throw ChatCompletionAuthException(
           message,
           statusCode: streamedResponse.statusCode,
@@ -277,11 +297,14 @@ class ChatApiService {
         final message =
             _messageFromErrorPayload(_tryDecodeJson(body)) ??
             'Chat request failed with status ${streamedResponse.statusCode}.';
+        debugPrint('❌ Request Error: $message');
         throw ChatCompletionException(
           message,
           statusCode: streamedResponse.statusCode,
         );
       }
+
+      debugPrint('✅ Streaming response started successfully');
 
       final StringBuffer remainder = StringBuffer();
       final StringBuffer contentBuffer = StringBuffer();
@@ -345,8 +368,21 @@ class ChatApiService {
       }
 
       if (!isDone) {
-        debugPrint('Chat SSE stream ended without a [DONE] marker.');
+        debugPrint('⚠️  Chat SSE stream ended without a [DONE] marker.');
       }
+
+      debugPrint('═══════════════════════════════════════════════════════════');
+      debugPrint('✅ CHAT COMPLETION SUCCESSFUL');
+      debugPrint('Provider: ${payload['provider'] ?? 'N/A'}');
+      debugPrint('Model ID: ${payload['model_id'] ?? payload['model'] ?? 'N/A'}');
+      debugPrint('Content Length: ${contentBuffer.length} chars');
+      if (reasoningBuffer.isNotEmpty) {
+        debugPrint('Reasoning Length: ${reasoningBuffer.length} chars');
+      }
+      if (usage != null) {
+        debugPrint('Usage: ${usage.toString()}');
+      }
+      debugPrint('═══════════════════════════════════════════════════════════');
 
       return ChatCompletionResult(
         content: contentBuffer.toString(),

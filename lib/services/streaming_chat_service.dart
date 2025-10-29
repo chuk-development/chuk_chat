@@ -27,7 +27,7 @@ class StreamingChatService {
       client = http.Client();
 
       final Map<String, dynamic> requestPayload = {
-        'model': modelId,
+        'model_id': modelId,
         'message': message,
         'max_tokens': maxTokens.toString(),
         'temperature': temperature.toString(),
@@ -55,17 +55,35 @@ class StreamingChatService {
         request.fields[key] = value.toString();
       });
 
-      debugPrint('Starting streaming chat request to: ${request.url}');
+      // Detailed request logging
+      debugPrint('═══════════════════════════════════════════════════════════');
+      debugPrint('📤 STREAMING CHAT REQUEST');
+      debugPrint('Provider: $providerSlug');
+      debugPrint('Model: $modelId');
+      debugPrint('Endpoint: ${request.url}');
+      debugPrint('───────────────────────────────────────────────────────────');
+      debugPrint('Request Details:');
+      debugPrint('  - Message Length: ${message.length} chars');
+      debugPrint('  - Max Tokens: $maxTokens');
+      debugPrint('  - Temperature: $temperature');
+      debugPrint('  - History: ${history?.length ?? 0} messages');
+      debugPrint('  - Accept: text/event-stream');
+      debugPrint('═══════════════════════════════════════════════════════════');
+
       response = await client.send(request);
-      debugPrint('Response status: ${response.statusCode}');
+      debugPrint('📥 Response Status: ${response.statusCode}');
 
       if (response.statusCode != 200) {
         final errorBody = await response.stream.bytesToString();
+        debugPrint('❌ Request failed with status ${response.statusCode}');
+        debugPrint('Error: $errorBody');
         throw StreamingChatException(
           'Server returned ${response.statusCode}: $errorBody',
           statusCode: response.statusCode,
         );
       }
+
+      debugPrint('✅ Stream connected successfully');
 
       await for (final chunk
           in response.stream
@@ -77,7 +95,11 @@ class StreamingChatService {
           final data = chunk.substring(6).trim();
 
           if (data == '[DONE]') {
-            debugPrint('Stream completed');
+            debugPrint('═══════════════════════════════════════════════════════════');
+            debugPrint('✅ STREAM COMPLETED SUCCESSFULLY');
+            debugPrint('Provider: $providerSlug');
+            debugPrint('Model: $modelId');
+            debugPrint('═══════════════════════════════════════════════════════════');
             yield const ChatStreamEvent.done();
             break;
           }
@@ -108,11 +130,17 @@ class StreamingChatService {
     } on StreamingChatException {
       rethrow;
     } catch (e, stackTrace) {
-      debugPrint('Streaming error: $e\n$stackTrace');
+      debugPrint('═══════════════════════════════════════════════════════════');
+      debugPrint('❌ STREAMING ERROR');
+      debugPrint('Provider: $providerSlug');
+      debugPrint('Model: $modelId');
+      debugPrint('Error: $e');
+      debugPrint('Stack Trace: $stackTrace');
+      debugPrint('═══════════════════════════════════════════════════════════');
       throw StreamingChatException('Streaming failed: $e');
     } finally {
       client?.close();
-      debugPrint('Stream resources cleaned up');
+      debugPrint('🧹 Stream resources cleaned up');
     }
   }
 }
