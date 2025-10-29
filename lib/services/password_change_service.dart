@@ -4,6 +4,7 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/password_revision_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/user_preferences_service.dart';
 
 class PasswordChangeService {
   const PasswordChangeService();
@@ -55,9 +56,19 @@ class PasswordChangeService {
         )
         .toList();
 
+    // Load system prompt snapshot for migration
+    String? systemPromptSnapshot;
     try {
-      await _rotateChatsForPasswordChange(
+      systemPromptSnapshot = await UserPreferencesService.loadSystemPrompt();
+    } catch (_) {
+      // If loading fails, we'll just skip system prompt migration
+      systemPromptSnapshot = null;
+    }
+
+    try {
+      await _rotateEncryptionForPasswordChange(
         chatsSnapshot: chatsSnapshot,
+        systemPromptSnapshot: systemPromptSnapshot,
         fromPassword: trimmedCurrent,
         toPassword: trimmedNew,
       );
@@ -76,22 +87,24 @@ class PasswordChangeService {
     } on AuthException catch (error) {
       final restored = await _tryRestoreEncryption(
         chatsSnapshot: chatsSnapshot,
+        systemPromptSnapshot: systemPromptSnapshot,
         currentPassword: trimmedNew,
         previousPassword: trimmedCurrent,
       );
       final reason = restored
           ? 'Supabase rejected the password change: ${error.message}'
-          : 'Supabase rejected the password change and the encrypted chats could not be restored: ${error.message}';
+          : 'Supabase rejected the password change and the encrypted data could not be restored: ${error.message}';
       throw PasswordChangeException(reason);
     } catch (error) {
       final restored = await _tryRestoreEncryption(
         chatsSnapshot: chatsSnapshot,
+        systemPromptSnapshot: systemPromptSnapshot,
         currentPassword: trimmedNew,
         previousPassword: trimmedCurrent,
       );
       final reason = restored
           ? 'Failed to update password: $error'
-          : 'Failed to update password and the encrypted chats could not be restored: $error';
+          : 'Failed to update password and the encrypted data could not be restored: $error';
       throw PasswordChangeException(reason);
     }
 
@@ -130,8 +143,9 @@ class PasswordChangeService {
     return 'Password updated. Check $email to confirm the change.';
   }
 
-  Future<void> _rotateChatsForPasswordChange({
+  Future<void> _rotateEncryptionForPasswordChange({
     required List<StoredChat> chatsSnapshot,
+    required String? systemPromptSnapshot,
     required String fromPassword,
     required String toPassword,
   }) async {
@@ -139,22 +153,36 @@ class PasswordChangeService {
       currentPassword: fromPassword,
       newPassword: toPassword,
       migrateWithNewKey: () async {
+        // Re-encrypt chats with new key
         await ChatStorageService.reencryptChats(chatsSnapshot);
+
+        // Re-encrypt system prompt with new key if it exists
+        if (systemPromptSnapshot != null && systemPromptSnapshot.isNotEmpty) {
+          await UserPreferencesService.saveSystemPrompt(systemPromptSnapshot);
+        }
       },
       rollbackWithOldKey: () async {
+        // Rollback chats to old key
         await ChatStorageService.reencryptChats(chatsSnapshot);
+
+        // Rollback system prompt to old key if it exists
+        if (systemPromptSnapshot != null && systemPromptSnapshot.isNotEmpty) {
+          await UserPreferencesService.saveSystemPrompt(systemPromptSnapshot);
+        }
       },
     );
   }
 
   Future<bool> _tryRestoreEncryption({
     required List<StoredChat> chatsSnapshot,
+    required String? systemPromptSnapshot,
     required String currentPassword,
     required String previousPassword,
   }) async {
     try {
-      await _rotateChatsForPasswordChange(
+      await _rotateEncryptionForPasswordChange(
         chatsSnapshot: chatsSnapshot,
+        systemPromptSnapshot: systemPromptSnapshot,
         fromPassword: currentPassword,
         toPassword: previousPassword,
       );
