@@ -6,6 +6,7 @@ import 'package:chuk_chat/core/model_selection_events.dart';
 
 class UserPreferencesService {
   const UserPreferencesService._();
+  static const String _kFallbackModelId = 'deepseek/deepseek-chat-v3.1';
 
   /// Save the user's selected model to Supabase
   static Future<bool> saveSelectedModel(String modelId) async {
@@ -348,11 +349,32 @@ class UserPreferencesService {
       // Encrypt the system prompt using the same encryption as chat data
       final encryptedPrompt = await EncryptionService.encrypt(systemPrompt);
 
+      String? selectedModelId;
+      // Ensure we preserve a non-null selected_model_id when upserting.
+      try {
+        final response = await SupabaseService.client
+            .from('user_preferences')
+            .select('selected_model_id')
+            .eq('user_id', userId)
+            .maybeSingle();
+        selectedModelId =
+            (response?['selected_model_id'] as String?)?.trim();
+      } catch (error) {
+        debugPrint('Unable to load existing model preference: $error');
+      }
+
+      selectedModelId ??= await ModelCacheService.loadSelectedModel(userId);
+      if (selectedModelId != null && selectedModelId.trim().isEmpty) {
+        selectedModelId = null;
+      }
+      selectedModelId ??= _kFallbackModelId;
+
       // Upsert the encrypted system prompt
       final response = await SupabaseService.client
           .from('user_preferences')
           .upsert({
             'user_id': userId,
+            'selected_model_id': selectedModelId,
             'system_prompt': encryptedPrompt,
           }, onConflict: 'user_id')
           .select();
