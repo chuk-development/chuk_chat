@@ -1806,7 +1806,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     return Container(
       width:
           double.infinity, // Occupy full width of its parent AnimatedContainer
-      height: _kSearchBarContentHeight,
+      constraints: const BoxConstraints(
+        minHeight: _kSearchBarContentHeight,
+      ),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(16),

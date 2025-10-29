@@ -1833,7 +1833,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     return Container(
       width: double.infinity,
-      height: _kSearchBarContentHeight,
+      constraints: const BoxConstraints(
+        minHeight: _kSearchBarContentHeight,
+      ),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(16),
