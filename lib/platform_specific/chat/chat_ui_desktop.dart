@@ -95,6 +95,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   bool _isStreaming = false;
   final StreamingManager _streamingManager = StreamingManager();
   Timer? _autoSaveTimer;
+  int? _editingMessageIndex;
 
   final List<AttachedFile> _attachedFiles = [];
   final Uuid _uuid = Uuid();
@@ -621,17 +622,24 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   void _editMessageAt(int index) {
     if (!_isValidMessageIndex(index)) return;
-    final String text = _messages[index]['text'] ?? '';
-    _controller
-      ..text = text
-      ..selection = TextSelection.fromPosition(
-        TextPosition(offset: text.length),
-      );
-    Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+    setState(() {
+      _editingMessageIndex = index;
+    });
   }
 
-  Future<void> _resendMessageAt(int index) async {
+  void _cancelEditMessage() {
+    setState(() {
+      _editingMessageIndex = null;
+    });
+  }
+
+  Future<void> _submitEditedMessage(int index, String newText) async {
     if (!_isValidMessageIndex(index)) return;
+    final String trimmedText = newText.trim();
+    if (trimmedText.isEmpty) {
+      _showSnackBar('Message cannot be empty.');
+      return;
+    }
     if (_isStreaming) {
       _showSnackBar('Please wait for the current response to finish.');
       return;
@@ -641,43 +649,149 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       return;
     }
 
+    // Store the edited message
+    setState(() {
+      _messages[index]['text'] = trimmedText;
+      _editingMessageIndex = null;
+    });
+
+    // Delete the AI response that follows this user message (if it exists)
+    if (index + 1 < _messages.length && _messages[index + 1]['sender'] == 'ai') {
+      setState(() {
+        _messages.removeAt(index + 1);
+      });
+    }
+
+    _persistChat();
+
+    // Prepare to send the edited message
+    final String originalUserInput = trimmedText;
+    late int placeholderIndex;
+
+    setState(() {
+      _isSending = true;
+      _messages.add({'sender': 'ai', 'text': 'Thinking...', 'reasoning': ''});
+      placeholderIndex = _messages.length - 1;
+    });
+
+    _persistChat();
+    _scrollChatToBottom();
+
+    final session =
+        await SupabaseService.refreshSession() ??
+        SupabaseService.auth.currentSession;
+    if (session == null) {
+      _finalizeAiMessage(
+        placeholderIndex,
+        'Please sign in to continue the conversation.',
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Session expired. Please sign in again.'),
+          ),
+        );
+      }
+      await SupabaseService.signOut();
+      return;
+    }
+
+    final String accessToken = session.accessToken;
+    if (accessToken.isEmpty) {
+      _finalizeAiMessage(
+        placeholderIndex,
+        'Authentication failed. Please sign in again.',
+      );
+      return;
+    }
+
+    // Build conversation history up to the edited message
+    final List<Map<String, String>> conversationHistory = [];
+    for (int i = 0; i < index; i++) {
+      final msg = _messages[i];
+      final sender = msg['sender'];
+      final text = msg['text'] ?? '';
+      if (sender == 'user') {
+        conversationHistory.add({'role': 'user', 'content': text});
+      } else if (sender == 'ai') {
+        conversationHistory.add({'role': 'assistant', 'content': text});
+      }
+    }
+
+    try {
+      setState(() => _isStreaming = true);
+
+      final Stream<ChatStreamEvent> eventStream =
+          StreamingChatService.sendStreamingChat(
+        accessToken: accessToken,
+        message: originalUserInput,
+        modelId: _selectedModelId,
+        providerSlug: _selectedProviderSlug ?? 'openai',
+        history: conversationHistory,
+        maxTokens: 4096,
+        temperature: 0.7,
+      );
+
+      final StringBuffer contentBuffer = StringBuffer();
+      final StringBuffer reasoningBuffer = StringBuffer();
+
+      await for (final event in eventStream) {
+        switch (event) {
+          case ContentEvent(:final text):
+            contentBuffer.write(text);
+            if (mounted && _isValidMessageIndex(placeholderIndex)) {
+              setState(() {
+                _messages[placeholderIndex]['text'] = contentBuffer.toString();
+              });
+              _scrollChatToBottom();
+            }
+            break;
+          case ReasoningEvent(:final text):
+            reasoningBuffer.write(text);
+            if (mounted && _isValidMessageIndex(placeholderIndex)) {
+              setState(() {
+                _messages[placeholderIndex]['reasoning'] = reasoningBuffer.toString();
+              });
+            }
+            break;
+          case DoneEvent():
+            break;
+          case ErrorEvent(:final message):
+            _finalizeAiMessage(placeholderIndex, 'Error: $message');
+            break;
+          case UsageEvent():
+          case MetaEvent():
+            break;
+        }
+      }
+
+      final String finalContent = contentBuffer.toString().trim();
+      if (finalContent.isEmpty) {
+        _finalizeAiMessage(placeholderIndex, 'No response received.');
+      }
+    } catch (e) {
+      debugPrint('Streaming error: $e');
+      _finalizeAiMessage(placeholderIndex, 'Error: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isStreaming = false;
+          _isSending = false;
+        });
+      }
+      _persistChat();
+    }
+  }
+
+  Future<void> _resendMessageAt(int index) async {
+    if (!_isValidMessageIndex(index)) return;
     final String text = (_messages[index]['text'] ?? '').trim();
     if (text.isEmpty) {
       _showSnackBar('Nothing to resend.');
       return;
     }
-
-    final String previousInput = _controller.text;
-    final TextSelection previousSelection = _controller.selection;
-    final List<AttachedFile> previousAttachments =
-        List<AttachedFile>.from(_attachedFiles);
-
-    setState(() {
-      _controller
-        ..text = text
-        ..selection = TextSelection.fromPosition(
-          TextPosition(offset: text.length),
-        );
-      _attachedFiles.clear();
-    });
-
-    await _sendMessage();
-
-    if (!mounted) return;
-
-    setState(() {
-      _attachedFiles
-        ..clear()
-        ..addAll(previousAttachments);
-    });
-
-    if (previousInput.isNotEmpty) {
-      _controller
-        ..text = previousInput
-        ..selection = previousSelection;
-    } else {
-      _controller.clear();
-    }
+    // Use the same logic as editing and submitting
+    await _submitEditedMessage(index, text);
   }
 
   List<MessageBubbleAction> _buildMessageActionsForIndex(
@@ -1500,6 +1614,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                 data.reasoning.trim().isEmpty
                                 ? null
                                 : data.reasoning;
+                            final bool isBeingEdited = _editingMessageIndex == i;
                             return RepaintBoundary(
                               child: MessageBubble(
                                 key: ValueKey('msg_$i'),
@@ -1510,6 +1625,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                 isReasoningStreaming:
                                     data.isReasoningStreaming,
                                 actions: _buildMessageActionsForIndex(i, data),
+                                isEditing: isBeingEdited,
+                                initialEditText: isBeingEdited ? data.displayText : null,
+                                onSubmitEdit: isBeingEdited && data.isUser
+                                    ? (newText) => _submitEditedMessage(i, newText)
+                                    : null,
+                                onCancelEdit: isBeingEdited ? _cancelEditMessage : null,
                               ),
                             );
                           },
