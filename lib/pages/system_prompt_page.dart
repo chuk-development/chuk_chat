@@ -46,6 +46,14 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
         _systemPromptCtrl.text = systemPrompt ?? '';
         _isLoading = false;
       });
+    } on StateError catch (error) {
+      // Handle encryption-related errors
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Encryption error: ${error.message}. '
+            'You may need to sign out and sign in again.';
+        _isLoading = false;
+      });
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -82,11 +90,19 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
           content: Text(
             prompt.isEmpty
                 ? 'System prompt cleared'
-                : 'System prompt saved successfully',
+                : 'System prompt saved and encrypted successfully',
           ),
           backgroundColor: Theme.of(context).colorScheme.primary,
         ),
       );
+    } on StateError catch (error) {
+      // Handle encryption-related errors
+      if (!mounted) return;
+      setState(() {
+        _isSaving = false;
+        _errorMessage = 'Encryption error: ${error.message}. '
+            'You may need to sign out and sign in again.';
+      });
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -119,6 +135,13 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
           backgroundColor: Theme.of(context).colorScheme.primary,
         ),
       );
+    } on StateError catch (error) {
+      // Handle encryption-related errors
+      if (!mounted) return;
+      setState(() {
+        _isSaving = false;
+        _errorMessage = 'Error: ${error.message}';
+      });
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -175,7 +198,9 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
               children: [
                 Text(
                   'Define a default system prompt that will be sent with every conversation. '
-                  'This helps set the behavior and personality of the AI assistant.',
+                  'This helps set the behavior and personality of the AI assistant.\n\n'
+                  'Your system prompt is encrypted with the same encryption used for your chat messages, '
+                  'protecting it with your password.',
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: iconFg.lighten(0.2),
                   ),

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/model_cache_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/core/model_selection_events.dart';
@@ -333,7 +334,7 @@ class UserPreferencesService {
     }
   }
 
-  /// Save the user's system prompt
+  /// Save the user's system prompt (encrypted)
   static Future<bool> saveSystemPrompt(String systemPrompt) async {
     try {
       final session = SupabaseService.auth.currentSession;
@@ -344,17 +345,20 @@ class UserPreferencesService {
 
       final userId = session.user.id;
 
-      // Upsert the user's system prompt
+      // Encrypt the system prompt using the same encryption as chat data
+      final encryptedPrompt = await EncryptionService.encrypt(systemPrompt);
+
+      // Upsert the encrypted system prompt
       final response = await SupabaseService.client
           .from('user_preferences')
           .upsert({
             'user_id': userId,
-            'system_prompt': systemPrompt,
+            'system_prompt': encryptedPrompt,
           }, onConflict: 'user_id')
           .select();
 
       if (response.isNotEmpty) {
-        debugPrint('Successfully saved system prompt');
+        debugPrint('Successfully saved encrypted system prompt');
         return true;
       } else {
         debugPrint('Failed to save system prompt: empty response');
@@ -366,7 +370,7 @@ class UserPreferencesService {
     }
   }
 
-  /// Load the user's system prompt
+  /// Load the user's system prompt (decrypted)
   static Future<String?> loadSystemPrompt() async {
     try {
       final session = SupabaseService.auth.currentSession;
@@ -384,9 +388,13 @@ class UserPreferencesService {
           .maybeSingle();
 
       if (response != null && response['system_prompt'] != null) {
-        final systemPrompt = response['system_prompt'] as String;
-        debugPrint('Loaded system prompt: ${systemPrompt.length} characters');
-        return systemPrompt;
+        final encryptedPrompt = response['system_prompt'] as String;
+
+        // Decrypt the system prompt
+        final decryptedPrompt = await EncryptionService.decrypt(encryptedPrompt);
+
+        debugPrint('Loaded encrypted system prompt: ${decryptedPrompt.length} characters');
+        return decryptedPrompt;
       } else {
         debugPrint('No system prompt found for user');
         return null;
