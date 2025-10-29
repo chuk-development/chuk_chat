@@ -1753,7 +1753,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 : effectiveHorizontalPadding, // Always keep padding from bottom edge
             child: Center(
               // Centers horizontally
-              child: Container(
+              child: SizedBox(
                 width: targetInputWidth, // Dynamically changes width
                 child: Column(
                   mainAxisSize: MainAxisSize

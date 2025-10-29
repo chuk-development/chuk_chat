@@ -98,7 +98,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   StreamSubscription<ChatStreamEvent>? _streamSubscription;
   bool _isStreaming = false;
   final StreamingManager _streamingManager = StreamingManager();
-  Timer? _autoSaveTimer;
   int? _editingMessageIndex;
 
   static const int _kMaxFileSizeBytes = 10 * 1024 * 1024; // 10MB
@@ -1842,7 +1841,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
             right: 0,
             bottom: composerBottomInset,
             child: Center(
-              child: Container(
+              child: SizedBox(
                 width: targetInputWidth,
                 child: Column(
                   children: [

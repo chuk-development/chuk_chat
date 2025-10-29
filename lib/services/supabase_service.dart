@@ -52,7 +52,7 @@ class SupabaseService {
       return auth.currentSession;
     }
 
-    Future<Session?> _performRefresh() async {
+    Future<Session?> performRefresh() async {
       final DateTime startedAt = DateTime.now();
       try {
         final current = auth.currentSession;
@@ -71,7 +71,7 @@ class SupabaseService {
     }
 
     try {
-      _inFlightRefresh = _performRefresh();
+      _inFlightRefresh = performRefresh();
       return await _inFlightRefresh;
     } finally {
       _inFlightRefresh = null;

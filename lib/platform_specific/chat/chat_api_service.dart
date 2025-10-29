@@ -154,7 +154,7 @@ class ChatApiService {
         final String text = (decoded?['text'] as String?) ?? '';
         final dynamic metadataRaw = decoded?['x_groq'];
         final Map<String, dynamic>? metadata = metadataRaw is Map
-            ? Map<String, dynamic>.from(metadataRaw as Map<dynamic, dynamic>)
+            ? Map<String, dynamic>.from(metadataRaw)
             : null;
         return TranscriptionResult(text: text, metadata: metadata);
       }
@@ -469,8 +469,7 @@ class ChatCompletionException implements Exception {
 }
 
 class ChatCompletionAuthException extends ChatCompletionException {
-  const ChatCompletionAuthException(String message, {int? statusCode})
-    : super(message, statusCode: statusCode);
+  const ChatCompletionAuthException(super.message, {super.statusCode});
 }
 
 class _SseEvent {

@@ -281,7 +281,7 @@ class UserPreferencesService {
       return Map<String, String>.from(_cachedProviderPreferences!);
     }
 
-    Future<Map<String, String>> _performFetch() async {
+    Future<Map<String, String>> performFetch() async {
       try {
         final session = SupabaseService.auth.currentSession;
         if (session == null) {
@@ -328,7 +328,7 @@ class UserPreferencesService {
     }
 
     try {
-      _providerPrefsInFlight = _performFetch();
+      _providerPrefsInFlight = performFetch();
       return await _providerPrefsInFlight!;
     } finally {
       _providerPrefsInFlight = null;
