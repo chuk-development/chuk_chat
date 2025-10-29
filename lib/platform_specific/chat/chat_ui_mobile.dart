@@ -2011,7 +2011,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                       : Row(
                           key: const ValueKey<String>('default-mic-controls'),
                           children: [
-                            // Add Button (File Upload)
                             _buildIconBtn(
                               icon: Icons.add,
                               onTap: _handleAddAttachmentTap,
@@ -2019,7 +2018,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                               debugLabel: 'Add button',
                             ),
                             const SizedBox(width: 8),
-                            // Image Button
                             _buildIconBtn(
                               icon: Icons.image,
                               onTap: () {
@@ -2034,7 +2032,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                               debugLabel: 'Image button',
                             ),
                             const Spacer(),
-                            // Model Selection Dropdown
                             ModelSelectionDropdown(
                               initialSelectedModelId: _selectedModelId,
                               onModelSelected: (newModelId) {
@@ -2054,7 +2051,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 ),
               ),
               const SizedBox(width: 8),
-              // Mic Button (acts as record/stop toggle)
               _buildIconBtn(
                 icon: _isMicActive ? Icons.stop : Icons.mic,
                 onTap: _handleMicTap,
