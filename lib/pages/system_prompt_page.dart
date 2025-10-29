@@ -24,12 +24,20 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
   void initState() {
     super.initState();
     _loadSystemPrompt();
+    // Listen to text changes to update button state
+    _systemPromptCtrl.addListener(_onTextChanged);
   }
 
   @override
   void dispose() {
+    _systemPromptCtrl.removeListener(_onTextChanged);
     _systemPromptCtrl.dispose();
     super.dispose();
+  }
+
+  void _onTextChanged() {
+    // Trigger rebuild to update save button enabled state
+    setState(() {});
   }
 
   Future<void> _loadSystemPrompt() async {
