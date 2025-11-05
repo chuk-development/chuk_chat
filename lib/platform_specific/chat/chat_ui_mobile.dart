@@ -83,7 +83,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   late AnimationController _animCtrl;
   late Animation<double> _anim;
 
-  bool _isImageActive = false;
   bool _isMicActive = false;
   final List<double> _audioLevels = List<double>.filled(
     32,
@@ -209,7 +208,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   };
 
   static const double _kMaxChatContentWidth = 760.0;
-  static const double _kSearchBarContentHeight = 135.0;
+  static const double _kSearchBarContentHeight = 48.0; // Compact single-line height
   static const double _kAttachmentBarHeight = 40.0;
   static const double _kAttachmentBarMarginBottom = 8.0;
   static const double _kHorizontalPaddingSmall =
@@ -809,70 +808,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     return actions;
   }
 
-  Widget _buildAudioVisualizer({required Color accent, required Color iconFg}) {
-    return SizedBox(
-      key: const ValueKey<String>('audio-visualizer'),
-      height: 44,
-      child: Row(
-        children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final int barCount = _audioLevels.length;
-                if (barCount == 0) {
-                  return const SizedBox.shrink();
-                }
-                final double maxHeight = constraints.maxHeight;
-
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: List.generate(barCount, (int index) {
-                    final double level = _audioLevels[index];
-                    final double clampedLevel = level.clamp(0.0, 1.0);
-                    final double barHeight = math.max(
-                      4.0,
-                      clampedLevel * maxHeight,
-                    );
-                    return Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 1.2),
-                        child: Align(
-                          alignment: Alignment.bottomCenter,
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 90),
-                            height: barHeight,
-                            decoration: BoxDecoration(
-                              color: accent,
-                              borderRadius: BorderRadius.circular(3),
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  }),
-                );
-              },
-            ),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            'Recording...',
-            style: TextStyle(
-              color: iconFg.withValues(alpha: 0.8),
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Future<void> _pickImageFromSource(ImageSource source) async {
     if (!_ensureImageUploadsSupported()) return;
@@ -1001,7 +936,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       _activeChatId = null;
     }
     setState(() {
-      _isImageActive = false;
       _isMicActive = false;
     });
     _scrollChatToBottom();
@@ -1015,7 +949,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       _animCtrl.reset();
       _activeChatId = null;
       ChatStorageService.selectedChatIndex = -1;
-      _isImageActive = false;
       _isMicActive = false;
       _attachedFiles.clear();
     });
@@ -1917,395 +1850,296 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
   Widget _buildSearchBar({required bool isCompactMode}) {
     final Color bg = Theme.of(context).scaffoldBackgroundColor;
-    final Color surfaceVariant = Theme.of(context).colorScheme.surfaceContainerHighest;
     final Color accent = Theme.of(context).colorScheme.primary;
     final Color iconFg = Theme.of(context).resolvedIconColor;
 
     final bool hasAttachments = _attachedFiles.isNotEmpty;
 
-    return Container(
+    // Compact single-line design
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
       width: double.infinity,
+      height: _isMicActive ? 56 : 48,
       decoration: BoxDecoration(
-        color: bg.withValues(alpha: 0.95),
-        borderRadius: BorderRadius.circular(28),
+        color: bg.withValues(alpha: 0.98),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: iconFg.withValues(alpha: 0.12),
-          width: 1.5,
+          color: _isMicActive
+              ? Colors.red.withValues(alpha: 0.3)
+              : iconFg.withValues(alpha: 0.15),
+          width: 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 20,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Top toolbar with action buttons
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 250),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            child: _isMicActive
-                ? Padding(
-                    key: const ValueKey<String>('recording-toolbar'),
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-                    child: _buildAudioVisualizer(accent: accent, iconFg: iconFg),
-                  )
-                : Container(
-                    key: const ValueKey<String>('normal-toolbar'),
-                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-                    child: Row(
-                      children: [
-                        // Media buttons group
-                        _buildCompactIconBtn(
-                          icon: Icons.attach_file_rounded,
-                          onTap: _handleAddAttachmentTap,
-                          isActive: hasAttachments,
-                          tooltip: 'Attach files',
-                        ),
-                        const SizedBox(width: 6),
-                        _buildCompactIconBtn(
-                          icon: Icons.image_outlined,
-                          onTap: () {
-                            setState(() => _isImageActive = !_isImageActive);
-                            debugPrint('Image button toggled: $_isImageActive');
-                          },
-                          isActive: _isImageActive,
-                          tooltip: 'Add image',
-                        ),
-
-                        const Spacer(),
-
-                        // Model selector
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: surfaceVariant.withValues(alpha: 0.4),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: iconFg.withValues(alpha: 0.1),
-                            ),
-                          ),
-                          child: ModelSelectionDropdown(
-                            initialSelectedModelId: _selectedModelId,
-                            onModelSelected: (newModelId) {
-                              setState(() {
-                                _selectedModelId = newModelId;
-                              });
-                              debugPrint('Selected model ID: $_selectedModelId');
-                            },
-                            textFieldFocusNode: _textFieldFocusNode,
-                            isCompactMode: isCompactMode,
-                            compactLabel: '#',
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-          ),
-
-          // Divider
-          Container(
-            height: 1,
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.transparent,
-                  iconFg.withValues(alpha: 0.1),
-                  Colors.transparent,
-                ],
-              ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      child: _isMicActive
+          ? _buildRecordingRow(accent: accent, iconFg: iconFg)
+          : _buildNormalRow(
+              hasAttachments: hasAttachments,
+              isCompactMode: isCompactMode,
+              accent: accent,
+              iconFg: iconFg,
             ),
-          ),
-
-          // Main input area
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 12, 12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                // Text input
-                Expanded(
-                  child: KeyboardListener(
-                    focusNode: _rawKeyboardListenerFocusNode,
-                    onKeyEvent: (event) {
-                      if (event is! KeyDownEvent) return;
-                      if (event.logicalKey != LogicalKeyboardKey.enter) return;
-
-                      final isShiftPressed =
-                          HardwareKeyboard.instance.isShiftPressed;
-                      if (isShiftPressed) {
-                        final value = _controller.value;
-                        final updatedText = value.text.replaceRange(
-                          value.selection.start,
-                          value.selection.end,
-                          '\n',
-                        );
-                        _controller.value = value.copyWith(
-                          text: updatedText,
-                          selection: TextSelection.collapsed(
-                            offset: value.selection.start + 1,
-                          ),
-                        );
-                        return;
-                      }
-
-                      unawaited(_sendMessage());
-                    },
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(
-                        maxHeight: 120,
-                        minHeight: 24,
-                      ),
-                      child: Scrollbar(
-                        controller: _composerScrollController,
-                        thumbVisibility: false,
-                        child: TextField(
-                          controller: _controller,
-                          focusNode: _textFieldFocusNode,
-                          autofocus: false,
-                          keyboardType: TextInputType.multiline,
-                          textInputAction: TextInputAction.send,
-                          style: TextStyle(
-                            color: iconFg,
-                            fontSize: 15,
-                            height: 1.4,
-                          ),
-                          minLines: 1,
-                          maxLines: null,
-                          scrollController: _composerScrollController,
-                          textAlignVertical: TextAlignVertical.center,
-                          decoration: InputDecoration(
-                            hintText: hasAttachments
-                                ? 'Add a message or send documents'
-                                : 'Ask me anything...',
-                            hintStyle: TextStyle(
-                              color: iconFg.withValues(alpha: 0.5),
-                              fontSize: 15,
-                            ),
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            errorBorder: InputBorder.none,
-                            focusedErrorBorder: InputBorder.none,
-                            disabledBorder: InputBorder.none,
-                            filled: false,
-                            contentPadding: EdgeInsets.zero,
-                            isDense: true,
-                          ),
-                          cursorColor: accent,
-                          cursorWidth: 2,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(width: 12),
-
-                // Right action buttons
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Mic button
-                    _buildRoundActionBtn(
-                      icon: _isMicActive ? Icons.stop_rounded : Icons.mic_rounded,
-                      onTap: _handleMicTap,
-                      isActive: _isMicActive,
-                      color: _isMicActive ? Colors.red : iconFg.withValues(alpha: 0.7),
-                      tooltip: _isMicActive ? 'Stop recording' : 'Voice input',
-                    ),
-
-                    const SizedBox(width: 8),
-
-                    // Send/Voice mode button
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 200),
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeInCubic,
-                      child: _isMicActive
-                          ? _buildMainActionBtn(
-                              key: const ValueKey<String>('audio-send'),
-                              icon: Icons.send_rounded,
-                              onTap: _handleAudioSend,
-                              tooltip: 'Send audio',
-                            )
-                          : _buildMainActionBtn(
-                              key: const ValueKey<String>('send-or-voice'),
-                              icon: _isStreaming
-                                  ? Icons.stop_rounded
-                                  : (_controller.text.trim().isEmpty && !hasAttachments
-                                      ? Icons.graphic_eq_rounded
-                                      : Icons.arrow_upward_rounded),
-                              onTap: _controller.text.trim().isEmpty && !hasAttachments
-                                  ? () => _openComingSoonFeature('Voice Mode')
-                                  : _sendMessage,
-                              tooltip: _isStreaming
-                                  ? 'Stop'
-                                  : (_controller.text.trim().isEmpty && !hasAttachments
-                                      ? 'Voice mode'
-                                      : 'Send'),
-                              isStop: _isStreaming,
-                            ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 
-  // Compact icon button for toolbar
-  Widget _buildCompactIconBtn({
-    required IconData icon,
-    required VoidCallback onTap,
-    required bool isActive,
-    String? tooltip,
+  Widget _buildRecordingRow({
+    required Color accent,
+    required Color iconFg,
   }) {
-    final Color iconFg = Theme.of(context).resolvedIconColor;
-    final Color accent = Theme.of(context).colorScheme.primary;
-
-    return Tooltip(
-      message: tooltip ?? '',
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(10),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: isActive
-                  ? accent.withValues(alpha: 0.15)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: isActive
-                    ? accent.withValues(alpha: 0.3)
-                    : Colors.transparent,
-                width: 1,
-              ),
-            ),
-            child: Icon(
-              icon,
-              size: 20,
-              color: isActive ? accent : iconFg.withValues(alpha: 0.7),
+    return Row(
+      children: [
+        const SizedBox(width: 4),
+        // Recording indicator
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: Colors.red,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 12),
+        // Compact visualizer
+        Expanded(
+          child: SizedBox(
+            height: 24,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: List.generate(20, (index) {
+                final double level = index < _audioLevels.length
+                    ? _audioLevels[index]
+                    : 0.0;
+                final double barHeight = (level * 20).clamp(2.0, 20.0);
+                return Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 1),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 90),
+                      height: barHeight,
+                      decoration: BoxDecoration(
+                        color: Colors.red.withValues(alpha: 0.8),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                );
+              }),
             ),
           ),
         ),
-      ),
+        const SizedBox(width: 8),
+        // Stop button
+        _buildTinyActionBtn(
+          icon: Icons.stop_rounded,
+          onTap: _handleMicTap,
+          color: Colors.red,
+        ),
+        const SizedBox(width: 4),
+        // Send audio button
+        _buildTinyActionBtn(
+          icon: Icons.send_rounded,
+          onTap: _handleAudioSend,
+          color: accent,
+        ),
+        const SizedBox(width: 4),
+      ],
     );
   }
 
-  // Round action button for mic
-  Widget _buildRoundActionBtn({
+  Widget _buildNormalRow({
+    required bool hasAttachments,
+    required bool isCompactMode,
+    required Color accent,
+    required Color iconFg,
+  }) {
+    return Row(
+      children: [
+        // Attachment button
+        _buildTinyIconBtn(
+          icon: Icons.add_rounded,
+          onTap: _handleAddAttachmentTap,
+          isActive: hasAttachments,
+          color: iconFg,
+        ),
+        const SizedBox(width: 2),
+        // Model selector (ultra compact)
+        GestureDetector(
+          onTap: () {
+            // Show model selector
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            child: ModelSelectionDropdown(
+              initialSelectedModelId: _selectedModelId,
+              onModelSelected: (newModelId) {
+                setState(() {
+                  _selectedModelId = newModelId;
+                });
+              },
+              textFieldFocusNode: _textFieldFocusNode,
+              isCompactMode: true,
+              compactLabel: '#',
+            ),
+          ),
+        ),
+        const SizedBox(width: 4),
+        // Text input
+        Expanded(
+          child: KeyboardListener(
+            focusNode: _rawKeyboardListenerFocusNode,
+            onKeyEvent: (event) {
+              if (event is! KeyDownEvent) return;
+              if (event.logicalKey != LogicalKeyboardKey.enter) return;
+
+              final isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
+              if (isShiftPressed) {
+                final value = _controller.value;
+                final updatedText = value.text.replaceRange(
+                  value.selection.start,
+                  value.selection.end,
+                  '\n',
+                );
+                _controller.value = value.copyWith(
+                  text: updatedText,
+                  selection: TextSelection.collapsed(
+                    offset: value.selection.start + 1,
+                  ),
+                );
+                return;
+              }
+
+              unawaited(_sendMessage());
+            },
+            child: TextField(
+              controller: _controller,
+              focusNode: _textFieldFocusNode,
+              autofocus: false,
+              keyboardType: TextInputType.multiline,
+              textInputAction: TextInputAction.send,
+              style: TextStyle(
+                color: iconFg,
+                fontSize: 14,
+                height: 1.3,
+              ),
+              maxLines: 1,
+              decoration: InputDecoration(
+                hintText: 'Message...',
+                hintStyle: TextStyle(
+                  color: iconFg.withValues(alpha: 0.4),
+                  fontSize: 14,
+                ),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                isDense: true,
+              ),
+              cursorColor: accent,
+              cursorWidth: 1.5,
+            ),
+          ),
+        ),
+        const SizedBox(width: 4),
+        // Mic button
+        _buildTinyIconBtn(
+          icon: Icons.mic_rounded,
+          onTap: _handleMicTap,
+          isActive: false,
+          color: iconFg,
+        ),
+        const SizedBox(width: 2),
+        // Send button
+        _buildTinyActionBtn(
+          icon: _isStreaming
+              ? Icons.stop_rounded
+              : (_controller.text.trim().isEmpty && !hasAttachments
+                  ? Icons.graphic_eq_rounded
+                  : Icons.arrow_upward_rounded),
+          onTap: _controller.text.trim().isEmpty && !hasAttachments
+              ? () => _openComingSoonFeature('Voice Mode')
+              : _sendMessage,
+          color: _isStreaming ? Colors.red : accent,
+        ),
+        const SizedBox(width: 4),
+      ],
+    );
+  }
+
+  Widget _buildTinyIconBtn({
     required IconData icon,
     required VoidCallback onTap,
     required bool isActive,
     required Color color,
-    String? tooltip,
   }) {
-    return Tooltip(
-      message: tooltip ?? '',
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: isActive
-                  ? color.withValues(alpha: 0.15)
-                  : Colors.transparent,
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: color.withValues(alpha: 0.3),
-                width: 1.5,
-              ),
-            ),
-            child: Icon(
-              icon,
-              size: 20,
-              color: color,
-            ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: isActive ? color.withValues(alpha: 0.15) : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(
+            icon,
+            size: 18,
+            color: isActive ? color : color.withValues(alpha: 0.6),
           ),
         ),
       ),
     );
   }
 
-  // Main action button (send/voice mode)
-  Widget _buildMainActionBtn({
-    Key? key,
+  Widget _buildTinyActionBtn({
     required IconData icon,
     required VoidCallback onTap,
-    String? tooltip,
-    bool isStop = false,
+    required Color color,
   }) {
-    final Color accent = Theme.of(context).colorScheme.primary;
-
-    return Tooltip(
-      message: tooltip ?? '',
-      child: Material(
-        key: key,
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              gradient: isStop
-                  ? LinearGradient(
-                      colors: [
-                        Colors.red.shade400,
-                        Colors.red.shade600,
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    )
-                  : LinearGradient(
-                      colors: [
-                        accent,
-                        accent.withValues(alpha: 0.8),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: (isStop ? Colors.red : accent).withValues(alpha: 0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                color,
+                color.withValues(alpha: 0.85),
               ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-            child: Icon(
-              icon,
-              size: 20,
-              color: Colors.white,
-            ),
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.25),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Icon(
+            icon,
+            size: 16,
+            color: Colors.white,
           ),
         ),
       ),
     );
   }
+
 
 }
