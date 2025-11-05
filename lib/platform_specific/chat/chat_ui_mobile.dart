@@ -1766,13 +1766,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     final MediaQueryData mediaQuery = MediaQuery.of(context);
     final double keyboardHeight = mediaQuery.viewInsets.bottom;
-    final double bottomSafeArea = keyboardHeight > 0
-        ? 0.0
-        : mediaQuery.padding.bottom;
-    final double chatListBottomInset =
-        inputAreaTotalHeight + keyboardHeight + bottomSafeArea;
-    final double composerBottomInset =
-        effectiveHorizontalPadding + keyboardHeight + bottomSafeArea;
+    // On mobile, match desktop behavior: use simple padding at bottom when keyboard is closed
+    final double bottomPadding = keyboardHeight > 0
+        ? keyboardHeight
+        : effectiveHorizontalPadding;
+    final double chatListBottomInset = inputAreaTotalHeight + bottomPadding;
+    final double composerBottomInset = bottomPadding;
 
     final double targetInputWidth = expandedInputWidth;
 
