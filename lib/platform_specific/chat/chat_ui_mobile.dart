@@ -1868,39 +1868,44 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           Positioned(
             left: 0,
             right: 0,
-            bottom: effectiveHorizontalPadding,
-            child: Center(
-              child: SizedBox(
-                width: targetInputWidth,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (_attachedFiles.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          bottom: _kAttachmentBarMarginBottom,
-                        ),
-                        child: SizedBox(
-                          width: targetInputWidth,
-                          child: AttachmentPreviewBar(
-                            files: _attachedFiles,
-                            onRemove: _removeAttachedFile,
+            bottom: 0,
+            child: Padding(
+              padding: EdgeInsets.only(
+                bottom: effectiveHorizontalPadding,
+              ),
+              child: Center(
+                child: SizedBox(
+                  width: targetInputWidth,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_attachedFiles.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(
+                            bottom: _kAttachmentBarMarginBottom,
+                          ),
+                          child: SizedBox(
+                            width: targetInputWidth,
+                            child: AttachmentPreviewBar(
+                              files: _attachedFiles,
+                              onRemove: _removeAttachedFile,
+                            ),
                           ),
                         ),
+                      _buildSearchBar(
+                        isCompactMode: isCompactModeForModelDropdown,
                       ),
-                    _buildSearchBar(
-                      isCompactMode: isCompactModeForModelDropdown,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'AI/LLMs can make mistakes — double-check important info.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: iconFg.withValues(alpha: 0.7),
-                        fontSize: 11,
+                      const SizedBox(height: 8),
+                      Text(
+                        'AI/LLMs can make mistakes — double-check important info.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: iconFg.withValues(alpha: 0.7),
+                          fontSize: 11,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
