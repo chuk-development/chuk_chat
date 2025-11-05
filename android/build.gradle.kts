@@ -3,6 +3,19 @@ allprojects {
         google()
         mavenCentral()
     }
+    
+    // Force Java 17 for all projects to avoid obsolete Java 8 warnings
+    afterEvaluate {
+        if (project.hasProperty("android")) {
+            val android = project.extensions.findByName("android")
+            if (android != null && android is com.android.build.gradle.BaseExtension) {
+                android.compileOptions {
+                    sourceCompatibility = JavaVersion.VERSION_17
+                    targetCompatibility = JavaVersion.VERSION_17
+                }
+            }
+        }
+    }
 }
 
 val newBuildDir: Directory =
@@ -17,16 +30,6 @@ subprojects {
 }
 subprojects {
     project.evaluationDependsOn(":app")
-    
-    // Force Java 17 for all subprojects to avoid obsolete Java 8 warnings
-    afterEvaluate {
-        (extensions.findByName("android") as? com.android.build.gradle.BaseExtension)?.apply {
-            compileOptions {
-                sourceCompatibility = JavaVersion.VERSION_17
-                targetCompatibility = JavaVersion.VERSION_17
-            }
-        }
-    }
 }
 
 tasks.register<Delete>("clean") {
