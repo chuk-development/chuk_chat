@@ -1916,8 +1916,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   }
 
   Widget _buildSearchBar({required bool isCompactMode}) {
-    const btnH = 36.0, btnW = 44.0;
     final Color bg = Theme.of(context).scaffoldBackgroundColor;
+    final Color surfaceVariant = Theme.of(context).colorScheme.surfaceContainerHighest;
     final Color accent = Theme.of(context).colorScheme.primary;
     final Color iconFg = Theme.of(context).resolvedIconColor;
 
@@ -1925,277 +1925,387 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     return Container(
       width: double.infinity,
-      constraints: const BoxConstraints(minHeight: _kSearchBarContentHeight),
       decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: iconFg.withValues(alpha: 0.3)),
+        color: bg.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(
+          color: iconFg.withValues(alpha: 0.12),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: KeyboardListener(
-                  focusNode: _rawKeyboardListenerFocusNode,
-                  onKeyEvent: (event) {
-                    if (event is! KeyDownEvent) return;
-                    if (event.logicalKey != LogicalKeyboardKey.enter) return;
-
-                    final isShiftPressed =
-                        HardwareKeyboard.instance.isShiftPressed;
-                    if (isShiftPressed) {
-                      final value = _controller.value;
-                      final updatedText = value.text.replaceRange(
-                        value.selection.start,
-                        value.selection.end,
-                        '\n',
-                      );
-                      _controller.value = value.copyWith(
-                        text: updatedText,
-                        selection: TextSelection.collapsed(
-                          offset: value.selection.start + 1,
+          // Top toolbar with action buttons
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            child: _isMicActive
+                ? Padding(
+                    key: const ValueKey<String>('recording-toolbar'),
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+                    child: _buildAudioVisualizer(accent: accent, iconFg: iconFg),
+                  )
+                : Container(
+                    key: const ValueKey<String>('normal-toolbar'),
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+                    child: Row(
+                      children: [
+                        // Media buttons group
+                        _buildCompactIconBtn(
+                          icon: Icons.attach_file_rounded,
+                          onTap: _handleAddAttachmentTap,
+                          isActive: hasAttachments,
+                          tooltip: 'Attach files',
                         ),
-                      );
-                      return;
-                    }
-
-                    unawaited(_sendMessage());
-                  },
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 160),
-                    child: Scrollbar(
-                      controller: _composerScrollController,
-                      thumbVisibility: false,
-                      child: TextField(
-                        controller: _controller,
-                        focusNode: _textFieldFocusNode,
-                        autofocus: false,
-                        keyboardType: TextInputType.multiline,
-                        textInputAction: TextInputAction.send,
-                        style: TextStyle(color: iconFg),
-                        minLines: 1,
-                        maxLines: null,
-                        scrollController: _composerScrollController,
-                        textAlignVertical: TextAlignVertical.top,
-                        decoration: InputDecoration(
-                          hintText: hasAttachments
-                              ? 'Add a message or send documents'
-                              : 'Ask me anything !',
-                          hintStyle: TextStyle(
-                            color: iconFg.withValues(alpha: 0.8),
-                          ),
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          errorBorder: InputBorder.none,
-                          focusedErrorBorder: InputBorder.none,
-                          disabledBorder: InputBorder.none,
-                          filled: false,
-                          fillColor: Colors.transparent,
-                          contentPadding: const EdgeInsets.symmetric(
-                            vertical: 8,
-                            horizontal: 0,
-                          ),
-                          isDense: true,
+                        const SizedBox(width: 6),
+                        _buildCompactIconBtn(
+                          icon: Icons.image_outlined,
+                          onTap: () {
+                            setState(() => _isImageActive = !_isImageActive);
+                            debugPrint('Image button toggled: $_isImageActive');
+                          },
+                          isActive: _isImageActive,
+                          tooltip: 'Add image',
                         ),
-                        cursorColor: iconFg,
-                      ),
+
+                        const Spacer(),
+
+                        // Model selector
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: surfaceVariant.withValues(alpha: 0.4),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: iconFg.withValues(alpha: 0.1),
+                            ),
+                          ),
+                          child: ModelSelectionDropdown(
+                            initialSelectedModelId: _selectedModelId,
+                            onModelSelected: (newModelId) {
+                              setState(() {
+                                _selectedModelId = newModelId;
+                              });
+                              debugPrint('Selected model ID: $_selectedModelId');
+                            },
+                            textFieldFocusNode: _textFieldFocusNode,
+                            isCompactMode: isCompactMode,
+                            compactLabel: '#',
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Align(
-                alignment: Alignment.topCenter,
-                child: GestureDetector(
-                  onTap: () => _sendMessage(),
-                  child: Container(
-                    width: btnW,
-                    height: btnH,
-                    decoration: BoxDecoration(
-                      color: _isStreaming ? Colors.red : accent,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(
-                      _isStreaming ? Icons.stop : Icons.arrow_upward,
-                      color: Colors.black,
-                    ),
-                  ),
-                ),
-              ),
-            ],
           ),
-          const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: <Widget>[
-              Expanded(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 250),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  child: _isMicActive
-                      ? _buildAudioVisualizer(accent: accent, iconFg: iconFg)
-                      : Row(
-                          key: const ValueKey<String>('default-mic-controls'),
-                          children: [
-                            _buildIconBtn(
-                              icon: Icons.add,
-                              onTap: _handleAddAttachmentTap,
-                              isActive: hasAttachments,
-                              debugLabel: 'Add button',
-                            ),
-                            const SizedBox(width: 8),
-                            _buildIconBtn(
-                              icon: Icons.image,
-                              onTap: () {
-                                setState(
-                                  () => _isImageActive = !_isImageActive,
-                                );
-                                debugPrint(
-                                  'Image button toggled: $_isImageActive',
-                                );
-                              },
-                              isActive: _isImageActive,
-                              debugLabel: 'Image button',
-                            ),
-                            const Spacer(),
-                            ModelSelectionDropdown(
-                              initialSelectedModelId: _selectedModelId,
-                              onModelSelected: (newModelId) {
-                                setState(() {
-                                  _selectedModelId = newModelId;
-                                });
-                                debugPrint(
-                                  'Selected model ID: $_selectedModelId',
-                                );
-                              },
-                              textFieldFocusNode: _textFieldFocusNode,
-                              isCompactMode: isCompactMode,
-                              compactLabel: '#',
-                            ),
-                          ],
-                        ),
-                ),
+
+          // Divider
+          Container(
+            height: 1,
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.transparent,
+                  iconFg.withValues(alpha: 0.1),
+                  Colors.transparent,
+                ],
               ),
-              const SizedBox(width: 8),
-              _buildIconBtn(
-                icon: _isMicActive ? Icons.stop : Icons.mic,
-                onTap: _handleMicTap,
-                isActive: _isMicActive,
-                debugLabel: 'Mic button',
-              ),
-              const SizedBox(width: 8),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                child: _isMicActive
-                    ? GestureDetector(
-                        key: const ValueKey<String>('audio-send-button'),
-                        onTap: _handleAudioSend,
-                        child: Container(
-                          width: 44,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: accent,
-                            borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+
+          // Main input area
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 12, 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                // Text input
+                Expanded(
+                  child: KeyboardListener(
+                    focusNode: _rawKeyboardListenerFocusNode,
+                    onKeyEvent: (event) {
+                      if (event is! KeyDownEvent) return;
+                      if (event.logicalKey != LogicalKeyboardKey.enter) return;
+
+                      final isShiftPressed =
+                          HardwareKeyboard.instance.isShiftPressed;
+                      if (isShiftPressed) {
+                        final value = _controller.value;
+                        final updatedText = value.text.replaceRange(
+                          value.selection.start,
+                          value.selection.end,
+                          '\n',
+                        );
+                        _controller.value = value.copyWith(
+                          text: updatedText,
+                          selection: TextSelection.collapsed(
+                            offset: value.selection.start + 1,
                           ),
-                          child: const Icon(Icons.send, color: Colors.black),
-                        ),
-                      )
-                    : GestureDetector(
-                        key: const ValueKey<String>('voice-mode-button'),
-                        onTap: () => _openComingSoonFeature('Voice Mode'),
-                        child: Container(
-                          width: 44,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: accent,
-                            borderRadius: BorderRadius.circular(10),
+                        );
+                        return;
+                      }
+
+                      unawaited(_sendMessage());
+                    },
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxHeight: 120,
+                        minHeight: 24,
+                      ),
+                      child: Scrollbar(
+                        controller: _composerScrollController,
+                        thumbVisibility: false,
+                        child: TextField(
+                          controller: _controller,
+                          focusNode: _textFieldFocusNode,
+                          autofocus: false,
+                          keyboardType: TextInputType.multiline,
+                          textInputAction: TextInputAction.send,
+                          style: TextStyle(
+                            color: iconFg,
+                            fontSize: 15,
+                            height: 1.4,
                           ),
-                          child: const Icon(
-                            Icons.graphic_eq,
-                            color: Colors.black,
+                          minLines: 1,
+                          maxLines: null,
+                          scrollController: _composerScrollController,
+                          textAlignVertical: TextAlignVertical.center,
+                          decoration: InputDecoration(
+                            hintText: hasAttachments
+                                ? 'Add a message or send documents'
+                                : 'Ask me anything...',
+                            hintStyle: TextStyle(
+                              color: iconFg.withValues(alpha: 0.5),
+                              fontSize: 15,
+                            ),
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            errorBorder: InputBorder.none,
+                            focusedErrorBorder: InputBorder.none,
+                            disabledBorder: InputBorder.none,
+                            filled: false,
+                            contentPadding: EdgeInsets.zero,
+                            isDense: true,
                           ),
+                          cursorColor: accent,
+                          cursorWidth: 2,
                         ),
                       ),
-              ),
-            ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(width: 12),
+
+                // Right action buttons
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Mic button
+                    _buildRoundActionBtn(
+                      icon: _isMicActive ? Icons.stop_rounded : Icons.mic_rounded,
+                      onTap: _handleMicTap,
+                      isActive: _isMicActive,
+                      color: _isMicActive ? Colors.red : iconFg.withValues(alpha: 0.7),
+                      tooltip: _isMicActive ? 'Stop recording' : 'Voice input',
+                    ),
+
+                    const SizedBox(width: 8),
+
+                    // Send/Voice mode button
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 200),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      child: _isMicActive
+                          ? _buildMainActionBtn(
+                              key: const ValueKey<String>('audio-send'),
+                              icon: Icons.send_rounded,
+                              onTap: _handleAudioSend,
+                              tooltip: 'Send audio',
+                            )
+                          : _buildMainActionBtn(
+                              key: const ValueKey<String>('send-or-voice'),
+                              icon: _isStreaming
+                                  ? Icons.stop_rounded
+                                  : (_controller.text.trim().isEmpty && !hasAttachments
+                                      ? Icons.graphic_eq_rounded
+                                      : Icons.arrow_upward_rounded),
+                              onTap: _controller.text.trim().isEmpty && !hasAttachments
+                                  ? () => _openComingSoonFeature('Voice Mode')
+                                  : _sendMessage,
+                              tooltip: _isStreaming
+                                  ? 'Stop'
+                                  : (_controller.text.trim().isEmpty && !hasAttachments
+                                      ? 'Voice mode'
+                                      : 'Send'),
+                              isStop: _isStreaming,
+                            ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildIconBtn({
+  // Compact icon button for toolbar
+  Widget _buildCompactIconBtn({
     required IconData icon,
     required VoidCallback onTap,
     required bool isActive,
-    String? debugLabel,
+    String? tooltip,
   }) {
-    final ThemeData theme = Theme.of(context);
-    final Color bg = theme.scaffoldBackgroundColor;
-    final Color iconFg = theme.resolvedIconColor;
-    final ThemeData compactTapTargetTheme = theme.copyWith(
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-    );
+    final Color iconFg = Theme.of(context).resolvedIconColor;
+    final Color accent = Theme.of(context).colorScheme.primary;
 
-    final ValueNotifier<bool> isHovered = ValueNotifier<bool>(false);
-
-    return MouseRegion(
-      onEnter: (_) => isHovered.value = true,
-      onExit: (_) => isHovered.value = false,
-      child: Theme(
-        data: compactTapTargetTheme,
+    return Tooltip(
+      message: tooltip ?? '',
+      child: Material(
+        color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(10),
-          splashFactory: InkRipple.splashFactory,
-          hoverColor: Colors.transparent,
-          highlightColor: Colors.transparent,
-          child: ValueListenableBuilder<bool>(
-            valueListenable: isHovered,
-            builder: (context, hovered, child) {
-              final Color effectiveBgColor = isActive ? iconFg : bg;
-              final Color effectiveIconColor = isActive ? bg : iconFg;
-
-              final Color effectiveBorderColor = hovered
-                  ? iconFg
-                  : isActive
-                  ? iconFg.withValues(alpha: 0.6)
-                  : iconFg.withValues(alpha: 0.3);
-
-              final double effectiveBorderWidth = hovered
-                  ? 1.2
-                  : isActive
-                  ? 1.0
-                  : 0.8;
-
-              return AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                curve: Curves.easeOutCubic,
-                width: 44,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: effectiveBgColor,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: effectiveBorderColor,
-                    width: effectiveBorderWidth,
-                  ),
-                ),
-                child: Icon(icon, color: effectiveIconColor, size: 20),
-              );
-            },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: isActive
+                  ? accent.withValues(alpha: 0.15)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isActive
+                    ? accent.withValues(alpha: 0.3)
+                    : Colors.transparent,
+                width: 1,
+              ),
+            ),
+            child: Icon(
+              icon,
+              size: 20,
+              color: isActive ? accent : iconFg.withValues(alpha: 0.7),
+            ),
           ),
         ),
       ),
     );
   }
+
+  // Round action button for mic
+  Widget _buildRoundActionBtn({
+    required IconData icon,
+    required VoidCallback onTap,
+    required bool isActive,
+    required Color color,
+    String? tooltip,
+  }) {
+    return Tooltip(
+      message: tooltip ?? '',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: isActive
+                  ? color.withValues(alpha: 0.15)
+                  : Colors.transparent,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: color.withValues(alpha: 0.3),
+                width: 1.5,
+              ),
+            ),
+            child: Icon(
+              icon,
+              size: 20,
+              color: color,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Main action button (send/voice mode)
+  Widget _buildMainActionBtn({
+    Key? key,
+    required IconData icon,
+    required VoidCallback onTap,
+    String? tooltip,
+    bool isStop = false,
+  }) {
+    final Color accent = Theme.of(context).colorScheme.primary;
+
+    return Tooltip(
+      message: tooltip ?? '',
+      child: Material(
+        key: key,
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              gradient: isStop
+                  ? LinearGradient(
+                      colors: [
+                        Colors.red.shade400,
+                        Colors.red.shade600,
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    )
+                  : LinearGradient(
+                      colors: [
+                        accent,
+                        accent.withValues(alpha: 0.8),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: (isStop ? Colors.red : accent).withValues(alpha: 0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Icon(
+              icon,
+              size: 20,
+              color: Colors.white,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
 }
