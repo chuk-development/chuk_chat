@@ -1764,18 +1764,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     double inputAreaTotalHeight =
         inputAreaVisualHeight + (2 * effectiveHorizontalPadding);
 
-    final MediaQueryData mediaQuery = MediaQuery.of(context);
-    final double keyboardHeight = mediaQuery.viewInsets.bottom;
-    final double bottomSafeArea = mediaQuery.padding.bottom;
-
-    // When keyboard is open, only use keyboard height
-    // When keyboard is closed, use padding + safe area for bottom positioning
-    final double bottomPadding = keyboardHeight > 0
-        ? keyboardHeight
-        : effectiveHorizontalPadding + bottomSafeArea;
-    final double chatListBottomInset = inputAreaTotalHeight + bottomPadding;
-    final double composerBottomInset = bottomPadding;
-
     final double targetInputWidth = expandedInputWidth;
 
     final List<_MobileMessageRenderData> renderMessages =
@@ -1803,95 +1791,88 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-          Positioned(
-            top: 0,
-            bottom: chatListBottomInset,
-            left: 0,
-            right: 0,
-            child: FadeTransition(
-              opacity: _anim,
-              child: Center(
-                child: Container(
-                  constraints: BoxConstraints(maxWidth: expandedInputWidth),
-                  child: !hasMessages
-                      ? Center(
-                          child: Text(
-                            'Start a new chat!',
-                            style: TextStyle(
-                              color: iconFg.withValues(alpha: 0.6),
-                              fontSize: 18,
-                            ),
-                          ),
-                        )
-                      : Scrollbar(
+          if (hasMessages)
+            Positioned(
+              top: 0,
+              bottom: inputAreaTotalHeight,
+              left: 0,
+              right: 0,
+              child: FadeTransition(
+                opacity: _anim,
+                child: Padding(
+                  padding: EdgeInsets.zero,
+                  child: Align(
+                    alignment: Alignment.center,
+                    child: Container(
+                      constraints: BoxConstraints(maxWidth: expandedInputWidth),
+                      child: Scrollbar(
+                        controller: _scrollController,
+                        thumbVisibility: true,
+                        thickness: 8.0,
+                        radius: const Radius.circular(4),
+                        child: ListView.builder(
                           controller: _scrollController,
-                          thumbVisibility: true,
-                          thickness: 8.0,
-                          radius: const Radius.circular(4),
-                          child: ListView.builder(
-                            controller: _scrollController,
-                            padding: EdgeInsets.symmetric(
-                              horizontal: effectiveHorizontalPadding,
-                              vertical: 10,
-                            ),
-                            itemCount: renderMessages.length,
-                            addAutomaticKeepAlives: false,
-                            addRepaintBoundaries: true,
-                            cacheExtent: 500.0,
-                            itemBuilder: (_, int i) {
-                              final _MobileMessageRenderData data =
-                                  renderMessages[i];
-                              final String? reasoningText =
-                                  data.reasoning.trim().isEmpty
-                                  ? null
-                                  : data.reasoning;
-                              final bool isBeingEdited =
-                                  _editingMessageIndex == i;
-                              return RepaintBoundary(
-                                child: MessageBubble(
-                                  key: ValueKey('msg_$i'),
-                                  message: data.displayText,
-                                  reasoning: reasoningText,
-                                  isUser: data.isUser,
-                                  maxWidth: data.isUser
-                                      ? expandedInputWidth * 0.7
-                                      : expandedInputWidth,
-                                  isReasoningStreaming:
-                                      data.isReasoningStreaming,
-                                  modelLabel: data.modelLabel,
-                                  actions: _buildMessageActionsForIndex(
-                                    i,
-                                    data,
-                                  ),
-                                  isEditing: isBeingEdited,
-                                  initialEditText: isBeingEdited
-                                      ? data.displayText
-                                      : null,
-                                  onSubmitEdit: isBeingEdited && data.isUser
-                                      ? (newText) =>
-                                            _submitEditedMessage(i, newText)
-                                      : null,
-                                  onCancelEdit: isBeingEdited
-                                      ? _cancelEditMessage
-                                      : null,
-                                ),
-                              );
-                            },
+                          padding: EdgeInsets.symmetric(
+                            horizontal: effectiveHorizontalPadding,
+                            vertical: 10,
                           ),
+                          itemCount: renderMessages.length,
+                          addAutomaticKeepAlives: false,
+                          addRepaintBoundaries: true,
+                          cacheExtent: 500.0,
+                          itemBuilder: (_, int i) {
+                            final _MobileMessageRenderData data =
+                                renderMessages[i];
+                            final String? reasoningText =
+                                data.reasoning.trim().isEmpty
+                                ? null
+                                : data.reasoning;
+                            final bool isBeingEdited =
+                                _editingMessageIndex == i;
+                            return RepaintBoundary(
+                              child: MessageBubble(
+                                key: ValueKey('msg_$i'),
+                                message: data.displayText,
+                                reasoning: reasoningText,
+                                isUser: data.isUser,
+                                maxWidth: expandedInputWidth * 0.7,
+                                isReasoningStreaming:
+                                    data.isReasoningStreaming,
+                                modelLabel: data.modelLabel,
+                                actions: _buildMessageActionsForIndex(
+                                  i,
+                                  data,
+                                ),
+                                isEditing: isBeingEdited,
+                                initialEditText: isBeingEdited
+                                    ? data.displayText
+                                    : null,
+                                onSubmitEdit: isBeingEdited && data.isUser
+                                    ? (newText) =>
+                                          _submitEditedMessage(i, newText)
+                                    : null,
+                                onCancelEdit: isBeingEdited
+                                    ? _cancelEditMessage
+                                    : null,
+                              ),
+                            );
+                          },
                         ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
-
           Positioned(
             left: 0,
             right: 0,
-            bottom: composerBottomInset,
+            bottom: effectiveHorizontalPadding,
             child: Center(
               child: SizedBox(
                 width: targetInputWidth,
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     if (_attachedFiles.isNotEmpty)
                       Padding(
@@ -1908,7 +1889,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                       ),
                     _buildSearchBar(
                       isCompactMode: isCompactModeForModelDropdown,
-                    ), // Pass the local variable
+                    ),
                     const SizedBox(height: 8),
                     Text(
                       'AI/LLMs can make mistakes — double-check important info.',
