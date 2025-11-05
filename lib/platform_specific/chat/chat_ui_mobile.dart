@@ -24,6 +24,7 @@ import 'package:record/record.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/utils/token_estimator.dart';
 
 class _MobileMessageRenderData {
   const _MobileMessageRenderData({
@@ -619,7 +620,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     });
 
     // Delete the AI response that follows this user message (if it exists)
-    if (index + 1 < _messages.length && _messages[index + 1]['sender'] == 'ai') {
+    if (index + 1 < _messages.length &&
+        _messages[index + 1]['sender'] == 'ai') {
       setState(() {
         _messages.removeAt(index + 1);
       });
@@ -686,15 +688,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
       final Stream<ChatStreamEvent> eventStream =
           StreamingChatService.sendStreamingChat(
-        accessToken: accessToken,
-        message: originalUserInput,
-        modelId: _selectedModelId,
-        providerSlug: _selectedProviderSlug ?? 'openai',
-        history: conversationHistory,
-        systemPrompt: _systemPrompt,
-        maxTokens: 4096,
-        temperature: 0.7,
-      );
+            accessToken: accessToken,
+            message: originalUserInput,
+            modelId: _selectedModelId,
+            providerSlug: _selectedProviderSlug ?? 'openai',
+            history: conversationHistory,
+            systemPrompt: _systemPrompt,
+            maxTokens: 4096,
+            temperature: 0.7,
+          );
 
       final StringBuffer contentBuffer = StringBuffer();
       final StringBuffer reasoningBuffer = StringBuffer();
@@ -714,7 +716,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
             reasoningBuffer.write(text);
             if (mounted && _isValidMessageIndex(placeholderIndex)) {
               setState(() {
-                _messages[placeholderIndex]['reasoning'] = reasoningBuffer.toString();
+                _messages[placeholderIndex]['reasoning'] = reasoningBuffer
+                    .toString();
               });
             }
             break;
@@ -935,8 +938,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       _loadChatFromIndex(widget.selectedChatIndex);
       // Update UI based on new chat's streaming status
       setState(() {
-        _isStreaming = _activeChatId != null &&
-                       _streamingManager.isStreaming(_activeChatId!);
+        _isStreaming =
+            _activeChatId != null &&
+            _streamingManager.isStreaming(_activeChatId!);
       });
     }
   }
@@ -1218,6 +1222,78 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       aiPromptContent = '$markdownSections\n\nUser query: $queryText';
     }
 
+    final session =
+        await SupabaseService.refreshSession() ??
+        SupabaseService.auth.currentSession;
+    if (session == null) {
+      _showSnackBar('Session expired. Please sign in again.');
+      await SupabaseService.signOut();
+      return;
+    }
+
+    final String accessToken = session.accessToken;
+    if (accessToken.isEmpty) {
+      _showSnackBar('Unable to authenticate your session.');
+      return;
+    }
+
+    final String? providerSlug = await _ensureProviderSlugForCurrentModel();
+    if (providerSlug == null || providerSlug.isEmpty) {
+      final String message =
+          'No provider is configured for $_selectedModelId. Select a provider in Settings and try again.';
+      _showSnackBar(message);
+      return;
+    }
+
+    final List<Map<String, String>> apiHistory =
+        _buildApiHistoryWithPendingMessage(displayMessageText);
+    final String? effectiveSystemPrompt =
+        (_systemPrompt != null && _systemPrompt!.trim().isNotEmpty)
+        ? _systemPrompt
+        : null;
+
+    final ModelProviderLimits? providerLimits =
+        ModelSelectionDropdown.providerLimitsForModel(_selectedModelId);
+
+    final int promptTokens = TokenEstimator.estimatePromptTokens(
+      history: apiHistory,
+      currentMessage: aiPromptContent,
+      systemPrompt: effectiveSystemPrompt,
+    );
+
+    int maxResponseTokens = 512;
+
+    if (providerLimits?.contextLength != null &&
+        providerLimits!.contextLength! > 0) {
+      final int contextLength = providerLimits.contextLength!;
+      if (promptTokens >= contextLength) {
+        _showSnackBar(
+          'Too much context for this model '
+          '(${promptTokens.toString()} vs ${contextLength.toString()} token limit). '
+          'Clear history or shorten your message.',
+        );
+        return;
+      }
+
+      final int availableForCompletion = contextLength - promptTokens;
+      final int completionCap =
+          providerLimits.maxCompletionTokens != null &&
+              providerLimits.maxCompletionTokens! > 0
+          ? providerLimits.maxCompletionTokens!
+          : math.max(256, contextLength ~/ 4);
+      maxResponseTokens = math.max(
+        1,
+        math.min(completionCap, availableForCompletion),
+      );
+
+      debugPrint(
+        'Prompt tokens (est): $promptTokens / $contextLength, '
+        'max completion tokens: $maxResponseTokens',
+      );
+    } else {
+      debugPrint('Prompt tokens (est): $promptTokens (no context limit data)');
+    }
+
     int placeholderIndex = -1;
     setState(() {
       _messages.add({
@@ -1225,6 +1301,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         'text': displayMessageText,
         'reasoning': '',
         'modelId': _selectedModelId,
+        'provider': providerSlug,
       });
       _controller.clear();
       _isSending = true;
@@ -1236,6 +1313,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         'text': 'Thinking...',
         'reasoning': '',
         'modelId': _selectedModelId,
+        'provider': providerSlug,
       });
       placeholderIndex = _messages.length - 1;
     });
@@ -1244,71 +1322,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     if (firstMessageInChat) _animCtrl.forward();
     _scrollChatToBottom();
 
-    final session =
-        await SupabaseService.refreshSession() ??
-        SupabaseService.auth.currentSession;
-    if (session == null) {
-      _finalizeAiMessage(
-        placeholderIndex,
-        'Please sign in to continue the conversation.',
-      );
-      _showSnackBar('Session expired. Please sign in again.');
-      await SupabaseService.signOut();
-      return;
-    }
-
-    final accessToken = session.accessToken;
-    if (accessToken.isEmpty) {
-      _finalizeAiMessage(
-        placeholderIndex,
-        'Authentication required. Please sign in again.',
-      );
-      _showSnackBar('Unable to authenticate your session.');
-      return;
-    }
-
-    final String? providerSlug = await _ensureProviderSlugForCurrentModel();
-    if (providerSlug == null || providerSlug.isEmpty) {
-      final String message =
-          'No provider is configured for $_selectedModelId. Select a provider in Settings and try again.';
-      _finalizeAiMessage(placeholderIndex, message);
-      _showSnackBar(message);
-      return;
-    }
-
-    void updateMessageMetadata(int messageIndex) {
-      if (messageIndex < 0 || messageIndex >= _messages.length) return;
-      final Map<String, String> updated =
-          Map<String, String>.from(_messages[messageIndex]);
-      updated['modelId'] = _selectedModelId;
-      if (providerSlug.isNotEmpty) {
-        updated['provider'] = providerSlug;
-      } else {
-        updated.remove('provider');
-      }
-      _messages[messageIndex] = updated;
-    }
-
-    setState(() {
-      updateMessageMetadata(placeholderIndex);
-      updateMessageMetadata(placeholderIndex - 1);
-    });
-
     _persistChat();
-
-    final List<Map<String, String>> apiHistory = [];
-    for (int i = 0; i < _messages.length - 1; i++) {
-      final message = _messages[i];
-      final sender = message['sender'];
-      final text = message['text'];
-      if (text == null || text.trim().isEmpty) continue;
-
-      if (sender == 'user') {
-        apiHistory.add({'role': 'user', 'content': text});
-      } else if (sender == 'ai' || sender == 'assistant') {
-        apiHistory.add({'role': 'assistant', 'content': text});
-      }
-    }
 
     setState(() {
       _isStreaming = true;
@@ -1324,7 +1338,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         modelId: _selectedModelId,
         providerSlug: providerSlug,
         history: apiHistory.isEmpty ? null : apiHistory,
-        systemPrompt: _systemPrompt,
+        systemPrompt: effectiveSystemPrompt,
+        maxTokens: maxResponseTokens,
       );
 
       _streamSubscription = stream.listen(
@@ -1434,6 +1449,29 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       _finalizeAiMessage(placeholderIndex, 'Failed to start streaming: $error');
       _showSnackBar('Failed to start streaming: $error');
     }
+  }
+
+  List<Map<String, String>> _buildApiHistoryWithPendingMessage(
+    String pendingUserText,
+  ) {
+    final List<Map<String, String>> history = <Map<String, String>>[];
+    for (final Map<String, String> message in _messages) {
+      final String? sender = message['sender'];
+      final String? text = message['text'];
+      if (text == null || text.trim().isEmpty) continue;
+
+      if (sender == 'user') {
+        history.add({'role': 'user', 'content': text});
+      } else if (sender == 'ai' || sender == 'assistant') {
+        history.add({'role': 'assistant', 'content': text});
+      }
+    }
+
+    if (pendingUserText.trim().isNotEmpty) {
+      history.add({'role': 'user', 'content': pendingUserText});
+    }
+
+    return history;
   }
 
   void _updateAiMessage(int index, String content, String reasoning) {
@@ -1728,8 +1766,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     final MediaQueryData mediaQuery = MediaQuery.of(context);
     final double keyboardHeight = mediaQuery.viewInsets.bottom;
-    final double bottomSafeArea =
-        keyboardHeight > 0 ? 0.0 : mediaQuery.padding.bottom;
+    final double bottomSafeArea = keyboardHeight > 0
+        ? 0.0
+        : mediaQuery.padding.bottom;
     final double chatListBottomInset =
         inputAreaTotalHeight + keyboardHeight + bottomSafeArea;
     final double composerBottomInset =
@@ -1744,8 +1783,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           final bool isAiMessage = sender != 'user';
           final bool isStreamingMessage =
               _isStreaming && index == _messages.length - 1 && isAiMessage;
-          final String? modelLabel =
-              isAiMessage ? _formatModelInfo(raw['modelId'], raw['provider']) : null;
+          final String? modelLabel = isAiMessage
+              ? _formatModelInfo(raw['modelId'], raw['provider'])
+              : null;
           return _MobileMessageRenderData(
             sender: sender,
             displayText: (raw['text'] ?? '').trimRight(),
@@ -1803,7 +1843,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                   data.reasoning.trim().isEmpty
                                   ? null
                                   : data.reasoning;
-                              final bool isBeingEdited = _editingMessageIndex == i;
+                              final bool isBeingEdited =
+                                  _editingMessageIndex == i;
                               return RepaintBoundary(
                                 child: MessageBubble(
                                   key: ValueKey('msg_$i'),
@@ -1821,11 +1862,16 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                     data,
                                   ),
                                   isEditing: isBeingEdited,
-                                  initialEditText: isBeingEdited ? data.displayText : null,
-                                  onSubmitEdit: isBeingEdited && data.isUser
-                                      ? (newText) => _submitEditedMessage(i, newText)
+                                  initialEditText: isBeingEdited
+                                      ? data.displayText
                                       : null,
-                                  onCancelEdit: isBeingEdited ? _cancelEditMessage : null,
+                                  onSubmitEdit: isBeingEdited && data.isUser
+                                      ? (newText) =>
+                                            _submitEditedMessage(i, newText)
+                                      : null,
+                                  onCancelEdit: isBeingEdited
+                                      ? _cancelEditMessage
+                                      : null,
                                 ),
                               );
                             },
@@ -1890,9 +1936,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     return Container(
       width: double.infinity,
-      constraints: const BoxConstraints(
-        minHeight: _kSearchBarContentHeight,
-      ),
+      constraints: const BoxConstraints(minHeight: _kSearchBarContentHeight),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(16),
@@ -2106,54 +2150,61 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     required bool isActive,
     String? debugLabel,
   }) {
-    final Color bg = Theme.of(context).scaffoldBackgroundColor;
-    final Color iconFg = Theme.of(context).resolvedIconColor;
+    final ThemeData theme = Theme.of(context);
+    final Color bg = theme.scaffoldBackgroundColor;
+    final Color iconFg = theme.resolvedIconColor;
+    final ThemeData compactTapTargetTheme = theme.copyWith(
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
 
     final ValueNotifier<bool> isHovered = ValueNotifier<bool>(false);
 
     return MouseRegion(
       onEnter: (_) => isHovered.value = true,
       onExit: (_) => isHovered.value = false,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        splashFactory: InkRipple.splashFactory,
-        hoverColor: Colors.transparent,
-        highlightColor: Colors.transparent,
-        child: ValueListenableBuilder<bool>(
-          valueListenable: isHovered,
-          builder: (context, hovered, child) {
-            final Color effectiveBgColor = isActive ? iconFg : bg;
-            final Color effectiveIconColor = isActive ? bg : iconFg;
+      child: Theme(
+        data: compactTapTargetTheme,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          splashFactory: InkRipple.splashFactory,
+          hoverColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+          child: ValueListenableBuilder<bool>(
+            valueListenable: isHovered,
+            builder: (context, hovered, child) {
+              final Color effectiveBgColor = isActive ? iconFg : bg;
+              final Color effectiveIconColor = isActive ? bg : iconFg;
 
-            final Color effectiveBorderColor = hovered
-                ? iconFg
-                : isActive
-                ? iconFg.withValues(alpha: 0.6)
-                : iconFg.withValues(alpha: 0.3);
+              final Color effectiveBorderColor = hovered
+                  ? iconFg
+                  : isActive
+                  ? iconFg.withValues(alpha: 0.6)
+                  : iconFg.withValues(alpha: 0.3);
 
-            final double effectiveBorderWidth = hovered
-                ? 1.2
-                : isActive
-                ? 1.0
-                : 0.8;
+              final double effectiveBorderWidth = hovered
+                  ? 1.2
+                  : isActive
+                  ? 1.0
+                  : 0.8;
 
-            return AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              curve: Curves.easeOutCubic,
-              width: 44,
-              height: 36,
-              decoration: BoxDecoration(
-                color: effectiveBgColor,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: effectiveBorderColor,
-                  width: effectiveBorderWidth,
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                curve: Curves.easeOutCubic,
+                width: 44,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: effectiveBgColor,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: effectiveBorderColor,
+                    width: effectiveBorderWidth,
+                  ),
                 ),
-              ),
-              child: Icon(icon, color: effectiveIconColor, size: 20),
-            );
-          },
+                child: Icon(icon, color: effectiveIconColor, size: 20),
+              );
+            },
+          ),
         ),
       ),
     );

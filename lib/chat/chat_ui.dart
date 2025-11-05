@@ -20,6 +20,7 @@ import 'dart:io'; // Import for SocketException
 import 'dart:async'; // Import for TimeoutException
 import 'package:uuid/uuid.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/utils/token_estimator.dart';
 
 /* ---------- CHAT UI ---------- */
 class ChukChatUI extends StatefulWidget {
@@ -377,6 +378,91 @@ class ChukChatUIState extends State<ChukChatUI>
               ),
         );
     final String userMessageId = _uuid.v4();
+    final String aiPromptContent = originalUserInput.isNotEmpty
+        ? originalUserInput
+        : displayMessageText;
+
+    final session =
+        await SupabaseService.refreshSession() ??
+        SupabaseService.auth.currentSession;
+    if (session == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Session expired. Please sign in again.'),
+          ),
+        );
+      }
+      await SupabaseService.signOut();
+      return;
+    }
+    final accessToken = session.accessToken;
+    if (accessToken.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to authenticate your session.')),
+        );
+      }
+      return;
+    }
+
+    // Build message history including the pending user message
+    final List<Map<String, String>> apiHistory =
+        _buildApiHistoryWithPendingMessage(displayMessageText);
+
+    final String? resolvedSystemPrompt = await _resolveSystemPromptForSend();
+    final String? systemPrompt =
+        (resolvedSystemPrompt != null && resolvedSystemPrompt.trim().isNotEmpty)
+        ? resolvedSystemPrompt
+        : null;
+
+    final ModelProviderLimits? providerLimits =
+        ModelSelectionDropdown.providerLimitsForModel(modelIdForSend);
+
+    final int promptTokens = TokenEstimator.estimatePromptTokens(
+      history: apiHistory,
+      currentMessage: aiPromptContent,
+      systemPrompt: systemPrompt,
+    );
+
+    int maxResponseTokens = 512;
+
+    if (providerLimits?.contextLength != null &&
+        providerLimits!.contextLength! > 0) {
+      final int contextLength = providerLimits.contextLength!;
+      if (promptTokens >= contextLength) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Too much context for this model '
+                '(${promptTokens.toString()} vs ${contextLength.toString()} token limit). '
+                'Clear history or shorten your message.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
+      final int availableForCompletion = contextLength - promptTokens;
+      final int completionCap =
+          providerLimits.maxCompletionTokens != null &&
+              providerLimits.maxCompletionTokens! > 0
+          ? providerLimits.maxCompletionTokens!
+          : math.max(256, contextLength ~/ 4);
+      maxResponseTokens = math.max(
+        1,
+        math.min(completionCap, availableForCompletion),
+      );
+
+      debugPrint(
+        'Prompt tokens (est): $promptTokens / $contextLength, '
+        'max completion tokens: $maxResponseTokens',
+      );
+    } else {
+      debugPrint('Prompt tokens (est): $promptTokens (no context limit data)');
+    }
 
     setState(() {
       _messages.add({
@@ -445,55 +531,6 @@ class ChukChatUIState extends State<ChukChatUI>
       _persistChat();
     }
 
-    final session =
-        await SupabaseService.refreshSession() ??
-        SupabaseService.auth.currentSession;
-    if (session == null) {
-      _isSending = false;
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Session expired. Please sign in again.'),
-          ),
-        );
-      }
-      await SupabaseService.signOut();
-      finalizeAiMessage('Please sign in to continue the conversation.');
-      return;
-    }
-    final accessToken = session.accessToken;
-    if (accessToken.isEmpty) {
-      _isSending = false;
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Unable to authenticate your session.')),
-        );
-      }
-      finalizeAiMessage('Authentication required. Please sign in again.');
-      return;
-    }
-
-    // Build message history for API call
-    final List<Map<String, String>> apiHistory = [];
-    for (int i = 0; i < _messages.length - 1; i++) {
-      final message = _messages[i];
-      final sender = message['sender'];
-      final text = message['text'];
-      if (text == null || text.trim().isEmpty) continue;
-
-      if (sender == 'user') {
-        apiHistory.add({'role': 'user', 'content': text});
-      } else if (sender == 'ai' || sender == 'assistant') {
-        apiHistory.add({'role': 'assistant', 'content': text});
-      }
-    }
-
-    final String aiPromptContent = originalUserInput.isNotEmpty
-        ? originalUserInput
-        : displayMessageText;
-
-    final String? systemPrompt = await _resolveSystemPromptForSend();
-
     // Make actual API call using StreamingChatService
     try {
       final stream = StreamingChatService.sendStreamingChat(
@@ -503,6 +540,7 @@ class ChukChatUIState extends State<ChukChatUI>
         providerSlug: providerSlug ?? '',
         history: apiHistory.isEmpty ? null : apiHistory,
         systemPrompt: systemPrompt,
+        maxTokens: maxResponseTokens,
       );
 
       final StringBuffer contentBuffer = StringBuffer();
@@ -537,6 +575,29 @@ class ChukChatUIState extends State<ChukChatUI>
         finalizeAiMessage('Error: Failed to get AI response - $e');
       }
     }
+  }
+
+  List<Map<String, String>> _buildApiHistoryWithPendingMessage(
+    String pendingUserText,
+  ) {
+    final List<Map<String, String>> history = <Map<String, String>>[];
+    for (final Map<String, dynamic> message in _messages) {
+      final String? sender = message['sender'] as String?;
+      final String? text = message['text'] as String?;
+      if (text == null || text.trim().isEmpty) continue;
+
+      if (sender == 'user') {
+        history.add({'role': 'user', 'content': text});
+      } else if (sender == 'ai' || sender == 'assistant') {
+        history.add({'role': 'assistant', 'content': text});
+      }
+    }
+
+    if (pendingUserText.trim().isNotEmpty) {
+      history.add({'role': 'user', 'content': pendingUserText});
+    }
+
+    return history;
   }
 
   void _showSnack(String message) {
@@ -1379,17 +1440,19 @@ class ChukChatUIState extends State<ChukChatUI>
                             key: ValueKey<String>(bubbleId),
                             message: messageText,
                             isUser: isUserMessage,
-                            maxWidth: expandedInputWidth *
+                            maxWidth:
+                                expandedInputWidth *
                                 0.7, // Message bubbles also use expanded width
                             actions: _buildMessageActions(message),
-                            isEditing: isUserMessage &&
+                            isEditing:
+                                isUserMessage &&
                                 ((message['isEditing'] as bool?) ?? false),
                             initialEditText:
                                 (message['rawText'] as String?) ?? messageText,
                             onSubmitEdit: isUserMessage
                                 ? (updated) => unawaited(
-                                      _submitEditedMessage(message, updated),
-                                    )
+                                    _submitEditedMessage(message, updated),
+                                  )
                                 : null,
                             onCancelEdit: isUserMessage
                                 ? () => _cancelEditingMessage(message)
@@ -1475,9 +1538,7 @@ class ChukChatUIState extends State<ChukChatUI>
     return Container(
       width:
           double.infinity, // Occupy full width of its parent AnimatedContainer
-      constraints: const BoxConstraints(
-        minHeight: _kSearchBarContentHeight,
-      ),
+      constraints: const BoxConstraints(minHeight: _kSearchBarContentHeight),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(16),

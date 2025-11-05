@@ -24,6 +24,7 @@ import 'package:record/record.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/utils/token_estimator.dart';
 
 class _MessageRenderData {
   const _MessageRenderData({
@@ -258,8 +259,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _loadChatFromIndex(widget.selectedChatIndex);
       // Update UI based on new chat's streaming status
       setState(() {
-        _isStreaming = _activeChatId != null &&
-                       _streamingManager.isStreaming(_activeChatId!);
+        _isStreaming =
+            _activeChatId != null &&
+            _streamingManager.isStreaming(_activeChatId!);
       });
     }
   }
@@ -752,7 +754,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     });
 
     // Delete the AI response that follows this user message (if it exists)
-    if (index + 1 < _messages.length && _messages[index + 1]['sender'] == 'ai') {
+    if (index + 1 < _messages.length &&
+        _messages[index + 1]['sender'] == 'ai') {
       setState(() {
         _messages.removeAt(index + 1);
       });
@@ -777,10 +780,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         await SupabaseService.refreshSession() ??
         SupabaseService.auth.currentSession;
     if (session == null) {
-      _finalizeAiMessage(
-        placeholderIndex,
-        'Please sign in to continue the conversation.',
-      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -821,15 +820,15 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
       final Stream<ChatStreamEvent> eventStream =
           StreamingChatService.sendStreamingChat(
-        accessToken: accessToken,
-        message: originalUserInput,
-        modelId: _selectedModelId,
-        providerSlug: _selectedProviderSlug ?? 'openai',
-        history: conversationHistory,
-        systemPrompt: systemPrompt,
-        maxTokens: 4096,
-        temperature: 0.7,
-      );
+            accessToken: accessToken,
+            message: originalUserInput,
+            modelId: _selectedModelId,
+            providerSlug: _selectedProviderSlug ?? 'openai',
+            history: conversationHistory,
+            systemPrompt: systemPrompt,
+            maxTokens: 4096,
+            temperature: 0.7,
+          );
 
       final StringBuffer contentBuffer = StringBuffer();
       final StringBuffer reasoningBuffer = StringBuffer();
@@ -849,7 +848,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             reasoningBuffer.write(text);
             if (mounted && _isValidMessageIndex(placeholderIndex)) {
               setState(() {
-                _messages[placeholderIndex]['reasoning'] = reasoningBuffer.toString();
+                _messages[placeholderIndex]['reasoning'] = reasoningBuffer
+                    .toString();
               });
             }
             break;
@@ -904,8 +904,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     final Map<String, String> rawMessage = _messages[index];
     final String messageText = rawMessage['text'] ?? '';
     final bool isUserMessage = data.isUser;
-    final bool isAssistantPending =
-        !isUserMessage && data.isReasoningStreaming;
+    final bool isAssistantPending = !isUserMessage && data.isReasoningStreaming;
     final List<MessageBubbleAction> actions = [];
 
     if (messageText.trim().isNotEmpty) {
@@ -1127,6 +1126,100 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       aiPromptContent = '$markdownSections\n\nUser query: $queryText';
     }
 
+    final session =
+        await SupabaseService.refreshSession() ??
+        SupabaseService.auth.currentSession;
+    if (session == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Session expired. Please sign in again.'),
+          ),
+        );
+      }
+      await SupabaseService.signOut();
+      return;
+    }
+
+    final accessToken = session.accessToken;
+    if (accessToken.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to authenticate your session.')),
+        );
+      }
+      return;
+    }
+
+    final String? providerSlug = await _ensureProviderSlugForCurrentModel();
+    if (providerSlug == null || providerSlug.isEmpty) {
+      final String message =
+          'No provider is configured for $_selectedModelId. Select a provider in Settings and try again.';
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
+      }
+      return;
+    }
+
+    final List<Map<String, String>> apiHistory =
+        _buildApiHistoryWithPendingMessage(displayMessageText);
+
+    final String? resolvedSystemPrompt = await _resolveSystemPromptForSend();
+    final String? systemPrompt =
+        (resolvedSystemPrompt != null && resolvedSystemPrompt.trim().isNotEmpty)
+        ? resolvedSystemPrompt
+        : null;
+
+    final ModelProviderLimits? providerLimits =
+        ModelSelectionDropdown.providerLimitsForModel(_selectedModelId);
+
+    final int promptTokens = TokenEstimator.estimatePromptTokens(
+      history: apiHistory,
+      currentMessage: aiPromptContent,
+      systemPrompt: systemPrompt,
+    );
+
+    int maxResponseTokens = 512;
+
+    if (providerLimits?.contextLength != null &&
+        providerLimits!.contextLength! > 0) {
+      final int contextLength = providerLimits.contextLength!;
+      if (promptTokens >= contextLength) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Too much context for this model '
+                '(${promptTokens.toString()} vs ${contextLength.toString()} token limit). '
+                'Clear history or shorten your message.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
+      final int availableForCompletion = contextLength - promptTokens;
+      final int completionCap =
+          providerLimits.maxCompletionTokens != null &&
+              providerLimits.maxCompletionTokens! > 0
+          ? providerLimits.maxCompletionTokens!
+          : math.max(256, contextLength ~/ 4);
+      maxResponseTokens = math.max(
+        1,
+        math.min(completionCap, availableForCompletion),
+      );
+
+      debugPrint(
+        'Prompt tokens (est): $promptTokens / $contextLength, '
+        'max completion tokens: $maxResponseTokens',
+      );
+    } else {
+      debugPrint('Prompt tokens (est): $promptTokens (no context limit data)');
+    }
+
     int placeholderIndex = -1;
     setState(() {
       _messages.add({
@@ -1149,68 +1242,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _scrollChatToBottom();
     Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
 
-    final session =
-        await SupabaseService.refreshSession() ??
-        SupabaseService.auth.currentSession;
-    if (session == null) {
-      _finalizeAiMessage(
-        placeholderIndex,
-        'Please sign in to continue the conversation.',
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Session expired. Please sign in again.'),
-          ),
-        );
-      }
-      await SupabaseService.signOut();
-      return;
-    }
-
-    final accessToken = session.accessToken;
-    if (accessToken.isEmpty) {
-      _finalizeAiMessage(
-        placeholderIndex,
-        'Authentication required. Please sign in again.',
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Unable to authenticate your session.')),
-        );
-      }
-      return;
-    }
-
-    final String? providerSlug = await _ensureProviderSlugForCurrentModel();
-    if (providerSlug == null || providerSlug.isEmpty) {
-      final String message =
-          'No provider is configured for $_selectedModelId. Select a provider in Settings and try again.';
-      _finalizeAiMessage(placeholderIndex, message);
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(message)));
-      }
-      return;
-    }
-
-    final List<Map<String, String>> apiHistory = [];
-    for (int i = 0; i < _messages.length - 1; i++) {
-      final message = _messages[i];
-      final sender = message['sender'];
-      final text = message['text'];
-      if (text == null || text.trim().isEmpty) continue;
-
-      if (sender == 'user') {
-        apiHistory.add({'role': 'user', 'content': text});
-      } else if (sender == 'ai' || sender == 'assistant') {
-        apiHistory.add({'role': 'assistant', 'content': text});
-      }
-    }
-
-    final String? systemPrompt = await _resolveSystemPromptForSend();
-
     setState(() {
       _isStreaming = true;
     });
@@ -1226,6 +1257,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         providerSlug: providerSlug,
         history: apiHistory.isEmpty ? null : apiHistory,
         systemPrompt: systemPrompt,
+        maxTokens: maxResponseTokens,
       );
 
       // Start auto-save timer during streaming
@@ -1245,7 +1277,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             // Always update messages, even if not mounted
             if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
               _messages[placeholderIndex]['text'] = contentBuffer.toString();
-              _messages[placeholderIndex]['reasoning'] = reasoningBuffer.toString();
+              _messages[placeholderIndex]['reasoning'] = reasoningBuffer
+                  .toString();
             }
             if (canUpdateUI) {
               _updateAiMessage(
@@ -1260,7 +1293,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             // Always update messages, even if not mounted
             if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
               _messages[placeholderIndex]['text'] = contentBuffer.toString();
-              _messages[placeholderIndex]['reasoning'] = reasoningBuffer.toString();
+              _messages[placeholderIndex]['reasoning'] = reasoningBuffer
+                  .toString();
             }
             if (canUpdateUI) {
               _updateAiMessage(
@@ -1326,7 +1360,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             // Finalize and save even if not mounted
             if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
               _messages[placeholderIndex]['text'] = contentBuffer.toString();
-              _messages[placeholderIndex]['reasoning'] = reasoningBuffer.toString();
+              _messages[placeholderIndex]['reasoning'] = reasoningBuffer
+                  .toString();
             }
             _persistChat(waitForCompletion: false);
             _isStreaming = false;
@@ -1385,6 +1420,29 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         );
       }
     }
+  }
+
+  List<Map<String, String>> _buildApiHistoryWithPendingMessage(
+    String pendingUserText,
+  ) {
+    final List<Map<String, String>> history = <Map<String, String>>[];
+    for (final Map<String, String> message in _messages) {
+      final String? sender = message['sender'];
+      final String? text = message['text'];
+      if (text == null || text.trim().isEmpty) continue;
+
+      if (sender == 'user') {
+        history.add({'role': 'user', 'content': text});
+      } else if (sender == 'ai' || sender == 'assistant') {
+        history.add({'role': 'assistant', 'content': text});
+      }
+    }
+
+    if (pendingUserText.trim().isNotEmpty) {
+      history.add({'role': 'user', 'content': pendingUserText});
+    }
+
+    return history;
   }
 
   void _updateAiMessage(int index, String content, String reasoning) {
@@ -1657,25 +1715,28 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         ? centeredInputWidth
         : expandedInputWidth;
 
-    final List<_MessageRenderData> renderMessages =
-        List<_MessageRenderData>.generate(_messages.length, (int index) {
-          final Map<String, String> raw = _messages[index];
-          final String sender = raw['sender'] ?? 'ai';
-          final String displayText = (raw['text'] ?? '').trimRight();
-          final String reasoning = raw['reasoning'] ?? '';
-          final bool isAiMessage = sender != 'user';
-          final bool isStreamingMessage =
-              _isStreaming && index == _messages.length - 1 && isAiMessage;
-          // Check if reasoning has content (meaning reasoning exists)
-          final bool hasReasoning = reasoning.isNotEmpty;
-          return _MessageRenderData(
-            sender: sender,
-            displayText: displayText,
-            reasoning: reasoning,
-            // Show loading icon if: streaming AND (has reasoning OR might get reasoning)
-            isReasoningStreaming: isStreamingMessage && (hasReasoning || displayText.isNotEmpty),
-          );
-        });
+    final List<_MessageRenderData>
+    renderMessages = List<_MessageRenderData>.generate(_messages.length, (
+      int index,
+    ) {
+      final Map<String, String> raw = _messages[index];
+      final String sender = raw['sender'] ?? 'ai';
+      final String displayText = (raw['text'] ?? '').trimRight();
+      final String reasoning = raw['reasoning'] ?? '';
+      final bool isAiMessage = sender != 'user';
+      final bool isStreamingMessage =
+          _isStreaming && index == _messages.length - 1 && isAiMessage;
+      // Check if reasoning has content (meaning reasoning exists)
+      final bool hasReasoning = reasoning.isNotEmpty;
+      return _MessageRenderData(
+        sender: sender,
+        displayText: displayText,
+        reasoning: reasoning,
+        // Show loading icon if: streaming AND (has reasoning OR might get reasoning)
+        isReasoningStreaming:
+            isStreamingMessage && (hasReasoning || displayText.isNotEmpty),
+      );
+    });
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -1716,7 +1777,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                 data.reasoning.trim().isEmpty
                                 ? null
                                 : data.reasoning;
-                            final bool isBeingEdited = _editingMessageIndex == i;
+                            final bool isBeingEdited =
+                                _editingMessageIndex == i;
                             return RepaintBoundary(
                               child: MessageBubble(
                                 key: ValueKey('msg_$i'),
@@ -1724,15 +1786,19 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                 reasoning: reasoningText,
                                 isUser: data.isUser,
                                 maxWidth: expandedInputWidth * 0.7,
-                                isReasoningStreaming:
-                                    data.isReasoningStreaming,
+                                isReasoningStreaming: data.isReasoningStreaming,
                                 actions: _buildMessageActionsForIndex(i, data),
                                 isEditing: isBeingEdited,
-                                initialEditText: isBeingEdited ? data.displayText : null,
-                                onSubmitEdit: isBeingEdited && data.isUser
-                                    ? (newText) => _submitEditedMessage(i, newText)
+                                initialEditText: isBeingEdited
+                                    ? data.displayText
                                     : null,
-                                onCancelEdit: isBeingEdited ? _cancelEditMessage : null,
+                                onSubmitEdit: isBeingEdited && data.isUser
+                                    ? (newText) =>
+                                          _submitEditedMessage(i, newText)
+                                    : null,
+                                onCancelEdit: isBeingEdited
+                                    ? _cancelEditMessage
+                                    : null,
                               ),
                             );
                           },
@@ -1806,9 +1872,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     return Container(
       width:
           double.infinity, // Occupy full width of its parent AnimatedContainer
-      constraints: const BoxConstraints(
-        minHeight: _kSearchBarContentHeight,
-      ),
+      constraints: const BoxConstraints(minHeight: _kSearchBarContentHeight),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(16),

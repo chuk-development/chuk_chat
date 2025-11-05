@@ -161,6 +161,16 @@ class _RootWrapperMobileState extends State<RootWrapperMobile> {
             bottom: 0,
             child: GestureDetector(
               onTap: _isSidebarExpanded ? _toggleSidebar : null,
+              onHorizontalDragEnd: (DragEndDetails details) {
+                // Only handle swipe when sidebar is closed
+                if (_isSidebarExpanded) return;
+
+                // If the swipe velocity is positive (left to right) and significant
+                if (details.primaryVelocity != null &&
+                    details.primaryVelocity! > 500) {
+                  _toggleSidebar();
+                }
+              },
               child: AbsorbPointer(
                 absorbing: _isSidebarExpanded,
                 child: Column(
