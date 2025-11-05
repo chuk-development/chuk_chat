@@ -124,6 +124,10 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
   }
 
   void _toggleSidebar() {
+    // Hide keyboard when opening sidebar
+    if (!_isSidebarExpanded) {
+      FocusScope.of(context).unfocus();
+    }
     setState(() {
       _isSidebarExpanded = !_isSidebarExpanded;
     });
@@ -169,6 +173,8 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
   }
 
   void _handleChatTapped(int index) {
+    // Hide keyboard when switching chats
+    FocusScope.of(context).unfocus();
     setState(() {
       ChatStorageService.selectedChatIndex = index;
     });
@@ -180,6 +186,8 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
   }
 
   void _newChatFromAppBar() {
+    // Hide keyboard when creating new chat
+    FocusScope.of(context).unfocus();
     _chatUIMobileKey.currentState?.newChat();
   }
 

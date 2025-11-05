@@ -1721,30 +1721,41 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     final bool hasMessages = renderMessages.isNotEmpty;
 
+    // Get keyboard height for smooth animation
+    final double keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: Stack(
-        children: [
-          if (hasMessages)
-            Positioned(
-              top: 0,
-              bottom: inputAreaTotalHeight,
-              left: 0,
-              right: 0,
-              child: FadeTransition(
-                opacity: _anim,
-                child: Padding(
-                  padding: EdgeInsets.zero,
-                  child: Align(
-                    alignment: Alignment.center,
-                    child: Container(
-                      constraints: BoxConstraints(maxWidth: expandedInputWidth),
-                      child: Scrollbar(
-                        controller: _scrollController,
-                        thumbVisibility: true,
-                        thickness: 8.0,
-                        radius: const Radius.circular(4),
-                        child: ListView.builder(
+      resizeToAvoidBottomInset: false, // We'll handle keyboard manually for smooth animation
+      body: GestureDetector(
+        onTap: () {
+          // Dismiss keyboard when tapping outside input area
+          FocusScope.of(context).unfocus();
+        },
+        child: Stack(
+          children: [
+            if (hasMessages)
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOutCubic,
+                top: 0,
+                bottom: inputAreaTotalHeight + keyboardHeight,
+                left: 0,
+                right: 0,
+                child: FadeTransition(
+                  opacity: _anim,
+                  child: Padding(
+                    padding: EdgeInsets.zero,
+                    child: Align(
+                      alignment: Alignment.center,
+                      child: Container(
+                        constraints: BoxConstraints(maxWidth: expandedInputWidth),
+                        child: Scrollbar(
+                          controller: _scrollController,
+                          thumbVisibility: true,
+                          thickness: 8.0,
+                          radius: const Radius.circular(4),
+                          child: ListView.builder(
                           controller: _scrollController,
                           padding: EdgeInsets.symmetric(
                             horizontal: effectiveHorizontalPadding,
@@ -1798,52 +1809,57 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 ),
               ),
             ),
-          Positioned(
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
             left: 0,
             right: 0,
-            bottom: 0,
-            child: Padding(
-              padding: EdgeInsets.only(
-                bottom: effectiveHorizontalPadding,
-              ),
-              child: Center(
-                child: SizedBox(
-                  width: targetInputWidth,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (_attachedFiles.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(
-                            bottom: _kAttachmentBarMarginBottom,
-                          ),
-                          child: SizedBox(
-                            width: targetInputWidth,
-                            child: AttachmentPreviewBar(
-                              files: _attachedFiles,
-                              onRemove: _removeAttachedFile,
+            bottom: keyboardHeight,
+            child: SafeArea(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  bottom: effectiveHorizontalPadding,
+                ),
+                child: Center(
+                  child: SizedBox(
+                    width: targetInputWidth,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_attachedFiles.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(
+                              bottom: _kAttachmentBarMarginBottom,
+                            ),
+                            child: SizedBox(
+                              width: targetInputWidth,
+                              child: AttachmentPreviewBar(
+                                files: _attachedFiles,
+                                onRemove: _removeAttachedFile,
+                              ),
                             ),
                           ),
+                        _buildSearchBar(
+                          isCompactMode: isCompactModeForModelDropdown,
                         ),
-                      _buildSearchBar(
-                        isCompactMode: isCompactModeForModelDropdown,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'AI/LLMs can make mistakes — double-check important info.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: iconFg.withValues(alpha: 0.7),
-                          fontSize: 11,
+                        const SizedBox(height: 8),
+                        Text(
+                          'AI/LLMs can make mistakes — double-check important info.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: iconFg.withValues(alpha: 0.7),
+                            fontSize: 11,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ],
+          ],
+        ),
       ),
     );
   }
