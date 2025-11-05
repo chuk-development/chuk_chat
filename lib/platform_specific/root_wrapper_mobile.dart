@@ -9,6 +9,7 @@ import 'package:chuk_chat/pages/settings_page.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_mobile.dart';
 import 'package:chuk_chat/platform_specific/sidebar_mobile.dart'; // UPDATED: Use mobile sidebar
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:chuk_chat/pages/coming_soon_page.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
@@ -45,14 +46,58 @@ class RootWrapperMobile extends StatefulWidget {
   State<RootWrapperMobile> createState() => _RootWrapperMobileState();
 }
 
-class _RootWrapperMobileState extends State<RootWrapperMobile> {
+class _RootWrapperMobileState extends State<RootWrapperMobile>
+    with WidgetsBindingObserver {
   bool _isSidebarExpanded = false;
   final GlobalKey<ChukChatUIMobileState> _chatUIMobileKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _ensureMicrophonePermission();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    // When app comes back to foreground, refresh the session
+    if (state == AppLifecycleState.resumed) {
+      _refreshSessionOnResume();
+    }
+  }
+
+  Future<void> _refreshSessionOnResume() async {
+    try {
+      debugPrint('App resumed - refreshing session...');
+      final session = await SupabaseService.refreshSession();
+
+      if (session == null) {
+        // Session couldn't be refreshed - user needs to sign in again
+        debugPrint('Session expired - user needs to sign in again');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Session expired. Please sign in again.'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+        // Sign out to force re-authentication
+        await SupabaseService.signOut();
+      } else {
+        debugPrint('Session refreshed successfully');
+      }
+    } catch (e) {
+      debugPrint('Error refreshing session on resume: $e');
+    }
   }
 
   Future<void> _ensureMicrophonePermission() async {
