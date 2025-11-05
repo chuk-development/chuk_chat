@@ -23,32 +23,63 @@ class AuthGate extends StatefulWidget {
 
 class _AuthGateState extends State<AuthGate> {
   late StreamSubscription<AuthState> _authSubscription;
-  Session? _session = SupabaseService.auth.currentSession;
+  Session? _session;
   bool _checkingSession = true;
 
   @override
   void initState() {
     super.initState();
 
-    if (_session != null) {
-      _checkingSession = false;
-    } else {
-      // Give Supabase a brief moment to recover stored session, but don't block UI
-      Future<void>.delayed(const Duration(milliseconds: 100)).then((_) {
-        if (!mounted) return;
-        setState(() {
-          _checkingSession = false;
+    // Check if Supabase is ready, otherwise wait a bit
+    _initializeAuthState();
+  }
+
+  Future<void> _initializeAuthState() async {
+    // Wait briefly for Supabase to initialize
+    for (int i = 0; i < 20; i++) {
+      try {
+        final session = SupabaseService.auth.currentSession;
+        _session = session;
+        _checkingSession = session == null;
+
+        _authSubscription = SupabaseService.auth.onAuthStateChange.listen((event) {
+          if (!mounted) return;
+          setState(() {
+            _session = event.session;
+            _checkingSession = false;
+          });
         });
-      });
+
+        if (mounted) {
+          setState(() {
+            if (_session != null) {
+              _checkingSession = false;
+            }
+          });
+        }
+
+        // Show UI after brief delay even if no session
+        if (_session == null && mounted) {
+          await Future.delayed(const Duration(milliseconds: 50));
+          if (mounted) {
+            setState(() {
+              _checkingSession = false;
+            });
+          }
+        }
+        return;
+      } catch (_) {
+        // Supabase not ready yet
+        await Future.delayed(const Duration(milliseconds: 50));
+      }
     }
 
-    _authSubscription = SupabaseService.auth.onAuthStateChange.listen((event) {
-      if (!mounted) return;
+    // Timeout - show UI anyway
+    if (mounted) {
       setState(() {
-        _session = event.session;
         _checkingSession = false;
       });
-    });
+    }
   }
 
   @override

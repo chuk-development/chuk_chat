@@ -20,84 +20,40 @@ import 'package:chuk_chat/services/theme_settings_service.dart';
 import 'package:chuk_chat/widgets/auth_gate.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-class InitialThemeData {
-  const InitialThemeData({
-    required this.themeMode,
-    required this.accentColor,
-    required this.iconColor,
-    required this.backgroundColor,
-    required this.grainEnabled,
-    required this.loadedFromSupabase,
-  });
-
-  final Brightness themeMode;
-  final Color accentColor;
-  final Color iconColor;
-  final Color backgroundColor;
-  final bool grainEnabled;
-  final bool loadedFromSupabase;
-}
-
-Future<InitialThemeData> _bootstrapThemeSettings() async {
-  final prefs = await SharedPreferences.getInstance();
-
-  Brightness themeMode =
-      (prefs.getString(_ChukChatAppState._kThemeModeKey) == 'light')
-      ? Brightness.light
-      : kDefaultThemeMode;
-  Color accentColor = ColorExtension.fromHexString(
-    prefs.getString(_ChukChatAppState._kAccentColorKey),
-    fallback: kDefaultAccentColor,
-  );
-  Color iconColor = ColorExtension.fromHexString(
-    prefs.getString(_ChukChatAppState._kIconFgColorKey),
-    fallback: kDefaultIconFgColor,
-  );
-  Color backgroundColor = ColorExtension.fromHexString(
-    prefs.getString(_ChukChatAppState._kBgColorKey),
-    fallback: kDefaultBgColor,
-  );
-  bool grainEnabled =
-      prefs.getBool(_ChukChatAppState._kGrainEnabledKey) ??
-      kDefaultGrainEnabled;
-
-  // Don't block startup with network call - load from Supabase async after UI is shown
-  return InitialThemeData(
-    themeMode: themeMode,
-    accentColor: accentColor,
-    iconColor: iconColor,
-    backgroundColor: backgroundColor,
-    grainEnabled: grainEnabled,
-    loadedFromSupabase: false,
-  );
-}
-
 /* ---------- MAIN ---------- */
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await SupabaseService.initialize();
 
-  // Don't block app startup - load encryption key and models async
-  if (SupabaseService.auth.currentSession != null) {
-    unawaited(
-      EncryptionService.tryLoadKey().catchError((error, stackTrace) async {
-        debugPrint('Initial encryption key load failed: $error');
-        debugPrint('$stackTrace');
-        await EncryptionService.clearKey();
-        return false;
-      }),
-    );
-    unawaited(ModelPrefetchService.prefetch());
+  // Initialize Supabase in background - don't block UI
+  unawaited(_initializeServicesAsync());
+
+  // Use default theme immediately - load preferences async after first frame
+  runApp(const ChukChatApp());
+}
+
+Future<void> _initializeServicesAsync() async {
+  try {
+    await SupabaseService.initialize();
+
+    // After Supabase is ready, load other stuff
+    if (SupabaseService.auth.currentSession != null) {
+      unawaited(
+        EncryptionService.tryLoadKey().catchError((error, stackTrace) async {
+          debugPrint('Initial encryption key load failed: $error');
+          debugPrint('$stackTrace');
+          await EncryptionService.clearKey();
+          return false;
+        }),
+      );
+      unawaited(ModelPrefetchService.prefetch());
+    }
+  } catch (error) {
+    debugPrint('Service initialization failed: $error');
   }
-
-  final initialTheme = await _bootstrapThemeSettings();
-  runApp(ChukChatApp(initialTheme: initialTheme));
 }
 
 class ChukChatApp extends StatefulWidget {
-  const ChukChatApp({super.key, required this.initialTheme});
-
-  final InitialThemeData initialTheme;
+  const ChukChatApp({super.key});
 
   @override
   State<ChukChatApp> createState() => _ChukChatAppState();
@@ -126,15 +82,17 @@ class _ChukChatAppState extends State<ChukChatApp> {
   @override
   void initState() {
     super.initState();
-    final initialTheme = widget.initialTheme;
-    _currentThemeMode = initialTheme.themeMode;
-    _currentAccentColor = initialTheme.accentColor;
-    _currentIconFgColor = initialTheme.iconColor;
-    _currentBgColor = initialTheme.backgroundColor;
-    _grainEnabled = initialTheme.grainEnabled;
-    _hasAppliedSupabaseTheme = initialTheme.loadedFromSupabase;
 
-    unawaited(ChatStorageService.loadSavedChatsForSidebar());
+    // Load theme preferences after first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadThemeSettingsFromPrefs();
+    });
+
+    // Load chats after UI is shown
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadChatsAsync();
+    });
+
     _authSubscription = SupabaseService.auth.onAuthStateChange.listen((
       event,
     ) async {
@@ -190,10 +148,15 @@ class _ChukChatAppState extends State<ChukChatApp> {
       }
     });
 
-    if (SupabaseService.auth.currentSession != null &&
-        !_hasAppliedSupabaseTheme) {
-      _loadThemeSettingsFromSupabase();
-    }
+    // Load theme from Supabase after it's initialized
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Wait for Supabase to be ready
+      await _waitForSupabase();
+      if (SupabaseService.auth.currentSession != null &&
+          !_hasAppliedSupabaseTheme) {
+        _loadThemeSettingsFromSupabase();
+      }
+    });
   }
 
   @override
@@ -202,12 +165,37 @@ class _ChukChatAppState extends State<ChukChatApp> {
     super.dispose();
   }
 
+  Future<void> _waitForSupabase() async {
+    // Wait for Supabase to initialize (max 5 seconds)
+    for (int i = 0; i < 50; i++) {
+      try {
+        if (SupabaseService.auth.currentSession != null ||
+            Supabase.instance.client.auth.currentSession == null) {
+          return; // Initialized
+        }
+      } catch (_) {
+        // Not yet initialized
+      }
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+  }
+
+  Future<void> _loadChatsAsync() async {
+    try {
+      await ChatStorageService.loadSavedChatsForSidebar();
+      if (mounted) setState(() {});
+    } catch (error) {
+      debugPrint('Failed to load chats: $error');
+    }
+  }
+
   Future<void> _loadThemeSettingsFromPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     if (SupabaseService.auth.currentSession != null &&
         _hasAppliedSupabaseTheme) {
       return;
     }
+    if (!mounted) return;
     setState(() {
       _currentThemeMode = (prefs.getString(_kThemeModeKey) == 'light')
           ? Brightness.light
