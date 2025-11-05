@@ -55,7 +55,10 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _ensureMicrophonePermission();
+    // Don't block UI startup - check permission after first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _ensureMicrophonePermission();
+    });
   }
 
   @override

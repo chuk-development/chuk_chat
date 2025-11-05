@@ -61,47 +61,14 @@ Future<InitialThemeData> _bootstrapThemeSettings() async {
       prefs.getBool(_ChukChatAppState._kGrainEnabledKey) ??
       kDefaultGrainEnabled;
 
-  bool loadedFromSupabase = false;
-
-  if (SupabaseService.auth.currentSession != null) {
-    try {
-      final settings = await const ThemeSettingsService().loadOrCreate();
-      themeMode = settings.themeMode;
-      accentColor = settings.accentColor;
-      iconColor = settings.iconColor;
-      backgroundColor = settings.backgroundColor;
-      grainEnabled = settings.grainEnabled;
-      loadedFromSupabase = true;
-
-      await prefs.setString(
-        _ChukChatAppState._kThemeModeKey,
-        themeMode == Brightness.light ? 'light' : 'dark',
-      );
-      await prefs.setString(
-        _ChukChatAppState._kAccentColorKey,
-        accentColor.toHexString(),
-      );
-      await prefs.setString(
-        _ChukChatAppState._kIconFgColorKey,
-        iconColor.toHexString(),
-      );
-      await prefs.setString(
-        _ChukChatAppState._kBgColorKey,
-        backgroundColor.toHexString(),
-      );
-      await prefs.setBool(_ChukChatAppState._kGrainEnabledKey, grainEnabled);
-    } catch (_) {
-      // Ignore remote load errors and fall back to locally stored values.
-    }
-  }
-
+  // Don't block startup with network call - load from Supabase async after UI is shown
   return InitialThemeData(
     themeMode: themeMode,
     accentColor: accentColor,
     iconColor: iconColor,
     backgroundColor: backgroundColor,
     grainEnabled: grainEnabled,
-    loadedFromSupabase: loadedFromSupabase,
+    loadedFromSupabase: false,
   );
 }
 
@@ -109,16 +76,20 @@ Future<InitialThemeData> _bootstrapThemeSettings() async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SupabaseService.initialize();
+
+  // Don't block app startup - load encryption key and models async
   if (SupabaseService.auth.currentSession != null) {
-    try {
-      await EncryptionService.tryLoadKey();
-    } catch (error, stackTrace) {
-      debugPrint('Initial encryption key load failed: $error');
-      debugPrint('$stackTrace');
-      await EncryptionService.clearKey();
-    }
+    unawaited(
+      EncryptionService.tryLoadKey().catchError((error, stackTrace) async {
+        debugPrint('Initial encryption key load failed: $error');
+        debugPrint('$stackTrace');
+        await EncryptionService.clearKey();
+        return false;
+      }),
+    );
     unawaited(ModelPrefetchService.prefetch());
   }
+
   final initialTheme = await _bootstrapThemeSettings();
   runApp(ChukChatApp(initialTheme: initialTheme));
 }

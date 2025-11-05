@@ -33,8 +33,8 @@ class _AuthGateState extends State<AuthGate> {
     if (_session != null) {
       _checkingSession = false;
     } else {
-      // Give Supabase time to recover a stored session before showing the sign-in form.
-      Future<void>.delayed(const Duration(milliseconds: 600)).then((_) {
+      // Give Supabase a brief moment to recover stored session, but don't block UI
+      Future<void>.delayed(const Duration(milliseconds: 100)).then((_) {
         if (!mounted) return;
         setState(() {
           _checkingSession = false;

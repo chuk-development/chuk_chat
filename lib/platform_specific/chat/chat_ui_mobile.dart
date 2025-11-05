@@ -226,7 +226,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       onUploadStatusUpdate: _handleFileUploadUpdate,
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+      _textFieldFocusNode.requestFocus();
     });
     _loadChatFromIndex(widget.selectedChatIndex);
     unawaited(_loadProviderSlugForModel(_selectedModelId));
