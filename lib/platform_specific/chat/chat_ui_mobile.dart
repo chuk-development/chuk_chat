@@ -1790,17 +1790,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     return Scaffold(
       backgroundColor: Colors.transparent,
       resizeToAvoidBottomInset: false,
-      body: SafeArea(
-        bottom: false,
-        child: Stack(
-          children: [
-            if (hasMessages)
-              Positioned(
-                top: 0,
-                bottom: inputAreaTotalHeight,
-                left: 0,
-                right: 0,
-                child: FadeTransition(
+      body: Stack(
+        children: [
+          if (hasMessages)
+            Positioned(
+              top: 0,
+              bottom: inputAreaTotalHeight,
+              left: 0,
+              right: 0,
+              child: FadeTransition(
                   opacity: _anim,
                   child: Padding(
                     padding: EdgeInsets.zero,
@@ -1870,7 +1868,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
             Positioned(
               left: 0,
               right: 0,
-              bottom: effectiveHorizontalPadding,
+              bottom: 0,
               child: Center(
                 child: SizedBox(
                   width: targetInputWidth,
@@ -1907,8 +1905,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 ),
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
