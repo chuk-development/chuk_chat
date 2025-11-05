@@ -1756,6 +1756,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     final double expandedInputWidth = constrainedChatContentWidth;
 
+    // Calculate input area height - EXACTLY like desktop
     double inputAreaVisualHeight = _kSearchBarContentHeight;
     if (_attachedFiles.isNotEmpty) {
       inputAreaVisualHeight +=
@@ -1789,7 +1790,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
           if (hasMessages)
@@ -1799,112 +1799,112 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               left: 0,
               right: 0,
               child: FadeTransition(
-                  opacity: _anim,
-                  child: Padding(
-                    padding: EdgeInsets.zero,
-                    child: Align(
-                      alignment: Alignment.center,
-                      child: Container(
-                        constraints: BoxConstraints(maxWidth: expandedInputWidth),
-                        child: Scrollbar(
+                opacity: _anim,
+                child: Padding(
+                  padding: EdgeInsets.zero,
+                  child: Align(
+                    alignment: Alignment.center,
+                    child: Container(
+                      constraints: BoxConstraints(maxWidth: expandedInputWidth),
+                      child: Scrollbar(
+                        controller: _scrollController,
+                        thumbVisibility: true,
+                        thickness: 8.0,
+                        radius: const Radius.circular(4),
+                        child: ListView.builder(
                           controller: _scrollController,
-                          thumbVisibility: true,
-                          thickness: 8.0,
-                          radius: const Radius.circular(4),
-                          child: ListView.builder(
-                            controller: _scrollController,
-                            padding: EdgeInsets.symmetric(
-                              horizontal: effectiveHorizontalPadding,
-                              vertical: 10,
-                            ),
-                            itemCount: renderMessages.length,
-                            addAutomaticKeepAlives: false,
-                            addRepaintBoundaries: true,
-                            cacheExtent: 500.0,
-                            itemBuilder: (_, int i) {
-                              final _MobileMessageRenderData data =
-                                  renderMessages[i];
-                              final String? reasoningText =
-                                  data.reasoning.trim().isEmpty
-                                  ? null
-                                  : data.reasoning;
-                              final bool isBeingEdited =
-                                  _editingMessageIndex == i;
-                              return RepaintBoundary(
-                                child: MessageBubble(
-                                  key: ValueKey('msg_$i'),
-                                  message: data.displayText,
-                                  reasoning: reasoningText,
-                                  isUser: data.isUser,
-                                  maxWidth: expandedInputWidth * 0.7,
-                                  isReasoningStreaming:
-                                      data.isReasoningStreaming,
-                                  modelLabel: data.modelLabel,
-                                  actions: _buildMessageActionsForIndex(
-                                    i,
-                                    data,
-                                  ),
-                                  isEditing: isBeingEdited,
-                                  initialEditText: isBeingEdited
-                                      ? data.displayText
-                                      : null,
-                                  onSubmitEdit: isBeingEdited && data.isUser
-                                      ? (newText) =>
-                                            _submitEditedMessage(i, newText)
-                                      : null,
-                                  onCancelEdit: isBeingEdited
-                                      ? _cancelEditMessage
-                                      : null,
-                                ),
-                              );
-                            },
+                          padding: EdgeInsets.symmetric(
+                            horizontal: effectiveHorizontalPadding,
+                            vertical: 10,
                           ),
+                          itemCount: renderMessages.length,
+                          addAutomaticKeepAlives: false,
+                          addRepaintBoundaries: true,
+                          cacheExtent: 500.0,
+                          itemBuilder: (_, int i) {
+                            final _MobileMessageRenderData data =
+                                renderMessages[i];
+                            final String? reasoningText =
+                                data.reasoning.trim().isEmpty
+                                ? null
+                                : data.reasoning;
+                            final bool isBeingEdited =
+                                _editingMessageIndex == i;
+                            return RepaintBoundary(
+                              child: MessageBubble(
+                                key: ValueKey('msg_$i'),
+                                message: data.displayText,
+                                reasoning: reasoningText,
+                                isUser: data.isUser,
+                                maxWidth: expandedInputWidth * 0.7,
+                                isReasoningStreaming:
+                                    data.isReasoningStreaming,
+                                modelLabel: data.modelLabel,
+                                actions: _buildMessageActionsForIndex(
+                                  i,
+                                  data,
+                                ),
+                                isEditing: isBeingEdited,
+                                initialEditText: isBeingEdited
+                                    ? data.displayText
+                                    : null,
+                                onSubmitEdit: isBeingEdited && data.isUser
+                                    ? (newText) =>
+                                          _submitEditedMessage(i, newText)
+                                    : null,
+                                onCancelEdit: isBeingEdited
+                                    ? _cancelEditMessage
+                                    : null,
+                              ),
+                            );
+                          },
                         ),
                       ),
                     ),
                   ),
                 ),
               ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: Center(
-                child: SizedBox(
-                  width: targetInputWidth,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (_attachedFiles.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(
-                            bottom: _kAttachmentBarMarginBottom,
-                          ),
-                          child: SizedBox(
-                            width: targetInputWidth,
-                            child: AttachmentPreviewBar(
-                              files: _attachedFiles,
-                              onRemove: _removeAttachedFile,
-                            ),
+            ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: effectiveHorizontalPadding,
+            child: Center(
+              child: SizedBox(
+                width: targetInputWidth,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_attachedFiles.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(
+                          bottom: _kAttachmentBarMarginBottom,
+                        ),
+                        child: SizedBox(
+                          width: targetInputWidth,
+                          child: AttachmentPreviewBar(
+                            files: _attachedFiles,
+                            onRemove: _removeAttachedFile,
                           ),
                         ),
-                      _buildSearchBar(
-                        isCompactMode: isCompactModeForModelDropdown,
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'AI/LLMs can make mistakes — double-check important info.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: iconFg.withValues(alpha: 0.7),
-                          fontSize: 11,
-                        ),
+                    _buildSearchBar(
+                      isCompactMode: isCompactModeForModelDropdown,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'AI/LLMs can make mistakes — double-check important info.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: iconFg.withValues(alpha: 0.7),
+                        fontSize: 11,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
+          ),
         ],
       ),
     );

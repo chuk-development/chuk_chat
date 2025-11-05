@@ -195,7 +195,6 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
           AnimatedPositioned(
