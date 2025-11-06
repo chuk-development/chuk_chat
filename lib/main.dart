@@ -83,16 +83,19 @@ class _ChukChatAppState extends State<ChukChatApp> {
   void initState() {
     super.initState();
 
-    // Load theme preferences after first frame
+    // Wait for Supabase to initialize, then set up everything
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadThemeSettingsFromPrefs();
+      _initializeAfterSupabase();
     });
+  }
 
-    // Load chats after UI is shown
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadChatsAsync();
-    });
+  Future<void> _initializeAfterSupabase() async {
+    // Wait for Supabase to be ready
+    await _waitForSupabase();
 
+    if (!mounted) return;
+
+    // Now we can safely access Supabase
     _authSubscription = SupabaseService.auth.onAuthStateChange.listen((
       event,
     ) async {
@@ -148,15 +151,19 @@ class _ChukChatAppState extends State<ChukChatApp> {
       }
     });
 
-    // Load theme from Supabase after it's initialized
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // Wait for Supabase to be ready
-      await _waitForSupabase();
+    // Load theme and chats after auth subscription is set up
+    await _loadThemeSettingsFromPrefs();
+    unawaited(_loadChatsAsync());
+
+    // Load theme from Supabase if logged in
+    try {
       if (SupabaseService.auth.currentSession != null &&
           !_hasAppliedSupabaseTheme) {
         _loadThemeSettingsFromSupabase();
       }
-    });
+    } catch (error) {
+      debugPrint('Error checking session for theme: $error');
+    }
   }
 
   @override
@@ -169,14 +176,13 @@ class _ChukChatAppState extends State<ChukChatApp> {
     // Wait for Supabase to initialize (max 5 seconds)
     for (int i = 0; i < 50; i++) {
       try {
-        if (SupabaseService.auth.currentSession != null ||
-            Supabase.instance.client.auth.currentSession == null) {
-          return; // Initialized
-        }
+        // Try to access auth - if it doesn't throw, we're initialized
+        SupabaseService.auth;
+        return; // Initialized successfully
       } catch (_) {
-        // Not yet initialized
+        // Not yet initialized, wait a bit
+        await Future.delayed(const Duration(milliseconds: 100));
       }
-      await Future.delayed(const Duration(milliseconds: 100));
     }
   }
 
@@ -191,10 +197,17 @@ class _ChukChatAppState extends State<ChukChatApp> {
 
   Future<void> _loadThemeSettingsFromPrefs() async {
     final prefs = await SharedPreferences.getInstance();
-    if (SupabaseService.auth.currentSession != null &&
-        _hasAppliedSupabaseTheme) {
-      return;
+
+    // Check if we should skip loading (Supabase theme already applied)
+    try {
+      if (SupabaseService.auth.currentSession != null &&
+          _hasAppliedSupabaseTheme) {
+        return;
+      }
+    } catch (_) {
+      // Supabase not ready yet, continue with local theme
     }
+
     if (!mounted) return;
     setState(() {
       _currentThemeMode = (prefs.getString(_kThemeModeKey) == 'light')
