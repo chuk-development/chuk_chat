@@ -79,6 +79,11 @@ class _ChukChatAppState extends State<ChukChatApp> {
   StreamSubscription<AuthState>? _authSubscription;
   bool _hasAppliedSupabaseTheme = false;
 
+  // Performance optimizations
+  SharedPreferences? _cachedPrefs;
+  Timer? _themeSyncDebounce;
+  ThemeData? _cachedThemeData;
+
   @override
   void initState() {
     super.initState();
@@ -169,7 +174,14 @@ class _ChukChatAppState extends State<ChukChatApp> {
   @override
   void dispose() {
     _authSubscription?.cancel();
+    _themeSyncDebounce?.cancel();
     super.dispose();
+  }
+
+  // Performance: Cache SharedPreferences instance
+  Future<SharedPreferences> _getPrefs() async {
+    _cachedPrefs ??= await SharedPreferences.getInstance();
+    return _cachedPrefs!;
   }
 
   Future<void> _waitForSupabase() async {
@@ -196,7 +208,7 @@ class _ChukChatAppState extends State<ChukChatApp> {
   }
 
   Future<void> _loadThemeSettingsFromPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _getPrefs();
 
     // Check if we should skip loading (Supabase theme already applied)
     try {
@@ -209,10 +221,11 @@ class _ChukChatAppState extends State<ChukChatApp> {
     }
 
     if (!mounted) return;
+    // Performance: Batch all theme updates into single setState
     setState(() {
       _currentThemeMode = (prefs.getString(_kThemeModeKey) == 'light')
           ? Brightness.light
-          : kDefaultThemeMode; // Default to dark if not explicitly light
+          : kDefaultThemeMode;
       _currentAccentColor = ColorExtension.fromHexString(
         prefs.getString(_kAccentColorKey),
         fallback: kDefaultAccentColor,
@@ -226,56 +239,69 @@ class _ChukChatAppState extends State<ChukChatApp> {
         fallback: kDefaultBgColor,
       );
       _grainEnabled = prefs.getBool(_kGrainEnabledKey) ?? kDefaultGrainEnabled;
+      _cachedThemeData = null; // Invalidate theme cache
     });
   }
 
   // Callbacks for ThemePage to update settings
   void _setThemeMode(Brightness newMode) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _getPrefs();
     await prefs.setString(
       _kThemeModeKey,
       newMode == Brightness.light ? 'light' : 'dark',
     );
     setState(() {
       _currentThemeMode = newMode;
+      _cachedThemeData = null; // Invalidate cache
     });
-    await _syncThemeSettings();
+    _debouncedSyncThemeSettings();
   }
 
   void _setAccentColor(Color newColor) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _getPrefs();
     await prefs.setString(_kAccentColorKey, newColor.toHexString());
     setState(() {
       _currentAccentColor = newColor;
+      _cachedThemeData = null; // Invalidate cache
     });
-    await _syncThemeSettings();
+    _debouncedSyncThemeSettings();
   }
 
   void _setIconFgColor(Color newColor) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _getPrefs();
     await prefs.setString(_kIconFgColorKey, newColor.toHexString());
     setState(() {
       _currentIconFgColor = newColor;
+      _cachedThemeData = null; // Invalidate cache
     });
-    await _syncThemeSettings();
+    _debouncedSyncThemeSettings();
   }
 
   void _setBgColor(Color newColor) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _getPrefs();
     await prefs.setString(_kBgColorKey, newColor.toHexString());
     setState(() {
       _currentBgColor = newColor;
+      _cachedThemeData = null; // Invalidate cache
     });
-    await _syncThemeSettings();
+    _debouncedSyncThemeSettings();
   }
 
   void _setGrainEnabled(bool enabled) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _getPrefs();
     await prefs.setBool(_kGrainEnabledKey, enabled);
     setState(() {
       _grainEnabled = enabled;
     });
-    await _syncThemeSettings();
+    _debouncedSyncThemeSettings();
+  }
+
+  // Performance: Debounce theme sync to avoid excessive Supabase calls
+  void _debouncedSyncThemeSettings() {
+    _themeSyncDebounce?.cancel();
+    _themeSyncDebounce = Timer(const Duration(milliseconds: 500), () {
+      unawaited(_syncThemeSettings());
+    });
   }
 
   Future<void> _loadThemeSettingsFromSupabase() async {
@@ -285,6 +311,7 @@ class _ChukChatAppState extends State<ChukChatApp> {
     try {
       final settings = await const ThemeSettingsService().loadOrCreate();
       if (!mounted) return;
+      // Performance: Batch all updates into single setState
       setState(() {
         _currentThemeMode = settings.themeMode;
         _currentAccentColor = settings.accentColor;
@@ -292,6 +319,7 @@ class _ChukChatAppState extends State<ChukChatApp> {
         _currentBgColor = settings.backgroundColor;
         _grainEnabled = settings.grainEnabled;
         _hasAppliedSupabaseTheme = true;
+        _cachedThemeData = null; // Invalidate cache
       });
       await _persistThemeSettingsToPrefs();
     } catch (_) {
@@ -300,7 +328,7 @@ class _ChukChatAppState extends State<ChukChatApp> {
   }
 
   Future<void> _persistThemeSettingsToPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _getPrefs();
     await prefs.setString(
       _kThemeModeKey,
       _currentThemeMode == Brightness.light ? 'light' : 'dark',
@@ -334,34 +362,38 @@ class _ChukChatAppState extends State<ChukChatApp> {
 
   @override
   Widget build(BuildContext context) {
-    // Construct the theme data dynamically
-    final appTheme = buildAppTheme(
+    // Performance: Cache theme data to avoid rebuilding on every frame
+    _cachedThemeData ??= buildAppTheme(
       accent: _currentAccentColor,
       iconFg: _currentIconFgColor,
-      bg: _currentBgColor, // Use the current background color
+      bg: _currentBgColor,
       brightness: _currentThemeMode,
     );
 
     return MaterialApp(
       title: 'chuk.chat',
       debugShowCheckedModeBanner: false,
-      theme: appTheme, // Use the dynamically built theme
+      theme: _cachedThemeData,
       // 👇 Apply film grain to EVERY route/page
       builder: (context, child) {
+        // Performance: Use const where possible
+        if (child == null) return const SizedBox.shrink();
+
+        if (!_grainEnabled) return child;
+
         return Stack(
           children: [
-            if (child != null) child,
-            if (_grainEnabled)
-              const Positioned.fill(
-                child: IgnorePointer(
-                  child: GrainOverlay(
-                    opacity: 0.10,
-                    speedMs: 160,
-                    noiseSize: 140,
-                    blendMode: BlendMode.overlay,
-                  ),
+            child,
+            const Positioned.fill(
+              child: IgnorePointer(
+                child: GrainOverlay(
+                  opacity: 0.10,
+                  speedMs: 160,
+                  noiseSize: 140,
+                  blendMode: BlendMode.overlay,
                 ),
               ),
+            ),
           ],
         );
       },

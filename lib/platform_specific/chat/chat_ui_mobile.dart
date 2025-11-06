@@ -1669,13 +1669,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
   @override
   Widget build(BuildContext context) {
-    const bool isCompactModeForModelDropdown =
-        true; // Mobile shows a hashtag-only trigger for model menu.
+    const bool isCompactModeForModelDropdown = true;
 
-    final double screenWidth = MediaQuery.of(context).size.width;
-    final Color iconFg = Theme.of(context).resolvedIconColor;
+    // Performance: Cache MediaQuery and Theme lookups
+    final mediaQuery = MediaQuery.of(context);
+    final theme = Theme.of(context);
+    final double screenWidth = mediaQuery.size.width;
+    final Color iconFg = theme.resolvedIconColor;
 
-    final double effectiveHorizontalPadding = _kHorizontalPaddingSmall;
+    const double effectiveHorizontalPadding = _kHorizontalPaddingSmall;
     final double maxPossibleChatContentWidth = math.max(
       0.0,
       screenWidth - (effectiveHorizontalPadding * 2),
@@ -1687,27 +1689,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     final double expandedInputWidth = constrainedChatContentWidth;
     final double targetInputWidth = expandedInputWidth;
-
-    final List<_MobileMessageRenderData> renderMessages =
-        List<_MobileMessageRenderData>.generate(_messages.length, (int index) {
-          final Map<String, String> raw = _messages[index];
-          final String sender = raw['sender'] ?? 'ai';
-          final bool isAiMessage = sender != 'user';
-          final bool isStreamingMessage =
-              _isStreaming && index == _messages.length - 1 && isAiMessage;
-          final String? modelLabel = isAiMessage
-              ? _formatModelInfo(raw['modelId'], raw['provider'])
-              : null;
-          return _MobileMessageRenderData(
-            sender: sender,
-            displayText: (raw['text'] ?? '').trimRight(),
-            reasoning: raw['reasoning'] ?? '',
-            isReasoningStreaming: isStreamingMessage,
-            modelLabel: modelLabel,
-          );
-        });
-
-    final bool hasMessages = renderMessages.isNotEmpty;
+    final bool hasMessages = _messages.isNotEmpty;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -1734,48 +1716,56 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                         radius: const Radius.circular(4),
                         child: ListView.builder(
                         controller: _scrollController,
-                        padding: EdgeInsets.symmetric(
+                        padding: const EdgeInsets.symmetric(
                           horizontal: effectiveHorizontalPadding,
                           vertical: 10,
                         ),
-                        itemCount: renderMessages.length,
+                        itemCount: _messages.length,
                         addAutomaticKeepAlives: false,
                         addRepaintBoundaries: true,
                         cacheExtent: 500.0,
                         itemBuilder: (_, int i) {
-                          final _MobileMessageRenderData data =
-                              renderMessages[i];
+                          // Performance: Build render data on-demand, not all at once
+                          final Map<String, String> raw = _messages[i];
+                          final String sender = raw['sender'] ?? 'ai';
+                          final bool isAiMessage = sender != 'user';
+                          final bool isStreamingMessage =
+                              _isStreaming && i == _messages.length - 1 && isAiMessage;
+                          final String displayText = (raw['text'] ?? '').trimRight();
+                          final String reasoning = raw['reasoning'] ?? '';
+                          final String? modelLabel = isAiMessage
+                              ? _formatModelInfo(raw['modelId'], raw['provider'])
+                              : null;
                           final String? reasoningText =
-                              data.reasoning.trim().isEmpty
-                              ? null
-                              : data.reasoning;
-                          final bool isBeingEdited =
-                              _editingMessageIndex == i;
+                              reasoning.trim().isEmpty ? null : reasoning;
+                          final bool isBeingEdited = _editingMessageIndex == i;
+                          final bool isUser = sender == 'user';
+
                           return RepaintBoundary(
                             child: MessageBubble(
                               key: ValueKey('msg_$i'),
-                              message: data.displayText,
+                              message: displayText,
                               reasoning: reasoningText,
-                              isUser: data.isUser,
+                              isUser: isUser,
                               maxWidth: expandedInputWidth * 0.7,
-                              isReasoningStreaming:
-                                  data.isReasoningStreaming,
-                              modelLabel: data.modelLabel,
+                              isReasoningStreaming: isStreamingMessage,
+                              modelLabel: modelLabel,
                               actions: _buildMessageActionsForIndex(
                                 i,
-                                data,
+                                _MobileMessageRenderData(
+                                  sender: sender,
+                                  displayText: displayText,
+                                  reasoning: reasoning,
+                                  isReasoningStreaming: isStreamingMessage,
+                                  modelLabel: modelLabel,
+                                ),
                               ),
                               isEditing: isBeingEdited,
-                              initialEditText: isBeingEdited
-                                  ? data.displayText
+                              initialEditText: isBeingEdited ? displayText : null,
+                              onSubmitEdit: isBeingEdited && isUser
+                                  ? (newText) => _submitEditedMessage(i, newText)
                                   : null,
-                              onSubmitEdit: isBeingEdited && data.isUser
-                                  ? (newText) =>
-                                        _submitEditedMessage(i, newText)
-                                  : null,
-                              onCancelEdit: isBeingEdited
-                                  ? _cancelEditMessage
-                                  : null,
+                              onCancelEdit: isBeingEdited ? _cancelEditMessage : null,
                             ),
                           );
                         },
@@ -1838,9 +1828,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   }
 
   Widget _buildSearchBar({required bool isCompactMode}) {
-    final Color bg = Theme.of(context).scaffoldBackgroundColor;
-    final Color accent = Theme.of(context).colorScheme.primary;
-    final Color iconFg = Theme.of(context).resolvedIconColor;
+    // Performance: Cache theme lookups
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final Color bg = theme.scaffoldBackgroundColor;
+    final Color accent = colorScheme.primary;
+    final Color iconFg = theme.resolvedIconColor;
 
     final bool hasAttachments = _attachedFiles.isNotEmpty;
 
@@ -1948,6 +1941,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     required Color accent,
     required Color iconFg,
   }) {
+    // Performance: Cache colorScheme lookup
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Row(
       children: [
         // Attachment button
@@ -2013,7 +2009,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               keyboardType: TextInputType.multiline,
               textInputAction: TextInputAction.send,
               style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurface,
+                color: colorScheme.onSurface,
                 fontSize: 14,
                 height: 1.3,
               ),
@@ -2021,7 +2017,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               decoration: InputDecoration(
                 hintText: 'Ask me anything',
                 hintStyle: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                  color: colorScheme.onSurface.withValues(alpha: 0.5),
                   fontSize: 14,
                 ),
                 border: InputBorder.none,
