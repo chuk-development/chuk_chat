@@ -1736,8 +1736,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           children: [
             if (hasMessages)
               AnimatedPositioned(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOutCubic,
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOut,
                 top: 0,
                 bottom: inputAreaTotalHeight + keyboardHeight,
                 left: 0,
@@ -1810,8 +1810,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               ),
             ),
           AnimatedPositioned(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOutCubic,
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOut,
             left: 0,
             right: 0,
             bottom: keyboardHeight,
@@ -2040,15 +2040,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               keyboardType: TextInputType.multiline,
               textInputAction: TextInputAction.send,
               style: TextStyle(
-                color: iconFg,
+                color: Theme.of(context).colorScheme.onSurface,
                 fontSize: 14,
                 height: 1.3,
               ),
               maxLines: 1,
               decoration: InputDecoration(
-                hintText: 'Message...',
+                hintText: 'Ask me anything',
                 hintStyle: TextStyle(
-                  color: iconFg.withValues(alpha: 0.4),
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
                   fontSize: 14,
                 ),
                 border: InputBorder.none,
