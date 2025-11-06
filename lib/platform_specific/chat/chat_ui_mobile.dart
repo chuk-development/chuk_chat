@@ -1784,7 +1784,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                   ),
                 ),
               ),
-            ),
+            )
+            else
+              const Spacer(),
             SafeArea(
               child: Padding(
                 padding: EdgeInsets.only(
