@@ -2,13 +2,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart'; // For defaultTargetPlatform
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
-import 'package:chuk_chat/platform_specific/root_wrapper_desktop.dart';
-import 'package:chuk_chat/platform_specific/root_wrapper_mobile.dart';
+import 'package:chuk_chat/platform_specific/root_wrapper.dart';
 import 'package:chuk_chat/utils/color_extensions.dart'; // Import for hex conversion
 import 'package:chuk_chat/utils/grain_overlay.dart'; // Film grain overlay
 import 'package:chuk_chat/pages/login_page.dart';
@@ -403,44 +401,18 @@ class _ChukChatAppState extends State<ChukChatApp> {
             const Scaffold(body: Center(child: CircularProgressIndicator())),
         signedOutBuilder: (context) => const LoginPage(),
         signedInBuilder: (context) {
-          return Builder(
-            builder: (context) {
-              final double screenWidth = MediaQuery.of(context).size.width;
-              final TargetPlatform platform = defaultTargetPlatform;
-
-              final bool isMobilePhone =
-                  (platform == TargetPlatform.android ||
-                      platform == TargetPlatform.iOS) &&
-                  screenWidth < kTabletBreakpoint;
-
-              if (isMobilePhone) {
-                return RootWrapperMobile(
-                  currentThemeMode: _currentThemeMode,
-                  currentAccentColor: _currentAccentColor,
-                  currentIconFgColor: _currentIconFgColor,
-                  currentBgColor: _currentBgColor,
-                  setThemeMode: _setThemeMode,
-                  setAccentColor: _setAccentColor,
-                  setIconFgColor: _setIconFgColor,
-                  setBgColor: _setBgColor,
-                  grainEnabled: _grainEnabled,
-                  setGrainEnabled: _setGrainEnabled,
-                );
-              }
-
-              return RootWrapperDesktop(
-                currentThemeMode: _currentThemeMode,
-                currentAccentColor: _currentAccentColor,
-                currentIconFgColor: _currentIconFgColor,
-                currentBgColor: _currentBgColor,
-                setThemeMode: _setThemeMode,
-                setAccentColor: _setAccentColor,
-                setIconFgColor: _setIconFgColor,
-                setBgColor: _setBgColor,
-                grainEnabled: _grainEnabled,
-                setGrainEnabled: _setGrainEnabled,
-              );
-            },
+          // RootWrapper automatically selects the correct platform implementation
+          return RootWrapper(
+            currentThemeMode: _currentThemeMode,
+            currentAccentColor: _currentAccentColor,
+            currentIconFgColor: _currentIconFgColor,
+            currentBgColor: _currentBgColor,
+            setThemeMode: _setThemeMode,
+            setAccentColor: _setAccentColor,
+            setIconFgColor: _setIconFgColor,
+            setBgColor: _setBgColor,
+            grainEnabled: _grainEnabled,
+            setGrainEnabled: _setGrainEnabled,
           );
         },
       ),

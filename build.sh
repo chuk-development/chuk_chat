@@ -3,6 +3,23 @@
 # Unified build script for chuk_chat
 # Usage: ./build.sh [target]
 # Targets: linux, deb, rpm, apk, appimage, all
+#
+# TREE-SHAKING OPTIMIZATION:
+# This build script uses Flutter's tree-shaking to automatically remove unused code:
+# - When building for Linux/Desktop: Mobile-specific code (root_wrapper_mobile.dart,
+#   chat_ui_mobile.dart, etc.) is automatically excluded from the final binary
+# - When building for Android/Mobile: Desktop-specific code (root_wrapper_desktop.dart,
+#   chat_ui_desktop.dart, etc.) is automatically excluded from the final APK
+#
+# This is achieved through conditional imports in lib/platform_specific/root_wrapper.dart
+# and deferred loading, which allows Dart's tree-shaker to detect and remove unused code paths.
+#
+# Additional optimizations enabled:
+# - --tree-shake-icons: Removes unused Material/Cupertino icons
+# - --split-debug-info: Separates debug symbols for smaller binaries
+# - --obfuscate: Obfuscates Dart code for better security
+#
+# Result: Smaller binary sizes and faster load times for each platform!
 
 set -e
 
@@ -83,14 +100,22 @@ cleanup() {
 # Build Linux app
 build_linux() {
     local arch=$1
-    print_info "Building Linux app for $arch..."
-    
+    print_info "Building Linux app for $arch (with tree-shaking - mobile code excluded)..."
+
     case $arch in
         "amd64")
-            flutter build linux --release --target-platform linux-x64
+            flutter build linux --release --target-platform linux-x64 \
+                --dart-define=PLATFORM_DESKTOP=true \
+                --tree-shake-icons \
+                --split-debug-info=build/debug-info \
+                --obfuscate
             ;;
         "arm64")
-            if ! flutter build linux --release --target-platform linux-arm64 2>/dev/null; then
+            if ! flutter build linux --release --target-platform linux-arm64 \
+                --dart-define=PLATFORM_DESKTOP=true \
+                --tree-shake-icons \
+                --split-debug-info=build/debug-info \
+                --obfuscate 2>/dev/null; then
                 print_warning "ARM64 build not supported on this system, skipping..."
                 return 1
             fi
@@ -100,8 +125,8 @@ build_linux() {
             exit 1
             ;;
     esac
-    
-    print_success "Linux build completed for $arch"
+
+    print_success "Linux build completed for $arch (mobile code tree-shaken)"
     return 0
 }
 
@@ -340,13 +365,17 @@ EOF
 
 # Build Android APKs with split-per-abi
 build_android() {
-    print_info "Building Android APKs with split-per-abi..."
-    
-    # Build with split-per-abi
-    if flutter build apk --release --split-per-abi; then
+    print_info "Building Android APKs with split-per-abi (with tree-shaking - desktop code excluded)..."
+
+    # Build with split-per-abi and optimizations
+    if flutter build apk --release --split-per-abi \
+        --dart-define=PLATFORM_MOBILE=true \
+        --tree-shake-icons \
+        --split-debug-info=build/android-debug-info \
+        --obfuscate; then
         # Copy APKs to releases directory
         mkdir -p releases/android
-        
+
         # Copy all generated APKs
         for apk in build/app/outputs/flutter-apk/app-*-release.apk; do
             if [ -f "$apk" ]; then
@@ -354,7 +383,7 @@ build_android() {
                 filename=$(basename "$apk")
                 arch=$(echo "$filename" | sed 's/app-\(.*\)-release.apk/\1/')
                 cp "$apk" "releases/android/${PACKAGE_NAME}_${VERSION}_${arch}.apk"
-                print_success "Created ${PACKAGE_NAME}_${VERSION}_${arch}.apk"
+                print_success "Created ${PACKAGE_NAME}_${VERSION}_${arch}.apk (desktop code tree-shaken)"
             fi
         done
     else

@@ -93,8 +93,7 @@ class _MessageBubbleState extends State<MessageBubble> {
   }
 
   void _configureEditController() {
-    final String sourceText =
-        widget.initialEditText ?? widget.message;
+    final String sourceText = widget.initialEditText ?? widget.message;
     _editController
       ..text = sourceText
       ..selection = TextSelection.fromPosition(
@@ -137,8 +136,9 @@ class _MessageBubbleState extends State<MessageBubble> {
     final bool canSubmit = widget.onSubmitEdit != null;
     return Row(
       mainAxisSize: MainAxisSize.min,
-      mainAxisAlignment:
-          alignRight ? MainAxisAlignment.end : MainAxisAlignment.start,
+      mainAxisAlignment: alignRight
+          ? MainAxisAlignment.end
+          : MainAxisAlignment.start,
       children: [
         Tooltip(
           message: 'Resend edited message',
@@ -206,20 +206,15 @@ class _MessageBubbleState extends State<MessageBubble> {
       decoration: decoration,
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment:
-            alignRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment: alignRight
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
         children: [
           if (_hasReasoning) ...[
             _buildReasoningToggle(iconFgColor, alignRight),
             const SizedBox(height: 4),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
-              child: _isReasoningExpanded
-                  ? _buildReasoningBox(iconFgColor, alignRight)
-                  : const SizedBox(key: ValueKey('reasoning-collapsed')),
-            ),
+            if (_isReasoningExpanded)
+              _buildReasoningBox(iconFgColor, alignRight),
           ],
           if (widget.modelLabel != null && widget.modelLabel!.isNotEmpty)
             Padding(
@@ -250,8 +245,9 @@ class _MessageBubbleState extends State<MessageBubble> {
         constraints: BoxConstraints(maxWidth: effectiveMaxWidth),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment:
-              alignRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          crossAxisAlignment: alignRight
+              ? CrossAxisAlignment.end
+              : CrossAxisAlignment.start,
           children: [
             bubbleContent,
             if (widget.isEditing && isUserMessage)
@@ -391,11 +387,7 @@ class _MessageBubbleState extends State<MessageBubble> {
         minLines: 1,
         maxLines: null,
         keyboardType: TextInputType.multiline,
-        style: TextStyle(
-          color: iconFgColor,
-          fontSize: 14,
-          height: 1.35,
-        ),
+        style: TextStyle(color: iconFgColor, fontSize: 14, height: 1.35),
         cursorColor: iconFgColor,
         decoration: InputDecoration(
           isDense: true,

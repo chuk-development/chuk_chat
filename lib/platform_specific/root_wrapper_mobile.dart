@@ -204,108 +204,89 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
         (3 * kFixedLeftPadding) -
         (ChatStorageService.savedChats.isNotEmpty ? kButtonVisualHeight : 0);
 
+    final Widget mainContent = GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: _isSidebarExpanded ? _toggleSidebar : null,
+      onHorizontalDragEnd: (DragEndDetails details) {
+        if (_isSidebarExpanded) return;
+        if (details.primaryVelocity != null && details.primaryVelocity! > 500) {
+          _toggleSidebar();
+        }
+      },
+      child: IgnorePointer(
+        ignoring: _isSidebarExpanded,
+        child: Column(
+          children: [
+            AppBar(
+              backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+              elevation: 0,
+              leading: IconButton(
+                icon: Icon(Icons.menu, color: iconFg, size: 24),
+                onPressed: _toggleSidebar,
+                tooltip: 'Open menu',
+              ),
+              title: SizedBox(
+                width: _isSidebarExpanded ? 0 : titleAvailableWidth,
+                child: ClipRect(
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 4.0),
+                    child: Text(
+                      'chuk.chat',
+                      style: TextStyle(color: iconFg, fontSize: 16),
+                      softWrap: false,
+                      overflow: TextOverflow.clip,
+                    ),
+                  ),
+                ),
+              ),
+              actions: [
+                Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: IconButton(
+                    icon: Icon(Icons.edit_square, color: iconFg),
+                    onPressed: _newChatFromAppBar,
+                    tooltip: 'New Chat',
+                  ),
+                ),
+              ],
+            ),
+            Expanded(
+              child: ChukChatUIMobile(
+                key: _chatUIMobileKey,
+                onToggleSidebar: _toggleSidebar,
+                selectedChatIndex: ChatStorageService.selectedChatIndex,
+                isSidebarExpanded: _isSidebarExpanded,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Stack(
         children: [
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOutCubic,
+          Positioned.fill(
             left: _isSidebarExpanded ? sidebarVisibleWidth : 0,
-            right: _isSidebarExpanded ? -sidebarVisibleWidth : 0,
-            top: 0,
-            bottom: 0,
-            child: GestureDetector(
-              onTap: _isSidebarExpanded ? _toggleSidebar : null,
-              onHorizontalDragEnd: (DragEndDetails details) {
-                // Only handle swipe when sidebar is closed
-                if (_isSidebarExpanded) return;
-
-                // If the swipe velocity is positive (left to right) and significant
-                if (details.primaryVelocity != null &&
-                    details.primaryVelocity! > 500) {
-                  _toggleSidebar();
-                }
-              },
-              child: AbsorbPointer(
-                absorbing: _isSidebarExpanded,
-                child: Column(
-                  children: [
-                    AppBar(
-                      backgroundColor: Theme.of(
-                        context,
-                      ).scaffoldBackgroundColor,
-                      elevation: 0,
-                      leading: IconButton(
-                        icon: Icon(Icons.menu, color: iconFg, size: 24),
-                        onPressed: _toggleSidebar,
-                        tooltip: 'Open menu',
-                      ),
-                      title: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        curve: Curves.easeOutCubic,
-                        width: _isSidebarExpanded ? 0 : titleAvailableWidth,
-                        constraints: BoxConstraints(
-                          minWidth: _isSidebarExpanded
-                              ? 0
-                              : math.min(100, titleAvailableWidth),
-                        ),
-                        child: ClipRect(
-                          child: Padding(
-                            padding: const EdgeInsets.only(left: 4.0),
-                            child: Text(
-                              'chuk.chat',
-                              style: TextStyle(color: iconFg, fontSize: 16),
-                              softWrap: false,
-                              overflow: TextOverflow.clip,
-                            ),
-                          ),
-                        ),
-                      ),
-                      actions: [
-                        // The "New Chat" button is now always visible on mobile
-                        Padding(
-                          padding: const EdgeInsets.only(right: 12),
-                          child: IconButton(
-                            icon: Icon(Icons.edit_square, color: iconFg),
-                            onPressed: _newChatFromAppBar,
-                            tooltip: 'New Chat',
-                          ),
-                        ),
-                      ],
-                    ),
-                    Expanded(
-                      child: ChukChatUIMobile(
-                        key: _chatUIMobileKey,
-                        onToggleSidebar: _toggleSidebar,
-                        selectedChatIndex: ChatStorageService.selectedChatIndex,
-                        isSidebarExpanded: _isSidebarExpanded,
-                      ),
-                    ),
-                  ],
-                ),
+            child: mainContent,
+          ),
+          if (_isSidebarExpanded)
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: sidebarVisibleWidth,
+              child: SidebarMobile(
+                onChatItemTapped: _handleChatTapped,
+                onSettingsTapped: _openSettingsPage,
+                onProjectsTapped: _openProjectsPage,
+                onAssistantsTapped: _openAssistantsPage,
+                onChatDeleted: _handleChatDeleted,
+                selectedChatIndex: ChatStorageService.selectedChatIndex,
+                isCompactMode: true,
               ),
             ),
-          ),
-
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOutCubic,
-            left: _isSidebarExpanded ? 0 : -sidebarVisibleWidth,
-            top: 0,
-            bottom: 0,
-            width: sidebarVisibleWidth,
-            child: SidebarMobile(
-              // UPDATED: Use SidebarMobile
-              onChatItemTapped: _handleChatTapped,
-              onSettingsTapped: _openSettingsPage,
-              onProjectsTapped: _openProjectsPage,
-              onAssistantsTapped: _openAssistantsPage,
-              onChatDeleted: _handleChatDeleted,
-              selectedChatIndex: ChatStorageService.selectedChatIndex,
-              isCompactMode: true,
-            ),
-          ),
         ],
       ),
     );

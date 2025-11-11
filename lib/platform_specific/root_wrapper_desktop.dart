@@ -120,48 +120,42 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       sidebarVisibleWidth,
     );
 
+    final bool showContent = !isCompactMode || !_isSidebarExpanded;
+    final Widget chatArea = ChukChatUIDesktop(
+      key: _chatUIKey,
+      onToggleSidebar: _toggleSidebar,
+      selectedChatIndex: ChatStorageService.selectedChatIndex,
+      isSidebarExpanded: _isSidebarExpanded,
+      isCompactMode: isCompactMode,
+    );
+
     return Scaffold(
       body: Stack(
         children: [
-          Visibility(
-            visible: !isCompactMode || !_isSidebarExpanded,
-            child: AnimatedPositioned(
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOutCubic,
+          if (showContent)
+            Positioned.fill(
               left: (!isCompactMode && _isSidebarExpanded)
                   ? effectiveSidebarWidth
                   : 0,
-              right: 0,
+              child: chatArea,
+            ),
+
+          if (_isSidebarExpanded)
+            Positioned(
+              left: 0,
               top: 0,
               bottom: 0,
-              child: ChukChatUIDesktop(
-                key: _chatUIKey,
-                onToggleSidebar: _toggleSidebar,
+              width: effectiveSidebarWidth,
+              child: SidebarDesktop(
+                onChatItemTapped: _handleChatTapped,
+                onSettingsTapped: _openSettingsPage,
+                onProjectsTapped: _openProjectsPage,
+                onChatDeleted: _handleChatDeleted,
                 selectedChatIndex: ChatStorageService.selectedChatIndex,
-                isSidebarExpanded: _isSidebarExpanded,
                 isCompactMode: isCompactMode,
+                showAssistantsButton: !isCompactMode || _isSidebarExpanded,
               ),
             ),
-          ),
-
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOutCubic,
-            left: _isSidebarExpanded ? 0 : -effectiveSidebarWidth,
-            top: 0,
-            bottom: 0,
-            width: effectiveSidebarWidth,
-            child: SidebarDesktop(
-              // Use the desktop-specific sidebar
-              onChatItemTapped: _handleChatTapped,
-              onSettingsTapped: _openSettingsPage,
-              onProjectsTapped: _openProjectsPage,
-              onChatDeleted: _handleChatDeleted,
-              selectedChatIndex: ChatStorageService.selectedChatIndex,
-              isCompactMode: isCompactMode,
-              showAssistantsButton: !isCompactMode || _isSidebarExpanded,
-            ),
-          ),
 
           // Layer 3: Hamburger-Menü
           Positioned(
@@ -188,25 +182,21 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      curve: Curves.easeOut,
-                      width: _isSidebarExpanded ? 100 : 0,
-                      constraints: BoxConstraints(
-                        minWidth: _isSidebarExpanded ? 100 : 0,
-                      ),
-                      child: ClipRect(
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 10.0),
-                          child: Text(
-                            'chuk.chat',
-                            style: TextStyle(color: iconFg, fontSize: 16),
-                            softWrap: false,
-                            overflow: TextOverflow.clip,
+                    if (_isSidebarExpanded)
+                      SizedBox(
+                        width: 100,
+                        child: ClipRect(
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: 10.0),
+                            child: Text(
+                              'chuk.chat',
+                              style: TextStyle(color: iconFg, fontSize: 16),
+                              softWrap: false,
+                              overflow: TextOverflow.clip,
+                            ),
                           ),
                         ),
                       ),
-                    ),
                   ],
                 ),
               ),

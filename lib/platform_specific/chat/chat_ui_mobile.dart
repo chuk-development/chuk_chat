@@ -61,8 +61,7 @@ class ChukChatUIMobile extends StatefulWidget {
   State<ChukChatUIMobile> createState() => ChukChatUIMobileState();
 }
 
-class ChukChatUIMobileState extends State<ChukChatUIMobile>
-    with SingleTickerProviderStateMixin {
+class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   final TextEditingController _controller = TextEditingController();
   final List<Map<String, String>> _messages = [];
   String? _activeChatId;
@@ -79,9 +78,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   String? _selectedProviderSlug;
   String? _systemPrompt;
   late final VoidCallback _modelSelectionListener;
-
-  late AnimationController _animCtrl;
-  late Animation<double> _anim;
 
   bool _isMicActive = false;
   final List<double> _audioLevels = List<double>.filled(
@@ -214,11 +210,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   @override
   void initState() {
     super.initState();
-    _animCtrl = AnimationController(
-      duration: const Duration(milliseconds: 200),
-      vsync: this,
-    );
-    _anim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic);
     _chatApiService = ChatApiService(
       onUploadStatusUpdate: _handleFileUploadUpdate,
     );
@@ -885,7 +876,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     _composerScrollController.dispose();
     _textFieldFocusNode.dispose();
     _rawKeyboardListenerFocusNode.dispose();
-    _animCtrl.dispose();
     unawaited(_stopMicRecording());
     _amplitudeSub?.cancel();
     unawaited(_audioRecorder.dispose());
@@ -898,7 +888,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   void _loadChatFromIndex(int index) {
     if (index == -1) {
       _messages.clear();
-      _animCtrl.reset();
       _attachedFiles.clear();
       _activeChatId = null;
     } else if (index >= 0 && index < ChatStorageService.savedChats.length) {
@@ -924,11 +913,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
             return map;
           }),
         );
-      if (_messages.isNotEmpty) {
-        _animCtrl.forward();
-      } else {
-        _animCtrl.reset();
-      }
     } else {
       _activeChatId = null;
     }
@@ -943,7 +927,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     await _persistChat(waitForCompletion: true);
     setState(() {
       _messages.clear();
-      _animCtrl.reset();
       _activeChatId = null;
       ChatStorageService.selectedChatIndex = -1;
       _isMicActive = false;
@@ -1123,8 +1106,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     if (!hasText && !hasAttachments) return;
 
-    final bool firstMessageInChat = _messages.isEmpty;
-
     String displayMessageText = originalUserInput;
     String aiPromptContent = originalUserInput;
 
@@ -1249,7 +1230,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     });
     _textFieldFocusNode.requestFocus();
 
-    if (firstMessageInChat) _animCtrl.forward();
     _scrollChatToBottom();
 
     _persistChat();
@@ -1706,9 +1686,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     return Scaffold(
       backgroundColor: Colors.transparent,
       resizeToAvoidBottomInset: false,
-      body: AnimatedPadding(
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
+      body: Padding(
         padding: EdgeInsets.only(bottom: keyboardInset),
         child: GestureDetector(
           behavior: HitTestBehavior.translucent,
@@ -1720,99 +1698,89 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
             children: [
               Expanded(
                 child: hasMessages
-                    ? FadeTransition(
-                        opacity: _anim,
-                        child: Align(
-                          alignment: Alignment.center,
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 220),
-                            curve: Curves.easeOutCubic,
-                            constraints: BoxConstraints(
-                              maxWidth: expandedInputWidth,
-                            ),
-                            child: Scrollbar(
+                    ? Align(
+                        alignment: Alignment.center,
+                        child: Container(
+                          constraints: BoxConstraints(
+                            maxWidth: expandedInputWidth,
+                          ),
+                          child: Scrollbar(
+                            controller: _scrollController,
+                            thumbVisibility: true,
+                            thickness: 8.0,
+                            radius: const Radius.circular(4),
+                            child: ListView.builder(
                               controller: _scrollController,
-                              thumbVisibility: true,
-                              thickness: 8.0,
-                              radius: const Radius.circular(4),
-                              child: ListView.builder(
-                                controller: _scrollController,
-                                padding: listPadding,
-                                itemCount: _messages.length,
-                                addAutomaticKeepAlives: false,
-                                addRepaintBoundaries: true,
-                                cacheExtent: 500.0,
-                                itemBuilder: (_, int i) {
-                                  // Performance: Build render data on-demand, not all at once
-                                  final Map<String, String> raw = _messages[i];
-                                  final String sender = raw['sender'] ?? 'ai';
-                                  final bool isAiMessage = sender != 'user';
-                                  final bool isStreamingMessage =
-                                      _isStreaming &&
-                                      i == _messages.length - 1 &&
-                                      isAiMessage;
-                                  final String displayText = (raw['text'] ?? '')
-                                      .trimRight();
-                                  final String reasoning =
-                                      raw['reasoning'] ?? '';
-                                  final String? modelLabel = isAiMessage
-                                      ? _formatModelInfo(
-                                          raw['modelId'],
-                                          raw['provider'],
-                                        )
-                                      : null;
-                                  final String? reasoningText =
-                                      reasoning.trim().isEmpty
-                                      ? null
-                                      : reasoning;
-                                  final bool isBeingEdited =
-                                      _editingMessageIndex == i;
-                                  final bool isUser = sender == 'user';
+                              padding: listPadding,
+                              itemCount: _messages.length,
+                              addAutomaticKeepAlives: false,
+                              addRepaintBoundaries: true,
+                              cacheExtent: 500.0,
+                              itemBuilder: (_, int i) {
+                                // Performance: Build render data on-demand, not all at once
+                                final Map<String, String> raw = _messages[i];
+                                final String sender = raw['sender'] ?? 'ai';
+                                final bool isAiMessage = sender != 'user';
+                                final bool isStreamingMessage =
+                                    _isStreaming &&
+                                    i == _messages.length - 1 &&
+                                    isAiMessage;
+                                final String displayText = (raw['text'] ?? '')
+                                    .trimRight();
+                                final String reasoning = raw['reasoning'] ?? '';
+                                final String? modelLabel = isAiMessage
+                                    ? _formatModelInfo(
+                                        raw['modelId'],
+                                        raw['provider'],
+                                      )
+                                    : null;
+                                final String? reasoningText =
+                                    reasoning.trim().isEmpty ? null : reasoning;
+                                final bool isBeingEdited =
+                                    _editingMessageIndex == i;
+                                final bool isUser = sender == 'user';
 
-                                  return RepaintBoundary(
-                                    child: MessageBubble(
-                                      key: ValueKey('msg_$i'),
-                                      message: displayText,
-                                      reasoning: reasoningText,
-                                      isUser: isUser,
-                                      maxWidth: expandedInputWidth * 0.7,
-                                      isReasoningStreaming: isStreamingMessage,
-                                      modelLabel: modelLabel,
-                                      actions: _buildMessageActionsForIndex(
-                                        i,
-                                        _MobileMessageRenderData(
-                                          sender: sender,
-                                          displayText: displayText,
-                                          reasoning: reasoning,
-                                          isReasoningStreaming:
-                                              isStreamingMessage,
-                                          modelLabel: modelLabel,
-                                        ),
+                                return RepaintBoundary(
+                                  child: MessageBubble(
+                                    key: ValueKey('msg_$i'),
+                                    message: displayText,
+                                    reasoning: reasoningText,
+                                    isUser: isUser,
+                                    maxWidth: expandedInputWidth * 0.7,
+                                    isReasoningStreaming: isStreamingMessage,
+                                    modelLabel: modelLabel,
+                                    actions: _buildMessageActionsForIndex(
+                                      i,
+                                      _MobileMessageRenderData(
+                                        sender: sender,
+                                        displayText: displayText,
+                                        reasoning: reasoning,
+                                        isReasoningStreaming:
+                                            isStreamingMessage,
+                                        modelLabel: modelLabel,
                                       ),
-                                      isEditing: isBeingEdited,
-                                      initialEditText: isBeingEdited
-                                          ? displayText
-                                          : null,
-                                      onSubmitEdit: isBeingEdited && isUser
-                                          ? (newText) =>
-                                                _submitEditedMessage(i, newText)
-                                          : null,
-                                      onCancelEdit: isBeingEdited
-                                          ? _cancelEditMessage
-                                          : null,
                                     ),
-                                  );
-                                },
-                              ),
+                                    isEditing: isBeingEdited,
+                                    initialEditText: isBeingEdited
+                                        ? displayText
+                                        : null,
+                                    onSubmitEdit: isBeingEdited && isUser
+                                        ? (newText) =>
+                                              _submitEditedMessage(i, newText)
+                                        : null,
+                                    onCancelEdit: isBeingEdited
+                                        ? _cancelEditMessage
+                                        : null,
+                                  ),
+                                );
+                              },
                             ),
                           ),
                         ),
                       )
                     : const SizedBox.expand(),
               ),
-              AnimatedPadding(
-                duration: const Duration(milliseconds: 220),
-                curve: Curves.easeOutCubic,
+              Padding(
                 padding: EdgeInsets.only(
                   left: effectiveHorizontalPadding,
                   right: effectiveHorizontalPadding,
@@ -1821,9 +1789,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 child: SafeArea(
                   top: false,
                   child: Center(
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 220),
-                      curve: Curves.easeOutCubic,
+                    child: SizedBox(
                       width: targetInputWidth,
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -1873,11 +1839,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     final bool hasAttachments = _attachedFiles.isNotEmpty;
 
-    // Compact single-line design
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
+    final double composerHeight = _isMicActive ? 56 : 48;
+
+    return Container(
       width: double.infinity,
-      height: _isMicActive ? 56 : 48,
+      height: composerHeight,
       decoration: BoxDecoration(
         color: bg.withValues(alpha: 0.98),
         borderRadius: BorderRadius.circular(24),
@@ -1932,8 +1898,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 return Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 1),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 90),
+                    child: Container(
                       height: barHeight,
                       decoration: BoxDecoration(
                         color: Colors.red.withValues(alpha: 0.8),

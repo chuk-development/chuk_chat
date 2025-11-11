@@ -18,15 +18,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Development
 ```bash
-# Run the app
+# Run the app (auto-detects platform)
 flutter run
 
 # Run with specific device
 flutter run -d linux
 flutter run -d android
 
-# Run in debug mode on emulator
-flutter run
+# Run with platform-specific optimization (smaller binary)
+flutter run -d linux --dart-define=PLATFORM_DESKTOP=true
+flutter run -d android --dart-define=PLATFORM_MOBILE=true
 
 # Clean build artifacts
 flutter clean
@@ -52,19 +53,25 @@ flutter test --coverage
 
 ### Release Builds
 
-All release builds are handled by the unified `build.sh` script:
+All release builds are handled by the unified `build.sh` script with **automatic tree-shaking optimization**:
 
 ```bash
-# Build all packages (Linux + Android)
+# Build all packages (Linux + Android) - OPTIMIZED
 ./build.sh all
 
-# Build specific targets
-./build.sh linux      # All Linux packages (DEB, RPM, AppImage)
-./build.sh deb        # DEB packages only (amd64, arm64)
-./build.sh rpm        # RPM packages only (amd64, arm64)
-./build.sh appimage   # AppImage packages only (amd64, arm64)
-./build.sh apk        # Android APKs with --split-per-abi
+# Build specific targets - OPTIMIZED
+./build.sh linux      # All Linux packages (DEB, RPM, AppImage) - Mobile code excluded
+./build.sh deb        # DEB packages only (amd64, arm64) - Mobile code excluded
+./build.sh rpm        # RPM packages only (amd64, arm64) - Mobile code excluded
+./build.sh appimage   # AppImage packages only (amd64, arm64) - Mobile code excluded
+./build.sh apk        # Android APKs with --split-per-abi - Desktop code excluded
 ```
+
+**Tree-Shaking Optimization:**
+- Linux builds: Mobile-specific code (root_wrapper_mobile.dart, chat_ui_mobile.dart, etc.) is automatically excluded
+- Android builds: Desktop-specific code (root_wrapper_desktop.dart, chat_ui_desktop.dart, etc.) is automatically excluded
+- Result: Smaller binaries and faster load times!
+- See TREE_SHAKING.md for detailed documentation
 
 **Output Location**: All built packages are placed in `releases/linux/` and `releases/android/`
 
@@ -73,24 +80,54 @@ All release builds are handled by the unified `build.sh` script:
 - For Android: Android SDK, NDK 26.3.11579264+, compileSdkVersion 36, minSdkVersion 24
 - See BUILD.md for complete setup instructions
 
+**Manual Optimized Builds:**
+```bash
+# Linux with tree-shaking (mobile code excluded)
+flutter build linux --dart-define=PLATFORM_DESKTOP=true --tree-shake-icons
+
+# Android with tree-shaking (desktop code excluded)
+flutter build apk --dart-define=PLATFORM_MOBILE=true --tree-shake-icons --split-per-abi
+```
+
 ## Architecture
 
 ### Platform Abstraction Layer
 
-The app uses a **platform-specific architecture** to adapt UI and behavior across desktop and mobile:
+The app uses a **platform-specific architecture with tree-shaking optimization** to adapt UI and behavior across desktop and mobile:
 
-- **Entry Point**: `lib/main.dart` - Determines platform and selects appropriate root wrapper
-- **Platform Detection**: Uses `defaultTargetPlatform` and screen width to differentiate mobile from desktop/tablet
-- **Root Wrappers**:
+- **Entry Point**: `lib/main.dart` - Uses unified `RootWrapper` for all platforms
+- **Platform Configuration**: `lib/platform_config.dart` - Compile-time constants for tree-shaking
+  - `kPlatformMobile` - Set via `--dart-define=PLATFORM_MOBILE=true`
+  - `kPlatformDesktop` - Set via `--dart-define=PLATFORM_DESKTOP=true`
+  - `kAutoDetectPlatform` - Runtime detection when not explicitly set
+
+- **Root Wrappers** (Conditional Imports with Tree-Shaking):
+  - `lib/platform_specific/root_wrapper.dart` - Export with conditional imports
+  - `lib/platform_specific/root_wrapper_io.dart` - Platform detection with tree-shaking
   - `lib/platform_specific/root_wrapper_desktop.dart` - Desktop layout orchestrator
   - `lib/platform_specific/root_wrapper_mobile.dart` - Mobile layout orchestrator
+  - `lib/platform_specific/root_wrapper_stub.dart` - Fallback (unused)
+
 - **UI Components**:
   - `lib/platform_specific/chat/chat_ui_desktop.dart` - Desktop chat interface
   - `lib/platform_specific/chat/chat_ui_mobile.dart` - Mobile chat interface
   - `lib/platform_specific/sidebar_desktop.dart` - Desktop navigation sidebar
   - `lib/platform_specific/sidebar_mobile.dart` - Mobile navigation drawer
 
-**Key Breakpoint**: `kTabletBreakpoint = 800.0` - Screens below this width on mobile platforms use mobile UI
+**Tree-Shaking Flow:**
+```
+Desktop Build (--dart-define=PLATFORM_DESKTOP=true):
+  main.dart → RootWrapper → root_wrapper_io.dart
+    → [kPlatformDesktop=true] → RootWrapperDesktop ✓
+    → [kPlatformMobile=false] → RootWrapperMobile ✗ (removed by tree-shaker)
+
+Mobile Build (--dart-define=PLATFORM_MOBILE=true):
+  main.dart → RootWrapper → root_wrapper_io.dart
+    → [kPlatformMobile=true] → RootWrapperMobile ✓
+    → [kPlatformDesktop=false] → RootWrapperDesktop ✗ (removed by tree-shaker)
+```
+
+**Key Breakpoint**: `kTabletBreakpoint = 800.0` - Screens below this width on mobile platforms use mobile UI (in auto-detect mode)
 
 ### Core Services Architecture
 
