@@ -56,7 +56,10 @@ flutter test --coverage
 All release builds are handled by the unified `build.sh` script with **automatic tree-shaking optimization**:
 
 ```bash
-# Build all packages (Linux + Android) - OPTIMIZED
+# FAST: Build single APK for arm64-v8a only (recommended for development/testing - ~30 seconds)
+flutter build apk --dart-define=PLATFORM_MOBILE=true --tree-shake-icons --target-platform android-arm64
+
+# Build all packages (Linux + Android) - OPTIMIZED (~2 minutes)
 ./build.sh all
 
 # Build specific targets - OPTIMIZED
@@ -64,8 +67,10 @@ All release builds are handled by the unified `build.sh` script with **automatic
 ./build.sh deb        # DEB packages only (amd64, arm64) - Mobile code excluded
 ./build.sh rpm        # RPM packages only (amd64, arm64) - Mobile code excluded
 ./build.sh appimage   # AppImage packages only (amd64, arm64) - Mobile code excluded
-./build.sh apk        # Android APKs with --split-per-abi - Desktop code excluded
+./build.sh apk        # Android APKs with --split-per-abi (all architectures) - Desktop code excluded (~2 minutes)
 ```
+
+**IMPORTANT**: For iterative development and testing, use the fast single-architecture build command above. Only use `./build.sh apk` for final releases.
 
 **Tree-Shaking Optimization:**
 - Linux builds: Mobile-specific code (root_wrapper_mobile.dart, chat_ui_mobile.dart, etc.) is automatically excluded

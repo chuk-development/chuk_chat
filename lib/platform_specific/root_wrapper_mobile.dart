@@ -195,15 +195,16 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     // Hide keyboard when switching chats
     FocusScope.of(context).unfocus();
 
-    // Update the chat selection FIRST before closing sidebar
-    setState(() {
-      ChatStorageService.selectedChatIndex = index;
-    });
+    // Update chat index immediately
+    ChatStorageService.selectedChatIndex = index;
 
-    // Close the sidebar after state is updated
-    if (_isSidebarExpanded) {
-      _toggleSidebar();
-    }
+    // Close the sidebar and trigger rebuild
+    setState(() {
+      if (_isSidebarExpanded) {
+        _isSidebarExpanded = false;
+        _sidebarAnimController.reverse();
+      }
+    });
   }
 
   Future<void> _handleChatDeleted(String _) async {
@@ -292,17 +293,16 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: AnimatedBuilder(
         animation: _sidebarAnimation,
-        child: mainContent, // Cache mainContent to avoid rebuilding during animation
         builder: (context, child) {
           final animValue = _sidebarAnimation.value;
           final sidebarOffset = -sidebarVisibleWidth + (sidebarVisibleWidth * animValue);
 
           return Stack(
             children: [
-              // Main content that slides right (using cached child)
+              // Main content that slides right (rebuilds on chat change)
               Positioned.fill(
                 left: sidebarVisibleWidth * animValue,
-                child: child!, // Use the cached child
+                child: mainContent,
               ),
               // Sidebar that slides in from left
               Positioned(

@@ -227,7 +227,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _textFieldFocusNode.requestFocus();
+      // Only request focus if sidebar is closed (on initial load)
+      if (!widget.isSidebarExpanded) {
+        _textFieldFocusNode.requestFocus();
+      }
     });
     _loadChatFromIndex(widget.selectedChatIndex);
     unawaited(_loadProviderSlugForModel(_selectedModelId));
@@ -934,7 +937,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       _isMicActive = false;
     });
     _scrollChatToBottom();
-    _textFieldFocusNode.requestFocus();
+    // Only request focus if sidebar is closed (don't steal focus from sidebar)
+    if (!widget.isSidebarExpanded) {
+      _textFieldFocusNode.requestFocus();
+    }
   }
 
   void newChat() async {
@@ -947,7 +953,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       _attachedFiles.clear();
     });
     _scrollChatToBottom();
-    _textFieldFocusNode.requestFocus();
+    // Only request focus if sidebar is closed
+    if (!widget.isSidebarExpanded) {
+      _textFieldFocusNode.requestFocus();
+    }
     await ChatStorageService.loadSavedChatsForSidebar();
   }
 
@@ -1628,14 +1637,19 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           ? await ChatStorageService.saveChat(messagesCopy)
           : await ChatStorageService.updateChat(chatId, messagesCopy);
       if (!mounted || stored == null) return;
-      setState(() {
-        _activeChatId = stored.id;
-      });
-      final index = ChatStorageService.savedChats.indexWhere(
-        (chat) => chat.id == stored.id,
-      );
-      if (index != -1) {
-        ChatStorageService.selectedChatIndex = index;
+
+      // Only update selectedChatIndex if this is still the active chat
+      // (prevents overwriting when user switches to a different chat)
+      if (_activeChatId == stored.id) {
+        setState(() {
+          _activeChatId = stored.id;
+        });
+        final index = ChatStorageService.savedChats.indexWhere(
+          (chat) => chat.id == stored.id,
+        );
+        if (index != -1) {
+          ChatStorageService.selectedChatIndex = index;
+        }
       }
     } catch (error) {
       if (!mounted) return;
@@ -1932,8 +1946,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
               // Show recording visualization when mic is active
               if (_isMicActive)
                 Positioned.fill(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: Row(
                       children: [
                         // Recording indicator
@@ -1945,31 +1959,33 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                             shape: BoxShape.circle,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        // Compact visualizer
+                        const SizedBox(width: 6),
+                        // Compact visualizer (fewer bars to prevent overflow)
                         Expanded(
-                          child: SizedBox(
-                            height: 20,
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: List.generate(15, (index) {
-                                final double level = index < _audioLevels.length
-                                    ? _audioLevels[index]
-                                    : 0.0;
-                                final double barHeight = (level * 16).clamp(2.0, 16.0);
-                                return Expanded(
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 1),
-                                    child: Container(
-                                      height: barHeight,
-                                      decoration: BoxDecoration(
-                                        color: Colors.red.withValues(alpha: 0.8),
-                                        borderRadius: BorderRadius.circular(2),
+                          child: ClipRect(
+                            child: SizedBox(
+                              height: 20,
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: List.generate(10, (index) {
+                                  final double level = index < _audioLevels.length
+                                      ? _audioLevels[index]
+                                      : 0.0;
+                                  final double barHeight = (level * 16).clamp(2.0, 16.0);
+                                  return Expanded(
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 0.5),
+                                      child: Container(
+                                        height: barHeight,
+                                        decoration: BoxDecoration(
+                                          color: Colors.red.withValues(alpha: 0.8),
+                                          borderRadius: BorderRadius.circular(1.5),
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                );
-                              }),
+                                  );
+                                }),
+                              ),
                             ),
                           ),
                         ),
