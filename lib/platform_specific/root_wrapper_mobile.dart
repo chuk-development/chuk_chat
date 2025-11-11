@@ -47,14 +47,27 @@ class RootWrapperMobile extends StatefulWidget {
 }
 
 class _RootWrapperMobileState extends State<RootWrapperMobile>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   bool _isSidebarExpanded = false;
   final GlobalKey<ChukChatUIMobileState> _chatUIMobileKey = GlobalKey();
+  late AnimationController _sidebarAnimController;
+  late Animation<double> _sidebarAnimation;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+
+    // Initialize smooth sidebar animation
+    _sidebarAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250), // Smooth 250ms animation
+    );
+    _sidebarAnimation = CurvedAnimation(
+      parent: _sidebarAnimController,
+      curve: Curves.easeInOut, // Smooth easing curve
+    );
+
     // Don't block UI startup - check permission after first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _ensureMicrophonePermission();
@@ -63,6 +76,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
 
   @override
   void dispose() {
+    _sidebarAnimController.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -130,6 +144,11 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     }
     setState(() {
       _isSidebarExpanded = !_isSidebarExpanded;
+      if (_isSidebarExpanded) {
+        _sidebarAnimController.forward(); // Animate in
+      } else {
+        _sidebarAnimController.reverse(); // Animate out
+      }
     });
   }
 
@@ -175,10 +194,16 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
   void _handleChatTapped(int index) {
     // Hide keyboard when switching chats
     FocusScope.of(context).unfocus();
+
+    // Update the chat selection FIRST before closing sidebar
     setState(() {
       ChatStorageService.selectedChatIndex = index;
     });
-    if (_isSidebarExpanded) _toggleSidebar();
+
+    // Close the sidebar after state is updated
+    if (_isSidebarExpanded) {
+      _toggleSidebar();
+    }
   }
 
   Future<void> _handleChatDeleted(String _) async {
@@ -265,29 +290,42 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: Stack(
-        children: [
-          Positioned.fill(
-            left: _isSidebarExpanded ? sidebarVisibleWidth : 0,
-            child: mainContent,
-          ),
-          if (_isSidebarExpanded)
-            Positioned(
-              left: 0,
-              top: 0,
-              bottom: 0,
-              width: sidebarVisibleWidth,
-              child: SidebarMobile(
-                onChatItemTapped: _handleChatTapped,
-                onSettingsTapped: _openSettingsPage,
-                onProjectsTapped: _openProjectsPage,
-                onAssistantsTapped: _openAssistantsPage,
-                onChatDeleted: _handleChatDeleted,
-                selectedChatIndex: ChatStorageService.selectedChatIndex,
-                isCompactMode: true,
+      body: AnimatedBuilder(
+        animation: _sidebarAnimation,
+        child: mainContent, // Cache mainContent to avoid rebuilding during animation
+        builder: (context, child) {
+          final animValue = _sidebarAnimation.value;
+          final sidebarOffset = -sidebarVisibleWidth + (sidebarVisibleWidth * animValue);
+
+          return Stack(
+            children: [
+              // Main content that slides right (using cached child)
+              Positioned.fill(
+                left: sidebarVisibleWidth * animValue,
+                child: child!, // Use the cached child
               ),
-            ),
-        ],
+              // Sidebar that slides in from left
+              Positioned(
+                left: sidebarOffset,
+                top: 0,
+                bottom: 0,
+                width: sidebarVisibleWidth,
+                child: Opacity(
+                  opacity: animValue,
+                  child: SidebarMobile(
+                    onChatItemTapped: _handleChatTapped,
+                    onSettingsTapped: _openSettingsPage,
+                    onProjectsTapped: _openProjectsPage,
+                    onAssistantsTapped: _openAssistantsPage,
+                    onChatDeleted: _handleChatDeleted,
+                    selectedChatIndex: ChatStorageService.selectedChatIndex,
+                    isCompactMode: true,
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

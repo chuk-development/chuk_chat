@@ -4,7 +4,7 @@ allprojects {
         mavenCentral()
     }
     
-    // Force Java 17 for all projects to avoid obsolete Java 8 warnings
+    // Force Java 17 and Kotlin JVM target 17 for all projects to avoid compatibility issues
     afterEvaluate {
         if (project.hasProperty("android")) {
             val android = project.extensions.findByName("android")
@@ -13,6 +13,12 @@ allprojects {
                     sourceCompatibility = JavaVersion.VERSION_17
                     targetCompatibility = JavaVersion.VERSION_17
                 }
+            }
+        }
+        // Also configure Kotlin JVM target
+        tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
+            kotlinOptions {
+                jvmTarget = "17"
             }
         }
     }
