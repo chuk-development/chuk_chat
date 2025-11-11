@@ -71,6 +71,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   final FocusNode _rawKeyboardListenerFocusNode = FocusNode();
   final Uuid _uuid = Uuid();
   final ImagePicker _imagePicker = ImagePicker();
+  bool _lastTextWasEmpty = true; // Track text state for optimization
 
   late ChatApiService _chatApiService;
   final List<AttachedFile> _attachedFiles = [];
@@ -213,6 +214,18 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     _chatApiService = ChatApiService(
       onUploadStatusUpdate: _handleFileUploadUpdate,
     );
+
+    // Add listener to update UI instantly when text changes (optimized)
+    _controller.addListener(() {
+      final bool currentTextIsEmpty = _controller.text.trim().isEmpty;
+      // Only rebuild if empty state changed (for performance)
+      if (currentTextIsEmpty != _lastTextWasEmpty) {
+        setState(() {
+          _lastTextWasEmpty = currentTextIsEmpty;
+        });
+      }
+    });
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _textFieldFocusNode.requestFocus();
     });
