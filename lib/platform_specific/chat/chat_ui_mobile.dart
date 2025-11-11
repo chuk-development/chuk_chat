@@ -1858,21 +1858,23 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       width: double.infinity,
       height: composerHeight,
       decoration: BoxDecoration(
-        color: bg.withValues(alpha: 0.98),
+        color: bg, // Pure background color, no transparency difference
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: _isMicActive
-              ? Colors.red.withValues(alpha: 0.3)
-              : iconFg.withValues(alpha: 0.15),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: _isMicActive
+            ? Border.all(
+                color: Colors.red.withValues(alpha: 0.3),
+                width: 1,
+              )
+            : null, // No border when not recording
+        boxShadow: _isMicActive
+            ? [
+                BoxShadow(
+                  color: Colors.red.withValues(alpha: 0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ]
+            : null, // No shadow when not recording
       ),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       child: _isMicActive
