@@ -55,12 +55,16 @@ class MessageBubble extends StatefulWidget {
 
 class _MessageBubbleState extends State<MessageBubble> {
   bool _isReasoningExpanded = false;
+  bool _isModelInfoExpanded = false;
   final TextEditingController _editController = TextEditingController();
   final FocusNode _editFocusNode = FocusNode();
   bool _shouldFocusEditField = false;
 
   bool get _hasReasoning =>
       widget.reasoning != null && widget.reasoning!.trim().isNotEmpty;
+
+  bool get _hasModelInfo =>
+      widget.modelLabel != null && widget.modelLabel!.isNotEmpty;
 
   @override
   void initState() {
@@ -216,19 +220,12 @@ class _MessageBubbleState extends State<MessageBubble> {
             if (_isReasoningExpanded)
               _buildReasoningBox(iconFgColor, alignRight),
           ],
-          if (widget.modelLabel != null && widget.modelLabel!.isNotEmpty)
-            Padding(
-              padding: EdgeInsets.only(bottom: isUserMessage ? 4 : 8),
-              child: Text(
-                widget.modelLabel!,
-                style: TextStyle(
-                  color: iconFgColor.withValues(alpha: 0.6),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-                textAlign: alignRight ? TextAlign.right : TextAlign.left,
-              ),
-            ),
+          if (_hasModelInfo) ...[
+            _buildModelInfoToggle(iconFgColor, alignRight),
+            const SizedBox(height: 4),
+            if (_isModelInfoExpanded)
+              _buildModelInfoBox(iconFgColor, alignRight),
+          ],
           _buildMessageBody(
             iconFgColor: iconFgColor,
             accentColor: accentColor,
@@ -366,6 +363,89 @@ class _MessageBubbleState extends State<MessageBubble> {
             style: TextStyle(
               color: iconFgColor.withValues(alpha: 0.85),
               height: 1.35,
+            ),
+            textAlign: alignRight ? TextAlign.right : TextAlign.left,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModelInfoToggle(Color iconFgColor, bool alignRight) {
+    final bool expanded = _isModelInfoExpanded;
+    final IconData icon = expanded ? Icons.expand_less : Icons.expand_more;
+    final String label = expanded ? 'Hide model' : 'Show model';
+
+    return InkWell(
+      onTap: () {
+        setState(() => _isModelInfoExpanded = !expanded);
+      },
+      child: Row(
+        mainAxisAlignment: alignRight
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: iconFgColor.withValues(alpha: 0.6)),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: iconFgColor.withValues(alpha: 0.7),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModelInfoBox(Color iconFgColor, bool alignRight) {
+    final Color containerColor = iconFgColor.withValues(alpha: 0.08);
+    return Container(
+      key: const ValueKey('model-info-expanded'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: containerColor,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: iconFgColor.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: alignRight
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: alignRight
+                ? MainAxisAlignment.end
+                : MainAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.smart_toy_outlined,
+                size: 16,
+                color: iconFgColor.withValues(alpha: 0.7),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Model',
+                style: TextStyle(
+                  color: iconFgColor.withValues(alpha: 0.9),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SelectableText(
+            widget.modelLabel!,
+            style: TextStyle(
+              color: iconFgColor.withValues(alpha: 0.85),
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
             ),
             textAlign: alignRight ? TextAlign.right : TextAlign.left,
           ),
