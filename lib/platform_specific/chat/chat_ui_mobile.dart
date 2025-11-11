@@ -464,8 +464,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         path: path,
       );
 
+      // More responsive audio visualization (30ms instead of 80ms)
       _amplitudeSub = _audioRecorder
-          .onAmplitudeChanged(const Duration(milliseconds: 80))
+          .onAmplitudeChanged(const Duration(milliseconds: 30))
           .listen(_handleAmplitudeSample);
 
       return true;
@@ -1875,71 +1876,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         ],
       ),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      child: _isMicActive
-          ? _buildRecordingRow(accent: accent, iconFg: iconFg)
-          : _buildNormalRow(
-              hasAttachments: hasAttachments,
-              isCompactMode: isCompactMode,
-              accent: accent,
-              iconFg: iconFg,
-            ),
-    );
-  }
-
-  Widget _buildRecordingRow({required Color accent, required Color iconFg}) {
-    return Row(
-      children: [
-        const SizedBox(width: 4),
-        // Recording indicator
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 12),
-        // Compact visualizer
-        Expanded(
-          child: SizedBox(
-            height: 24,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: List.generate(20, (index) {
-                final double level = index < _audioLevels.length
-                    ? _audioLevels[index]
-                    : 0.0;
-                final double barHeight = (level * 20).clamp(2.0, 20.0);
-                return Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 1),
-                    child: Container(
-                      height: barHeight,
-                      decoration: BoxDecoration(
-                        color: Colors.red.withValues(alpha: 0.8),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                );
-              }),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        // Stop button
-        _buildTinyActionBtn(
-          icon: Icons.stop_rounded,
-          onTap: _handleMicTap,
-          color: Colors.red,
-        ),
-        const SizedBox(width: 4),
-        // Send audio button
-        _buildTinyActionBtn(
-          icon: Icons.send_rounded,
-          onTap: _handleAudioSend,
-          color: accent,
-        ),
-        const SizedBox(width: 4),
-      ],
+      child: _buildNormalRow(
+        hasAttachments: hasAttachments,
+        isCompactMode: isCompactMode,
+        accent: accent,
+        iconFg: iconFg,
+      ),
     );
   }
 
@@ -1983,9 +1925,60 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           ),
         ),
         const SizedBox(width: 4),
-        // Text input
+        // Text input (with recording visualization overlay)
         Expanded(
-          child: KeyboardListener(
+          child: Stack(
+            children: [
+              // Show recording visualization when mic is active
+              if (_isMicActive)
+                Positioned.fill(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(
+                      children: [
+                        // Recording indicator
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: const BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Compact visualizer
+                        Expanded(
+                          child: SizedBox(
+                            height: 20,
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: List.generate(15, (index) {
+                                final double level = index < _audioLevels.length
+                                    ? _audioLevels[index]
+                                    : 0.0;
+                                final double barHeight = (level * 16).clamp(2.0, 16.0);
+                                return Expanded(
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 1),
+                                    child: Container(
+                                      height: barHeight,
+                                      decoration: BoxDecoration(
+                                        color: Colors.red.withValues(alpha: 0.8),
+                                        borderRadius: BorderRadius.circular(2),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              // Text field (always present, keyboard stays open)
+              KeyboardListener(
             focusNode: _rawKeyboardListenerFocusNode,
             onKeyEvent: (event) {
               if (event is! KeyDownEvent) return;
@@ -2028,6 +2021,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                   color: colorScheme.onSurface.withValues(alpha: 0.5),
                   fontSize: 14,
                 ),
+                filled: true,
+                fillColor: _isMicActive
+                    ? Colors.transparent  // Transparent when recording to show visualization
+                    : Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.98),
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
@@ -2040,28 +2037,34 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
               cursorColor: accent,
               cursorWidth: 1.5,
             ),
+              ),
+            ],
           ),
         ),
         const SizedBox(width: 4),
-        // Mic button
+        // Mic button (red when active)
         _buildTinyIconBtn(
-          icon: Icons.mic_rounded,
+          icon: _isMicActive ? Icons.stop_rounded : Icons.mic_rounded,
           onTap: _handleMicTap,
-          isActive: false,
-          color: iconFg,
+          isActive: _isMicActive,
+          color: _isMicActive ? Colors.red : iconFg,
         ),
         const SizedBox(width: 2),
-        // Send button
+        // Send button (or send audio button when recording)
         _buildTinyActionBtn(
-          icon: _isStreaming
-              ? Icons.stop_rounded
+          icon: _isMicActive
+              ? Icons.send_rounded  // Send audio when recording
+              : (_isStreaming
+                  ? Icons.stop_rounded
+                  : (_controller.text.trim().isEmpty && !hasAttachments
+                        ? Icons.graphic_eq_rounded
+                        : Icons.arrow_upward_rounded)),
+          onTap: _isMicActive
+              ? _handleAudioSend  // Send recorded audio
               : (_controller.text.trim().isEmpty && !hasAttachments
-                    ? Icons.graphic_eq_rounded
-                    : Icons.arrow_upward_rounded),
-          onTap: _controller.text.trim().isEmpty && !hasAttachments
-              ? () => _openComingSoonFeature('Voice Mode')
-              : _sendMessage,
-          color: _isStreaming ? Colors.red : accent,
+                  ? () => _openComingSoonFeature('Voice Mode')
+                  : _sendMessage),
+          color: _isMicActive ? accent : (_isStreaming ? Colors.red : accent),
         ),
         const SizedBox(width: 4),
       ],
