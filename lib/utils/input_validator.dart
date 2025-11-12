@@ -1,3 +1,36 @@
+/// Password strength levels.
+enum PasswordStrength {
+  weak,
+  fair,
+  good,
+  strong,
+}
+
+/// Result of password validation with detailed feedback.
+class PasswordValidationResult {
+  final bool isValid;
+  final PasswordStrength strength;
+  final String? errorMessage;
+  final List<String> suggestions;
+  final bool hasMinLength;
+  final bool hasUppercase;
+  final bool hasLowercase;
+  final bool hasDigit;
+  final bool hasSpecialChar;
+
+  const PasswordValidationResult({
+    required this.isValid,
+    required this.strength,
+    this.errorMessage,
+    required this.suggestions,
+    required this.hasMinLength,
+    required this.hasUppercase,
+    required this.hasLowercase,
+    required this.hasDigit,
+    required this.hasSpecialChar,
+  });
+}
+
 /// Input validation and sanitization utilities for security.
 ///
 /// This utility provides validation and sanitization functions to prevent
@@ -14,6 +47,9 @@ class InputValidator {
 
   /// Maximum file name length (reasonable limit for file names).
   static const int maxFileNameLength = 255;
+
+  /// Minimum password length for secure passwords.
+  static const int minPasswordLength = 12;
 
   /// RFC 5322 compliant email validation regex (simplified).
   /// Validates: local-part@domain with proper character restrictions.
@@ -155,5 +191,108 @@ class InputValidator {
           RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
           (Match m) => '${m[1]},',
         );
+  }
+
+  // ==================== Password Validation ====================
+
+  /// Validates password strength and returns detailed feedback.
+  ///
+  /// Requirements:
+  /// - Minimum 12 characters
+  /// - At least one uppercase letter
+  /// - At least one lowercase letter
+  /// - At least one digit
+  /// - At least one special character
+  static PasswordValidationResult validatePasswordStrength(String? password) {
+    if (password == null || password.isEmpty) {
+      return const PasswordValidationResult(
+        isValid: false,
+        strength: PasswordStrength.weak,
+        errorMessage: 'Password is required.',
+        suggestions: ['Enter a password'],
+        hasMinLength: false,
+        hasUppercase: false,
+        hasLowercase: false,
+        hasDigit: false,
+        hasSpecialChar: false,
+      );
+    }
+
+    final hasMinLength = password.length >= minPasswordLength;
+    final hasUppercase = password.contains(RegExp(r'[A-Z]'));
+    final hasLowercase = password.contains(RegExp(r'[a-z]'));
+    final hasDigit = password.contains(RegExp(r'[0-9]'));
+    final hasSpecialChar = password.contains(RegExp(r'[^A-Za-z0-9]'));
+
+    final suggestions = <String>[];
+    if (!hasMinLength) {
+      suggestions.add('Use at least $minPasswordLength characters');
+    }
+    if (!hasUppercase) {
+      suggestions.add('Add uppercase letters (A-Z)');
+    }
+    if (!hasLowercase) {
+      suggestions.add('Add lowercase letters (a-z)');
+    }
+    if (!hasDigit) {
+      suggestions.add('Add numbers (0-9)');
+    }
+    if (!hasSpecialChar) {
+      suggestions.add('Add special characters (!@#\$%^&*)');
+    }
+
+    // Calculate strength
+    int score = 0;
+    if (hasMinLength) score++;
+    if (hasUppercase) score++;
+    if (hasLowercase) score++;
+    if (hasDigit) score++;
+    if (hasSpecialChar) score++;
+
+    // Additional scoring for extra length
+    if (password.length >= 16) score++;
+    if (password.length >= 20) score++;
+
+    PasswordStrength strength;
+    if (score <= 2) {
+      strength = PasswordStrength.weak;
+    } else if (score <= 4) {
+      strength = PasswordStrength.fair;
+    } else if (score <= 5) {
+      strength = PasswordStrength.good;
+    } else {
+      strength = PasswordStrength.strong;
+    }
+
+    final isValid = hasMinLength &&
+        hasUppercase &&
+        hasLowercase &&
+        hasDigit &&
+        hasSpecialChar;
+
+    String? errorMessage;
+    if (!isValid) {
+      errorMessage = 'Password must be at least $minPasswordLength characters and include uppercase, lowercase, number, and special character.';
+    }
+
+    return PasswordValidationResult(
+      isValid: isValid,
+      strength: strength,
+      errorMessage: errorMessage,
+      suggestions: suggestions,
+      hasMinLength: hasMinLength,
+      hasUppercase: hasUppercase,
+      hasLowercase: hasLowercase,
+      hasDigit: hasDigit,
+      hasSpecialChar: hasSpecialChar,
+    );
+  }
+
+  /// Simple password validation for forms.
+  ///
+  /// Returns null if valid, otherwise returns an error message.
+  static String? validatePassword(String? password) {
+    final result = validatePasswordStrength(password);
+    return result.errorMessage;
   }
 }

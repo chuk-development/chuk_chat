@@ -6,6 +6,7 @@ import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/supabase_config.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/input_validator.dart';
+import 'package:chuk_chat/widgets/password_strength_meter.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -26,6 +27,18 @@ class _LoginPageState extends State<LoginPage> {
   bool _isSignInMode = true;
   bool _obscurePassword = true;
   String? _errorMessage;
+  String _currentPassword = '';
+
+  @override
+  void initState() {
+    super.initState();
+    // Listen to password changes for strength meter
+    _passwordCtrl.addListener(() {
+      setState(() {
+        _currentPassword = _passwordCtrl.text;
+      });
+    });
+  }
 
   @override
   void dispose() {
@@ -117,32 +130,19 @@ class _LoginPageState extends State<LoginPage> {
     });
   }
 
-  bool _isPasswordSecure(String password) {
-    final hasMinLength = password.length >= 12;
-    final hasUppercase = password.contains(RegExp(r'[A-Z]'));
-    final hasLowercase = password.contains(RegExp(r'[a-z]'));
-    final hasDigit = password.contains(RegExp(r'\d'));
-    final hasSpecial = password.contains(RegExp(r'[^A-Za-z0-9]'));
-    return hasMinLength &&
-        hasUppercase &&
-        hasLowercase &&
-        hasDigit &&
-        hasSpecial;
-  }
-
   String? _validatePassword(String? value) {
+    // For sign-in mode, allow any password (backend will validate)
+    // For sign-up mode, enforce strong password requirements
     if (value == null || value.isEmpty) {
       return 'Enter your password.';
     }
-    if (_isSignInMode) {
-      if (value.length < 6) {
-        return 'Password must be at least 6 characters.';
-      }
-      return null;
+
+    if (!_isSignInMode) {
+      // Enforce strong password for sign-up
+      return InputValidator.validatePassword(value);
     }
-    if (!_isPasswordSecure(value)) {
-      return 'Password must be at least 12 characters and include uppercase, lowercase, number, and symbol.';
-    }
+
+    // For sign-in, just check it's not empty (already done above)
     return null;
   }
 
@@ -252,6 +252,11 @@ class _LoginPageState extends State<LoginPage> {
                       obscureText: _obscurePassword,
                       validator: _validatePassword,
                     ),
+                    // Show password strength meter only in sign-up mode
+                    if (!_isSignInMode && _currentPassword.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      PasswordStrengthMeter(password: _currentPassword),
+                    ],
                     if (_errorMessage != null) ...[
                       const SizedBox(height: 16),
                       Text(
