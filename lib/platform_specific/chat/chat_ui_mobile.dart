@@ -151,11 +151,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
   void _handleRealtimeChatUpdate() {
     if (!mounted) return;
-    if (_activeChatId == null) return;
+
+    // CRITICAL: Capture chatId at the start to prevent race conditions
+    final String? chatIdAtStart = _activeChatId;
+    if (chatIdAtStart == null) return;
 
     // Find the updated chat in storage
     final chatIndex = ChatStorageService.savedChats.indexWhere(
-      (chat) => chat.id == _activeChatId,
+      (chat) => chat.id == chatIdAtStart,
     );
 
     if (chatIndex == -1) return; // Chat was deleted
@@ -168,6 +171,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
     if (newMessageCount != currentMessageCount ||
         _messagesHaveChanged(updatedChat.messages)) {
+      // CRITICAL: Verify we're still on the same chat before updating UI
+      if (_activeChatId != chatIdAtStart) {
+        debugPrint('Chat switched during realtime update, skipping (was: $chatIdAtStart, now: $_activeChatId)');
+        return;
+      }
+
       setState(() {
         // Reload messages from storage
         _messages.clear();
@@ -649,6 +658,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     _persistChat();
     _scrollChatToBottom();
 
+    // Generate a chat ID if this is a new chat (do this early)
+    if (_activeChatId == null) {
+      _activeChatId = _uuid.v4();
+    }
+    final String chatId = _activeChatId!;
+
     final session =
         await SupabaseService.refreshSession() ??
         SupabaseService.auth.currentSession;
@@ -656,6 +671,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       _finalizeAiMessage(
         placeholderIndex,
         'Please sign in to continue the conversation.',
+        chatId: chatId,
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -673,6 +689,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       _finalizeAiMessage(
         placeholderIndex,
         'Authentication failed. Please sign in again.',
+        chatId: chatId,
       );
       return;
     }
@@ -689,12 +706,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         conversationHistory.add({'role': 'assistant', 'content': text});
       }
     }
-
-    // Generate a chat ID if this is a new chat
-    if (_activeChatId == null) {
-      _activeChatId = _uuid.v4();
-    }
-    final String chatId = _activeChatId!;
 
     try {
       setState(() => _isStreaming = true);
@@ -719,7 +730,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         onUpdate: (content, reasoning) {
           if (!mounted) return;
           if (_activeChatId == chatId) {
-            _updateAiMessage(placeholderIndex, content, reasoning);
+            _updateAiMessage(placeholderIndex, content, reasoning, chatId: chatId);
             _scrollChatToBottom();
           }
         },
@@ -729,12 +740,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           // Only update UI if this is still the active chat
           if (_activeChatId == chatId) {
             if (finalContent.isEmpty) {
-              _finalizeAiMessage(placeholderIndex, 'No response received.');
+              _finalizeAiMessage(placeholderIndex, 'No response received.', chatId: chatId);
             } else {
               _finalizeAiMessage(
                 placeholderIndex,
                 finalContent,
                 reasoning: finalReasoning.isEmpty ? null : finalReasoning,
+                chatId: chatId,
               );
             }
 
@@ -759,7 +771,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
           // Only update UI if this is still the active chat
           if (_activeChatId == chatId) {
-            _finalizeAiMessage(placeholderIndex, errorMessage);
+            _finalizeAiMessage(placeholderIndex, errorMessage, chatId: chatId);
             setState(() {
               _isStreaming = false;
               _isSending = false;
@@ -777,7 +789,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       );
     } catch (e) {
       debugPrint('Streaming error: $e');
-      _finalizeAiMessage(placeholderIndex, 'Error: $e');
+      _finalizeAiMessage(placeholderIndex, 'Error: $e', chatId: chatId);
       if (mounted) {
         setState(() {
           _isStreaming = false;
@@ -1349,16 +1361,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         stream: stream,
         onUpdate: (content, reasoning) {
           if (!mounted) return;
-          // Only update UI if this is still the active chat
+          // CRITICAL: Only update UI if this is STILL the active chat
+          // Background streams should NOT modify _messages list at all during streaming
           if (_activeChatId == chatId) {
-            _updateAiMessage(placeholderIndex, content, reasoning);
+            _updateAiMessage(placeholderIndex, content, reasoning, chatId: chatId);
             _scrollChatToBottom();
           } else {
-            // Stream is running in background, just update the stored message
-            if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
-              _messages[placeholderIndex]['text'] = content;
-              _messages[placeholderIndex]['reasoning'] = reasoning;
-            }
+            // Background stream - do NOT touch _messages, only onComplete saves to storage
+            debugPrint('Background stream update for chat $chatId (not updating UI)');
           }
         },
         onComplete: (finalContent, finalReasoning) {
@@ -1371,12 +1381,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
               _finalizeAiMessage(
                 placeholderIndex,
                 'The model returned an empty response.',
+                chatId: chatId,
               );
             } else {
               _finalizeAiMessage(
                 placeholderIndex,
                 finalContent,
                 reasoning: finalReasoning.isEmpty ? null : finalReasoning,
+                chatId: chatId,
               );
             }
 
@@ -1404,7 +1416,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
           // Only update UI if this is still the active chat
           if (_activeChatId == chatId) {
-            _finalizeAiMessage(placeholderIndex, errorMessage);
+            _finalizeAiMessage(placeholderIndex, errorMessage, chatId: chatId);
             _showSnackBar(errorMessage);
             setState(() {
               _isStreaming = false;
@@ -1423,7 +1435,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       );
     } catch (error) {
       debugPrint('Failed to start stream: $error');
-      _finalizeAiMessage(placeholderIndex, 'Failed to start streaming: $error');
+      _finalizeAiMessage(placeholderIndex, 'Failed to start streaming: $error', chatId: chatId);
       _showSnackBar('Failed to start streaming: $error');
       if (mounted) {
         setState(() {
@@ -1457,8 +1469,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     return history;
   }
 
-  void _updateAiMessage(int index, String content, String reasoning) {
+  void _updateAiMessage(int index, String content, String reasoning, {required String chatId}) {
     if (!mounted || index < 0 || index >= _messages.length) return;
+
+    // CRITICAL: Only update if this is still the active chat
+    if (_activeChatId != chatId) {
+      debugPrint('Skipping UI update for background chat $chatId (active: $_activeChatId)');
+      return;
+    }
 
     setState(() {
       final Map<String, String> message = Map<String, String>.from(
@@ -1470,10 +1488,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     });
   }
 
-  void _finalizeAiMessage(int index, String content, {String? reasoning}) {
+  void _finalizeAiMessage(int index, String content, {String? reasoning, required String chatId}) {
     if (index < 0 || index >= _messages.length) {
-      _isSending = false;
-      _isStreaming = false;
+      debugPrint('Invalid message index $index for finalization');
+      return;
+    }
+
+    // CRITICAL: Only update UI if this is still the active chat
+    if (_activeChatId != chatId) {
+      debugPrint('Skipping finalization for background chat $chatId (active: $_activeChatId)');
       return;
     }
 
@@ -1488,18 +1511,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         _isSending = false;
         _isStreaming = false;
       });
-    } else {
-      final Map<String, String> message = Map<String, String>.from(
-        _messages[index],
-      );
-      message['text'] = content;
-      message['reasoning'] = reasoning ?? '';
-      _messages[index] = message;
-      _isSending = false;
-      _isStreaming = false;
-    }
 
-    if (mounted) {
       _scrollChatToBottom();
       Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
       _persistChat();
@@ -1720,15 +1732,18 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     List<Map<String, String>> messagesCopy,
     String? chatId,
   ) async {
+    // CRITICAL: Capture chatId at the start to prevent race conditions
+    final String? chatIdAtStart = chatId ?? _activeChatId;
+
     try {
       final stored = chatId == null
           ? await ChatStorageService.saveChat(messagesCopy)
           : await ChatStorageService.updateChat(chatId, messagesCopy);
       if (!mounted || stored == null) return;
 
-      // Only update selectedChatIndex if this is still the active chat
-      // (prevents overwriting when user switches to a different chat)
-      if (_activeChatId == stored.id) {
+      // CRITICAL: Only update state if we're STILL on the same chat
+      // This prevents corruption when user switches chats during persist
+      if (_activeChatId == chatIdAtStart && _activeChatId == stored.id) {
         setState(() {
           _activeChatId = stored.id;
         });
@@ -1738,6 +1753,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         if (index != -1) {
           ChatStorageService.selectedChatIndex = index;
         }
+      } else {
+        debugPrint('Chat switched during persist, skipping UI update (was: $chatIdAtStart, now: $_activeChatId)');
       }
     } catch (error) {
       if (!mounted) return;
