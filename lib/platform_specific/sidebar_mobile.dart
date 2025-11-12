@@ -54,6 +54,8 @@ class _SidebarMobileState extends State<SidebarMobile> {
   StreamSubscription<void>? _chatUpdatesSub;
   Timer? _searchDebounce;
   int _filterGeneration = 0;
+  Timer? _deleteNotificationTimer;
+  int _pendingDeleteCount = 0;
 
   @override
   void initState() {
@@ -74,6 +76,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
     _chatUpdatesSub?.cancel();
     _refreshTimer?.cancel();
     _searchDebounce?.cancel();
+    _deleteNotificationTimer?.cancel();
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     super.dispose();
@@ -224,6 +227,34 @@ class _SidebarMobileState extends State<SidebarMobile> {
     }
   }
 
+  void _showDebouncedDeleteNotification() {
+    _deleteNotificationTimer?.cancel();
+    _deleteNotificationTimer = Timer(const Duration(milliseconds: 800), () {
+      if (!mounted) return;
+      final count = _pendingDeleteCount;
+      _pendingDeleteCount = 0;
+
+      final messenger = ScaffoldMessenger.of(context);
+      final message = count == 1
+          ? 'Deleted'
+          : '$count chats deleted';
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            message,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          duration: const Duration(seconds: 1),
+          dismissDirection: DismissDirection.horizontal,
+        ),
+      );
+    });
+  }
+
   Future<void> _confirmAndDeleteChat(StoredChat chat) async {
     final messenger = ScaffoldMessenger.of(context);
     final shouldDelete = await showDialog<bool>(
@@ -259,20 +290,8 @@ class _SidebarMobileState extends State<SidebarMobile> {
       if (widget.onChatDeleted != null) {
         await widget.onChatDeleted!(chat.id);
       }
-      messenger.showSnackBar(
-        SnackBar(
-          content: const Text(
-            'Deleted',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          duration: const Duration(seconds: 1),
-          dismissDirection: DismissDirection.horizontal,
-        ),
-      );
+      _pendingDeleteCount++;
+      _showDebouncedDeleteNotification();
     } on StateError catch (error) {
       messenger.showSnackBar(
         SnackBar(

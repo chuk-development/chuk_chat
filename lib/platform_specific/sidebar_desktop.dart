@@ -46,6 +46,8 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
   List<StoredChat> _filteredRecentChats = [];
   ProfileRecord? _profile;
   StreamSubscription<void>? _chatUpdatesSub;
+  Timer? _deleteNotificationTimer;
+  int _pendingDeleteCount = 0;
 
   @override
   void initState() {
@@ -64,6 +66,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
   @override
   void dispose() {
     _chatUpdatesSub?.cancel();
+    _deleteNotificationTimer?.cancel();
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     super.dispose();
@@ -545,6 +548,23 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
     );
   }
 
+  void _showDebouncedDeleteNotification() {
+    _deleteNotificationTimer?.cancel();
+    _deleteNotificationTimer = Timer(const Duration(milliseconds: 800), () {
+      if (!mounted) return;
+      final count = _pendingDeleteCount;
+      _pendingDeleteCount = 0;
+
+      final messenger = ScaffoldMessenger.of(context);
+      final message = count == 1
+          ? 'Chat deleted permanently.'
+          : '$count chats deleted permanently.';
+      messenger.showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    });
+  }
+
   Future<void> _confirmAndDeleteChat(StoredChat chat) async {
     final messenger = ScaffoldMessenger.of(context);
     final shouldDelete = await showDialog<bool>(
@@ -582,9 +602,8 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
       if (widget.onChatDeleted != null) {
         await widget.onChatDeleted!(chat.id);
       }
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Chat deleted permanently.')),
-      );
+      _pendingDeleteCount++;
+      _showDebouncedDeleteNotification();
     } on StateError catch (error) {
       messenger.showSnackBar(SnackBar(content: Text(error.message)));
     } catch (error) {
