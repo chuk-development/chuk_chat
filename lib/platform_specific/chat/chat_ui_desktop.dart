@@ -26,6 +26,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/utils/token_estimator.dart';
+import 'package:chuk_chat/utils/input_validator.dart';
 
 class _MessageRenderData {
   const _MessageRenderData({
@@ -986,6 +987,20 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     }
 
     final String originalUserInput = _controller.text.trim();
+
+    // Validate message length
+    if (originalUserInput.isNotEmpty) {
+      final validationResult = InputValidator.validateAndSanitizeMessage(originalUserInput);
+      if (!validationResult['valid']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(validationResult['error'] ?? 'Invalid input'),
+          ),
+        );
+        return;
+      }
+    }
+
     final bool hasText = originalUserInput.isNotEmpty;
     final bool hasAttachments = _attachedFiles.any(
       (f) => f.markdownContent != null,
@@ -1001,7 +1016,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     if (hasAttachments) {
       final attachedFileNames = _attachedFiles
           .where((f) => f.markdownContent != null)
-          .map((f) => '"${f.fileName}"')
+          .map((f) {
+            final sanitized = InputValidator.sanitizeFileName(f.fileName);
+            final escaped = InputValidator.escapeFileNameForDisplay(sanitized);
+            return '"$escaped"';
+          })
           .join(', ');
       final String attachmentsLine = 'Uploaded documents: $attachedFileNames';
       if (displayMessageText.isNotEmpty) {
@@ -1013,7 +1032,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       final markdownSections = _attachedFiles
           .where((f) => f.markdownContent != null)
           .map(
-            (f) => 'Document: "${f.fileName}"\n```\n${f.markdownContent}\n```',
+            (f) {
+              final sanitized = InputValidator.sanitizeFileName(f.fileName);
+              final escaped = InputValidator.escapeFileNameForDisplay(sanitized);
+              return 'Document: "$escaped"\n```\n${f.markdownContent}\n```';
+            },
           )
           .join('\n\n');
       final String queryText = originalUserInput.isNotEmpty

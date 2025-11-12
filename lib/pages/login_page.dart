@@ -5,6 +5,7 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/supabase_config.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
+import 'package:chuk_chat/utils/input_validator.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -227,13 +228,7 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       keyboardType: TextInputType.emailAddress,
                       validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Enter your email address.';
-                        }
-                        if (!value.contains('@')) {
-                          return 'Email looks invalid.';
-                        }
-                        return null;
+                        return InputValidator.validateEmail(value);
                       },
                     ),
                     const SizedBox(height: 16),
