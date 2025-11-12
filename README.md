@@ -86,7 +86,7 @@ This section is for developers who want to build, modify, or contribute to chuk_
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/chuk_chat.git
+   git clone https://github.com/1337-Corp/chuk_chat.git
    cd chuk_chat
    ```
 
@@ -343,10 +343,6 @@ flutter clean
 # Rebuild from scratch
 flutter clean && flutter pub get && flutter run
 ```
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## Acknowledgments
 
