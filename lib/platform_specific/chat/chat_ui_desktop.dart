@@ -1239,7 +1239,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           }
 
           String errorMessage = 'Failed to reach the AI service';
-          if (error is StreamingChatException) {
+          if (error is WebSocketChatException) {
             errorMessage = error.message;
           }
 

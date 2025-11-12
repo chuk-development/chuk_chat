@@ -1262,7 +1262,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           if (!mounted) return;
 
           String errorMessage = 'Failed to reach the AI service';
-          if (error is StreamingChatException) {
+          if (error is WebSocketChatException) {
             errorMessage = error.message;
           }
 
