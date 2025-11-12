@@ -7,6 +7,7 @@ import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/utils/file_upload_validator.dart';
 import 'package:chuk_chat/utils/upload_rate_limiter.dart';
 import 'package:chuk_chat/utils/secure_token_handler.dart';
+import 'package:chuk_chat/utils/api_rate_limiter.dart';
 
 /// Service for converting files to markdown using the /ai/convert-file endpoint.
 /// Supports documents, images (with EXIF/OCR), audio (with transcription),
@@ -64,11 +65,11 @@ class FileConversionService {
         };
       }
 
-      // Rate limiting check (if userId provided)
+      // Upload rate limiting check (if userId provided)
       if (userId != null) {
-        final rateLimiter = UploadRateLimiter();
-        if (!rateLimiter.isUploadAllowed(userId)) {
-          final timeUntilReset = rateLimiter.getTimeUntilReset(userId);
+        final uploadLimiter = UploadRateLimiter();
+        if (!uploadLimiter.isUploadAllowed(userId)) {
+          final timeUntilReset = uploadLimiter.getTimeUntilReset(userId);
           final minutes = timeUntilReset != null ? (timeUntilReset / 60).ceil() : 5;
           return {
             'success': false,
@@ -76,6 +77,29 @@ class FileConversionService {
             'markdown': null,
           };
         }
+
+        // API rate limiting check (general API throttling)
+        final apiLimiter = ApiRateLimiter();
+        final rateLimitResult = apiLimiter.checkRateLimit(
+          endpoint: '/ai/convert-file',
+          userId: userId,
+          config: RateLimitConfig.fileConversion,
+        );
+
+        if (!rateLimitResult.allowed) {
+          return {
+            'success': false,
+            'error': rateLimitResult.errorMessage ?? 'Rate limit exceeded',
+            'markdown': null,
+          };
+        }
+
+        // Log rate limit status in debug mode
+        apiLimiter.logRateLimitStatus(
+          endpoint: '/ai/convert-file',
+          userId: userId,
+          config: RateLimitConfig.fileConversion,
+        );
       }
 
       // Validate file before upload (size, MIME type, archive content)
@@ -104,9 +128,13 @@ class FileConversionService {
       }
       debugPrint('═══════════════════════════════════════════════════════════');
 
-      // Record upload attempt for rate limiting
+      // Record upload attempt and API request for rate limiting
       if (userId != null) {
         UploadRateLimiter().recordUpload(userId);
+        ApiRateLimiter().recordRequest(
+          endpoint: '/ai/convert-file',
+          userId: userId,
+        );
       }
 
       final fileName = file.path.split('/').last;
