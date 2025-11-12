@@ -96,6 +96,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   bool _isStreaming = false;
   final StreamingManager _streamingManager = StreamingManager();
   int? _editingMessageIndex;
+  StreamSubscription<void>? _chatStorageSubscription;
 
   static const double _kMaxChatContentWidth = 760.0;
   static const double _kAttachmentBarMarginBottom = 8.0;
@@ -141,6 +142,71 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     ModelSelectionDropdown.selectedModelListenable.addListener(
       _modelSelectionListener,
     );
+
+    // Listen for realtime chat updates from other devices
+    _chatStorageSubscription = ChatStorageService.changes.listen((_) {
+      _handleRealtimeChatUpdate();
+    });
+  }
+
+  void _handleRealtimeChatUpdate() {
+    if (!mounted) return;
+    if (_activeChatId == null) return;
+
+    // Find the updated chat in storage
+    final chatIndex = ChatStorageService.savedChats.indexWhere(
+      (chat) => chat.id == _activeChatId,
+    );
+
+    if (chatIndex == -1) return; // Chat was deleted
+
+    final updatedChat = ChatStorageService.savedChats[chatIndex];
+
+    // Check if messages have changed
+    final currentMessageCount = _messages.length;
+    final newMessageCount = updatedChat.messages.length;
+
+    if (newMessageCount != currentMessageCount ||
+        _messagesHaveChanged(updatedChat.messages)) {
+      setState(() {
+        // Reload messages from storage
+        _messages.clear();
+        _messages.addAll(
+          updatedChat.messages.map((message) {
+            final map = <String, String>{
+              'sender': message.sender,
+              'text': message.text,
+              'reasoning': message.reasoning,
+            };
+            if (message.modelId != null && message.modelId!.isNotEmpty) {
+              map['modelId'] = message.modelId!;
+            }
+            if (message.provider != null && message.provider!.isNotEmpty) {
+              map['provider'] = message.provider!;
+            }
+            return map;
+          }),
+        );
+      });
+      _scrollChatToBottom();
+    }
+  }
+
+  bool _messagesHaveChanged(List<ChatMessage> newMessages) {
+    if (newMessages.length != _messages.length) return true;
+
+    for (int i = 0; i < newMessages.length; i++) {
+      final newMsg = newMessages[i];
+      final currentMsg = _messages[i];
+
+      if (newMsg.sender != currentMsg['sender'] ||
+          newMsg.text != currentMsg['text'] ||
+          newMsg.reasoning != (currentMsg['reasoning'] ?? '')) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   void _handleAddAttachmentTap() {
@@ -859,6 +925,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     if (_activeChatId != null) {
       unawaited(_streamingManager.cancelStream(_activeChatId!));
     }
+    _chatStorageSubscription?.cancel();
     _controller.dispose();
     _scrollController.dispose();
     _composerScrollController.dispose();
