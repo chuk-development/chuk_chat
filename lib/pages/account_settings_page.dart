@@ -123,9 +123,17 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       final messenger = ScaffoldMessenger.of(context);
       messenger.showSnackBar(
         SnackBar(
-          content: Text(emailNotice ?? 'Saved'),
+          content: Text(
+            emailNotice ?? 'Saved',
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
           backgroundColor: Theme.of(context).colorScheme.primary,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           duration: const Duration(seconds: 2),
+          dismissDirection: DismissDirection.horizontal,
         ),
       );
     } on AuthException catch (error) {
@@ -185,9 +193,17 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(notice),
+          content: Text(
+            notice,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
           backgroundColor: Theme.of(context).colorScheme.primary,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           duration: const Duration(seconds: 2),
+          dismissDirection: DismissDirection.horizontal,
         ),
       );
     } on PasswordChangeException catch (error) {

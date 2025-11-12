@@ -95,9 +95,17 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
       final messenger = ScaffoldMessenger.of(context);
       messenger.showSnackBar(
         SnackBar(
-          content: Text(prompt.isEmpty ? 'Cleared' : 'Saved'),
+          content: Text(
+            prompt.isEmpty ? 'Cleared' : 'Saved',
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
           backgroundColor: Theme.of(context).colorScheme.primary,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           duration: const Duration(seconds: 1),
+          dismissDirection: DismissDirection.horizontal,
         ),
       );
     } on StateError catch (error) {
@@ -136,9 +144,17 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
       final messenger = ScaffoldMessenger.of(context);
       messenger.showSnackBar(
         SnackBar(
-          content: const Text('Cleared'),
+          content: const Text(
+            'Cleared',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
           backgroundColor: Theme.of(context).colorScheme.primary,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           duration: const Duration(seconds: 1),
+          dismissDirection: DismissDirection.horizontal,
         ),
       );
     } on StateError catch (error) {

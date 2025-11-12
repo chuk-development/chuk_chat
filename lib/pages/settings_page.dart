@@ -219,15 +219,31 @@ class SettingsPage extends StatelessWidget {
                 } on AuthServiceException catch (error) {
                   messenger.showSnackBar(
                     SnackBar(
-                      content: Text(error.message),
+                      content: Text(
+                        error.message,
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                      ),
+                      behavior: SnackBarBehavior.floating,
+                      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       duration: const Duration(seconds: 2),
+                      dismissDirection: DismissDirection.horizontal,
                     ),
                   );
                 } catch (error) {
                   messenger.showSnackBar(
                     SnackBar(
-                      content: Text('Error: $error'),
+                      content: Text(
+                        'Error: $error',
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                      ),
+                      behavior: SnackBarBehavior.floating,
+                      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       duration: const Duration(seconds: 2),
+                      dismissDirection: DismissDirection.horizontal,
                     ),
                   );
                 }
@@ -249,9 +265,17 @@ class SettingsPage extends StatelessWidget {
       await ChatStorageService.loadSavedChatsForSidebar();
       if (ChatStorageService.savedChats.isEmpty) {
         messenger.showSnackBar(
-          const SnackBar(
-            content: Text('No chats to export'),
-            duration: Duration(seconds: 2),
+          SnackBar(
+            content: const Text(
+              'No chats to export',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            duration: const Duration(seconds: 2),
+            dismissDirection: DismissDirection.horizontal,
           ),
         );
         return;
@@ -264,9 +288,17 @@ class SettingsPage extends StatelessWidget {
       if (kIsWeb) {
         await Clipboard.setData(ClipboardData(text: jsonPayload));
         messenger.showSnackBar(
-          const SnackBar(
-            content: Text('Copied to clipboard'),
-            duration: Duration(seconds: 2),
+          SnackBar(
+            content: const Text(
+              'Copied to clipboard',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            duration: const Duration(seconds: 2),
+            dismissDirection: DismissDirection.horizontal,
           ),
         );
         return;
@@ -277,15 +309,31 @@ class SettingsPage extends StatelessWidget {
         if (savedPath != null) {
           messenger.showSnackBar(
             SnackBar(
-              content: Text('Saved to $savedPath'),
+              content: Text(
+                'Saved to $savedPath',
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              ),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               duration: const Duration(seconds: 2),
+              dismissDirection: DismissDirection.horizontal,
             ),
           );
         } else {
           messenger.showSnackBar(
-            const SnackBar(
-              content: Text('Export cancelled'),
-              duration: Duration(seconds: 1),
+            SnackBar(
+              content: const Text(
+                'Export cancelled',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              ),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              duration: const Duration(seconds: 1),
+              dismissDirection: DismissDirection.horizontal,
             ),
           );
         }
@@ -306,32 +354,64 @@ class SettingsPage extends StatelessWidget {
           ),
         );
         messenger.showSnackBar(
-          const SnackBar(
-            content: Text('Share opened'),
-            duration: Duration(seconds: 1),
+          SnackBar(
+            content: const Text(
+              'Share opened',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            duration: const Duration(seconds: 1),
+            dismissDirection: DismissDirection.horizontal,
           ),
         );
       } on Exception {
         await Clipboard.setData(ClipboardData(text: jsonPayload));
         messenger.showSnackBar(
-          const SnackBar(
-            content: Text('Copied to clipboard'),
-            duration: Duration(seconds: 2),
+          SnackBar(
+            content: const Text(
+              'Copied to clipboard',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            duration: const Duration(seconds: 2),
+            dismissDirection: DismissDirection.horizontal,
           ),
         );
       }
     } on StateError catch (error) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(error.message),
+          content: Text(
+            error.message,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           duration: const Duration(seconds: 2),
+          dismissDirection: DismissDirection.horizontal,
         ),
       );
     } catch (error) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text('Export failed: $error'),
+          content: Text(
+            'Export failed: $error',
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           duration: const Duration(seconds: 2),
+          dismissDirection: DismissDirection.horizontal,
         ),
       );
     }

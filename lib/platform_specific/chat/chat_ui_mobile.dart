@@ -253,6 +253,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   void _handleAddAttachmentTap() {
     if (!mounted) return;
     final theme = Theme.of(context);
+    final bool supportsImages = _modelSupportsImageInput;
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: theme.colorScheme.surface,
@@ -275,15 +276,48 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                     borderRadius: BorderRadius.circular(999),
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
+                if (!supportsImages) ...[
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: theme.dividerColor.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          size: 18,
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'This model does not support images',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 Row(
                   children: [
                     _buildAttachmentSheetOption(
                       context: sheetContext,
                       icon: Icons.photo_camera_outlined,
                       label: 'Camera',
+                      isEnabled: supportsImages,
                       onTap: () {
-                        if (!_ensureImageUploadsSupported()) return;
+                        if (!supportsImages) return;
                         Navigator.of(sheetContext).pop();
                         unawaited(_pickImageFromSource(ImageSource.camera));
                       },
@@ -293,8 +327,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                       context: sheetContext,
                       icon: Icons.photo_library_outlined,
                       label: 'Photos',
+                      isEnabled: supportsImages,
                       onTap: () {
-                        if (!_ensureImageUploadsSupported()) return;
+                        if (!supportsImages) return;
                         Navigator.of(sheetContext).pop();
                         unawaited(_pickImagesFromGallery());
                       },
@@ -304,6 +339,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                       context: sheetContext,
                       icon: Icons.attach_file,
                       label: 'Files',
+                      isEnabled: true,
                       onTap: () {
                         Navigator.of(sheetContext).pop();
                         unawaited(_uploadFiles());
@@ -569,7 +605,18 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   void _showSnackBar(String message) {
     final messenger = ScaffoldMessenger.maybeOf(context);
     messenger?.showSnackBar(
-      SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
+      SnackBar(
+        content: Text(
+          message,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        duration: const Duration(seconds: 2),
+        dismissDirection: DismissDirection.horizontal,
+      ),
     );
   }
 
@@ -1550,18 +1597,24 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     required IconData icon,
     required String label,
     required VoidCallback onTap,
+    required bool isEnabled,
   }) {
     final theme = Theme.of(context);
-    final Color background = theme.colorScheme.surfaceContainerHighest
-        .withValues(alpha: 0.6);
-    final Color borderColor = theme.dividerColor.withValues(alpha: 0.2);
-    final Color foreground = theme.colorScheme.onSurface;
+    final Color background = isEnabled
+        ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.6)
+        : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3);
+    final Color borderColor = isEnabled
+        ? theme.dividerColor.withValues(alpha: 0.2)
+        : theme.dividerColor.withValues(alpha: 0.1);
+    final Color foreground = isEnabled
+        ? theme.colorScheme.onSurface
+        : theme.colorScheme.onSurface.withValues(alpha: 0.3);
 
     return Expanded(
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: onTap,
+          onTap: isEnabled ? onTap : null,
           borderRadius: BorderRadius.circular(16),
           child: Ink(
             height: 84,
@@ -1906,12 +1959,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
     return Row(
       children: [
-        // Attachment button (disabled if model doesn't support images)
+        // Attachment button (images restricted to vision models, files work for all)
         _buildTinyIconBtn(
           icon: Icons.add_rounded,
-          onTap: _modelSupportsImageInput ? _handleAddAttachmentTap : null,
+          onTap: _handleAddAttachmentTap,
           isActive: hasAttachments,
-          color: _modelSupportsImageInput ? iconFg : iconFg.withValues(alpha: 0.3),
+          color: iconFg,
         ),
         const SizedBox(width: 2),
         // Model selector (ultra compact)

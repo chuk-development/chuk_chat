@@ -185,15 +185,31 @@ class _SidebarMobileState extends State<SidebarMobile> {
     } on StateError catch (error) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(error.message),
+          content: Text(
+            error.message,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           duration: const Duration(seconds: 2),
+          dismissDirection: DismissDirection.horizontal,
         ),
       );
     } catch (error) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text('Error: $error'),
+          content: Text(
+            'Error: $error',
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           duration: const Duration(seconds: 2),
+          dismissDirection: DismissDirection.horizontal,
         ),
       );
     }
@@ -244,23 +260,47 @@ class _SidebarMobileState extends State<SidebarMobile> {
         await widget.onChatDeleted!(chat.id);
       }
       messenger.showSnackBar(
-        const SnackBar(
-          content: Text('Deleted'),
-          duration: Duration(seconds: 1),
+        SnackBar(
+          content: const Text(
+            'Deleted',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          duration: const Duration(seconds: 1),
+          dismissDirection: DismissDirection.horizontal,
         ),
       );
     } on StateError catch (error) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(error.message),
+          content: Text(
+            error.message,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           duration: const Duration(seconds: 2),
+          dismissDirection: DismissDirection.horizontal,
         ),
       );
     } catch (error) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text('Error: $error'),
+          content: Text(
+            'Error: $error',
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           duration: const Duration(seconds: 2),
+          dismissDirection: DismissDirection.horizontal,
         ),
       );
     }
