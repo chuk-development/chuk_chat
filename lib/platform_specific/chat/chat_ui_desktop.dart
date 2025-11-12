@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'dart:math' as math; // For min/max
 import 'dart:async';
 import 'package:chuk_chat/models/chat_model.dart';
+import 'package:chuk_chat/models/chat_stream_event.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';

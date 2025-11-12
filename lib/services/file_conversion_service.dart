@@ -8,6 +8,7 @@ import 'package:chuk_chat/utils/file_upload_validator.dart';
 import 'package:chuk_chat/utils/upload_rate_limiter.dart';
 import 'package:chuk_chat/utils/secure_token_handler.dart';
 import 'package:chuk_chat/utils/api_rate_limiter.dart';
+import 'package:chuk_chat/utils/certificate_pinning.dart';
 
 /// Service for converting files to markdown using the /ai/convert-file endpoint.
 /// Supports documents, images (with EXIF/OCR), audio (with transcription),
@@ -158,17 +159,15 @@ class FileConversionService {
         };
       }
 
-      // Create Dio instance with proper timeout settings for large files
-      final dio = Dio(
-        BaseOptions(
-          baseUrl: _apiBaseUrl,
-          headers: {
-            'Authorization': 'Bearer $accessToken',
-          },
-          connectTimeout: const Duration(seconds: 30),
-          receiveTimeout: const Duration(minutes: 5), // For large files
-          sendTimeout: const Duration(minutes: 5),    // For large files
-        ),
+      // Create Dio instance with proper timeout settings and certificate pinning
+      final dio = CertificatePinning.createSecureDio(
+        baseUrl: _apiBaseUrl,
+        headers: {
+          'Authorization': 'Bearer $accessToken',
+        },
+        connectTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(minutes: 5), // For large files
+        sendTimeout: const Duration(minutes: 5),    // For large files
       );
 
       // Log request with masked token

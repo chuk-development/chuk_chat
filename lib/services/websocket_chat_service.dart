@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/utils/secure_token_handler.dart';
+import 'package:chuk_chat/models/chat_stream_event.dart';
 
 /// Service for handling streaming chat responses via WebSocket.
 /// WebSocket provides better reliability than HTTP streaming,
@@ -184,47 +185,6 @@ class WebSocketChatService {
       }
     }
   }
-}
-
-/// Events that can be received from the WebSocket chat stream.
-sealed class ChatStreamEvent {
-  const ChatStreamEvent();
-
-  const factory ChatStreamEvent.content(String text) = ContentEvent;
-  const factory ChatStreamEvent.reasoning(String text) = ReasoningEvent;
-  const factory ChatStreamEvent.usage(Map<String, dynamic> usage) = UsageEvent;
-  const factory ChatStreamEvent.meta(Map<String, dynamic> meta) = MetaEvent;
-  const factory ChatStreamEvent.error(String message) = ErrorEvent;
-  const factory ChatStreamEvent.done() = DoneEvent;
-}
-
-class ContentEvent extends ChatStreamEvent {
-  final String text;
-  const ContentEvent(this.text);
-}
-
-class ReasoningEvent extends ChatStreamEvent {
-  final String text;
-  const ReasoningEvent(this.text);
-}
-
-class UsageEvent extends ChatStreamEvent {
-  final Map<String, dynamic> usage;
-  const UsageEvent(this.usage);
-}
-
-class MetaEvent extends ChatStreamEvent {
-  final Map<String, dynamic> meta;
-  const MetaEvent(this.meta);
-}
-
-class ErrorEvent extends ChatStreamEvent {
-  final String message;
-  const ErrorEvent(this.message);
-}
-
-class DoneEvent extends ChatStreamEvent {
-  const DoneEvent();
 }
 
 /// Exception thrown when WebSocket chat fails.

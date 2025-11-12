@@ -1,7 +1,7 @@
 // lib/services/streaming_manager.dart
 import 'dart:async';
-import 'package:chuk_chat/services/websocket_chat_service.dart';
 import 'package:flutter/foundation.dart';
+import 'package:chuk_chat/models/chat_stream_event.dart';
 
 /// Manages multiple concurrent chat streams across different chats
 class StreamingManager {
