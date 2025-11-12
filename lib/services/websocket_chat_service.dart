@@ -8,15 +8,19 @@ import 'package:chuk_chat/services/api_config_service.dart';
 /// WebSocket provides better reliability than HTTP streaming,
 /// especially on mobile devices when the app is backgrounded.
 class WebSocketChatService {
-  static String get _wsBaseUrl {
+  static Uri get _wsBaseUrl {
     final httpUrl = ApiConfigService.apiBaseUrl;
-    // Convert HTTP(S) URL to WS(S) URL
-    if (httpUrl.startsWith('https://')) {
-      return httpUrl.replaceFirst('https://', 'wss://');
-    } else if (httpUrl.startsWith('http://')) {
-      return httpUrl.replaceFirst('http://', 'ws://');
-    }
-    return 'ws://$httpUrl';
+    final uri = Uri.parse(httpUrl);
+
+    // Convert HTTP(S) scheme to WS(S) scheme
+    final wsScheme = uri.scheme == 'https' ? 'wss' : 'ws';
+
+    return Uri(
+      scheme: wsScheme,
+      host: uri.host,
+      port: uri.hasPort ? uri.port : null,
+      path: uri.path.isEmpty ? '/' : uri.path,
+    );
   }
 
   /// Sends a streaming chat request via WebSocket and yields chunks as they arrive.
@@ -39,7 +43,7 @@ class WebSocketChatService {
     WebSocketChannel? channel;
 
     try {
-      final wsUrl = Uri.parse('$_wsBaseUrl/ai/chat/ws');
+      final wsUrl = _wsBaseUrl.replace(path: '/ai/chat/ws');
 
       debugPrint('═══════════════════════════════════════════════════════════');
       debugPrint('🔌 WEBSOCKET CHAT REQUEST');
@@ -56,6 +60,9 @@ class WebSocketChatService {
       debugPrint('═══════════════════════════════════════════════════════════');
 
       // Connect to WebSocket
+      debugPrint('🔌 Attempting to connect to: ${wsUrl.toString()}');
+      debugPrint('   Scheme: ${wsUrl.scheme}, Host: ${wsUrl.host}, Port: ${wsUrl.port}, Path: ${wsUrl.path}');
+
       channel = WebSocketChannel.connect(wsUrl);
       await channel.ready;
 

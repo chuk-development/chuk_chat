@@ -140,22 +140,29 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
               child: chatArea,
             ),
 
-          if (_isSidebarExpanded)
-            Positioned(
-              left: 0,
-              top: 0,
-              bottom: 0,
-              width: effectiveSidebarWidth,
-              child: SidebarDesktop(
-                onChatItemTapped: _handleChatTapped,
-                onSettingsTapped: _openSettingsPage,
-                onProjectsTapped: _openProjectsPage,
-                onChatDeleted: _handleChatDeleted,
-                selectedChatIndex: ChatStorageService.selectedChatIndex,
-                isCompactMode: isCompactMode,
-                showAssistantsButton: !isCompactMode || _isSidebarExpanded,
+          // Always build sidebar to preserve state, but hide it when collapsed
+          Positioned(
+            left: _isSidebarExpanded ? 0 : -effectiveSidebarWidth,
+            top: 0,
+            bottom: 0,
+            width: effectiveSidebarWidth,
+            child: AnimatedOpacity(
+              opacity: _isSidebarExpanded ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 200),
+              child: IgnorePointer(
+                ignoring: !_isSidebarExpanded,
+                child: SidebarDesktop(
+                  onChatItemTapped: _handleChatTapped,
+                  onSettingsTapped: _openSettingsPage,
+                  onProjectsTapped: _openProjectsPage,
+                  onChatDeleted: _handleChatDeleted,
+                  selectedChatIndex: ChatStorageService.selectedChatIndex,
+                  isCompactMode: isCompactMode,
+                  showAssistantsButton: !isCompactMode || _isSidebarExpanded,
+                ),
               ),
             ),
+          ),
 
           // Layer 3: Hamburger-Menü
           Positioned(
