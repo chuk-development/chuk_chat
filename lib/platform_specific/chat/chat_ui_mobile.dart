@@ -909,13 +909,27 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       if (_activeChatId != null) {
         _persistChat(waitForCompletion: false);
       }
-      _loadChatFromIndex(widget.selectedChatIndex);
-      // Update UI based on new chat's streaming status
+
+      // Clear all state before loading new chat to prevent data leakage
       setState(() {
-        _isStreaming =
-            _activeChatId != null &&
-            _streamingManager.isStreaming(_activeChatId!);
+        _messages.clear();
+        _attachedFiles.clear();
+        _controller.clear();
+        _editingMessageIndex = null;
+        _isSending = false;
       });
+
+      _loadChatFromIndex(widget.selectedChatIndex);
+
+      // Update streaming state for the NEW chat
+      final bool newChatIsStreaming = _activeChatId != null &&
+          _streamingManager.isStreaming(_activeChatId!);
+
+      if (_isStreaming != newChatIsStreaming) {
+        setState(() {
+          _isStreaming = newChatIsStreaming;
+        });
+      }
     }
   }
 
@@ -971,9 +985,17 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     } else {
       _activeChatId = null;
     }
+
+    // Update streaming state for the loaded chat
+    final bool chatIsStreaming = _activeChatId != null &&
+        _streamingManager.isStreaming(_activeChatId!);
+
     setState(() {
       _isMicActive = false;
+      _isStreaming = chatIsStreaming;
+      _isSending = chatIsStreaming; // If streaming, also mark as sending
     });
+
     _scrollChatToBottom();
     // Only request focus if sidebar is closed (don't steal focus from sidebar)
     if (!widget.isSidebarExpanded) {
@@ -989,6 +1011,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       ChatStorageService.selectedChatIndex = -1;
       _isMicActive = false;
       _attachedFiles.clear();
+      _controller.clear();
+      _editingMessageIndex = null;
+      _isSending = false;
+      _isStreaming = false; // New chat has no streaming
     });
     _scrollChatToBottom();
     // Only request focus if sidebar is closed
