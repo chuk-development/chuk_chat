@@ -108,6 +108,34 @@ class StreamingManager {
       ),
     );
   }
+
+  /// Get the current buffered content for a streaming chat
+  /// Returns null if chat is not streaming
+  String? getBufferedContent(String chatId) {
+    final stream = _activeStreams[chatId];
+    if (stream == null || !stream.isActive) return null;
+
+    final content = stream.contentBuffer.toString();
+    return content.isEmpty ? null : content;
+  }
+
+  /// Get the current buffered reasoning for a streaming chat
+  /// Returns null if chat is not streaming
+  String? getBufferedReasoning(String chatId) {
+    final stream = _activeStreams[chatId];
+    if (stream == null || !stream.isActive) return null;
+
+    final reasoning = stream.reasoningBuffer.toString();
+    return reasoning.isEmpty ? null : reasoning;
+  }
+
+  /// Get the message index being streamed for a chat
+  /// Returns null if chat is not streaming
+  int? getStreamingMessageIndex(String chatId) {
+    final stream = _activeStreams[chatId];
+    if (stream == null || !stream.isActive) return null;
+    return stream.messageIndex;
+  }
 }
 
 class _ActiveStream {

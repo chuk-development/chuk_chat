@@ -1011,6 +1011,35 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     final bool chatIsStreaming = _activeChatId != null &&
         _streamingManager.isStreaming(_activeChatId!);
 
+    // CRITICAL: If this chat is streaming in background, update the message
+    // with the current buffered content instead of stale storage data
+    if (chatIsStreaming && _activeChatId != null) {
+      final int? streamingMsgIndex =
+          _streamingManager.getStreamingMessageIndex(_activeChatId!);
+      if (streamingMsgIndex != null &&
+          streamingMsgIndex >= 0 &&
+          streamingMsgIndex < _messages.length) {
+        final String? bufferedContent =
+            _streamingManager.getBufferedContent(_activeChatId!);
+        final String? bufferedReasoning =
+            _streamingManager.getBufferedReasoning(_activeChatId!);
+
+        if (bufferedContent != null) {
+          // Update the message with live buffered content
+          final Map<String, String> updatedMessage =
+              Map<String, String>.from(_messages[streamingMsgIndex]);
+          updatedMessage['text'] = bufferedContent;
+          updatedMessage['reasoning'] = bufferedReasoning ?? '';
+          _messages[streamingMsgIndex] = updatedMessage;
+
+          debugPrint(
+            'Loaded streaming chat $_activeChatId with buffered content '
+            '(${bufferedContent.length} chars)',
+          );
+        }
+      }
+    }
+
     setState(() {
       _isMicActive = false;
       _isStreaming = chatIsStreaming;

@@ -65,3 +65,4 @@ AppDir/
 # Generated files
 combined_code_for_llm.txt
 generate_llm_input.sh
+SECURITY_AND_DUPLICATION_REPORT.md
