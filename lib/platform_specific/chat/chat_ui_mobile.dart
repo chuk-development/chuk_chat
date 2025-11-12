@@ -1809,10 +1809,41 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         debugPrint('Chat switched during persist, skipping UI update (was: $chatIdAtStart, now: $_activeChatId)');
       }
     } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to store chat: $error')));
+      final String errorStr = error.toString().toLowerCase();
+
+      // Don't show errors for network issues or when offline
+      if (NetworkStatusService.isNetworkError(error) || _isOffline) {
+        debugPrint('Chat persist failed (offline/network): $error');
+        // Silently fail - chats will sync when back online
+        return;
+      }
+
+      // Check if it's a permission/auth error
+      if (errorStr.contains('permission') ||
+          errorStr.contains('access') ||
+          errorStr.contains('denied') ||
+          errorStr.contains('unauthorized')) {
+        debugPrint('Chat persist failed (permissions): $error');
+
+        // Only show error if mounted and not a transient issue
+        if (mounted) {
+          // Check if we actually have a valid session
+          final session = SupabaseService.auth.currentSession;
+          if (session == null) {
+            _showSnackBar('Please sign in to save chats');
+          } else {
+            debugPrint('Permission error despite valid session - may be RLS policy issue');
+            // Don't spam user with permission errors - log it
+          }
+        }
+        return;
+      }
+
+      // For other errors, log but don't show to user (too disruptive)
+      debugPrint('Chat persist failed: $error');
+      if (mounted && errorStr.contains('encryption')) {
+        _showSnackBar('Error saving chat. Your messages are still visible.');
+      }
     }
   }
 
