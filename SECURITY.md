@@ -17,6 +17,16 @@ All chat messages are encrypted client-side before being stored or transmitted:
 
 Chat data is never stored or transmitted in plaintext. Even the server cannot decrypt your messages.
 
+**What Data is NOT Encrypted:**
+
+While your chat messages are fully encrypted, the following data is stored in plaintext for operational purposes:
+- Your email address (for authentication)
+- Theme preferences (colors, dark/light mode settings)
+- Model selection preferences
+- API usage statistics (anonymous, for rate limiting and abuse prevention)
+
+This data does not contain any chat content or sensitive personal information.
+
 ### 2. Certificate Pinning
 
 The app uses SSL certificate pinning to prevent man-in-the-middle (MITM) attacks:

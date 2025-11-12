@@ -1,14 +1,16 @@
 # chuk_chat
 
-A secure, cross-platform chat application built with Flutter that puts privacy first. Chat with AI models while keeping your conversations encrypted and under your control.
+A secure, cross-platform chat application built with Flutter that puts privacy first. Chat with open-weight AI models while keeping your conversations encrypted and under your control.
+
+**Our Philosophy**: We exclusively support open-weight models. We believe in transparency, accessibility, and the freedom to run AI models independently. Closed-source models have no place in our ecosystem.
 
 ## Features
 
 ### Core Features
 
 - **End-to-End Encryption**: All your chats are encrypted client-side with AES-256-GCM before being stored or synced
-- **Cross-Platform**: Works seamlessly on Linux (DEB, RPM, AppImage) and Android (APK)
-- **Multiple AI Models**: Choose from various AI models including Claude, GPT-4, DeepSeek, and more
+- **Cross-Platform**: Works seamlessly on Windows, macOS, Linux, Android, and iOS
+- **Open-Weight AI Models**: Access to various open-weight models including DeepSeek, Llama, Mistral, Qwen, and more
 - **Real-Time Streaming**: Watch AI responses appear in real-time as they're generated
 - **Offline Support**: Access your chat history even when offline
 - **File Attachments**: Share images and documents with AI (PDF, images, text files)
@@ -33,117 +35,13 @@ For detailed security information, see [SECURITY.md](SECURITY.md).
 - **Message History**: Search and browse your previous conversations
 - **Starred Chats**: Mark important conversations for quick access
 
-## Installation
+## Important: Password Security
 
-### Android
+⚠️ **If you lose your password, all your chats are permanently lost and cannot be recovered by anyone.**
 
-1. Download the latest APK from the [Releases](releases/android/) page
-2. Choose the APK for your device architecture:
-   - `chuk_chat-arm64-v8a.apk` - Most modern Android phones (64-bit)
-   - `chuk_chat-armeabi-v7a.apk` - Older Android phones (32-bit)
-   - `chuk_chat-x86_64.apk` - Android emulators and x86 devices
-3. Install the APK (you may need to enable "Install from Unknown Sources" in your device settings)
-4. Open the app and sign up or sign in
+Your chats are encrypted with your password on your device. We can send you the encrypted chat data if needed, but it will remain encrypted and unreadable without your password. There is no password recovery mechanism by design - this ensures maximum privacy and security.
 
-### Linux
-
-#### Debian/Ubuntu (DEB)
-
-```bash
-# For 64-bit systems (most common)
-sudo dpkg -i releases/linux/chuk_chat_1.0.1_amd64.deb
-
-# For ARM64 systems (Raspberry Pi 4, etc.)
-sudo dpkg -i releases/linux/chuk_chat_1.0.1_arm64.deb
-
-# Install dependencies if needed
-sudo apt-get install -f
-```
-
-#### Fedora/RHEL/CentOS (RPM)
-
-```bash
-# For 64-bit systems
-sudo rpm -i releases/linux/chuk_chat-1.0.1-1.x86_64.rpm
-
-# For ARM64 systems
-sudo rpm -i releases/linux/chuk_chat-1.0.1-1.aarch64.rpm
-```
-
-#### AppImage (Universal)
-
-```bash
-# Make executable
-chmod +x releases/linux/chuk_chat-1.0.1-x86_64.AppImage
-
-# Run directly (no installation needed)
-./releases/linux/chuk_chat-1.0.1-x86_64.AppImage
-```
-
-## Getting Started
-
-### First Time Setup
-
-1. **Create an Account**
-   - Open the app
-   - Click "Sign Up"
-   - Enter your email and a strong password (12+ characters)
-   - Verify your email address
-
-2. **Sign In**
-   - Enter your credentials
-   - Your encryption keys are automatically loaded
-   - Your synced chats appear in the sidebar
-
-3. **Start Chatting**
-   - Click the "+" button to create a new chat
-   - Select an AI model from the dropdown
-   - Type your message and press Enter or click Send
-   - Watch the AI response stream in real-time
-
-### Using Advanced Features
-
-#### Changing AI Models
-
-- Click the model dropdown at the top of the chat
-- Select a different model
-- The model applies to new messages in that chat
-
-#### Attaching Files
-
-- Click the attachment icon (📎) in the message input area
-- Select a file (images, PDFs, text files, etc.)
-- The file is uploaded and converted to markdown
-- Files are included in your message context
-
-#### Customizing Theme
-
-- Click Settings (⚙️) in the sidebar
-- Choose accent colors, background colors, and icon colors
-- Toggle dark/light mode
-- Enable or disable film grain overlay
-- Changes sync across all your devices
-
-#### Starring Chats
-
-- Hover over a chat in the sidebar
-- Click the star icon (⭐)
-- Starred chats appear at the top of your chat list
-
-## System Requirements
-
-### Android
-
-- Android 7.0 (API level 24) or higher
-- 100 MB free storage space
-- Internet connection for syncing and AI chat
-
-### Linux
-
-- Ubuntu 20.04+, Debian 11+, Fedora 35+, or compatible distribution
-- x86_64 or ARM64 processor
-- 200 MB free storage space
-- Internet connection for syncing and AI chat
+**Choose a strong password and store it safely.**
 
 ## Privacy & Data
 
@@ -154,13 +52,6 @@ chmod +x releases/linux/chuk_chat-1.0.1-x86_64.AppImage
 - Starred chat status
 - Timestamps and message history
 
-### What Data is NOT Encrypted
-
-- Your email address
-- Theme preferences
-- Model selection preferences
-- API usage statistics (anonymous)
-
 ### Where is Data Stored
 
 - **Local Device**: Encrypted chat history is cached locally for offline access
@@ -168,42 +59,6 @@ chmod +x releases/linux/chuk_chat-1.0.1-x86_64.AppImage
 - **Your Encryption Key**: Stored securely in your device's keychain/keystore
 
 Your encryption key never leaves your device. Even if the server is compromised, your chats remain encrypted.
-
-## Troubleshooting
-
-### App won't connect to server
-
-1. Check your internet connection
-2. Verify you're not behind a restrictive firewall
-3. Try disabling VPN if you're using one
-4. Check if api.chuk.dev is accessible from your browser
-
-### Can't see my chats after signing in
-
-1. Make sure you're using the same email address
-2. Try logging out and logging back in
-3. Check if your encryption key was loaded (check logs in debug mode)
-4. Contact support if issue persists
-
-### File upload fails
-
-1. Ensure file is under 10 MB
-2. Check file type is supported (PDF, images, text, markdown)
-3. Try a different file
-4. Check your internet connection
-
-### Theme changes not saving
-
-1. Make sure you're signed in
-2. Check your internet connection
-3. Try changing theme again
-4. Check Settings page for error messages
-
-## Support
-
-For bug reports and feature requests, please open an issue on the GitHub repository.
-
-For security vulnerabilities, please see [SECURITY.md](SECURITY.md) for responsible disclosure guidelines.
 
 ---
 
@@ -215,10 +70,14 @@ This section is for developers who want to build, modify, or contribute to chuk_
 
 - **Flutter SDK**: Version 3.24.0 or higher
 - **Dart SDK**: Version 3.5.0 or higher (comes with Flutter)
-- **Android Studio** (for Android builds): Latest stable version
-- **Android SDK**: API Level 36 (compileSdk), minimum API Level 24
-- **Android NDK**: Version 26.3.11579264 or higher
-- **Linux Build Tools** (for Linux builds):
+
+**Platform-Specific Requirements:**
+
+- **Android**: Android Studio, Android SDK (API 36), Android NDK 26.3.11579264+
+- **iOS**: Xcode (latest stable), macOS required for iOS builds
+- **Windows**: Visual Studio 2022 or later with Desktop development with C++ workload
+- **macOS**: Xcode command line tools
+- **Linux**:
   - `dpkg-dev` (for DEB packages)
   - `rpm` (for RPM packages, optional)
   - `appimagetool` (for AppImage packages, optional)
@@ -249,13 +108,19 @@ This section is for developers who want to build, modify, or contribute to chuk_
    # Auto-detect platform
    flutter run
 
-   # Run on specific device
+   # Run on specific platform
+   flutter run -d windows
+   flutter run -d macos
    flutter run -d linux
    flutter run -d android
+   flutter run -d ios
 
    # Run with platform optimization (tree-shaking)
+   flutter run -d windows --dart-define=PLATFORM_DESKTOP=true
+   flutter run -d macos --dart-define=PLATFORM_DESKTOP=true
    flutter run -d linux --dart-define=PLATFORM_DESKTOP=true
    flutter run -d android --dart-define=PLATFORM_MOBILE=true
+   flutter run -d ios --dart-define=PLATFORM_MOBILE=true
    ```
 
 ### Building for Release
@@ -265,11 +130,14 @@ This section is for developers who want to build, modify, or contribute to chuk_
 For fast iteration during development:
 
 ```bash
-# Single-architecture Android APK (~30 seconds)
-flutter build apk --dart-define=PLATFORM_MOBILE=true --tree-shake-icons --target-platform android-arm64
-
-# Linux build (optimized)
+# Desktop platforms (optimized with tree-shaking)
+flutter build windows --dart-define=PLATFORM_DESKTOP=true --tree-shake-icons
+flutter build macos --dart-define=PLATFORM_DESKTOP=true --tree-shake-icons
 flutter build linux --dart-define=PLATFORM_DESKTOP=true --tree-shake-icons
+
+# Mobile platforms (optimized with tree-shaking)
+flutter build apk --dart-define=PLATFORM_MOBILE=true --tree-shake-icons --target-platform android-arm64  # Fast single-arch build
+flutter build ios --dart-define=PLATFORM_MOBILE=true --tree-shake-icons  # Requires macOS
 ```
 
 #### Full Release Builds
@@ -484,4 +352,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 - Built with [Flutter](https://flutter.dev)
 - Backend powered by [Supabase](https://supabase.com)
-- AI models provided by various providers (OpenRouter, Anthropic, OpenAI, etc.)
+- Open-weight AI models accessed via [OpenRouter](https://openrouter.ai)
