@@ -10,6 +10,7 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/services/model_capabilities_service.dart';
+import 'package:chuk_chat/services/message_composition_service.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/pages/coming_soon_page.dart';
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
@@ -26,8 +27,6 @@ import 'package:record/record.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
-import 'package:chuk_chat/utils/token_estimator.dart';
-import 'package:chuk_chat/utils/input_validator.dart';
 
 class _MessageRenderData {
   const _MessageRenderData({
@@ -989,156 +988,45 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     final String originalUserInput = _controller.text.trim();
 
-    // Validate message length
-    if (originalUserInput.isNotEmpty) {
-      final validationResult = InputValidator.validateAndSanitizeMessage(originalUserInput);
-      if (!validationResult['valid']) {
+    // Use MessageCompositionService to prepare the message
+    final List<Map<String, String>> apiHistory =
+        _buildApiHistoryWithPendingMessage(originalUserInput);
+    final String? resolvedSystemPrompt = await _resolveSystemPromptForSend();
+
+    final result = await MessageCompositionService.prepareMessage(
+      userInput: originalUserInput,
+      attachedFiles: _attachedFiles,
+      selectedModelId: _selectedModelId,
+      apiHistory: apiHistory,
+      systemPrompt: resolvedSystemPrompt,
+      getProviderSlug: _ensureProviderSlugForCurrentModel,
+    );
+
+    if (!result.isValid) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(validationResult['error'] ?? 'Invalid input'),
-          ),
+          SnackBar(content: Text(result.errorMessage ?? 'Invalid message')),
         );
-        return;
       }
+      if (result.errorMessage == 'Session expired. Please sign in again.') {
+        await SupabaseService.signOut();
+      }
+      return;
     }
 
-    final bool hasText = originalUserInput.isNotEmpty;
+    // Extract prepared values
+    final String displayMessageText = result.displayMessageText!;
+    final String aiPromptContent = result.aiPromptContent!;
+    final String accessToken = result.accessToken!;
+    final String providerSlug = result.providerSlug!;
+    final int maxResponseTokens = result.maxResponseTokens!;
+    final String? systemPrompt = result.effectiveSystemPrompt;
+
     final bool hasAttachments = _attachedFiles.any(
       (f) => f.markdownContent != null,
     );
 
-    if (!hasText && !hasAttachments) return;
-
     final bool firstMessageInChat = _messages.isEmpty;
-
-    String displayMessageText = originalUserInput;
-    String aiPromptContent = originalUserInput;
-
-    if (hasAttachments) {
-      final attachedFileNames = _attachedFiles
-          .where((f) => f.markdownContent != null)
-          .map((f) {
-            final sanitized = InputValidator.sanitizeFileName(f.fileName);
-            final escaped = InputValidator.escapeFileNameForDisplay(sanitized);
-            return '"$escaped"';
-          })
-          .join(', ');
-      final String attachmentsLine = 'Uploaded documents: $attachedFileNames';
-      if (displayMessageText.isNotEmpty) {
-        displayMessageText = '$attachmentsLine\n\n$displayMessageText';
-      } else {
-        displayMessageText = attachmentsLine;
-      }
-
-      final markdownSections = _attachedFiles
-          .where((f) => f.markdownContent != null)
-          .map(
-            (f) {
-              final sanitized = InputValidator.sanitizeFileName(f.fileName);
-              final escaped = InputValidator.escapeFileNameForDisplay(sanitized);
-              return 'Document: "$escaped"\n```\n${f.markdownContent}\n```';
-            },
-          )
-          .join('\n\n');
-      final String queryText = originalUserInput.isNotEmpty
-          ? originalUserInput
-          : 'Please review the uploaded documents.';
-      aiPromptContent = '$markdownSections\n\nUser query: $queryText';
-    }
-
-    final session =
-        await SupabaseService.refreshSession() ??
-        SupabaseService.auth.currentSession;
-    if (session == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Session expired. Please sign in again.'),
-          ),
-        );
-      }
-      await SupabaseService.signOut();
-      return;
-    }
-
-    final accessToken = session.accessToken;
-    if (accessToken.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Unable to authenticate your session.')),
-        );
-      }
-      return;
-    }
-
-    final String? providerSlug = await _ensureProviderSlugForCurrentModel();
-    if (providerSlug == null || providerSlug.isEmpty) {
-      final String message =
-          'No provider is configured for $_selectedModelId. Select a provider in Settings and try again.';
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(message)));
-      }
-      return;
-    }
-
-    final List<Map<String, String>> apiHistory =
-        _buildApiHistoryWithPendingMessage(displayMessageText);
-
-    final String? resolvedSystemPrompt = await _resolveSystemPromptForSend();
-    final String? systemPrompt =
-        (resolvedSystemPrompt != null && resolvedSystemPrompt.trim().isNotEmpty)
-        ? resolvedSystemPrompt
-        : null;
-
-    final ModelProviderLimits? providerLimits =
-        ModelSelectionDropdown.providerLimitsForModel(_selectedModelId);
-
-    final int promptTokens = TokenEstimator.estimatePromptTokens(
-      history: apiHistory,
-      currentMessage: aiPromptContent,
-      systemPrompt: systemPrompt,
-    );
-
-    int maxResponseTokens = 512;
-
-    if (providerLimits?.contextLength != null &&
-        providerLimits!.contextLength! > 0) {
-      final int contextLength = providerLimits.contextLength!;
-      if (promptTokens >= contextLength) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Too much context for this model '
-                '(${promptTokens.toString()} vs ${contextLength.toString()} token limit). '
-                'Clear history or shorten your message.',
-              ),
-            ),
-          );
-        }
-        return;
-      }
-
-      final int availableForCompletion = contextLength - promptTokens;
-      final int completionCap =
-          providerLimits.maxCompletionTokens != null &&
-              providerLimits.maxCompletionTokens! > 0
-          ? providerLimits.maxCompletionTokens!
-          : math.max(256, contextLength ~/ 4);
-      maxResponseTokens = math.max(
-        1,
-        math.min(completionCap, availableForCompletion),
-      );
-
-      debugPrint(
-        'Prompt tokens (est): $promptTokens / $contextLength, '
-        'max completion tokens: $maxResponseTokens',
-      );
-    } else {
-      debugPrint('Prompt tokens (est): $promptTokens (no context limit data)');
-    }
 
     int placeholderIndex = -1;
     setState(() {

@@ -60,20 +60,18 @@ class CertificatePinning {
 
   /// Certificate pins for known domains.
   ///
-  /// IMPORTANT: Update these SHA-256 fingerprints with your actual API certificates.
-  /// To get certificate fingerprints:
-  /// 1. openssl s_client -connect api.example.com:443 -servername api.example.com < /dev/null | openssl x509 -outform PEM > cert.pem
-  /// 2. openssl x509 -in cert.pem -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | openssl enc -base64
+  /// Configured for api.chuk.dev with primary and backup certificates.
+  /// Certificate expires: January 7, 2026
+  /// See SECURITY.md for certificate rotation instructions.
   static final List<CertificatePin> _pins = [
-    // Example: Add your API certificate pins here
-    // CertificatePin(
-    //   domain: 'api.yourservice.com',
-    //   sha256Hashes: [
-    //     'primary_certificate_sha256_hash',
-    //     'backup_certificate_sha256_hash',  // Backup for certificate rotation
-    //   ],
-    //   includeSubdomains: true,
-    // ),
+    CertificatePin(
+      domain: 'api.chuk.dev',
+      sha256Hashes: [
+        'bd7NPPpXedasuFCk8HN7QGbJNpWwrcO++lerFEbCh2I=',  // Primary certificate (expires Jan 2026)
+        'bd7NPPpXedasuFCk8HN7QGbJNpWwrcO++lerFEbCh2I=',  // Backup (same for now, update before rotation)
+      ],
+      includeSubdomains: true,
+    ),
   ];
 
   /// Configure Dio instance with certificate pinning.
