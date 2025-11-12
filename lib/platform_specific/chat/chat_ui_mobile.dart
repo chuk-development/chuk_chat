@@ -7,6 +7,7 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/services/model_capabilities_service.dart';
+import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/pages/coming_soon_page.dart';
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
@@ -97,6 +98,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   final StreamingManager _streamingManager = StreamingManager();
   int? _editingMessageIndex;
   StreamSubscription<void>? _chatStorageSubscription;
+  bool _isOffline = false;
+  late final VoidCallback _networkStatusListener;
 
   static const double _kMaxChatContentWidth = 760.0;
   static const double _kAttachmentBarMarginBottom = 8.0;
@@ -147,6 +150,25 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     _chatStorageSubscription = ChatStorageService.changes.listen((_) {
       _handleRealtimeChatUpdate();
     });
+
+    // Listen for network status changes
+    _networkStatusListener = () {
+      final bool isOnline = NetworkStatusService.isOnline;
+      if (_isOffline != !isOnline) {
+        setState(() {
+          _isOffline = !isOnline;
+        });
+        if (isOnline) {
+          _showSnackBar('Back online');
+        } else {
+          _showSnackBar('You are offline');
+        }
+      }
+    };
+    NetworkStatusService.isOnlineListenable.addListener(_networkStatusListener);
+
+    // Do initial network check
+    unawaited(NetworkStatusService.quickCheck());
   }
 
   void _handleRealtimeChatUpdate() {
@@ -367,14 +389,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       return;
     }
 
-    final session =
-        await SupabaseService.refreshSession() ??
-        SupabaseService.auth.currentSession;
+    final session = await _getSessionSafely();
     if (session == null) {
       await _deleteRecordingFile(audioPath);
       _lastRecordedFilePath = null;
-      _showSnackBar('Session expired');
-      await SupabaseService.signOut();
       return;
     }
     final accessToken = session.accessToken;
@@ -664,23 +682,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     }
     final String chatId = _activeChatId!;
 
-    final session =
-        await SupabaseService.refreshSession() ??
-        SupabaseService.auth.currentSession;
+    final session = await _getSessionSafely();
     if (session == null) {
       _finalizeAiMessage(
         placeholderIndex,
-        'Please sign in to continue the conversation.',
+        'Cannot send message. Please check your connection.',
         chatId: chatId,
       );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Session expired. Please sign in again.'),
-          ),
-        );
-      }
-      await SupabaseService.signOut();
       return;
     }
 
@@ -952,6 +960,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       unawaited(_streamingManager.cancelStream(_activeChatId!));
     }
     _chatStorageSubscription?.cancel();
+    NetworkStatusService.isOnlineListenable.removeListener(_networkStatusListener);
     _controller.dispose();
     _scrollController.dispose();
     _composerScrollController.dispose();
@@ -1191,6 +1200,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       return;
     }
 
+    // Check network status before sending
+    if (_isOffline) {
+      _showSnackBar('You are offline. Please check your connection.');
+      return;
+    }
+
     if (_attachedFiles.any((f) => f.isUploading)) {
       _showSnackBar('Upload in progress');
       return;
@@ -1231,12 +1246,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       aiPromptContent = '$markdownSections\n\nUser query: $queryText';
     }
 
-    final session =
-        await SupabaseService.refreshSession() ??
-        SupabaseService.auth.currentSession;
+    // Try to get session, but don't logout on network errors
+    final session = await _getSessionSafely();
     if (session == null) {
-      _showSnackBar('Session expired. Please sign in again.');
-      await SupabaseService.signOut();
+      // Session is genuinely expired or network error already handled
       return;
     }
 
@@ -1676,6 +1689,45 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         curve: Curves.easeOut,
       );
     });
+  }
+
+  /// Safely get session, only logout on actual auth errors (not network errors)
+  Future<dynamic> _getSessionSafely() async {
+    try {
+      final session = await SupabaseService.refreshSession() ??
+                      SupabaseService.auth.currentSession;
+
+      if (session == null) {
+        // Check if we're offline before logging out
+        final bool isOnline = await NetworkStatusService.hasInternetConnection();
+        if (!isOnline) {
+          _showSnackBar('Cannot connect. Please check your network.');
+          return null;
+        }
+
+        // Online but no session = genuinely expired
+        _showSnackBar('Session expired. Please sign in again.');
+        await SupabaseService.signOut();
+        return null;
+      }
+
+      return session;
+    } catch (error) {
+      // Check if this is a network error
+      if (NetworkStatusService.isNetworkError(error)) {
+        debugPrint('Network error during session refresh: $error');
+        _showSnackBar('Network error. Please check your connection.');
+        // Do a quick network check to update status
+        unawaited(NetworkStatusService.quickCheck());
+        return null;
+      }
+
+      // Not a network error, likely auth issue
+      debugPrint('Auth error during session refresh: $error');
+      _showSnackBar('Authentication error. Please sign in again.');
+      await SupabaseService.signOut();
+      return null;
+    }
   }
 
   Future<void> _persistChat({bool waitForCompletion = false}) async {
