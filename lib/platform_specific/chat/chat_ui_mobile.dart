@@ -14,6 +14,7 @@ import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart'; // NEW API SERVICE
 import 'package:chuk_chat/services/streaming_chat_service.dart';
 import 'package:chuk_chat/services/streaming_manager.dart';
+import 'package:chuk_chat/constants/file_constants.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
@@ -96,113 +97,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   bool _isStreaming = false;
   final StreamingManager _streamingManager = StreamingManager();
   int? _editingMessageIndex;
-
-  static const int _kMaxFileSizeBytes = 10 * 1024 * 1024; // 10MB
-  static const int _kMaxConcurrentUploads = 5;
-  static const List<String> _kAllowedExtensions = [
-    // Audio (with transcription)
-    'wav',
-    'mp3',
-    'm4a',
-    'aac',
-    'flac',
-    'ogg',
-    // Video
-    'mp4',
-    // Documents (PDF, Word, PowerPoint, Excel, OpenDocument)
-    'pdf',
-    'doc',
-    'docx',
-    'ppt',
-    'pptx',
-    'xls',
-    'xlsx',
-    'odt',
-    'ods',
-    'odp',
-    'odg',
-    'odf',
-    // Text (CSV, JSON, XML, HTML, Markdown)
-    'csv',
-    'json',
-    'jsonl',
-    'xml',
-    'html',
-    'htm',
-    'md',
-    'markdown',
-    'txt',
-    'text',
-    // Images (PNG, JPEG, GIF, BMP, TIFF, WebP with EXIF and OCR)
-    'png',
-    'jpg',
-    'jpeg',
-    'gif',
-    'bmp',
-    'tiff',
-    'tif',
-    'webp',
-    'heic',
-    'heif',
-    // Archives (ZIP)
-    'zip',
-    // E-books (EPUB)
-    'epub',
-    // Email (MSG, EML)
-    'msg',
-    'eml',
-    // Code and other formats
-    'py',
-    'js',
-    'ts',
-    'jsx',
-    'tsx',
-    'java',
-    'c',
-    'cpp',
-    'h',
-    'hpp',
-    'go',
-    'rs',
-    'rb',
-    'php',
-    'swift',
-    'kt',
-    'cs',
-    'sh',
-    'bash',
-    'yaml',
-    'yml',
-    'toml',
-    'ini',
-    'cfg',
-    'conf',
-    'sql',
-    'prisma',
-    'graphql',
-    'proto',
-    'css',
-    'scss',
-    'sass',
-    'less',
-    'vue',
-    'svelte',
-    'ipynb',
-    'rss',
-    'atom',
-  ];
-  static const Set<String> _kImageExtensions = <String>{
-    'jpg',
-    'jpeg',
-    'png',
-    'gif',
-    'bmp',
-    'tiff',
-    'tif',
-    'webp',
-    'heic',
-    'heif',
-  };
 
   static const double _kMaxChatContentWidth = 760.0;
   static const double _kAttachmentBarMarginBottom = 8.0;
@@ -1085,7 +979,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   }
 
   bool _isImageExtension(String extension) {
-    return _kImageExtensions.contains(extension);
+    return FileConstants.imageExtensions.contains(extension);
   }
 
   void _handleFileUploadUpdate(
@@ -1506,14 +1400,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
   Future<void> _uploadFiles() async {
     if (_attachedFiles.where((f) => f.isUploading).length >=
-        _kMaxConcurrentUploads) {
+        FileConstants.maxConcurrentUploads) {
       _showAttachmentError('Please wait for current uploads to complete');
       return;
     }
 
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: _kAllowedExtensions,
+      allowedExtensions: FileConstants.allowedExtensions,
       allowMultiple: true,
     );
 
@@ -1543,12 +1437,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         ? fileName.split('.').last.toLowerCase()
         : '';
 
-    if (fileSizeBytes > _kMaxFileSizeBytes) {
+    if (fileSizeBytes > FileConstants.maxFileSizeBytes) {
       _showAttachmentError('File "$fileName" exceeds 10MB limit');
       return;
     }
 
-    if (extension.isEmpty || !_kAllowedExtensions.contains(extension)) {
+    if (extension.isEmpty || !FileConstants.allowedExtensions.contains(extension)) {
       final String detail = extension.isEmpty ? '' : ': .$extension';
       _showAttachmentError('Unsupported file type for "$fileName"$detail');
       return;
@@ -1562,7 +1456,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     }
 
     if (_attachedFiles.where((f) => f.isUploading).length >=
-        _kMaxConcurrentUploads) {
+        FileConstants.maxConcurrentUploads) {
       _showAttachmentError(
         'Skipping "$fileName": too many concurrent uploads. Try again soon.',
       );

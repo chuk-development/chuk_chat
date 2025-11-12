@@ -16,6 +16,7 @@ import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart'; // NEW
 import 'package:chuk_chat/services/streaming_chat_service.dart';
 import 'package:chuk_chat/services/streaming_manager.dart';
+import 'package:chuk_chat/constants/file_constants.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
@@ -102,111 +103,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   final List<AttachedFile> _attachedFiles = [];
   final Uuid _uuid = Uuid();
-
-  static const List<String> _kAllowedExtensions = [
-    // Audio (with transcription)
-    'wav',
-    'mp3',
-    'm4a',
-    'aac',
-    'flac',
-    'ogg',
-    // Video
-    'mp4',
-    // Documents (PDF, Word, PowerPoint, Excel, OpenDocument)
-    'pdf',
-    'doc',
-    'docx',
-    'ppt',
-    'pptx',
-    'xls',
-    'xlsx',
-    'odt',
-    'ods',
-    'odp',
-    'odg',
-    'odf',
-    // Text (CSV, JSON, XML, HTML, Markdown)
-    'csv',
-    'json',
-    'jsonl',
-    'xml',
-    'html',
-    'htm',
-    'md',
-    'markdown',
-    'txt',
-    'text',
-    // Images (PNG, JPEG, GIF, BMP, TIFF, WebP with EXIF and OCR)
-    'png',
-    'jpg',
-    'jpeg',
-    'gif',
-    'bmp',
-    'tiff',
-    'tif',
-    'webp',
-    'heic',
-    'heif',
-    // Archives (ZIP)
-    'zip',
-    // E-books (EPUB)
-    'epub',
-    // Email (MSG, EML)
-    'msg',
-    'eml',
-    // Code and other formats
-    'py',
-    'js',
-    'ts',
-    'jsx',
-    'tsx',
-    'java',
-    'c',
-    'cpp',
-    'h',
-    'hpp',
-    'go',
-    'rs',
-    'rb',
-    'php',
-    'swift',
-    'kt',
-    'cs',
-    'sh',
-    'bash',
-    'yaml',
-    'yml',
-    'toml',
-    'ini',
-    'cfg',
-    'conf',
-    'sql',
-    'prisma',
-    'graphql',
-    'proto',
-    'css',
-    'scss',
-    'sass',
-    'less',
-    'vue',
-    'svelte',
-    'ipynb',
-    'rss',
-    'atom',
-  ];
-  static const Set<String> _kImageExtensions = <String>{
-    'jpg',
-    'jpeg',
-    'png',
-    'gif',
-    'bmp',
-    'tiff',
-    'tif',
-    'webp',
-    'heic',
-    'heif',
-  };
 
   static const double _kMaxChatContentWidth = 760.0;
   static const double _kSearchBarContentHeight = 135.0;
@@ -433,7 +329,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       ModelCapabilitiesService.supportsImageInput(_selectedModelId);
 
   bool _isImageExtension(String extension) {
-    return _kImageExtensions.contains(extension);
+    return FileConstants.imageExtensions.contains(extension);
   }
 
   Future<void> _handleMicTap() async {
@@ -1518,7 +1414,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: _kAllowedExtensions,
+      allowedExtensions: FileConstants.allowedExtensions,
       allowMultiple: true,
     );
 
@@ -1545,7 +1441,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         String fileExtension = fileName.split('.').last.toLowerCase();
         String fileId = _uuid.v4();
 
-        if (!_kAllowedExtensions.contains(fileExtension)) {
+        if (!FileConstants.allowedExtensions.contains(fileExtension)) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
