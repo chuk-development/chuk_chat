@@ -12,7 +12,7 @@ import 'package:chuk_chat/pages/coming_soon_page.dart';
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart'; // NEW API SERVICE
-import 'package:chuk_chat/services/streaming_chat_service.dart';
+import 'package:chuk_chat/services/websocket_chat_service.dart';
 import 'package:chuk_chat/services/streaming_manager.dart';
 import 'package:chuk_chat/constants/file_constants.dart';
 
@@ -629,7 +629,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       setState(() => _isStreaming = true);
 
       final Stream<ChatStreamEvent> eventStream =
-          StreamingChatService.sendStreamingChat(
+          WebSocketChatService.sendStreamingChat(
             accessToken: accessToken,
             message: originalUserInput,
             modelId: _selectedModelId,
@@ -1202,7 +1202,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     final StringBuffer reasoningBuffer = StringBuffer();
 
     try {
-      final stream = StreamingChatService.sendStreamingChat(
+      final stream = WebSocketChatService.sendStreamingChat(
         accessToken: accessToken,
         message: aiPromptContent,
         modelId: _selectedModelId,
