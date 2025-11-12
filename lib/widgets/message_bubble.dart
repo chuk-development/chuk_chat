@@ -317,56 +317,13 @@ class _MessageBubbleState extends State<MessageBubble> {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: iconFgColor.withValues(alpha: 0.18)),
       ),
-      child: Column(
-        crossAxisAlignment: alignRight
-            ? CrossAxisAlignment.end
-            : CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: alignRight
-                ? MainAxisAlignment.end
-                : MainAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.psychology_alt_outlined,
-                size: 16,
-                color: iconFgColor.withValues(alpha: 0.7),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                'Reasoning',
-                style: TextStyle(
-                  color: iconFgColor.withValues(alpha: 0.75),
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12,
-                ),
-              ),
-              if (widget.isReasoningStreaming) ...[
-                const SizedBox(width: 6),
-                SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      iconFgColor.withValues(alpha: 0.6),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 8),
-          SelectableText(
-            widget.reasoning!,
-            style: TextStyle(
-              color: iconFgColor.withValues(alpha: 0.85),
-              height: 1.35,
-            ),
-            textAlign: alignRight ? TextAlign.right : TextAlign.left,
-          ),
-        ],
+      child: SelectableText(
+        widget.reasoning!,
+        style: TextStyle(
+          color: iconFgColor.withValues(alpha: 0.85),
+          height: 1.35,
+        ),
+        textAlign: alignRight ? TextAlign.right : TextAlign.left,
       ),
     );
   }
