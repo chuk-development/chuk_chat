@@ -4,6 +4,9 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 import 'package:chuk_chat/services/api_config_service.dart';
+import 'package:chuk_chat/utils/file_upload_validator.dart';
+import 'package:chuk_chat/utils/upload_rate_limiter.dart';
+import 'package:chuk_chat/utils/secure_token_handler.dart';
 
 /// Service for converting files to markdown using the /ai/convert-file endpoint.
 /// Supports documents, images (with EXIF/OCR), audio (with transcription),
@@ -48,6 +51,7 @@ class FileConversionService {
   static Future<Map<String, dynamic>> convertFile({
     required String filePath,
     required String accessToken,
+    String? userId,
   }) async {
     try {
       final file = File(filePath);
@@ -60,6 +64,51 @@ class FileConversionService {
         };
       }
 
+      // Rate limiting check (if userId provided)
+      if (userId != null) {
+        final rateLimiter = UploadRateLimiter();
+        if (!rateLimiter.isUploadAllowed(userId)) {
+          final timeUntilReset = rateLimiter.getTimeUntilReset(userId);
+          final minutes = timeUntilReset != null ? (timeUntilReset / 60).ceil() : 5;
+          return {
+            'success': false,
+            'error': 'Too many uploads. Please wait $minutes minute(s) before trying again.',
+            'markdown': null,
+          };
+        }
+      }
+
+      // Validate file before upload (size, MIME type, archive content)
+      debugPrint('═══════════════════════════════════════════════════════════');
+      debugPrint('🔒 VALIDATING FILE UPLOAD');
+      debugPrint('File: ${file.path.split('/').last}');
+      debugPrint('═══════════════════════════════════════════════════════════');
+
+      final validationResult = await FileUploadValidator.validateFile(filePath);
+
+      if (!validationResult.isValid) {
+        debugPrint('❌ VALIDATION FAILED: ${validationResult.errorMessage}');
+        return {
+          'success': false,
+          'error': validationResult.errorMessage ?? 'File validation failed',
+          'markdown': null,
+        };
+      }
+
+      debugPrint('✅ VALIDATION PASSED');
+      if (validationResult.fileSizeBytes != null) {
+        debugPrint('File size: ${FileUploadValidator.formatFileSize(validationResult.fileSizeBytes!)}');
+      }
+      if (validationResult.mimeType != null) {
+        debugPrint('MIME type: ${validationResult.mimeType}');
+      }
+      debugPrint('═══════════════════════════════════════════════════════════');
+
+      // Record upload attempt for rate limiting
+      if (userId != null) {
+        UploadRateLimiter().recordUpload(userId);
+      }
+
       final fileName = file.path.split('/').last;
       final fileExtension = fileName.split('.').last.toLowerCase();
 
@@ -67,6 +116,16 @@ class FileConversionService {
         return {
           'success': false,
           'error': 'Unsupported file type: .$fileExtension',
+          'markdown': null,
+        };
+      }
+
+      // Validate token before use
+      final tokenError = SecureTokenHandler.validateTokenForRequest(accessToken, context: 'File conversion');
+      if (tokenError != null) {
+        return {
+          'success': false,
+          'error': tokenError,
           'markdown': null,
         };
       }
@@ -84,12 +143,13 @@ class FileConversionService {
         ),
       );
 
-      debugPrint('═══════════════════════════════════════════════════════════');
-      debugPrint('📤 FILE CONVERSION REQUEST');
-      debugPrint('File: $fileName');
-      debugPrint('Extension: .$fileExtension');
-      debugPrint('Endpoint: $_apiBaseUrl/ai/convert-file');
-      debugPrint('═══════════════════════════════════════════════════════════');
+      // Log request with masked token
+      SecureTokenHandler.logApiRequest(
+        endpoint: '$_apiBaseUrl/ai/convert-file',
+        method: 'POST',
+        accessToken: accessToken,
+        payload: {'file': fileName},
+      );
 
       // Create multipart form data
       final formData = FormData.fromMap({
@@ -104,18 +164,19 @@ class FileConversionService {
         '/ai/convert-file',
         data: formData,
         onSendProgress: (sent, total) {
-          if (total != -1) {
+          if (total != -1 && kDebugMode) {
             final progress = (sent / total * 100).toStringAsFixed(0);
             debugPrint('Upload progress: $progress% ($sent/$total bytes)');
           }
         },
       );
 
-      debugPrint('═══════════════════════════════════════════════════════════');
-      debugPrint('✅ FILE CONVERSION SUCCESS');
-      debugPrint('Status Code: ${response.statusCode}');
-      debugPrint('File: $fileName');
-      debugPrint('═══════════════════════════════════════════════════════════');
+      // Log success response
+      SecureTokenHandler.logApiResponse(
+        endpoint: '/ai/convert-file',
+        statusCode: response.statusCode ?? 200,
+        success: true,
+      );
 
       // Extract markdown from response
       final markdown = response.data['markdown'] as String?;
@@ -134,14 +195,6 @@ class FileConversionService {
         'markdown': markdown,
       };
     } on DioException catch (e) {
-      debugPrint('═══════════════════════════════════════════════════════════');
-      debugPrint('❌ FILE CONVERSION ERROR (DioException)');
-      debugPrint('File: ${filePath.split('/').last}');
-      debugPrint('Type: ${e.type}');
-      debugPrint('Message: ${e.message}');
-      debugPrint('Response: ${e.response?.data}');
-      debugPrint('═══════════════════════════════════════════════════════════');
-
       String errorMessage = 'File conversion failed';
 
       if (e.type == DioExceptionType.connectionTimeout ||
@@ -149,7 +202,7 @@ class FileConversionService {
           e.type == DioExceptionType.receiveTimeout) {
         errorMessage = 'Request timed out. The file may be too large.';
       } else if (e.response?.statusCode == 413) {
-        errorMessage = 'File is too large (max 500MB)';
+        errorMessage = 'File is too large (max 10MB)';
       } else if (e.response?.statusCode == 401) {
         errorMessage = 'Authentication failed. Please sign in again.';
       } else if (e.response?.statusCode == 415) {
@@ -159,12 +212,26 @@ class FileConversionService {
         if (e.response!.data != null) {
           final data = e.response!.data;
           if (data is Map && data.containsKey('detail')) {
-            errorMessage = data['detail'].toString();
+            errorMessage = SecureTokenHandler.createSafeErrorMessage(
+              data['detail'].toString(),
+              token: accessToken,
+            );
           } else if (data is Map && data.containsKey('error')) {
-            errorMessage = data['error'].toString();
+            errorMessage = SecureTokenHandler.createSafeErrorMessage(
+              data['error'].toString(),
+              token: accessToken,
+            );
           }
         }
       }
+
+      // Log error with secure handling
+      SecureTokenHandler.logApiResponse(
+        endpoint: '/ai/convert-file',
+        statusCode: e.response?.statusCode ?? 0,
+        error: '${e.type}: $errorMessage',
+        success: false,
+      );
 
       return {
         'success': false,
@@ -172,12 +239,17 @@ class FileConversionService {
         'markdown': null,
       };
     } catch (e, stackTrace) {
-      debugPrint('═══════════════════════════════════════════════════════════');
-      debugPrint('❌ FILE CONVERSION ERROR (Unexpected)');
-      debugPrint('File: ${filePath.split('/').last}');
-      debugPrint('Error: $e');
-      debugPrint('Stack Trace: $stackTrace');
-      debugPrint('═══════════════════════════════════════════════════════════');
+      final errorMessage = 'Unexpected error: ${e.toString()}';
+
+      // Log unexpected error with secure handling
+      if (kDebugMode) {
+        debugPrint('═══════════════════════════════════════════════════════════');
+        debugPrint('❌ FILE CONVERSION ERROR (Unexpected)');
+        debugPrint('File: ${filePath.split('/').last}');
+        debugPrint('Error: $errorMessage');
+        debugPrint('Stack Trace: $stackTrace');
+        debugPrint('═══════════════════════════════════════════════════════════');
+      }
 
       return {
         'success': false,

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
+import 'package:chuk_chat/utils/secure_token_handler.dart';
 
 /// Service for handling streaming chat responses via WebSocket.
 /// WebSocket provides better reliability than HTTP streaming,
@@ -43,30 +44,39 @@ class WebSocketChatService {
     WebSocketChannel? channel;
 
     try {
+      // Validate token before use
+      final tokenError = SecureTokenHandler.validateTokenForRequest(accessToken, context: 'WebSocket chat');
+      if (tokenError != null) {
+        yield ChatStreamEvent.error(tokenError);
+        return;
+      }
+
       final wsUrl = _wsBaseUrl.replace(path: '/ai/chat/ws');
 
-      debugPrint('═══════════════════════════════════════════════════════════');
-      debugPrint('🔌 WEBSOCKET CHAT REQUEST');
-      debugPrint('Provider: $providerSlug');
-      debugPrint('Model: $modelId');
-      debugPrint('WebSocket URL: $wsUrl');
-      debugPrint('───────────────────────────────────────────────────────────');
-      debugPrint('Request Details:');
-      debugPrint('  - Message Length: ${message.length} chars');
-      debugPrint('  - Max Tokens: $maxTokens');
-      debugPrint('  - Temperature: $temperature');
-      debugPrint('  - History: ${history?.length ?? 0} messages');
-      debugPrint('  - System Prompt: ${systemPrompt != null ? '${systemPrompt.length} chars' : 'none'}');
-      debugPrint('═══════════════════════════════════════════════════════════');
+      // Log WebSocket connection with masked token
+      SecureTokenHandler.logWebSocketConnection(
+        url: wsUrl.toString(),
+        accessToken: accessToken,
+      );
+
+      if (kDebugMode) {
+        debugPrint('Request Details:');
+        debugPrint('  - Provider: $providerSlug');
+        debugPrint('  - Model: $modelId');
+        debugPrint('  - Message Length: ${message.length} chars');
+        debugPrint('  - Max Tokens: $maxTokens');
+        debugPrint('  - Temperature: $temperature');
+        debugPrint('  - History: ${history?.length ?? 0} messages');
+        debugPrint('  - System Prompt: ${systemPrompt != null ? '${systemPrompt.length} chars' : 'none'}');
+      }
 
       // Connect to WebSocket
-      debugPrint('🔌 Attempting to connect to: ${wsUrl.toString()}');
-      debugPrint('   Scheme: ${wsUrl.scheme}, Host: ${wsUrl.host}, Port: ${wsUrl.port}, Path: ${wsUrl.path}');
-
       channel = WebSocketChannel.connect(wsUrl);
       await channel.ready;
 
-      debugPrint('✅ WebSocket connected');
+      if (kDebugMode) {
+        debugPrint('✅ WebSocket connected');
+      }
 
       // Prepare the request payload
       final requestPayload = {
@@ -88,7 +98,10 @@ class WebSocketChatService {
 
       // Send the request
       channel.sink.add(jsonEncode(requestPayload));
-      debugPrint('📤 Request sent via WebSocket');
+
+      if (kDebugMode) {
+        debugPrint('📤 Request sent via WebSocket');
+      }
 
       // Listen for responses
       await for (final message in channel.stream) {
@@ -97,17 +110,27 @@ class WebSocketChatService {
             final Map<String, dynamic> data = jsonDecode(message);
 
             if (data.containsKey('error')) {
-              debugPrint('❌ WebSocket error: ${data['error']}');
-              yield ChatStreamEvent.error(data['error'] as String);
+              final errorMsg = SecureTokenHandler.createSafeErrorMessage(
+                data['error'] as String,
+                token: accessToken,
+              );
+
+              if (kDebugMode) {
+                debugPrint('❌ WebSocket error: $errorMsg');
+              }
+
+              yield ChatStreamEvent.error(errorMsg);
               break;
             }
 
             if (data.containsKey('done') && data['done'] == true) {
-              debugPrint('═══════════════════════════════════════════════════════════');
-              debugPrint('✅ WEBSOCKET STREAM COMPLETED');
-              debugPrint('Provider: $providerSlug');
-              debugPrint('Model: $modelId');
-              debugPrint('═══════════════════════════════════════════════════════════');
+              if (kDebugMode) {
+                debugPrint('═══════════════════════════════════════════════════════════');
+                debugPrint('✅ WEBSOCKET STREAM COMPLETED');
+                debugPrint('Provider: $providerSlug');
+                debugPrint('Model: $modelId');
+                debugPrint('═══════════════════════════════════════════════════════════');
+              }
               yield const ChatStreamEvent.done();
               break;
             }
@@ -126,31 +149,39 @@ class WebSocketChatService {
               );
             }
           } catch (e) {
-            debugPrint('Failed to parse WebSocket message: $message');
-            debugPrint('Error: $e');
+            if (kDebugMode) {
+              debugPrint('Failed to parse WebSocket message: $message');
+              debugPrint('Error: $e');
+            }
           }
         }
       }
     } on WebSocketChannelException catch (e) {
-      debugPrint('═══════════════════════════════════════════════════════════');
-      debugPrint('❌ WEBSOCKET ERROR');
-      debugPrint('Provider: $providerSlug');
-      debugPrint('Model: $modelId');
-      debugPrint('Error: $e');
-      debugPrint('═══════════════════════════════════════════════════════════');
+      if (kDebugMode) {
+        debugPrint('═══════════════════════════════════════════════════════════');
+        debugPrint('❌ WEBSOCKET ERROR');
+        debugPrint('Provider: $providerSlug');
+        debugPrint('Model: $modelId');
+        debugPrint('Error: $e');
+        debugPrint('═══════════════════════════════════════════════════════════');
+      }
       throw WebSocketChatException('WebSocket connection failed: $e');
     } catch (e, stackTrace) {
-      debugPrint('═══════════════════════════════════════════════════════════');
-      debugPrint('❌ WEBSOCKET ERROR');
-      debugPrint('Provider: $providerSlug');
-      debugPrint('Model: $modelId');
-      debugPrint('Error: $e');
-      debugPrint('Stack Trace: $stackTrace');
-      debugPrint('═══════════════════════════════════════════════════════════');
+      if (kDebugMode) {
+        debugPrint('═══════════════════════════════════════════════════════════');
+        debugPrint('❌ WEBSOCKET ERROR');
+        debugPrint('Provider: $providerSlug');
+        debugPrint('Model: $modelId');
+        debugPrint('Error: $e');
+        debugPrint('Stack Trace: $stackTrace');
+        debugPrint('═══════════════════════════════════════════════════════════');
+      }
       throw WebSocketChatException('WebSocket streaming failed: $e');
     } finally {
       await channel?.sink.close();
-      debugPrint('🧹 WebSocket closed and resources cleaned up');
+      if (kDebugMode) {
+        debugPrint('🧹 WebSocket closed and resources cleaned up');
+      }
     }
   }
 }
