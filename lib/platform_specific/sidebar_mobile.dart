@@ -183,10 +183,18 @@ class _SidebarMobileState extends State<SidebarMobile> {
       if (!mounted) return;
       await _filterRecentChats();
     } on StateError catch (error) {
-      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(error.message),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     } catch (error) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Failed to update star: $error')),
+        SnackBar(
+          content: Text('Error: $error'),
+          duration: const Duration(seconds: 2),
+        ),
       );
     }
   }
@@ -236,13 +244,24 @@ class _SidebarMobileState extends State<SidebarMobile> {
         await widget.onChatDeleted!(chat.id);
       }
       messenger.showSnackBar(
-        const SnackBar(content: Text('Chat deleted permanently.')),
+        const SnackBar(
+          content: Text('Deleted'),
+          duration: Duration(seconds: 1),
+        ),
       );
     } on StateError catch (error) {
-      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(error.message),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     } catch (error) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Failed to delete chat: $error')),
+        SnackBar(
+          content: Text('Error: $error'),
+          duration: const Duration(seconds: 2),
+        ),
       );
     }
   }

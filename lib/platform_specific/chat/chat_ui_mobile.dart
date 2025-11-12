@@ -352,12 +352,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     });
     final String? audioPath = _lastRecordedFilePath;
     if (audioPath == null) {
-      _showSnackBar('No audio recording available.');
+      _showSnackBar('No audio');
       return;
     }
     final File audioFile = File(audioPath);
     if (!await audioFile.exists()) {
-      _showSnackBar('Recorded audio file is missing.');
+      _showSnackBar('Audio missing');
       await _deleteRecordingFile(audioPath);
       _lastRecordedFilePath = null;
       return;
@@ -369,7 +369,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     if (session == null) {
       await _deleteRecordingFile(audioPath);
       _lastRecordedFilePath = null;
-      _showSnackBar('Session expired. Please sign in again.');
+      _showSnackBar('Session expired');
       await SupabaseService.signOut();
       return;
     }
@@ -377,7 +377,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     if (accessToken.isEmpty) {
       await _deleteRecordingFile(audioPath);
       _lastRecordedFilePath = null;
-      _showSnackBar('Unable to authenticate your session.');
+      _showSnackBar('Auth failed');
       return;
     }
 
@@ -385,7 +385,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     setState(() {
       _isTranscribingAudio = true;
     });
-    _showSnackBar('Transcribing audio…');
+    _showSnackBar('Transcribing…');
 
     try {
       final transcription = await _chatApiService.transcribeAudioFile(
@@ -394,7 +394,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       );
       final String text = transcription.text.trim();
       if (text.isEmpty) {
-        _showSnackBar('Transcription returned no text.');
+        _showSnackBar('No text found');
       } else {
         setState(() {
           _controller.text = text;
@@ -403,29 +403,27 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           );
         });
         _textFieldFocusNode.requestFocus();
-        _showSnackBar('Transcription ready. Tap send to share it.');
+        _showSnackBar('Ready to send');
       }
     } on TranscriptionException catch (error) {
       switch (error.statusCode) {
         case 401:
-          _showSnackBar('Session expired. Please sign in again.');
+          _showSnackBar('Session expired');
           await SupabaseService.signOut();
           break;
         case 502:
-          _showSnackBar(
-            'Transcription service is unavailable. Please try again shortly.',
-          );
+          _showSnackBar('Service unavailable');
           break;
         default:
           final String message = error.message.isNotEmpty
               ? error.message
-              : 'Failed to transcribe audio.';
+              : 'Transcription failed';
           _showSnackBar(message);
       }
     } on TimeoutException {
-      _showSnackBar('Transcription timed out. Please try again.');
+      _showSnackBar('Timed out');
     } catch (error) {
-      _showSnackBar('Unexpected transcription error: $error');
+      _showSnackBar('Error: $error');
     } finally {
       await _deleteRecordingFile(audioPath);
       _lastRecordedFilePath = null;
@@ -444,7 +442,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       }
 
       if (!await _audioRecorder.hasPermission()) {
-        _showSnackBar('Microphone permission is required to record audio.');
+        _showSnackBar('Mic permission required');
         return false;
       }
 
@@ -475,7 +473,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       return true;
     } catch (error, stackTrace) {
       debugPrint('Failed to start microphone: $error\n$stackTrace');
-      _showSnackBar('Unable to access microphone. Please try again.');
+      _showSnackBar('Mic access failed');
       return false;
     }
   }
@@ -514,12 +512,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       return true;
     }
     if (status.isPermanentlyDenied) {
-      _showSnackBar(
-        'Microphone permission denied. Please enable it in settings.',
-      );
+      _showSnackBar('Enable mic in settings');
       return false;
     }
-    _showSnackBar('Microphone permission is required to record audio.');
+    _showSnackBar('Mic permission required');
     return false;
   }
 
@@ -582,11 +578,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
   Future<void> _copyTextToClipboard(String text, {String? label}) async {
     if (text.trim().isEmpty) {
-      _showSnackBar('Nothing to copy.');
+      _showSnackBar('Nothing to copy');
       return;
     }
     await Clipboard.setData(ClipboardData(text: text));
-    _showSnackBar(label ?? 'Copied to clipboard.');
+    _showSnackBar(label ?? 'Copied');
   }
 
   void _editMessageAt(int index) {
@@ -606,15 +602,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     if (!_isValidMessageIndex(index)) return;
     final String trimmedText = newText.trim();
     if (trimmedText.isEmpty) {
-      _showSnackBar('Message cannot be empty.');
+      _showSnackBar('Message empty');
       return;
     }
     if (_isStreaming) {
-      _showSnackBar('Please wait for the current response to finish.');
+      _showSnackBar('Please wait');
       return;
     }
     if (_isSending) {
-      _showSnackBar('Please wait for the current send to finish.');
+      _showSnackBar('Please wait');
       return;
     }
 
@@ -759,7 +755,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     if (!_isValidMessageIndex(index)) return;
     final String text = (_messages[index]['text'] ?? '').trim();
     if (text.isEmpty) {
-      _showSnackBar('Nothing to resend.');
+      _showSnackBar('Nothing to resend');
       return;
     }
     // Use the same logic as editing and submitting
@@ -1107,7 +1103,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
   Future<void> _sendMessage() async {
     if (_isSending && !_isStreaming) {
-      _showSnackBar('Please wait for the current response to finish.');
+      _showSnackBar('Please wait');
       return;
     }
 
@@ -1117,7 +1113,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     }
 
     if (_attachedFiles.any((f) => f.isUploading)) {
-      _showSnackBar('Please wait for file uploads to finish.');
+      _showSnackBar('Upload in progress');
       return;
     }
 
@@ -1910,12 +1906,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
     return Row(
       children: [
-        // Attachment button
+        // Attachment button (disabled if model doesn't support images)
         _buildTinyIconBtn(
           icon: Icons.add_rounded,
-          onTap: _handleAddAttachmentTap,
+          onTap: _modelSupportsImageInput ? _handleAddAttachmentTap : null,
           isActive: hasAttachments,
-          color: iconFg,
+          color: _modelSupportsImageInput ? iconFg : iconFg.withValues(alpha: 0.3),
         ),
         const SizedBox(width: 2),
         // Model selector (ultra compact)
@@ -2077,9 +2073,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                         : Icons.arrow_upward_rounded)),
           onTap: _isMicActive
               ? _handleAudioSend  // Send recorded audio
-              : (_controller.text.trim().isEmpty && !hasAttachments
-                  ? () => _openComingSoonFeature('Voice Mode')
-                  : _sendMessage),
+              : (_isStreaming
+                  ? _sendMessage  // Stop streaming when clicked
+                  : (_controller.text.trim().isEmpty && !hasAttachments
+                      ? () => _openComingSoonFeature('Voice Mode')
+                      : _sendMessage)),
           color: _isMicActive ? accent : (_isStreaming ? Colors.red : accent),
         ),
         const SizedBox(width: 4),
@@ -2089,7 +2087,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
   Widget _buildTinyIconBtn({
     required IconData icon,
-    required VoidCallback onTap,
+    required VoidCallback? onTap, // Made optional for disabled state
     required bool isActive,
     required Color color,
   }) {

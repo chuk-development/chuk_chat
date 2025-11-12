@@ -123,8 +123,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       final messenger = ScaffoldMessenger.of(context);
       messenger.showSnackBar(
         SnackBar(
-          content: Text(emailNotice ?? 'Account settings saved'),
+          content: Text(emailNotice ?? 'Saved'),
           backgroundColor: Theme.of(context).colorScheme.primary,
+          duration: const Duration(seconds: 2),
         ),
       );
     } on AuthException catch (error) {
@@ -186,6 +187,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         SnackBar(
           content: Text(notice),
           backgroundColor: Theme.of(context).colorScheme.primary,
+          duration: const Duration(seconds: 2),
         ),
       );
     } on PasswordChangeException catch (error) {

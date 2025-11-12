@@ -461,22 +461,31 @@ class _MessageBubbleState extends State<MessageBubble> {
     required bool isUserMessage,
   }) {
     if (widget.isEditing && isUserMessage) {
-      return TextField(
-        controller: _editController,
-        focusNode: _editFocusNode,
-        minLines: 1,
-        maxLines: null,
-        keyboardType: TextInputType.multiline,
-        style: TextStyle(color: iconFgColor, fontSize: 14, height: 1.35),
-        cursorColor: iconFgColor,
-        decoration: InputDecoration(
-          isDense: true,
-          isCollapsed: true,
-          border: InputBorder.none,
-          focusedBorder: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          hintText: 'Edit your message',
-          hintStyle: TextStyle(color: iconFgColor.withValues(alpha: 0.6)),
+      return Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: accentColor.withValues(alpha: 0.9), // Full accent color background
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: TextField(
+          controller: _editController,
+          focusNode: _editFocusNode,
+          minLines: 1,
+          maxLines: null,
+          keyboardType: TextInputType.multiline,
+          style: TextStyle(color: iconFgColor, fontSize: 14, height: 1.35),
+          cursorColor: iconFgColor,
+          decoration: InputDecoration(
+            isDense: true,
+            isCollapsed: true,
+            filled: true,
+            fillColor: accentColor.withValues(alpha: 0.9), // Accent color fill
+            border: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            hintText: 'Edit your message',
+            hintStyle: TextStyle(color: iconFgColor.withValues(alpha: 0.6)),
+          ),
         ),
       );
     }

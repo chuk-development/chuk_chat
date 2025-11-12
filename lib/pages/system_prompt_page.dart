@@ -95,12 +95,9 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
       final messenger = ScaffoldMessenger.of(context);
       messenger.showSnackBar(
         SnackBar(
-          content: Text(
-            prompt.isEmpty
-                ? 'System prompt cleared'
-                : 'System prompt saved and encrypted successfully',
-          ),
+          content: Text(prompt.isEmpty ? 'Cleared' : 'Saved'),
           backgroundColor: Theme.of(context).colorScheme.primary,
+          duration: const Duration(seconds: 1),
         ),
       );
     } on StateError catch (error) {
@@ -139,8 +136,9 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
       final messenger = ScaffoldMessenger.of(context);
       messenger.showSnackBar(
         SnackBar(
-          content: const Text('System prompt cleared'),
+          content: const Text('Cleared'),
           backgroundColor: Theme.of(context).colorScheme.primary,
+          duration: const Duration(seconds: 1),
         ),
       );
     } on StateError catch (error) {

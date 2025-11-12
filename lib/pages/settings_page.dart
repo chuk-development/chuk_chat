@@ -218,11 +218,17 @@ class SettingsPage extends StatelessWidget {
                   }
                 } on AuthServiceException catch (error) {
                   messenger.showSnackBar(
-                    SnackBar(content: Text(error.message)),
+                    SnackBar(
+                      content: Text(error.message),
+                      duration: const Duration(seconds: 2),
+                    ),
                   );
                 } catch (error) {
                   messenger.showSnackBar(
-                    SnackBar(content: Text('Unexpected error: $error')),
+                    SnackBar(
+                      content: Text('Error: $error'),
+                      duration: const Duration(seconds: 2),
+                    ),
                   );
                 }
               },
@@ -243,7 +249,10 @@ class SettingsPage extends StatelessWidget {
       await ChatStorageService.loadSavedChatsForSidebar();
       if (ChatStorageService.savedChats.isEmpty) {
         messenger.showSnackBar(
-          const SnackBar(content: Text('No chats available to export yet.')),
+          const SnackBar(
+            content: Text('No chats to export'),
+            duration: Duration(seconds: 2),
+          ),
         );
         return;
       }
@@ -256,9 +265,8 @@ class SettingsPage extends StatelessWidget {
         await Clipboard.setData(ClipboardData(text: jsonPayload));
         messenger.showSnackBar(
           const SnackBar(
-            content: Text(
-              'Chats copied to clipboard. Paste into a file to complete the export.',
-            ),
+            content: Text('Copied to clipboard'),
+            duration: Duration(seconds: 2),
           ),
         );
         return;
@@ -268,12 +276,16 @@ class SettingsPage extends StatelessWidget {
         final savedPath = await _saveExportToLinux(data, fileName);
         if (savedPath != null) {
           messenger.showSnackBar(
-            SnackBar(content: Text('Chats saved to $savedPath')),
+            SnackBar(
+              content: Text('Saved to $savedPath'),
+              duration: const Duration(seconds: 2),
+            ),
           );
         } else {
           messenger.showSnackBar(
             const SnackBar(
-              content: Text('Export cancelled before selecting a destination.'),
+              content: Text('Export cancelled'),
+              duration: Duration(seconds: 1),
             ),
           );
         }
@@ -295,26 +307,32 @@ class SettingsPage extends StatelessWidget {
         );
         messenger.showSnackBar(
           const SnackBar(
-            content: Text(
-              'Share sheet opened. Pick a destination to finish exporting.',
-            ),
+            content: Text('Share opened'),
+            duration: Duration(seconds: 1),
           ),
         );
       } on Exception {
         await Clipboard.setData(ClipboardData(text: jsonPayload));
         messenger.showSnackBar(
           const SnackBar(
-            content: Text(
-              'Could not open the share sheet. Chats copied to clipboard instead.',
-            ),
+            content: Text('Copied to clipboard'),
+            duration: Duration(seconds: 2),
           ),
         );
       }
     } on StateError catch (error) {
-      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(error.message),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     } catch (error) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Failed to export chats: $error')),
+        SnackBar(
+          content: Text('Export failed: $error'),
+          duration: const Duration(seconds: 2),
+        ),
       );
     }
   }
