@@ -482,30 +482,83 @@ build_appimage_packages() {
     done
 }
 
-# Show usage
+# Show usage and help menu
 show_usage() {
+    echo ""
+    print_header "Chuk Chat Build System"
+    echo ""
     echo "Usage: $0 [target]"
     echo ""
-    echo "Targets:"
-    echo "  linux    - Build all Linux packages (DEB, RPM, AppImage)"
-    echo "  deb      - Build DEB packages only"
-    echo "  rpm      - Build RPM packages only"
-    echo "  appimage - Build AppImage packages only"
-    echo "  apk      - Build Android APKs with split-per-abi (mobile UI)"
-    echo "  apk-desktop - Build Android APKs with desktop UI mode (for tablets)"
-    echo "  all      - Build everything (Linux + Android)"
+    echo "Available Build Targets:"
+    echo ""
+    echo "  linux"
+    echo "    Build all Linux packages for multiple architectures"
+    echo "    Creates: DEB, RPM, and AppImage packages (amd64, arm64)"
+    echo "    Output: releases/linux/"
+    echo ""
+    echo "  deb"
+    echo "    Build DEB packages only (Debian/Ubuntu)"
+    echo "    Creates: .deb files for amd64 and arm64"
+    echo "    Output: releases/linux/*.deb"
+    echo ""
+    echo "  rpm"
+    echo "    Build RPM packages only (RHEL/CentOS/Fedora)"
+    echo "    Creates: .rpm files for amd64 and arm64"
+    echo "    Output: releases/linux/*.rpm"
+    echo "    Note: Requires rpmbuild (install with: sudo apt install rpm)"
+    echo ""
+    echo "  appimage"
+    echo "    Build AppImage packages only (portable Linux apps)"
+    echo "    Creates: .AppImage files for amd64 and arm64"
+    echo "    Output: releases/linux/*.AppImage"
+    echo "    Note: Requires appimagetool"
+    echo ""
+    echo "  apk"
+    echo "    Build Android APKs with mobile UI (optimized for phones)"
+    echo "    Creates: Split APKs per architecture (arm64-v8a, armeabi-v7a, x86_64)"
+    echo "    Output: releases/android/*.apk"
+    echo "    Features: Mobile UI, tree-shaking removes desktop code"
+    echo ""
+    echo "  apk-desktop"
+    echo "    Build Android APKs with desktop UI mode (optimized for tablets)"
+    echo "    Creates: Split APKs per architecture with desktop layout"
+    echo "    Output: releases/android/*_desktop.apk"
+    echo "    Features: Desktop UI layout, tree-shaking removes mobile code"
+    echo "    Best for: Tablets and larger Android devices"
+    echo ""
+    echo "  all"
+    echo "    Build everything (Linux packages + Android APKs)"
+    echo "    Creates: All Linux packages + Android mobile UI APKs"
+    echo "    Output: releases/linux/ and releases/android/"
     echo ""
     echo "Examples:"
-    echo "  $0 linux    # Build all Linux packages"
-    echo "  $0 deb      # Build DEB packages only"
-    echo "  $0 apk      # Build Android APKs with mobile UI"
-    echo "  $0 apk-desktop  # Build Android APKs with desktop UI for tablets"
-    echo "  $0 all      # Build everything"
+    echo "  $0              # Show this help menu"
+    echo "  $0 --help       # Show this help menu (alternative)"
+    echo "  $0 -h           # Show this help menu (alternative)"
+    echo "  $0 linux        # Build all Linux packages"
+    echo "  $0 deb          # Build DEB packages only"
+    echo "  $0 apk          # Build Android APKs (mobile UI)"
+    echo "  $0 apk-desktop  # Build Android APKs (desktop UI for tablets)"
+    echo "  $0 all          # Build everything"
+    echo ""
+    echo "Build Features:"
+    echo "  • Tree-shaking: Automatically removes unused platform-specific code"
+    echo "  • Split APKs: Smaller Android packages per architecture"
+    echo "  • Optimizations: Icon tree-shaking, code obfuscation, debug info splitting"
+    echo ""
+    echo "For more information, see BUILD.md"
+    echo ""
 }
 
 # Main execution
 main() {
-    local target=${1:-"all"}
+    # If no arguments provided or help flags, show help menu
+    if [ $# -eq 0 ] || [ "$1" = "--help" ] || [ "$1" = "-h" ] || [ "$1" = "help" ]; then
+        show_usage
+        exit 0
+    fi
+    
+    local target=$1
     
     print_header "Starting build process for $APP_NAME..."
     
