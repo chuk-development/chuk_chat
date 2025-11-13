@@ -34,12 +34,14 @@ class _MessageRenderData {
     required this.displayText,
     required this.reasoning,
     required this.isReasoningStreaming,
+    this.modelLabel,
   });
 
   final String sender;
   final String displayText;
   final String reasoning;
   final bool isReasoningStreaming;
+  final String? modelLabel;
 
   bool get isUser => sender == 'user';
 }
@@ -196,15 +198,20 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _messages
         ..clear()
         ..addAll(
-          storedChat.messages
-              .map(
-                (message) => {
-                  'sender': message.sender,
-                  'text': message.text,
-                  'reasoning': message.reasoning,
-                },
-              )
-              .toList(),
+          storedChat.messages.map((message) {
+            final map = <String, String>{
+              'sender': message.sender,
+              'text': message.text,
+              'reasoning': message.reasoning,
+            };
+            if (message.modelId != null && message.modelId!.isNotEmpty) {
+              map['modelId'] = message.modelId!;
+            }
+            if (message.provider != null && message.provider!.isNotEmpty) {
+              map['provider'] = message.provider!;
+            }
+            return map;
+          }),
         );
       if (_messages.isNotEmpty) {
         _animCtrl.forward();
@@ -1034,13 +1041,21 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         'sender': 'user',
         'text': displayMessageText,
         'reasoning': '',
+        'modelId': _selectedModelId,
+        'provider': providerSlug,
       });
       _controller.clear();
       _isSending = true;
       if (hasAttachments) {
         _attachedFiles.clear();
       }
-      _messages.add({'sender': 'ai', 'text': 'Thinking...', 'reasoning': ''});
+      _messages.add({
+        'sender': 'ai',
+        'text': 'Thinking...',
+        'reasoning': '',
+        'modelId': _selectedModelId,
+        'provider': providerSlug,
+      });
       placeholderIndex = _messages.length - 1;
     });
 
@@ -1478,6 +1493,21 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     }
   }
 
+  String? _formatModelInfo(String? modelId, String? provider) {
+    final String normalizedModel = (modelId ?? '').trim();
+    final String normalizedProvider = (provider ?? '').trim();
+    if (normalizedModel.isEmpty && normalizedProvider.isEmpty) {
+      return null;
+    }
+    if (normalizedModel.isEmpty) {
+      return 'Provider: $normalizedProvider';
+    }
+    if (normalizedProvider.isEmpty) {
+      return 'Model: $normalizedModel';
+    }
+    return 'Model: $normalizedModel • Provider: $normalizedProvider';
+  }
+
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
@@ -1536,6 +1566,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           _isStreaming && index == _messages.length - 1 && isAiMessage;
       // Check if reasoning has content (meaning reasoning exists)
       final bool hasReasoning = reasoning.isNotEmpty;
+      final String? modelLabel = isAiMessage
+          ? _formatModelInfo(
+              raw['modelId'],
+              raw['provider'],
+            )
+          : null;
       return _MessageRenderData(
         sender: sender,
         displayText: displayText,
@@ -1543,6 +1579,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         // Show loading icon if: streaming AND (has reasoning OR might get reasoning)
         isReasoningStreaming:
             isStreamingMessage && (hasReasoning || displayText.isNotEmpty),
+        modelLabel: modelLabel,
       );
     });
 
@@ -1595,6 +1632,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                 isUser: data.isUser,
                                 maxWidth: expandedInputWidth * 0.7,
                                 isReasoningStreaming: data.isReasoningStreaming,
+                                modelLabel: data.modelLabel,
                                 actions: _buildMessageActionsForIndex(i, data),
                                 isEditing: isBeingEdited,
                                 initialEditText: isBeingEdited
