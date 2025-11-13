@@ -362,6 +362,8 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
 
   Future<void> refreshModels() async {
     if (!mounted) return;
+    // Clear cached preferences to force reload of fresh data
+    _lastSavedPreferences.clear();
     await _initializeModelSelection();
   }
 

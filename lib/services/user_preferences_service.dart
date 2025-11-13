@@ -163,6 +163,10 @@ class UserPreferencesService {
           modelId,
           providerSlug,
         );
+        // Update in-memory cache immediately to avoid stale data
+        if (_cachedProviderPreferences != null) {
+          _cachedProviderPreferences![modelId] = providerSlug;
+        }
         return true;
       } else {
         debugPrint('Failed to save provider preference: empty response');
@@ -206,6 +210,10 @@ class UserPreferencesService {
       if (deletedCount > 0) {
         debugPrint('Cleared provider preference for model: $modelId');
         await ModelCacheService.clearProviderPreference(userId, modelId);
+        // Remove from in-memory cache immediately to avoid stale data
+        if (_cachedProviderPreferences != null) {
+          _cachedProviderPreferences!.remove(modelId);
+        }
         return true;
       }
 
