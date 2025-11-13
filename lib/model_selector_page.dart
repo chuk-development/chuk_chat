@@ -142,13 +142,31 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
   final Map<String, bool> _expandedDescriptions = {};
   Map<String, String> _lastSavedPreferences = {};
   Timer? _apiAvailabilityTimer;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
 
   static const Duration _apiPollInterval = Duration(seconds: 8);
 
   @override
   void initState() {
     super.initState();
+    _searchController.addListener(() {
+      setState(() {
+        _searchQuery = _searchController.text.toLowerCase();
+      });
+    });
     _initializeModelSelections();
+  }
+
+  List<CustomModelInfo> get _filteredModels {
+    if (_searchQuery.isEmpty) {
+      return _models;
+    }
+    return _models.where((model) {
+      final nameMatch = model.name.toLowerCase().contains(_searchQuery);
+      final descMatch = model.description?.toLowerCase().contains(_searchQuery) ?? false;
+      return nameMatch || descMatch;
+    }).toList();
   }
 
   // Initialize model selections by loading saved preferences and fetching models
@@ -489,7 +507,78 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  ..._models.map((model) {
+                  // Search field
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    child: TextField(
+                      controller: _searchController,
+                      style: TextStyle(color: iconFg, fontSize: 14),
+                      decoration: InputDecoration(
+                        hintText: 'Search models...',
+                        hintStyle: TextStyle(
+                          color: iconFg.withValues(alpha: 0.5),
+                          fontSize: 14,
+                        ),
+                        prefixIcon: Icon(
+                          Icons.search,
+                          color: iconFg.withValues(alpha: 0.6),
+                          size: 20,
+                        ),
+                        suffixIcon: _searchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: Icon(
+                                  Icons.clear,
+                                  color: iconFg.withValues(alpha: 0.6),
+                                  size: 20,
+                                ),
+                                onPressed: () {
+                                  _searchController.clear();
+                                },
+                              )
+                            : null,
+                        filled: true,
+                        fillColor: scaffoldBg.lighten(0.05),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: iconFg.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: iconFg.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: accent,
+                            width: 1.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Show results count when searching
+                  if (_searchQuery.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12, left: 8),
+                      child: Text(
+                        '${_filteredModels.length} model${_filteredModels.length == 1 ? '' : 's'} found',
+                        style: TextStyle(
+                          color: iconFg.withValues(alpha: 0.7),
+                          fontSize: 13,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                  // Models list
+                  ..._filteredModels.map((model) {
                     ModelProviderInfo? selectedProviderForModel =
                         _selectedProviders[model.id];
                     bool isDescriptionExpanded =
@@ -594,6 +683,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
   @override
   void dispose() {
     _stopApiAvailabilityPolling();
+    _searchController.dispose();
     super.dispose();
   }
 }
