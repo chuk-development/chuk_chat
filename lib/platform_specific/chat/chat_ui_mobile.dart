@@ -9,6 +9,7 @@ import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
+import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/services/message_composition_service.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/pages/coming_soon_page.dart';
@@ -99,6 +100,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   final StreamingManager _streamingManager = StreamingManager();
   int? _editingMessageIndex;
   StreamSubscription<void>? _chatStorageSubscription;
+  StreamSubscription<void>? _providerRefreshSubscription;
   bool _isOffline = false;
   late final VoidCallback _networkStatusListener;
 
@@ -146,6 +148,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     ModelSelectionDropdown.selectedModelListenable.addListener(
       _modelSelectionListener,
     );
+
+    // Listen for provider changes from model selector page
+    _providerRefreshSubscription = ModelSelectionEventBus().refreshStream.listen((_) {
+      // Reload provider slug when settings are changed
+      unawaited(_loadProviderSlugForModel(_selectedModelId));
+    });
 
     // Listen for realtime chat updates from other devices
     _chatStorageSubscription = ChatStorageService.changes.listen((_) {
@@ -961,6 +969,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       unawaited(_streamingManager.cancelStream(_activeChatId!));
     }
     _chatStorageSubscription?.cancel();
+    _providerRefreshSubscription?.cancel();
     NetworkStatusService.isOnlineListenable.removeListener(_networkStatusListener);
     _controller.dispose();
     _scrollController.dispose();

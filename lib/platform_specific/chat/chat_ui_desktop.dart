@@ -10,6 +10,7 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/services/model_capabilities_service.dart';
+import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/services/message_composition_service.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/pages/coming_soon_page.dart';
@@ -99,6 +100,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   bool _isSending = false;
   bool _isTranscribingAudio = false;
   StreamSubscription<ChatStreamEvent>? _streamSubscription;
+  StreamSubscription<void>? _providerRefreshSubscription;
   bool _isStreaming = false;
   final StreamingManager _streamingManager = StreamingManager();
   Timer? _autoSaveTimer;
@@ -144,6 +146,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     ModelSelectionDropdown.selectedModelListenable.addListener(
       _modelSelectionListener,
     );
+
+    // Listen for provider changes from model selector page
+    _providerRefreshSubscription = ModelSelectionEventBus().refreshStream.listen((_) {
+      // Reload provider slug when settings are changed
+      unawaited(_loadProviderSlugForModel(_selectedModelId));
+    });
   }
 
   @override
@@ -171,6 +179,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // _streamingManager handles all streams globally
     _autoSaveTimer?.cancel();
     _streamSubscription?.cancel();
+    _providerRefreshSubscription?.cancel();
     _controller.dispose();
     _scrollController.dispose();
     _composerScrollController.dispose();
