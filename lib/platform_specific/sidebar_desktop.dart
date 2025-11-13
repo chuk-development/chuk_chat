@@ -499,10 +499,6 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
     final String title = _deriveChatTitle(chat);
     return RepaintBoundary(
       child: ListTile(
-        leading: _leadingIconPlaceholder(
-          Icons.chat_bubble_outline,
-          iconFgColor: iconFgColor,
-        ),
         title: Text(
           title,
           style: TextStyle(
@@ -514,38 +510,139 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
-      onTap: onTap,
-      dense: true,
-      contentPadding: const EdgeInsets.only(left: _sidebarHorizontalPadding),
-      tileColor: isSelected ? accentColor.withValues(alpha: 0.1) : null,
-      selectedTileColor: accentColor.withValues(alpha: 0.1),
-      selectedColor: accentColor,
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            icon: Icon(
-              isStarred ? Icons.star : Icons.star_border,
-              color: isStarred
-                  ? accentColor
-                  : iconFgColor.withValues(alpha: 0.7),
-            ),
-            tooltip: isStarred ? 'Remove from starred' : 'Add to starred',
-            onPressed: () => _toggleStarred(chat),
+        onTap: onTap,
+        dense: true,
+        contentPadding: const EdgeInsets.only(
+          left: _sidebarHorizontalPadding,
+          right: 8.0,
+        ),
+        tileColor: isSelected ? accentColor.withValues(alpha: 0.1) : null,
+        selectedTileColor: accentColor.withValues(alpha: 0.1),
+        selectedColor: accentColor,
+        trailing: PopupMenuButton<String>(
+          icon: Icon(
+            Icons.more_horiz,
+            color: iconFgColor.withValues(alpha: 0.7),
           ),
-          if (onDelete != null)
-            IconButton(
-              icon: Icon(
-                Icons.delete_outline,
-                color: iconFgColor.withValues(alpha: 0.7),
+          tooltip: 'Chat options',
+          onSelected: (value) {
+            switch (value) {
+              case 'star':
+                _toggleStarred(chat);
+                break;
+              case 'edit':
+                _renameChatDialog(chat);
+                break;
+              case 'delete':
+                if (onDelete != null) onDelete();
+                break;
+            }
+          },
+          itemBuilder: (context) => [
+            PopupMenuItem(
+              value: 'star',
+              child: Row(
+                children: [
+                  Icon(
+                    isStarred ? Icons.star : Icons.star_border,
+                    color: isStarred ? accentColor : iconFgColor,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(isStarred ? 'Remove from starred' : 'Add to starred'),
+                ],
               ),
-              tooltip: 'Delete chat',
-              onPressed: onDelete,
             ),
-        ],
-      ),
+            PopupMenuItem(
+              value: 'edit',
+              child: Row(
+                children: [
+                  Icon(Icons.edit_outlined, color: iconFgColor, size: 20),
+                  const SizedBox(width: 12),
+                  const Text('Rename'),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              value: 'delete',
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.delete_outline,
+                    color: Colors.redAccent.withValues(alpha: 0.8),
+                    size: 20,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Delete',
+                    style: TextStyle(
+                      color: Colors.redAccent.withValues(alpha: 0.8),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  Future<void> _renameChatDialog(StoredChat chat) async {
+    final controller = TextEditingController(text: _deriveChatTitle(chat));
+    final messenger = ScaffoldMessenger.of(context);
+
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Rename chat'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Chat name',
+              hintText: 'Enter new name',
+            ),
+            onSubmitted: (value) {
+              Navigator.of(dialogContext).pop(value.trim());
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(controller.text.trim());
+              },
+              child: const Text('Rename'),
+            ),
+          ],
+        );
+      },
+    );
+
+    controller.dispose();
+
+    if (newName == null || newName.isEmpty || newName == _deriveChatTitle(chat)) {
+      return;
+    }
+
+    try {
+      await ChatStorageService.renameChat(chat.id, newName);
+      if (!mounted) return;
+      setState(() {
+        _filterRecentChats();
+      });
+    } on StateError catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Failed to rename chat: $error')),
+      );
+    }
   }
 
   void _showDebouncedDeleteNotification() {

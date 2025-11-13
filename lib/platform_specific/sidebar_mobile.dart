@@ -805,13 +805,8 @@ class _SidebarMobileState extends State<SidebarMobile> {
     required Color textColor,
   }) {
     bool isSelected = index == widget.selectedChatIndex;
-    bool isStarred = chat.isStarred;
     final String title = _deriveChatTitle(chat);
     return ListTile(
-      leading: _leadingIconPlaceholder(
-        Icons.chat_bubble_outline,
-        iconColor: iconColor,
-      ),
       title: Text(
         title,
         style: TextStyle(
@@ -824,6 +819,13 @@ class _SidebarMobileState extends State<SidebarMobile> {
         overflow: TextOverflow.ellipsis,
       ),
       onTap: onTap,
+      onLongPress: () => _showChatOptionsBottomSheet(
+        chat,
+        onDelete: onDelete,
+        accentColor: accentColor,
+        iconColor: iconColor,
+        textColor: textColor,
+      ),
       dense: true,
       contentPadding: const EdgeInsets.only(
         left: _sidebarHorizontalPadding,
@@ -834,29 +836,147 @@ class _SidebarMobileState extends State<SidebarMobile> {
       selectedColor: accentColor,
       iconColor: iconColor,
       textColor: textColor,
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            icon: Icon(
-              isStarred ? Icons.star : Icons.star_border,
-              color: isStarred ? accentColor : iconColor.withValues(alpha: 0.7),
-            ),
-            tooltip: isStarred ? 'Remove from starred' : 'Add to starred',
-            onPressed: () => _toggleStarred(chat),
-          ),
-          if (onDelete != null)
-            IconButton(
-              icon: Icon(
-                Icons.delete_outline,
-                color: iconColor.withValues(alpha: 0.7),
-              ),
-              tooltip: 'Delete chat',
-              onPressed: onDelete,
-            ),
-        ],
-      ),
     );
+  }
+
+  void _showChatOptionsBottomSheet(
+    StoredChat chat, {
+    VoidCallback? onDelete,
+    required Color accentColor,
+    required Color iconColor,
+    required Color textColor,
+  }) {
+    final bool isStarred = chat.isStarred;
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: Icon(
+                  isStarred ? Icons.star : Icons.star_border,
+                  color: isStarred ? accentColor : iconColor,
+                ),
+                title: Text(isStarred ? 'Remove from starred' : 'Add to starred'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _toggleStarred(chat);
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.edit_outlined, color: iconColor),
+                title: const Text('Rename'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _renameChatDialog(chat);
+                },
+              ),
+              ListTile(
+                leading: Icon(
+                  Icons.delete_outline,
+                  color: Colors.redAccent.withValues(alpha: 0.8),
+                ),
+                title: Text(
+                  'Delete',
+                  style: TextStyle(
+                    color: Colors.redAccent.withValues(alpha: 0.8),
+                  ),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  if (onDelete != null) onDelete();
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _renameChatDialog(StoredChat chat) async {
+    final controller = TextEditingController(text: _deriveChatTitle(chat));
+    final messenger = ScaffoldMessenger.of(context);
+
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Rename chat'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Chat name',
+              hintText: 'Enter new name',
+            ),
+            onSubmitted: (value) {
+              Navigator.of(dialogContext).pop(value.trim());
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(controller.text.trim());
+              },
+              child: const Text('Rename'),
+            ),
+          ],
+        );
+      },
+    );
+
+    controller.dispose();
+
+    if (newName == null || newName.isEmpty || newName == _deriveChatTitle(chat)) {
+      return;
+    }
+
+    try {
+      await ChatStorageService.renameChat(chat.id, newName);
+      if (!mounted) return;
+      await _filterRecentChats();
+    } on StateError catch (error) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            error.message,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          duration: const Duration(seconds: 2),
+          dismissDirection: DismissDirection.horizontal,
+        ),
+      );
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to rename chat: $error',
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          duration: const Duration(seconds: 2),
+          dismissDirection: DismissDirection.horizontal,
+        ),
+      );
+    }
   }
 }
 

@@ -64,14 +64,19 @@ class StoredChat {
     required List<ChatMessage> messages,
     required this.createdAt,
     required this.isStarred,
+    this.customName,
   }) : messages = List<ChatMessage>.unmodifiable(messages);
 
   final String id;
   final List<ChatMessage> messages;
   final DateTime createdAt;
   final bool isStarred;
+  final String? customName;
 
   String get previewText {
+    if (customName != null && customName!.trim().isNotEmpty) {
+      return customName!.trim();
+    }
     if (messages.isEmpty) return 'Chat';
     final text = messages.first.text.trim();
     return text.isEmpty ? 'Chat' : text;
@@ -81,24 +86,28 @@ class StoredChat {
     List<ChatMessage>? messages,
     DateTime? createdAt,
     bool? isStarred,
+    String? customName,
   }) {
     return StoredChat(
       id: id,
       messages: messages ?? this.messages,
       createdAt: createdAt ?? this.createdAt,
       isStarred: isStarred ?? this.isStarred,
+      customName: customName ?? this.customName,
     );
   }
 
   factory StoredChat.fromRow(
     Map<String, dynamic> row,
-    List<ChatMessage> messages,
-  ) {
+    List<ChatMessage> messages, {
+    String? customName,
+  }) {
     return StoredChat(
       id: row['id'] as String,
       messages: messages,
       createdAt: DateTime.parse(row['created_at'] as String),
       isStarred: row['is_starred'] as bool? ?? false,
+      customName: customName,
     );
   }
 }
@@ -172,8 +181,12 @@ class ChatStorageService {
       if (encryptedPayload == null) continue;
       try {
         final decrypted = await EncryptionService.decrypt(encryptedPayload);
-        final messages = _deserializeMessages(decrypted);
-        chats.add(StoredChat.fromRow(map, messages));
+        final chatPayload = _deserializePayload(decrypted);
+        chats.add(StoredChat.fromRow(
+          map,
+          chatPayload.messages,
+          customName: chatPayload.customName,
+        ));
       } on SecretBoxAuthenticationError {
         // Skip corrupted rows silently to keep UI responsive.
         continue;
@@ -428,6 +441,63 @@ class ChatStorageService {
     _notifyChanges();
   }
 
+  static Future<void> renameChat(String chatId, String newName) async {
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) {
+      throw StateError('User must be signed in to rename chats.');
+    }
+    if (!EncryptionService.hasKey) {
+      final loaded = await EncryptionService.tryLoadKey();
+      if (!loaded) {
+        throw StateError(
+          'Cannot rename chat because the encryption key is missing. Please sign in again.',
+        );
+      }
+    }
+
+    final index = _savedChats.indexWhere((chat) => chat.id == chatId);
+    if (index == -1) {
+      throw StateError('Chat not found.');
+    }
+
+    final chat = _savedChats[index];
+    final updatedChat = chat.copyWith(customName: newName);
+
+    final payload = jsonEncode({
+      'v': _kChatPayloadVersion,
+      'customName': newName,
+      'messages': updatedChat.messages.map((message) => message.toJson()).toList(),
+    });
+
+    final encryptedPayload = await EncryptionService.encrypt(payload);
+    List<dynamic> updatedRows;
+    try {
+      updatedRows = await SupabaseService.client
+          .from('encrypted_chats')
+          .update({'encrypted_payload': encryptedPayload})
+          .eq('id', chatId)
+          .eq('user_id', user.id)
+          .select('id, encrypted_payload, created_at, is_starred');
+    } on PostgrestException catch (error) {
+      throw StateError('Failed to rename chat: ${error.message}');
+    }
+
+    if (updatedRows.isEmpty) {
+      throw StateError(
+        'Failed to rename chat: Chat was not found or access is denied.',
+      );
+    }
+
+    final updated = updatedRows.first as Map<String, dynamic>;
+    final stored = StoredChat.fromRow(
+      updated,
+      updatedChat.messages,
+      customName: newName,
+    );
+    _upsertChatLocally(stored);
+    unawaited(LocalChatCacheService.upsert(user.id, updated));
+  }
+
   static Future<String> exportChatsAsJson() async {
     await loadChats();
     final exportPayload = _savedChats
@@ -468,7 +538,7 @@ class ChatStorageService {
         .toList();
   }
 
-  static List<ChatMessage> _deserializeMessages(String payload) {
+  static ({List<ChatMessage> messages, String? customName}) _deserializePayload(String payload) {
     try {
       final dynamic decoded = jsonDecode(payload);
       if (decoded is Map<String, dynamic>) {
@@ -484,10 +554,12 @@ class ChatStorageService {
         }
         final rawMessages =
             decoded['messages'] as List<dynamic>? ?? <dynamic>[];
-        return rawMessages
+        final messages = rawMessages
             .whereType<Map<String, dynamic>>()
             .map(ChatMessage.fromJson)
             .toList();
+        final customName = decoded['customName'] as String?;
+        return (messages: messages, customName: customName);
       }
     } catch (_) {
       // Fall back to legacy pipe/section delimited format.
@@ -503,7 +575,7 @@ class ChatStorageService {
       final text = segment.substring(separatorIndex + 1);
       legacyMessages.add(ChatMessage(sender: sender, text: text));
     }
-    return legacyMessages;
+    return (messages: legacyMessages, customName: null);
   }
 
   static void _notifyChanges() {
@@ -626,8 +698,12 @@ class ChatStorageService {
             }
           }
           final decrypted = await EncryptionService.decrypt(encryptedPayload);
-          final messages = _deserializeMessages(decrypted);
-          final stored = StoredChat.fromRow(record, messages);
+          final chatPayload = _deserializePayload(decrypted);
+          final stored = StoredChat.fromRow(
+            record,
+            chatPayload.messages,
+            customName: chatPayload.customName,
+          );
           _upsertChatLocally(stored);
           return;
         case PostgresChangeEvent.all:
