@@ -38,10 +38,18 @@ Builds AppImage packages only:
 - `chuk-chat_1.0.1_arm64.AppImage` (if supported)
 
 ### `./build.sh apk`
-Builds Android APKs using `--split-per-abi`:
+Builds Android APKs with mobile UI using `--split-per-abi`:
 - `chuk-chat_1.0.1_arm64-v8a.apk`
 - `chuk-chat_1.0.1_armeabi-v7a.apk`
 - `chuk-chat_1.0.1_x86_64.apk`
+
+### `./build.sh apk-desktop`
+Builds Android APKs with desktop UI mode (optimized for tablets) using `--split-per-abi`:
+- `chuk-chat_1.0.1_arm64-v8a_desktop.apk`
+- `chuk-chat_1.0.1_armeabi-v7a_desktop.apk`
+- `chuk-chat_1.0.1_x86_64_desktop.apk`
+
+**Note**: The desktop UI mode uses the desktop layout interface, which is better suited for tablets with larger screens. The mobile-specific code is tree-shaken out for smaller APK size.
 
 ### `./build.sh all`
 Builds everything (Linux + Android packages)
@@ -160,8 +168,11 @@ flutter clean
 ## 📝 Examples
 
 ```bash
-# Quick Android build
+# Quick Android build (mobile UI)
 ./build.sh apk
+
+# Android build with desktop UI for tablets
+./build.sh apk-desktop
 
 # Quick Linux DEB build
 ./build.sh deb

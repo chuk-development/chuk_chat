@@ -2,7 +2,7 @@
 
 # Unified build script for chuk_chat
 # Usage: ./build.sh [target]
-# Targets: linux, deb, rpm, apk, appimage, all
+# Targets: linux, deb, rpm, apk, apk-desktop, appimage, all
 #
 # TREE-SHAKING OPTIMIZATION:
 # This build script uses Flutter's tree-shaking to automatically remove unused code:
@@ -363,7 +363,7 @@ EOF
     print_success "Created ${PACKAGE_NAME}_${VERSION}_${arch}.AppImage"
 }
 
-# Build Android APKs with split-per-abi
+# Build Android APKs with split-per-abi (mobile UI)
 build_android() {
     print_info "Building Android APKs with split-per-abi (with tree-shaking - desktop code excluded)..."
 
@@ -383,11 +383,41 @@ build_android() {
                 filename=$(basename "$apk")
                 arch=$(echo "$filename" | sed 's/app-\(.*\)-release.apk/\1/')
                 cp "$apk" "releases/android/${PACKAGE_NAME}_${VERSION}_${arch}.apk"
-                print_success "Created ${PACKAGE_NAME}_${VERSION}_${arch}.apk (desktop code tree-shaken)"
+                print_success "Created ${PACKAGE_NAME}_${VERSION}_${arch}.apk (mobile UI, desktop code tree-shaken)"
             fi
         done
     else
         print_warning "Android build failed"
+    fi
+}
+
+# Build Android APKs with desktop UI mode (for tablets)
+build_android_desktop() {
+    print_info "Building Android APKs with desktop UI mode for tablets (with tree-shaking - mobile code excluded)..."
+
+    # Build with split-per-abi and desktop UI mode
+    # Using PLATFORM_DESKTOP=true forces desktop UI on all screen sizes
+    # Or omit both flags to auto-detect (tablets > 800px will use desktop UI)
+    if flutter build apk --release --split-per-abi \
+        --dart-define=PLATFORM_DESKTOP=true \
+        --tree-shake-icons \
+        --split-debug-info=build/android-debug-info \
+        --obfuscate; then
+        # Copy APKs to releases directory
+        mkdir -p releases/android
+
+        # Copy all generated APKs
+        for apk in build/app/outputs/flutter-apk/app-*-release.apk; do
+            if [ -f "$apk" ]; then
+                # Extract architecture from filename
+                filename=$(basename "$apk")
+                arch=$(echo "$filename" | sed 's/app-\(.*\)-release.apk/\1/')
+                cp "$apk" "releases/android/${PACKAGE_NAME}_${VERSION}_${arch}_desktop.apk"
+                print_success "Created ${PACKAGE_NAME}_${VERSION}_${arch}_desktop.apk (desktop UI for tablets, mobile code tree-shaken)"
+            fi
+        done
+    else
+        print_warning "Android build with desktop UI failed"
     fi
 }
 
@@ -461,13 +491,15 @@ show_usage() {
     echo "  deb      - Build DEB packages only"
     echo "  rpm      - Build RPM packages only"
     echo "  appimage - Build AppImage packages only"
-    echo "  apk      - Build Android APKs with split-per-abi"
+    echo "  apk      - Build Android APKs with split-per-abi (mobile UI)"
+    echo "  apk-desktop - Build Android APKs with desktop UI mode (for tablets)"
     echo "  all      - Build everything (Linux + Android)"
     echo ""
     echo "Examples:"
     echo "  $0 linux    # Build all Linux packages"
     echo "  $0 deb      # Build DEB packages only"
-    echo "  $0 apk      # Build Android APKs"
+    echo "  $0 apk      # Build Android APKs with mobile UI"
+    echo "  $0 apk-desktop  # Build Android APKs with desktop UI for tablets"
     echo "  $0 all      # Build everything"
 }
 
@@ -496,6 +528,9 @@ main() {
             ;;
         "apk")
             build_android
+            ;;
+        "apk-desktop")
+            build_android_desktop
             ;;
         "all")
             build_linux_packages
