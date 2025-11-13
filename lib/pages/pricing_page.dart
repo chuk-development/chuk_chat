@@ -164,8 +164,17 @@ class _PricingPageState extends State<PricingPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error opening billing portal: $error'),
+          content: Text(
+            'Error opening billing portal: $error',
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
           backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          duration: const Duration(seconds: 2),
+          dismissDirection: DismissDirection.horizontal,
         ),
       );
     } finally {
@@ -209,11 +218,18 @@ class _PricingPageState extends State<PricingPage> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
+        SnackBar(
+          content: const Text(
             'Subscription will be cancelled at the end of the billing period',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
           ),
           backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          duration: const Duration(seconds: 2),
+          dismissDirection: DismissDirection.horizontal,
         ),
       );
 
@@ -222,8 +238,17 @@ class _PricingPageState extends State<PricingPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error cancelling subscription: $error'),
+          content: Text(
+            'Error cancelling subscription: $error',
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
           backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          duration: const Duration(seconds: 2),
+          dismissDirection: DismissDirection.horizontal,
         ),
       );
     } finally {
@@ -752,7 +777,19 @@ class _PlanCardState extends State<_PlanCard> {
         : 'Unexpected error';
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Error: $message'), backgroundColor: Colors.red),
+      SnackBar(
+        content: Text(
+          'Error: $message',
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        duration: const Duration(seconds: 2),
+        dismissDirection: DismissDirection.horizontal,
+      ),
     );
   }
 

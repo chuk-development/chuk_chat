@@ -167,10 +167,38 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
         _filterRecentChats();
       });
     } on StateError catch (error) {
-      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            error.message,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          duration: const Duration(seconds: 2),
+          dismissDirection: DismissDirection.horizontal,
+        ),
+      );
     } catch (error) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Failed to update star: $error')),
+        SnackBar(
+          content: Text(
+            'Failed to update star: $error',
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          duration: const Duration(seconds: 2),
+          dismissDirection: DismissDirection.horizontal,
+        ),
       );
     }
   }
@@ -189,9 +217,9 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
     final Color iconFg = Theme.of(context).resolvedIconColor;
     final Color accent = Theme.of(context).colorScheme.primary;
     final Color sidebarBg = Theme.of(context).cardColor.darken(0.03);
-    final Color dividerColor = Theme.of(context).dividerColor.withValues(
-      alpha: 0.5,
-    );
+    final Color dividerColor = Theme.of(
+      context,
+    ).dividerColor.withValues(alpha: 0.5);
     final List<StoredChat> starredChats = ChatStorageService.savedChats
         .where((chat) => chat.isStarred)
         .toList();
@@ -626,7 +654,9 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
 
     controller.dispose();
 
-    if (newName == null || newName.isEmpty || newName == _deriveChatTitle(chat)) {
+    if (newName == null ||
+        newName.isEmpty ||
+        newName == _deriveChatTitle(chat)) {
       return;
     }
 
@@ -637,10 +667,38 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
         _filterRecentChats();
       });
     } on StateError catch (error) {
-      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            error.message,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          duration: const Duration(seconds: 2),
+          dismissDirection: DismissDirection.horizontal,
+        ),
+      );
     } catch (error) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Failed to rename chat: $error')),
+        SnackBar(
+          content: Text(
+            'Failed to rename chat: $error',
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          duration: const Duration(seconds: 2),
+          dismissDirection: DismissDirection.horizontal,
+        ),
       );
     }
   }
@@ -653,11 +711,22 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
       _pendingDeleteCount = 0;
 
       final messenger = ScaffoldMessenger.of(context);
-      final message = count == 1
-          ? 'Chat deleted permanently.'
-          : '$count chats deleted permanently.';
+      final message = count == 1 ? 'Deleted' : '$count chats deleted';
       messenger.showSnackBar(
-        SnackBar(content: Text(message)),
+        SnackBar(
+          content: Text(
+            message,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          duration: const Duration(seconds: 1),
+          dismissDirection: DismissDirection.horizontal,
+        ),
       );
     });
   }
@@ -702,10 +771,38 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
       _pendingDeleteCount++;
       _showDebouncedDeleteNotification();
     } on StateError catch (error) {
-      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            error.message,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          duration: const Duration(seconds: 2),
+          dismissDirection: DismissDirection.horizontal,
+        ),
+      );
     } catch (error) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Failed to delete chat: $error')),
+        SnackBar(
+          content: Text(
+            'Failed to delete chat: $error',
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          duration: const Duration(seconds: 2),
+          dismissDirection: DismissDirection.horizontal,
+        ),
       );
     }
   }

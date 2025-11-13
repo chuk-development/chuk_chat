@@ -463,7 +463,18 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       });
       await SupabaseService.signOut();
       messenger.showSnackBar(
-        const SnackBar(content: Text('Session expired. Please sign in again.')),
+        SnackBar(
+          content: const Text(
+            'Session expired. Please sign in again.',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          duration: const Duration(seconds: 2),
+          dismissDirection: DismissDirection.horizontal,
+        ),
       );
     } catch (error) {
       await _handleApiUnavailable(debugDetails: '$error');
@@ -484,7 +495,20 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       _selectedModelName = message;
       _isLoadingModels = false;
     });
-    scaffoldMessenger.showSnackBar(SnackBar(content: Text(message)));
+    scaffoldMessenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        duration: const Duration(seconds: 2),
+        dismissDirection: DismissDirection.horizontal,
+      ),
+    );
     _startApiAvailabilityPolling();
   }
 
@@ -740,12 +764,17 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
 
                 final messenger = ScaffoldMessenger.of(context);
                 messenger.showSnackBar(
-                  const SnackBar(
-                    content: Text(
+                  SnackBar(
+                    content: const Text(
                       'Failed to save model selection. Please try again.',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                     ),
-                    backgroundColor: Colors.red,
-                    duration: Duration(seconds: 3),
+                    behavior: SnackBarBehavior.floating,
+                    margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    duration: const Duration(seconds: 3),
+                    dismissDirection: DismissDirection.horizontal,
                   ),
                 );
 

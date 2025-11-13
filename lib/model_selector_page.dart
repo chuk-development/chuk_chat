@@ -299,7 +299,20 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        duration: const Duration(seconds: 2),
+        dismissDirection: DismissDirection.horizontal,
+      ),
+    );
   }
 
   void _startApiAvailabilityPolling() {
@@ -598,9 +611,17 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
 
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text(summary),
+                            content: Text(
+                              summary,
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                            ),
                             backgroundColor: accent,
+                            behavior: SnackBarBehavior.floating,
+                            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                             duration: const Duration(seconds: 5),
+                            dismissDirection: DismissDirection.horizontal,
                           ),
                         );
                       },

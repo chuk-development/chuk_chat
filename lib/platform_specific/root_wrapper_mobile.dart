@@ -101,9 +101,17 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
         debugPrint('Session expired - user needs to sign in again');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Session expired. Please sign in again.'),
-              duration: Duration(seconds: 3),
+            SnackBar(
+              content: const Text(
+                'Session expired. Please sign in again.',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              ),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              duration: const Duration(seconds: 3),
+              dismissDirection: DismissDirection.horizontal,
             ),
           );
         }

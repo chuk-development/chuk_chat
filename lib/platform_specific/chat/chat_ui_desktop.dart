@@ -606,7 +606,18 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   void _showSnackBar(String message) {
     final messenger = ScaffoldMessenger.maybeOf(context);
     messenger?.showSnackBar(
-      SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
+      SnackBar(
+        content: Text(
+          message,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        duration: const Duration(seconds: 2),
+        dismissDirection: DismissDirection.horizontal,
+      ),
     );
   }
 
@@ -686,8 +697,17 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     if (session == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Session expired. Please sign in again.'),
+          SnackBar(
+            content: const Text(
+              'Session expired. Please sign in again.',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            duration: const Duration(seconds: 2),
+            dismissDirection: DismissDirection.horizontal,
           ),
         );
       }
@@ -932,7 +952,20 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     if (snackBarMessage != null) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(snackBarMessage)));
+      ).showSnackBar(
+        SnackBar(
+          content: Text(
+            snackBarMessage,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          duration: const Duration(seconds: 2),
+          dismissDirection: DismissDirection.horizontal,
+        ),
+      );
     }
     _scrollChatToBottom();
   }
@@ -969,8 +1002,17 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     if (_isSending && !_isStreaming) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please wait for the current response to finish.'),
+          SnackBar(
+            content: const Text(
+              'Please wait for the current response to finish.',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            duration: const Duration(seconds: 2),
+            dismissDirection: DismissDirection.horizontal,
           ),
         );
       }
@@ -985,8 +1027,17 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     if (_attachedFiles.any((f) => f.isUploading)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please wait for file uploads to finish.'),
+          SnackBar(
+            content: const Text(
+              'Please wait for file uploads to finish.',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            duration: const Duration(seconds: 2),
+            dismissDirection: DismissDirection.horizontal,
           ),
         );
       }
@@ -1012,7 +1063,18 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     if (!result.isValid) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(result.errorMessage ?? 'Invalid message')),
+          SnackBar(
+            content: Text(
+              result.errorMessage ?? 'Invalid message',
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            duration: const Duration(seconds: 2),
+            dismissDirection: DismissDirection.horizontal,
+          ),
         );
       }
       if (result.errorMessage == 'Session expired. Please sign in again.') {
@@ -1136,7 +1198,20 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             if (mounted) {
               ScaffoldMessenger.of(
                 context,
-              ).showSnackBar(SnackBar(content: Text(event.message)));
+              ).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    event.message,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                  ),
+                  behavior: SnackBarBehavior.floating,
+                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  duration: const Duration(seconds: 2),
+                  dismissDirection: DismissDirection.horizontal,
+                ),
+              );
             }
           } else if (event is DoneEvent) {
             debugPrint('Stream completed successfully');
@@ -1173,7 +1248,20 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           _finalizeAiMessage(placeholderIndex, errorMessage);
           ScaffoldMessenger.of(
             context,
-          ).showSnackBar(SnackBar(content: Text(errorMessage)));
+          ).showSnackBar(
+            SnackBar(
+              content: Text(
+                errorMessage,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              ),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              duration: const Duration(seconds: 2),
+              dismissDirection: DismissDirection.horizontal,
+            ),
+          );
         },
         onDone: () {
           debugPrint('Stream closed');
@@ -1239,7 +1327,18 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _finalizeAiMessage(placeholderIndex, 'Failed to start streaming: $error');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to start streaming: $error')),
+          SnackBar(
+            content: Text(
+              'Failed to start streaming: $error',
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            duration: const Duration(seconds: 2),
+            dismissDirection: DismissDirection.horizontal,
+          ),
         );
       }
     }
@@ -1331,8 +1430,17 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         maxConcurrentUploads) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please wait for current uploads to complete'),
+          SnackBar(
+            content: const Text(
+              'Please wait for current uploads to complete',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            duration: const Duration(seconds: 2),
+            dismissDirection: DismissDirection.horizontal,
           ),
         );
       }
@@ -1356,7 +1464,16 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('File "${platformFile.name}" exceeds 10MB limit'),
+                content: Text(
+                  'File "${platformFile.name}" exceeds 10MB limit',
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                ),
+                behavior: SnackBarBehavior.floating,
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                duration: const Duration(seconds: 2),
+                dismissDirection: DismissDirection.horizontal,
               ),
             );
           }
@@ -1374,7 +1491,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               SnackBar(
                 content: Text(
                   'Unsupported file type for "$fileName": .$fileExtension',
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                 ),
+                behavior: SnackBarBehavior.floating,
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                duration: const Duration(seconds: 2),
+                dismissDirection: DismissDirection.horizontal,
               ),
             );
           }
@@ -1387,7 +1511,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               SnackBar(
                 content: Text(
                   'Image uploads are not supported by the selected model.',
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                 ),
+                behavior: SnackBarBehavior.floating,
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                duration: const Duration(seconds: 2),
+                dismissDirection: DismissDirection.horizontal,
               ),
             );
           }
@@ -1403,7 +1534,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               SnackBar(
                 content: Text(
                   'Skipping "$fileName": too many concurrent uploads. Try again soon.',
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                 ),
+                behavior: SnackBarBehavior.floating,
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                duration: const Duration(seconds: 2),
+                dismissDirection: DismissDirection.horizontal,
               ),
             );
           }
@@ -1489,7 +1627,20 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Failed to store chat: $error')));
+      ).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to store chat: $error',
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          duration: const Duration(seconds: 2),
+          dismissDirection: DismissDirection.horizontal,
+        ),
+      );
     }
   }
 

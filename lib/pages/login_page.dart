@@ -71,7 +71,18 @@ class _LoginPageState extends State<LoginPage> {
         } catch (error) {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Could not sync chats: $error')),
+            SnackBar(
+              content: Text(
+                'Could not sync chats: $error',
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              ),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              duration: const Duration(seconds: 2),
+              dismissDirection: DismissDirection.horizontal,
+            ),
           );
         }
       } else {
@@ -84,8 +95,17 @@ class _LoginPageState extends State<LoginPage> {
 
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Check your email inbox to confirm the account.'),
+          SnackBar(
+            content: const Text(
+              'Check your email inbox to confirm the account.',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            duration: const Duration(seconds: 2),
+            dismissDirection: DismissDirection.horizontal,
           ),
         );
         setState(() {
@@ -98,7 +118,20 @@ class _LoginPageState extends State<LoginPage> {
           error.code == AuthServiceException.codeEmailAlreadyRegistered;
       if (isEmailAlreadyRegistered && mounted) {
         final messenger = ScaffoldMessenger.of(context);
-        messenger.showSnackBar(SnackBar(content: Text(error.message)));
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              error.message,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            duration: const Duration(seconds: 2),
+            dismissDirection: DismissDirection.horizontal,
+          ),
+        );
       }
       setState(() {
         if (isEmailAlreadyRegistered) {
