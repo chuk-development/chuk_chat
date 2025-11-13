@@ -234,8 +234,14 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
       behavior: HitTestBehavior.translucent,
       onTap: _isSidebarExpanded ? _toggleSidebar : null,
       onHorizontalDragEnd: (DragEndDetails details) {
-        if (_isSidebarExpanded) return;
-        if (details.primaryVelocity != null && details.primaryVelocity! > 500) {
+        if (details.primaryVelocity == null) return;
+
+        // Swipe right to open (when closed)
+        if (!_isSidebarExpanded && details.primaryVelocity! > 500) {
+          _toggleSidebar();
+        }
+        // Swipe left to close (when open)
+        else if (_isSidebarExpanded && details.primaryVelocity! < -500) {
           _toggleSidebar();
         }
       },
@@ -310,16 +316,26 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                 top: 0,
                 bottom: 0,
                 width: sidebarVisibleWidth,
-                child: Opacity(
-                  opacity: animValue,
-                  child: SidebarMobile(
-                    onChatItemTapped: _handleChatTapped,
-                    onSettingsTapped: _openSettingsPage,
-                    onProjectsTapped: _openProjectsPage,
-                    onAssistantsTapped: _openAssistantsPage,
-                    onChatDeleted: _handleChatDeleted,
-                    selectedChatIndex: ChatStorageService.selectedChatIndex,
-                    isCompactMode: true,
+                child: GestureDetector(
+                  onHorizontalDragEnd: (DragEndDetails details) {
+                    // Swipe left on sidebar to close it
+                    if (_isSidebarExpanded &&
+                        details.primaryVelocity != null &&
+                        details.primaryVelocity! < -500) {
+                      _toggleSidebar();
+                    }
+                  },
+                  child: Opacity(
+                    opacity: animValue,
+                    child: SidebarMobile(
+                      onChatItemTapped: _handleChatTapped,
+                      onSettingsTapped: _openSettingsPage,
+                      onProjectsTapped: _openProjectsPage,
+                      onAssistantsTapped: _openAssistantsPage,
+                      onChatDeleted: _handleChatDeleted,
+                      selectedChatIndex: ChatStorageService.selectedChatIndex,
+                      isCompactMode: true,
+                    ),
                   ),
                 ),
               ),
