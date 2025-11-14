@@ -387,7 +387,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
             await UserPreferencesService.loadAllProviderPreferences();
       }
       final response = await http.get(
-        Uri.parse('$_apiBaseUrl/models_info'),
+        Uri.parse('$_apiBaseUrl/v1/models_info'),
         headers: {'Authorization': 'Bearer $accessToken'},
       );
 

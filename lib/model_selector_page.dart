@@ -217,7 +217,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
       _lastSavedPreferences =
           await UserPreferencesService.loadAllProviderPreferences();
       final response = await http.get(
-        Uri.parse('$_baseUrl/models_info'),
+        Uri.parse('$_baseUrl/v1/models_info'),
         headers: {'Authorization': 'Bearer $accessToken'},
       );
 

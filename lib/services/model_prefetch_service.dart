@@ -49,7 +49,7 @@ class ModelPrefetchService {
       // Fetch models list and cache for quick reuse.
       final response = await http
           .get(
-            Uri.parse('${ApiConfigService.apiBaseUrl}/models_info'),
+            Uri.parse('${ApiConfigService.apiBaseUrl}/v1/models_info'),
             headers: {'Authorization': 'Bearer $accessToken'},
           )
           .timeout(_httpTimeout);

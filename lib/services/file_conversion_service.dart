@@ -10,7 +10,7 @@ import 'package:chuk_chat/utils/secure_token_handler.dart';
 import 'package:chuk_chat/utils/api_rate_limiter.dart';
 import 'package:chuk_chat/utils/certificate_pinning.dart';
 
-/// Service for converting files to markdown using the /ai/convert-file endpoint.
+/// Service for converting files to markdown using the /v1/ai/convert-file endpoint.
 /// Supports documents, images (with EXIF/OCR), audio (with transcription),
 /// archives, e-books, and email files.
 class FileConversionService {
@@ -44,7 +44,7 @@ class FileConversionService {
     'ipynb', 'rss', 'atom',
   };
 
-  /// Convert a file to markdown using the /ai/convert-file endpoint.
+  /// Convert a file to markdown using the /v1/ai/convert-file endpoint.
   ///
   /// Returns a map with:
   /// - 'markdown': The markdown content string
@@ -82,7 +82,7 @@ class FileConversionService {
         // API rate limiting check (general API throttling)
         final apiLimiter = ApiRateLimiter();
         final rateLimitResult = apiLimiter.checkRateLimit(
-          endpoint: '/ai/convert-file',
+          endpoint: '/v1/ai/convert-file',
           userId: userId,
           config: RateLimitConfig.fileConversion,
         );
@@ -97,7 +97,7 @@ class FileConversionService {
 
         // Log rate limit status in debug mode
         apiLimiter.logRateLimitStatus(
-          endpoint: '/ai/convert-file',
+          endpoint: '/v1/ai/convert-file',
           userId: userId,
           config: RateLimitConfig.fileConversion,
         );
@@ -133,7 +133,7 @@ class FileConversionService {
       if (userId != null) {
         UploadRateLimiter().recordUpload(userId);
         ApiRateLimiter().recordRequest(
-          endpoint: '/ai/convert-file',
+          endpoint: '/v1/ai/convert-file',
           userId: userId,
         );
       }
@@ -172,7 +172,7 @@ class FileConversionService {
 
       // Log request with masked token
       SecureTokenHandler.logApiRequest(
-        endpoint: '$_apiBaseUrl/ai/convert-file',
+        endpoint: '$_apiBaseUrl/v1/ai/convert-file',
         method: 'POST',
         accessToken: accessToken,
         payload: {'file': fileName},
@@ -188,7 +188,7 @@ class FileConversionService {
 
       // Send the request
       final response = await dio.post(
-        '/ai/convert-file',
+        '/v1/ai/convert-file',
         data: formData,
         onSendProgress: (sent, total) {
           if (total != -1 && kDebugMode) {
@@ -200,7 +200,7 @@ class FileConversionService {
 
       // Log success response
       SecureTokenHandler.logApiResponse(
-        endpoint: '/ai/convert-file',
+        endpoint: '/v1/ai/convert-file',
         statusCode: response.statusCode ?? 200,
         success: true,
       );
@@ -254,7 +254,7 @@ class FileConversionService {
 
       // Log error with secure handling
       SecureTokenHandler.logApiResponse(
-        endpoint: '/ai/convert-file',
+        endpoint: '/v1/ai/convert-file',
         statusCode: e.response?.statusCode ?? 0,
         error: '${e.type}: $errorMessage',
         success: false,

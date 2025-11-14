@@ -51,7 +51,7 @@ class StreamingChatService {
 
       final request = http.MultipartRequest(
         'POST',
-        Uri.parse('$_apiBaseUrl/ai/chat'),
+        Uri.parse('$_apiBaseUrl/v1/ai/chat'),
       );
 
       request.headers['Authorization'] = 'Bearer $accessToken';

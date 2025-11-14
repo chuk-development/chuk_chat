@@ -52,7 +52,7 @@ class WebSocketChatService {
         return;
       }
 
-      final wsUrl = _wsBaseUrl.replace(path: '/ai/chat/ws');
+      final wsUrl = _wsBaseUrl.replace(path: '/v1/ai/chat/ws');
 
       // Log WebSocket connection with masked token
       SecureTokenHandler.logWebSocketConnection(
