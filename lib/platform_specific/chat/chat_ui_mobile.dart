@@ -934,9 +934,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   void didUpdateWidget(covariant ChukChatUIMobile oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.selectedChatIndex != oldWidget.selectedChatIndex) {
-      // Save current chat before switching
+      // Save current chat before switching (only if it still exists)
       if (_activeChatId != null) {
-        _persistChat(waitForCompletion: false);
+        final chatStillExists = ChatStorageService.savedChats.any(
+          (chat) => chat.id == _activeChatId,
+        );
+        if (chatStillExists) {
+          _persistChat(waitForCompletion: false);
+        }
       }
 
       // Clear all state before loading new chat to prevent data leakage

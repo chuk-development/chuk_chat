@@ -159,9 +159,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // RENAMED WIDGET TYPE
     super.didUpdateWidget(oldWidget);
     if (widget.selectedChatIndex != oldWidget.selectedChatIndex) {
-      // Save current chat before switching
+      // Save current chat before switching (only if it still exists)
       if (_activeChatId != null) {
-        _persistChat(waitForCompletion: false);
+        final chatStillExists = ChatStorageService.savedChats.any(
+          (chat) => chat.id == _activeChatId,
+        );
+        if (chatStillExists) {
+          _persistChat(waitForCompletion: false);
+        }
       }
       _loadChatFromIndex(widget.selectedChatIndex);
       // Update UI based on new chat's streaming status
