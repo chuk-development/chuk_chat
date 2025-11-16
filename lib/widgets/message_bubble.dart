@@ -62,19 +62,23 @@ class _MessageBubbleState extends State<MessageBubble> {
   final FocusNode _editFocusNode = FocusNode();
   bool _shouldFocusEditField = false;
 
-  // User preferences for display
-  bool _showReasoningTokens = kDefaultShowReasoningTokens;
-  bool _showModelInfo = kDefaultShowModelInfo;
+  // User preferences for display - null until loaded
+  bool? _showReasoningTokens;
+  bool? _showModelInfo;
+  static bool? _cachedShowReasoningTokens;
+  static bool? _cachedShowModelInfo;
 
-  bool get _hasReasoning =>
-      _showReasoningTokens &&
-      widget.reasoning != null &&
-      widget.reasoning!.trim().isNotEmpty;
+  bool get _hasReasoning {
+    // Show reasoning if preference is true OR still loading (null)
+    final show = _showReasoningTokens ?? _cachedShowReasoningTokens ?? kDefaultShowReasoningTokens;
+    return show && widget.reasoning != null && widget.reasoning!.trim().isNotEmpty;
+  }
 
-  bool get _hasModelInfo =>
-      _showModelInfo &&
-      widget.modelLabel != null &&
-      widget.modelLabel!.isNotEmpty;
+  bool get _hasModelInfo {
+    // Show model info if preference is true OR still loading (null)
+    final show = _showModelInfo ?? _cachedShowModelInfo ?? kDefaultShowModelInfo;
+    return show && widget.modelLabel != null && widget.modelLabel!.isNotEmpty;
+  }
 
   @override
   void initState() {
@@ -88,10 +92,17 @@ class _MessageBubbleState extends State<MessageBubble> {
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     if (mounted) {
+      final showReasoning = prefs.getBool('showReasoningTokens') ?? kDefaultShowReasoningTokens;
+      final showModel = prefs.getBool('showModelInfo') ?? kDefaultShowModelInfo;
+
       setState(() {
-        _showReasoningTokens = prefs.getBool('showReasoningTokens') ?? kDefaultShowReasoningTokens;
-        _showModelInfo = prefs.getBool('showModelInfo') ?? kDefaultShowModelInfo;
+        _showReasoningTokens = showReasoning;
+        _showModelInfo = showModel;
       });
+
+      // Cache for future instances
+      _cachedShowReasoningTokens = showReasoning;
+      _cachedShowModelInfo = showModel;
     }
   }
 

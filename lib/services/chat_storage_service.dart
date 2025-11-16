@@ -227,10 +227,14 @@ class ChatStorageService {
 
     try {
       for (final chat in chats) {
-        final payload = jsonEncode({
+        final Map<String, dynamic> payloadMap = {
           'v': _kChatPayloadVersion,
           'messages': chat.messages.map((message) => message.toJson()).toList(),
-        });
+        };
+        if (chat.customName != null) {
+          payloadMap['customName'] = chat.customName;
+        }
+        final payload = jsonEncode(payloadMap);
         final encryptedPayload = await EncryptionService.encrypt(payload);
         List<dynamic> updatedRows;
         try {
@@ -251,7 +255,7 @@ class ChatStorageService {
           );
         }
         final updatedRow = updatedRows.first as Map<String, dynamic>;
-        updatedChats.add(StoredChat.fromRow(updatedRow, chat.messages));
+        updatedChats.add(StoredChat.fromRow(updatedRow, chat.messages, customName: chat.customName));
       }
     } finally {
       for (final updated in updatedChats) {
@@ -327,10 +331,20 @@ class ChatStorageService {
       return null;
     }
 
-    final payload = jsonEncode({
+    // Preserve existing customName from the chat being updated
+    final existingChatIndex = _savedChats.indexWhere((chat) => chat.id == chatId);
+    final String? existingCustomName = existingChatIndex != -1
+        ? _savedChats[existingChatIndex].customName
+        : null;
+
+    final Map<String, dynamic> payloadMap = {
       'v': _kChatPayloadVersion,
       'messages': messages.map((message) => message.toJson()).toList(),
-    });
+    };
+    if (existingCustomName != null) {
+      payloadMap['customName'] = existingCustomName;
+    }
+    final payload = jsonEncode(payloadMap);
 
     final encryptedPayload = await EncryptionService.encrypt(payload);
     List<dynamic> updatedRows;
@@ -352,7 +366,7 @@ class ChatStorageService {
     }
     final updated = updatedRows.first as Map<String, dynamic>;
 
-    final stored = StoredChat.fromRow(updated, messages);
+    final stored = StoredChat.fromRow(updated, messages, customName: existingCustomName);
     _upsertChatLocally(stored);
     unawaited(LocalChatCacheService.upsert(user.id, updated));
     return stored;
