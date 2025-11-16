@@ -1936,7 +1936,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                     message: displayText,
                                     reasoning: reasoningText,
                                     isUser: isUser,
-                                    maxWidth: expandedInputWidth * 0.7,
+                                    maxWidth: isUser
+                                        ? expandedInputWidth * 0.7  // User messages: 70%
+                                        : expandedInputWidth,        // AI messages: 100%
                                     isReasoningStreaming: isStreamingMessage,
                                     modelLabel: modelLabel,
                                     actions: _buildMessageActionsForIndex(

@@ -1795,7 +1795,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                 message: data.displayText,
                                 reasoning: reasoningText,
                                 isUser: data.isUser,
-                                maxWidth: expandedInputWidth * 0.7,
+                                maxWidth: data.isUser
+                                    ? expandedInputWidth * 0.7  // User messages: 70%
+                                    : expandedInputWidth,        // AI messages: 100%
                                 isReasoningStreaming: data.isReasoningStreaming,
                                 modelLabel: data.modelLabel,
                                 actions: _buildMessageActionsForIndex(i, data),
