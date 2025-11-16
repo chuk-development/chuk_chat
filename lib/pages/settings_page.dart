@@ -28,9 +28,15 @@ class SettingsPage extends StatelessWidget {
   final Function(Color) setIconFgColor;
   final Function(Color) setBgColor;
 
-  // NEW: film grain
+  // Film grain
   final bool grainEnabled;
   final Function(bool) setGrainEnabled;
+
+  // Message display preferences
+  final bool showReasoningTokens;
+  final Function(bool) setShowReasoningTokens;
+  final bool showModelInfo;
+  final Function(bool) setShowModelInfo;
 
   const SettingsPage({
     super.key,
@@ -42,8 +48,12 @@ class SettingsPage extends StatelessWidget {
     required this.setAccentColor,
     required this.setIconFgColor,
     required this.setBgColor,
-    required this.grainEnabled, // added
-    required this.setGrainEnabled, // added
+    required this.grainEnabled,
+    required this.setGrainEnabled,
+    required this.showReasoningTokens,
+    required this.setShowReasoningTokens,
+    required this.showModelInfo,
+    required this.setShowModelInfo,
   });
 
   @override
@@ -84,8 +94,12 @@ class SettingsPage extends StatelessWidget {
                     setAccentColor: setAccentColor,
                     setIconFgColor: setIconFgColor,
                     setBgColor: setBgColor,
-                    grainEnabled: grainEnabled, // pass
-                    setGrainEnabled: setGrainEnabled, // pass
+                    grainEnabled: grainEnabled,
+                    setGrainEnabled: setGrainEnabled,
+                    showReasoningTokens: showReasoningTokens,
+                    setShowReasoningTokens: setShowReasoningTokens,
+                    showModelInfo: showModelInfo,
+                    setShowModelInfo: setShowModelInfo,
                   ),
                 ),
               );
@@ -162,6 +176,30 @@ class SettingsPage extends StatelessWidget {
                 MaterialPageRoute(builder: (_) => const AccountSettingsPage()),
               );
             },
+            accentColor: accent,
+            iconFgColor: iconFg,
+            bgColor: scaffoldBg,
+          ),
+          const SizedBox(height: 32),
+          _buildToggleCard(
+            context,
+            title: 'Show Reasoning Tokens',
+            subtitle: 'Display reasoning process from AI models',
+            icon: Icons.psychology,
+            value: showReasoningTokens,
+            onChanged: setShowReasoningTokens,
+            accentColor: accent,
+            iconFgColor: iconFg,
+            bgColor: scaffoldBg,
+          ),
+          const SizedBox(height: 16),
+          _buildToggleCard(
+            context,
+            title: 'Show Model Info',
+            subtitle: 'Display model name for each AI response',
+            icon: Icons.info_outline,
+            value: showModelInfo,
+            onChanged: setShowModelInfo,
             accentColor: accent,
             iconFgColor: iconFg,
             bgColor: scaffoldBg,
@@ -491,6 +529,50 @@ class SettingsPage extends StatelessWidget {
         ),
         trailing: Icon(Icons.arrow_forward_ios, color: iconFgColor),
         onTap: onTap,
+      ),
+    );
+  }
+
+  Widget _buildToggleCard(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required bool value,
+    required Function(bool) onChanged,
+    required Color accentColor,
+    required Color iconFgColor,
+    required Color bgColor,
+  }) {
+    return Card(
+      color: bgColor.lighten(0.05),
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: iconFgColor.withValues(alpha: 0.3), width: 1),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: Icon(icon, color: accentColor),
+        title: Text(
+          title,
+          style: TextStyle(
+            color: Theme.of(context).textTheme.titleMedium?.color,
+            fontWeight: FontWeight.w600,
+            fontSize: 16,
+          ),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: TextStyle(color: iconFgColor.lighten(0.3), fontSize: 13),
+        ),
+        trailing: Switch(
+          value: value,
+          onChanged: onChanged,
+          activeColor: accentColor,
+          activeTrackColor: accentColor.withValues(alpha: 0.5),
+        ),
+        onTap: () => onChanged(!value),
       ),
     );
   }

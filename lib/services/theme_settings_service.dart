@@ -14,6 +14,8 @@ class ThemeSettings {
     required this.iconColor,
     required this.backgroundColor,
     required this.grainEnabled,
+    required this.showReasoningTokens,
+    required this.showModelInfo,
   });
 
   final String userId;
@@ -22,6 +24,8 @@ class ThemeSettings {
   final Color iconColor;
   final Color backgroundColor;
   final bool grainEnabled;
+  final bool showReasoningTokens;
+  final bool showModelInfo;
 
   ThemeSettings copyWith({
     Brightness? themeMode,
@@ -29,6 +33,8 @@ class ThemeSettings {
     Color? iconColor,
     Color? backgroundColor,
     bool? grainEnabled,
+    bool? showReasoningTokens,
+    bool? showModelInfo,
   }) {
     return ThemeSettings(
       userId: userId,
@@ -37,6 +43,8 @@ class ThemeSettings {
       iconColor: iconColor ?? this.iconColor,
       backgroundColor: backgroundColor ?? this.backgroundColor,
       grainEnabled: grainEnabled ?? this.grainEnabled,
+      showReasoningTokens: showReasoningTokens ?? this.showReasoningTokens,
+      showModelInfo: showModelInfo ?? this.showModelInfo,
     );
   }
 
@@ -48,6 +56,8 @@ class ThemeSettings {
       'icon_color': iconColor.toHexString(),
       'background_color': backgroundColor.toHexString(),
       'grain_enabled': grainEnabled,
+      'show_reasoning_tokens': showReasoningTokens,
+      'show_model_info': showModelInfo,
     };
   }
 
@@ -59,6 +69,8 @@ class ThemeSettings {
       iconColor: kDefaultIconFgColor,
       backgroundColor: kDefaultBgColor,
       grainEnabled: kDefaultGrainEnabled,
+      showReasoningTokens: kDefaultShowReasoningTokens,
+      showModelInfo: kDefaultShowModelInfo,
     );
   }
 
@@ -80,6 +92,8 @@ class ThemeSettings {
         fallback: kDefaultBgColor,
       ),
       grainEnabled: (map['grain_enabled'] as bool?) ?? kDefaultGrainEnabled,
+      showReasoningTokens: (map['show_reasoning_tokens'] as bool?) ?? kDefaultShowReasoningTokens,
+      showModelInfo: (map['show_model_info'] as bool?) ?? kDefaultShowModelInfo,
     );
   }
 }

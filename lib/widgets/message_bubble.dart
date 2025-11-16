@@ -2,6 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:chuk_chat/constants.dart';
 
 class MessageBubbleAction {
   const MessageBubbleAction({
@@ -60,17 +62,36 @@ class _MessageBubbleState extends State<MessageBubble> {
   final FocusNode _editFocusNode = FocusNode();
   bool _shouldFocusEditField = false;
 
+  // User preferences for display
+  bool _showReasoningTokens = kDefaultShowReasoningTokens;
+  bool _showModelInfo = kDefaultShowModelInfo;
+
   bool get _hasReasoning =>
-      widget.reasoning != null && widget.reasoning!.trim().isNotEmpty;
+      _showReasoningTokens &&
+      widget.reasoning != null &&
+      widget.reasoning!.trim().isNotEmpty;
 
   bool get _hasModelInfo =>
-      widget.modelLabel != null && widget.modelLabel!.isNotEmpty;
+      _showModelInfo &&
+      widget.modelLabel != null &&
+      widget.modelLabel!.isNotEmpty;
 
   @override
   void initState() {
     super.initState();
+    _loadPreferences();
     if (widget.isEditing) {
       _configureEditController();
+    }
+  }
+
+  Future<void> _loadPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _showReasoningTokens = prefs.getBool('showReasoningTokens') ?? kDefaultShowReasoningTokens;
+        _showModelInfo = prefs.getBool('showModelInfo') ?? kDefaultShowModelInfo;
+      });
     }
   }
 

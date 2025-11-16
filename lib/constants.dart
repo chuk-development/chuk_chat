@@ -11,6 +11,12 @@ const Brightness kDefaultThemeMode = Brightness.dark;
 /* ---------- FILM GRAIN DEFAULT ---------- */
 const bool kDefaultGrainEnabled = false;
 
+/* ---------- REASONING TOKENS DEFAULT ---------- */
+const bool kDefaultShowReasoningTokens = true;
+
+/* ---------- MODEL INFO DEFAULT ---------- */
+const bool kDefaultShowModelInfo = false;
+
 /* ---------- THEME BUILDER ---------- */
 ThemeData buildAppTheme({
   required Color accent,

@@ -25,6 +25,11 @@ class RootWrapperDesktop extends StatefulWidget {
   final bool grainEnabled;
   final Function(bool) setGrainEnabled;
 
+  final bool showReasoningTokens;
+  final Function(bool) setShowReasoningTokens;
+  final bool showModelInfo;
+  final Function(bool) setShowModelInfo;
+
   const RootWrapperDesktop({
     super.key,
     required this.currentThemeMode,
@@ -37,6 +42,10 @@ class RootWrapperDesktop extends StatefulWidget {
     required this.setBgColor,
     required this.grainEnabled,
     required this.setGrainEnabled,
+    required this.showReasoningTokens,
+    required this.setShowReasoningTokens,
+    required this.showModelInfo,
+    required this.setShowModelInfo,
   });
 
   @override
@@ -63,6 +72,10 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
           setBgColor: widget.setBgColor,
           grainEnabled: widget.grainEnabled,
           setGrainEnabled: widget.setGrainEnabled,
+          showReasoningTokens: widget.showReasoningTokens,
+          setShowReasoningTokens: widget.setShowReasoningTokens,
+          showModelInfo: widget.showModelInfo,
+          setShowModelInfo: widget.setShowModelInfo,
         ),
       ),
     );

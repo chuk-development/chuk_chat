@@ -14,8 +14,12 @@ class ThemePage extends StatefulWidget {
   final Function(Color) setAccentColor;
   final Function(Color) setIconFgColor;
   final Function(Color) setBgColor;
-  final bool grainEnabled;                // NEW
-  final Function(bool) setGrainEnabled;   // NEW
+  final bool grainEnabled;
+  final Function(bool) setGrainEnabled;
+  final bool showReasoningTokens;
+  final Function(bool) setShowReasoningTokens;
+  final bool showModelInfo;
+  final Function(bool) setShowModelInfo;
 
   const ThemePage({
     super.key,
@@ -29,6 +33,10 @@ class ThemePage extends StatefulWidget {
     required this.setBgColor,
     required this.grainEnabled,
     required this.setGrainEnabled,
+    required this.showReasoningTokens,
+    required this.setShowReasoningTokens,
+    required this.showModelInfo,
+    required this.setShowModelInfo,
   });
 
   @override
