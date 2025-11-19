@@ -57,6 +57,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   final FocusNode _rawKeyboardListenerFocusNode = FocusNode();
   final Uuid _uuid = const Uuid();
   bool _lastTextWasEmpty = true;
+  bool _showFullscreenButton = false;
 
   // Services and handlers
   late ChatApiService _chatApiService;
@@ -140,9 +141,20 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     // Text controller listener
     _controller.addListener(() {
       final bool currentTextIsEmpty = _controller.text.trim().isEmpty;
-      if (currentTextIsEmpty != _lastTextWasEmpty) {
+      final String text = _controller.text;
+
+      // Estimate if text is getting long (3+ lines worth of content)
+      // A line is roughly 22 chars, so 3 lines = ~66 chars
+      // Also check for newlines
+      final int newlineCount = '\n'.allMatches(text).length;
+      final bool shouldShowFullscreen =
+          text.length > 66 || newlineCount >= 2;
+
+      if (currentTextIsEmpty != _lastTextWasEmpty ||
+          shouldShowFullscreen != _showFullscreenButton) {
         setState(() {
           _lastTextWasEmpty = currentTextIsEmpty;
+          _showFullscreenButton = shouldShowFullscreen;
         });
       }
     });
@@ -856,6 +868,76 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     await _submitEditedMessage(index, text);
   }
 
+  // --- FULLSCREEN EDITOR ---
+
+  Future<void> _openFullscreenEditor() async {
+    final String currentText = _controller.text;
+    final theme = Theme.of(context);
+
+    final String? result = await showDialog<String>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        final TextEditingController dialogController =
+            TextEditingController(text: currentText);
+        return Dialog.fullscreen(
+          child: Scaffold(
+            backgroundColor: theme.scaffoldBackgroundColor,
+            appBar: AppBar(
+              title: const Text('Edit Message'),
+              backgroundColor: theme.scaffoldBackgroundColor,
+              leading: IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.of(dialogContext).pop(),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop(dialogController.text);
+                  },
+                  child: const Text('Done'),
+                ),
+              ],
+            ),
+            body: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: TextField(
+                controller: dialogController,
+                autofocus: true,
+                maxLines: null,
+                expands: true,
+                keyboardType: TextInputType.multiline,
+                textAlignVertical: TextAlignVertical.top,
+                style: TextStyle(
+                  color: theme.colorScheme.onSurface,
+                  fontSize: 16,
+                  height: 1.4,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Type your message here...',
+                  hintStyle: TextStyle(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                  ),
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                cursorColor: theme.colorScheme.primary,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    if (result != null) {
+      setState(() {
+        _controller.text = result;
+        _controller.selection = TextSelection.fromPosition(
+          TextPosition(offset: result.length),
+        );
+      });
+    }
+  }
+
   // --- UTILITY METHODS ---
 
   Future<void> _loadProviderSlugForModel(String modelId) async {
@@ -1293,48 +1375,45 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                   focusNode: _rawKeyboardListenerFocusNode,
                   controller: _controller,
                   onSend: _sendMessage,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 120),
-                    child: Scrollbar(
-                      controller: _composerScrollController,
-                      child: TextField(
-                        controller: _controller,
-                        focusNode: _textFieldFocusNode,
-                        autofocus: false,
-                        keyboardType: TextInputType.multiline,
-                        textInputAction: TextInputAction.send,
-                        scrollController: _composerScrollController,
-                        style: TextStyle(
-                          color: theme.colorScheme.onSurface,
-                          fontSize: 14,
-                          height: 1.3,
-                        ),
-                        minLines: 1,
-                        maxLines: null,
-                        decoration: InputDecoration(
-                          hintText: 'Ask me anything',
-                          hintStyle: TextStyle(
-                            color: theme.colorScheme.onSurface.withValues(
-                              alpha: 0.5,
-                            ),
-                            fontSize: 14,
-                          ),
-                          filled: true,
-                          fillColor: _audioHandler.isMicActive
-                              ? Colors.transparent
-                              : bg.withValues(alpha: 0.98),
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 8,
-                          ),
-                          isDense: true,
-                        ),
-                        cursorColor: accent,
-                        cursorWidth: 1.5,
+                  child: Scrollbar(
+                    controller: _composerScrollController,
+                    child: TextField(
+                      controller: _controller,
+                      focusNode: _textFieldFocusNode,
+                      autofocus: false,
+                      keyboardType: TextInputType.multiline,
+                      textInputAction: TextInputAction.newline,
+                      scrollController: _composerScrollController,
+                      style: TextStyle(
+                        color: theme.colorScheme.onSurface,
+                        fontSize: 14,
+                        height: 1.3,
                       ),
+                      minLines: 1,
+                      maxLines: 5,
+                      decoration: InputDecoration(
+                        hintText: 'Ask me anything',
+                        hintStyle: TextStyle(
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.5,
+                          ),
+                          fontSize: 14,
+                        ),
+                        filled: true,
+                        fillColor: _audioHandler.isMicActive
+                            ? Colors.transparent
+                            : bg.withValues(alpha: 0.98),
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 8,
+                        ),
+                        isDense: true,
+                      ),
+                      cursorColor: accent,
+                      cursorWidth: 1.5,
                     ),
                   ),
                 ),
@@ -1342,6 +1421,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
             ),
           ),
           const SizedBox(width: 4),
+          if (_showFullscreenButton && !_audioHandler.isMicActive) ...[
+            buildTinyIconButton(
+              icon: Icons.fullscreen_rounded,
+              onTap: _openFullscreenEditor,
+              isActive: false,
+              color: iconFg,
+            ),
+            const SizedBox(width: 2),
+          ],
           buildTinyIconButton(
             icon: _audioHandler.isMicActive
                 ? Icons.stop_rounded
