@@ -747,8 +747,15 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
                 color: theme.resolvedIconColor.withValues(alpha: 0.3),
               ),
             ),
+            onCanceled: () {
+              // Maintain keyboard focus when popup is cancelled
+              widget.textFieldFocusNode.requestFocus();
+            },
             onSelected: (value) async {
               final previousModelId = _selectedModelId;
+
+              // Immediately request focus to keep keyboard open
+              widget.textFieldFocusNode.requestFocus();
 
               setState(() {
                 _selectedModelId = value;
@@ -785,12 +792,9 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
                 });
                 _updateSelectedModelName();
                 widget.onModelSelected(previousModelId);
+                // Re-request focus after error handling
+                widget.textFieldFocusNode.requestFocus();
               }
-
-              Future.delayed(
-                Duration.zero,
-                () => widget.textFieldFocusNode.requestFocus(),
-              );
             },
             itemBuilder: (context) {
               final iconFgColor = Theme.of(context).resolvedIconColor;

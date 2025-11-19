@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:highlight/highlight.dart' as hi;
+import 'package:chuk_chat/utils/highlight_registry.dart' as highlight_registry;
 import 'package:markdown_widget/markdown_widget.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -526,22 +527,33 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
   }
 }
 
-// Top-level function for compute
+  // Top-level function for compute
 List<hi.Node> _parseCode(Map<String, dynamic> args) {
   final String code = args['code'];
   final String? language = args['language'];
   final bool autoDetect = args['autoDetect'];
 
+  // Register all languages to ensure syntax highlighting works for any language
+  // inside the isolate.
+  hi.highlight.registerLanguages(highlight_registry.allLanguages);
+
   // Replace Windows line endings for consistency
   final String normalizedCode = code.replaceAll('\r\n', '\n');
 
-  final hi.Result result = hi.highlight.parse(
-    normalizedCode,
-    language: autoDetect ? null : language,
-    autoDetection: autoDetect,
-  );
-
-  return result.nodes ?? [];
+  try {
+    final hi.Result result = hi.highlight.parse(
+      normalizedCode,
+      language: autoDetect ? null : language,
+      autoDetection: autoDetect,
+    );
+    return result.nodes ?? [];
+  } catch (e) {
+    // If the highlighter fails (e.g. unknown language or parsing error),
+    // return an empty list which will be handled gracefully by the UI
+    // falling back to plain text.
+    debugPrint('Highlight parsing error: $e');
+    return [];
+  }
 }
 
 // Helper to convert nodes to spans (Main thread)
