@@ -442,14 +442,29 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
 
     final String code = widget.code;
     final String language = widget.language;
+
+    // Skip highlighting for empty code
+    if (code.trim().isEmpty) {
+      setState(() {
+        _highlightedSpans = [TextSpan(text: code, style: widget.textStyle)];
+      });
+      return;
+    }
+
     // Pass only necessary data to the isolate
     try {
       // Run heavy parsing in an isolate
       final List<hi.Node> nodes = await compute(_parseCode, {
         'code': code,
-        'language': language,
-        'autoDetect': language.isEmpty,
-      });
+        'language': language.trim().toLowerCase(),
+        'autoDetect': language.trim().isEmpty,
+      }).timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          debugPrint('Highlight timeout for language: $language');
+          return <hi.Node>[];
+        },
+      );
 
       if (!mounted) return;
 
@@ -460,12 +475,22 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
         widget.textStyle,
       );
 
-      setState(() {
-        _highlightedSpans = spans;
-      });
-    } catch (e) {
-      debugPrint('Highlight error: $e');
-      // Fallback to plain text handled by default build
+      if (mounted) {
+        setState(() {
+          _highlightedSpans = spans.isEmpty
+              ? [TextSpan(text: code, style: widget.textStyle)]
+              : spans;
+        });
+      }
+    } catch (e, stackTrace) {
+      debugPrint('Highlight error for language "$language": $e');
+      debugPrint('Stack trace: $stackTrace');
+      // Fallback to plain text
+      if (mounted) {
+        setState(() {
+          _highlightedSpans = [TextSpan(text: code, style: widget.textStyle)];
+        });
+      }
     }
   }
 
@@ -529,52 +554,97 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
 
   // Top-level function for compute
 List<hi.Node> _parseCode(Map<String, dynamic> args) {
-  final String code = args['code'];
-  final String? language = args['language'];
-  final bool autoDetect = args['autoDetect'];
-
-  // Register all languages to ensure syntax highlighting works for any language
-  // inside the isolate.
-  hi.highlight.registerLanguages(highlight_registry.allLanguages);
-
-  // Replace Windows line endings for consistency
-  final String normalizedCode = code.replaceAll('\r\n', '\n');
-
   try {
-    final hi.Result result = hi.highlight.parse(
-      normalizedCode,
-      language: autoDetect ? null : language,
-      autoDetection: autoDetect,
-    );
-    return result.nodes ?? [];
-  } catch (e) {
-    // If the highlighter fails (e.g. unknown language or parsing error),
-    // return an empty list which will be handled gracefully by the UI
-    // falling back to plain text.
-    debugPrint('Highlight parsing error: $e');
+    final String code = args['code'] as String? ?? '';
+    final String? language = args['language'] as String?;
+    final bool autoDetect = args['autoDetect'] as bool? ?? false;
+
+    if (code.isEmpty) {
+      return [];
+    }
+
+    // Register all languages to ensure syntax highlighting works for any language
+    // inside the isolate.
+    try {
+      hi.highlight.registerLanguages(highlight_registry.allLanguages);
+    } catch (e) {
+      // Language registration failed, return empty to fall back to plain text
+      debugPrint('Language registration error: $e');
+      return [];
+    }
+
+    // Replace Windows line endings for consistency
+    final String normalizedCode = code.replaceAll('\r\n', '\n');
+
+    // Validate language is in our registry if specified
+    String? validatedLanguage = language;
+    if (language != null &&
+        language.isNotEmpty &&
+        !highlight_registry.allLanguages.containsKey(language.toLowerCase())) {
+      debugPrint('Unknown language: $language, falling back to auto-detection');
+      validatedLanguage = null;
+    }
+
+    try {
+      final hi.Result result = hi.highlight.parse(
+        normalizedCode,
+        language: autoDetect || validatedLanguage == null ? null : validatedLanguage,
+        autoDetection: autoDetect || validatedLanguage == null,
+      );
+      return result.nodes ?? [];
+    } catch (e) {
+      // If the highlighter fails (e.g. unknown language or parsing error),
+      // return an empty list which will be handled gracefully by the UI
+      // falling back to plain text.
+      debugPrint('Highlight parsing error: $e');
+      return [];
+    }
+  } catch (e, stackTrace) {
+    // Catch any unexpected errors in the isolate
+    debugPrint('Fatal error in _parseCode: $e');
+    debugPrint('Stack trace: $stackTrace');
     return [];
   }
 }
 
 // Helper to convert nodes to spans (Main thread)
 List<TextSpan> _convertNodesSafely(
-  List<hi.Node> nodes,
+  List<hi.Node>? nodes,
   Map<String, TextStyle> theme,
   TextStyle baseStyle,
 ) {
+  if (nodes == null || nodes.isEmpty) {
+    return <TextSpan>[];
+  }
+
   final List<TextSpan> spans = <TextSpan>[];
-  for (final hi.Node node in nodes) {
-    spans.addAll(_collectSpans(node, theme, baseStyle, null));
+  try {
+    for (final hi.Node node in nodes) {
+      try {
+        spans.addAll(_collectSpans(node, theme, baseStyle, null));
+      } catch (e) {
+        debugPrint('Error converting node: $e');
+        // Skip problematic nodes
+        continue;
+      }
+    }
+  } catch (e) {
+    debugPrint('Error in _convertNodesSafely: $e');
+    return <TextSpan>[];
   }
   return spans;
 }
 
 List<TextSpan> _collectSpans(
-  hi.Node node,
+  hi.Node? node,
   Map<String, TextStyle> theme,
   TextStyle baseStyle,
   TextStyle? parentThemeStyle,
 ) {
+  if (node == null) {
+    return <TextSpan>[];
+  }
+
   try {
     final String className = node.className ?? '';
     final TextStyle? themeStyle = className.isNotEmpty
@@ -584,7 +654,7 @@ List<TextSpan> _collectSpans(
         ? themeStyle.merge(baseStyle)
         : baseStyle);
 
-    if (node.value != null) {
+    if (node.value != null && node.value!.isNotEmpty) {
       return <TextSpan>[TextSpan(text: node.value, style: effectiveStyle)];
     }
 
@@ -595,14 +665,29 @@ List<TextSpan> _collectSpans(
 
     final List<TextSpan> childSpans = <TextSpan>[];
     for (final hi.Node child in children) {
-      childSpans.addAll(
-        _collectSpans(child, theme, baseStyle, themeStyle ?? parentThemeStyle),
-      );
+      try {
+        childSpans.addAll(
+          _collectSpans(child, theme, baseStyle, themeStyle ?? parentThemeStyle),
+        );
+      } catch (e) {
+        debugPrint('Error collecting child spans: $e');
+        // Skip problematic child nodes
+        continue;
+      }
     }
+
+    if (childSpans.isEmpty) {
+      return <TextSpan>[];
+    }
+
     return <TextSpan>[TextSpan(children: childSpans, style: effectiveStyle)];
   } catch (error) {
+    debugPrint('Error in _collectSpans: $error');
     // Return a safe fallback span
-    return <TextSpan>[TextSpan(text: node.value ?? '', style: baseStyle)];
+    final String fallbackText = node.value ?? '';
+    return fallbackText.isNotEmpty
+        ? <TextSpan>[TextSpan(text: fallbackText, style: baseStyle)]
+        : <TextSpan>[];
   }
 }
 
