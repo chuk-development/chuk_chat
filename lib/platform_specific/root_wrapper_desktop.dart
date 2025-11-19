@@ -140,6 +140,8 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       selectedChatIndex: ChatStorageService.selectedChatIndex,
       isSidebarExpanded: _isSidebarExpanded,
       isCompactMode: isCompactMode,
+      showReasoningTokens: widget.showReasoningTokens,
+      showModelInfo: widget.showModelInfo,
     );
 
     return Scaffold(

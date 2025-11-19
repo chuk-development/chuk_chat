@@ -54,6 +54,8 @@ class ChukChatUIDesktop extends StatefulWidget {
   final int selectedChatIndex;
   final bool isSidebarExpanded;
   final bool isCompactMode;
+  final bool showReasoningTokens;
+  final bool showModelInfo;
 
   const ChukChatUIDesktop({
     // RENAMED CONSTRUCTOR
@@ -62,6 +64,8 @@ class ChukChatUIDesktop extends StatefulWidget {
     required this.selectedChatIndex,
     required this.isSidebarExpanded,
     required this.isCompactMode,
+    required this.showReasoningTokens,
+    required this.showModelInfo,
   });
 
   @override
@@ -1968,6 +1972,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                       onCancelEdit: isBeingEdited
                                           ? _cancelEditMessage
                                           : null,
+                                      showReasoningTokens: widget.showReasoningTokens,
+                                      showModelInfo: widget.showModelInfo,
                                     ),
                                   );
                                 },

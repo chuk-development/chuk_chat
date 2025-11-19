@@ -35,6 +35,8 @@ class MessageBubble extends StatefulWidget {
     this.initialEditText,
     this.onSubmitEdit,
     this.onCancelEdit,
+    this.showReasoningTokens,
+    this.showModelInfo,
   });
 
   final String message;
@@ -50,6 +52,8 @@ class MessageBubble extends StatefulWidget {
   final String? initialEditText;
   final ValueChanged<String>? onSubmitEdit;
   final VoidCallback? onCancelEdit;
+  final bool? showReasoningTokens;
+  final bool? showModelInfo;
 
   @override
   State<MessageBubble> createState() => _MessageBubbleState();
@@ -69,8 +73,9 @@ class _MessageBubbleState extends State<MessageBubble> {
   static bool? _cachedShowModelInfo;
 
   bool get _hasReasoning {
-    // Show reasoning if preference is true OR still loading (null)
+    // Prioritize widget prop, then loaded preference, then cached, then default
     final show =
+        widget.showReasoningTokens ??
         _showReasoningTokens ??
         _cachedShowReasoningTokens ??
         kDefaultShowReasoningTokens;
@@ -80,9 +85,12 @@ class _MessageBubbleState extends State<MessageBubble> {
   }
 
   bool get _hasModelInfo {
-    // Show model info if preference is true OR still loading (null)
+    // Prioritize widget prop, then loaded preference, then cached, then default
     final show =
-        _showModelInfo ?? _cachedShowModelInfo ?? kDefaultShowModelInfo;
+        widget.showModelInfo ??
+        _showModelInfo ??
+        _cachedShowModelInfo ??
+        kDefaultShowModelInfo;
     return show && widget.modelLabel != null && widget.modelLabel!.isNotEmpty;
   }
 

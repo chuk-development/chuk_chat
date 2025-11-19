@@ -15,6 +15,10 @@ class RootWrapper extends StatelessWidget {
   final Function(Color) setBgColor;
   final bool grainEnabled;
   final Function(bool) setGrainEnabled;
+  final bool showReasoningTokens;
+  final Function(bool) setShowReasoningTokens;
+  final bool showModelInfo;
+  final Function(bool) setShowModelInfo;
 
   const RootWrapper({
     super.key,
@@ -28,6 +32,10 @@ class RootWrapper extends StatelessWidget {
     required this.setBgColor,
     required this.grainEnabled,
     required this.setGrainEnabled,
+    required this.showReasoningTokens,
+    required this.setShowReasoningTokens,
+    required this.showModelInfo,
+    required this.setShowModelInfo,
   });
 
   @override

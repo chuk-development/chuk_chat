@@ -30,12 +30,16 @@ class ChukChatUIMobile extends StatefulWidget {
   final VoidCallback onToggleSidebar;
   final int selectedChatIndex;
   final bool isSidebarExpanded;
+  final bool showReasoningTokens;
+  final bool showModelInfo;
 
   const ChukChatUIMobile({
     super.key,
     required this.onToggleSidebar,
     required this.selectedChatIndex,
     required this.isSidebarExpanded,
+    required this.showReasoningTokens,
+    required this.showModelInfo,
   });
 
   @override
@@ -1100,6 +1104,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                               });
                                             }
                                           : null,
+                                      showReasoningTokens: widget.showReasoningTokens,
+                                      showModelInfo: widget.showModelInfo,
                                     ),
                                   );
                                 },

@@ -381,7 +381,7 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
 /// Widget that handles async code highlighting to prevent UI jank
 class _AsyncCodeBlock extends StatefulWidget {
   final String code;
-  final String language;
+  final String? language;
   final TextStyle textStyle;
   final Color backgroundColor;
   final Color borderColor;
@@ -390,7 +390,7 @@ class _AsyncCodeBlock extends StatefulWidget {
 
   const _AsyncCodeBlock({
     required this.code,
-    required this.language,
+    this.language,
     required this.textStyle,
     required this.backgroundColor,
     required this.borderColor,
@@ -441,7 +441,7 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
     if (!mounted) return;
 
     final String code = widget.code;
-    final String language = widget.language;
+    final String? language = widget.language;
 
     // Skip highlighting for empty code
     if (code.trim().isEmpty) {
@@ -451,17 +451,21 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
       return;
     }
 
+    // Normalize and validate language
+    final String normalizedLanguage = (language ?? '').trim().toLowerCase();
+    final bool shouldAutoDetect = normalizedLanguage.isEmpty;
+
     // Pass only necessary data to the isolate
     try {
       // Run heavy parsing in an isolate
       final List<hi.Node> nodes = await compute(_parseCode, {
         'code': code,
-        'language': language.trim().toLowerCase(),
-        'autoDetect': language.trim().isEmpty,
+        'language': normalizedLanguage,
+        'autoDetect': shouldAutoDetect,
       }).timeout(
         const Duration(seconds: 5),
         onTimeout: () {
-          debugPrint('Highlight timeout for language: $language');
+          debugPrint('Highlight timeout for language: ${normalizedLanguage.isEmpty ? '(auto-detect)' : normalizedLanguage}');
           return <hi.Node>[];
         },
       );
@@ -483,8 +487,11 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
         });
       }
     } catch (e, stackTrace) {
-      debugPrint('Highlight error for language "$language": $e');
-      debugPrint('Stack trace: $stackTrace');
+      final String langDesc = normalizedLanguage.isEmpty ? '(auto-detect)' : normalizedLanguage;
+      debugPrint('Highlight error for language "$langDesc": $e');
+      if (e is! TimeoutException) {
+        debugPrint('Stack trace: $stackTrace');
+      }
       // Fallback to plain text
       if (mounted) {
         setState(() {
@@ -524,7 +531,7 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  widget.language.isEmpty ? 'code' : widget.language,
+                  (widget.language?.isEmpty ?? true) ? 'code' : widget.language!,
                   style: TextStyle(
                     color: widget.textColor.withValues(alpha: 0.7),
                     fontSize: 12,
@@ -569,20 +576,21 @@ List<hi.Node> _parseCode(Map<String, dynamic> args) {
       hi.highlight.registerLanguages(highlight_registry.allLanguages);
     } catch (e) {
       // Language registration failed, return empty to fall back to plain text
-      debugPrint('Language registration error: $e');
+      // Silently fail - this is expected in some environments
       return [];
     }
 
     // Replace Windows line endings for consistency
     final String normalizedCode = code.replaceAll('\r\n', '\n');
 
-    // Validate language is in our registry if specified
-    String? validatedLanguage = language;
-    if (language != null &&
-        language.isNotEmpty &&
-        !highlight_registry.allLanguages.containsKey(language.toLowerCase())) {
-      debugPrint('Unknown language: $language, falling back to auto-detection');
-      validatedLanguage = null;
+    // Safely validate and normalize language
+    String? validatedLanguage;
+    if (language != null && language.isNotEmpty) {
+      final String langLower = language.toLowerCase();
+      if (highlight_registry.allLanguages.containsKey(langLower)) {
+        validatedLanguage = langLower;
+      }
+      // Silently fall back to auto-detection for unknown languages
     }
 
     try {
@@ -592,17 +600,22 @@ List<hi.Node> _parseCode(Map<String, dynamic> args) {
         autoDetection: autoDetect || validatedLanguage == null,
       );
       return result.nodes ?? [];
+    } on FormatException catch (_) {
+      // FormatException can occur when the highlighter encounters unexpected syntax
+      // Fall back to plain text rendering
+      return [];
     } catch (e) {
-      // If the highlighter fails (e.g. unknown language or parsing error),
+      // If the highlighter fails (e.g. parsing error, null check operator used on null),
       // return an empty list which will be handled gracefully by the UI
       // falling back to plain text.
-      debugPrint('Highlight parsing error: $e');
       return [];
     }
-  } catch (e, stackTrace) {
-    // Catch any unexpected errors in the isolate
-    debugPrint('Fatal error in _parseCode: $e');
-    debugPrint('Stack trace: $stackTrace');
+  } on FormatException catch (_) {
+    // Handle FormatException at the top level too
+    return [];
+  } catch (e) {
+    // Catch any unexpected errors in the isolate, including null check errors
+    // Silently return empty to fall back to plain text
     return [];
   }
 }

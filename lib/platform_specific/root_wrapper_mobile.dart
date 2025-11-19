@@ -308,6 +308,8 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                 onToggleSidebar: _toggleSidebar,
                 selectedChatIndex: ChatStorageService.selectedChatIndex,
                 isSidebarExpanded: _isSidebarExpanded,
+                showReasoningTokens: widget.showReasoningTokens,
+                showModelInfo: widget.showModelInfo,
               ),
             ),
           ],
