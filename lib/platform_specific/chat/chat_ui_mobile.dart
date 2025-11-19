@@ -1,12 +1,12 @@
 // lib/platform_specific/chat/chat_ui_mobile.dart
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
-import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
+import 'package:chuk_chat/services/message_composition_service.dart';
 import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/pages/coming_soon_page.dart';
@@ -48,6 +48,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   final List<Map<String, String>> _messages = [];
   String? _activeChatId;
   final ScrollController _scrollController = ScrollController();
+  final ScrollController _composerScrollController = ScrollController();
   final FocusNode _textFieldFocusNode = FocusNode();
   final FocusNode _rawKeyboardListenerFocusNode = FocusNode();
   final Uuid _uuid = const Uuid();
@@ -239,6 +240,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     );
     _controller.dispose();
     _scrollController.dispose();
+    _composerScrollController.dispose();
     _textFieldFocusNode.dispose();
     _rawKeyboardListenerFocusNode.dispose();
     ModelSelectionDropdown.selectedModelListenable.removeListener(
@@ -670,6 +672,23 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       return;
     }
 
+    // Validate message using MessageCompositionService
+    final List<Map<String, String>> apiHistory = _buildApiHistory();
+    final MessageCompositionResult validationResult =
+        await MessageCompositionService.prepareMessage(
+      userInput: originalUserInput,
+      attachedFiles: _fileHandler.attachedFiles,
+      selectedModelId: _selectedModelId,
+      apiHistory: apiHistory,
+      systemPrompt: _systemPrompt,
+      getProviderSlug: _ensureProviderSlugForCurrentModel,
+    );
+
+    if (!validationResult.isValid) {
+      _showSnackBar(validationResult.errorMessage ?? 'Invalid message');
+      return;
+    }
+
     // Generate chat ID if new chat
     if (_activeChatId == null) {
       _activeChatId = _uuid.v4();
@@ -716,6 +735,22 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       getProviderSlug: _ensureProviderSlugForCurrentModel,
       isOffline: _isOffline,
     );
+  }
+
+  List<Map<String, String>> _buildApiHistory() {
+    final List<Map<String, String>> history = <Map<String, String>>[];
+    for (final Map<String, String> message in _messages) {
+      final String? sender = message['sender'];
+      final String? text = message['text'];
+      if (text == null || text.trim().isEmpty) continue;
+
+      if (sender == 'user') {
+        history.add({'role': 'user', 'content': text});
+      } else if (sender == 'ai' || sender == 'assistant') {
+        history.add({'role': 'assistant', 'content': text});
+      }
+    }
+    return history;
   }
 
   void _updateCancelledMessage() {
@@ -1211,41 +1246,49 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                   focusNode: _rawKeyboardListenerFocusNode,
                   controller: _controller,
                   onSend: _sendMessage,
-                  child: TextField(
-                    controller: _controller,
-                    focusNode: _textFieldFocusNode,
-                    autofocus: false,
-                    keyboardType: TextInputType.multiline,
-                    textInputAction: TextInputAction.send,
-                    style: TextStyle(
-                      color: theme.colorScheme.onSurface,
-                      fontSize: 14,
-                      height: 1.3,
-                    ),
-                    maxLines: 1,
-                    decoration: InputDecoration(
-                      hintText: 'Ask me anything',
-                      hintStyle: TextStyle(
-                        color: theme.colorScheme.onSurface.withValues(
-                          alpha: 0.5,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 120),
+                    child: Scrollbar(
+                      controller: _composerScrollController,
+                      child: TextField(
+                        controller: _controller,
+                        focusNode: _textFieldFocusNode,
+                        autofocus: false,
+                        keyboardType: TextInputType.multiline,
+                        textInputAction: TextInputAction.send,
+                        scrollController: _composerScrollController,
+                        style: TextStyle(
+                          color: theme.colorScheme.onSurface,
+                          fontSize: 14,
+                          height: 1.3,
                         ),
-                        fontSize: 14,
+                        minLines: 1,
+                        maxLines: null,
+                        decoration: InputDecoration(
+                          hintText: 'Ask me anything',
+                          hintStyle: TextStyle(
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.5,
+                            ),
+                            fontSize: 14,
+                          ),
+                          filled: true,
+                          fillColor: _audioHandler.isMicActive
+                              ? Colors.transparent
+                              : bg.withValues(alpha: 0.98),
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 8,
+                          ),
+                          isDense: true,
+                        ),
+                        cursorColor: accent,
+                        cursorWidth: 1.5,
                       ),
-                      filled: true,
-                      fillColor: _audioHandler.isMicActive
-                          ? Colors.transparent
-                          : bg.withValues(alpha: 0.98),
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 0,
-                      ),
-                      isDense: true,
                     ),
-                    cursorColor: accent,
-                    cursorWidth: 1.5,
                   ),
                 ),
               ],
