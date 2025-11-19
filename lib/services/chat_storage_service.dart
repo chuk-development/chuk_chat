@@ -548,7 +548,11 @@ class ChatStorageService {
             provider: entry['provider'],
           ),
         )
-        .where((message) => message.text.trim().isNotEmpty)
+        .where((message) {
+          final text = message.text.trim();
+          // Filter out empty messages and "Thinking..." placeholders
+          return text.isNotEmpty && text != 'Thinking...';
+        })
         .toList();
   }
 
@@ -571,6 +575,11 @@ class ChatStorageService {
         final messages = rawMessages
             .whereType<Map<String, dynamic>>()
             .map(ChatMessage.fromJson)
+            .where((message) {
+              // Filter out "Thinking..." placeholders that may have been saved
+              final text = message.text.trim();
+              return text.isNotEmpty && text != 'Thinking...';
+            })
             .toList();
         final customName = decoded['customName'] as String?;
         return (messages: messages, customName: customName);
@@ -587,7 +596,10 @@ class ChatStorageService {
       if (separatorIndex == -1) continue;
       final sender = segment.substring(0, separatorIndex);
       final text = segment.substring(separatorIndex + 1);
-      legacyMessages.add(ChatMessage(sender: sender, text: text));
+      // Filter out "Thinking..." placeholders
+      if (text.trim().isNotEmpty && text.trim() != 'Thinking...') {
+        legacyMessages.add(ChatMessage(sender: sender, text: text));
+      }
     }
     return (messages: legacyMessages, customName: null);
   }

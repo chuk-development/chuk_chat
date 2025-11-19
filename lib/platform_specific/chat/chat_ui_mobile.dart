@@ -724,7 +724,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     final int placeholderIndex = _messages.length - 1;
     _textFieldFocusNode.requestFocus();
     _scrollChatToBottom();
-    _persistChat();
+    // Don't persist "Thinking..." placeholder - wait for actual response
+    // _persistChat(); // Removed - will persist after streaming completes
 
     // Send with streaming handler
     await _streamingHandler.sendMessage(
@@ -795,18 +796,34 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       });
     }
 
-    _persistChat();
+    // Don't persist yet - wait for actual response
+    // _persistChat(); // Removed - will persist after streaming completes
 
     // Resend with new text
     final String originalUserInput = newText;
     late int placeholderIndex;
 
+    // Preserve the original model and provider from the user message being resent
+    final String? originalModelId = _messages[index]['modelId'];
+    final String? originalProvider = _messages[index]['provider'];
+
+    // Use original model/provider if available, otherwise use currently selected
+    final String modelIdToUse = originalModelId ?? _selectedModelId;
+    final String? providerToUse = originalProvider ?? _selectedProviderSlug;
+
     setState(() {
-      _messages.add({'sender': 'ai', 'text': 'Thinking...', 'reasoning': ''});
+      _messages.add({
+        'sender': 'ai',
+        'text': 'Thinking...',
+        'reasoning': '',
+        'modelId': modelIdToUse,
+        'provider': providerToUse ?? '',
+      });
       placeholderIndex = _messages.length - 1;
     });
 
-    _persistChat();
+    // Don't persist "Thinking..." placeholder - wait for actual response
+    // _persistChat(); // Removed - will persist after streaming completes
     _scrollChatToBottom();
 
     if (_activeChatId == null) {
@@ -814,22 +831,19 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     }
     final String chatId = _activeChatId!;
 
-    // Build history up to edited message
-    final List<Map<String, String>> conversationHistory = [];
-    for (int i = 0; i < index; i++) {
-      final msg = _messages[i];
-      final sender = msg['sender'];
-      final text = msg['text'] ?? '';
-      if (sender == 'user') {
-        conversationHistory.add({'role': 'user', 'content': text});
-      } else if (sender == 'ai') {
-        conversationHistory.add({'role': 'assistant', 'content': text});
-      }
-    }
-
-    // Send message (simplified version - uses WebSocket directly for edit)
-    // In full version, this would use streaming handler similar to _sendMessage
-    _showSnackBar('Resending message...');
+    // Send using streaming handler with preserved model/provider
+    await _streamingHandler.sendMessage(
+      userInput: originalUserInput,
+      attachedFiles: [],
+      selectedModelId: modelIdToUse,
+      selectedProviderSlug: providerToUse,
+      messages: _messages,
+      systemPrompt: _systemPrompt,
+      activeChatId: chatId,
+      placeholderIndex: placeholderIndex,
+      getProviderSlug: () async => providerToUse,
+      isOffline: _isOffline,
+    );
   }
 
   Future<void> _resendMessageAt(int index) async {
@@ -973,22 +987,49 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     const bool isCompactModeForModelDropdown = true;
     final mediaQuery = MediaQuery.of(context);
     final theme = Theme.of(context);
-    final double screenWidth = mediaQuery.size.width;
     final double keyboardInset = mediaQuery.viewInsets.bottom;
     final Color iconFg = theme.resolvedIconColor;
 
-    const double effectiveHorizontalPadding = _kHorizontalPaddingSmall;
-    final double maxPossibleChatContentWidth = math.max(
-      0.0,
-      screenWidth - (effectiveHorizontalPadding * 2),
-    );
-    final double constrainedChatContentWidth = math.min(
-      _kMaxChatContentWidth,
-      maxPossibleChatContentWidth,
-    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Use actual available width from constraints, not screen width
+        final double availableWidth = constraints.maxWidth;
 
+        const double effectiveHorizontalPadding = _kHorizontalPaddingSmall;
+        final double maxPossibleChatContentWidth = math.max(
+          0.0,
+          availableWidth - (effectiveHorizontalPadding * 2),
+        );
+        final double constrainedChatContentWidth = math.min(
+          _kMaxChatContentWidth,
+          maxPossibleChatContentWidth,
+        );
+
+        return _buildChatContent(
+          context: context,
+          mediaQuery: mediaQuery,
+          theme: theme,
+          iconFg: iconFg,
+          keyboardInset: keyboardInset,
+          expandedInputWidth: constrainedChatContentWidth,
+          effectiveHorizontalPadding: effectiveHorizontalPadding,
+          isCompactModeForModelDropdown: isCompactModeForModelDropdown,
+        );
+      },
+    );
+  }
+
+  Widget _buildChatContent({
+    required BuildContext context,
+    required MediaQueryData mediaQuery,
+    required ThemeData theme,
+    required Color iconFg,
+    required double keyboardInset,
+    required double expandedInputWidth,
+    required double effectiveHorizontalPadding,
+    required bool isCompactModeForModelDropdown,
+  }) {
     final bool hasAttachments = _fileHandler.hasAttachments;
-    final double expandedInputWidth = constrainedChatContentWidth;
     final bool hasMessages = _messages.isNotEmpty;
     final double composerReservedSpace =
         (_audioHandler.isMicActive ? 56.0 : 48.0) +

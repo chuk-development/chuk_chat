@@ -700,13 +700,28 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     final String originalUserInput = trimmedText;
     late int placeholderIndex;
 
+    // Preserve the original model and provider from the user message being resent
+    final String? originalModelId = _messages[index]['modelId'];
+    final String? originalProvider = _messages[index]['provider'];
+
+    // Use original model/provider if available, otherwise use currently selected
+    final String modelIdToUse = originalModelId ?? _selectedModelId;
+    final String? providerToUse = originalProvider ?? _selectedProviderSlug;
+
     setState(() {
       _isSending = true;
-      _messages.add({'sender': 'ai', 'text': 'Thinking...', 'reasoning': ''});
+      _messages.add({
+        'sender': 'ai',
+        'text': 'Thinking...',
+        'reasoning': '',
+        'modelId': modelIdToUse,
+        'provider': providerToUse ?? '',
+      });
       placeholderIndex = _messages.length - 1;
     });
 
-    _persistChat();
+    // Don't persist "Thinking..." placeholder - wait for actual response
+    // _persistChat(); // Removed - will persist after streaming completes
     _scrollChatToBottom();
 
     final session =
@@ -766,8 +781,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           WebSocketChatService.sendStreamingChat(
             accessToken: accessToken,
             message: originalUserInput,
-            modelId: _selectedModelId,
-            providerSlug: _selectedProviderSlug ?? 'openai',
+            modelId: modelIdToUse,
+            providerSlug: providerToUse ?? 'openai',
             history: conversationHistory,
             systemPrompt: systemPrompt,
             maxTokens: 4096,
@@ -1147,7 +1162,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       placeholderIndex = _messages.length - 1;
     });
 
-    _persistChat();
+    // Don't persist "Thinking..." placeholder - wait for actual response
+    // _persistChat(); // Removed - will persist after streaming completes
 
     if (firstMessageInChat) _animCtrl.forward();
     _scrollChatToBottom();
