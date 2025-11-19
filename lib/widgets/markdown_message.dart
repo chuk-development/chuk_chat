@@ -1,9 +1,13 @@
 // lib/widgets/markdown_message.dart
 
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:highlight/highlight.dart' as hi;
 import 'package:markdown_widget/markdown_widget.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class MarkdownMessage extends StatefulWidget {
   const MarkdownMessage({
@@ -45,6 +49,33 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
     }
   }
 
+  Future<void> _onTapLink(String href) async {
+    final bool? shouldOpen = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Open Link'),
+        content: Text('Do you really want to leave the app and open $href?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Open'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldOpen == true) {
+      final Uri uri = Uri.parse(href);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_cachedContent == null) {
@@ -71,6 +102,7 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
       color: widget.textColor,
     );
     final Color codeBorderColor = widget.textColor.withValues(alpha: 0.2);
+    final Color accentColor = theme.colorScheme.primary;
 
     final MarkdownConfig config = MarkdownConfig(
       configs: [
@@ -162,8 +194,7 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
               ),
         ),
         CodeConfig(
-          style:
-              codeTextStyle.copyWith(backgroundColor: codeBackground),
+          style: codeTextStyle.copyWith(backgroundColor: codeBackground),
         ),
         PreConfig(
           padding: EdgeInsets.zero,
@@ -171,14 +202,29 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
           textStyle: codeTextStyle,
           styleNotMatched: codeTextStyle,
           theme: syntaxTheme,
-          builder: (code, language) => _buildCodeBlock(
+          builder: (code, language) => _AsyncCodeBlock(
             code: code,
             language: language,
             textStyle: codeTextStyle,
             backgroundColor: codeBackground,
             borderColor: codeBorderColor,
             theme: syntaxTheme,
+            textColor: widget.textColor,
           ),
+        ),
+        LinkConfig(
+          style:
+              (theme.textTheme.bodyMedium?.copyWith(
+                color: accentColor,
+                decoration: TextDecoration.underline,
+              )) ??
+              TextStyle(
+                color: accentColor,
+                decoration: TextDecoration.underline,
+              ),
+          onTap: (url) {
+            _onTapLink(url);
+          },
         ),
         BlockquoteConfig(
           textColor: widget.textColor,
@@ -219,22 +265,18 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
         final TextSpan textSpan = span is TextSpan
             ? span
             : TextSpan(children: <InlineSpan>[span]);
-        return SelectableText.rich(textSpan, textAlign: TextAlign.left);
+        return Text.rich(textSpan, textAlign: TextAlign.left);
       },
     );
 
     List<Widget> builtWidgets;
     try {
-      builtWidgets = generator.buildWidgets(
-        widget.text,
-        config: config,
-      );
+      builtWidgets = generator.buildWidgets(widget.text, config: config);
     } catch (error, stackTrace) {
-      // Handle markdown parsing errors gracefully (e.g., incomplete code blocks during streaming)
       debugPrint('Markdown parsing error: $error');
       debugPrint('Stack trace: $stackTrace');
       builtWidgets = <Widget>[
-        SelectableText(
+        Text(
           widget.text,
           style:
               (theme.textTheme.bodyMedium?.copyWith(
@@ -251,179 +293,27 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
       ];
     }
 
-    _cachedContent = builtWidgets.isEmpty
-        ? <Widget>[
-            SelectableText(
-              widget.text,
-              style:
-                  (theme.textTheme.bodyMedium?.copyWith(
-                    color: widget.textColor,
-                    height: 1.45,
-                    fontSize: 14,
-                  )) ??
-                  TextStyle(
-                    color: widget.textColor,
-                    height: 1.45,
-                    fontSize: 14,
-                  ),
-            ),
-          ]
-        : builtWidgets;
+    _cachedContent =
+        builtWidgets.isEmpty
+            ? <Widget>[
+              Text(
+                widget.text,
+                style:
+                    (theme.textTheme.bodyMedium?.copyWith(
+                      color: widget.textColor,
+                      height: 1.45,
+                      fontSize: 14,
+                    )) ??
+                    TextStyle(
+                      color: widget.textColor,
+                      height: 1.45,
+                      fontSize: 14,
+                    ),
+              ),
+            ]
+            : builtWidgets;
 
     _lastBrightness = theme.brightness;
-  }
-
-  Widget _buildCodeBlock({
-    required String code,
-    required String language,
-    required TextStyle textStyle,
-    required Color backgroundColor,
-    required Color borderColor,
-    required Map<String, TextStyle> theme,
-  }) {
-    final List<InlineSpan> spans = _highlightSafely(
-      code.replaceAll('\r\n', '\n'),
-      language,
-      theme,
-      textStyle,
-    );
-
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: borderColor),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Header with language and copy button
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: widget.textColor.withValues(alpha: 0.05),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(7),
-                topRight: Radius.circular(7),
-              ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  language.isEmpty ? 'code' : language,
-                  style: TextStyle(
-                    color: widget.textColor.withValues(alpha: 0.7),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                _CopyButton(
-                  code: code,
-                  textColor: widget.textColor,
-                ),
-              ],
-            ),
-          ),
-          // Code content
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: SelectableText.rich(
-                TextSpan(children: spans),
-                style: textStyle,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  List<InlineSpan> _highlightSafely(
-    String code,
-    String language,
-    Map<String, TextStyle> theme,
-    TextStyle baseStyle,
-  ) {
-    final String normalizedLanguage = language.trim();
-    final bool autoDetect = normalizedLanguage.isEmpty;
-
-    try {
-      final hi.Result result = hi.highlight.parse(
-        code,
-        language: autoDetect ? null : normalizedLanguage,
-        autoDetection: autoDetect,
-      );
-      final List<hi.Node>? nodes = result.nodes;
-      if (nodes == null || nodes.isEmpty) {
-        return <InlineSpan>[TextSpan(text: code, style: baseStyle)];
-      }
-      return _convertNodesSafely(nodes, theme, baseStyle);
-    } catch (error, stackTrace) {
-      debugPrint(
-        'Code highlight failed for language "$normalizedLanguage": $error',
-      );
-      debugPrint('$stackTrace');
-      return <InlineSpan>[TextSpan(text: code, style: baseStyle)];
-    }
-  }
-
-  List<TextSpan> _convertNodesSafely(
-    List<hi.Node> nodes,
-    Map<String, TextStyle> theme,
-    TextStyle baseStyle,
-  ) {
-    final List<TextSpan> spans = <TextSpan>[];
-    for (final hi.Node node in nodes) {
-      spans.addAll(_collectSpans(node, theme, baseStyle, null));
-    }
-    return spans;
-  }
-
-  List<TextSpan> _collectSpans(
-    hi.Node node,
-    Map<String, TextStyle> theme,
-    TextStyle baseStyle,
-    TextStyle? parentThemeStyle,
-  ) {
-    try {
-      final String className = node.className ?? '';
-      final TextStyle? themeStyle = className.isNotEmpty
-          ? theme[className]
-          : parentThemeStyle;
-      final TextStyle effectiveStyle = (themeStyle != null
-          ? themeStyle.merge(baseStyle)
-          : baseStyle);
-
-      if (node.value != null) {
-        return <TextSpan>[TextSpan(text: node.value, style: effectiveStyle)];
-      }
-
-      final List<hi.Node>? children = node.children;
-      if (children == null || children.isEmpty) {
-        return <TextSpan>[];
-      }
-
-      final List<TextSpan> childSpans = <TextSpan>[];
-      for (final hi.Node child in children) {
-        childSpans.addAll(
-          _collectSpans(child, theme, baseStyle, themeStyle ?? parentThemeStyle),
-        );
-      }
-      return <TextSpan>[TextSpan(children: childSpans, style: effectiveStyle)];
-    } catch (error) {
-      debugPrint('Error collecting spans: $error');
-      // Return a safe fallback span
-      return <TextSpan>[
-        TextSpan(
-          text: node.value ?? '',
-          style: baseStyle,
-        ),
-      ];
-    }
   }
 
   Color _codeBackground() {
@@ -499,15 +389,226 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
   }
 }
 
+/// Widget that handles async code highlighting to prevent UI jank
+class _AsyncCodeBlock extends StatefulWidget {
+  final String code;
+  final String language;
+  final TextStyle textStyle;
+  final Color backgroundColor;
+  final Color borderColor;
+  final Map<String, TextStyle> theme;
+  final Color textColor;
+
+  const _AsyncCodeBlock({
+    required this.code,
+    required this.language,
+    required this.textStyle,
+    required this.backgroundColor,
+    required this.borderColor,
+    required this.theme,
+    required this.textColor,
+  });
+
+  @override
+  State<_AsyncCodeBlock> createState() => _AsyncCodeBlockState();
+}
+
+class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
+  List<InlineSpan>? _highlightedSpans;
+  Timer? _debounceTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleHighlight();
+  }
+
+  @override
+  void didUpdateWidget(covariant _AsyncCodeBlock oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.code != oldWidget.code ||
+        widget.language != oldWidget.language ||
+        widget.theme != oldWidget.theme) {
+      _scheduleHighlight();
+    }
+  }
+
+  @override
+  void dispose() {
+    _debounceTimer?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleHighlight() {
+    _debounceTimer?.cancel();
+    // Use a short delay to debounce rapid updates (e.g. streaming)
+    // This prevents spawning too many isolates for every single character
+    _debounceTimer = Timer(const Duration(milliseconds: 150), () {
+      _highlightCode();
+    });
+  }
+
+  Future<void> _highlightCode() async {
+    if (!mounted) return;
+
+    final String code = widget.code;
+    final String language = widget.language;
+    // Pass only necessary data to the isolate
+    try {
+      // Run heavy parsing in an isolate
+      final List<hi.Node> nodes = await compute(_parseCode, {
+        'code': code,
+        'language': language,
+        'autoDetect': language.isEmpty,
+      });
+
+      if (!mounted) return;
+
+      // Convert nodes to TextSpans on the main thread (fast)
+      final List<InlineSpan> spans = _convertNodesSafely(
+        nodes,
+        widget.theme,
+        widget.textStyle,
+      );
+
+      setState(() {
+        _highlightedSpans = spans;
+      });
+    } catch (e) {
+      debugPrint('Highlight error: $e');
+      // Fallback to plain text handled by default build
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final List<InlineSpan> content =
+        _highlightedSpans ?? [TextSpan(text: widget.code, style: widget.textStyle)];
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: widget.backgroundColor,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: widget.borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header with language and copy button
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: widget.textColor.withValues(alpha: 0.05),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(7),
+                topRight: Radius.circular(7),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  widget.language.isEmpty ? 'code' : widget.language,
+                  style: TextStyle(
+                    color: widget.textColor.withValues(alpha: 0.7),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                _CopyButton(code: widget.code, textColor: widget.textColor),
+              ],
+            ),
+          ),
+          // Code content
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Text.rich(
+                TextSpan(children: content),
+                style: widget.textStyle,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Top-level function for compute
+List<hi.Node> _parseCode(Map<String, dynamic> args) {
+  final String code = args['code'];
+  final String? language = args['language'];
+  final bool autoDetect = args['autoDetect'];
+
+  // Replace Windows line endings for consistency
+  final String normalizedCode = code.replaceAll('\r\n', '\n');
+
+  final hi.Result result = hi.highlight.parse(
+    normalizedCode,
+    language: autoDetect ? null : language,
+    autoDetection: autoDetect,
+  );
+
+  return result.nodes ?? [];
+}
+
+// Helper to convert nodes to spans (Main thread)
+List<TextSpan> _convertNodesSafely(
+  List<hi.Node> nodes,
+  Map<String, TextStyle> theme,
+  TextStyle baseStyle,
+) {
+  final List<TextSpan> spans = <TextSpan>[];
+  for (final hi.Node node in nodes) {
+    spans.addAll(_collectSpans(node, theme, baseStyle, null));
+  }
+  return spans;
+}
+
+List<TextSpan> _collectSpans(
+  hi.Node node,
+  Map<String, TextStyle> theme,
+  TextStyle baseStyle,
+  TextStyle? parentThemeStyle,
+) {
+  try {
+    final String className = node.className ?? '';
+    final TextStyle? themeStyle =
+        className.isNotEmpty ? theme[className] : parentThemeStyle;
+    final TextStyle effectiveStyle =
+        (themeStyle != null ? themeStyle.merge(baseStyle) : baseStyle);
+
+    if (node.value != null) {
+      return <TextSpan>[TextSpan(text: node.value, style: effectiveStyle)];
+    }
+
+    final List<hi.Node>? children = node.children;
+    if (children == null || children.isEmpty) {
+      return <TextSpan>[];
+    }
+
+    final List<TextSpan> childSpans = <TextSpan>[];
+    for (final hi.Node child in children) {
+      childSpans.addAll(
+        _collectSpans(child, theme, baseStyle, themeStyle ?? parentThemeStyle),
+      );
+    }
+    return <TextSpan>[TextSpan(children: childSpans, style: effectiveStyle)];
+  } catch (error) {
+    // Return a safe fallback span
+    return <TextSpan>[TextSpan(text: node.value ?? '', style: baseStyle)];
+  }
+}
+
 /// Copy button widget for code blocks
 class _CopyButton extends StatefulWidget {
   final String code;
   final Color textColor;
 
-  const _CopyButton({
-    required this.code,
-    required this.textColor,
-  });
+  const _CopyButton({required this.code, required this.textColor});
 
   @override
   State<_CopyButton> createState() => _CopyButtonState();
