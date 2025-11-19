@@ -151,7 +151,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
     // Model selection listener
     _modelSelectionListener = () {
-      final String newModelId = ModelSelectionDropdown.selectedModelNotifier.value;
+      final String newModelId =
+          ModelSelectionDropdown.selectedModelNotifier.value;
       if (newModelId != _selectedModelId) {
         setState(() {
           _selectedModelId = newModelId;
@@ -159,12 +160,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       }
       unawaited(_loadProviderSlugForModel(newModelId));
     };
-    ModelSelectionDropdown.selectedModelListenable.addListener(_modelSelectionListener);
+    ModelSelectionDropdown.selectedModelListenable.addListener(
+      _modelSelectionListener,
+    );
 
     // Provider refresh listener
-    _providerRefreshSubscription = ModelSelectionEventBus().refreshStream.listen((_) {
-      unawaited(_loadProviderSlugForModel(_selectedModelId));
-    });
+    _providerRefreshSubscription = ModelSelectionEventBus().refreshStream
+        .listen((_) {
+          unawaited(_loadProviderSlugForModel(_selectedModelId));
+        });
 
     // Chat storage listener
     _chatStorageSubscription = ChatStorageService.changes.listen((_) {
@@ -213,7 +217,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
       _loadChatFromIndex(widget.selectedChatIndex);
 
-      final bool newChatIsStreaming = _activeChatId != null &&
+      final bool newChatIsStreaming =
+          _activeChatId != null &&
           _streamingHandler.isChatStreaming(_activeChatId!);
 
       if (newChatIsStreaming != _streamingHandler.isStreaming) {
@@ -229,12 +234,16 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     }
     _chatStorageSubscription?.cancel();
     _providerRefreshSubscription?.cancel();
-    NetworkStatusService.isOnlineListenable.removeListener(_networkStatusListener);
+    NetworkStatusService.isOnlineListenable.removeListener(
+      _networkStatusListener,
+    );
     _controller.dispose();
     _scrollController.dispose();
     _textFieldFocusNode.dispose();
     _rawKeyboardListenerFocusNode.dispose();
-    ModelSelectionDropdown.selectedModelListenable.removeListener(_modelSelectionListener);
+    ModelSelectionDropdown.selectedModelListenable.removeListener(
+      _modelSelectionListener,
+    );
     _audioHandler.dispose();
     super.dispose();
   }
@@ -251,42 +260,48 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       _activeChatId = storedChat.id;
       _messages
         ..clear()
-        ..addAll(storedChat.messages.map((message) {
-          final map = <String, String>{
-            'sender': message.sender,
-            'text': message.text,
-            'reasoning': message.reasoning,
-          };
-          if (message.modelId != null && message.modelId!.isNotEmpty) {
-            map['modelId'] = message.modelId!;
-          }
-          if (message.provider != null && message.provider!.isNotEmpty) {
-            map['provider'] = message.provider!;
-          }
-          return map;
-        }));
+        ..addAll(
+          storedChat.messages.map((message) {
+            final map = <String, String>{
+              'sender': message.sender,
+              'text': message.text,
+              'reasoning': message.reasoning,
+            };
+            if (message.modelId != null && message.modelId!.isNotEmpty) {
+              map['modelId'] = message.modelId!;
+            }
+            if (message.provider != null && message.provider!.isNotEmpty) {
+              map['provider'] = message.provider!;
+            }
+            return map;
+          }),
+        );
     } else {
       _activeChatId = null;
     }
 
     // Check for background streaming
-    final bool chatIsStreaming = _activeChatId != null &&
+    final bool chatIsStreaming =
+        _activeChatId != null &&
         _streamingHandler.isChatStreaming(_activeChatId!);
 
     if (chatIsStreaming && _activeChatId != null) {
-      final int? streamingMsgIndex =
-          _streamingHandler.getStreamingMessageIndex(_activeChatId!);
+      final int? streamingMsgIndex = _streamingHandler.getStreamingMessageIndex(
+        _activeChatId!,
+      );
       if (streamingMsgIndex != null &&
           streamingMsgIndex >= 0 &&
           streamingMsgIndex < _messages.length) {
-        final String? bufferedContent =
-            _streamingHandler.getBufferedContent(_activeChatId!);
-        final String? bufferedReasoning =
-            _streamingHandler.getBufferedReasoning(_activeChatId!);
+        final String? bufferedContent = _streamingHandler.getBufferedContent(
+          _activeChatId!,
+        );
+        final String? bufferedReasoning = _streamingHandler
+            .getBufferedReasoning(_activeChatId!);
 
         if (bufferedContent != null) {
-          final Map<String, String> updatedMessage =
-              Map<String, String>.from(_messages[streamingMsgIndex]);
+          final Map<String, String> updatedMessage = Map<String, String>.from(
+            _messages[streamingMsgIndex],
+          );
           updatedMessage['text'] = bufferedContent;
           updatedMessage['reasoning'] = bufferedReasoning ?? '';
           _messages[streamingMsgIndex] = updatedMessage;
@@ -474,7 +489,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                      color: theme.colorScheme.surfaceContainerHighest
+                          .withValues(alpha: 0.5),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: theme.dividerColor.withValues(alpha: 0.3),
@@ -485,7 +501,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                         Icon(
                           Icons.info_outline,
                           size: 18,
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.7,
+                          ),
                         ),
                         const SizedBox(width: 8),
                         Expanded(
@@ -493,7 +511,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                             'This model does not support images',
                             style: TextStyle(
                               fontSize: 13,
-                              color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.8,
+                              ),
                             ),
                           ),
                         ),
@@ -512,10 +532,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                       onTap: () {
                         if (!supportsImages) return;
                         Navigator.of(sheetContext).pop();
-                        unawaited(_fileHandler.pickImageFromSource(
-                          ImageSource.camera,
-                          supportsImages: supportsImages,
-                        ));
+                        unawaited(
+                          _fileHandler.pickImageFromSource(
+                            ImageSource.camera,
+                            supportsImages: supportsImages,
+                          ),
+                        );
                       },
                     ),
                     const SizedBox(width: 12),
@@ -527,9 +549,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                       onTap: () {
                         if (!supportsImages) return;
                         Navigator.of(sheetContext).pop();
-                        unawaited(_fileHandler.pickImagesFromGallery(
-                          supportsImages: supportsImages,
-                        ));
+                        unawaited(
+                          _fileHandler.pickImagesFromGallery(
+                            supportsImages: supportsImages,
+                          ),
+                        );
                       },
                     ),
                     const SizedBox(width: 12),
@@ -540,9 +564,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                       isEnabled: true,
                       onTap: () {
                         Navigator.of(sheetContext).pop();
-                        unawaited(_fileHandler.uploadFiles(
-                          supportsImages: supportsImages,
-                        ));
+                        unawaited(
+                          _fileHandler.uploadFiles(
+                            supportsImages: supportsImages,
+                          ),
+                        );
                       },
                     ),
                   ],
@@ -571,25 +597,39 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
   // --- MESSAGE HANDLERS ---
 
-  void _updateAiMessage(int index, String content, String reasoning, String chatId) {
+  void _updateAiMessage(
+    int index,
+    String content,
+    String reasoning,
+    String chatId,
+  ) {
     if (!mounted || index < 0 || index >= _messages.length) return;
     if (_activeChatId != chatId) return;
 
     setState(() {
-      final Map<String, String> message = Map<String, String>.from(_messages[index]);
+      final Map<String, String> message = Map<String, String>.from(
+        _messages[index],
+      );
       message['text'] = content;
       message['reasoning'] = reasoning;
       _messages[index] = message;
     });
   }
 
-  void _finalizeAiMessage(int index, String content, String reasoning, String chatId) {
+  void _finalizeAiMessage(
+    int index,
+    String content,
+    String reasoning,
+    String chatId,
+  ) {
     if (index < 0 || index >= _messages.length) return;
     if (_activeChatId != chatId) return;
 
     if (mounted) {
       setState(() {
-        final Map<String, String> message = Map<String, String>.from(_messages[index]);
+        final Map<String, String> message = Map<String, String>.from(
+          _messages[index],
+        );
         message['text'] = content;
         message['reasoning'] = reasoning;
         _messages[index] = message;
@@ -709,7 +749,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       _messages[index]['text'] = newText;
     });
 
-    if (index + 1 < _messages.length && _messages[index + 1]['sender'] == 'ai') {
+    if (index + 1 < _messages.length &&
+        _messages[index + 1]['sender'] == 'ai') {
       setState(() {
         _messages.removeAt(index + 1);
       });
@@ -774,7 +815,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       return;
     }
 
-    final String? dropdownSlug = ModelSelectionDropdown.providerSlugForModel(modelId);
+    final String? dropdownSlug = ModelSelectionDropdown.providerSlugForModel(
+      modelId,
+    );
     if (dropdownSlug != null && dropdownSlug.isNotEmpty) {
       if (_selectedProviderSlug != dropdownSlug) {
         setState(() {
@@ -784,7 +827,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       return;
     }
 
-    final String? loadedSlug = await UserPreferencesService.loadSelectedProvider(modelId);
+    final String? loadedSlug =
+        await UserPreferencesService.loadSelectedProvider(modelId);
     if (!mounted) return;
     if (_selectedProviderSlug != loadedSlug) {
       setState(() {
@@ -936,76 +980,95 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                     ? Align(
                         alignment: Alignment.center,
                         child: Container(
-                          constraints: BoxConstraints(maxWidth: expandedInputWidth),
-                          child: Scrollbar(
-                            controller: _scrollController,
-                            thumbVisibility: true,
-                            thickness: 8.0,
-                            radius: const Radius.circular(4),
-                            child: ListView.builder(
+                          constraints: BoxConstraints(
+                            maxWidth: expandedInputWidth,
+                          ),
+                          child: SelectionArea(
+                            child: Scrollbar(
                               controller: _scrollController,
-                              padding: listPadding,
-                              itemCount: _messages.length,
-                              addAutomaticKeepAlives: false,
-                              addRepaintBoundaries: true,
-                              cacheExtent: 500.0,
-                              itemBuilder: (_, int i) {
-                                final Map<String, String> raw = _messages[i];
-                                final String sender = raw['sender'] ?? 'ai';
-                                final bool isAiMessage = sender != 'user';
-                                final bool isStreamingMessage =
-                                    _streamingHandler.isStreaming &&
-                                    i == _messages.length - 1 &&
-                                    isAiMessage;
-                                final String displayText = (raw['text'] ?? '').trimRight();
-                                final String reasoning = raw['reasoning'] ?? '';
-                                final String? modelLabel = isAiMessage
-                                    ? _formatModelInfo(raw['modelId'], raw['provider'])
-                                    : null;
-                                final String? reasoningText =
-                                    reasoning.trim().isEmpty ? null : reasoning;
-                                final bool isBeingEdited =
-                                    _messageActionsHandler.editingMessageIndex == i;
-                                final bool isUser = sender == 'user';
+                              thumbVisibility: true,
+                              thickness: 8.0,
+                              radius: const Radius.circular(4),
+                              child: ListView.builder(
+                                controller: _scrollController,
+                                padding: listPadding,
+                                itemCount: _messages.length,
+                                addAutomaticKeepAlives: false,
+                                addRepaintBoundaries: true,
+                                cacheExtent: 500.0,
+                                itemBuilder: (_, int i) {
+                                  final Map<String, String> raw = _messages[i];
+                                  final String sender = raw['sender'] ?? 'ai';
+                                  final bool isAiMessage = sender != 'user';
+                                  final bool isStreamingMessage =
+                                      _streamingHandler.isStreaming &&
+                                      i == _messages.length - 1 &&
+                                      isAiMessage;
+                                  final String displayText = (raw['text'] ?? '')
+                                      .trimRight();
+                                  final String reasoning =
+                                      raw['reasoning'] ?? '';
+                                  final String? modelLabel = isAiMessage
+                                      ? _formatModelInfo(
+                                          raw['modelId'],
+                                          raw['provider'],
+                                        )
+                                      : null;
+                                  final String? reasoningText =
+                                      reasoning.trim().isEmpty
+                                      ? null
+                                      : reasoning;
+                                  final bool isBeingEdited =
+                                      _messageActionsHandler
+                                          .editingMessageIndex ==
+                                      i;
+                                  final bool isUser = sender == 'user';
 
-                                return RepaintBoundary(
-                                  child: MessageBubble(
-                                    key: ValueKey('msg_$i'),
-                                    message: displayText,
-                                    reasoning: reasoningText,
-                                    isUser: isUser,
-                                    maxWidth: isUser
-                                        ? expandedInputWidth * 0.7
-                                        : expandedInputWidth,
-                                    isReasoningStreaming: isStreamingMessage,
-                                    modelLabel: modelLabel,
-                                    actions: _messageActionsHandler.buildActionsForMessage(
-                                      index: i,
-                                      messageText: displayText,
+                                  return RepaintBoundary(
+                                    child: MessageBubble(
+                                      key: ValueKey('msg_$i'),
+                                      message: displayText,
+                                      reasoning: reasoningText,
                                       isUser: isUser,
-                                      isStreaming: isStreamingMessage,
-                                      onEdit: (index) {
-                                        setState(() {
-                                          _messageActionsHandler.startEdit(index);
-                                        });
-                                      },
-                                      onResendMessage: _resendMessageAt,
+                                      maxWidth: isUser
+                                          ? expandedInputWidth * 0.7
+                                          : expandedInputWidth,
+                                      isReasoningStreaming: isStreamingMessage,
+                                      modelLabel: modelLabel,
+                                      actions: _messageActionsHandler
+                                          .buildActionsForMessage(
+                                            index: i,
+                                            messageText: displayText,
+                                            isUser: isUser,
+                                            isStreaming: isStreamingMessage,
+                                            onEdit: (index) {
+                                              setState(() {
+                                                _messageActionsHandler
+                                                    .startEdit(index);
+                                              });
+                                            },
+                                            onResendMessage: _resendMessageAt,
+                                          ),
+                                      isEditing: isBeingEdited,
+                                      initialEditText: isBeingEdited
+                                          ? displayText
+                                          : null,
+                                      onSubmitEdit: isBeingEdited && isUser
+                                          ? (newText) =>
+                                                _submitEditedMessage(i, newText)
+                                          : null,
+                                      onCancelEdit: isBeingEdited
+                                          ? () {
+                                              setState(() {
+                                                _messageActionsHandler
+                                                    .cancelEdit();
+                                              });
+                                            }
+                                          : null,
                                     ),
-                                    isEditing: isBeingEdited,
-                                    initialEditText: isBeingEdited ? displayText : null,
-                                    onSubmitEdit: isBeingEdited && isUser
-                                        ? (newText) => _submitEditedMessage(i, newText)
-                                        : null,
-                                    onCancelEdit: isBeingEdited
-                                        ? () {
-                                            setState(() {
-                                              _messageActionsHandler.cancelEdit();
-                                            });
-                                          }
-                                        : null,
-                                  ),
-                                );
-                              },
+                                  );
+                                },
+                              ),
                             ),
                           ),
                         ),
@@ -1163,7 +1226,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                     decoration: InputDecoration(
                       hintText: 'Ask me anything',
                       hintStyle: TextStyle(
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.5,
+                        ),
                         fontSize: 14,
                       ),
                       filled: true,
@@ -1188,7 +1253,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           ),
           const SizedBox(width: 4),
           buildTinyIconButton(
-            icon: _audioHandler.isMicActive ? Icons.stop_rounded : Icons.mic_rounded,
+            icon: _audioHandler.isMicActive
+                ? Icons.stop_rounded
+                : Icons.mic_rounded,
             onTap: _handleMicTap,
             isActive: _audioHandler.isMicActive,
             color: _audioHandler.isMicActive ? Colors.red : iconFg,
@@ -1198,17 +1265,17 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
             icon: _audioHandler.isMicActive
                 ? Icons.send_rounded
                 : (_streamingHandler.isStreaming
-                    ? Icons.stop_rounded
-                    : (_controller.text.trim().isEmpty && !hasAttachments
-                        ? Icons.graphic_eq_rounded
-                        : Icons.arrow_upward_rounded)),
+                      ? Icons.stop_rounded
+                      : (_controller.text.trim().isEmpty && !hasAttachments
+                            ? Icons.graphic_eq_rounded
+                            : Icons.arrow_upward_rounded)),
             onTap: _audioHandler.isMicActive
                 ? _handleAudioSend
                 : (_streamingHandler.isStreaming
-                    ? _sendMessage
-                    : (_controller.text.trim().isEmpty && !hasAttachments
-                        ? () => _openComingSoonFeature('Voice Mode')
-                        : _sendMessage)),
+                      ? _sendMessage
+                      : (_controller.text.trim().isEmpty && !hasAttachments
+                            ? () => _openComingSoonFeature('Voice Mode')
+                            : _sendMessage)),
             color: _audioHandler.isMicActive
                 ? accent
                 : (_streamingHandler.isStreaming ? Colors.red : accent),

@@ -82,12 +82,10 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
       _rebuildCache();
     }
 
-    return SelectionArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: _cachedContent!,
-      ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: _cachedContent!,
     );
   }
 
@@ -244,14 +242,9 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
                 color: widget.textColor,
                 fontWeight: FontWeight.w600,
               )) ??
-              TextStyle(
-                color: widget.textColor,
-                fontWeight: FontWeight.w600,
-              ),
+              TextStyle(color: widget.textColor, fontWeight: FontWeight.w600),
           bodyStyle:
-              (theme.textTheme.bodyMedium?.copyWith(
-                color: widget.textColor,
-              )) ??
+              (theme.textTheme.bodyMedium?.copyWith(color: widget.textColor)) ??
               TextStyle(color: widget.textColor),
         ),
         ListConfig(),
@@ -284,34 +277,29 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
                 height: 1.45,
                 fontSize: 14,
               )) ??
-              TextStyle(
-                color: widget.textColor,
-                height: 1.45,
-                fontSize: 14,
-              ),
+              TextStyle(color: widget.textColor, height: 1.45, fontSize: 14),
         ),
       ];
     }
 
-    _cachedContent =
-        builtWidgets.isEmpty
-            ? <Widget>[
-              Text(
-                widget.text,
-                style:
-                    (theme.textTheme.bodyMedium?.copyWith(
-                      color: widget.textColor,
-                      height: 1.45,
-                      fontSize: 14,
-                    )) ??
-                    TextStyle(
-                      color: widget.textColor,
-                      height: 1.45,
-                      fontSize: 14,
-                    ),
-              ),
-            ]
-            : builtWidgets;
+    _cachedContent = builtWidgets.isEmpty
+        ? <Widget>[
+            Text(
+              widget.text,
+              style:
+                  (theme.textTheme.bodyMedium?.copyWith(
+                    color: widget.textColor,
+                    height: 1.45,
+                    fontSize: 14,
+                  )) ??
+                  TextStyle(
+                    color: widget.textColor,
+                    height: 1.45,
+                    fontSize: 14,
+                  ),
+            ),
+          ]
+        : builtWidgets;
 
     _lastBrightness = theme.brightness;
   }
@@ -483,7 +471,8 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
   @override
   Widget build(BuildContext context) {
     final List<InlineSpan> content =
-        _highlightedSpans ?? [TextSpan(text: widget.code, style: widget.textStyle)];
+        _highlightedSpans ??
+        [TextSpan(text: widget.code, style: widget.textStyle)];
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -576,10 +565,12 @@ List<TextSpan> _collectSpans(
 ) {
   try {
     final String className = node.className ?? '';
-    final TextStyle? themeStyle =
-        className.isNotEmpty ? theme[className] : parentThemeStyle;
-    final TextStyle effectiveStyle =
-        (themeStyle != null ? themeStyle.merge(baseStyle) : baseStyle);
+    final TextStyle? themeStyle = className.isNotEmpty
+        ? theme[className]
+        : parentThemeStyle;
+    final TextStyle effectiveStyle = (themeStyle != null
+        ? themeStyle.merge(baseStyle)
+        : baseStyle);
 
     if (node.value != null) {
       return <TextSpan>[TextSpan(text: node.value, style: effectiveStyle)];

@@ -70,13 +70,19 @@ class _MessageBubbleState extends State<MessageBubble> {
 
   bool get _hasReasoning {
     // Show reasoning if preference is true OR still loading (null)
-    final show = _showReasoningTokens ?? _cachedShowReasoningTokens ?? kDefaultShowReasoningTokens;
-    return show && widget.reasoning != null && widget.reasoning!.trim().isNotEmpty;
+    final show =
+        _showReasoningTokens ??
+        _cachedShowReasoningTokens ??
+        kDefaultShowReasoningTokens;
+    return show &&
+        widget.reasoning != null &&
+        widget.reasoning!.trim().isNotEmpty;
   }
 
   bool get _hasModelInfo {
     // Show model info if preference is true OR still loading (null)
-    final show = _showModelInfo ?? _cachedShowModelInfo ?? kDefaultShowModelInfo;
+    final show =
+        _showModelInfo ?? _cachedShowModelInfo ?? kDefaultShowModelInfo;
     return show && widget.modelLabel != null && widget.modelLabel!.isNotEmpty;
   }
 
@@ -92,7 +98,8 @@ class _MessageBubbleState extends State<MessageBubble> {
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     if (mounted) {
-      final showReasoning = prefs.getBool('showReasoningTokens') ?? kDefaultShowReasoningTokens;
+      final showReasoning =
+          prefs.getBool('showReasoningTokens') ?? kDefaultShowReasoningTokens;
       final showModel = prefs.getBool('showModelInfo') ?? kDefaultShowModelInfo;
 
       setState(() {
@@ -349,7 +356,7 @@ class _MessageBubbleState extends State<MessageBubble> {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: iconFgColor.withValues(alpha: 0.18)),
       ),
-      child: SelectableText(
+      child: Text(
         widget.reasoning!,
         style: TextStyle(
           color: iconFgColor.withValues(alpha: 0.85),
@@ -429,7 +436,7 @@ class _MessageBubbleState extends State<MessageBubble> {
             ],
           ),
           const SizedBox(height: 8),
-          SelectableText(
+          Text(
             widget.modelLabel!,
             style: TextStyle(
               color: iconFgColor.withValues(alpha: 0.85),
@@ -453,7 +460,9 @@ class _MessageBubbleState extends State<MessageBubble> {
       return Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: accentColor.withValues(alpha: 0.9), // Full accent color background
+          color: accentColor.withValues(
+            alpha: 0.9,
+          ), // Full accent color background
           borderRadius: BorderRadius.circular(8),
         ),
         child: TextField(

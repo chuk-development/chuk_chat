@@ -1915,61 +1915,63 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                           constraints: BoxConstraints(
                             maxWidth: expandedInputWidth,
                           ),
-                          child: Scrollbar(
-                            controller: _scrollController,
-                            thumbVisibility: true,
-                            thickness: 8.0,
-                            radius: const Radius.circular(4),
-                            child: ListView.builder(
+                          child: SelectionArea(
+                            child: Scrollbar(
                               controller: _scrollController,
-                              padding: EdgeInsets.symmetric(
-                                horizontal: effectiveHorizontalPadding,
-                                vertical: 10,
-                              ),
-                              itemCount: renderMessages.length,
-                              addAutomaticKeepAlives: false,
-                              addRepaintBoundaries: true,
-                              cacheExtent: 500.0,
-                              itemBuilder: (_, int i) {
-                                final _MessageRenderData data =
-                                    renderMessages[i];
-                                final String? reasoningText =
-                                    data.reasoning.trim().isEmpty
-                                    ? null
-                                    : data.reasoning;
-                                final bool isBeingEdited =
-                                    _editingMessageIndex == i;
-                                return RepaintBoundary(
-                                  child: MessageBubble(
-                                    key: ValueKey('msg_$i'),
-                                    message: data.displayText,
-                                    reasoning: reasoningText,
-                                    isUser: data.isUser,
-                                    maxWidth: data.isUser
-                                        ? expandedInputWidth *
-                                              0.7 // User messages: 70%
-                                        : expandedInputWidth, // AI messages: 100%
-                                    isReasoningStreaming:
-                                        data.isReasoningStreaming,
-                                    modelLabel: data.modelLabel,
-                                    actions: _buildMessageActionsForIndex(
-                                      i,
-                                      data,
+                              thumbVisibility: true,
+                              thickness: 8.0,
+                              radius: const Radius.circular(4),
+                              child: ListView.builder(
+                                controller: _scrollController,
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: effectiveHorizontalPadding,
+                                  vertical: 10,
+                                ),
+                                itemCount: renderMessages.length,
+                                addAutomaticKeepAlives: false,
+                                addRepaintBoundaries: true,
+                                cacheExtent: 500.0,
+                                itemBuilder: (_, int i) {
+                                  final _MessageRenderData data =
+                                      renderMessages[i];
+                                  final String? reasoningText =
+                                      data.reasoning.trim().isEmpty
+                                      ? null
+                                      : data.reasoning;
+                                  final bool isBeingEdited =
+                                      _editingMessageIndex == i;
+                                  return RepaintBoundary(
+                                    child: MessageBubble(
+                                      key: ValueKey('msg_$i'),
+                                      message: data.displayText,
+                                      reasoning: reasoningText,
+                                      isUser: data.isUser,
+                                      maxWidth: data.isUser
+                                          ? expandedInputWidth *
+                                                0.7 // User messages: 70%
+                                          : expandedInputWidth, // AI messages: 100%
+                                      isReasoningStreaming:
+                                          data.isReasoningStreaming,
+                                      modelLabel: data.modelLabel,
+                                      actions: _buildMessageActionsForIndex(
+                                        i,
+                                        data,
+                                      ),
+                                      isEditing: isBeingEdited,
+                                      initialEditText: isBeingEdited
+                                          ? data.displayText
+                                          : null,
+                                      onSubmitEdit: isBeingEdited && data.isUser
+                                          ? (newText) =>
+                                                _submitEditedMessage(i, newText)
+                                          : null,
+                                      onCancelEdit: isBeingEdited
+                                          ? _cancelEditMessage
+                                          : null,
                                     ),
-                                    isEditing: isBeingEdited,
-                                    initialEditText: isBeingEdited
-                                        ? data.displayText
-                                        : null,
-                                    onSubmitEdit: isBeingEdited && data.isUser
-                                        ? (newText) =>
-                                              _submitEditedMessage(i, newText)
-                                        : null,
-                                    onCancelEdit: isBeingEdited
-                                        ? _cancelEditMessage
-                                        : null,
-                                  ),
-                                );
-                              },
+                                  );
+                                },
+                              ),
                             ),
                           ),
                         ),
