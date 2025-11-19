@@ -1856,7 +1856,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           builder: (context) {
             final Color accent = Theme.of(context).colorScheme.primary;
             final Color bg = Theme.of(context).scaffoldBackgroundColor;
-            
+
             return Stack(
               children: [
                 // Visual feedback when dragging files
