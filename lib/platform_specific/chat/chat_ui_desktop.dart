@@ -28,6 +28,7 @@ import 'package:record/record.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:desktop_drop/desktop_drop.dart';
 
 class _MessageRenderData {
   const _MessageRenderData({
@@ -80,7 +81,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   final FocusNode _rawKeyboardListenerFocusNode = FocusNode();
 
   late AnimationController _animCtrl;
-  late Animation<double> _anim;
   String _selectedModelId = 'deepseek/deepseek-chat-v3.1';
   String? _selectedProviderSlug;
   String? _systemPrompt;
@@ -126,7 +126,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _chatApiService = ChatApiService(
       onUploadStatusUpdate: _handleFileUploadUpdate,
     );
-    _anim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
     });
@@ -148,10 +147,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     );
 
     // Listen for provider changes from model selector page
-    _providerRefreshSubscription = ModelSelectionEventBus().refreshStream.listen((_) {
-      // Reload provider slug when settings are changed
-      unawaited(_loadProviderSlugForModel(_selectedModelId));
-    });
+    _providerRefreshSubscription = ModelSelectionEventBus().refreshStream
+        .listen((_) {
+          // Reload provider slug when settings are changed
+          unawaited(_loadProviderSlugForModel(_selectedModelId));
+        });
   }
 
   @override
@@ -227,11 +227,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             return map;
           }),
         );
-      if (_messages.isNotEmpty) {
-        _animCtrl.forward();
-      } else {
-        _animCtrl.reset();
-      }
+      // Instant visibility
+      _animCtrl.value = 1.0;
     } else {
       _activeChatId = null;
     }
@@ -240,7 +237,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _isMicActive = false;
       _resetAudioLevels();
     });
-    _scrollChatToBottom();
+    _scrollChatToBottom(animate: false);
     Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
   }
 
@@ -353,6 +350,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   bool _isImageExtension(String extension) {
     return FileConstants.imageExtensions.contains(extension);
   }
+
+  // State for drag and drop
+  bool _isDraggingFiles = false;
 
   Future<void> _handleMicTap() async {
     if (_isMicActive) {
@@ -718,7 +718,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             ),
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             duration: const Duration(seconds: 2),
             dismissDirection: DismissDirection.horizontal,
@@ -964,9 +966,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       }
     });
     if (snackBarMessage != null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             snackBarMessage,
@@ -974,7 +974,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           ),
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           duration: const Duration(seconds: 2),
           dismissDirection: DismissDirection.horizontal,
@@ -1023,7 +1025,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             ),
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             duration: const Duration(seconds: 2),
             dismissDirection: DismissDirection.horizontal,
@@ -1048,7 +1052,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             ),
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             duration: const Duration(seconds: 2),
             dismissDirection: DismissDirection.horizontal,
@@ -1084,7 +1090,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             ),
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             duration: const Duration(seconds: 2),
             dismissDirection: DismissDirection.horizontal,
@@ -1210,18 +1218,24 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             debugPrint('Stream error: ${event.message}');
             _finalizeAiMessage(placeholderIndex, 'Error: ${event.message}');
             if (mounted) {
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(
+              ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(
                     event.message,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                   behavior: SnackBarBehavior.floating,
                   margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   duration: const Duration(seconds: 2),
                   dismissDirection: DismissDirection.horizontal,
                 ),
@@ -1260,17 +1274,20 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           }
 
           _finalizeAiMessage(placeholderIndex, errorMessage);
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(
+          ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
                 errorMessage,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
               behavior: SnackBarBehavior.floating,
               margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               duration: const Duration(seconds: 2),
               dismissDirection: DismissDirection.horizontal,
@@ -1348,7 +1365,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             ),
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             duration: const Duration(seconds: 2),
             dismissDirection: DismissDirection.horizontal,
@@ -1436,7 +1455,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     }
   }
 
-  Future<void> _uploadFiles() async {
+  /// Processes a list of file paths (from drag and drop or file picker)
+  Future<void> _processFilePaths(List<String> filePaths) async {
     const int maxFileSize = 10 * 1024 * 1024; // 10MB
     const int maxConcurrentUploads = 5;
 
@@ -1451,7 +1471,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             ),
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             duration: const Duration(seconds: 2),
             dismissDirection: DismissDirection.horizontal,
@@ -1461,6 +1483,168 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       return;
     }
 
+    for (String filePath in filePaths) {
+      final File file = File(filePath);
+
+      // Check if file exists
+      if (!await file.exists()) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'File not found: ${file.path}',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              duration: const Duration(seconds: 2),
+              dismissDirection: DismissDirection.horizontal,
+            ),
+          );
+        }
+        continue;
+      }
+
+      // Get file size
+      final int fileSize = await file.length();
+      final String fileName = file.path.split(Platform.pathSeparator).last;
+      final String fileExtension = fileName.split('.').last.toLowerCase();
+
+      // Check file size
+      if (fileSize > maxFileSize) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'File "$fileName" exceeds 10MB limit',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              duration: const Duration(seconds: 2),
+              dismissDirection: DismissDirection.horizontal,
+            ),
+          );
+        }
+        continue; // Skip this file and go to the next
+      }
+
+      String fileId = _uuid.v4();
+
+      if (!FileConstants.allowedExtensions.contains(fileExtension)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Unsupported file type for "$fileName": .$fileExtension',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              duration: const Duration(seconds: 2),
+              dismissDirection: DismissDirection.horizontal,
+            ),
+          );
+        }
+        continue;
+      }
+
+      if (_isImageExtension(fileExtension) && !_modelSupportsImageInput) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Image uploads are not supported by the selected model.',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              duration: const Duration(seconds: 2),
+              dismissDirection: DismissDirection.horizontal,
+            ),
+          );
+        }
+        continue;
+      }
+
+      // Check concurrent upload limit again before adding to UI and starting upload
+      // This handles cases where user quickly picks many files, or files picked while others finish
+      if (_attachedFiles.where((f) => f.isUploading).length >=
+          maxConcurrentUploads) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Skipping "$fileName": too many concurrent uploads. Try again soon.',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              duration: const Duration(seconds: 2),
+              dismissDirection: DismissDirection.horizontal,
+            ),
+          );
+        }
+        continue;
+      }
+
+      setState(() {
+        _attachedFiles.add(
+          AttachedFile(
+            id: fileId,
+            fileName: fileName,
+            isUploading: true,
+            localPath: file.path,
+            fileSizeBytes: fileSize,
+          ),
+        );
+      });
+      _scrollChatToBottom(); // Scroll to ensure attachment bar is visible
+
+      _chatApiService.performFileUpload(
+        file,
+        fileName,
+        fileId,
+      ); // Use the service
+    }
+  }
+
+  Future<void> _uploadFiles() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: FileConstants.allowedExtensions,
@@ -1468,122 +1652,19 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     );
 
     if (result != null && result.files.isNotEmpty) {
-      List<PlatformFile> selectedPlatformFiles = result.files;
-
-      for (PlatformFile platformFile in selectedPlatformFiles) {
-        if (platformFile.path == null) continue;
-
-        // Check file size
-        if (platformFile.size > maxFileSize) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'File "${platformFile.name}" exceeds 10MB limit',
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                ),
-                behavior: SnackBarBehavior.floating,
-                margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                duration: const Duration(seconds: 2),
-                dismissDirection: DismissDirection.horizontal,
-              ),
-            );
-          }
-          continue; // Skip this file and go to the next
-        }
-
-        File file = File(platformFile.path!);
-        String fileName = platformFile.name;
-        String fileExtension = fileName.split('.').last.toLowerCase();
-        String fileId = _uuid.v4();
-
-        if (!FileConstants.allowedExtensions.contains(fileExtension)) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Unsupported file type for "$fileName": .$fileExtension',
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                ),
-                behavior: SnackBarBehavior.floating,
-                margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                duration: const Duration(seconds: 2),
-                dismissDirection: DismissDirection.horizontal,
-              ),
-            );
-          }
-          continue;
-        }
-
-        if (_isImageExtension(fileExtension) && !_modelSupportsImageInput) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Image uploads are not supported by the selected model.',
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                ),
-                behavior: SnackBarBehavior.floating,
-                margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                duration: const Duration(seconds: 2),
-                dismissDirection: DismissDirection.horizontal,
-              ),
-            );
-          }
-          continue;
-        }
-
-        // Check concurrent upload limit again before adding to UI and starting upload
-        // This handles cases where user quickly picks many files, or files picked while others finish
-        if (_attachedFiles.where((f) => f.isUploading).length >=
-            maxConcurrentUploads) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Skipping "$fileName": too many concurrent uploads. Try again soon.',
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                ),
-                behavior: SnackBarBehavior.floating,
-                margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                duration: const Duration(seconds: 2),
-                dismissDirection: DismissDirection.horizontal,
-              ),
-            );
-          }
-          continue;
-        }
-
-        setState(() {
-          _attachedFiles.add(
-            AttachedFile(
-              id: fileId,
-              fileName: fileName,
-              isUploading: true,
-              localPath: file.path,
-              fileSizeBytes: platformFile.size,
-            ),
-          );
-        });
-        _scrollChatToBottom(); // Scroll to ensure attachment bar is visible
-
-        _chatApiService.performFileUpload(
-          file,
-          fileName,
-          fileId,
-        ); // Use the service
-      }
+      List<String> filePaths = result.files
+          .where((f) => f.path != null)
+          .map((f) => f.path!)
+          .toList();
+      await _processFilePaths(filePaths);
     } else {
       debugPrint('File picking canceled.');
     }
+  }
+
+  /// Handles files dropped via drag and drop
+  Future<void> _handleDroppedFiles(List<String> filePaths) async {
+    await _processFilePaths(filePaths);
   }
 
   void _removeAttachedFile(String fileId) {
@@ -1594,15 +1675,19 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
   }
 
-  void _scrollChatToBottom() {
+  void _scrollChatToBottom({bool animate = true}) {
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) return;
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-      );
+      if (animate) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
+      } else {
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+      }
     });
   }
 
@@ -1639,9 +1724,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       }
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             'Failed to store chat: $error',
@@ -1649,7 +1732,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           ),
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           duration: const Duration(seconds: 2),
           dismissDirection: DismissDirection.horizontal,
@@ -1732,10 +1817,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       // Check if reasoning has content (meaning reasoning exists)
       final bool hasReasoning = reasoning.isNotEmpty;
       final String? modelLabel = isAiMessage
-          ? _formatModelInfo(
-              raw['modelId'],
-              raw['provider'],
-            )
+          ? _formatModelInfo(raw['modelId'], raw['provider'])
           : null;
       return _MessageRenderData(
         sender: sender,
@@ -1750,125 +1832,200 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: Stack(
-        children: [
-          if (!isChatEmpty)
-            Positioned(
-              top: 0,
-              bottom: inputAreaTotalHeight,
-              left: 0,
-              right: 0,
-              child: FadeTransition(
-                opacity: _anim,
-                child: Padding(
-                  padding: EdgeInsets.zero,
-                  child: Align(
-                    alignment: Alignment.center,
+      body: DropTarget(
+        onDragDone: (detail) {
+          final List<String> filePaths = detail.files
+              .map((file) => file.path)
+              .where((path) => path.isNotEmpty)
+              .toList();
+          if (filePaths.isNotEmpty) {
+            _handleDroppedFiles(filePaths);
+          }
+        },
+        onDragEntered: (detail) {
+          setState(() {
+            _isDraggingFiles = true;
+          });
+        },
+        onDragExited: (detail) {
+          setState(() {
+            _isDraggingFiles = false;
+          });
+        },
+        child: Builder(
+          builder: (context) {
+            final Color accent = Theme.of(context).colorScheme.primary;
+            final Color bg = Theme.of(context).scaffoldBackgroundColor;
+            
+            return Stack(
+              children: [
+                // Visual feedback when dragging files
+                if (_isDraggingFiles)
+                  Positioned.fill(
                     child: Container(
-                      constraints: BoxConstraints(maxWidth: expandedInputWidth),
-                      child: Scrollbar(
-                        controller: _scrollController,
-                        thumbVisibility: true,
-                        thickness: 8.0,
-                        radius: const Radius.circular(4),
-                        child: ListView.builder(
-                          controller: _scrollController,
-                          padding: EdgeInsets.symmetric(
-                            horizontal: effectiveHorizontalPadding,
-                            vertical: 10,
+                      color: accent.withValues(alpha: 0.1),
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 32,
+                            vertical: 24,
                           ),
-                          itemCount: renderMessages.length,
-                          addAutomaticKeepAlives: false,
-                          addRepaintBoundaries: true,
-                          cacheExtent: 500.0,
-                          itemBuilder: (_, int i) {
-                            final _MessageRenderData data = renderMessages[i];
-                            final String? reasoningText =
-                                data.reasoning.trim().isEmpty
-                                ? null
-                                : data.reasoning;
-                            final bool isBeingEdited =
-                                _editingMessageIndex == i;
-                            return RepaintBoundary(
-                              child: MessageBubble(
-                                key: ValueKey('msg_$i'),
-                                message: data.displayText,
-                                reasoning: reasoningText,
-                                isUser: data.isUser,
-                                maxWidth: data.isUser
-                                    ? expandedInputWidth * 0.7  // User messages: 70%
-                                    : expandedInputWidth,        // AI messages: 100%
-                                isReasoningStreaming: data.isReasoningStreaming,
-                                modelLabel: data.modelLabel,
-                                actions: _buildMessageActionsForIndex(i, data),
-                                isEditing: isBeingEdited,
-                                initialEditText: isBeingEdited
-                                    ? data.displayText
-                                    : null,
-                                onSubmitEdit: isBeingEdited && data.isUser
-                                    ? (newText) =>
-                                          _submitEditedMessage(i, newText)
-                                    : null,
-                                onCancelEdit: isBeingEdited
-                                    ? _cancelEditMessage
-                                    : null,
+                          decoration: BoxDecoration(
+                            color: bg,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: accent, width: 2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: accent.withValues(alpha: 0.3),
+                                blurRadius: 20,
+                                spreadRadius: 5,
                               ),
-                            );
-                          },
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.cloud_upload, color: accent, size: 32),
+                              const SizedBox(width: 16),
+                              Text(
+                                'Drop files here to upload',
+                                style: TextStyle(
+                                  color: iconFg,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ),
-            ),
-          Positioned(
-            left: 0,
-            right: 0,
-            // Position at the bottom if not empty, otherwise calculate center position
-            bottom: showInputAreaCentered
-                ? (MediaQuery.of(context).size.height / 2 -
-                      (inputAreaVisualHeight / 2))
-                : effectiveHorizontalPadding, // Always keep padding from bottom edge
-            child: Center(
-              // Centers horizontally
-              child: SizedBox(
-                width: targetInputWidth, // Dynamically changes width
-                child: Column(
-                  mainAxisSize: MainAxisSize
-                      .min, // Crucial for column inside AnimatedPositioned/Center
-                  children: [
-                    // Multiple Attachment Indicator Bar (if files are present)
-                    if (_attachedFiles.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          bottom: _kAttachmentBarMarginBottom,
-                        ), // Margin below chips
-                        child: SizedBox(
-                          width: targetInputWidth,
-                          child: AttachmentPreviewBar(
-                            files: _attachedFiles,
-                            onRemove: _removeAttachedFile,
+                if (!isChatEmpty)
+                  Positioned(
+                    top: 0,
+                    bottom: inputAreaTotalHeight,
+                    left: 0,
+                    right: 0,
+                    child: Padding(
+                      padding: EdgeInsets.zero,
+                      child: Align(
+                        alignment: Alignment.center,
+                        child: Container(
+                          constraints: BoxConstraints(
+                            maxWidth: expandedInputWidth,
+                          ),
+                          child: Scrollbar(
+                            controller: _scrollController,
+                            thumbVisibility: true,
+                            thickness: 8.0,
+                            radius: const Radius.circular(4),
+                            child: ListView.builder(
+                              controller: _scrollController,
+                              padding: EdgeInsets.symmetric(
+                                horizontal: effectiveHorizontalPadding,
+                                vertical: 10,
+                              ),
+                              itemCount: renderMessages.length,
+                              addAutomaticKeepAlives: false,
+                              addRepaintBoundaries: true,
+                              cacheExtent: 500.0,
+                              itemBuilder: (_, int i) {
+                                final _MessageRenderData data =
+                                    renderMessages[i];
+                                final String? reasoningText =
+                                    data.reasoning.trim().isEmpty
+                                    ? null
+                                    : data.reasoning;
+                                final bool isBeingEdited =
+                                    _editingMessageIndex == i;
+                                return RepaintBoundary(
+                                  child: MessageBubble(
+                                    key: ValueKey('msg_$i'),
+                                    message: data.displayText,
+                                    reasoning: reasoningText,
+                                    isUser: data.isUser,
+                                    maxWidth: data.isUser
+                                        ? expandedInputWidth *
+                                              0.7 // User messages: 70%
+                                        : expandedInputWidth, // AI messages: 100%
+                                    isReasoningStreaming:
+                                        data.isReasoningStreaming,
+                                    modelLabel: data.modelLabel,
+                                    actions: _buildMessageActionsForIndex(
+                                      i,
+                                      data,
+                                    ),
+                                    isEditing: isBeingEdited,
+                                    initialEditText: isBeingEdited
+                                        ? data.displayText
+                                        : null,
+                                    onSubmitEdit: isBeingEdited && data.isUser
+                                        ? (newText) =>
+                                              _submitEditedMessage(i, newText)
+                                        : null,
+                                    onCancelEdit: isBeingEdited
+                                        ? _cancelEditMessage
+                                        : null,
+                                  ),
+                                );
+                              },
+                            ),
                           ),
                         ),
                       ),
-                    // Search Bar
-                    _buildSearchBar(isCompactMode: widget.isCompactMode),
-                    const SizedBox(height: 8),
-                    Text(
-                      'AI/LLMs can make mistakes — double-check important info.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: iconFg.withValues(alpha: 0.7),
-                        fontSize: 11,
+                    ),
+                  ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  // Position at the bottom if not empty, otherwise calculate center position
+                  bottom: showInputAreaCentered
+                      ? (MediaQuery.of(context).size.height / 2 -
+                            (inputAreaVisualHeight / 2))
+                      : effectiveHorizontalPadding, // Always keep padding from bottom edge
+                  child: Center(
+                    // Centers horizontally
+                    child: SizedBox(
+                      width: targetInputWidth, // Dynamically changes width
+                      child: Column(
+                        mainAxisSize: MainAxisSize
+                            .min, // Crucial for column inside AnimatedPositioned/Center
+                        children: [
+                          // Multiple Attachment Indicator Bar (if files are present)
+                          if (_attachedFiles.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                bottom: _kAttachmentBarMarginBottom,
+                              ), // Margin below chips
+                              child: SizedBox(
+                                width: targetInputWidth,
+                                child: AttachmentPreviewBar(
+                                  files: _attachedFiles,
+                                  onRemove: _removeAttachedFile,
+                                ),
+                              ),
+                            ),
+                          // Search Bar
+                          _buildSearchBar(isCompactMode: widget.isCompactMode),
+                          const SizedBox(height: 8),
+                          Text(
+                            'AI/LLMs can make mistakes — double-check important info.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: iconFg.withValues(alpha: 0.7),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-          ),
-        ],
+              ],
+            );
+          },
+        ),
       ),
     );
   }
