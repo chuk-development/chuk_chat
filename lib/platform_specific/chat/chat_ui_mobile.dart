@@ -1114,7 +1114,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     final bool hasAttachments = _fileHandler.hasAttachments;
     final bool hasMessages = _messages.isNotEmpty;
     final double composerReservedSpace =
-        (_audioHandler.isMicActive ? 56.0 : 48.0) +
+        (_audioHandler.isMicActive ? 52.0 : 44.0) +
         (hasAttachments ? 80.0 : 0.0) +
         32.0 +
         mediaQuery.padding.bottom;
@@ -1298,11 +1298,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     final Color bg = theme.scaffoldBackgroundColor;
     final Color accent = theme.colorScheme.primary;
     final bool hasAttachments = _fileHandler.hasAttachments;
-    final double composerHeight = _audioHandler.isMicActive ? 56 : 48;
+    final double minComposerHeight = _audioHandler.isMicActive ? 52 : 44;
 
     return Container(
       width: double.infinity,
-      height: composerHeight,
+      constraints: BoxConstraints(
+        minHeight: minComposerHeight,
+      ),
       decoration: BoxDecoration(
         color: bg.withValues(alpha: 0.98),
         borderRadius: BorderRadius.circular(24),
@@ -1392,7 +1394,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                       minLines: 1,
                       maxLines: 5,
                       decoration: InputDecoration(
-                        hintText: 'Ask me anything',
+                        hintText: _audioHandler.isMicActive ? '' : 'Ask me anything',
                         hintStyle: TextStyle(
                           color: theme.colorScheme.onSurface.withValues(
                             alpha: 0.5,
