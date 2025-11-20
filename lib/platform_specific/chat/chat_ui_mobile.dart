@@ -1114,7 +1114,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     final bool hasAttachments = _fileHandler.hasAttachments;
     final bool hasMessages = _messages.isNotEmpty;
     final double composerReservedSpace =
-        (_audioHandler.isMicActive ? 52.0 : 44.0) +
+        40.0 +
         (hasAttachments ? 80.0 : 0.0) +
         32.0 +
         mediaQuery.padding.bottom;
@@ -1298,13 +1298,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     final Color bg = theme.scaffoldBackgroundColor;
     final Color accent = theme.colorScheme.primary;
     final bool hasAttachments = _fileHandler.hasAttachments;
-    final double minComposerHeight = _audioHandler.isMicActive ? 52 : 44;
 
     return Container(
       width: double.infinity,
-      constraints: BoxConstraints(
-        minHeight: minComposerHeight,
-      ),
       decoration: BoxDecoration(
         color: bg.withValues(alpha: 0.98),
         borderRadius: BorderRadius.circular(24),
@@ -1322,7 +1318,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           ),
         ],
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       child: Row(
         children: [
           buildTinyIconButton(
@@ -1351,10 +1347,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           ),
           const SizedBox(width: 4),
           Expanded(
-            child: Stack(
-              children: [
-                if (_audioHandler.isMicActive)
-                  Positioned.fill(
+            child: _audioHandler.isMicActive
+                ? Container(
+                    height: 32,
+                    alignment: Alignment.center,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4),
                       child: Row(
@@ -1362,65 +1358,59 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                           buildRecordingIndicator(),
                           const SizedBox(width: 6),
                           Expanded(
-                            child: ClipRect(
-                              child: buildAudioVisualizer(
-                                audioLevels: _audioHandler.audioLevels,
-                                accentColor: Colors.red,
-                              ),
+                            child: buildAudioVisualizer(
+                              audioLevels: _audioHandler.audioLevels,
+                              accentColor: Colors.red,
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ),
-                buildKeyboardListener(
-                  focusNode: _rawKeyboardListenerFocusNode,
-                  controller: _controller,
-                  onSend: _sendMessage,
-                  child: Scrollbar(
-                    controller: _composerScrollController,
-                    child: TextField(
-                      controller: _controller,
-                      focusNode: _textFieldFocusNode,
-                      autofocus: false,
-                      keyboardType: TextInputType.multiline,
-                      textInputAction: TextInputAction.newline,
-                      scrollController: _composerScrollController,
-                      style: TextStyle(
-                        color: theme.colorScheme.onSurface,
-                        fontSize: 14,
-                        height: 1.3,
-                      ),
-                      minLines: 1,
-                      maxLines: 5,
-                      decoration: InputDecoration(
-                        hintText: _audioHandler.isMicActive ? '' : 'Ask me anything',
-                        hintStyle: TextStyle(
-                          color: theme.colorScheme.onSurface.withValues(
-                            alpha: 0.5,
-                          ),
+                  )
+                : buildKeyboardListener(
+                    focusNode: _rawKeyboardListenerFocusNode,
+                    controller: _controller,
+                    onSend: _sendMessage,
+                    child: Scrollbar(
+                      controller: _composerScrollController,
+                      child: TextField(
+                        controller: _controller,
+                        focusNode: _textFieldFocusNode,
+                        autofocus: false,
+                        keyboardType: TextInputType.multiline,
+                        textInputAction: TextInputAction.newline,
+                        scrollController: _composerScrollController,
+                        style: TextStyle(
+                          color: theme.colorScheme.onSurface,
                           fontSize: 14,
+                          height: 1.2,
                         ),
-                        filled: true,
-                        fillColor: _audioHandler.isMicActive
-                            ? Colors.transparent
-                            : bg.withValues(alpha: 0.98),
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 8,
+                        minLines: 1,
+                        maxLines: 5,
+                        decoration: InputDecoration(
+                          hintText: 'Ask me anything',
+                          hintStyle: TextStyle(
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.5,
+                            ),
+                            fontSize: 14,
+                          ),
+                          filled: true,
+                          fillColor: bg.withValues(alpha: 0.98),
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          isDense: true,
                         ),
-                        isDense: true,
+                        cursorColor: accent,
+                        cursorWidth: 1.5,
                       ),
-                      cursorColor: accent,
-                      cursorWidth: 1.5,
                     ),
                   ),
-                ),
-              ],
-            ),
           ),
           const SizedBox(width: 4),
           if (_showFullscreenButton && !_audioHandler.isMicActive) ...[
