@@ -80,6 +80,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   // Network and UI state
   bool _isOffline = false;
   late final VoidCallback _networkStatusListener;
+  Timer? _audioVisualizerTimer;
 
   static const double _kMaxChatContentWidth = 760.0;
   static const double _kAttachmentBarMarginBottom = 8.0;
@@ -249,6 +250,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     if (_activeChatId != null) {
       _streamingHandler.cancelStream(_activeChatId);
     }
+    _audioVisualizerTimer?.cancel();
     _chatStorageSubscription?.cancel();
     _providerRefreshSubscription?.cancel();
     NetworkStatusService.isOnlineListenable.removeListener(
@@ -413,6 +415,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   Future<void> _handleMicTap() async {
     if (_audioHandler.isMicActive) {
       await _audioHandler.stopRecording();
+      _audioVisualizerTimer?.cancel();
+      _audioVisualizerTimer = null;
       if (!mounted) return;
       setState(() {
         _audioHandler.resetAudioLevels();
@@ -424,6 +428,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         setState(() {
           _audioHandler.resetAudioLevels();
         });
+        // Update visualizer every 50ms for smooth animation
+        _audioVisualizerTimer = Timer.periodic(
+          const Duration(milliseconds: 50),
+          (_) {
+            if (mounted && _audioHandler.isMicActive) {
+              setState(() {});
+            }
+          },
+        );
       } else {
         _showSnackBar('Mic access failed');
       }
@@ -436,6 +449,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     }
 
     await _audioHandler.stopRecording(keepFile: true);
+    _audioVisualizerTimer?.cancel();
+    _audioVisualizerTimer = null;
     if (!mounted) return;
     setState(() {
       _audioHandler.resetAudioLevels();
@@ -1349,7 +1364,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           Expanded(
             child: _audioHandler.isMicActive
                 ? Container(
-                    height: 32,
+                    height: 30,
                     alignment: Alignment.center,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4),

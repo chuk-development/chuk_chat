@@ -157,28 +157,60 @@ Widget buildKeyboardListener({
   );
 }
 
-/// Build audio visualizer widget
+/// Build audio visualizer widget with live amplitude response
 Widget buildAudioVisualizer({
   required List<double> audioLevels,
   required Color accentColor,
 }) {
+  // Use the last 24 samples for smooth, responsive visualization
+  const int barCount = 24;
+  final int startIndex = audioLevels.length > barCount
+      ? audioLevels.length - barCount
+      : 0;
+
   return SizedBox(
-    height: 20,
+    height: 24,
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.center,
-      children: List.generate(10, (index) {
-        final double level = index < audioLevels.length
-            ? audioLevels[index]
+      children: List.generate(barCount, (index) {
+        final int levelIndex = startIndex + index;
+        final double rawLevel = levelIndex < audioLevels.length
+            ? audioLevels[levelIndex]
             : 0.0;
-        final double barHeight = (level * 16).clamp(2.0, 16.0);
+
+        // Apply exponential scaling for more dramatic response
+        final double level = rawLevel * rawLevel;
+
+        // Calculate bar height with better range (3-22px)
+        final double barHeight = (level * 20 + 3).clamp(3.0, 22.0);
+
+        // Vary opacity based on level for depth effect
+        final double opacity = (0.6 + (level * 0.4)).clamp(0.6, 1.0);
+
         return Expanded(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 0.5),
-            child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 0.8),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 50),
+              curve: Curves.easeOut,
               height: barHeight,
               decoration: BoxDecoration(
-                color: accentColor.withValues(alpha: 0.8),
-                borderRadius: BorderRadius.circular(1.5),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    accentColor.withValues(alpha: opacity),
+                    accentColor.withValues(alpha: opacity * 0.7),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(2),
+                boxShadow: level > 0.3 ? [
+                  BoxShadow(
+                    color: accentColor.withValues(alpha: 0.3),
+                    blurRadius: 2,
+                    spreadRadius: 0.5,
+                  ),
+                ] : null,
               ),
             ),
           ),
@@ -188,14 +220,62 @@ Widget buildAudioVisualizer({
   );
 }
 
-/// Build recording indicator (red dot)
+/// Build recording indicator (pulsating red dot)
 Widget buildRecordingIndicator() {
-  return Container(
-    width: 6,
-    height: 6,
-    decoration: const BoxDecoration(
-      color: Colors.red,
-      shape: BoxShape.circle,
-    ),
-  );
+  return const _PulsatingRecordingIndicator();
+}
+
+class _PulsatingRecordingIndicator extends StatefulWidget {
+  const _PulsatingRecordingIndicator();
+
+  @override
+  State<_PulsatingRecordingIndicator> createState() => _PulsatingRecordingIndicatorState();
+}
+
+class _PulsatingRecordingIndicatorState extends State<_PulsatingRecordingIndicator>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..repeat(reverse: true);
+    _animation = Tween<double>(begin: 0.4, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        return Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: Colors.red.withValues(alpha: _animation.value),
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.red.withValues(alpha: _animation.value * 0.6),
+                blurRadius: 6 * _animation.value,
+                spreadRadius: 1.5 * _animation.value,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }
