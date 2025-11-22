@@ -459,7 +459,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     final session = await _streamingHandler.getSessionSafely();
     if (session == null) return;
 
-    _showSnackBar('Transcribing…');
+    setState(() {}); // Trigger UI update to show loading icon
     final result = await _audioHandler.transcribeLastRecording(
       apiService: _chatApiService,
       accessToken: session.accessToken,
@@ -473,6 +473,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
     if (!result.success) {
       _showSnackBar(result.error ?? 'Transcription failed');
+      setState(() {}); // Trigger UI update to hide loading icon
       return;
     }
 
@@ -484,7 +485,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         );
       });
       _textFieldFocusNode.requestFocus();
-      _showSnackBar('Ready to send');
     }
   }
 
@@ -1464,6 +1464,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
             color: _audioHandler.isMicActive
                 ? accent
                 : (_streamingHandler.isStreaming ? Colors.red : accent),
+            isLoading: _audioHandler.isTranscribingAudio,
           ),
           const SizedBox(width: 4),
         ],

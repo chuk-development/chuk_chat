@@ -424,7 +424,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     setState(() {
       _isTranscribingAudio = true;
     });
-    _showSnackBar('Transcribing audio…');
 
     try {
       final transcription = await _chatApiService.transcribeAudioFile(
@@ -442,7 +441,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           );
         });
         Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
-        _showSnackBar('Transcription ready. Tap send to share it.');
       }
     } on TranscriptionException catch (error) {
       switch (error.statusCode) {
@@ -2151,7 +2149,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               const SizedBox(width: 8),
               // Send/Cancel Message Button
               GestureDetector(
-                onTap: () => _sendMessage(),
+                onTap: _isTranscribingAudio ? null : () => _sendMessage(),
                 child: Container(
                   width: btnW,
                   height: btnH,
@@ -2159,10 +2157,18 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                     color: _isStreaming ? Colors.red : accent,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(
-                    _isStreaming ? Icons.stop : Icons.arrow_upward,
-                    color: Colors.black,
-                  ),
+                  child: _isTranscribingAudio
+                      ? const Padding(
+                          padding: EdgeInsets.all(8.0),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                          ),
+                        )
+                      : Icon(
+                          _isStreaming ? Icons.stop : Icons.arrow_upward,
+                          color: Colors.black,
+                        ),
                 ),
               ),
             ],
@@ -2241,7 +2247,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 child: _isMicActive
                     ? GestureDetector(
                         key: const ValueKey<String>('audio-send-button'),
-                        onTap: _handleAudioSend,
+                        onTap: _isTranscribingAudio ? null : _handleAudioSend,
                         child: Container(
                           width: 44,
                           height: 36,
@@ -2249,7 +2255,15 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                             color: accent,
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: const Icon(Icons.send, color: Colors.black),
+                          child: _isTranscribingAudio
+                              ? const Padding(
+                                  padding: EdgeInsets.all(8.0),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                                  ),
+                                )
+                              : const Icon(Icons.send, color: Colors.black),
                         ),
                       )
                     : GestureDetector(

@@ -38,11 +38,12 @@ Widget buildTinyActionButton({
   required IconData icon,
   required VoidCallback onTap,
   required Color color,
+  bool isLoading = false,
 }) {
   return Material(
     color: Colors.transparent,
     child: InkWell(
-      onTap: onTap,
+      onTap: isLoading ? null : onTap,
       borderRadius: BorderRadius.circular(16),
       child: Container(
         width: 32,
@@ -62,7 +63,15 @@ Widget buildTinyActionButton({
             ),
           ],
         ),
-        child: Icon(icon, size: 16, color: Colors.white),
+        child: isLoading
+            ? Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : Icon(icon, size: 16, color: Colors.white),
       ),
     ),
   );
