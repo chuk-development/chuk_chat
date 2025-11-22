@@ -20,6 +20,7 @@ import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart'; // NEW
 import 'package:chuk_chat/services/websocket_chat_service.dart';
 import 'package:chuk_chat/services/streaming_manager.dart';
 import 'package:chuk_chat/constants/file_constants.dart';
+import 'package:chuk_chat/pages/pricing_page.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
@@ -1079,6 +1080,54 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         );
       }
       return;
+    }
+
+    // Check if user has sufficient credits
+    final user = SupabaseService.auth.currentUser;
+    if (user != null) {
+      try {
+        final creditsRemainingResponse = await SupabaseService.client.rpc(
+          'get_credits_remaining',
+          params: {'p_user_id': user.id},
+        );
+
+        final double remainingCredits = (creditsRemainingResponse is num)
+            ? creditsRemainingResponse.toDouble()
+            : 0.0;
+
+        if (remainingCredits < 0.01) {
+          if (!mounted) return;
+          await showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Insufficient Credits'),
+              content: Text(
+                'You have €${remainingCredits.toStringAsFixed(2)} credits remaining. You need at least €0.01 to send a message.\n\nPlease subscribe or upgrade your plan to continue using the AI chat.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const PricingPage()),
+                    );
+                  },
+                  child: const Text('View Plans'),
+                ),
+              ],
+            ),
+          );
+          return;
+        }
+      } catch (error) {
+        debugPrint('Error checking credits: $error');
+        // Continue with sending - API will handle the check as well
+      }
     }
 
     final String originalUserInput = _controller.text.trim();

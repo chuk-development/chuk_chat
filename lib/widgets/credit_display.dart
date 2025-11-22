@@ -79,18 +79,27 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
         return;
       }
 
-      final response = await _supabase
+      // Get total credits allocated from profiles table
+      final profileResponse = await _supabase
           .from('profiles')
-          .select('total_credits, used_credits, remaining_credits')
+          .select('total_credits_allocated')
           .eq('id', user.id)
           .single();
 
       final double totalCredits =
-          _parseToDouble(response['total_credits']) ?? 0.0;
-      final double usedCredits =
-          _parseToDouble(response['used_credits']) ?? 0.0;
+          _parseToDouble(profileResponse['total_credits_allocated']) ?? 0.0;
+
+      // Get remaining credits via RPC function
+      final creditsRemainingResponse = await _supabase.rpc(
+        'get_credits_remaining',
+        params: {'p_user_id': user.id},
+      );
+
       final double remainingCredits =
-          _parseToDouble(response['remaining_credits']) ?? 0.0;
+          _parseToDouble(creditsRemainingResponse) ?? 0.0;
+
+      // Calculate used credits
+      final double usedCredits = totalCredits - remainingCredits;
 
       if (!mounted) return;
       setState(() {

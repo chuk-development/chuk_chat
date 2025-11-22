@@ -1,32 +1,19 @@
+import 'dart:convert';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/widgets/credit_display.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:http/http.dart' as http;
 
 final SupabaseClient _supabase = Supabase.instance.client;
 
-const double _creditMultiplier = 0.9;
-
-// Price IDs from your Stripe dashboard
-const Map<String, Map<String, dynamic>> _plans = {
-  'price_1SHRmD4RznxB1MLdyNEhp4On': {
-    'name': 'Starter',
-    'price': 10,
-    'features': ['Image Generation', 'Voice Mode', 'Text Chat'],
-  },
-  'price_1SHRnc4RznxB1MLdckKKLgvg': {
-    'name': 'Plus',
-    'price': 20,
-    'features': ['Image Generation', 'Voice Mode', 'Text Chat'],
-  },
-  'price_1SHRo84RznxB1MLdixi99wLf': {
-    'name': 'Pro',
-    'price': 40,
-    'features': ['Image Generation', 'Voice Mode', 'Text Chat'],
-  },
-};
+// API base URL - defaults to production
+const String _apiBaseUrl = String.fromEnvironment(
+  'API_BASE_URL',
+  defaultValue: 'https://api.chuk.chat',
+);
 
 Future<void> _launchExternalUrl(String url) async {
   final Uri? uri = Uri.tryParse(url);
@@ -43,40 +30,99 @@ Future<void> _launchExternalUrl(String url) async {
   }
 }
 
-Future<void> startCheckout(String priceId) async {
-  final user = _supabase.auth.currentUser;
-  if (user == null) {
-    throw Exception('User not signed in');
+Future<String> _getAccessToken() async {
+  final session = _supabase.auth.currentSession;
+  if (session == null) {
+    throw Exception('Not authenticated');
   }
-
-  final res = await _supabase.functions.invoke(
-    'create_checkout_session',
-    body: {'priceId': priceId},
-  );
-
-  final data = res.data;
-  if (data is! Map || data['url'] is! String) {
-    throw Exception('Checkout session could not be created');
-  }
-  await _launchExternalUrl(data['url'] as String);
+  return session.accessToken;
 }
 
-Future<void> cancelSubscription() async {
-  final user = _supabase.auth.currentUser;
-  if (user == null) {
-    throw Exception('User not signed in');
+Future<void> startCheckout() async {
+  final token = await _getAccessToken();
+
+  final response = await http.post(
+    Uri.parse('$_apiBaseUrl/stripe/create-checkout-session'),
+    headers: {
+      'Authorization': 'Bearer $token',
+      'Content-Type': 'application/json',
+    },
+  );
+
+  if (response.statusCode != 200) {
+    throw Exception('Failed to create checkout session: ${response.body}');
   }
 
-  final res = await _supabase.functions.invoke('cancel_subscription');
+  final data = jsonDecode(response.body);
+  final checkoutUrl = data['checkout_url'] as String?;
 
-  final data = res.data;
-  if (data is! Map) {
-    throw Exception('Failed to cancel subscription');
+  if (checkoutUrl == null) {
+    throw Exception('No checkout URL returned');
   }
 
-  if (data['error'] != null) {
-    throw Exception(data['error']);
+  await _launchExternalUrl(checkoutUrl);
+}
+
+Future<void> openBillingPortal() async {
+  final token = await _getAccessToken();
+
+  final response = await http.post(
+    Uri.parse('$_apiBaseUrl/stripe/create-portal-session'),
+    headers: {
+      'Authorization': 'Bearer $token',
+      'Content-Type': 'application/json',
+    },
+  );
+
+  if (response.statusCode == 404) {
+    throw Exception('No subscription found. Please subscribe first.');
   }
+
+  if (response.statusCode != 200) {
+    throw Exception('Failed to create portal session: ${response.body}');
+  }
+
+  final data = jsonDecode(response.body);
+  final portalUrl = data['portal_url'] as String?;
+
+  if (portalUrl == null) {
+    throw Exception('No portal URL returned');
+  }
+
+  await _launchExternalUrl(portalUrl);
+}
+
+Future<void> syncSubscription() async {
+  final token = await _getAccessToken();
+
+  final response = await http.post(
+    Uri.parse('$_apiBaseUrl/stripe/sync-subscription'),
+    headers: {
+      'Authorization': 'Bearer $token',
+      'Content-Type': 'application/json',
+    },
+  );
+
+  if (response.statusCode != 200) {
+    throw Exception('Failed to sync subscription: ${response.body}');
+  }
+}
+
+Future<Map<String, dynamic>> getUserStatus() async {
+  final token = await _getAccessToken();
+
+  final response = await http.get(
+    Uri.parse('$_apiBaseUrl/user/status'),
+    headers: {
+      'Authorization': 'Bearer $token',
+    },
+  );
+
+  if (response.statusCode != 200) {
+    throw Exception('Failed to get user status: ${response.body}');
+  }
+
+  return jsonDecode(response.body) as Map<String, dynamic>;
 }
 
 class PricingPage extends StatefulWidget {
@@ -87,210 +133,120 @@ class PricingPage extends StatefulWidget {
 }
 
 class _PricingPageState extends State<PricingPage> {
-  Map<String, dynamic>? _currentSubscription;
+  Map<String, dynamic>? _userStatus;
   bool _isLoading = true;
-  bool _isManagingBilling = false;
-  bool _isCancelling = false;
-  int _loadRequestToken = 0;
+  bool _isProcessing = false;
 
   @override
   void initState() {
     super.initState();
-    _loadSubscription();
+    _loadUserStatus();
   }
 
-  Future<void> _loadSubscription() async {
-    final int requestToken = ++_loadRequestToken;
-    if (!mounted) return;
-
+  Future<void> _loadUserStatus() async {
     setState(() => _isLoading = true);
 
     try {
-      final user = _supabase.auth.currentUser;
-      if (user == null) {
-        if (!mounted || requestToken != _loadRequestToken) return;
-        setState(() {
-          _currentSubscription = null;
-          _isLoading = false;
-        });
-        return;
-      }
-
-      // Sync subscription from Stripe first
-      try {
-        await _supabase.functions.invoke('sync_subscription');
-      } catch (e) {
-        debugPrint('Sync error (not critical): $e');
-      }
-
-      final response = await _supabase
-          .from('profiles')
-          .select(
-            'is_subscribed, subscription_status, subscription_price_id, subscription_amount, current_period_end, cancel_at_period_end',
-          )
-          .eq('id', user.id)
-          .single();
-
-      if (!mounted || requestToken != _loadRequestToken) return;
+      final status = await getUserStatus();
+      if (!mounted) return;
       setState(() {
-        _currentSubscription = response;
+        _userStatus = status;
         _isLoading = false;
-      });
-    } catch (e) {
-      if (!mounted || requestToken != _loadRequestToken) return;
-      setState(() => _isLoading = false);
-      debugPrint('Error loading subscription: $e');
-    }
-  }
-
-  Future<void> _manageBilling() async {
-    final user = _supabase.auth.currentUser;
-    if (user == null || _isManagingBilling) return;
-
-    setState(() => _isManagingBilling = true);
-    try {
-      final res = await _supabase.functions.invoke('manage_billing');
-      final data = res.data;
-      if (data is! Map || data['url'] is! String) {
-        throw Exception('Billing portal could not be created');
-      }
-      await _launchExternalUrl(data['url'] as String);
-
-      // Wait a bit and then refresh to get updated subscription status
-      Future.delayed(Duration(seconds: 3), () {
-        if (mounted) _loadSubscription();
       });
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Error opening billing portal: $error',
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          duration: const Duration(seconds: 2),
-          dismissDirection: DismissDirection.horizontal,
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isManagingBilling = false);
-      }
+      setState(() => _isLoading = false);
+      debugPrint('Error loading user status: $error');
     }
   }
 
-  Future<void> _handleCancelSubscription() async {
-    if (_isCancelling) return;
+  Future<void> _handleSubscribe() async {
+    if (_isProcessing) return;
 
-    // Show confirmation dialog
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Cancel Subscription'),
-        content: const Text(
-          'Are you sure you want to cancel your subscription? '
-          'You will retain access until the end of your current billing period.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Keep Subscription'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Cancel Subscription'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !mounted) return;
-
-    setState(() => _isCancelling = true);
+    setState(() => _isProcessing = true);
     try {
-      await cancelSubscription();
+      await startCheckout();
 
+      // Wait a bit and refresh
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted) _loadUserStatus();
+      });
+    } catch (error) {
+      if (!mounted) return;
+      _showError(error.toString());
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
+  }
+
+  Future<void> _handleManageBilling() async {
+    if (_isProcessing) return;
+
+    setState(() => _isProcessing = true);
+    try {
+      await openBillingPortal();
+
+      // Wait and refresh
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted) _loadUserStatus();
+      });
+    } catch (error) {
+      if (!mounted) return;
+      _showError(error.toString());
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
+  }
+
+  Future<void> _handleSyncSubscription() async {
+    if (_isProcessing) return;
+
+    setState(() => _isProcessing = true);
+    try {
+      await syncSubscription();
+
+      // Show success message
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text(
-            'Subscription will be cancelled at the end of the billing period',
+            'Subscription synced successfully!',
             style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
           ),
-          backgroundColor: Colors.orange,
+          backgroundColor: Colors.green,
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           duration: const Duration(seconds: 2),
-          dismissDirection: DismissDirection.horizontal,
         ),
       );
 
-      await _loadSubscription();
+      // Reload status
+      await _loadUserStatus();
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Error cancelling subscription: $error',
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          duration: const Duration(seconds: 2),
-          dismissDirection: DismissDirection.horizontal,
-        ),
-      );
+      _showError(error.toString());
     } finally {
-      if (mounted) {
-        setState(() => _isCancelling = false);
-      }
+      if (mounted) setState(() => _isProcessing = false);
     }
   }
 
-  String _getCurrentPlanName() {
-    final priceId = _currentSubscription?['subscription_price_id'] as String?;
-    if (priceId == null) return 'Free';
-    return _plans[priceId]?['name'] ?? 'Unknown';
-  }
-
-  int _getCurrentPlanPrice() {
-    final priceId = _currentSubscription?['subscription_price_id'] as String?;
-    if (priceId == null) return 0;
-    return _plans[priceId]?['price'] ?? 0;
-  }
-
-  bool _isCurrentPlan(String priceId) {
-    final currentPriceId =
-        _currentSubscription?['subscription_price_id'] as String?;
-    return currentPriceId == priceId;
-  }
-
-  bool _isUpgrade(String priceId) {
-    final currentPrice = _getCurrentPlanPrice();
-    final newPrice = _plans[priceId]?['price'] ?? 0;
-    return newPrice > currentPrice;
-  }
-
-  bool _isDowngrade(String priceId) {
-    final currentPrice = _getCurrentPlanPrice();
-    final newPrice = _plans[priceId]?['price'] ?? 0;
-    return newPrice < currentPrice && currentPrice > 0;
-  }
-
-  double _getPlanCredits(String priceId) {
-    final price = _plans[priceId]?['price'] ?? 0;
-    return price * _creditMultiplier;
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 
   @override
@@ -311,22 +267,13 @@ class _PricingPageState extends State<PricingPage> {
           elevation: 0,
           iconTheme: IconThemeData(color: iconFg),
         ),
-        body: Center(child: CircularProgressIndicator()),
+        body: Center(child: CircularProgressIndicator(color: accent)),
       );
     }
 
-    final isSubscribed = _currentSubscription?['is_subscribed'] == true;
-    final willCancel = _currentSubscription?['cancel_at_period_end'] == true;
-    final currentPlanName = _getCurrentPlanName();
-    final double currentPlanCredits =
-        _currentSubscription?['subscription_price_id'] is String
-        ? _getPlanCredits(
-            _currentSubscription!['subscription_price_id'] as String,
-          )
-        : 0.0;
-    final List<MapEntry<String, Map<String, dynamic>>> planEntries = _plans
-        .entries
-        .toList();
+    final hasSubscription = _userStatus?['has_subscription'] == true;
+    final currentPlan = _userStatus?['current_plan'] as String?;
+    final creditsRemaining = (_userStatus?['credits_remaining'] ?? 0.0) as num;
 
     return Scaffold(
       backgroundColor: scaffoldBg,
@@ -341,10 +288,12 @@ class _PricingPageState extends State<PricingPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Credit Display
             const CreditDisplay(),
             const SizedBox(height: 24),
-            // Current Plan Card
-            if (isSubscribed)
+
+            // Current Plan Card (if subscribed)
+            if (hasSubscription) ...[
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
@@ -372,7 +321,7 @@ class _PricingPageState extends State<PricingPage> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      currentPlanName,
+                      currentPlan ?? 'Plus',
                       style: TextStyle(
                         color: iconFg,
                         fontSize: 28,
@@ -381,161 +330,59 @@ class _PricingPageState extends State<PricingPage> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '€${_getCurrentPlanPrice()}/month',
+                      '€20/month plus tax',
                       style: TextStyle(
                         color: iconFg.withValues(alpha: 0.7),
                         fontSize: 18,
                       ),
                     ),
-                    if (_currentSubscription?['current_period_end'] !=
-                        null) ...[
-                      const SizedBox(height: 12),
-                      if (willCancel)
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.orange),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.warning_amber,
-                                color: Colors.orange,
-                                size: 20,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Subscription Ending',
-                                      style: TextStyle(
-                                        color: Colors.orange,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      'Cancels on: ${_formatDate(_currentSubscription!['current_period_end'])}',
-                                      style: TextStyle(
-                                        color: iconFg.withValues(alpha: 0.8),
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      else
-                        Text(
-                          'Renews on: ${_formatDate(_currentSubscription!['current_period_end'])}',
-                          style: TextStyle(
-                            color: iconFg.withValues(alpha: 0.6),
-                            fontSize: 14,
-                          ),
-                        ),
-                    ],
-                    if (currentPlanCredits > 0) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        'Monthly AI credits: €${currentPlanCredits.toStringAsFixed(2)} (90% of your plan)',
-                        style: TextStyle(
-                          color: iconFg.withValues(alpha: 0.7),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Monthly AI credits: €16.00',
+                      style: TextStyle(
+                        color: iconFg.withValues(alpha: 0.7),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
                       ),
-                    ],
+                    ),
+                    Text(
+                      '80% of your subscription goes to AI credits',
+                      style: TextStyle(
+                        color: iconFg.withValues(alpha: 0.6),
+                        fontSize: 12,
+                      ),
+                    ),
                     if (!isMobile) ...[
                       const SizedBox(height: 20),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              onPressed: _isManagingBilling
-                                  ? null
-                                  : _manageBilling,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: accent,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 14,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              icon: _isManagingBilling
-                                  ? SizedBox(
-                                      height: 18,
-                                      width: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        valueColor:
-                                            AlwaysStoppedAnimation<Color>(
-                                              Colors.white,
-                                            ),
-                                      ),
-                                    )
-                                  : const Icon(Icons.credit_card),
-                              label: Text(
-                                _isManagingBilling
-                                    ? 'Opening...'
-                                    : 'Manage Billing',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: _isProcessing ? null : _handleManageBilling,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: accent,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          if (!willCancel) ...[
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: _isCancelling
-                                    ? null
-                                    : _handleCancelSubscription,
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: Colors.red,
-                                  side: BorderSide(color: Colors.red),
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 14,
+                          icon: _isProcessing
+                              ? const SizedBox(
+                                  height: 18,
+                                  width: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white,
+                                    ),
                                   ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                                icon: _isCancelling
-                                    ? SizedBox(
-                                        height: 18,
-                                        width: 18,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          valueColor:
-                                              AlwaysStoppedAnimation<Color>(
-                                                Colors.red,
-                                              ),
-                                        ),
-                                      )
-                                    : const Icon(Icons.cancel_outlined),
-                                label: Text(
-                                  _isCancelling
-                                      ? 'Cancelling...'
-                                      : 'Cancel Plan',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
+                                )
+                              : const Icon(Icons.credit_card),
+                          label: Text(
+                            _isProcessing ? 'Opening...' : 'Manage Billing',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 12),
                       Container(
@@ -551,9 +398,7 @@ class _PricingPageState extends State<PricingPage> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                willCancel
-                                    ? 'Your subscription is set to cancel. You can renew it in the billing portal.'
-                                    : 'Use the billing portal to change your plan or manage payment methods.',
+                                'Use the billing portal to cancel your subscription or update payment methods.',
                                 style: TextStyle(
                                   color: iconFg.withValues(alpha: 0.8),
                                   fontSize: 12,
@@ -567,25 +412,21 @@ class _PricingPageState extends State<PricingPage> {
                   ],
                 ),
               ),
-            const SizedBox(height: 32),
+              const SizedBox(height: 32),
+            ],
 
-            // Plans Header
+            // Plan Header
             Text(
-              isSubscribed ? 'Available Plans' : 'Choose a Plan',
+              hasSubscription ? 'Subscription Plan' : 'Subscribe to Get AI Credits',
               style: TextStyle(
                 color: iconFg,
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
               ),
             ),
-            const SizedBox(height: 8),
-            if (isSubscribed && !isMobile) ...[
-              Text(
-                'Click on a plan card to upgrade or downgrade your subscription.',
-                style: TextStyle(color: iconFg.withValues(alpha: 0.7), fontSize: 14),
-              ),
-            ],
             const SizedBox(height: 16),
+
+            // Mobile notice
             if (isMobile) ...[
               Container(
                 width: double.infinity,
@@ -602,8 +443,7 @@ class _PricingPageState extends State<PricingPage> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Subscription management is only available on desktop. '
-                        'Plan details and credits are shown below.',
+                        'Subscription management is only available on desktop.',
                         style: TextStyle(
                           color: iconFg.withValues(alpha: 0.7),
                           fontSize: 14,
@@ -616,248 +456,31 @@ class _PricingPageState extends State<PricingPage> {
               const SizedBox(height: 16),
             ],
 
-            // Plan Cards
-            if (isMobile)
-              Column(
-                children: planEntries.map((entry) {
-                  final priceId = entry.key;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 16.0),
-                    child: _PlanCard(
-                      priceId: priceId,
-                      name: entry.value['name'],
-                      price: entry.value['price'],
-                      features: List<String>.from(entry.value['features']),
-                      creditValue: _getPlanCredits(priceId),
-                      isCurrentPlan: _isCurrentPlan(priceId),
-                      isUpgrade: _isUpgrade(priceId),
-                      isDowngrade: _isDowngrade(priceId),
-                      isSubscribed: isSubscribed,
-                      actionsEnabled: !isMobile,
-                      accent: accent,
-                      iconFg: iconFg,
-                      scaffoldBg: scaffoldBg,
-                      onChanged: _loadSubscription,
-                    ),
-                  );
-                }).toList(),
-              )
-            else
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: List.generate(planEntries.length, (index) {
-                  final entry = planEntries[index];
-                  final priceId = entry.key;
-                  return Expanded(
-                    child: Padding(
-                      padding: EdgeInsets.only(
-                        right: index == planEntries.length - 1 ? 0 : 16.0,
-                      ),
-                      child: _PlanCard(
-                        priceId: priceId,
-                        name: entry.value['name'],
-                        price: entry.value['price'],
-                        features: List<String>.from(entry.value['features']),
-                        creditValue: _getPlanCredits(priceId),
-                        isCurrentPlan: _isCurrentPlan(priceId),
-                        isUpgrade: _isUpgrade(priceId),
-                        isDowngrade: _isDowngrade(priceId),
-                        isSubscribed: isSubscribed,
-                        actionsEnabled: !isMobile,
-                        accent: accent,
-                        iconFg: iconFg,
-                        scaffoldBg: scaffoldBg,
-                        onChanged: _loadSubscription,
-                      ),
-                    ),
-                  );
-                }).toList(),
+            // Plus Plan Card
+            Card(
+              elevation: hasSubscription ? 8 : 4,
+              shadowColor: Colors.black.withValues(alpha: 0.1),
+              color: scaffoldBg.lighten(0.05),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(
+                  color: hasSubscription ? accent : iconFg.withValues(alpha: 0.3),
+                  width: hasSubscription ? 2 : 1,
+                ),
               ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _formatDate(String dateString) {
-    try {
-      final date = DateTime.parse(dateString);
-      return '${date.day}.${date.month}.${date.year}';
-    } catch (e) {
-      return dateString;
-    }
-  }
-}
-
-class _PlanCard extends StatefulWidget {
-  final String priceId;
-  final String name;
-  final int price;
-  final List<String> features;
-  final double creditValue;
-  final bool isCurrentPlan;
-  final bool isUpgrade;
-  final bool isDowngrade;
-  final bool isSubscribed;
-  final bool actionsEnabled;
-  final Color accent;
-  final Color iconFg;
-  final Color scaffoldBg;
-  final VoidCallback onChanged;
-
-  const _PlanCard({
-    required this.priceId,
-    required this.name,
-    required this.price,
-    required this.features,
-    required this.creditValue,
-    required this.isCurrentPlan,
-    required this.isUpgrade,
-    required this.isDowngrade,
-    required this.isSubscribed,
-    required this.actionsEnabled,
-    required this.accent,
-    required this.iconFg,
-    required this.scaffoldBg,
-    required this.onChanged,
-  });
-
-  @override
-  State<_PlanCard> createState() => _PlanCardState();
-}
-
-class _PlanCardState extends State<_PlanCard> {
-  bool _isLoading = false;
-
-  Future<void> _handleAction() async {
-    if (_isLoading || !widget.actionsEnabled) return;
-
-    // If user already has a subscription, open billing portal for upgrades/downgrades
-    if (widget.isSubscribed) {
-      setState(() => _isLoading = true);
-      try {
-        final res = await _supabase.functions.invoke('manage_billing');
-        final data = res.data;
-        if (data is! Map || data['url'] is! String) {
-          throw Exception('Billing portal could not be created');
-        }
-        await _launchExternalUrl(data['url'] as String);
-
-        // Wait and refresh
-        Future.delayed(Duration(seconds: 3), () {
-          if (mounted) widget.onChanged();
-        });
-      } catch (error) {
-        if (!mounted) return;
-        _showError(error);
-      } finally {
-        if (mounted) setState(() => _isLoading = false);
-      }
-      return;
-    }
-
-    // New user - go to checkout
-    setState(() => _isLoading = true);
-    try {
-      await startCheckout(widget.priceId);
-      Future.delayed(Duration(seconds: 2), () {
-        if (mounted) widget.onChanged();
-      });
-    } catch (error) {
-      if (!mounted) return;
-      _showError(error);
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  void _showError(dynamic error) {
-    final String message = error is Exception
-        ? error.toString().replaceFirst('Exception: ', '')
-        : 'Unexpected error';
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Error: $message',
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        duration: const Duration(seconds: 2),
-        dismissDirection: DismissDirection.horizontal,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final bool showActions = widget.actionsEnabled;
-    final bool isCurrentPlan = widget.isCurrentPlan;
-    final bool isSubscribed = widget.isSubscribed;
-    final bool isCurrentPlanAndSubscribed = isCurrentPlan && isSubscribed;
-
-    String buttonText = 'Subscribe';
-
-    if (isCurrentPlanAndSubscribed) {
-      buttonText = 'Manage Billing';
-    } else if (isCurrentPlan) {
-      buttonText = 'Current Plan';
-    } else if (isSubscribed) {
-      if (widget.isUpgrade) {
-        buttonText = 'Upgrade';
-      } else if (widget.isDowngrade) {
-        buttonText = 'Downgrade';
-      }
-    }
-
-    final bool canPressButton =
-        showActions && (!isCurrentPlan || isSubscribed) && !_isLoading;
-    final Color neutralButtonBg = widget.scaffoldBg.lighten(0.1);
-    final Color buttonBackground = isCurrentPlanAndSubscribed
-        ? widget.accent
-        : (isCurrentPlan ? neutralButtonBg : widget.accent);
-    final Color buttonForeground = isCurrentPlanAndSubscribed
-        ? Colors.white
-        : (isCurrentPlan ? widget.iconFg : Colors.white);
-    final BorderSide? buttonBorder =
-        isCurrentPlan && !isCurrentPlanAndSubscribed
-        ? BorderSide(color: widget.iconFg.withValues(alpha: 0.3))
-        : null;
-
-    return Card(
-      elevation: widget.isCurrentPlan ? 8 : 4,
-      shadowColor: Colors.black.withValues(alpha: 0.1),
-      color: widget.scaffoldBg.lighten(0.05),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: widget.isCurrentPlan
-              ? widget.accent
-              : widget.iconFg.withValues(alpha: 0.3),
-          width: widget.isCurrentPlan ? 2 : 1,
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              height: 28,
-              child: widget.isCurrentPlan
-                  ? Align(
-                      alignment: Alignment.centerLeft,
-                      child: Container(
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (hasSubscription)
+                      Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: widget.accent,
+                          color: accent,
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Text(
@@ -869,156 +492,138 @@ class _PlanCardState extends State<_PlanCard> {
                           ),
                         ),
                       ),
-                    )
-                  : widget.isUpgrade && widget.isSubscribed
-                  ? Align(
-                      alignment: Alignment.centerLeft,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withValues(alpha: 0.2),
-                          border: Border.all(color: Colors.green),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          'UPGRADE',
+                    const SizedBox(height: 12),
+                    Text(
+                      'Plus',
+                      style: TextStyle(
+                        color: iconFg,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text(
+                          '€',
                           style: TextStyle(
-                            color: Colors.green,
-                            fontSize: 10,
+                            color: accent,
+                            fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
+                        Text(
+                          '20',
+                          style: TextStyle(
+                            color: accent,
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          '/month',
+                          style: TextStyle(
+                            color: iconFg.withValues(alpha: 0.7),
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'plus tax',
+                      style: TextStyle(
+                        color: iconFg.withValues(alpha: 0.6),
+                        fontSize: 12,
+                        fontStyle: FontStyle.italic,
                       ),
-                    )
-                  : const SizedBox.shrink(),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              widget.name,
-              style: TextStyle(
-                color: widget.iconFg,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Text(
-                  '€',
-                  style: TextStyle(
-                    color: widget.accent,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  widget.price.toString(),
-                  style: TextStyle(
-                    color: widget.accent,
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  '/month',
-                  style: TextStyle(
-                    color: widget.iconFg.withValues(alpha: 0.7),
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            ...widget.features.map(
-              (feature) => Padding(
-                padding: const EdgeInsets.only(bottom: 8.0),
-                child: Row(
-                  children: [
-                    Icon(Icons.check_circle, color: widget.accent, size: 16),
-                    const SizedBox(width: 8),
-                    Expanded(
+                    ),
+                    const SizedBox(height: 16),
+                    _buildFeature(accent, iconFg, 'Get €16 in AI credits monthly'),
+                    _buildFeature(accent, iconFg, 'Access to all AI models'),
+                    _buildFeature(accent, iconFg, 'Image generation'),
+                    _buildFeature(accent, iconFg, 'Voice mode'),
+                    _buildFeature(accent, iconFg, 'Text chat with reasoning'),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: accent.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       child: Text(
-                        feature,
+                        '80% of your subscription is converted to spendable AI credits. Credits are used per token based on the model you choose.',
                         style: TextStyle(
-                          color: widget.iconFg.withValues(alpha: 0.8),
-                          fontSize: 14,
+                          color: iconFg.withValues(alpha: 0.8),
+                          fontSize: 12,
                         ),
                       ),
                     ),
+                    if (!isMobile && !hasSubscription) ...[
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _isProcessing ? null : _handleSubscribe,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: accent,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 4,
+                          ),
+                          child: _isProcessing
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white,
+                                    ),
+                                  ),
+                                )
+                              : const Text(
+                                  'Subscribe Now',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
             ),
-            const SizedBox(height: 12),
-            Text(
-              'Monthly AI credits: €${widget.creditValue.toStringAsFixed(2)}',
-              style: TextStyle(
-                color: widget.iconFg,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            Text(
-              '90% of your subscription is converted to spendable credits.',
-              style: TextStyle(
-                color: widget.iconFg.withValues(alpha: 0.7),
-                fontSize: 12,
-              ),
-            ),
-            if (showActions) ...[
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: canPressButton ? _handleAction : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: buttonBackground,
-                    foregroundColor: buttonForeground,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    side: buttonBorder,
-                    elevation: widget.isCurrentPlan ? 2 : 4,
-                  ),
-                  child: _isLoading
-                      ? SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              buttonForeground,
-                            ),
-                          ),
-                        )
-                      : Text(
-                          buttonText,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
-                          ),
-                        ),
-                ),
-              ),
-            ] else ...[
-              const SizedBox(height: 16),
-              Text(
-                'Manage your subscription from a desktop device.',
-                style: TextStyle(
-                  color: widget.iconFg.withValues(alpha: 0.6),
-                  fontSize: 12,
-                ),
-              ),
-            ],
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildFeature(Color accent, Color iconFg, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Row(
+        children: [
+          Icon(Icons.check_circle, color: accent, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                color: iconFg.withValues(alpha: 0.9),
+                fontSize: 14,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
