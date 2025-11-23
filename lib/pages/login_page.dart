@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 
 import 'package:chuk_chat/services/auth_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
@@ -7,6 +8,7 @@ import 'package:chuk_chat/supabase_config.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/input_validator.dart';
 import 'package:chuk_chat/widgets/password_strength_meter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -26,6 +28,7 @@ class _LoginPageState extends State<LoginPage> {
   bool _isSubmitting = false;
   bool _isSignInMode = true;
   bool _obscurePassword = true;
+  bool _agreedToTerms = false;
   String? _errorMessage;
   String _currentPassword = '';
 
@@ -50,6 +53,14 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _handleSubmit() async {
     if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    // Check if user agreed to terms when signing up
+    if (!_isSignInMode && !_agreedToTerms) {
+      setState(() {
+        _errorMessage = 'You must agree to the Terms of Service and Privacy Policy to create an account.';
+      });
       return;
     }
 
@@ -160,6 +171,7 @@ class _LoginPageState extends State<LoginPage> {
     setState(() {
       _isSignInMode = !_isSignInMode;
       _errorMessage = null;
+      _agreedToTerms = false; // Reset checkbox when switching modes
     });
   }
 
@@ -177,6 +189,13 @@ class _LoginPageState extends State<LoginPage> {
 
     // For sign-in, just check it's not empty (already done above)
     return null;
+  }
+
+  Future<void> _launchUrl(String url) async {
+    final Uri uri = Uri.parse(url);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      debugPrint('Could not launch $url');
+    }
   }
 
   @override
@@ -319,12 +338,61 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     if (!_isSignInMode) ...[
                       const SizedBox(height: 12),
-                      Text(
-                        'By signing up, you acknowledge that you have read, understood, and agree to chuk.chat Terms of Service and Privacy Policy.',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: iconFg.withValues(alpha: 0.7),
-                        ),
-                        textAlign: TextAlign.center,
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Checkbox(
+                            value: _agreedToTerms,
+                            onChanged: (bool? value) {
+                              setState(() {
+                                _agreedToTerms = value ?? false;
+                              });
+                            },
+                            activeColor: theme.colorScheme.primary,
+                          ),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: 12.0),
+                              child: RichText(
+                                text: TextSpan(
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: iconFg.withValues(alpha: 0.7),
+                                  ),
+                                  children: [
+                                    const TextSpan(
+                                      text: 'I agree to the ',
+                                    ),
+                                    TextSpan(
+                                      text: 'Terms of Service',
+                                      style: TextStyle(
+                                        color: theme.colorScheme.primary,
+                                        decoration: TextDecoration.underline,
+                                      ),
+                                      recognizer: TapGestureRecognizer()
+                                        ..onTap = () {
+                                          _launchUrl('https://chuk.chat/terms.html');
+                                        },
+                                    ),
+                                    const TextSpan(
+                                      text: ' and ',
+                                    ),
+                                    TextSpan(
+                                      text: 'Privacy Policy',
+                                      style: TextStyle(
+                                        color: theme.colorScheme.primary,
+                                        decoration: TextDecoration.underline,
+                                      ),
+                                      recognizer: TapGestureRecognizer()
+                                        ..onTap = () {
+                                          _launchUrl('https://chuk.chat/privacy.html');
+                                        },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                     const SizedBox(height: 16),
