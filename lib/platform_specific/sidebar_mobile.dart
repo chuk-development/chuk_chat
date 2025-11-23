@@ -9,6 +9,7 @@ import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart'; // Assuming this exists
 import 'package:chuk_chat/widgets/credit_display.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class SidebarMobile extends StatefulWidget {
   final Function(int index) onChatItemTapped;
@@ -173,6 +174,13 @@ class _SidebarMobileState extends State<SidebarMobile> {
       return profile.email.trim();
     }
     return 'Account';
+  }
+
+  Future<void> _launchUrl(String url) async {
+    final Uri uri = Uri.parse(url);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      debugPrint('Could not launch $url');
+    }
   }
 
   String _deriveChatTitle(StoredChat chat) {
@@ -617,6 +625,53 @@ class _SidebarMobileState extends State<SidebarMobile> {
                   );
                 }),
                 const SizedBox(height: 10),
+              ],
+            ),
+          ),
+
+          // Legal links section
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 8.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                TextButton(
+                  onPressed: () => _launchUrl('https://chuk.chat/terms.html'),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text(
+                    'Terms',
+                    style: TextStyle(
+                      color: iconColorDefault.withValues(alpha: 0.6),
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                Text(
+                  '•',
+                  style: TextStyle(
+                    color: iconColorDefault.withValues(alpha: 0.4),
+                    fontSize: 12,
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => _launchUrl('https://chuk.chat/privacy.html'),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text(
+                    'Privacy',
+                    style: TextStyle(
+                      color: iconColorDefault.withValues(alpha: 0.6),
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
