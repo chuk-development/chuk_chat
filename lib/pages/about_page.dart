@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:chuk_chat/utils/color_extensions.dart';
 
@@ -85,6 +86,50 @@ class AboutPage extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
+              _AboutCard(
+                icon: Icons.gavel,
+                iconColor: accent,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Legal Documents',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => _launchUrl('https://chuk.chat/terms.html'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: accent,
+                              side: BorderSide(color: accent.withValues(alpha: 0.5)),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            child: const Text('Terms of Service'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => _launchUrl('https://chuk.chat/privacy.html'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: accent,
+                              side: BorderSide(color: accent.withValues(alpha: 0.5)),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            child: const Text('Privacy Policy'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
               if (versionText != null)
                 _AboutCard(
                   icon: Icons.numbers_outlined,
@@ -148,6 +193,13 @@ class AboutPage extends StatelessWidget {
       return version;
     }
     return '$version (build $trimmedBuild)';
+  }
+
+  static Future<void> _launchUrl(String url) async {
+    final Uri uri = Uri.parse(url);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      debugPrint('Could not launch $url');
+    }
   }
 }
 
