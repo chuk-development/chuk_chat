@@ -265,24 +265,36 @@ class ChatStorageService {
   }
 
   static Future<StoredChat?> saveChat(
-    List<Map<String, String>> messagesMaps,
-  ) async {
+    List<Map<String, String>> messagesMaps, {
+    String? chatId,
+  }) async {
+    debugPrint('💾 [ChatStorage] saveChat called with ${messagesMaps.length} messages, chatId=$chatId');
+
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
+      debugPrint('❌ [ChatStorage] No user signed in');
       throw StateError('User must be signed in to store chats.');
     }
+
+    debugPrint('✅ [ChatStorage] User authenticated: ${user.id}');
+
     if (!EncryptionService.hasKey) {
+      debugPrint('🔐 [ChatStorage] No encryption key, attempting to load...');
       final loaded = await EncryptionService.tryLoadKey();
       if (!loaded) {
+        debugPrint('❌ [ChatStorage] Failed to load encryption key');
         throw StateError(
           'Encrypted chats could not be saved because the encryption key is missing. Please sign in again.',
         );
       }
+      debugPrint('✅ [ChatStorage] Encryption key loaded');
     }
 
     final messages = _mapToChatMessages(messagesMaps);
+    debugPrint('📝 [ChatStorage] After filtering: ${messages.length} messages (removed "Thinking..." placeholders)');
 
     if (messages.isEmpty) {
+      debugPrint('⚠️ [ChatStorage] No messages after filtering, returning null');
       return null;
     }
 
@@ -291,20 +303,42 @@ class ChatStorageService {
       'messages': messages.map((message) => message.toJson()).toList(),
     });
 
+    debugPrint('🔐 [ChatStorage] Encrypting payload (${payload.length} bytes)...');
     final encryptedPayload = await EncryptionService.encrypt(payload);
+    debugPrint('✅ [ChatStorage] Encrypted payload (${encryptedPayload.length} bytes)');
+
     Map<String, dynamic> inserted;
     try {
+      debugPrint('📤 [ChatStorage] Inserting into Supabase...');
+
+      // Build insert map - include chatId if provided
+      final Map<String, dynamic> insertData = {
+        'user_id': user.id,
+        'encrypted_payload': encryptedPayload,
+      };
+      if (chatId != null) {
+        insertData['id'] = chatId;
+        debugPrint('   Using provided chatId: $chatId');
+      }
+
       inserted = await SupabaseService.client
           .from('encrypted_chats')
-          .insert({'user_id': user.id, 'encrypted_payload': encryptedPayload})
+          .insert(insertData)
           .select('id, encrypted_payload, created_at, is_starred')
           .single();
+      debugPrint('✅ [ChatStorage] Insert successful! Chat ID: ${inserted['id']}');
     } on PostgrestException catch (error) {
+      debugPrint('❌ [ChatStorage] Supabase insert failed: ${error.message}');
+      debugPrint('   Code: ${error.code}, Details: ${error.details}');
       throw StateError('Failed to save chat: ${error.message}');
+    } catch (error) {
+      debugPrint('❌ [ChatStorage] Unexpected error during insert: $error');
+      rethrow;
     }
 
     final stored = StoredChat.fromRow(inserted, messages);
     _upsertChatLocally(stored);
+    debugPrint('✅ [ChatStorage] Chat saved locally and added to sidebar');
     unawaited(LocalChatCacheService.upsert(user.id, inserted));
     return stored;
   }
@@ -313,21 +347,31 @@ class ChatStorageService {
     String chatId,
     List<Map<String, String>> messagesMaps,
   ) async {
+    debugPrint('🔄 [ChatStorage] updateChat called for chatId=$chatId with ${messagesMaps.length} messages');
+
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
+      debugPrint('❌ [ChatStorage] No user signed in');
       throw StateError('User must be signed in to store chats.');
     }
+
     if (!EncryptionService.hasKey) {
+      debugPrint('🔐 [ChatStorage] No encryption key, attempting to load...');
       final loaded = await EncryptionService.tryLoadKey();
       if (!loaded) {
+        debugPrint('❌ [ChatStorage] Failed to load encryption key');
         throw StateError(
           'Encrypted chats could not be saved because the encryption key is missing. Please sign in again.',
         );
       }
+      debugPrint('✅ [ChatStorage] Encryption key loaded');
     }
 
     final messages = _mapToChatMessages(messagesMaps);
+    debugPrint('📝 [ChatStorage] After filtering: ${messages.length} messages');
+
     if (messages.isEmpty) {
+      debugPrint('⚠️ [ChatStorage] No messages after filtering, returning null');
       return null;
     }
 
@@ -346,20 +390,31 @@ class ChatStorageService {
     }
     final payload = jsonEncode(payloadMap);
 
+    debugPrint('🔐 [ChatStorage] Encrypting payload...');
     final encryptedPayload = await EncryptionService.encrypt(payload);
+    debugPrint('✅ [ChatStorage] Encrypted payload');
+
     List<dynamic> updatedRows;
     try {
+      debugPrint('📤 [ChatStorage] Updating chat in Supabase...');
       updatedRows = await SupabaseService.client
           .from('encrypted_chats')
           .update({'encrypted_payload': encryptedPayload})
           .eq('id', chatId)
           .eq('user_id', user.id)
           .select('id, encrypted_payload, created_at, is_starred');
+      debugPrint('✅ [ChatStorage] Update successful! ${updatedRows.length} rows affected');
     } on PostgrestException catch (error) {
+      debugPrint('❌ [ChatStorage] Supabase update failed: ${error.message}');
+      debugPrint('   Code: ${error.code}, Details: ${error.details}');
       throw StateError('Failed to update chat: ${error.message}');
+    } catch (error) {
+      debugPrint('❌ [ChatStorage] Unexpected error during update: $error');
+      rethrow;
     }
 
     if (updatedRows.isEmpty) {
+      debugPrint('❌ [ChatStorage] No rows updated - chat not found or access denied');
       throw StateError(
         'Failed to update chat: Chat was not found or access is denied.',
       );
@@ -368,6 +423,7 @@ class ChatStorageService {
 
     final stored = StoredChat.fromRow(updated, messages, customName: existingCustomName);
     _upsertChatLocally(stored);
+    debugPrint('✅ [ChatStorage] Chat updated locally');
     unawaited(LocalChatCacheService.upsert(user.id, updated));
     return stored;
   }

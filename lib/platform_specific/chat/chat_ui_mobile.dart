@@ -359,6 +359,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     final String? chatIdAtStart = _activeChatId;
     if (chatIdAtStart == null) return;
 
+    // CRITICAL: Don't update if this chat is currently streaming
+    // Otherwise we'll overwrite the streaming AI response
+    if (_streamingHandler.isChatStreaming(chatIdAtStart)) {
+      debugPrint('⚠️ Skipping realtime update - chat is streaming');
+      return;
+    }
+
     final chatIndex = ChatStorageService.savedChats.indexWhere(
       (chat) => chat.id == chatIdAtStart,
     );
@@ -374,6 +381,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         return;
       }
 
+      debugPrint('📥 Applying realtime chat update: ${updatedChat.messages.length} messages');
       setState(() {
         _messages.clear();
         _messages.addAll(
@@ -657,9 +665,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     String chatId,
   ) {
     if (index < 0 || index >= _messages.length) return;
-    if (_activeChatId != chatId) return;
 
-    if (mounted) {
+    // Check if this is the active chat (for UI updates)
+    final bool isActiveChat = _activeChatId == chatId;
+
+    if (mounted && isActiveChat) {
+      // Update UI only for active chat
       setState(() {
         final Map<String, String> message = Map<String, String>.from(
           _messages[index],
@@ -671,7 +682,21 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
       _scrollChatToBottom();
       Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+    }
+
+    // CRITICAL: Always persist, even for background chats
+    // This ensures chats are saved to Supabase regardless of whether
+    // the user has switched to a different chat
+    if (mounted && isActiveChat) {
       _persistChat();
+    } else if (!isActiveChat) {
+      // For background chats, persist using the background update handler
+      _persistenceHandler.updateBackgroundChatMessage(
+        chatId: chatId,
+        messageIndex: index,
+        content: content,
+        reasoning: reasoning,
+      );
     }
   }
 
@@ -800,8 +825,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     final int placeholderIndex = _messages.length - 1;
     _textFieldFocusNode.requestFocus();
     _scrollChatToBottom();
-    // Don't persist "Thinking..." placeholder - wait for actual response
-    // _persistChat(); // Removed - will persist after streaming completes
+
+    // CRITICAL: Persist immediately after user sends first message
+    // This ensures the chat is created and saved right away, even if
+    // the app crashes, user switches chats, or network drops
+    _persistChat();
 
     // Send with streaming handler
     await _streamingHandler.sendMessage(
@@ -872,9 +900,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       });
     }
 
-    // Don't persist yet - wait for actual response
-    // _persistChat(); // Removed - will persist after streaming completes
-
     // Resend with new text
     final String originalUserInput = newText;
     late int placeholderIndex;
@@ -887,6 +912,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     final String modelIdToUse = originalModelId ?? _selectedModelId;
     final String? providerToUse = originalProvider ?? _selectedProviderSlug;
 
+    // Generate chat ID if needed BEFORE persisting
+    if (_activeChatId == null) {
+      _activeChatId = _uuid.v4();
+    }
+    final String chatId = _activeChatId!;
+
     setState(() {
       _messages.add({
         'sender': 'ai',
@@ -898,14 +929,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       placeholderIndex = _messages.length - 1;
     });
 
-    // Don't persist "Thinking..." placeholder - wait for actual response
-    // _persistChat(); // Removed - will persist after streaming completes
+    // Persist immediately after editing - chat ID is now guaranteed to exist
+    _persistChat();
     _scrollChatToBottom();
-
-    if (_activeChatId == null) {
-      _activeChatId = _uuid.v4();
-    }
-    final String chatId = _activeChatId!;
 
     // Send using streaming handler with preserved model/provider
     await _streamingHandler.sendMessage(
