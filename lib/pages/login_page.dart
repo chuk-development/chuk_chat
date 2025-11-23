@@ -349,6 +349,16 @@ class _LoginPageState extends State<LoginPage> {
                               });
                             },
                             activeColor: theme.colorScheme.primary,
+                            fillColor: WidgetStateProperty.resolveWith<Color>((states) {
+                              if (states.contains(WidgetState.selected)) {
+                                return theme.colorScheme.primary;
+                              }
+                              return Colors.transparent;
+                            }),
+                            side: BorderSide(
+                              color: iconFg.withValues(alpha: 0.5),
+                              width: 2,
+                            ),
                           ),
                           Expanded(
                             child: Padding(
