@@ -1,7 +1,7 @@
 name: chuk_chat
 description: "A new Flutter project."
 
-version: 1.0.2+2002
+version: 1.0.3+2003
 
 environment:
   sdk: ^3.9.2
@@ -31,8 +31,8 @@ dependencies:
   markdown: ^7.3.0
   highlight: ^0.7.0
   web_socket_channel: ^3.0.1
-  archive: ^3.6.1
-  desktop_drop: ^0.4.3
+  archive: ^4.0.7
+  desktop_drop: ^0.7.0
 
 
 dev_dependencies:

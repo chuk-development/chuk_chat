@@ -327,10 +327,12 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
 
           return Stack(
             children: [
-              // Main content that slides right (rebuilds on chat change)
+              // Main content that slides right - keeps full width to prevent layout collapse
               Positioned.fill(
-                left: sidebarVisibleWidth * animValue,
-                child: mainContent,
+                child: Transform.translate(
+                  offset: Offset(sidebarVisibleWidth * animValue, 0),
+                  child: mainContent,
+                ),
               ),
               // Sidebar that slides in from left
               Positioned(
