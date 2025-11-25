@@ -19,6 +19,8 @@ class ChatMessage {
     this.reasoning = '',
     this.modelId,
     this.provider,
+    this.images,
+    this.attachments,
   });
 
   final String sender;
@@ -26,6 +28,8 @@ class ChatMessage {
   final String reasoning;
   final String? modelId;
   final String? provider;
+  final String? images; // JSON-encoded array of base64 image data URLs
+  final String? attachments; // JSON-encoded array of document attachments
 
   Map<String, String> toJson() {
     final Map<String, String> json = {'sender': sender, 'text': text};
@@ -37,6 +41,12 @@ class ChatMessage {
     }
     if (provider != null && provider!.isNotEmpty) {
       json['provider'] = provider!;
+    }
+    if (images != null && images!.isNotEmpty) {
+      json['images'] = images!;
+    }
+    if (attachments != null && attachments!.isNotEmpty) {
+      json['attachments'] = attachments!;
     }
     return json;
   }
@@ -54,6 +64,8 @@ class ChatMessage {
       reasoning: json['reasoning'] as String? ?? '',
       modelId: normalize(json['modelId'] as String?),
       provider: normalize(json['provider'] as String?),
+      images: normalize(json['images'] as String?),
+      attachments: normalize(json['attachments'] as String?),
     );
   }
 }
@@ -602,6 +614,8 @@ class ChatStorageService {
             reasoning: entry['reasoning'] ?? '',
             modelId: entry['modelId'],
             provider: entry['provider'],
+            images: entry['images'],
+            attachments: entry['attachments'],
           ),
         )
         .where((message) {
