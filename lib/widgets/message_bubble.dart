@@ -92,12 +92,16 @@ class MessageBubble extends StatefulWidget {
   State<MessageBubble> createState() => _MessageBubbleState();
 }
 
-class _MessageBubbleState extends State<MessageBubble> {
+class _MessageBubbleState extends State<MessageBubble>
+    with AutomaticKeepAliveClientMixin {
   bool _isReasoningExpanded = false;
   bool _isModelInfoExpanded = false;
   final TextEditingController _editController = TextEditingController();
   final FocusNode _editFocusNode = FocusNode();
   bool _shouldFocusEditField = false;
+
+  @override
+  bool get wantKeepAlive => true; // Keep this widget alive to prevent rebuilds
 
   // User preferences for display - null until loaded
   bool? _showReasoningTokens;
@@ -251,6 +255,8 @@ class _MessageBubbleState extends State<MessageBubble> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+
     // Determine alignment based on whether it's a user message or not.
     // Historically voice mode inverted this flag, so we keep compatibility.
     final bool isUserMessage =
@@ -502,6 +508,7 @@ class _MessageBubbleState extends State<MessageBubble> {
   }
 
   Widget _buildImagesGrid(List<String> images) {
+    debugPrint('🖼️ [ImageDebug] Building images grid with ${images.length} images');
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -509,7 +516,8 @@ class _MessageBubbleState extends State<MessageBubble> {
         final int index = entry.key;
         final String imageDataUrl = entry.value;
 
-        return GestureDetector(
+        return _CachedImageThumbnail(
+          imageDataUrl: imageDataUrl,
           onTap: () {
             // Open image viewer with all images
             Navigator.of(context).push(
@@ -523,29 +531,6 @@ class _MessageBubbleState extends State<MessageBubble> {
               ),
             );
           },
-          child: MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.memory(
-                _base64ToBytes(imageDataUrl),
-                width: 100, // ~3cm at 96 DPI
-                height: 100,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    width: 100,
-                    height: 100,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.withValues(alpha: 0.3),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(Icons.broken_image, size: 32),
-                  );
-                },
-              ),
-            ),
-          ),
         );
       }).toList(),
     );
@@ -678,6 +663,91 @@ class _MessageBubbleState extends State<MessageBubble> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: messageWidget,
+    );
+  }
+}
+
+/// Cached image thumbnail that decodes once and caches the bytes
+class _CachedImageThumbnail extends StatefulWidget {
+  const _CachedImageThumbnail({
+    super.key,
+    required this.imageDataUrl,
+    required this.onTap,
+  });
+
+  final String imageDataUrl;
+  final VoidCallback onTap;
+
+  @override
+  State<_CachedImageThumbnail> createState() => _CachedImageThumbnailState();
+}
+
+class _CachedImageThumbnailState extends State<_CachedImageThumbnail>
+    with AutomaticKeepAliveClientMixin {
+  Uint8List? _cachedBytes;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _decodeImage();
+  }
+
+  void _decodeImage() {
+    try {
+      final base64String = widget.imageDataUrl.split(',').last;
+      _cachedBytes = base64Decode(base64String);
+    } catch (e) {
+      debugPrint('Failed to decode image: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+
+    if (_cachedBytes == null) {
+      return Container(
+        width: 100,
+        height: 100,
+        decoration: BoxDecoration(
+          color: Colors.grey.withValues(alpha: 0.3),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Icon(Icons.broken_image, size: 32),
+      );
+    }
+
+    return GestureDetector(
+      onTap: widget.onTap,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.memory(
+            _cachedBytes!,
+            width: 100,
+            height: 100,
+            fit: BoxFit.cover,
+            cacheWidth: 200,
+            cacheHeight: 200,
+            gaplessPlayback: true,
+            errorBuilder: (context, error, stackTrace) {
+              return Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  color: Colors.grey.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.broken_image, size: 32),
+              );
+            },
+          ),
+        ),
+      ),
     );
   }
 }

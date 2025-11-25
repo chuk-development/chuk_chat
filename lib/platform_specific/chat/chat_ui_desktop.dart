@@ -2157,9 +2157,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                   vertical: 10,
                                 ),
                                 itemCount: renderMessages.length,
-                                addAutomaticKeepAlives: false,
+                                addAutomaticKeepAlives: true, // Keep message widgets alive
                                 addRepaintBoundaries: true,
-                                cacheExtent: 500.0,
+                                cacheExtent: 2000.0, // Increase cache to keep more messages in memory
                                 itemBuilder: (_, int i) {
                                   final _MessageRenderData data =
                                       renderMessages[i];
