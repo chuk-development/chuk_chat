@@ -4,9 +4,35 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
+import 'package:chuk_chat/widgets/document_viewer.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chuk_chat/constants.dart';
+
+/// Document attachment data
+class DocumentAttachment {
+  const DocumentAttachment({
+    required this.fileName,
+    required this.markdownContent,
+  });
+
+  final String fileName;
+  final String markdownContent;
+
+  Map<String, String> toJson() {
+    return {
+      'fileName': fileName,
+      'markdownContent': markdownContent,
+    };
+  }
+
+  factory DocumentAttachment.fromJson(Map<String, dynamic> json) {
+    return DocumentAttachment(
+      fileName: json['fileName'] as String? ?? 'document',
+      markdownContent: json['markdownContent'] as String? ?? '',
+    );
+  }
+}
 
 class MessageBubbleAction {
   const MessageBubbleAction({
@@ -41,6 +67,7 @@ class MessageBubble extends StatefulWidget {
     this.showReasoningTokens,
     this.showModelInfo,
     this.images,
+    this.attachments,
   });
 
   final String message;
@@ -59,6 +86,7 @@ class MessageBubble extends StatefulWidget {
   final bool? showReasoningTokens;
   final bool? showModelInfo;
   final List<String>? images; // Base64 data URLs of images
+  final List<DocumentAttachment>? attachments; // Document attachments
 
   @override
   State<MessageBubble> createState() => _MessageBubbleState();
@@ -283,6 +311,11 @@ class _MessageBubbleState extends State<MessageBubble> {
             _buildImagesGrid(widget.images!),
             const SizedBox(height: 8),
           ],
+          // Display document attachments
+          if (widget.attachments != null && widget.attachments!.isNotEmpty) ...[
+            _buildAttachmentsChips(widget.attachments!),
+            const SizedBox(height: 8),
+          ],
           _buildMessageBody(
             iconFgColor: iconFgColor,
             accentColor: accentColor,
@@ -492,6 +525,74 @@ class _MessageBubbleState extends State<MessageBubble> {
               ),
             );
           },
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildAttachmentsChips(List<DocumentAttachment> attachments) {
+    final iconColor = Theme.of(context).colorScheme.onSurface;
+    final accentColor = Theme.of(context).colorScheme.primary;
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: attachments.map((attachment) {
+        return InkWell(
+          onTap: () {
+            // Open document viewer
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => DocumentViewer(
+                  fileName: attachment.fileName,
+                  markdownContent: attachment.markdownContent,
+                ),
+                fullscreenDialog: true,
+              ),
+            );
+          },
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: accentColor.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: accentColor.withValues(alpha: 0.5),
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.description,
+                    size: 18,
+                    color: iconColor,
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      attachment.fileName,
+                      style: TextStyle(
+                        color: iconColor,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.open_in_new,
+                    size: 14,
+                    color: iconColor.withValues(alpha: 0.7),
+                  ),
+                ],
+              ),
+            ),
+          ),
         );
       }).toList(),
     );

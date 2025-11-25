@@ -13,7 +13,8 @@ import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/services/message_composition_service.dart';
-import 'package:chuk_chat/widgets/message_bubble.dart';
+import 'package:chuk_chat/widgets/message_bubble.dart'
+    show MessageBubble, MessageBubbleAction, DocumentAttachment;
 import 'package:chuk_chat/pages/coming_soon_page.dart';
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
@@ -41,6 +42,7 @@ class _MessageRenderData {
     required this.isReasoningStreaming,
     this.modelLabel,
     this.images,
+    this.attachments,
   });
 
   final String sender;
@@ -49,6 +51,7 @@ class _MessageRenderData {
   final bool isReasoningStreaming;
   final String? modelLabel;
   final List<String>? images;
+  final List<DocumentAttachment>? attachments;
 
   bool get isUser => sender == 'user';
 }
@@ -1192,7 +1195,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     int placeholderIndex = -1;
     setState(() {
-      // Store message with images (if any)
+      // Store message with images and attachments (if any)
       final userMessage = {
         'sender': 'user',
         'text': displayMessageText,
@@ -1200,10 +1203,25 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         'modelId': _selectedModelId,
         'provider': providerSlug,
       };
+
       // Store images as JSON-encoded string if present
       if (imageDataUrls != null && imageDataUrls.isNotEmpty) {
         userMessage['images'] = jsonEncode(imageDataUrls);
       }
+
+      // Store document attachments as JSON-encoded string if present
+      final documentAttachments = _attachedFiles
+          .where((f) => !f.isImage && f.markdownContent != null)
+          .map((f) => {
+                'fileName': f.fileName,
+                'markdownContent': f.markdownContent!,
+              })
+          .toList();
+
+      if (documentAttachments.isNotEmpty) {
+        userMessage['attachments'] = jsonEncode(documentAttachments);
+      }
+
       _messages.add(userMessage);
 
       _controller.clear();
@@ -1979,6 +1997,23 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         }
       }
 
+      // Extract attachments if present (stored as JSON string)
+      List<DocumentAttachment>? attachments;
+      final String? attachmentsJson = raw['attachments'];
+      if (attachmentsJson != null && attachmentsJson.isNotEmpty) {
+        try {
+          final decoded = jsonDecode(attachmentsJson);
+          if (decoded is List) {
+            attachments = decoded
+                .map((item) => DocumentAttachment.fromJson(
+                    item as Map<String, dynamic>))
+                .toList();
+          }
+        } catch (e) {
+          debugPrint('Failed to decode attachments JSON: $e');
+        }
+      }
+
       return _MessageRenderData(
         sender: sender,
         displayText: displayText,
@@ -1988,6 +2023,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             isStreamingMessage && (hasReasoning || displayText.isNotEmpty),
         modelLabel: modelLabel,
         images: images,
+        attachments: attachments,
       );
     });
 
@@ -2115,6 +2151,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                           data.isReasoningStreaming,
                                       modelLabel: data.modelLabel,
                                       images: data.images,
+                                      attachments: data.attachments,
                                       actions: _buildMessageActionsForIndex(
                                         i,
                                         data,

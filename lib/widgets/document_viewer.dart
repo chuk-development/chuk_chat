@@ -114,7 +114,7 @@ class _DocumentViewerState extends State<DocumentViewer> {
         fontSize: 14,
       ),
       decoration: InputDecoration(
-        border: OutlineBorder.none,
+        border: InputBorder.none,
         filled: true,
         fillColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.3),
         contentPadding: const EdgeInsets.all(16),
