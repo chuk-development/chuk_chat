@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
+import 'package:chuk_chat/widgets/image_viewer.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chuk_chat/constants.dart';
@@ -471,31 +472,29 @@ class _MessageBubbleState extends State<MessageBubble> {
     return Wrap(
       spacing: 8,
       runSpacing: 8,
-      children: images.map((imageDataUrl) {
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.memory(
-            _base64ToBytes(imageDataUrl),
-            width: images.length == 1 ? 300 : 150,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) {
-              return Container(
-                width: 150,
-                height: 150,
-                color: Colors.grey.withValues(alpha: 0.3),
-                child: const Icon(Icons.broken_image, size: 48),
-              );
-            },
-          ),
+      children: images.asMap().entries.map((entry) {
+        final int index = entry.key;
+        final String imageDataUrl = entry.value;
+
+        return _HoverableImage(
+          imageDataUrl: imageDataUrl,
+          width: images.length == 1 ? 300 : 150,
+          onTap: () {
+            // Open image viewer with all images
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => ImageViewer(
+                  imageDataUrl: imageDataUrl,
+                  initialIndex: index,
+                  allImages: images,
+                ),
+                fullscreenDialog: true,
+              ),
+            );
+          },
         );
       }).toList(),
     );
-  }
-
-  static Uint8List _base64ToBytes(String dataUrl) {
-    // Remove the data URL prefix (e.g., "data:image/jpeg;base64,")
-    final base64String = dataUrl.split(',').last;
-    return base64Decode(base64String);
   }
 
   Widget _buildMessageBody({
@@ -551,6 +550,85 @@ class _MessageBubbleState extends State<MessageBubble> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: messageWidget,
+    );
+  }
+}
+
+/// Hoverable image widget with click to zoom functionality
+class _HoverableImage extends StatefulWidget {
+  const _HoverableImage({
+    required this.imageDataUrl,
+    required this.width,
+    required this.onTap,
+  });
+
+  final String imageDataUrl;
+  final double width;
+  final VoidCallback onTap;
+
+  @override
+  State<_HoverableImage> createState() => _HoverableImageState();
+}
+
+class _HoverableImageState extends State<_HoverableImage> {
+  bool _isHovering = false;
+
+  Uint8List _base64ToBytes(String dataUrl) {
+    final base64String = dataUrl.split(',').last;
+    return base64Decode(base64String);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: widget.onTap,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _isHovering = true),
+        onExit: (_) => setState(() => _isHovering = false),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Stack(
+            children: [
+              Image.memory(
+                _base64ToBytes(widget.imageDataUrl),
+                width: widget.width,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    width: 150,
+                    height: 150,
+                    color: Colors.grey.withValues(alpha: 0.3),
+                    child: const Icon(Icons.broken_image, size: 48),
+                  );
+                },
+              ),
+              // Hover overlay with zoom icon
+              if (_isHovering)
+                Positioned.fill(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.4),
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        Icons.zoom_in,
+                        color: Colors.white,
+                        size: 48,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black,
+                            blurRadius: 8,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
