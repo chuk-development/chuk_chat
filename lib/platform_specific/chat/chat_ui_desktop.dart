@@ -221,6 +221,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     } else if (index >= 0 && index < ChatStorageService.savedChats.length) {
       final storedChat = ChatStorageService.savedChats[index];
       _activeChatId = storedChat.id;
+      debugPrint('📂 [ChatDebug] Loading chat with ${storedChat.messages.length} messages');
+
       _messages
         ..clear()
         ..addAll(
@@ -235,6 +237,16 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             }
             if (message.provider != null && message.provider!.isNotEmpty) {
               map['provider'] = message.provider!;
+            }
+            // Include images if present
+            if (message.images != null && message.images!.isNotEmpty) {
+              map['images'] = message.images!;
+              debugPrint('🖼️ [ImageDebug] Loading message with images field (${message.images!.length} chars)');
+            }
+            // Include attachments if present
+            if (message.attachments != null && message.attachments!.isNotEmpty) {
+              map['attachments'] = message.attachments!;
+              debugPrint('📄 [AttachmentDebug] Loading message with attachments field');
             }
             return map;
           }),
@@ -1207,6 +1219,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       // Store images as JSON-encoded string if present
       if (imageDataUrls != null && imageDataUrls.isNotEmpty) {
         userMessage['images'] = jsonEncode(imageDataUrls);
+        debugPrint('🖼️ [ImageDebug] Storing ${imageDataUrls.length} images in message');
+        debugPrint('🖼️ [ImageDebug] First image preview: ${imageDataUrls.first.substring(0, 50)}...');
+      } else {
+        debugPrint('🖼️ [ImageDebug] No images to store in this message');
       }
 
       // Store document attachments as JSON-encoded string if present
@@ -1220,9 +1236,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
       if (documentAttachments.isNotEmpty) {
         userMessage['attachments'] = jsonEncode(documentAttachments);
+        debugPrint('📄 [AttachmentDebug] Storing ${documentAttachments.length} attachments');
       }
 
       _messages.add(userMessage);
+      debugPrint('💾 [MessageDebug] Message added to _messages list. Total messages: ${_messages.length}');
 
       _controller.clear();
       _isSending = true;
@@ -1986,15 +2004,28 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       // Extract images if present (stored as JSON string)
       List<String>? images;
       final String? imagesJson = raw['images'];
+      debugPrint('🖼️ [ImageDebug] Message $index - Checking for images...');
+      debugPrint('🖼️ [ImageDebug] Raw images field: ${imagesJson != null ? "EXISTS (${imagesJson.length} chars)" : "NULL"}');
+
       if (imagesJson != null && imagesJson.isNotEmpty) {
         try {
           final decoded = jsonDecode(imagesJson);
+          debugPrint('🖼️ [ImageDebug] JSON decoded successfully, type: ${decoded.runtimeType}');
           if (decoded is List) {
             images = decoded.cast<String>();
+            debugPrint('🖼️ [ImageDebug] ✅ Extracted ${images.length} images from message $index');
+            if (images.isNotEmpty) {
+              debugPrint('🖼️ [ImageDebug] First image preview: ${images.first.substring(0, 50)}...');
+            }
+          } else {
+            debugPrint('🖼️ [ImageDebug] ❌ Decoded value is not a List: $decoded');
           }
         } catch (e) {
-          debugPrint('Failed to decode images JSON: $e');
+          debugPrint('🖼️ [ImageDebug] ❌ Failed to decode images JSON: $e');
+          debugPrint('🖼️ [ImageDebug] Raw JSON: ${imagesJson.substring(0, imagesJson.length > 100 ? 100 : imagesJson.length)}');
         }
+      } else {
+        debugPrint('🖼️ [ImageDebug] No images in message $index');
       }
 
       // Extract attachments if present (stored as JSON string)
@@ -2008,9 +2039,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 .map((item) => DocumentAttachment.fromJson(
                     item as Map<String, dynamic>))
                 .toList();
+            debugPrint('📄 [AttachmentDebug] Extracted ${attachments.length} attachments from message $index');
           }
         } catch (e) {
-          debugPrint('Failed to decode attachments JSON: $e');
+          debugPrint('📄 [AttachmentDebug] Failed to decode attachments JSON: $e');
         }
       }
 
