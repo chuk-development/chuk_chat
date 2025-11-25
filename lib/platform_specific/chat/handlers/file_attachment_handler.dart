@@ -1,5 +1,6 @@
 // lib/platform_specific/chat/handlers/file_attachment_handler.dart
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
@@ -7,6 +8,7 @@ import 'package:uuid/uuid.dart';
 import 'package:chuk_chat/constants/file_constants.dart';
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart';
+import 'package:chuk_chat/services/image_storage_service.dart';
 
 /// Handles file and image attachments
 class FileAttachmentHandler {
@@ -28,9 +30,14 @@ class FileAttachmentHandler {
   }
 
   /// Pick image from camera or gallery
-  Future<void> pickImageFromSource(ImageSource source, {required bool supportsImages}) async {
+  Future<void> pickImageFromSource(
+    ImageSource source, {
+    required bool supportsImages,
+  }) async {
     if (!supportsImages) {
-      onError?.call('Image uploads are not supported by the selected model. Choose a vision-capable model in Settings.');
+      onError?.call(
+        'Image uploads are not supported by the selected model. Choose a vision-capable model in Settings.',
+      );
       return;
     }
 
@@ -54,7 +61,9 @@ class FileAttachmentHandler {
         supportsImages: supportsImages,
       );
     } catch (error) {
-      final String sourceName = source == ImageSource.camera ? 'camera' : 'photo picker';
+      final String sourceName = source == ImageSource.camera
+          ? 'camera'
+          : 'photo picker';
       onError?.call('Unable to open $sourceName: $error');
     }
   }
@@ -62,7 +71,9 @@ class FileAttachmentHandler {
   /// Pick multiple images from gallery
   Future<void> pickImagesFromGallery({required bool supportsImages}) async {
     if (!supportsImages) {
-      onError?.call('Image uploads are not supported by the selected model. Choose a vision-capable model in Settings.');
+      onError?.call(
+        'Image uploads are not supported by the selected model. Choose a vision-capable model in Settings.',
+      );
       return;
     }
 
@@ -75,7 +86,9 @@ class FileAttachmentHandler {
       for (final XFile image in pickedImages) {
         final File file = File(image.path);
         final int fileSize = await image.length();
-        final String fileName = image.name.isNotEmpty ? image.name : image.path.split('/').last;
+        final String fileName = image.name.isNotEmpty
+            ? image.name
+            : image.path.split('/').last;
         await _handleFileAttachment(
           file: file,
           fileName: fileName,
@@ -90,7 +103,8 @@ class FileAttachmentHandler {
 
   /// Upload files using file picker
   Future<void> uploadFiles({required bool supportsImages}) async {
-    if (_attachedFiles.where((f) => f.isUploading).length >= FileConstants.maxConcurrentUploads) {
+    if (_attachedFiles.where((f) => f.isUploading).length >=
+        FileConstants.maxConcurrentUploads) {
       onError?.call('Please wait for current uploads to complete');
       return;
     }
@@ -129,12 +143,15 @@ class FileAttachmentHandler {
         ? fileName.split('.').last.toLowerCase()
         : '';
 
-    if (fileSizeBytes > FileConstants.maxFileSizeBytes) {
+    // Skip size check for images - they'll be compressed automatically (no size limit)
+    if (!_isImageExtension(extension) &&
+        fileSizeBytes > FileConstants.maxFileSizeBytes) {
       onError?.call('File "$fileName" exceeds 10MB limit');
       return;
     }
 
-    if (extension.isEmpty || !FileConstants.allowedExtensions.contains(extension)) {
+    if (extension.isEmpty ||
+        !FileConstants.allowedExtensions.contains(extension)) {
       final String detail = extension.isEmpty ? '' : ': .$extension';
       onError?.call('Unsupported file type for "$fileName"$detail');
       return;
@@ -145,12 +162,17 @@ class FileAttachmentHandler {
       return;
     }
 
-    if (_attachedFiles.where((f) => f.isUploading).length >= FileConstants.maxConcurrentUploads) {
-      onError?.call('Skipping "$fileName": too many concurrent uploads. Try again soon.');
+    if (_attachedFiles.where((f) => f.isUploading).length >=
+        FileConstants.maxConcurrentUploads) {
+      onError?.call(
+        'Skipping "$fileName": too many concurrent uploads. Try again soon.',
+      );
       return;
     }
 
     final String fileId = _uuid.v4();
+    final bool isImage = _isImageExtension(extension);
+
     _attachedFiles.add(
       AttachedFile(
         id: fileId,
@@ -158,11 +180,59 @@ class FileAttachmentHandler {
         isUploading: true,
         localPath: file.path,
         fileSizeBytes: fileSizeBytes,
+        isImage: isImage,
       ),
     );
     onUpdate?.call();
 
-    _chatApiService.performFileUpload(file, fileName, fileId);
+    // Handle images differently - compress, encrypt, and upload to storage
+    if (isImage) {
+      _uploadEncryptedImage(file, fileName, fileId);
+    } else {
+      _chatApiService.performFileUpload(file, fileName, fileId);
+    }
+  }
+
+  /// Upload image with compression and encryption
+  Future<void> _uploadEncryptedImage(
+    File file,
+    String fileName,
+    String fileId,
+  ) async {
+    try {
+      // Read image bytes
+      final Uint8List imageBytes = await file.readAsBytes();
+
+      // Upload to encrypted storage (compression + encryption happens inside)
+      final String storagePath = await ImageStorageService.uploadEncryptedImage(
+        imageBytes,
+      );
+
+      // Update the attached file with the storage path
+      int index = _attachedFiles.indexWhere((f) => f.id == fileId);
+      if (index != -1) {
+        _attachedFiles[index] = _attachedFiles[index].copyWith(
+          encryptedImagePath: storagePath,
+          isUploading: false,
+          // Don't set markdownContent for images - they'll be sent separately
+        );
+        onUpdate?.call();
+      }
+
+      debugPrint(
+        'Image "$fileName" uploaded and encrypted successfully: $storagePath',
+      );
+    } catch (error) {
+      debugPrint('Failed to upload encrypted image "$fileName": $error');
+      onError?.call('Failed to upload image "$fileName": $error');
+
+      // Remove failed upload
+      int index = _attachedFiles.indexWhere((f) => f.id == fileId);
+      if (index != -1) {
+        _attachedFiles.removeAt(index);
+        onUpdate?.call();
+      }
+    }
   }
 
   bool _isImageExtension(String extension) {

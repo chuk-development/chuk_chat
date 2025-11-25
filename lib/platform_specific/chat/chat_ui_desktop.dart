@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:math' as math; // For min/max
 import 'dart:async';
+import 'dart:convert';
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/models/chat_stream_event.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
@@ -19,6 +20,7 @@ import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart'; // NEW
 import 'package:chuk_chat/services/websocket_chat_service.dart';
 import 'package:chuk_chat/services/streaming_manager.dart';
+import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/constants/file_constants.dart';
 import 'package:chuk_chat/pages/pricing_page.dart';
 
@@ -38,6 +40,7 @@ class _MessageRenderData {
     required this.reasoning,
     required this.isReasoningStreaming,
     this.modelLabel,
+    this.images,
   });
 
   final String sender;
@@ -45,6 +48,7 @@ class _MessageRenderData {
   final String reasoning;
   final bool isReasoningStreaming;
   final String? modelLabel;
+  final List<String>? images;
 
   bool get isUser => sender == 'user';
 }
@@ -1178,22 +1182,30 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     final String providerSlug = result.providerSlug!;
     final int maxResponseTokens = result.maxResponseTokens!;
     final String? systemPrompt = result.effectiveSystemPrompt;
+    final List<String>? imageDataUrls = result.images;
 
     final bool hasAttachments = _attachedFiles.any(
-      (f) => f.markdownContent != null,
+      (f) => f.markdownContent != null || f.encryptedImagePath != null,
     );
 
     final bool firstMessageInChat = _messages.isEmpty;
 
     int placeholderIndex = -1;
     setState(() {
-      _messages.add({
+      // Store message with images (if any)
+      final userMessage = {
         'sender': 'user',
         'text': displayMessageText,
         'reasoning': '',
         'modelId': _selectedModelId,
         'provider': providerSlug,
-      });
+      };
+      // Store images as JSON-encoded string if present
+      if (imageDataUrls != null && imageDataUrls.isNotEmpty) {
+        userMessage['images'] = jsonEncode(imageDataUrls);
+      }
+      _messages.add(userMessage);
+
       _controller.clear();
       _isSending = true;
       if (hasAttachments) {
@@ -1232,6 +1244,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         history: apiHistory.isEmpty ? null : apiHistory,
         systemPrompt: systemPrompt,
         maxTokens: maxResponseTokens,
+        images: imageDataUrls,
       );
 
       // Start auto-save timer during streaming
@@ -1584,8 +1597,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       final String fileName = file.path.split(Platform.pathSeparator).last;
       final String fileExtension = fileName.split('.').last.toLowerCase();
 
-      // Check file size
-      if (fileSize > maxFileSize) {
+      // Check if it's an image
+      final isImage = FileConstants.imageExtensions.contains(fileExtension);
+
+      // Check file size (skip for images - they'll be compressed automatically with no size limit)
+      if (!isImage && fileSize > maxFileSize) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -1698,16 +1714,78 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             isUploading: true,
             localPath: file.path,
             fileSizeBytes: fileSize,
+            isImage: isImage,
           ),
         );
       });
       _scrollChatToBottom(); // Scroll to ensure attachment bar is visible
 
-      _chatApiService.performFileUpload(
-        file,
-        fileName,
-        fileId,
-      ); // Use the service
+      // Handle images differently - compress, encrypt, and upload to storage
+      if (isImage) {
+        _uploadEncryptedImage(file, fileName, fileId);
+      } else {
+        _chatApiService.performFileUpload(file, fileName, fileId);
+      }
+    }
+  }
+
+  /// Upload image with compression and encryption
+  Future<void> _uploadEncryptedImage(
+    File file,
+    String fileName,
+    String fileId,
+  ) async {
+    try {
+      // Read image bytes
+      final Uint8List imageBytes = await file.readAsBytes();
+
+      // Upload to encrypted storage (compression + encryption happens inside)
+      final String storagePath = await ImageStorageService.uploadEncryptedImage(
+        imageBytes,
+      );
+
+      // Update the attached file with the storage path
+      setState(() {
+        final int index = _attachedFiles.indexWhere((f) => f.id == fileId);
+        if (index != -1) {
+          _attachedFiles[index] = _attachedFiles[index].copyWith(
+            encryptedImagePath: storagePath,
+            isUploading: false,
+            // Don't set markdownContent for images - they'll be sent separately
+          );
+        }
+      });
+
+      debugPrint(
+        'Image "$fileName" uploaded and encrypted successfully: $storagePath',
+      );
+    } catch (error) {
+      debugPrint('Failed to upload encrypted image "$fileName": $error');
+
+      // Show error snackbar
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Failed to upload image "$fileName": $error',
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            duration: const Duration(seconds: 3),
+            dismissDirection: DismissDirection.horizontal,
+          ),
+        );
+      }
+
+      // Remove failed upload
+      setState(() {
+        _attachedFiles.removeWhere((f) => f.id == fileId);
+      });
     }
   }
 
@@ -1886,6 +1964,21 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       final String? modelLabel = isAiMessage
           ? _formatModelInfo(raw['modelId'], raw['provider'])
           : null;
+
+      // Extract images if present (stored as JSON string)
+      List<String>? images;
+      final String? imagesJson = raw['images'];
+      if (imagesJson != null && imagesJson.isNotEmpty) {
+        try {
+          final decoded = jsonDecode(imagesJson);
+          if (decoded is List) {
+            images = decoded.cast<String>();
+          }
+        } catch (e) {
+          debugPrint('Failed to decode images JSON: $e');
+        }
+      }
+
       return _MessageRenderData(
         sender: sender,
         displayText: displayText,
@@ -1894,6 +1987,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         isReasoningStreaming:
             isStreamingMessage && (hasReasoning || displayText.isNotEmpty),
         modelLabel: modelLabel,
+        images: images,
       );
     });
 
@@ -2020,6 +2114,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                       isReasoningStreaming:
                                           data.isReasoningStreaming,
                                       modelLabel: data.modelLabel,
+                                      images: data.images,
                                       actions: _buildMessageActionsForIndex(
                                         i,
                                         data,
@@ -2035,7 +2130,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                       onCancelEdit: isBeingEdited
                                           ? _cancelEditMessage
                                           : null,
-                                      showReasoningTokens: widget.showReasoningTokens,
+                                      showReasoningTokens:
+                                          widget.showReasoningTokens,
                                       showModelInfo: widget.showModelInfo,
                                     ),
                                   );
@@ -2211,7 +2307,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                           padding: EdgeInsets.all(8.0),
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.black,
+                            ),
                           ),
                         )
                       : Icon(
@@ -2309,7 +2407,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                   padding: EdgeInsets.all(8.0),
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.black,
+                                    ),
                                   ),
                                 )
                               : const Icon(Icons.send, color: Colors.black),

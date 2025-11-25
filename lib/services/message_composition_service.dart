@@ -1,7 +1,9 @@
 // lib/services/message_composition_service.dart
+import 'dart:convert';
 import 'dart:math' as math;
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/utils/input_validator.dart';
 import 'package:chuk_chat/utils/token_estimator.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
@@ -17,6 +19,7 @@ class MessageCompositionResult {
   final String? providerSlug;
   final int? maxResponseTokens;
   final String? effectiveSystemPrompt;
+  final List<String>? images;
 
   const MessageCompositionResult({
     required this.isValid,
@@ -27,13 +30,11 @@ class MessageCompositionResult {
     this.providerSlug,
     this.maxResponseTokens,
     this.effectiveSystemPrompt,
+    this.images,
   });
 
   factory MessageCompositionResult.error(String message) {
-    return MessageCompositionResult(
-      isValid: false,
-      errorMessage: message,
-    );
+    return MessageCompositionResult(isValid: false, errorMessage: message);
   }
 
   factory MessageCompositionResult.success({
@@ -43,6 +44,7 @@ class MessageCompositionResult {
     required String providerSlug,
     required int maxResponseTokens,
     String? effectiveSystemPrompt,
+    List<String>? images,
   }) {
     return MessageCompositionResult(
       isValid: true,
@@ -52,6 +54,7 @@ class MessageCompositionResult {
       providerSlug: providerSlug,
       maxResponseTokens: maxResponseTokens,
       effectiveSystemPrompt: effectiveSystemPrompt,
+      images: images,
     );
   }
 }
@@ -71,7 +74,9 @@ class MessageCompositionService {
   }) async {
     // Validate message length
     if (userInput.isNotEmpty) {
-      final validationResult = InputValidator.validateAndSanitizeMessage(userInput);
+      final validationResult = InputValidator.validateAndSanitizeMessage(
+        userInput,
+      );
       if (!validationResult['valid']) {
         return MessageCompositionResult.error(
           validationResult['error'] ?? 'Invalid input',
@@ -82,7 +87,7 @@ class MessageCompositionService {
     // Check if there's content to send
     final bool hasText = userInput.isNotEmpty;
     final bool hasAttachments = attachedFiles.any(
-      (f) => f.markdownContent != null,
+      (f) => f.markdownContent != null || f.encryptedImagePath != null,
     );
 
     if (!hasText && !hasAttachments) {
@@ -90,13 +95,14 @@ class MessageCompositionService {
     }
 
     // Build display message and AI prompt with attachments
-    final messageContent = _buildMessageContent(
+    final messageContent = await _buildMessageContent(
       userInput: userInput,
       attachedFiles: attachedFiles,
     );
 
     // Refresh session and get access token
-    final session = await SupabaseService.refreshSession() ??
+    final session =
+        await SupabaseService.refreshSession() ??
         SupabaseService.auth.currentSession;
 
     if (session == null) {
@@ -146,56 +152,125 @@ class MessageCompositionService {
       providerSlug: providerSlug,
       maxResponseTokens: tokenLimits.maxResponseTokens!,
       effectiveSystemPrompt: effectiveSystemPrompt,
+      images: messageContent.images.isNotEmpty ? messageContent.images : null,
     );
   }
 
   /// Build message content with attachments
-  static _MessageContent _buildMessageContent({
+  static Future<_MessageContent> _buildMessageContent({
     required String userInput,
     required List<AttachedFile> attachedFiles,
-  }) {
+  }) async {
     String displayMessageText = userInput;
     String aiPromptContent = userInput;
 
     final bool hasAttachments = attachedFiles.any(
-      (f) => f.markdownContent != null,
+      (f) => f.markdownContent != null || f.encryptedImagePath != null,
     );
 
     if (hasAttachments) {
-      // Build display message with attachment names
-      final attachedFileNames = attachedFiles
-          .where((f) => f.markdownContent != null)
-          .map((f) {
-            final sanitized = InputValidator.sanitizeFileName(f.fileName);
-            final escaped = InputValidator.escapeFileNameForDisplay(sanitized);
-            return '"$escaped"';
-          })
-          .join(', ');
+      // Separate images from documents
+      final imageFiles = attachedFiles
+          .where((f) => f.isImage && f.encryptedImagePath != null)
+          .toList();
+      final documentFiles = attachedFiles
+          .where((f) => !f.isImage && f.markdownContent != null)
+          .toList();
 
-      final String attachmentsLine = 'Uploaded documents: $attachedFileNames';
-      if (displayMessageText.isNotEmpty) {
-        displayMessageText = '$attachmentsLine\n\n$displayMessageText';
-      } else {
-        displayMessageText = attachmentsLine;
+      // Build display message with attachment names
+      final attachmentNames = <String>[];
+      if (imageFiles.isNotEmpty) {
+        final imageNames = imageFiles
+            .map((f) {
+              final sanitized = InputValidator.sanitizeFileName(f.fileName);
+              final escaped = InputValidator.escapeFileNameForDisplay(
+                sanitized,
+              );
+              return '"$escaped"';
+            })
+            .join(', ');
+        attachmentNames.add('Images: $imageNames');
+      }
+      if (documentFiles.isNotEmpty) {
+        final docNames = documentFiles
+            .map((f) {
+              final sanitized = InputValidator.sanitizeFileName(f.fileName);
+              final escaped = InputValidator.escapeFileNameForDisplay(
+                sanitized,
+              );
+              return '"$escaped"';
+            })
+            .join(', ');
+        attachmentNames.add('Documents: $docNames');
       }
 
-      // Build AI prompt with full attachment content
-      final markdownSections = attachedFiles
-          .where((f) => f.markdownContent != null)
-          .map(
-            (f) {
+      if (attachmentNames.isNotEmpty) {
+        final String attachmentsLine = attachmentNames.join(', ');
+        if (displayMessageText.isNotEmpty) {
+          displayMessageText = '$attachmentsLine\n\n$displayMessageText';
+        } else {
+          displayMessageText = attachmentsLine;
+        }
+      }
+
+      // Build AI prompt with attachments
+      final promptParts = <String>[];
+      final imageDataUrls = <String>[];
+
+      // Prepare encrypted images as base64 data URLs
+      if (imageFiles.isNotEmpty) {
+        for (final imageFile in imageFiles) {
+          try {
+            // Download and decrypt image
+            final imageBytes =
+                await ImageStorageService.downloadAndDecryptImage(
+                  imageFile.encryptedImagePath!,
+                );
+            // Convert to base64 data URL (JPEG format)
+            final base64Image = base64Encode(imageBytes);
+            final dataUrl = 'data:image/jpeg;base64,$base64Image';
+            imageDataUrls.add(dataUrl);
+          } catch (e) {
+            debugPrint(
+              'Failed to load encrypted image ${imageFile.fileName}: $e',
+            );
+            // Skip failed images
+          }
+        }
+      }
+
+      // Add documents with markdown content
+      if (documentFiles.isNotEmpty) {
+        final markdownSections = documentFiles
+            .map((f) {
               final sanitized = InputValidator.sanitizeFileName(f.fileName);
-              final escaped = InputValidator.escapeFileNameForDisplay(sanitized);
+              final escaped = InputValidator.escapeFileNameForDisplay(
+                sanitized,
+              );
               return 'Document: "$escaped"\n```\n${f.markdownContent}\n```';
-            },
-          )
-          .join('\n\n');
+            })
+            .join('\n\n');
+        promptParts.add(markdownSections);
+      }
 
       final String queryText = userInput.isNotEmpty
           ? userInput
-          : 'Please review the uploaded documents.';
+          : (imageFiles.isNotEmpty
+                ? 'Please describe these images.'
+                : 'Please review the uploaded documents.');
 
-      aiPromptContent = '$markdownSections\n\nUser query: $queryText';
+      if (promptParts.isNotEmpty) {
+        aiPromptContent =
+            '${promptParts.join('\n\n')}\n\nUser query: $queryText';
+      } else {
+        aiPromptContent = queryText;
+      }
+
+      return _MessageContent(
+        displayText: displayMessageText,
+        aiPromptContent: aiPromptContent,
+        images: imageDataUrls,
+      );
     }
 
     return _MessageContent(
@@ -237,7 +312,8 @@ class MessageCompositionService {
 
       // Calculate max response tokens
       final int availableForCompletion = contextLength - promptTokens;
-      final int completionCap = providerLimits.maxCompletionTokens != null &&
+      final int completionCap =
+          providerLimits.maxCompletionTokens != null &&
               providerLimits.maxCompletionTokens! > 0
           ? providerLimits.maxCompletionTokens!
           : math.max(256, contextLength ~/ 4);
@@ -255,7 +331,9 @@ class MessageCompositionService {
       }
     } else {
       if (kDebugMode) {
-        debugPrint('Prompt tokens (est): $promptTokens (no context limit data)');
+        debugPrint(
+          'Prompt tokens (est): $promptTokens (no context limit data)',
+        );
       }
     }
 
@@ -267,10 +345,12 @@ class MessageCompositionService {
 class _MessageContent {
   final String displayText;
   final String aiPromptContent;
+  final List<String> images;
 
   const _MessageContent({
     required this.displayText,
     required this.aiPromptContent,
+    this.images = const [],
   });
 }
 
@@ -287,16 +367,10 @@ class _TokenLimits {
   });
 
   factory _TokenLimits.error(String message) {
-    return _TokenLimits(
-      isValid: false,
-      errorMessage: message,
-    );
+    return _TokenLimits(isValid: false, errorMessage: message);
   }
 
   factory _TokenLimits.success(int maxResponseTokens) {
-    return _TokenLimits(
-      isValid: true,
-      maxResponseTokens: maxResponseTokens,
-    );
+    return _TokenLimits(isValid: true, maxResponseTokens: maxResponseTokens);
   }
 }

@@ -6,7 +6,8 @@
 class FileConstants {
   FileConstants._();
 
-  /// Maximum file size allowed for uploads (10MB)
+  /// Maximum file size allowed for non-image uploads (10MB)
+  /// Note: Images have no size limit - they are automatically compressed to WebP format
   static const int maxFileSizeBytes = 10 * 1024 * 1024;
 
   /// Maximum number of concurrent file uploads

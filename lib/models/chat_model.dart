@@ -44,6 +44,10 @@ class AttachedFile {
   final bool isUploading;
   final String? localPath; // Local file system path when available
   final int? fileSizeBytes; // File size in bytes, used for UI display
+  final String?
+  encryptedImagePath; // Storage path for encrypted images (e.g., "userId/fileId.enc")
+  final bool
+  isImage; // Whether this is an image file (stored in encrypted storage)
 
   AttachedFile({
     required this.id,
@@ -52,6 +56,8 @@ class AttachedFile {
     this.isUploading = false,
     this.localPath,
     this.fileSizeBytes,
+    this.encryptedImagePath,
+    this.isImage = false,
   });
 
   AttachedFile copyWith({
@@ -59,6 +65,8 @@ class AttachedFile {
     bool? isUploading,
     String? localPath,
     int? fileSizeBytes,
+    String? encryptedImagePath,
+    bool? isImage,
   }) {
     return AttachedFile(
       id: id,
@@ -67,6 +75,36 @@ class AttachedFile {
       isUploading: isUploading ?? this.isUploading,
       localPath: localPath ?? this.localPath,
       fileSizeBytes: fileSizeBytes ?? this.fileSizeBytes,
+      encryptedImagePath: encryptedImagePath ?? this.encryptedImagePath,
+      isImage: isImage ?? this.isImage,
+    );
+  }
+
+  /// Converts AttachedFile to JSON for storage
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'fileName': fileName,
+      'markdownContent': markdownContent,
+      'isUploading': isUploading,
+      'localPath': localPath,
+      'fileSizeBytes': fileSizeBytes,
+      'encryptedImagePath': encryptedImagePath,
+      'isImage': isImage,
+    };
+  }
+
+  /// Creates AttachedFile from JSON
+  factory AttachedFile.fromJson(Map<String, dynamic> json) {
+    return AttachedFile(
+      id: json['id'] as String,
+      fileName: json['fileName'] as String,
+      markdownContent: json['markdownContent'] as String?,
+      isUploading: json['isUploading'] as bool? ?? false,
+      localPath: json['localPath'] as String?,
+      fileSizeBytes: json['fileSizeBytes'] as int?,
+      encryptedImagePath: json['encryptedImagePath'] as String?,
+      isImage: json['isImage'] as bool? ?? false,
     );
   }
 }

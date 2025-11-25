@@ -41,12 +41,16 @@ class WebSocketChatService {
     String? systemPrompt,
     int maxTokens = 512,
     double temperature = 0.7,
+    List<String>? images,
   }) async* {
     WebSocketChannel? channel;
 
     try {
       // Validate token before use
-      final tokenError = SecureTokenHandler.validateTokenForRequest(accessToken, context: 'WebSocket chat');
+      final tokenError = SecureTokenHandler.validateTokenForRequest(
+        accessToken,
+        context: 'WebSocket chat',
+      );
       if (tokenError != null) {
         yield ChatStreamEvent.error(tokenError);
         return;
@@ -68,7 +72,9 @@ class WebSocketChatService {
         debugPrint('  - Max Tokens: $maxTokens');
         debugPrint('  - Temperature: $temperature');
         debugPrint('  - History: ${history?.length ?? 0} messages');
-        debugPrint('  - System Prompt: ${systemPrompt != null ? '${systemPrompt.length} chars' : 'none'}');
+        debugPrint(
+          '  - System Prompt: ${systemPrompt != null ? '${systemPrompt.length} chars' : 'none'}',
+        );
       }
 
       // Connect to WebSocket
@@ -95,6 +101,10 @@ class WebSocketChatService {
 
       if (systemPrompt != null && systemPrompt.isNotEmpty) {
         requestPayload['system_prompt'] = systemPrompt;
+      }
+
+      if (images != null && images.isNotEmpty) {
+        requestPayload['images'] = images;
       }
 
       // Send the request
@@ -126,11 +136,15 @@ class WebSocketChatService {
 
             if (data.containsKey('done') && data['done'] == true) {
               if (kDebugMode) {
-                debugPrint('═══════════════════════════════════════════════════════════');
+                debugPrint(
+                  '═══════════════════════════════════════════════════════════',
+                );
                 debugPrint('✅ WEBSOCKET STREAM COMPLETED');
                 debugPrint('Provider: $providerSlug');
                 debugPrint('Model: $modelId');
-                debugPrint('═══════════════════════════════════════════════════════════');
+                debugPrint(
+                  '═══════════════════════════════════════════════════════════',
+                );
               }
               yield const ChatStreamEvent.done();
               break;
@@ -145,9 +159,7 @@ class WebSocketChatService {
                 data['usage'] as Map<String, dynamic>,
               );
             } else if (data.containsKey('meta')) {
-              yield ChatStreamEvent.meta(
-                data['meta'] as Map<String, dynamic>,
-              );
+              yield ChatStreamEvent.meta(data['meta'] as Map<String, dynamic>);
             }
           } catch (e) {
             if (kDebugMode) {
@@ -159,23 +171,31 @@ class WebSocketChatService {
       }
     } on WebSocketChannelException catch (e) {
       if (kDebugMode) {
-        debugPrint('═══════════════════════════════════════════════════════════');
+        debugPrint(
+          '═══════════════════════════════════════════════════════════',
+        );
         debugPrint('❌ WEBSOCKET ERROR');
         debugPrint('Provider: $providerSlug');
         debugPrint('Model: $modelId');
         debugPrint('Error: $e');
-        debugPrint('═══════════════════════════════════════════════════════════');
+        debugPrint(
+          '═══════════════════════════════════════════════════════════',
+        );
       }
       throw WebSocketChatException('WebSocket connection failed: $e');
     } catch (e, stackTrace) {
       if (kDebugMode) {
-        debugPrint('═══════════════════════════════════════════════════════════');
+        debugPrint(
+          '═══════════════════════════════════════════════════════════',
+        );
         debugPrint('❌ WEBSOCKET ERROR');
         debugPrint('Provider: $providerSlug');
         debugPrint('Model: $modelId');
         debugPrint('Error: $e');
         debugPrint('Stack Trace: $stackTrace');
-        debugPrint('═══════════════════════════════════════════════════════════');
+        debugPrint(
+          '═══════════════════════════════════════════════════════════',
+        );
       }
       throw WebSocketChatException('WebSocket streaming failed: $e');
     } finally {

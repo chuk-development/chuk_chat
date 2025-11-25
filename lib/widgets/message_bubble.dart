@@ -1,4 +1,6 @@
 // lib/widgets/message_bubble.dart
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
@@ -37,6 +39,7 @@ class MessageBubble extends StatefulWidget {
     this.onCancelEdit,
     this.showReasoningTokens,
     this.showModelInfo,
+    this.images,
   });
 
   final String message;
@@ -54,6 +57,7 @@ class MessageBubble extends StatefulWidget {
   final VoidCallback? onCancelEdit;
   final bool? showReasoningTokens;
   final bool? showModelInfo;
+  final List<String>? images; // Base64 data URLs of images
 
   @override
   State<MessageBubble> createState() => _MessageBubbleState();
@@ -273,6 +277,11 @@ class _MessageBubbleState extends State<MessageBubble> {
             if (_isModelInfoExpanded)
               _buildModelInfoBox(iconFgColor, alignRight),
           ],
+          // Display images above the text message
+          if (widget.images != null && widget.images!.isNotEmpty) ...[
+            _buildImagesGrid(widget.images!),
+            const SizedBox(height: 8),
+          ],
           _buildMessageBody(
             iconFgColor: iconFgColor,
             accentColor: accentColor,
@@ -456,6 +465,37 @@ class _MessageBubbleState extends State<MessageBubble> {
         ],
       ),
     );
+  }
+
+  Widget _buildImagesGrid(List<String> images) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: images.map((imageDataUrl) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.memory(
+            _base64ToBytes(imageDataUrl),
+            width: images.length == 1 ? 300 : 150,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              return Container(
+                width: 150,
+                height: 150,
+                color: Colors.grey.withValues(alpha: 0.3),
+                child: const Icon(Icons.broken_image, size: 48),
+              );
+            },
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  static Uint8List _base64ToBytes(String dataUrl) {
+    // Remove the data URL prefix (e.g., "data:image/jpeg;base64,")
+    final base64String = dataUrl.split(',').last;
+    return base64Decode(base64String);
   }
 
   Widget _buildMessageBody({
