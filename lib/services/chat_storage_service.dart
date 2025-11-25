@@ -277,7 +277,7 @@ class ChatStorageService {
   }
 
   static Future<StoredChat?> saveChat(
-    List<Map<String, String>> messagesMaps, {
+    List<Map<String, dynamic>> messagesMaps, {
     String? chatId,
   }) async {
     debugPrint('💾 [ChatStorage] saveChat called with ${messagesMaps.length} messages, chatId=$chatId');
@@ -357,7 +357,7 @@ class ChatStorageService {
 
   static Future<StoredChat?> updateChat(
     String chatId,
-    List<Map<String, String>> messagesMaps,
+    List<Map<String, dynamic>> messagesMaps,
   ) async {
     debugPrint('🔄 [ChatStorage] updateChat called for chatId=$chatId with ${messagesMaps.length} messages');
 
@@ -604,18 +604,18 @@ class ChatStorageService {
   }
 
   static List<ChatMessage> _mapToChatMessages(
-    List<Map<String, String>> messagesMaps,
+    List<Map<String, dynamic>> messagesMaps,
   ) {
     return messagesMaps
         .map(
           (entry) => ChatMessage(
-            sender: entry['sender'] ?? 'user',
-            text: entry['text'] ?? '',
-            reasoning: entry['reasoning'] ?? '',
-            modelId: entry['modelId'],
-            provider: entry['provider'],
-            images: entry['images'],
-            attachments: entry['attachments'],
+            sender: entry['sender'] as String? ?? 'user',
+            text: entry['text'] as String? ?? '',
+            reasoning: entry['reasoning'] as String? ?? '',
+            modelId: entry['modelId'] as String?,
+            provider: entry['provider'] as String?,
+            images: entry['images'] as String?,
+            attachments: entry['attachments'] as String?,
           ),
         )
         .where((message) {

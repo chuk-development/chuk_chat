@@ -1874,8 +1874,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   Future<void> _persistChat({bool waitForCompletion = false}) async {
     if (_messages.isEmpty) return;
+    // Use Map.from() instead of Map<String, String>.from() to preserve all field types
+    // This ensures images (String) and attachments (String) fields are not lost
     final messagesCopy = _messages
-        .map((message) => Map<String, String>.from(message))
+        .map((message) => Map<String, dynamic>.from(message))
         .toList(growable: false);
     final operation = _persistChatInternal(messagesCopy, _activeChatId);
     if (waitForCompletion) {
@@ -1886,7 +1888,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   }
 
   Future<void> _persistChatInternal(
-    List<Map<String, String>> messagesCopy,
+    List<Map<String, dynamic>> messagesCopy,
     String? chatId,
   ) async {
     try {
@@ -1897,12 +1899,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       setState(() {
         _activeChatId = stored.id;
       });
-      final index = ChatStorageService.savedChats.indexWhere(
-        (chat) => chat.id == stored.id,
-      );
-      if (index != -1) {
-        ChatStorageService.selectedChatIndex = index;
-      }
+      // Don't update selectedChatIndex here - it causes navigation bugs
+      // when user switches chats. Let the UI manage selectedChatIndex.
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
