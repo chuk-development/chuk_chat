@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:chuk_chat/model_selector_page.dart';
 import 'package:chuk_chat/pages/theme_page.dart';
+import 'package:chuk_chat/pages/customization_page.dart';
 import 'package:chuk_chat/pages/account_settings_page.dart';
 import 'package:chuk_chat/pages/about_page.dart';
 import 'package:chuk_chat/pages/pricing_page.dart';
@@ -38,6 +39,10 @@ class SettingsPage extends StatelessWidget {
   final bool showModelInfo;
   final Function(bool) setShowModelInfo;
 
+  // Customization preferences
+  final bool autoSendVoiceTranscription;
+  final Function(bool) setAutoSendVoiceTranscription;
+
   const SettingsPage({
     super.key,
     required this.currentThemeMode,
@@ -54,6 +59,8 @@ class SettingsPage extends StatelessWidget {
     required this.setShowReasoningTokens,
     required this.showModelInfo,
     required this.setShowModelInfo,
+    required this.autoSendVoiceTranscription,
+    required this.setAutoSendVoiceTranscription,
   });
 
   @override
@@ -96,6 +103,29 @@ class SettingsPage extends StatelessWidget {
                     setBgColor: setBgColor,
                     grainEnabled: grainEnabled,
                     setGrainEnabled: setGrainEnabled,
+                  ),
+                ),
+              );
+            },
+            accentColor: accent,
+            iconFgColor: iconFg,
+            bgColor: scaffoldBg,
+          ),
+          const SizedBox(height: 16),
+
+          // Customization Settings
+          _buildSettingsCard(
+            context,
+            title: 'Customization',
+            subtitle: 'Configure app behavior and preferences',
+            icon: Icons.tune,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CustomizationPage(
+                    autoSendVoiceTranscription: autoSendVoiceTranscription,
+                    setAutoSendVoiceTranscription: setAutoSendVoiceTranscription,
                     showReasoningTokens: showReasoningTokens,
                     setShowReasoningTokens: setShowReasoningTokens,
                     showModelInfo: showModelInfo,
@@ -181,30 +211,6 @@ class SettingsPage extends StatelessWidget {
             bgColor: scaffoldBg,
           ),
           const SizedBox(height: 32),
-          _buildToggleCard(
-            context,
-            title: 'Show Reasoning Tokens',
-            subtitle: 'Display reasoning process from AI models',
-            icon: Icons.psychology,
-            value: showReasoningTokens,
-            onChanged: setShowReasoningTokens,
-            accentColor: accent,
-            iconFgColor: iconFg,
-            bgColor: scaffoldBg,
-          ),
-          const SizedBox(height: 16),
-          _buildToggleCard(
-            context,
-            title: 'Show Model Info',
-            subtitle: 'Display model name for each AI response',
-            icon: Icons.info_outline,
-            value: showModelInfo,
-            onChanged: setShowModelInfo,
-            accentColor: accent,
-            iconFgColor: iconFg,
-            bgColor: scaffoldBg,
-          ),
-          const SizedBox(height: 32),
           _buildSettingsCard(
             context,
             title: 'Export Chats',
@@ -224,9 +230,7 @@ class SettingsPage extends StatelessWidget {
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => const AboutPage(),
-                ),
+                MaterialPageRoute(builder: (_) => const AboutPage()),
               );
             },
             accentColor: accent,
@@ -259,12 +263,20 @@ class SettingsPage extends StatelessWidget {
                     SnackBar(
                       content: Text(
                         error.message,
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                       behavior: SnackBarBehavior.floating,
                       margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                       duration: const Duration(seconds: 2),
                       dismissDirection: DismissDirection.horizontal,
                     ),
@@ -274,12 +286,20 @@ class SettingsPage extends StatelessWidget {
                     SnackBar(
                       content: Text(
                         'Error: $error',
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                       behavior: SnackBarBehavior.floating,
                       margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                       duration: const Duration(seconds: 2),
                       dismissDirection: DismissDirection.horizontal,
                     ),
@@ -310,7 +330,9 @@ class SettingsPage extends StatelessWidget {
             ),
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             duration: const Duration(seconds: 2),
             dismissDirection: DismissDirection.horizontal,
@@ -333,7 +355,9 @@ class SettingsPage extends StatelessWidget {
             ),
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             duration: const Duration(seconds: 2),
             dismissDirection: DismissDirection.horizontal,
@@ -349,11 +373,16 @@ class SettingsPage extends StatelessWidget {
             SnackBar(
               content: Text(
                 'Saved to $savedPath',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
               behavior: SnackBarBehavior.floating,
               margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               duration: const Duration(seconds: 2),
               dismissDirection: DismissDirection.horizontal,
@@ -368,7 +397,9 @@ class SettingsPage extends StatelessWidget {
               ),
               behavior: SnackBarBehavior.floating,
               margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               duration: const Duration(seconds: 1),
               dismissDirection: DismissDirection.horizontal,
@@ -399,7 +430,9 @@ class SettingsPage extends StatelessWidget {
             ),
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             duration: const Duration(seconds: 1),
             dismissDirection: DismissDirection.horizontal,
@@ -415,7 +448,9 @@ class SettingsPage extends StatelessWidget {
             ),
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             duration: const Duration(seconds: 2),
             dismissDirection: DismissDirection.horizontal,
@@ -431,7 +466,9 @@ class SettingsPage extends StatelessWidget {
           ),
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           duration: const Duration(seconds: 2),
           dismissDirection: DismissDirection.horizontal,
@@ -446,7 +483,9 @@ class SettingsPage extends StatelessWidget {
           ),
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           duration: const Duration(seconds: 2),
           dismissDirection: DismissDirection.horizontal,
@@ -529,50 +568,6 @@ class SettingsPage extends StatelessWidget {
         ),
         trailing: Icon(Icons.arrow_forward_ios, color: iconFgColor),
         onTap: onTap,
-      ),
-    );
-  }
-
-  Widget _buildToggleCard(
-    BuildContext context, {
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required bool value,
-    required Function(bool) onChanged,
-    required Color accentColor,
-    required Color iconFgColor,
-    required Color bgColor,
-  }) {
-    return Card(
-      color: bgColor.lighten(0.05),
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: iconFgColor.withValues(alpha: 0.3), width: 1),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: Icon(icon, color: accentColor),
-        title: Text(
-          title,
-          style: TextStyle(
-            color: Theme.of(context).textTheme.titleMedium?.color,
-            fontWeight: FontWeight.w600,
-            fontSize: 16,
-          ),
-        ),
-        subtitle: Text(
-          subtitle,
-          style: TextStyle(color: iconFgColor.lighten(0.3), fontSize: 13),
-        ),
-        trailing: Switch(
-          value: value,
-          onChanged: onChanged,
-          activeColor: accentColor,
-          activeTrackColor: accentColor.withValues(alpha: 0.5),
-        ),
-        onTap: () => onChanged(!value),
       ),
     );
   }

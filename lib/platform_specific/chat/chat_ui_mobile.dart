@@ -33,6 +33,7 @@ class ChukChatUIMobile extends StatefulWidget {
   final bool isSidebarExpanded;
   final bool showReasoningTokens;
   final bool showModelInfo;
+  final bool autoSendVoiceTranscription;
 
   const ChukChatUIMobile({
     super.key,
@@ -41,6 +42,7 @@ class ChukChatUIMobile extends StatefulWidget {
     required this.isSidebarExpanded,
     required this.showReasoningTokens,
     required this.showModelInfo,
+    required this.autoSendVoiceTranscription,
   });
 
   @override
@@ -493,7 +495,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           TextPosition(offset: result.text!.length),
         );
       });
-      _textFieldFocusNode.requestFocus();
+
+      // If auto-send is enabled, send the message immediately
+      if (widget.autoSendVoiceTranscription) {
+        await _sendMessage();
+      } else {
+        // Otherwise, focus the text field so user can review before sending
+        _textFieldFocusNode.requestFocus();
+      }
     }
   }
 

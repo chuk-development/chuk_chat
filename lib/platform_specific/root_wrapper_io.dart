@@ -40,6 +40,8 @@ class RootWrapper extends StatelessWidget {
   final Function(bool) setShowReasoningTokens;
   final bool showModelInfo;
   final Function(bool) setShowModelInfo;
+  final bool autoSendVoiceTranscription;
+  final Function(bool) setAutoSendVoiceTranscription;
 
   const RootWrapper({
     super.key,
@@ -57,6 +59,8 @@ class RootWrapper extends StatelessWidget {
     required this.setShowReasoningTokens,
     required this.showModelInfo,
     required this.setShowModelInfo,
+    required this.autoSendVoiceTranscription,
+    required this.setAutoSendVoiceTranscription,
   });
 
   @override
@@ -80,6 +84,8 @@ class RootWrapper extends StatelessWidget {
         setShowReasoningTokens: setShowReasoningTokens,
         showModelInfo: showModelInfo,
         setShowModelInfo: setShowModelInfo,
+        autoSendVoiceTranscription: autoSendVoiceTranscription,
+        setAutoSendVoiceTranscription: setAutoSendVoiceTranscription,
       );
     } else if (kPlatformDesktop) {
       // When PLATFORM_DESKTOP=true is set at build time,
@@ -99,6 +105,8 @@ class RootWrapper extends StatelessWidget {
         setShowReasoningTokens: setShowReasoningTokens,
         showModelInfo: showModelInfo,
         setShowModelInfo: setShowModelInfo,
+        autoSendVoiceTranscription: autoSendVoiceTranscription,
+        setAutoSendVoiceTranscription: setAutoSendVoiceTranscription,
       );
     }
 
@@ -120,6 +128,8 @@ class RootWrapper extends StatelessWidget {
         setShowReasoningTokens: setShowReasoningTokens,
         showModelInfo: showModelInfo,
         setShowModelInfo: setShowModelInfo,
+        autoSendVoiceTranscription: autoSendVoiceTranscription,
+        setAutoSendVoiceTranscription: setAutoSendVoiceTranscription,
       );
     }
 
@@ -138,6 +148,8 @@ class RootWrapper extends StatelessWidget {
       setShowReasoningTokens: setShowReasoningTokens,
       showModelInfo: showModelInfo,
       setShowModelInfo: setShowModelInfo,
+      autoSendVoiceTranscription: autoSendVoiceTranscription,
+      setAutoSendVoiceTranscription: setAutoSendVoiceTranscription,
     );
   }
 

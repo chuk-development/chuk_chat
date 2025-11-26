@@ -19,6 +19,8 @@ class RootWrapper extends StatelessWidget {
   final Function(bool) setShowReasoningTokens;
   final bool showModelInfo;
   final Function(bool) setShowModelInfo;
+  final bool autoSendVoiceTranscription;
+  final Function(bool) setAutoSendVoiceTranscription;
 
   const RootWrapper({
     super.key,
@@ -36,6 +38,8 @@ class RootWrapper extends StatelessWidget {
     required this.setShowReasoningTokens,
     required this.showModelInfo,
     required this.setShowModelInfo,
+    required this.autoSendVoiceTranscription,
+    required this.setAutoSendVoiceTranscription,
   });
 
   @override

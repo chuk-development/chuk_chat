@@ -15,6 +15,7 @@ import 'package:chuk_chat/services/password_revision_service.dart';
 import 'package:chuk_chat/services/model_prefetch_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/theme_settings_service.dart';
+import 'package:chuk_chat/services/customization_preferences_service.dart';
 import 'package:chuk_chat/widgets/auth_gate.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -71,6 +72,9 @@ class _ChukChatAppState extends State<ChukChatApp> {
   bool _showReasoningTokens = kDefaultShowReasoningTokens;
   bool _showModelInfo = kDefaultShowModelInfo;
 
+  // Customization preferences
+  bool _autoSendVoiceTranscription = false;
+
   // Keys for SharedPreferences
   static const String _kThemeModeKey = 'themeMode';
   static const String _kAccentColorKey = 'accentColor';
@@ -79,6 +83,7 @@ class _ChukChatAppState extends State<ChukChatApp> {
   static const String _kGrainEnabledKey = 'grainEnabled';
   static const String _kShowReasoningTokensKey = 'showReasoningTokens';
   static const String _kShowModelInfoKey = 'showModelInfo';
+  static const String _kAutoSendVoiceTranscriptionKey = 'autoSendVoiceTranscription';
 
   StreamSubscription<AuthState>? _authSubscription;
   bool _hasAppliedSupabaseTheme = false;
@@ -245,6 +250,7 @@ class _ChukChatAppState extends State<ChukChatApp> {
       _grainEnabled = prefs.getBool(_kGrainEnabledKey) ?? kDefaultGrainEnabled;
       _showReasoningTokens = prefs.getBool(_kShowReasoningTokensKey) ?? kDefaultShowReasoningTokens;
       _showModelInfo = prefs.getBool(_kShowModelInfoKey) ?? kDefaultShowModelInfo;
+      _autoSendVoiceTranscription = prefs.getBool(_kAutoSendVoiceTranscriptionKey) ?? false;
       _cachedThemeData = null; // Invalidate theme cache
     });
   }
@@ -308,7 +314,7 @@ class _ChukChatAppState extends State<ChukChatApp> {
     setState(() {
       _showReasoningTokens = show;
     });
-    _debouncedSyncThemeSettings();
+    _debouncedSyncCustomizationSettings();
   }
 
   void _setShowModelInfo(bool show) async {
@@ -317,7 +323,16 @@ class _ChukChatAppState extends State<ChukChatApp> {
     setState(() {
       _showModelInfo = show;
     });
-    _debouncedSyncThemeSettings();
+    _debouncedSyncCustomizationSettings();
+  }
+
+  void _setAutoSendVoiceTranscription(bool autoSend) async {
+    final prefs = await _getPrefs();
+    await prefs.setBool(_kAutoSendVoiceTranscriptionKey, autoSend);
+    setState(() {
+      _autoSendVoiceTranscription = autoSend;
+    });
+    _debouncedSyncCustomizationSettings();
   }
 
   // Performance: Debounce theme sync to avoid excessive Supabase calls
@@ -334,6 +349,7 @@ class _ChukChatAppState extends State<ChukChatApp> {
 
     try {
       final settings = await const ThemeSettingsService().loadOrCreate();
+      final customizationPrefs = await const CustomizationPreferencesService().loadOrCreate();
       if (!mounted) return;
       // Performance: Batch all updates into single setState
       setState(() {
@@ -342,8 +358,9 @@ class _ChukChatAppState extends State<ChukChatApp> {
         _currentIconFgColor = settings.iconColor;
         _currentBgColor = settings.backgroundColor;
         _grainEnabled = settings.grainEnabled;
-        _showReasoningTokens = settings.showReasoningTokens;
-        _showModelInfo = settings.showModelInfo;
+        _showReasoningTokens = customizationPrefs.showReasoningTokens;
+        _showModelInfo = customizationPrefs.showModelInfo;
+        _autoSendVoiceTranscription = customizationPrefs.autoSendVoiceTranscription;
         _hasAppliedSupabaseTheme = true;
         _cachedThemeData = null; // Invalidate cache
       });
@@ -365,6 +382,7 @@ class _ChukChatAppState extends State<ChukChatApp> {
     await prefs.setBool(_kGrainEnabledKey, _grainEnabled);
     await prefs.setBool(_kShowReasoningTokensKey, _showReasoningTokens);
     await prefs.setBool(_kShowModelInfoKey, _showModelInfo);
+    await prefs.setBool(_kAutoSendVoiceTranscriptionKey, _autoSendVoiceTranscription);
   }
 
   Future<void> _syncThemeSettings() async {
@@ -378,12 +396,37 @@ class _ChukChatAppState extends State<ChukChatApp> {
       iconColor: _currentIconFgColor,
       backgroundColor: _currentBgColor,
       grainEnabled: _grainEnabled,
+    );
+
+    try {
+      await const ThemeSettingsService().save(settings);
+      await _persistThemeSettingsToPrefs();
+    } catch (_) {
+      // Ignore sync failures; preferences remain updated locally.
+    }
+  }
+
+  // Performance: Debounce customization sync to avoid excessive Supabase calls
+  void _debouncedSyncCustomizationSettings() {
+    _themeSyncDebounce?.cancel();
+    _themeSyncDebounce = Timer(const Duration(milliseconds: 500), () {
+      unawaited(_syncCustomizationSettings());
+    });
+  }
+
+  Future<void> _syncCustomizationSettings() async {
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) return;
+
+    final preferences = CustomizationPreferences(
+      userId: user.id,
+      autoSendVoiceTranscription: _autoSendVoiceTranscription,
       showReasoningTokens: _showReasoningTokens,
       showModelInfo: _showModelInfo,
     );
 
     try {
-      await const ThemeSettingsService().save(settings);
+      await const CustomizationPreferencesService().save(preferences);
       await _persistThemeSettingsToPrefs();
     } catch (_) {
       // Ignore sync failures; preferences remain updated locally.
@@ -449,6 +492,8 @@ class _ChukChatAppState extends State<ChukChatApp> {
             setShowReasoningTokens: _setShowReasoningTokens,
             showModelInfo: _showModelInfo,
             setShowModelInfo: _setShowModelInfo,
+            autoSendVoiceTranscription: _autoSendVoiceTranscription,
+            setAutoSendVoiceTranscription: _setAutoSendVoiceTranscription,
           );
         },
       ),

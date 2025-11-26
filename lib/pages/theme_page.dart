@@ -16,10 +16,6 @@ class ThemePage extends StatefulWidget {
   final Function(Color) setBgColor;
   final bool grainEnabled;
   final Function(bool) setGrainEnabled;
-  final bool showReasoningTokens;
-  final Function(bool) setShowReasoningTokens;
-  final bool showModelInfo;
-  final Function(bool) setShowModelInfo;
 
   const ThemePage({
     super.key,
@@ -33,10 +29,6 @@ class ThemePage extends StatefulWidget {
     required this.setBgColor,
     required this.grainEnabled,
     required this.setGrainEnabled,
-    required this.showReasoningTokens,
-    required this.setShowReasoningTokens,
-    required this.showModelInfo,
-    required this.setShowModelInfo,
   });
 
   @override
@@ -49,8 +41,6 @@ class _ThemePageState extends State<ThemePage> {
   late Color _selectedIconFgColor;
   late Color _selectedBgColor;
   late bool _selectedGrain;
-  late bool _selectedShowReasoningTokens;
-  late bool _selectedShowModelInfo;
 
   final TextEditingController _accentHexController = TextEditingController();
   final TextEditingController _iconFgHexController = TextEditingController();
@@ -92,8 +82,6 @@ class _ThemePageState extends State<ThemePage> {
     _selectedIconFgColor = widget.currentIconFgColor;
     _selectedBgColor = widget.currentBgColor;
     _selectedGrain = widget.grainEnabled;
-    _selectedShowReasoningTokens = widget.showReasoningTokens;
-    _selectedShowModelInfo = widget.showModelInfo;
 
     _accentHexController.text = _selectedAccentColor.toHexString();
     _iconFgHexController.text = _selectedIconFgColor.toHexString();
@@ -114,8 +102,6 @@ class _ThemePageState extends State<ThemePage> {
     widget.setIconFgColor(_selectedIconFgColor);
     widget.setBgColor(_selectedBgColor);
     widget.setGrainEnabled(_selectedGrain);
-    widget.setShowReasoningTokens(_selectedShowReasoningTokens);
-    widget.setShowModelInfo(_selectedShowModelInfo);
   }
 
   void _updateThemeMode(bool useDarkMode) {
@@ -131,20 +117,6 @@ class _ThemePageState extends State<ThemePage> {
   void _updateGrainEnabled(bool enabled) {
     setState(() {
       _selectedGrain = enabled;
-      _applyThemeChanges();
-    });
-  }
-
-  void _updateShowReasoningTokens(bool show) {
-    setState(() {
-      _selectedShowReasoningTokens = show;
-      _applyThemeChanges();
-    });
-  }
-
-  void _updateShowModelInfo(bool show) {
-    setState(() {
-      _selectedShowModelInfo = show;
       _applyThemeChanges();
     });
   }
@@ -291,54 +263,6 @@ class _ThemePageState extends State<ThemePage> {
                 activeTrackColor: accent.withValues(alpha: 0.5),
               ),
               onTap: () => _updateGrainEnabled(!_selectedGrain),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Show Reasoning Tokens
-          _card(
-            context,
-            child: ListTile(
-              title: Text(
-                'Show Reasoning Tokens',
-                style:
-                    TextStyle(color: iconFg, fontWeight: FontWeight.w600),
-              ),
-              subtitle: Text(
-                'Display reasoning process from AI models',
-                style: TextStyle(color: iconFg.withValues(alpha: 0.6)),
-              ),
-              trailing: Switch(
-                value: _selectedShowReasoningTokens,
-                onChanged: _updateShowReasoningTokens,
-                activeThumbColor: accent,
-                activeTrackColor: accent.withValues(alpha: 0.5),
-              ),
-              onTap: () => _updateShowReasoningTokens(!_selectedShowReasoningTokens),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Show Model Info
-          _card(
-            context,
-            child: ListTile(
-              title: Text(
-                'Show Model Info',
-                style:
-                    TextStyle(color: iconFg, fontWeight: FontWeight.w600),
-              ),
-              subtitle: Text(
-                'Display model name for each AI response',
-                style: TextStyle(color: iconFg.withValues(alpha: 0.6)),
-              ),
-              trailing: Switch(
-                value: _selectedShowModelInfo,
-                onChanged: _updateShowModelInfo,
-                activeThumbColor: accent,
-                activeTrackColor: accent.withValues(alpha: 0.5),
-              ),
-              onTap: () => _updateShowModelInfo(!_selectedShowModelInfo),
             ),
           ),
         ],

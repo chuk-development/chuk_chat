@@ -157,7 +157,8 @@ Services are organized in `lib/services/` and follow a **singleton-like pattern*
    - `ModelCapabilitiesService` - Tracks model features and limits
 
 4. **Configuration & State**:
-   - `ThemeSettingsService` - Syncs theme preferences between local and Supabase
+   - `ThemeSettingsService` - Syncs theme/appearance preferences between local and Supabase
+   - `CustomizationPreferencesService` - Syncs customization/behavior preferences between local and Supabase
    - `UserPreferencesService` - User settings persistence
    - `ApiConfigService` - API configuration management
    - `ApiStatusService` - API health monitoring
@@ -170,6 +171,11 @@ Services are organized in `lib/services/` and follow a **singleton-like pattern*
   - Uses `SharedPreferences` for local persistence
   - Syncs with Supabase via `ThemeSettingsService`
   - Includes accent color, icon color, background color, theme mode, and grain overlay
+- **Customization State**: Managed at `ChukChatApp` level in `main.dart`
+  - Uses `SharedPreferences` for local persistence
+  - Syncs with Supabase via `CustomizationPreferencesService`
+  - Includes auto-send voice transcription, show reasoning tokens, and show model info
+  - Settings accessible via Settings → Customization page
 - **Auth State**: Managed via Supabase `auth.onAuthStateChange` stream in `main.dart`
   - Automatically loads encryption keys and chat data on login
   - Clears sensitive data on logout
@@ -187,7 +193,8 @@ Services are organized in `lib/services/` and follow a **singleton-like pattern*
    - `EncryptionService.tryLoadKey()` loads encryption key
    - `ChatStorageService.loadSavedChatsForSidebar()` loads encrypted chats
    - `ModelPrefetchService.prefetch()` loads available models
-   - Theme settings loaded from Supabase
+   - Theme settings loaded from Supabase via `ThemeSettingsService`
+   - Customization preferences loaded from Supabase via `CustomizationPreferencesService`
 5. Platform-appropriate root wrapper is displayed
 
 ### Data Models
@@ -203,15 +210,38 @@ Key models in `lib/models/`:
 - Supports compile-time environment variables: `SUPABASE_URL`, `SUPABASE_ANON_KEY`
 - Falls back to hardcoded values if env vars not provided
 
+### Supabase Database Schema
+
+The app uses the following Supabase tables:
+
+1. **theme_settings** - Stores user theme/appearance preferences
+   - Columns: `user_id`, `theme_mode`, `accent_color`, `icon_color`, `background_color`, `grain_enabled`
+   - Synced via `ThemeSettingsService`
+
+2. **customization_preferences** - Stores user customization/behavior preferences
+   - Columns: `user_id`, `auto_send_voice_transcription`, `show_reasoning_tokens`, `show_model_info`
+   - Synced via `CustomizationPreferencesService`
+   - Defaults: `auto_send_voice_transcription=false`, `show_reasoning_tokens=true`, `show_model_info=true`
+
+3. **user_preferences** - Stores user settings (model selection, system prompts, etc.)
+   - Managed via `UserPreferencesService`
+
+All tables use Row Level Security (RLS) with policies ensuring users can only access their own data.
+
 ## Key Files to Understand
 
 - `lib/main.dart:109` - App initialization and theme bootstrapping
 - `lib/main.dart:397` - AuthGate and platform detection logic
 - `lib/constants.dart` - Theme builder and default colors/breakpoints
 - `lib/services/supabase_service.dart` - Supabase initialization
+- `lib/services/theme_settings_service.dart` - Theme/appearance preferences sync
+- `lib/services/customization_preferences_service.dart` - Customization/behavior preferences sync
 - `lib/services/encryption_service.dart` - Client-side encryption implementation
 - `lib/services/chat_storage_service.dart` - Chat persistence layer
+- `lib/pages/theme_page.dart` - Theme/appearance settings UI
+- `lib/pages/customization_page.dart` - Customization/behavior settings UI
 - `lib/platform_specific/root_wrapper_*.dart` - Platform-specific layout orchestration
+- `lib/platform_specific/chat/chat_ui_mobile.dart:500` - Voice transcription auto-send logic
 
 ## Development Notes
 
@@ -219,8 +249,11 @@ Key models in `lib/models/`:
 - **Platform-Specific Code**: When adding new UI features, ensure both desktop and mobile variants are implemented in their respective platform_specific directories.
 - **Encryption**: All chat data is encrypted client-side. Never commit unencrypted sensitive data.
 - **Theme Sync**: Theme changes must update both SharedPreferences (local) and Supabase (remote) via the callbacks in main.dart.
+- **Customization Sync**: Customization changes must update both SharedPreferences (local) and Supabase (remote) via the callbacks in main.dart.
 - **Build Artifacts**: `releases/`, `debian/`, `rpm/`, and `AppDir/` directories are git-ignored.
 - **Dependencies**: Uses flutter_lints for code quality. Run `flutter analyze` before committing.
+- **Documentation**: Do NOT create separate markdown documentation files. All documentation should be in this CLAUDE.md file.
+- **IMPORTANT: Always commit changes after completing a task**. Update this CLAUDE.md file with any new features or changes, then commit with a descriptive message.
 
 ## Common Tasks
 
@@ -237,11 +270,22 @@ Key models in `lib/models/`:
 4. Test on both platforms if cross-platform
 
 ### Modifying Theme System
-1. Update `lib/constants.dart` for new theme properties
+1. Update `lib/constants.dart` for new theme properties (if adding visual defaults)
 2. Add state management in `_ChukChatAppState` in `main.dart`
 3. Update `ThemeSettings` model in `ThemeSettingsService`
-4. Update Supabase schema if adding server-synced properties
+4. Update Supabase `theme_settings` table schema if adding new columns
 5. Pass new callbacks to both root wrappers (desktop and mobile)
+6. Update `ThemePage` UI to expose new settings
+
+### Modifying Customization/Behavior Settings
+1. Add state management in `_ChukChatAppState` in `main.dart`
+2. Update `CustomizationPreferences` model in `CustomizationPreferencesService`
+3. Update Supabase `customization_preferences` table schema if adding new columns
+4. Pass new callbacks to both root wrappers (desktop and mobile)
+5. Update `CustomizationPage` UI to expose new settings
+6. Implement behavior logic in relevant components (e.g., `chat_ui_mobile.dart` for voice transcription)
+
+Note: Theme settings are for visual/appearance preferences, while customization settings are for behavioral/functionality preferences.
 
 ### Updating Build Configuration
 1. Modify version in `pubspec.yaml` (version field)

@@ -29,6 +29,8 @@ class RootWrapperDesktop extends StatefulWidget {
   final Function(bool) setShowReasoningTokens;
   final bool showModelInfo;
   final Function(bool) setShowModelInfo;
+  final bool autoSendVoiceTranscription;
+  final Function(bool) setAutoSendVoiceTranscription;
 
   const RootWrapperDesktop({
     super.key,
@@ -46,6 +48,8 @@ class RootWrapperDesktop extends StatefulWidget {
     required this.setShowReasoningTokens,
     required this.showModelInfo,
     required this.setShowModelInfo,
+    required this.autoSendVoiceTranscription,
+    required this.setAutoSendVoiceTranscription,
   });
 
   @override
@@ -76,6 +80,8 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
           setShowReasoningTokens: widget.setShowReasoningTokens,
           showModelInfo: widget.showModelInfo,
           setShowModelInfo: widget.setShowModelInfo,
+          autoSendVoiceTranscription: widget.autoSendVoiceTranscription,
+          setAutoSendVoiceTranscription: widget.setAutoSendVoiceTranscription,
         ),
       ),
     );

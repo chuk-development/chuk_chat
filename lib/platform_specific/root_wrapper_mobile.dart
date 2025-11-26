@@ -31,6 +31,8 @@ class RootWrapperMobile extends StatefulWidget {
   final Function(bool) setShowReasoningTokens;
   final bool showModelInfo;
   final Function(bool) setShowModelInfo;
+  final bool autoSendVoiceTranscription;
+  final Function(bool) setAutoSendVoiceTranscription;
 
   const RootWrapperMobile({
     super.key,
@@ -48,6 +50,8 @@ class RootWrapperMobile extends StatefulWidget {
     required this.setShowReasoningTokens,
     required this.showModelInfo,
     required this.setShowModelInfo,
+    required this.autoSendVoiceTranscription,
+    required this.setAutoSendVoiceTranscription,
   });
 
   @override
@@ -187,6 +191,8 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
           setShowReasoningTokens: widget.setShowReasoningTokens,
           showModelInfo: widget.showModelInfo,
           setShowModelInfo: widget.setShowModelInfo,
+          autoSendVoiceTranscription: widget.autoSendVoiceTranscription,
+          setAutoSendVoiceTranscription: widget.setAutoSendVoiceTranscription,
         ),
       ),
     );
@@ -310,6 +316,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                 isSidebarExpanded: _isSidebarExpanded,
                 showReasoningTokens: widget.showReasoningTokens,
                 showModelInfo: widget.showModelInfo,
+                autoSendVoiceTranscription: widget.autoSendVoiceTranscription,
               ),
             ),
           ],
