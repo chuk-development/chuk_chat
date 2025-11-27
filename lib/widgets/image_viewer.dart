@@ -1,6 +1,5 @@
 // lib/widgets/image_viewer.dart
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -198,13 +197,13 @@ class _ImageViewerState extends State<ImageViewer> {
   void _zoomIn() {
     final currentScale = _transformationController.value.getMaxScaleOnAxis();
     final newScale = (currentScale * 1.5).clamp(0.5, 4.0);
-    _transformationController.value = Matrix4.identity()..scale(newScale);
+    _transformationController.value = Matrix4.diagonal3Values(newScale, newScale, 1.0);
   }
 
   void _zoomOut() {
     final currentScale = _transformationController.value.getMaxScaleOnAxis();
     final newScale = (currentScale / 1.5).clamp(0.5, 4.0);
-    _transformationController.value = Matrix4.identity()..scale(newScale);
+    _transformationController.value = Matrix4.diagonal3Values(newScale, newScale, 1.0);
   }
 
   void _resetZoom() {

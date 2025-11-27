@@ -53,7 +53,7 @@ class ChatPersistenceHandler {
 
       // If chatId is provided but chat doesn't exist in storage, we need to INSERT not UPDATE
       final stored = chatExists
-          ? await ChatStorageService.updateChat(chatId!, messagesCopy)
+          ? await ChatStorageService.updateChat(chatId, messagesCopy)
           : await ChatStorageService.saveChat(messagesCopy, chatId: chatId);
 
       if (stored == null) {

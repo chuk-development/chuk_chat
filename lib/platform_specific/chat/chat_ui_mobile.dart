@@ -825,9 +825,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     }
 
     // Generate chat ID if new chat
-    if (_activeChatId == null) {
-      _activeChatId = _uuid.v4();
-    }
+    _activeChatId ??= _uuid.v4();
     final String chatId = _activeChatId!;
 
     // Extract prepared values from validation result
@@ -972,9 +970,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     final String? providerToUse = originalProvider ?? _selectedProviderSlug;
 
     // Generate chat ID if needed BEFORE persisting
-    if (_activeChatId == null) {
-      _activeChatId = _uuid.v4();
-    }
+    _activeChatId ??= _uuid.v4();
     final String chatId = _activeChatId!;
 
     setState(() {

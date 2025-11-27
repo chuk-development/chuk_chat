@@ -536,12 +536,6 @@ class _MessageBubbleState extends State<MessageBubble>
     );
   }
 
-  static Uint8List _base64ToBytes(String dataUrl) {
-    // Remove the data URL prefix (e.g., "data:image/jpeg;base64,")
-    final base64String = dataUrl.split(',').last;
-    return base64Decode(base64String);
-  }
-
   Widget _buildAttachmentsChips(List<DocumentAttachment> attachments) {
     final iconColor = Theme.of(context).colorScheme.onSurface;
     final accentColor = Theme.of(context).colorScheme.primary;
@@ -670,7 +664,6 @@ class _MessageBubbleState extends State<MessageBubble>
 /// Cached image thumbnail that decodes once and caches the bytes
 class _CachedImageThumbnail extends StatefulWidget {
   const _CachedImageThumbnail({
-    super.key,
     required this.imageDataUrl,
     required this.onTap,
   });
