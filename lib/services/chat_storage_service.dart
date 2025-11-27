@@ -135,7 +135,7 @@ class ChatStorageService {
 
   // Debouncing for realtime events to prevent duplicate chat entries
   static final Map<String, DateTime> _lastRealtimeUpdate = <String, DateTime>{};
-  static const Duration _realtimeDebounceDuration = Duration(seconds: 2); // Increased to 2 seconds
+  static const Duration _realtimeDebounceDuration = Duration(seconds: 5); // Increased to 5 seconds for aggressive debouncing
   static final Set<String> _processingChats = <String>{}; // Track chats currently being processed
 
   // Prevent concurrent save/update operations for the same chat
@@ -151,6 +151,32 @@ class ChatStorageService {
     } catch (_) {
       return false; // Assume offline on any error
     }
+  }
+
+  /// Find a chat with identical content to prevent duplicates
+  static StoredChat? _findDuplicateChat(List<Map<String, dynamic>> messagesMaps) {
+    final messages = _mapToChatMessages(messagesMaps);
+    if (messages.isEmpty) return null;
+
+    for (final chat in _savedChats) {
+      if (chat.messages.length == messages.length) {
+        bool isDuplicate = true;
+        for (int i = 0; i < messages.length && isDuplicate; i++) {
+          final chatMsg = chat.messages[i];
+          final newMsg = messages[i];
+          if (chatMsg.sender != newMsg.sender ||
+              chatMsg.text != newMsg.text ||
+              chatMsg.images != newMsg.images ||
+              chatMsg.attachments != newMsg.attachments) {
+            isDuplicate = false;
+          }
+        }
+        if (isDuplicate) {
+          return chat;
+        }
+      }
+    }
+    return null;
   }
 
   static Future<void> loadChats() async {
@@ -327,6 +353,15 @@ class ChatStorageService {
   }) async {
     final effectiveChatId = chatId ?? 'new-chat-${DateTime.now().millisecondsSinceEpoch}';
     debugPrint('💾 [ChatStorage] saveChat called with ${messagesMaps.length} messages, chatId=$effectiveChatId');
+
+    // CRITICAL: Prevent duplicate chats by checking if a chat with identical content already exists
+    if (chatId == null) {
+      final existingChat = _findDuplicateChat(messagesMaps);
+      if (existingChat != null) {
+        debugPrint('🚫 [ChatStorage] Duplicate chat detected, returning existing chat ${existingChat.id}');
+        return existingChat;
+      }
+    }
 
     // Prevent concurrent operations on the same chat
     final existingOperation = _chatSaveOperations[effectiveChatId];
