@@ -901,8 +901,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     _textFieldFocusNode.requestFocus();
     _scrollChatToBottom(force: true);
 
-    // Chat ID is created immediately but Supabase sync is deferred until AI responds
-    // This allows streaming to start immediately while batching database operations
+    // Create chat locally immediately for chat ID assignment (streaming needs it)
+    // But defer Supabase sync until AI finishes responding
+    final storedChat = await _persistChat(saveToSupabase: false, waitForCompletion: true);
+    if (storedChat != null && _activeChatId != storedChat.id) {
+      _activeChatId = storedChat.id;
+    }
 
     // Send with streaming handler
     await _streamingHandler.sendMessage(
@@ -1220,8 +1224,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     });
   }
 
-  Future<void> _persistChat({bool waitForCompletion = false, bool saveToSupabase = true}) async {
-    await _persistenceHandler.persistChat(
+  Future<StoredChat?> _persistChat({bool waitForCompletion = false, bool saveToSupabase = true}) async {
+    return await _persistenceHandler.persistChat(
       messages: _messages,
       chatId: _activeChatId,
       waitForCompletion: waitForCompletion,
