@@ -296,6 +296,16 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
             if (message.provider != null && message.provider!.isNotEmpty) {
               map['provider'] = message.provider!;
             }
+            // Include images if present
+            if (message.images != null && message.images!.isNotEmpty) {
+              map['images'] = message.images!;
+              debugPrint('🖼️ [ImageDebug] Loading message with images field (${message.images!.length} chars)');
+            }
+            // Include attachments if present
+            if (message.attachments != null && message.attachments!.isNotEmpty) {
+              map['attachments'] = message.attachments!;
+              debugPrint('📄 [AttachmentDebug] Loading message with attachments field');
+            }
             return map;
           }),
         );
@@ -398,6 +408,16 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
             }
             if (message.provider != null && message.provider!.isNotEmpty) {
               map['provider'] = message.provider!;
+            }
+            // Include images if present
+            if (message.images != null && message.images!.isNotEmpty) {
+              map['images'] = message.images!;
+              debugPrint('🖼️ [ImageDebug] Realtime update includes images (${message.images!.length} chars)');
+            }
+            // Include attachments if present
+            if (message.attachments != null && message.attachments!.isNotEmpty) {
+              map['attachments'] = message.attachments!;
+              debugPrint('📄 [AttachmentDebug] Realtime update includes attachments');
             }
             return map;
           }),

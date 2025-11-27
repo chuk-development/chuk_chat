@@ -250,6 +250,7 @@ All tables use Row Level Security (RLS) with policies ensuring users can only ac
 - **Encryption**: All chat data is encrypted client-side. Never commit unencrypted sensitive data.
 - **Theme Sync**: Theme changes must update both SharedPreferences (local) and Supabase (remote) via the callbacks in main.dart.
 - **Customization Sync**: Customization changes must update both SharedPreferences (local) and Supabase (remote) via the callbacks in main.dart.
+- **Message Fields Preservation**: When loading messages from storage (in `_loadChatFromIndex()` or `_handleRealtimeChatUpdate()`), ALWAYS preserve ALL fields from `ChatMessage` including `images` and `attachments`. Failure to do so causes data loss and message duplication due to realtime sync loops. Both desktop and mobile UIs must handle these fields identically.
 - **Build Artifacts**: `releases/`, `debian/`, `rpm/`, and `AppDir/` directories are git-ignored.
 - **Dependencies**: Uses flutter_lints for code quality. Run `flutter analyze` before committing.
 - **Documentation**: Do NOT create separate markdown documentation files. All documentation should be in this CLAUDE.md file.
