@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart'; // Assuming this exists
+import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/profile_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart'; // Assuming this exists
@@ -56,6 +57,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
   int _filterGeneration = 0;
   Timer? _deleteNotificationTimer;
   int _pendingDeleteCount = 0;
+  bool _isOfflineMode = false;
 
   @override
   void initState() {
@@ -68,6 +70,8 @@ class _SidebarMobileState extends State<SidebarMobile> {
       if (!mounted) return;
       unawaited(_filterRecentChats());
     });
+    // Monitor network status for offline indicators
+    NetworkStatusService.isOnlineListenable.addListener(_onNetworkStatusChanged);
     unawaited(_filterRecentChats());
   }
 
@@ -77,6 +81,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
     _refreshTimer?.cancel();
     _searchDebounce?.cancel();
     _deleteNotificationTimer?.cancel();
+    NetworkStatusService.isOnlineListenable.removeListener(_onNetworkStatusChanged);
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     super.dispose();
@@ -158,10 +163,21 @@ class _SidebarMobileState extends State<SidebarMobile> {
       await ChatStorageService.loadSavedChatsForSidebar();
       if (!mounted) return;
       await _filterRecentChats();
+      // Update offline mode based on current network status
+      setState(() {
+        _isOfflineMode = !NetworkStatusService.isOnline;
+      });
     } catch (error, stackTrace) {
       debugPrint('SidebarMobile chat sync failed: $error');
       debugPrint('$stackTrace');
     }
+  }
+
+  void _onNetworkStatusChanged() {
+    if (!mounted) return;
+    setState(() {
+      _isOfflineMode = !NetworkStatusService.isOnline;
+    });
   }
 
   String _displayNameFor(ProfileRecord? profile) {
@@ -488,6 +504,65 @@ class _SidebarMobileState extends State<SidebarMobile> {
             ),
           ),
           const SizedBox(height: 16),
+
+          // Offline indicator
+          if (_isOfflineMode)
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: _sidebarHorizontalPadding,
+                vertical: 8,
+              ),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: Colors.orange.withValues(alpha: 0.3),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.cloud_off,
+                      size: 14,
+                      color: Colors.orange,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Offline - Cached chats',
+                        style: TextStyle(
+                          color: Colors.orange,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    IconButton(
+                      icon: Icon(
+                        Icons.refresh,
+                        size: 14,
+                        color: Colors.orange,
+                      ),
+                      tooltip: 'Check for updates',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(width: 20, height: 20),
+                      onPressed: () async {
+                        // Quick network check and refresh if online
+                        final isOnline = await NetworkStatusService.quickCheck();
+                        if (isOnline && mounted) {
+                          await _loadChatsAndRefresh();
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
 
           // Search Old Chats input field (styled from main.dart's InputDecorationTheme)
           Padding(

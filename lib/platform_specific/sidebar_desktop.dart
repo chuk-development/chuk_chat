@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/profile_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart'; // Import the color extensions
@@ -48,6 +49,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
   StreamSubscription<void>? _chatUpdatesSub;
   Timer? _deleteNotificationTimer;
   int _pendingDeleteCount = 0;
+  bool _isOfflineMode = false;
 
   @override
   void initState() {
@@ -61,12 +63,15 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
         _filterRecentChats();
       });
     });
+    // Monitor network status for offline indicators
+    NetworkStatusService.isOnlineListenable.addListener(_onNetworkStatusChanged);
   }
 
   @override
   void dispose() {
     _chatUpdatesSub?.cancel();
     _deleteNotificationTimer?.cancel();
+    NetworkStatusService.isOnlineListenable.removeListener(_onNetworkStatusChanged);
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     super.dispose();
@@ -76,6 +81,14 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
     setState(() {
       _searchQuery = _searchController.text;
       _filterRecentChats();
+    });
+  }
+
+  void _onNetworkStatusChanged() {
+    if (!mounted) return;
+    setState(() {
+      // Update offline status when network changes
+      _isOfflineMode = !NetworkStatusService.isOnline;
     });
   }
 
@@ -89,6 +102,8 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
     if (mounted) {
       setState(() {
         _filterRecentChats(); // Filter after loading/refreshing chats
+        // Update offline mode based on current network status
+        _isOfflineMode = !NetworkStatusService.isOnline;
       });
     }
   }
@@ -305,7 +320,67 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
               cursorColor: accent,
             ),
           ),
-          const SizedBox(height: 16), // Spacing after search bar
+
+          // Offline indicator
+          if (_isOfflineMode)
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: _sidebarHorizontalPadding,
+                vertical: 8,
+              ),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: Colors.orange.withValues(alpha: 0.3),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.cloud_off,
+                      size: 14,
+                      color: Colors.orange,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Offline - Showing cached chats',
+                        style: TextStyle(
+                          color: Colors.orange,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    IconButton(
+                      icon: Icon(
+                        Icons.refresh,
+                        size: 14,
+                        color: Colors.orange,
+                      ),
+                      tooltip: 'Check for updates',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(width: 20, height: 20),
+                      onPressed: () async {
+                        // Quick network check and refresh if online
+                        final isOnline = await NetworkStatusService.quickCheck();
+                        if (isOnline && mounted) {
+                          await _loadChatsAndRefresh();
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          const SizedBox(height: 8), // Spacing after search bar or offline indicator
           // Starred Section - Fixed
           _buildSectionHeader('Starred', iconFg: iconFg),
           if (starredChats.isEmpty)

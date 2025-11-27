@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
+import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
 const _kChatPayloadVersion = 1;
@@ -139,6 +140,15 @@ class ChatStorageService {
   static List<StoredChat> get savedChats => List.unmodifiable(_savedChats);
   static Stream<void> get changes => _changesController.stream;
 
+  /// Check network status for offline handling
+  static Future<bool> _checkNetworkStatus() async {
+    try {
+      return await NetworkStatusService.hasInternetConnection(timeout: const Duration(seconds: 2));
+    } catch (_) {
+      return false; // Assume offline on any error
+    }
+  }
+
   static Future<void> loadChats() async {
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
@@ -153,41 +163,68 @@ class ChatStorageService {
         return;
       }
     }
-    await _ensureRealtimeSubscription(user.id);
 
     List<Map<String, dynamic>> rows = <Map<String, dynamic>>[];
     bool loadedFromCache = false;
     Object? remoteError;
     StackTrace? remoteStack;
 
-    try {
-      final data = await SupabaseService.client
-          .from('encrypted_chats')
-          .select('id, encrypted_payload, created_at, is_starred')
-          .eq('user_id', user.id)
-          .order('created_at', ascending: false);
-      rows = data
-          .whereType<Map<String, dynamic>>()
-          .map((raw) => Map<String, dynamic>.from(raw))
-          .toList(growable: false);
-      await LocalChatCacheService.replaceAll(user.id, rows);
-    } catch (error, stackTrace) {
-      remoteError = error;
-      remoteStack = stackTrace;
+    // Check if we're offline first
+    final isOnline = await _checkNetworkStatus();
+    debugPrint('🌐 [ChatStorage] Network status: ${isOnline ? 'ONLINE' : 'OFFLINE'}');
+
+    if (isOnline) {
+      // Try to load from remote first when online
       try {
-        rows = await LocalChatCacheService.load(user.id);
-        if (rows.isEmpty) {
+        await _ensureRealtimeSubscription(user.id);
+        final data = await SupabaseService.client
+            .from('encrypted_chats')
+            .select('id, encrypted_payload, created_at, is_starred')
+            .eq('user_id', user.id)
+            .order('created_at', ascending: false);
+        rows = data
+            .whereType<Map<String, dynamic>>()
+            .map((raw) => Map<String, dynamic>.from(raw))
+            .toList(growable: false);
+        await LocalChatCacheService.replaceAll(user.id, rows);
+        debugPrint('✅ [ChatStorage] Loaded ${rows.length} chats from remote');
+      } catch (error, stackTrace) {
+        remoteError = error;
+        remoteStack = stackTrace;
+        debugPrint('❌ [ChatStorage] Remote load failed, falling back to cache: $error');
+        // Fall back to cache when remote fails
+        try {
+          rows = await LocalChatCacheService.load(user.id);
+          loadedFromCache = true;
+          if (rows.isNotEmpty) {
+            debugPrint('✅ [ChatStorage] Loaded ${rows.length} chats from cache (remote failed)');
+          } else {
+            debugPrint('⚠️ [ChatStorage] No cached chats available');
+          }
+        } catch (cacheError) {
+          debugPrint('❌ [ChatStorage] Cache load also failed: $cacheError');
           if (error is PostgrestException) {
             throw StateError('Failed to load chats: ${error.message}');
           }
           throw StateError('Failed to load chats.');
         }
+      }
+    } else {
+      // Load from cache immediately when offline
+      debugPrint('📱 [ChatStorage] Offline - loading chats from cache');
+      try {
+        rows = await LocalChatCacheService.load(user.id);
         loadedFromCache = true;
-      } catch (_) {
-        if (error is PostgrestException) {
-          throw StateError('Failed to load chats: ${error.message}');
+        if (rows.isNotEmpty) {
+          debugPrint('✅ [ChatStorage] Loaded ${rows.length} chats from cache (offline mode)');
+        } else {
+          debugPrint('⚠️ [ChatStorage] No cached chats available (offline mode)');
         }
-        rethrow;
+      } catch (error) {
+        debugPrint('❌ [ChatStorage] Failed to load cached chats: $error');
+        // Don't throw error for cache failures when offline - just show empty state
+        rows = [];
+        loadedFromCache = true;
       }
     }
 
