@@ -691,12 +691,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     _scrollChatToBottom();
   }
 
-  void _finalizeAiMessage(
+  Future<void> _finalizeAiMessage(
     int index,
     String content,
     String reasoning,
     String chatId,
-  ) {
+  ) async {
     if (index < 0 || index >= _messages.length) return;
 
     // Check if this is the active chat (for UI updates)
@@ -715,6 +715,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
       _scrollChatToBottom();
       // Don't refocus text field during streaming - let user control keyboard
+
+      // CRITICAL: Save to Supabase when AI finishes responding
+      // This batches all accumulated messages (including new ones sent during streaming)
+      // into a single database operation for efficiency
+      if (_activeChatId == chatId) {
+        await _persistChat(saveToSupabase: true);
+      }
     }
 
     // CRITICAL: Always persist, even for background chats
@@ -894,10 +901,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     _textFieldFocusNode.requestFocus();
     _scrollChatToBottom(force: true);
 
-    // CRITICAL: Persist immediately after user sends first message
-    // This ensures the chat is created and saved right away, even if
-    // the app crashes, user switches chats, or network drops
-    _persistChat();
+    // Chat ID is created immediately but Supabase sync is deferred until AI responds
+    // This allows streaming to start immediately while batching database operations
 
     // Send with streaming handler
     await _streamingHandler.sendMessage(
@@ -1215,12 +1220,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     });
   }
 
-  Future<void> _persistChat({bool waitForCompletion = false}) async {
+  Future<void> _persistChat({bool waitForCompletion = false, bool saveToSupabase = true}) async {
     await _persistenceHandler.persistChat(
       messages: _messages,
       chatId: _activeChatId,
       waitForCompletion: waitForCompletion,
       isOffline: _isOffline,
+      saveToSupabase: saveToSupabase,
     );
   }
 

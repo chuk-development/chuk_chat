@@ -16,6 +16,7 @@ class ChatPersistenceHandler {
     String? chatId,
     bool waitForCompletion = false,
     bool isOffline = false,
+    bool saveToSupabase = true,
   }) async {
     if (messages.isEmpty) return;
 
@@ -27,6 +28,7 @@ class ChatPersistenceHandler {
       messagesCopy,
       chatId,
       isOffline: isOffline,
+      saveToSupabase: saveToSupabase,
     );
 
     if (waitForCompletion) {
@@ -38,6 +40,7 @@ class ChatPersistenceHandler {
     List<Map<String, String>> messagesCopy,
     String? chatId, {
     required bool isOffline,
+    required bool saveToSupabase,
   }) async {
     // CRITICAL: Capture chatId at the start to prevent race conditions
     final String? chatIdAtStart = chatId;
@@ -53,8 +56,8 @@ class ChatPersistenceHandler {
 
       // If chatId is provided but chat doesn't exist in storage, we need to INSERT not UPDATE
       final stored = chatExists
-          ? await ChatStorageService.updateChat(chatId, messagesCopy)
-          : await ChatStorageService.saveChat(messagesCopy, chatId: chatId);
+          ? await ChatStorageService.updateChat(chatId, messagesCopy, saveToSupabase: saveToSupabase)
+          : await ChatStorageService.saveChat(messagesCopy, chatId: chatId, saveToSupabase: saveToSupabase);
 
       if (stored == null) {
         debugPrint('❌ [ChatPersistence] Failed: ChatStorageService returned null');

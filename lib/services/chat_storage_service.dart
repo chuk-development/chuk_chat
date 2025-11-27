@@ -323,6 +323,7 @@ class ChatStorageService {
   static Future<StoredChat?> saveChat(
     List<Map<String, dynamic>> messagesMaps, {
     String? chatId,
+    bool saveToSupabase = true,
   }) async {
     final effectiveChatId = chatId ?? 'new-chat-${DateTime.now().millisecondsSinceEpoch}';
     debugPrint('💾 [ChatStorage] saveChat called with ${messagesMaps.length} messages, chatId=$effectiveChatId');
@@ -341,7 +342,7 @@ class ChatStorageService {
       return existingChat;
     }
 
-    final operation = _performSaveChat(messagesMaps, effectiveChatId, chatId);
+    final operation = _performSaveChat(messagesMaps, effectiveChatId, chatId, saveToSupabase);
     _chatSaveOperations[effectiveChatId] = operation;
 
     try {
@@ -356,6 +357,7 @@ class ChatStorageService {
     List<Map<String, dynamic>> messagesMaps,
     String effectiveChatId,
     String? originalChatId,
+    bool saveToSupabase,
   ) async {
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
@@ -390,50 +392,76 @@ class ChatStorageService {
       'messages': messages.map((message) => message.toJson()).toList(),
     });
 
-    debugPrint('🔐 [ChatStorage] Encrypting payload (${payload.length} bytes)...');
-    final encryptedPayload = await EncryptionService.encrypt(payload);
-    debugPrint('✅ [ChatStorage] Encrypted payload (${encryptedPayload.length} bytes)');
+    final stored = StoredChat(
+      id: effectiveChatId,
+      messages: messages,
+      createdAt: DateTime.now(),
+      isStarred: false,
+    );
 
-    Map<String, dynamic> inserted;
-    try {
-      debugPrint('📤 [ChatStorage] Inserting into Supabase...');
+    // Always save locally first
+    _upsertChatLocally(stored);
+    debugPrint('✅ [ChatStorage] Chat saved locally: $effectiveChatId');
 
-      // Build insert map - include chatId if provided
-      final Map<String, dynamic> insertData = {
-        'user_id': user.id,
-        'encrypted_payload': encryptedPayload,
-      };
-      if (originalChatId != null) {
-        insertData['id'] = originalChatId;
-        debugPrint('   Using provided chatId: $originalChatId');
+    // Conditionally save to Supabase
+    if (saveToSupabase) {
+      debugPrint('🔐 [ChatStorage] Encrypting payload (${payload.length} bytes)...');
+      final encryptedPayload = await EncryptionService.encrypt(payload);
+      debugPrint('✅ [ChatStorage] Encrypted payload (${encryptedPayload.length} bytes)');
+
+      Map<String, dynamic> inserted;
+      try {
+        debugPrint('📤 [ChatStorage] Inserting into Supabase...');
+
+        // Build insert map - include chatId if provided
+        final Map<String, dynamic> insertData = {
+          'user_id': user.id,
+          'encrypted_payload': encryptedPayload,
+        };
+        if (originalChatId != null) {
+          insertData['id'] = originalChatId;
+          debugPrint('   Using provided chatId: $originalChatId');
+        }
+
+        inserted = await SupabaseService.client
+            .from('encrypted_chats')
+            .insert(insertData)
+            .select('id, encrypted_payload, created_at, is_starred')
+            .single();
+        debugPrint('✅ [ChatStorage] Insert successful! Chat ID: ${inserted['id']}');
+      } on PostgrestException catch (error) {
+        debugPrint('❌ [ChatStorage] Supabase insert failed: ${error.message}');
+        debugPrint('   Code: ${error.code}, Details: ${error.details}');
+        throw StateError('Failed to save chat: ${error.message}');
+      } catch (error) {
+        debugPrint('❌ [ChatStorage] Unexpected error during insert: $error');
+        rethrow;
       }
 
-      inserted = await SupabaseService.client
-          .from('encrypted_chats')
-          .insert(insertData)
-          .select('id, encrypted_payload, created_at, is_starred')
-          .single();
-      debugPrint('✅ [ChatStorage] Insert successful! Chat ID: ${inserted['id']}');
-    } on PostgrestException catch (error) {
-      debugPrint('❌ [ChatStorage] Supabase insert failed: ${error.message}');
-      debugPrint('   Code: ${error.code}, Details: ${error.details}');
-      throw StateError('Failed to save chat: ${error.message}');
-    } catch (error) {
-      debugPrint('❌ [ChatStorage] Unexpected error during insert: $error');
-      rethrow;
+      final storedFromDb = StoredChat.fromRow(inserted, messages);
+      _upsertChatLocally(storedFromDb);
+      unawaited(LocalChatCacheService.upsert(user.id, inserted));
+      debugPrint('✅ [ChatStorage] Chat synced with Supabase');
+      return storedFromDb;
+    } else {
+      // Just save to local cache for now
+      final Map<String, dynamic> cacheData = {
+        'id': effectiveChatId,
+        'encrypted_payload': '', // Empty for local-only storage
+        'created_at': stored.createdAt.toUtc().toIso8601String(),
+        'is_starred': false,
+      };
+      unawaited(LocalChatCacheService.upsert(user.id, cacheData));
+      debugPrint('✅ [ChatStorage] Chat saved locally only (Supabase sync deferred)');
+      return stored;
     }
-
-    final stored = StoredChat.fromRow(inserted, messages);
-    _upsertChatLocally(stored);
-    debugPrint('✅ [ChatStorage] Chat saved locally and added to sidebar');
-    unawaited(LocalChatCacheService.upsert(user.id, inserted));
-    return stored;
   }
 
   static Future<StoredChat?> updateChat(
     String chatId,
-    List<Map<String, dynamic>> messagesMaps,
-  ) async {
+    List<Map<String, dynamic>> messagesMaps, {
+    bool saveToSupabase = true,
+  }) async {
     debugPrint('🔄 [ChatStorage] updateChat called for chatId=$chatId with ${messagesMaps.length} messages');
 
     // Prevent concurrent operations on the same chat
@@ -450,7 +478,7 @@ class ChatStorageService {
       return existingChat;
     }
 
-    final operation = _performUpdateChat(chatId, messagesMaps);
+    final operation = _performUpdateChat(chatId, messagesMaps, saveToSupabase);
     _chatSaveOperations[chatId] = operation;
 
     try {
@@ -464,6 +492,7 @@ class ChatStorageService {
   static Future<StoredChat?> _performUpdateChat(
     String chatId,
     List<Map<String, dynamic>> messagesMaps,
+    bool saveToSupabase,
   ) async {
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
@@ -506,42 +535,68 @@ class ChatStorageService {
     }
     final payload = jsonEncode(payloadMap);
 
-    debugPrint('🔐 [ChatStorage] Encrypting payload...');
-    final encryptedPayload = await EncryptionService.encrypt(payload);
-    debugPrint('✅ [ChatStorage] Encrypted payload');
+    final updated = StoredChat(
+      id: chatId,
+      messages: messages,
+      createdAt: DateTime.now(), // Will be overridden if from DB
+      isStarred: false, // Will be overridden if from DB
+      customName: existingCustomName,
+    );
 
-    List<dynamic> updatedRows;
-    try {
-      debugPrint('📤 [ChatStorage] Updating chat in Supabase...');
-      updatedRows = await SupabaseService.client
-          .from('encrypted_chats')
-          .update({'encrypted_payload': encryptedPayload})
-          .eq('id', chatId)
-          .eq('user_id', user.id)
-          .select('id, encrypted_payload, created_at, is_starred');
-      debugPrint('✅ [ChatStorage] Update successful! ${updatedRows.length} rows affected');
-    } on PostgrestException catch (error) {
-      debugPrint('❌ [ChatStorage] Supabase update failed: ${error.message}');
-      debugPrint('   Code: ${error.code}, Details: ${error.details}');
-      throw StateError('Failed to update chat: ${error.message}');
-    } catch (error) {
-      debugPrint('❌ [ChatStorage] Unexpected error during update: $error');
-      rethrow;
+    // Always update locally first
+    _upsertChatLocally(updated);
+    debugPrint('✅ [ChatStorage] Chat updated locally: $chatId');
+
+    // Conditionally save to Supabase
+    if (saveToSupabase) {
+      debugPrint('🔐 [ChatStorage] Encrypting payload...');
+      final encryptedPayload = await EncryptionService.encrypt(payload);
+      debugPrint('✅ [ChatStorage] Encrypted payload');
+
+      List<dynamic> updatedRows;
+      try {
+        debugPrint('📤 [ChatStorage] Updating chat in Supabase...');
+        updatedRows = await SupabaseService.client
+            .from('encrypted_chats')
+            .update({'encrypted_payload': encryptedPayload})
+            .eq('id', chatId)
+            .eq('user_id', user.id)
+            .select('id, encrypted_payload, created_at, is_starred');
+        debugPrint('✅ [ChatStorage] Update successful! ${updatedRows.length} rows affected');
+      } on PostgrestException catch (error) {
+        debugPrint('❌ [ChatStorage] Supabase update failed: ${error.message}');
+        debugPrint('   Code: ${error.code}, Details: ${error.details}');
+        throw StateError('Failed to update chat: ${error.message}');
+      } catch (error) {
+        debugPrint('❌ [ChatStorage] Unexpected error during update: $error');
+        rethrow;
+      }
+
+      if (updatedRows.isEmpty) {
+        debugPrint('❌ [ChatStorage] No rows updated - chat not found or access denied');
+        throw StateError(
+          'Failed to update chat: Chat was not found or access is denied.',
+        );
+      }
+      final updatedFromDb = updatedRows.first as Map<String, dynamic>;
+
+      final stored = StoredChat.fromRow(updatedFromDb, messages, customName: existingCustomName);
+      _upsertChatLocally(stored);
+      unawaited(LocalChatCacheService.upsert(user.id, updatedFromDb));
+      debugPrint('✅ [ChatStorage] Chat synced with Supabase');
+      return stored;
+    } else {
+      // Just update local cache for now
+      final Map<String, dynamic> cacheData = {
+        'id': chatId,
+        'encrypted_payload': '', // Empty for local-only storage
+        'created_at': updated.createdAt.toUtc().toIso8601String(),
+        'is_starred': false,
+      };
+      unawaited(LocalChatCacheService.upsert(user.id, cacheData));
+      debugPrint('✅ [ChatStorage] Chat updated locally only (Supabase sync deferred)');
+      return updated;
     }
-
-    if (updatedRows.isEmpty) {
-      debugPrint('❌ [ChatStorage] No rows updated - chat not found or access denied');
-      throw StateError(
-        'Failed to update chat: Chat was not found or access is denied.',
-      );
-    }
-    final updated = updatedRows.first as Map<String, dynamic>;
-
-    final stored = StoredChat.fromRow(updated, messages, customName: existingCustomName);
-    _upsertChatLocally(stored);
-    debugPrint('✅ [ChatStorage] Chat updated locally');
-    unawaited(LocalChatCacheService.upsert(user.id, updated));
-    return stored;
   }
 
   static Future<void> deleteChat(String chatId) async {
