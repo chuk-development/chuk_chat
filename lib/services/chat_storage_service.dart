@@ -132,6 +132,10 @@ class ChatStorageService {
   static String? _realtimeUserId;
   static int selectedChatIndex = -1;
 
+  // Debouncing for realtime events to prevent duplicate chat entries
+  static final Map<String, DateTime> _lastRealtimeUpdate = <String, DateTime>{};
+  static const Duration _realtimeDebounceDuration = Duration(milliseconds: 500);
+
   static List<StoredChat> get savedChats => List.unmodifiable(_savedChats);
   static Stream<void> get changes => _changesController.stream;
 
@@ -761,6 +765,8 @@ class ChatStorageService {
     } finally {
       _realtimeChannel = null;
       _realtimeUserId = null;
+      // Clean up debouncing map when subscription stops
+      _lastRealtimeUpdate.clear();
     }
   }
 
@@ -779,6 +785,20 @@ class ChatStorageService {
         case PostgresChangeEvent.insert:
         case PostgresChangeEvent.update:
           final Map<String, dynamic> record = payload.newRecord;
+          final chatId = record['id'] as String?;
+          if (chatId == null) return;
+
+          // Debounce realtime updates for the same chat to prevent duplicates
+          final now = DateTime.now();
+          final lastUpdate = _lastRealtimeUpdate[chatId];
+          if (lastUpdate != null &&
+              now.difference(lastUpdate) < _realtimeDebounceDuration) {
+            debugPrint('🔄 [Realtime] Skipping duplicate update for chat $chatId (debounced)');
+            return;
+          }
+          _lastRealtimeUpdate[chatId] = now;
+          debugPrint('🔄 [Realtime] Processing ${payload.eventType} event for chat $chatId');
+
           final encryptedPayload = record['encrypted_payload'] as String?;
           if (encryptedPayload == null) {
             return;
@@ -825,29 +845,64 @@ class ChatStorageService {
 
     final updatedChats = List<StoredChat>.from(_savedChats);
     final existingIndex = updatedChats.indexWhere((c) => c.id == chat.id);
+    bool shouldNotify = false;
+
     if (existingIndex != -1) {
-      updatedChats[existingIndex] = chat;
+      // Only update if the chat data has actually changed
+      final existingChat = updatedChats[existingIndex];
+      if (existingChat.messages.length != chat.messages.length ||
+          existingChat.customName != chat.customName ||
+          existingChat.isStarred != chat.isStarred) {
+        updatedChats[existingIndex] = chat;
+        shouldNotify = true;
+        debugPrint('💾 [ChatStorage] Updated existing chat ${chat.id} (metadata changed)');
+      } else {
+        // Check if message contents have changed
+        bool hasChanges = false;
+        for (int i = 0; i < chat.messages.length && !hasChanges; i++) {
+          if (i >= existingChat.messages.length ||
+              existingChat.messages[i].text != chat.messages[i].text ||
+              existingChat.messages[i].images != chat.messages[i].images ||
+              existingChat.messages[i].attachments != chat.messages[i].attachments) {
+            hasChanges = true;
+          }
+        }
+        if (hasChanges) {
+          updatedChats[existingIndex] = chat;
+          shouldNotify = true;
+          debugPrint('💾 [ChatStorage] Updated existing chat ${chat.id} (messages changed)');
+        } else {
+          // No changes, skip the update to avoid unnecessary notifications
+          debugPrint('💾 [ChatStorage] Skipped update for chat ${chat.id} (no changes)');
+          return;
+        }
+      }
     } else {
       updatedChats.add(chat);
-    }
-    updatedChats.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    _savedChats = updatedChats;
-
-    if (selectedChatId != null) {
-      final newIndex = _savedChats.indexWhere(
-        (storedChat) => storedChat.id == selectedChatId,
-      );
-      selectedChatIndex = newIndex >= 0 ? newIndex : -1;
-    } else if (!hadAnySelection) {
-      selectedChatIndex = -1;
+      shouldNotify = true;
+      debugPrint('💾 [ChatStorage] Added new chat ${chat.id}');
     }
 
-    if (selectedChatIndex >= _savedChats.length) {
-      selectedChatIndex = _savedChats.isEmpty ? -1 : _savedChats.length - 1;
-    } else if (selectedChatIndex < 0) {
-      selectedChatIndex = -1;
+    if (shouldNotify) {
+      updatedChats.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      _savedChats = updatedChats;
+
+      if (selectedChatId != null) {
+        final newIndex = _savedChats.indexWhere(
+          (storedChat) => storedChat.id == selectedChatId,
+        );
+        selectedChatIndex = newIndex >= 0 ? newIndex : -1;
+      } else if (!hadAnySelection) {
+        selectedChatIndex = -1;
+      }
+
+      if (selectedChatIndex >= _savedChats.length) {
+        selectedChatIndex = _savedChats.isEmpty ? -1 : _savedChats.length - 1;
+      } else if (selectedChatIndex < 0) {
+        selectedChatIndex = -1;
+      }
+      _notifyChanges();
     }
-    _notifyChanges();
   }
 
   static void _removeChatLocally(String chatId) {
@@ -856,6 +911,8 @@ class ChatStorageService {
       return;
     }
     _savedChats.removeAt(removedIndex);
+    // Clean up debouncing map when chat is removed
+    _lastRealtimeUpdate.remove(chatId);
     if (selectedChatIndex == removedIndex) {
       selectedChatIndex = -1;
     } else if (selectedChatIndex > removedIndex) {
