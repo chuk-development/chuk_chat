@@ -713,7 +713,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         _messages[index] = message;
       });
 
-      _scrollChatToBottom(force: true);
+      _scrollChatToBottom();
       // Don't refocus text field during streaming - let user control keyboard
     }
 

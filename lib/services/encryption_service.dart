@@ -1,13 +1,86 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:chuk_chat/services/supabase_service.dart';
+
+/// Parameters for background encryption
+class _EncryptionParams {
+  final Uint8List bytes;
+  final List<int> keyBytes;
+  final String payloadVersion;
+
+  _EncryptionParams({
+    required this.bytes,
+    required this.keyBytes,
+    required this.payloadVersion,
+  });
+}
+
+/// Parameters for background decryption
+class _DecryptionParams {
+  final String encrypted;
+  final List<int> keyBytes;
+  final String payloadVersion;
+
+  _DecryptionParams({
+    required this.encrypted,
+    required this.keyBytes,
+    required this.payloadVersion,
+  });
+}
+
+/// Top-level function for background encryption
+Future<String> _encryptBytesInBackground(_EncryptionParams params) async {
+  final cipher = AesGcm.with256bits();
+  final secretKey = SecretKey(params.keyBytes);
+  final rng = Random.secure();
+
+  final nonce = List<int>.generate(12, (_) => rng.nextInt(256));
+  final secretBox = await cipher.encrypt(
+    params.bytes,
+    secretKey: secretKey,
+    nonce: nonce,
+  );
+
+  final payload = <String, String>{
+    'v': params.payloadVersion,
+    'nonce': base64Encode(secretBox.nonce),
+    'ciphertext': base64Encode(secretBox.cipherText),
+    'mac': base64Encode(secretBox.mac.bytes),
+  };
+
+  return jsonEncode(payload);
+}
+
+/// Top-level function for background decryption
+Future<Uint8List> _decryptBytesInBackground(_DecryptionParams params) async {
+  final cipher = AesGcm.with256bits();
+  final secretKey = SecretKey(params.keyBytes);
+
+  final Map<String, dynamic> payload = jsonDecode(params.encrypted);
+  final version = payload['v'];
+  if (version != params.payloadVersion) {
+    throw StateError('Unsupported ciphertext version: $version');
+  }
+
+  final nonce = base64Decode(payload['nonce'] as String);
+  final cipherText = base64Decode(payload['ciphertext'] as String);
+  final mac = Mac(base64Decode(payload['mac'] as String));
+  final secretBox = SecretBox(cipherText, nonce: nonce, mac: mac);
+
+  final cleartextBytes = await cipher.decrypt(
+    secretBox,
+    secretKey: secretKey,
+  );
+
+  return Uint8List.fromList(cleartextBytes);
+}
 
 class EncryptionService {
   const EncryptionService._();
@@ -315,39 +388,32 @@ class EncryptionService {
   /// Format: {"v":"1","nonce":"...","ciphertext":"...","mac":"..."}
   static Future<String> encryptBytes(Uint8List bytes) async {
     final secretKey = await _ensureKey();
-    final nonce = _randomNonce(12);
-    final secretBox = await _cipher.encrypt(
-      bytes,
-      secretKey: secretKey,
-      nonce: nonce,
+    final keyBytes = await secretKey.extractBytes();
+
+    final params = _EncryptionParams(
+      bytes: bytes,
+      keyBytes: keyBytes,
+      payloadVersion: _payloadVersion,
     );
-    final payload = <String, String>{
-      'v': _payloadVersion,
-      'nonce': base64Encode(secretBox.nonce),
-      'ciphertext': base64Encode(secretBox.cipherText),
-      'mac': base64Encode(secretBox.mac.bytes),
-    };
-    return jsonEncode(payload);
+
+    // Run encryption in background isolate to avoid blocking UI
+    return await compute(_encryptBytesInBackground, params);
   }
 
   /// Decrypts binary data from encrypted JSON format
   /// Returns the original binary data as Uint8List
   static Future<Uint8List> decryptBytes(String encrypted) async {
     final secretKey = await _ensureKey();
-    final Map<String, dynamic> payload = jsonDecode(encrypted);
-    final version = payload['v'];
-    if (version != _payloadVersion) {
-      throw StateError('Unsupported ciphertext version: $version');
-    }
-    final nonce = base64Decode(payload['nonce'] as String);
-    final cipherText = base64Decode(payload['ciphertext'] as String);
-    final mac = Mac(base64Decode(payload['mac'] as String));
-    final secretBox = SecretBox(cipherText, nonce: nonce, mac: mac);
-    final cleartextBytes = await _cipher.decrypt(
-      secretBox,
-      secretKey: secretKey,
+    final keyBytes = await secretKey.extractBytes();
+
+    final params = _DecryptionParams(
+      encrypted: encrypted,
+      keyBytes: keyBytes,
+      payloadVersion: _payloadVersion,
     );
-    return Uint8List.fromList(cleartextBytes);
+
+    // Run decryption in background isolate to avoid blocking UI
+    return await compute(_decryptBytesInBackground, params);
   }
 
   static Future<SecretKey> _ensureKey() async {
