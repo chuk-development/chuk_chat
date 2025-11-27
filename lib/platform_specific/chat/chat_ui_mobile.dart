@@ -1300,7 +1300,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                 controller: _scrollController,
                                 padding: listPadding,
                                 itemCount: _messages.length,
-                                addAutomaticKeepAlives: false,
+                                addAutomaticKeepAlives: true,
                                 addRepaintBoundaries: true,
                                 cacheExtent: 500.0,
                                 itemBuilder: (_, int i) {
@@ -1331,6 +1331,39 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                       i;
                                   final bool isUser = sender == 'user';
 
+                                  // Parse images from JSON
+                                  List<String>? images;
+                                  final String? imagesJson = raw['images'];
+                                  if (imagesJson != null && imagesJson.isNotEmpty) {
+                                    try {
+                                      final decoded = jsonDecode(imagesJson);
+                                      if (decoded is List) {
+                                        images = decoded.cast<String>();
+                                        debugPrint('🖼️ [ImageDebug] Extracted ${images.length} images from message $i');
+                                      }
+                                    } catch (e) {
+                                      debugPrint('🖼️ [ImageDebug] Failed to decode images JSON: $e');
+                                    }
+                                  }
+
+                                  // Parse document attachments from JSON
+                                  List<DocumentAttachment>? attachments;
+                                  final String? attachmentsJson = raw['attachments'];
+                                  if (attachmentsJson != null && attachmentsJson.isNotEmpty) {
+                                    try {
+                                      final decoded = jsonDecode(attachmentsJson);
+                                      if (decoded is List) {
+                                        attachments = decoded
+                                            .map((item) => DocumentAttachment.fromJson(
+                                                item as Map<String, dynamic>))
+                                            .toList();
+                                        debugPrint('📄 [AttachmentDebug] Extracted ${attachments.length} attachments from message $i');
+                                      }
+                                    } catch (e) {
+                                      debugPrint('📄 [AttachmentDebug] Failed to decode attachments JSON: $e');
+                                    }
+                                  }
+
                                   return RepaintBoundary(
                                     child: MessageBubble(
                                       key: ValueKey('msg_$i'),
@@ -1342,6 +1375,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                           : expandedInputWidth,
                                       isReasoningStreaming: isStreamingMessage,
                                       modelLabel: modelLabel,
+                                      images: images,
+                                      attachments: attachments,
                                       actions: _messageActionsHandler
                                           .buildActionsForMessage(
                                             index: i,
