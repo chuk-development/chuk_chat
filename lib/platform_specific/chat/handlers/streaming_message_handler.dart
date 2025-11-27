@@ -15,9 +15,12 @@ class StreamingMessageHandler {
   // Callbacks
   Function(String)? onShowSnackBar;
   Function()? onUpdateUI;
-  Function(int index, String content, String reasoning, String chatId)? onMessageUpdate;
-  Function(int index, String content, String reasoning, String chatId)? onMessageFinalize;
-  Function(String chatId, int index, String content, String reasoning)? onBackgroundUpdate;
+  Function(int index, String content, String reasoning, String chatId)?
+  onMessageUpdate;
+  Function(int index, String content, String reasoning, String chatId)?
+  onMessageFinalize;
+  Function(String chatId, int index, String content, String reasoning)?
+  onBackgroundUpdate;
 
   bool _isStreaming = false;
   bool _isSending = false;
@@ -60,7 +63,10 @@ class StreamingMessageHandler {
     }
 
     // Build API history
-    final List<Map<String, String>> apiHistory = _buildApiHistory(messages, userInput);
+    final List<Map<String, String>> apiHistory = _buildApiHistory(
+      messages,
+      userInput,
+    );
 
     // Prepare message using MessageCompositionService
     final result = await MessageCompositionService.prepareMessage(
@@ -86,6 +92,7 @@ class StreamingMessageHandler {
     final int maxResponseTokens = result.maxResponseTokens!;
     final String? effectiveSystemPrompt = result.effectiveSystemPrompt;
     final String aiPromptContent = result.aiPromptContent!;
+    final List<String>? images = result.images;
 
     _isSending = true;
     _isStreaming = true;
@@ -100,6 +107,7 @@ class StreamingMessageHandler {
         history: apiHistory.isEmpty ? null : apiHistory,
         systemPrompt: effectiveSystemPrompt,
         maxTokens: maxResponseTokens,
+        images: images,
       );
 
       // Use StreamingManager to handle the stream
@@ -109,7 +117,12 @@ class StreamingMessageHandler {
         stream: stream,
         onUpdate: (content, reasoning) {
           if (onMessageUpdate != null) {
-            onMessageUpdate!(placeholderIndex, content, reasoning, activeChatId);
+            onMessageUpdate!(
+              placeholderIndex,
+              content,
+              reasoning,
+              activeChatId,
+            );
           }
         },
         onComplete: (finalContent, finalReasoning) {
@@ -131,7 +144,12 @@ class StreamingMessageHandler {
         },
         onError: (errorMessage) {
           if (onMessageFinalize != null) {
-            onMessageFinalize!(placeholderIndex, errorMessage, '', activeChatId);
+            onMessageFinalize!(
+              placeholderIndex,
+              errorMessage,
+              '',
+              activeChatId,
+            );
           }
           onShowSnackBar?.call(errorMessage);
 
@@ -219,12 +237,14 @@ class StreamingMessageHandler {
   /// Get session safely with network error handling
   Future<dynamic> getSessionSafely() async {
     try {
-      final session = await SupabaseService.refreshSession() ??
+      final session =
+          await SupabaseService.refreshSession() ??
           SupabaseService.auth.currentSession;
 
       if (session == null) {
         // Check if we're offline before logging out
-        final bool isOnline = await NetworkStatusService.hasInternetConnection();
+        final bool isOnline =
+            await NetworkStatusService.hasInternetConnection();
         if (!isOnline) {
           onShowSnackBar?.call('Cannot connect. Please check your network.');
           return null;

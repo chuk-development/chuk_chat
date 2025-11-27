@@ -33,7 +33,7 @@ dependencies:
   web_socket_channel: ^3.0.1
   archive: ^4.0.7
   desktop_drop: ^0.7.0
-
+  image: ^4.3.0
 
 dev_dependencies:
   flutter_test:

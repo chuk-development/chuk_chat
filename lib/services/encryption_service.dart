@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -308,6 +309,45 @@ class EncryptionService {
       secretKey: secretKey,
     );
     return utf8.decode(cleartextBytes);
+  }
+
+  /// Encrypts binary data (e.g., image files) and returns encrypted JSON
+  /// Format: {"v":"1","nonce":"...","ciphertext":"...","mac":"..."}
+  static Future<String> encryptBytes(Uint8List bytes) async {
+    final secretKey = await _ensureKey();
+    final nonce = _randomNonce(12);
+    final secretBox = await _cipher.encrypt(
+      bytes,
+      secretKey: secretKey,
+      nonce: nonce,
+    );
+    final payload = <String, String>{
+      'v': _payloadVersion,
+      'nonce': base64Encode(secretBox.nonce),
+      'ciphertext': base64Encode(secretBox.cipherText),
+      'mac': base64Encode(secretBox.mac.bytes),
+    };
+    return jsonEncode(payload);
+  }
+
+  /// Decrypts binary data from encrypted JSON format
+  /// Returns the original binary data as Uint8List
+  static Future<Uint8List> decryptBytes(String encrypted) async {
+    final secretKey = await _ensureKey();
+    final Map<String, dynamic> payload = jsonDecode(encrypted);
+    final version = payload['v'];
+    if (version != _payloadVersion) {
+      throw StateError('Unsupported ciphertext version: $version');
+    }
+    final nonce = base64Decode(payload['nonce'] as String);
+    final cipherText = base64Decode(payload['ciphertext'] as String);
+    final mac = Mac(base64Decode(payload['mac'] as String));
+    final secretBox = SecretBox(cipherText, nonce: nonce, mac: mac);
+    final cleartextBytes = await _cipher.decrypt(
+      secretBox,
+      secretKey: secretKey,
+    );
+    return Uint8List.fromList(cleartextBytes);
   }
 
   static Future<SecretKey> _ensureKey() async {

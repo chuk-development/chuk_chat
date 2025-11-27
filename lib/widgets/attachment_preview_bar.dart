@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/models/chat_model.dart';
+import 'package:chuk_chat/widgets/encrypted_image_widget.dart';
 
 typedef AttachmentRemoveCallback = void Function(String fileId);
 typedef AttachmentCopyCallback = Future<void> Function(AttachedFile file);
@@ -86,7 +87,9 @@ class _AttachmentTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final BorderRadius cardRadius = BorderRadius.circular(12);
     final bool isUploading = file.isUploading;
-    final Color metaTextColor = textColor.withValues(alpha: isUploading ? 0.5 : 0.65);
+    final Color metaTextColor = textColor.withValues(
+      alpha: isUploading ? 0.5 : 0.65,
+    );
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -173,7 +176,9 @@ class _AttachmentTile extends StatelessWidget {
                     splashRadius: 18,
                     icon: Icon(
                       Icons.copy,
-                      color: textColor.withValues(alpha: isUploading ? 0.25 : 0.7),
+                      color: textColor.withValues(
+                        alpha: isUploading ? 0.25 : 0.7,
+                      ),
                     ),
                     tooltip: 'Copy ${file.fileName}',
                     onPressed: isUploading ? null : () => onCopy?.call(file),
@@ -190,7 +195,9 @@ class _AttachmentTile extends StatelessWidget {
                   splashRadius: 18,
                   icon: Icon(
                     Icons.close,
-                    color: textColor.withValues(alpha: isUploading ? 0.25 : 0.7),
+                    color: textColor.withValues(
+                      alpha: isUploading ? 0.25 : 0.7,
+                    ),
                   ),
                   tooltip: 'Remove ${file.fileName}',
                   onPressed: isUploading ? null : () => onRemove(file.id),
@@ -214,6 +221,21 @@ class _AttachmentThumbnail extends StatelessWidget {
   Widget build(BuildContext context) {
     final BorderRadius radius = BorderRadius.circular(8);
     final bool isImage = _isImageFile(file.fileName);
+
+    // Show encrypted image if available
+    if (isImage && file.encryptedImagePath != null) {
+      return ClipRRect(
+        borderRadius: radius,
+        child: EncryptedImageWidget(
+          storagePath: file.encryptedImagePath!,
+          width: _kChipThumbnailSize,
+          height: _kChipThumbnailSize,
+          fit: BoxFit.cover,
+        ),
+      );
+    }
+
+    // Show local file thumbnail if available
     final File? localFile = file.localPath != null
         ? File(file.localPath!)
         : null;
@@ -337,8 +359,9 @@ void _showAttachmentPreview(
           : null;
       final File? imageFile =
           isImage && candidateFile != null && candidateFile.existsSync()
-              ? candidateFile
-              : null;
+          ? candidateFile
+          : null;
+      final bool hasEncryptedImage = file.encryptedImagePath != null;
       final bool hasMarkdown =
           file.markdownContent != null && file.markdownContent!.isNotEmpty;
 
@@ -397,7 +420,19 @@ void _showAttachmentPreview(
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.all(24),
-                  child: imageFile != null
+                  child: hasEncryptedImage
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: InteractiveViewer(
+                            minScale: 0.5,
+                            maxScale: 4.0,
+                            child: EncryptedImageWidget(
+                              storagePath: file.encryptedImagePath!,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                        )
+                      : imageFile != null
                       ? ClipRRect(
                           borderRadius: BorderRadius.circular(12),
                           child: InteractiveViewer(

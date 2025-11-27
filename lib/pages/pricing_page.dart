@@ -113,9 +113,7 @@ Future<Map<String, dynamic>> getUserStatus() async {
 
   final response = await http.get(
     Uri.parse('$_apiBaseUrl/user/status'),
-    headers: {
-      'Authorization': 'Bearer $token',
-    },
+    headers: {'Authorization': 'Bearer $token'},
   );
 
   if (response.statusCode != 200) {
@@ -198,40 +196,6 @@ class _PricingPageState extends State<PricingPage> {
     }
   }
 
-  Future<void> _handleSyncSubscription() async {
-    if (_isProcessing) return;
-
-    setState(() => _isProcessing = true);
-    try {
-      await syncSubscription();
-
-      // Show success message
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text(
-            'Subscription synced successfully!',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-
-      // Reload status
-      await _loadUserStatus();
-    } catch (error) {
-      if (!mounted) return;
-      _showError(error.toString());
-    } finally {
-      if (mounted) setState(() => _isProcessing = false);
-    }
-  }
-
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -273,7 +237,6 @@ class _PricingPageState extends State<PricingPage> {
 
     final hasSubscription = _userStatus?['has_subscription'] == true;
     final currentPlan = _userStatus?['current_plan'] as String?;
-    final creditsRemaining = (_userStatus?['credits_remaining'] ?? 0.0) as num;
 
     return Scaffold(
       backgroundColor: scaffoldBg,
@@ -357,7 +320,9 @@ class _PricingPageState extends State<PricingPage> {
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
-                          onPressed: _isProcessing ? null : _handleManageBilling,
+                          onPressed: _isProcessing
+                              ? null
+                              : _handleManageBilling,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: accent,
                             foregroundColor: Colors.white,
@@ -390,7 +355,9 @@ class _PricingPageState extends State<PricingPage> {
                         decoration: BoxDecoration(
                           color: accent.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: accent.withValues(alpha: 0.3)),
+                          border: Border.all(
+                            color: accent.withValues(alpha: 0.3),
+                          ),
                         ),
                         child: Row(
                           children: [
@@ -417,7 +384,9 @@ class _PricingPageState extends State<PricingPage> {
 
             // Plan Header
             Text(
-              hasSubscription ? 'Subscription Plan' : 'Subscribe to Get AI Credits',
+              hasSubscription
+                  ? 'Subscription Plan'
+                  : 'Subscribe to Get AI Credits',
               style: TextStyle(
                 color: iconFg,
                 fontSize: 24,
@@ -464,7 +433,9 @@ class _PricingPageState extends State<PricingPage> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
                 side: BorderSide(
-                  color: hasSubscription ? accent : iconFg.withValues(alpha: 0.3),
+                  color: hasSubscription
+                      ? accent
+                      : iconFg.withValues(alpha: 0.3),
                   width: hasSubscription ? 2 : 1,
                 ),
               ),
@@ -541,7 +512,11 @@ class _PricingPageState extends State<PricingPage> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    _buildFeature(accent, iconFg, 'Get €16 in AI credits monthly'),
+                    _buildFeature(
+                      accent,
+                      iconFg,
+                      'Get €16 in AI credits monthly',
+                    ),
                     _buildFeature(accent, iconFg, 'Access to all AI models'),
                     _buildFeature(accent, iconFg, 'Image generation'),
                     _buildFeature(accent, iconFg, 'Voice mode'),

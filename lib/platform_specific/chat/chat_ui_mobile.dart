@@ -1,5 +1,6 @@
 // lib/platform_specific/chat/chat_ui_mobile.dart
 import 'package:flutter/material.dart';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -710,7 +711,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       });
 
       _scrollChatToBottom();
-      Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+      // Don't refocus text field during streaming - let user control keyboard
     }
 
     // CRITICAL: Always persist, even for background chats
@@ -829,15 +830,44 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     }
     final String chatId = _activeChatId!;
 
+    // Extract prepared values from validation result
+    final String displayMessageText = validationResult.displayMessageText!;
+    final List<String>? imageDataUrls = validationResult.images;
+
     // Add user message
     setState(() {
-      _messages.add({
+      // Store message with images and attachments (if any)
+      final userMessage = {
         'sender': 'user',
-        'text': originalUserInput,
+        'text': displayMessageText,
         'reasoning': '',
         'modelId': _selectedModelId,
         'provider': _selectedProviderSlug ?? '',
-      });
+      };
+
+      // Store images as JSON-encoded string if present
+      if (imageDataUrls != null && imageDataUrls.isNotEmpty) {
+        userMessage['images'] = jsonEncode(imageDataUrls);
+        debugPrint('🖼️ [ImageDebug] Storing ${imageDataUrls.length} images in message');
+      }
+
+      // Store document attachments as JSON-encoded string if present
+      final documentAttachments = _fileHandler.attachedFiles
+          .where((f) => !f.isImage && f.markdownContent != null)
+          .map((f) => {
+                'fileName': f.fileName,
+                'markdownContent': f.markdownContent!,
+              })
+          .toList();
+
+      if (documentAttachments.isNotEmpty) {
+        userMessage['attachments'] = jsonEncode(documentAttachments);
+        debugPrint('📄 [AttachmentDebug] Storing ${documentAttachments.length} attachments');
+      }
+
+      _messages.add(userMessage);
+      debugPrint('💾 [MessageDebug] Message added to _messages list. Total messages: ${_messages.length}');
+
       _controller.clear();
       if (hasAttachments) {
         _fileHandler.clearAll();
