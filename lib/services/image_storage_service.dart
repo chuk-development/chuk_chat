@@ -1,4 +1,5 @@
 // lib/services/image_storage_service.dart
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -38,7 +39,7 @@ class ImageStorageService {
 
     // Step 2: Encrypt the compressed image
     final encryptedJson = await EncryptionService.encryptBytes(compressedBytes);
-    final encryptedBytes = Uint8List.fromList(encryptedJson.codeUnits);
+    final encryptedBytes = Uint8List.fromList(utf8.encode(encryptedJson));
 
     // Step 3: Generate unique filename
     final fileId = _uuid.v4();
@@ -86,8 +87,8 @@ class ImageStorageService {
           .from(bucketName)
           .download(storagePath);
 
-      // Convert bytes to string (JSON format)
-      final encryptedJson = String.fromCharCodes(encryptedBytes);
+      // Convert bytes to string (JSON format) - use UTF-8 decoding
+      final encryptedJson = utf8.decode(encryptedBytes);
 
       // Decrypt the image
       final decryptedBytes = await EncryptionService.decryptBytes(
