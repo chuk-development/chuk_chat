@@ -290,7 +290,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
             final map = <String, String>{
               'sender': message.sender,
               'text': message.text,
-              'reasoning': message.reasoning,
+              'reasoning': message.reasoning ?? '',
             };
             if (message.modelId != null && message.modelId!.isNotEmpty) {
               map['modelId'] = message.modelId!;
@@ -403,7 +403,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
             final map = <String, String>{
               'sender': message.sender,
               'text': message.text,
-              'reasoning': message.reasoning,
+              'reasoning': message.reasoning ?? '',
             };
             if (message.modelId != null && message.modelId!.isNotEmpty) {
               map['modelId'] = message.modelId!;
