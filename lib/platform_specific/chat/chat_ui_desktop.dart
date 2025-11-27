@@ -726,6 +726,21 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     final String modelIdToUse = originalModelId ?? _selectedModelId;
     final String? providerToUse = originalProvider ?? _selectedProviderSlug;
 
+    // Reconstruct images from stored JSON for resend
+    List<String>? imagesForResend;
+    final String? imagesJson = _messages[index]['images'];
+    if (imagesJson != null && imagesJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(imagesJson);
+        if (decoded is List) {
+          imagesForResend = decoded.cast<String>();
+          debugPrint('🔄 [ResendDebug] Reconstructed ${imagesForResend.length} images for resend');
+        }
+      } catch (e) {
+        debugPrint('🔄 [ResendDebug] Failed to parse images JSON: $e');
+      }
+    }
+
     setState(() {
       _isSending = true;
       _messages.add({
@@ -805,6 +820,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             systemPrompt: systemPrompt,
             maxTokens: 4096,
             temperature: 0.7,
+            images: imagesForResend,
           );
 
       final StringBuffer contentBuffer = StringBuffer();
@@ -1237,6 +1253,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       if (documentAttachments.isNotEmpty) {
         userMessage['attachments'] = jsonEncode(documentAttachments);
         debugPrint('📄 [AttachmentDebug] Storing ${documentAttachments.length} attachments');
+      }
+
+      // Store original AttachedFile objects for resend functionality
+      if (_attachedFiles.isNotEmpty) {
+        userMessage['attachedFilesJson'] = jsonEncode(
+          _attachedFiles.map((f) => f.toJson()).toList(),
+        );
+        debugPrint('💾 [AttachmentDebug] Storing ${_attachedFiles.length} attached files for resend');
       }
 
       _messages.add(userMessage);

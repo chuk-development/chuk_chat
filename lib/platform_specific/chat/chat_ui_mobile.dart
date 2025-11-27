@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
@@ -865,6 +866,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         debugPrint('📄 [AttachmentDebug] Storing ${documentAttachments.length} attachments');
       }
 
+      // Store original AttachedFile objects for resend functionality
+      if (_fileHandler.attachedFiles.isNotEmpty) {
+        userMessage['attachedFilesJson'] = jsonEncode(
+          _fileHandler.attachedFiles.map((f) => f.toJson()).toList(),
+        );
+        debugPrint('💾 [AttachmentDebug] Storing ${_fileHandler.attachedFiles.length} attached files for resend');
+      }
+
       _messages.add(userMessage);
       debugPrint('💾 [MessageDebug] Message added to _messages list. Total messages: ${_messages.length}');
 
@@ -971,6 +980,23 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     final String modelIdToUse = originalModelId ?? _selectedModelId;
     final String? providerToUse = originalProvider ?? _selectedProviderSlug;
 
+    // Reconstruct attached files from stored JSON for resend
+    List<AttachedFile> attachedFilesForResend = [];
+    final String? attachedFilesJson = _messages[index]['attachedFilesJson'];
+    if (attachedFilesJson != null && attachedFilesJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(attachedFilesJson);
+        if (decoded is List) {
+          attachedFilesForResend = decoded
+              .map((item) => AttachedFile.fromJson(item as Map<String, dynamic>))
+              .toList();
+          debugPrint('🔄 [ResendDebug] Reconstructed ${attachedFilesForResend.length} attached files for resend');
+        }
+      } catch (e) {
+        debugPrint('🔄 [ResendDebug] Failed to parse attachedFilesJson: $e');
+      }
+    }
+
     // Generate chat ID if needed BEFORE persisting
     _activeChatId ??= _uuid.v4();
     final String chatId = _activeChatId!;
@@ -990,10 +1016,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     _persistChat();
     _scrollChatToBottom();
 
-    // Send using streaming handler with preserved model/provider
+    // Send using streaming handler with preserved model/provider and attached files
     await _streamingHandler.sendMessage(
       userInput: originalUserInput,
-      attachedFiles: [],
+      attachedFiles: attachedFilesForResend,
       selectedModelId: modelIdToUse,
       selectedProviderSlug: providerToUse,
       messages: _messages,
