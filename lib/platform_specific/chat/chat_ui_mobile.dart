@@ -345,7 +345,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     }
 
     setState(() {});
-    _scrollChatToBottom();
+    _scrollChatToBottom(force: true);
     if (!widget.isSidebarExpanded) {
       _textFieldFocusNode.requestFocus();
     }
@@ -361,7 +361,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       _controller.clear();
       _messageActionsHandler.cancelEdit();
     });
-    _scrollChatToBottom();
+    _scrollChatToBottom(force: true);
     if (!widget.isSidebarExpanded) {
       _textFieldFocusNode.requestFocus();
     }
@@ -713,7 +713,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         _messages[index] = message;
       });
 
-      _scrollChatToBottom();
+      _scrollChatToBottom(force: true);
       // Don't refocus text field during streaming - let user control keyboard
     }
 
@@ -892,7 +892,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
     final int placeholderIndex = _messages.length - 1;
     _textFieldFocusNode.requestFocus();
-    _scrollChatToBottom();
+    _scrollChatToBottom(force: true);
 
     // CRITICAL: Persist immediately after user sends first message
     // This ensures the chat is created and saved right away, even if
@@ -1014,7 +1014,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
     // Persist immediately after editing - chat ID is now guaranteed to exist
     _persistChat();
-    _scrollChatToBottom();
+    _scrollChatToBottom(force: true);
 
     // Send using streaming handler with preserved model/provider and attached files
     await _streamingHandler.sendMessage(
@@ -1199,15 +1199,19 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     );
   }
 
-  void _scrollChatToBottom() {
+  void _scrollChatToBottom({bool force = false}) {
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) return;
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-      );
+
+      // Only auto-scroll if user is already near bottom (within 100px) or force is true
+      final position = _scrollController.position;
+      final isNearBottom = position.maxScrollExtent - position.pixels < 100;
+
+      if (force || isNearBottom) {
+        // Use jumpTo during streaming to avoid animation conflicts with keyboard
+        _scrollController.jumpTo(position.maxScrollExtent);
+      }
     });
   }
 
@@ -1328,9 +1332,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                 controller: _scrollController,
                                 padding: listPadding,
                                 itemCount: _messages.length,
-                                addAutomaticKeepAlives: true,
+                                addAutomaticKeepAlives: false,
                                 addRepaintBoundaries: true,
-                                cacheExtent: 500.0,
+                                cacheExtent: 1000.0,
                                 itemBuilder: (_, int i) {
                                   final Map<String, String> raw = _messages[i];
                                   final String sender = raw['sender'] ?? 'ai';
