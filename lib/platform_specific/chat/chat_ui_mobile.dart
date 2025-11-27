@@ -686,6 +686,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       message['reasoning'] = reasoning;
       _messages[index] = message;
     });
+
+    _scrollChatToBottom();
   }
 
   void _finalizeAiMessage(
