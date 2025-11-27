@@ -173,7 +173,7 @@ class _ImageViewerState extends State<ImageViewer> {
         maxScale: 4.0,
         child: Image.memory(
           _base64ToBytes(imageDataUrl),
-          fit: BoxFit.contain,
+          fit: BoxFit.cover,
           errorBuilder: (context, error, stackTrace) {
             return Center(
               child: Column(

@@ -135,7 +135,11 @@ class ChatStorageService {
 
   // Debouncing for realtime events to prevent duplicate chat entries
   static final Map<String, DateTime> _lastRealtimeUpdate = <String, DateTime>{};
-  static const Duration _realtimeDebounceDuration = Duration(milliseconds: 500);
+  static const Duration _realtimeDebounceDuration = Duration(seconds: 2); // Increased to 2 seconds
+  static final Set<String> _processingChats = <String>{}; // Track chats currently being processed
+
+  // Prevent concurrent save/update operations for the same chat
+  static final Map<String, Future<void>> _chatSaveOperations = <String, Future<void>>{};
 
   static List<StoredChat> get savedChats => List.unmodifiable(_savedChats);
   static Stream<void> get changes => _changesController.stream;
@@ -203,8 +207,8 @@ class ChatStorageService {
           }
         } catch (cacheError) {
           debugPrint('❌ [ChatStorage] Cache load also failed: $cacheError');
-          if (error is PostgrestException) {
-            throw StateError('Failed to load chats: ${error.message}');
+          if (cacheError is PostgrestException) {
+            throw StateError('Failed to load chats: ${cacheError.message}');
           }
           throw StateError('Failed to load chats.');
         }
@@ -321,8 +325,39 @@ class ChatStorageService {
     List<Map<String, dynamic>> messagesMaps, {
     String? chatId,
   }) async {
-    debugPrint('💾 [ChatStorage] saveChat called with ${messagesMaps.length} messages, chatId=$chatId');
+    final effectiveChatId = chatId ?? 'new-chat-${DateTime.now().millisecondsSinceEpoch}';
+    debugPrint('💾 [ChatStorage] saveChat called with ${messagesMaps.length} messages, chatId=$effectiveChatId');
 
+    // Prevent concurrent operations on the same chat
+    final existingOperation = _chatSaveOperations[effectiveChatId];
+    if (existingOperation != null) {
+      debugPrint('⏳ [ChatStorage] Waiting for existing save operation on chat $effectiveChatId');
+      await existingOperation;
+      debugPrint('✅ [ChatStorage] Previous save operation completed for chat $effectiveChatId');
+      // Return the existing chat if it exists
+      final existingChat = _savedChats.cast<StoredChat?>().firstWhere(
+        (chat) => chat?.id == effectiveChatId,
+        orElse: () => null,
+      );
+      return existingChat;
+    }
+
+    final operation = _performSaveChat(messagesMaps, effectiveChatId, chatId);
+    _chatSaveOperations[effectiveChatId] = operation;
+
+    try {
+      final result = await operation;
+      return result;
+    } finally {
+      _chatSaveOperations.remove(effectiveChatId);
+    }
+  }
+
+  static Future<StoredChat?> _performSaveChat(
+    List<Map<String, dynamic>> messagesMaps,
+    String effectiveChatId,
+    String? originalChatId,
+  ) async {
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
       debugPrint('❌ [ChatStorage] No user signed in');
@@ -369,9 +404,9 @@ class ChatStorageService {
         'user_id': user.id,
         'encrypted_payload': encryptedPayload,
       };
-      if (chatId != null) {
-        insertData['id'] = chatId;
-        debugPrint('   Using provided chatId: $chatId');
+      if (originalChatId != null) {
+        insertData['id'] = originalChatId;
+        debugPrint('   Using provided chatId: $originalChatId');
       }
 
       inserted = await SupabaseService.client
@@ -402,6 +437,35 @@ class ChatStorageService {
   ) async {
     debugPrint('🔄 [ChatStorage] updateChat called for chatId=$chatId with ${messagesMaps.length} messages');
 
+    // Prevent concurrent operations on the same chat
+    final existingOperation = _chatSaveOperations[chatId];
+    if (existingOperation != null) {
+      debugPrint('⏳ [ChatStorage] Waiting for existing update operation on chat $chatId');
+      await existingOperation;
+      debugPrint('✅ [ChatStorage] Previous update operation completed for chat $chatId');
+      // Return the existing chat
+      final existingChat = _savedChats.cast<StoredChat?>().firstWhere(
+        (chat) => chat?.id == chatId,
+        orElse: () => null,
+      );
+      return existingChat;
+    }
+
+    final operation = _performUpdateChat(chatId, messagesMaps);
+    _chatSaveOperations[chatId] = operation;
+
+    try {
+      final result = await operation;
+      return result;
+    } finally {
+      _chatSaveOperations.remove(chatId);
+    }
+  }
+
+  static Future<StoredChat?> _performUpdateChat(
+    String chatId,
+    List<Map<String, dynamic>> messagesMaps,
+  ) async {
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
       debugPrint('❌ [ChatStorage] No user signed in');
@@ -802,8 +866,10 @@ class ChatStorageService {
     } finally {
       _realtimeChannel = null;
       _realtimeUserId = null;
-      // Clean up debouncing map when subscription stops
+      // Clean up debouncing and processing maps when subscription stops
       _lastRealtimeUpdate.clear();
+      _processingChats.clear();
+      _chatSaveOperations.clear();
     }
   }
 
@@ -825,6 +891,12 @@ class ChatStorageService {
           final chatId = record['id'] as String?;
           if (chatId == null) return;
 
+          // Prevent concurrent processing of the same chat
+          if (_processingChats.contains(chatId)) {
+            debugPrint('🔄 [Realtime] Skipping concurrent update for chat $chatId (already processing)');
+            return;
+          }
+
           // Debounce realtime updates for the same chat to prevent duplicates
           final now = DateTime.now();
           final lastUpdate = _lastRealtimeUpdate[chatId];
@@ -833,31 +905,39 @@ class ChatStorageService {
             debugPrint('🔄 [Realtime] Skipping duplicate update for chat $chatId (debounced)');
             return;
           }
+
+          // Mark as processing and update timestamp
+          _processingChats.add(chatId);
           _lastRealtimeUpdate[chatId] = now;
           debugPrint('🔄 [Realtime] Processing ${payload.eventType} event for chat $chatId');
 
-          final encryptedPayload = record['encrypted_payload'] as String?;
-          if (encryptedPayload == null) {
-            return;
-          }
-          final userId = SupabaseService.auth.currentUser?.id;
-          if (userId != null) {
-            unawaited(LocalChatCacheService.upsert(userId, record));
-          }
-          if (!EncryptionService.hasKey) {
-            final loaded = await EncryptionService.tryLoadKey();
-            if (!loaded) {
+          try {
+            final encryptedPayload = record['encrypted_payload'] as String?;
+            if (encryptedPayload == null) {
               return;
             }
+            final userId = SupabaseService.auth.currentUser?.id;
+            if (userId != null) {
+              unawaited(LocalChatCacheService.upsert(userId, record));
+            }
+            if (!EncryptionService.hasKey) {
+              final loaded = await EncryptionService.tryLoadKey();
+              if (!loaded) {
+                return;
+              }
+            }
+            final decrypted = await EncryptionService.decrypt(encryptedPayload);
+            final chatPayload = _deserializePayload(decrypted);
+            final stored = StoredChat.fromRow(
+              record,
+              chatPayload.messages,
+              customName: chatPayload.customName,
+            );
+            _upsertChatLocally(stored);
+          } finally {
+            // Always remove from processing set
+            _processingChats.remove(chatId);
           }
-          final decrypted = await EncryptionService.decrypt(encryptedPayload);
-          final chatPayload = _deserializePayload(decrypted);
-          final stored = StoredChat.fromRow(
-            record,
-            chatPayload.messages,
-            customName: chatPayload.customName,
-          );
-          _upsertChatLocally(stored);
           return;
         case PostgresChangeEvent.all:
           break;
@@ -892,7 +972,7 @@ class ChatStorageService {
           existingChat.isStarred != chat.isStarred) {
         updatedChats[existingIndex] = chat;
         shouldNotify = true;
-        debugPrint('💾 [ChatStorage] Updated existing chat ${chat.id} (metadata changed)');
+        debugPrint('💾 [ChatStorage] Updated existing chat ${chat.id} (metadata changed) - ${chat.messages.length} messages');
       } else {
         // Check if message contents have changed
         bool hasChanges = false;
@@ -907,17 +987,17 @@ class ChatStorageService {
         if (hasChanges) {
           updatedChats[existingIndex] = chat;
           shouldNotify = true;
-          debugPrint('💾 [ChatStorage] Updated existing chat ${chat.id} (messages changed)');
+          debugPrint('💾 [ChatStorage] Updated existing chat ${chat.id} (messages changed) - ${chat.messages.length} messages');
         } else {
           // No changes, skip the update to avoid unnecessary notifications
-          debugPrint('💾 [ChatStorage] Skipped update for chat ${chat.id} (no changes)');
+          debugPrint('💾 [ChatStorage] Skipped update for chat ${chat.id} (no changes) - ${chat.messages.length} messages');
           return;
         }
       }
     } else {
       updatedChats.add(chat);
       shouldNotify = true;
-      debugPrint('💾 [ChatStorage] Added new chat ${chat.id}');
+      debugPrint('💾 [ChatStorage] Added new chat ${chat.id} - ${chat.messages.length} messages, created: ${chat.createdAt}');
     }
 
     if (shouldNotify) {
@@ -948,8 +1028,10 @@ class ChatStorageService {
       return;
     }
     _savedChats.removeAt(removedIndex);
-    // Clean up debouncing map when chat is removed
+    // Clean up debouncing and processing maps when chat is removed
     _lastRealtimeUpdate.remove(chatId);
+    _processingChats.remove(chatId);
+    _chatSaveOperations.remove(chatId);
     if (selectedChatIndex == removedIndex) {
       selectedChatIndex = -1;
     } else if (selectedChatIndex > removedIndex) {

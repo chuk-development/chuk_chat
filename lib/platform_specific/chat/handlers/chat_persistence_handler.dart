@@ -68,12 +68,8 @@ class ChatPersistenceHandler {
         onChatIdAssigned?.call(stored.id);
       }
 
-      final index = ChatStorageService.savedChats.indexWhere(
-        (chat) => chat.id == stored.id,
-      );
-      if (index != -1) {
-        ChatStorageService.selectedChatIndex = index;
-      }
+      // Note: We don't set selectedChatIndex here - that's managed by the UI layer
+      // when the user explicitly selects a chat
     } catch (error, stackTrace) {
       final String errorStr = error.toString().toLowerCase();
       debugPrint('❌ [ChatPersistence] Exception: $error');

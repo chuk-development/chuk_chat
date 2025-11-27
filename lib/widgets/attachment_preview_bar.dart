@@ -428,7 +428,7 @@ void _showAttachmentPreview(
                             maxScale: 4.0,
                             child: EncryptedImageWidget(
                               storagePath: file.encryptedImagePath!,
-                              fit: BoxFit.contain,
+                              fit: BoxFit.cover,
                             ),
                           ),
                         )
@@ -438,7 +438,7 @@ void _showAttachmentPreview(
                           child: InteractiveViewer(
                             minScale: 0.5,
                             maxScale: 4.0,
-                            child: Image.file(imageFile, fit: BoxFit.contain),
+                            child: Image.file(imageFile, fit: BoxFit.cover),
                           ),
                         )
                       : isPlainText
