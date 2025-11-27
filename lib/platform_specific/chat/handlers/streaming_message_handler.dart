@@ -116,12 +116,22 @@ class StreamingMessageHandler {
         messageIndex: placeholderIndex,
         stream: stream,
         onUpdate: (content, reasoning) {
+          // Update UI for active chat
           if (onMessageUpdate != null) {
             onMessageUpdate!(
               placeholderIndex,
               content,
               reasoning,
               activeChatId,
+            );
+          }
+          // Always persist to database in background
+          if (onBackgroundUpdate != null) {
+            onBackgroundUpdate!(
+              activeChatId,
+              placeholderIndex,
+              content,
+              reasoning,
             );
           }
         },
@@ -135,6 +145,18 @@ class StreamingMessageHandler {
               effectiveContent,
               finalReasoning,
               activeChatId,
+            );
+          }
+          // Always persist final message to database in background
+          if (onBackgroundUpdate != null) {
+            final effectiveContent = finalContent.isEmpty
+                ? 'The model returned an empty response.'
+                : finalContent;
+            onBackgroundUpdate!(
+              activeChatId,
+              placeholderIndex,
+              effectiveContent,
+              finalReasoning,
             );
           }
 
