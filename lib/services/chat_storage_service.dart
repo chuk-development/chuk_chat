@@ -135,6 +135,8 @@ class ChatStorageService {
 
   // Processing state for realtime events to prevent duplicate chat entries
   static final Set<String> _processingChats = <String>{}; // Track chats currently being processed
+  static final Map<String, DateTime> _lastRealtimeUpdate = <String, DateTime>{};
+  static const Duration _realtimeDebounceDuration = Duration(milliseconds: 500);
 
   // Prevent concurrent save/update operations for the same chat
   static final Map<String, Future<void>> _chatSaveOperations = <String, Future<void>>{};
@@ -944,23 +946,24 @@ class ChatStorageService {
           final chatId = record['id'] as String?;
           if (chatId == null) return;
 
-          // For INSERT events, only process if chat doesn't exist locally
-          if (payload.eventType == PostgresChangeEvent.insert) {
-            final existingChat = _savedChats.where((chat) => chat.id == chatId);
-            if (existingChat.isNotEmpty) {
-              debugPrint('🔄 [Realtime] Skipping INSERT for existing chat $chatId');
-              return;
-            }
-          }
-
           // Prevent concurrent processing of the same chat
           if (_processingChats.contains(chatId)) {
             debugPrint('🔄 [Realtime] Skipping concurrent ${payload.eventType} for chat $chatId (already processing)');
             return;
           }
 
-          // Mark as processing
+          // Debounce realtime updates for the same chat to prevent duplicates
+          final now = DateTime.now();
+          final lastUpdate = _lastRealtimeUpdate[chatId];
+          if (lastUpdate != null &&
+              now.difference(lastUpdate) < _realtimeDebounceDuration) {
+            debugPrint('🔄 [Realtime] Skipping duplicate ${payload.eventType} for chat $chatId (debounced)');
+            return;
+          }
+
+          // Mark as processing and update timestamp
           _processingChats.add(chatId);
+          _lastRealtimeUpdate[chatId] = now;
           debugPrint('🔄 [Realtime] Processing ${payload.eventType} event for chat $chatId');
 
           try {

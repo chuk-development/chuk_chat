@@ -716,12 +716,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       _scrollChatToBottom();
       // Don't refocus text field during streaming - let user control keyboard
 
-      // CRITICAL: Save to Supabase when AI finishes responding
-      // This batches all accumulated messages (including new ones sent during streaming)
-      // into a single database operation for efficiency
-      if (_activeChatId == chatId) {
-        await _persistChat(saveToSupabase: true);
-      }
+      // Chat is already saved to Supabase when user sent message
+      // AI responses are streamed and saved via background updates
     }
 
     // CRITICAL: Always persist, even for background chats
@@ -901,9 +897,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     _textFieldFocusNode.requestFocus();
     _scrollChatToBottom(force: true);
 
-    // Create chat locally immediately for chat ID assignment (streaming needs it)
-    // But defer Supabase sync until AI finishes responding
-    final storedChat = await _persistChat(saveToSupabase: false, waitForCompletion: true);
+    // Immediately create chat in Supabase for reliable chat ID assignment
+    final storedChat = await _persistChat(waitForCompletion: true);
     if (storedChat != null && _activeChatId != storedChat.id) {
       _activeChatId = storedChat.id;
     }
@@ -1224,13 +1219,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     });
   }
 
-  Future<StoredChat?> _persistChat({bool waitForCompletion = false, bool saveToSupabase = true}) async {
+  Future<StoredChat?> _persistChat({bool waitForCompletion = false}) async {
     return await _persistenceHandler.persistChat(
       messages: _messages,
       chatId: _activeChatId,
       waitForCompletion: waitForCompletion,
       isOffline: _isOffline,
-      saveToSupabase: saveToSupabase,
     );
   }
 
