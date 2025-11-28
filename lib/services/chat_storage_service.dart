@@ -542,10 +542,20 @@ class ChatStorageService {
         .eq('id', chatId)
         .eq('user_id', user.id);
 
+    // Find the index of the chat being deleted BEFORE removal
+    final deletedIndex = savedChats.indexWhere((c) => c.id == chatId);
+
     _chatsById.remove(chatId);
     _savingChats.remove(chatId);
     _pendingSaves.remove(chatId);
 
+    // Adjust selectedChatIndex to account for index shifts
+    if (deletedIndex != -1 && deletedIndex < selectedChatIndex) {
+      // Chat was deleted before the selected one, shift index down
+      selectedChatIndex -= 1;
+    }
+
+    // Always ensure selectedChatIndex is in bounds (handles concurrent deletions too)
     if (selectedChatIndex >= savedChats.length) {
       selectedChatIndex = savedChats.isEmpty ? -1 : savedChats.length - 1;
     }

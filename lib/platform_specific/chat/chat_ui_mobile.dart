@@ -436,7 +436,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       final currentMsg = _messages[i];
       if (newMsg.sender != currentMsg['sender'] ||
           newMsg.text != currentMsg['text'] ||
-          newMsg.reasoning != (currentMsg['reasoning'] ?? '')) {
+          (newMsg.reasoning ?? '') != (currentMsg['reasoning'] ?? '')) {
         return true;
       }
     }
