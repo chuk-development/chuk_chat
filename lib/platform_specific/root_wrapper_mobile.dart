@@ -9,6 +9,7 @@ import 'package:chuk_chat/pages/settings_page.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_mobile.dart';
 import 'package:chuk_chat/platform_specific/sidebar_mobile.dart'; // UPDATED: Use mobile sidebar
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/streaming_manager.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:chuk_chat/pages/coming_soon_page.dart';
@@ -158,6 +159,17 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
   }
 
   void _toggleSidebar() {
+    // Don't allow opening sidebar while streaming to prevent save conflicts
+    if (!_isSidebarExpanded && StreamingManager().hasActiveStreams) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please wait for the AI response to finish or cancel it first'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    
     // Hide keyboard when opening sidebar
     if (!_isSidebarExpanded) {
       FocusScope.of(context).unfocus();

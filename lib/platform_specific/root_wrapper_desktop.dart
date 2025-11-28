@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/streaming_manager.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_desktop.dart';
 import 'package:chuk_chat/platform_specific/sidebar_desktop.dart'; // UPDATED
 import 'package:chuk_chat/pages/projects_page.dart';
@@ -115,6 +116,16 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   }
 
   void _toggleSidebar() {
+    // Don't allow opening sidebar while streaming to prevent save conflicts
+    if (!_isSidebarExpanded && StreamingManager().hasActiveStreams) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please wait for the AI response to finish or cancel it first'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
     setState(() {
       _isSidebarExpanded = !_isSidebarExpanded;
     });

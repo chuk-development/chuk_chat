@@ -18,6 +18,11 @@ class StreamingManager {
            _activeStreams[chatId]!.isActive;
   }
 
+  /// Check if ANY chat is currently streaming
+  bool get hasActiveStreams {
+    return _activeStreams.values.any((stream) => stream.isActive);
+  }
+
   /// Start a new stream for a chat
   Future<void> startStream({
     required String chatId,

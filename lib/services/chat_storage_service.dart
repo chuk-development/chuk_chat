@@ -299,18 +299,33 @@ class ChatStorageService {
   static List<ChatMessage> _mapToChatMessages(
     List<Map<String, dynamic>> messagesMaps,
   ) {
-    return messagesMaps
-        .where((m) => m['text']?.toString() != 'Thinking...')
-        .map(
-          (m) => ChatMessage(
-            role: m['role'] as String? ?? 'user',
-            text: m['text'] as String? ?? '',
-            reasoning: m['reasoning'] as String?,
-            images: m['images'] as String?,
-            attachments: m['attachments'] as String?,
-          ),
-        )
-        .toList();
+    return messagesMaps.where((m) => m['text']?.toString() != 'Thinking...').map((
+      m,
+    ) {
+      // UI uses 'sender' with 'user'/'ai', convert to 'role' with 'user'/'assistant'
+      String role;
+      final sender = m['sender'] as String?;
+      final rawRole = m['role'] as String?;
+
+      if (sender != null) {
+        // Convert sender format to role format
+        role = sender == 'ai' ? 'assistant' : sender;
+      } else if (rawRole != null) {
+        role = rawRole;
+      } else {
+        role = 'user';
+      }
+
+      return ChatMessage(
+        role: role,
+        text: m['text'] as String? ?? '',
+        reasoning: m['reasoning'] as String?,
+        images: m['images'] as String?,
+        attachments: m['attachments'] as String?,
+        modelId: m['modelId'] as String?,
+        provider: m['provider'] as String?,
+      );
+    }).toList();
   }
 
   /// Save a new chat to Supabase
