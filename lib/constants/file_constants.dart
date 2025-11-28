@@ -60,8 +60,6 @@ class FileConstants {
     'webp',
     'heic',
     'heif',
-    // Archives (ZIP)
-    'zip',
     // E-books (EPUB)
     'epub',
     // Email (MSG, EML)
