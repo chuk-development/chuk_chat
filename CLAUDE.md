@@ -226,7 +226,51 @@ The app uses the following Supabase tables:
 3. **user_preferences** - Stores user settings (model selection, system prompts, etc.)
    - Managed via `UserPreferencesService`
 
+4. **projects** - Stores project workspaces (NEW)
+   - Columns: `id`, `user_id`, `name`, `description`, `custom_system_prompt`, `created_at`, `updated_at`, `is_archived`
+   - Managed via `ProjectStorageService`
+   - See `migrations/projects.sql` for full schema
+
+5. **project_chats** - Many-to-many relationship between projects and chats (NEW)
+   - Columns: `id`, `project_id`, `chat_id`, `added_at`
+   - Links chats to project workspaces
+
+6. **project_files** - Encrypted file attachments for projects (NEW)
+   - Columns: `id`, `project_id`, `file_name`, `encrypted_content`, `file_type`, `file_size`, `uploaded_at`
+   - Files are encrypted client-side before upload
+
 All tables use Row Level Security (RLS) with policies ensuring users can only access their own data.
+
+### Projects Feature
+
+The app includes a **Projects** feature that allows users to create workspaces for organizing chats and files with custom AI behavior:
+
+**Key Features**:
+- Create project workspaces with name, description, and custom system prompt
+- Add existing chats to one or more projects
+- Upload files to projects (encrypted, accessible to AI as context)
+- Projects UI works on both desktop and mobile platforms
+
+**Architecture**:
+- `lib/models/project_model.dart` - `Project` and `ProjectFile` data models
+- `lib/services/project_storage_service.dart` - CRUD operations, chat/file management
+- `lib/services/project_message_service.dart` - Inject project context into AI messages
+- `lib/pages/projects_page.dart` - Projects list (adaptive desktop/mobile UI)
+- `lib/pages/project_detail_page.dart` - Project detail with tabs (Chats, Files, Settings)
+
+**How It Works**:
+1. User creates a project with optional custom system prompt
+2. User adds chats to the project (many-to-many relationship)
+3. User uploads files to the project (encrypted before storage)
+4. When chatting in a project context, `ProjectMessageService.injectProjectContext()` prepends:
+   - Project name and description
+   - Custom system prompt
+   - Decrypted file contents (up to 50KB total)
+5. AI receives full project context with each message
+
+**Database Migration**: Run `migrations/projects.sql` in Supabase SQL Editor to create tables
+
+**Documentation**: See `PROJECTS_PLAN.md` for detailed implementation plan and feature spec
 
 ## Key Files to Understand
 
@@ -330,8 +374,14 @@ This section provides a comprehensive map of ALL Dart files in the codebase, org
 - **Purpose**: Backup of old pricing implementation
 
 #### **lib/pages/projects_page.dart**
-- **Purpose**: Projects/workspaces feature (not implemented)
-- **What to Look For**: Coming soon placeholder
+- **Purpose**: Projects list and management
+- **Features**: Create/delete projects, search, adaptive desktop/mobile layout
+- **What to Look For**: Project CRUD operations, navigation to project detail
+
+#### **lib/pages/project_detail_page.dart**
+- **Purpose**: Project detail with tabs
+- **Features**: Manage chats, files, and settings for a project
+- **What to Look For**: Chat assignment, file upload (coming soon), project settings
 
 #### **lib/pages/coming_soon_page.dart**
 - **Purpose**: Placeholder for unimplemented features
@@ -356,6 +406,13 @@ This section provides a comprehensive map of ALL Dart files in the codebase, org
 - **Purpose**: Event types for streaming chat responses
 - **Key Types**: `ContentEvent`, `ReasoningEvent`, `UsageEvent`, `MetaEvent`, `ErrorEvent`, `DoneEvent`
 - **What to Look For**: Stream event handling patterns
+
+#### **lib/models/project_model.dart**
+- **Purpose**: Project workspace data models
+- **Key Classes**:
+  - `Project` - Project metadata (name, description, custom prompt, chat IDs, files)
+  - `ProjectFile` - File attachment with encryption, type, size
+- **What to Look For**: Project data structures, file type detection
 
 ---
 
@@ -421,6 +478,18 @@ This section provides a comprehensive map of ALL Dart files in the codebase, org
 **lib/services/local_chat_cache_service.dart**
 - **Purpose**: In-memory chat caching
 - **What to Look For**: Cache operations
+
+#### Project Management Services
+
+**lib/services/project_storage_service.dart**
+- **Purpose**: Project workspace CRUD and management
+- **Key Features**: Create/update/delete projects, chat assignment, file upload/download
+- **What to Look For**: Project operations, encryption integration for files
+
+**lib/services/project_message_service.dart**
+- **Purpose**: Inject project context into AI messages
+- **Key Methods**: `buildProjectSystemMessage()`, `injectProjectContext()`
+- **What to Look For**: Context composition, file content inclusion
 
 #### Model Management Services
 
