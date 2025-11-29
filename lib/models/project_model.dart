@@ -116,7 +116,7 @@ class ProjectFile {
   final String id;
   final String projectId;
   final String fileName;
-  final String encryptedContent;
+  final String storagePath;
   final String fileType;
   final int fileSize;
   final DateTime uploadedAt;
@@ -125,7 +125,7 @@ class ProjectFile {
     required this.id,
     required this.projectId,
     required this.fileName,
-    required this.encryptedContent,
+    required this.storagePath,
     required this.fileType,
     required this.fileSize,
     required this.uploadedAt,
@@ -136,7 +136,7 @@ class ProjectFile {
       id: json['id'] as String,
       projectId: json['project_id'] as String,
       fileName: json['file_name'] as String,
-      encryptedContent: json['encrypted_content'] as String,
+      storagePath: json['storage_path'] as String,
       fileType: json['file_type'] as String,
       fileSize: json['file_size'] as int,
       uploadedAt: DateTime.parse(json['uploaded_at'] as String),
@@ -147,7 +147,7 @@ class ProjectFile {
         'id': id,
         'project_id': projectId,
         'file_name': fileName,
-        'encrypted_content': encryptedContent,
+        'storage_path': storagePath,
         'file_type': fileType,
         'file_size': fileSize,
         'uploaded_at': uploadedAt.toIso8601String(),

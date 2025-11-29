@@ -119,13 +119,14 @@ CREATE TABLE IF NOT EXISTS project_files (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   file_name TEXT NOT NULL,
-  encrypted_content TEXT NOT NULL,
+  storage_path TEXT NOT NULL,
   file_type TEXT NOT NULL,
   file_size BIGINT NOT NULL,
   uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
   -- Constraints
   CONSTRAINT file_name_not_empty CHECK (LENGTH(TRIM(file_name)) > 0),
+  CONSTRAINT storage_path_not_empty CHECK (LENGTH(TRIM(storage_path)) > 0),
   CONSTRAINT file_size_positive CHECK (file_size > 0),
   CONSTRAINT file_size_limit CHECK (file_size <= 10485760) -- 10MB max
 );
@@ -226,7 +227,10 @@ ALTER VIEW project_stats SET (security_invoker = true);
 --
 -- Next steps:
 --   1. Verify tables in Supabase Dashboard → Database → Tables
---   2. Test RLS policies with sample data
---   3. Implement Flutter services (ProjectStorageService)
+--   2. Create 'project-files' storage bucket in Supabase Dashboard → Storage
+--      - Make bucket private (not public)
+--      - Files are stored encrypted, one per user folder structure
+--   3. Test RLS policies with sample data
+--   4. Implement Flutter services (ProjectStorageService)
 --
 -- ============================================================

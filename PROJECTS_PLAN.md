@@ -110,14 +110,14 @@ CREATE INDEX idx_project_chats_chat_id ON project_chats(chat_id);
 
 ### Table: `project_files`
 
-Stores encrypted file attachments for projects.
+Stores metadata for encrypted file attachments. Files themselves are stored in Supabase Storage (project-files bucket).
 
 ```sql
 CREATE TABLE project_files (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   file_name TEXT NOT NULL,
-  encrypted_content TEXT NOT NULL,
+  storage_path TEXT NOT NULL,
   file_type TEXT NOT NULL,
   file_size BIGINT NOT NULL,
   uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

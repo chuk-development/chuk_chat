@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:uuid/uuid.dart';
 import 'package:chuk_chat/models/project_model.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
@@ -10,6 +11,9 @@ import 'package:chuk_chat/services/supabase_service.dart';
 
 /// Service for managing project workspaces, chat assignments, and file attachments
 class ProjectStorageService {
+  static const String bucketName = 'project-files';
+  static const Uuid _uuid = Uuid();
+
   // SINGLE SOURCE OF TRUTH - all projects stored here
   static final Map<String, Project> _projectsById = <String, Project>{};
 
@@ -360,7 +364,7 @@ class ProjectStorageService {
 
   // ============ FILE MANAGEMENT ============
 
-  /// Upload a file to a project
+  /// Upload a file to a project (encrypted in Supabase Storage)
   static Future<ProjectFile> uploadFile(
     String projectId,
     String fileName,
@@ -380,16 +384,32 @@ class ProjectStorageService {
     }
 
     try {
-      // Encrypt file content
+      // Step 1: Encrypt file content
       final fileContent = utf8.decode(fileBytes);
-      final encryptedContent = await EncryptionService.encrypt(fileContent);
+      final encryptedJson = await EncryptionService.encrypt(fileContent);
+      final encryptedBytes = Uint8List.fromList(utf8.encode(encryptedJson));
 
+      // Step 2: Upload to Supabase Storage
+      final fileId = _uuid.v4();
+      final storageFileName = '$fileId.enc';
+      final storagePath = '${user.id}/$storageFileName';
+
+      await SupabaseService.client.storage.from(bucketName).uploadBinary(
+            storagePath,
+            encryptedBytes,
+            fileOptions: const FileOptions(
+              contentType: 'application/octet-stream',
+              upsert: false,
+            ),
+          );
+
+      // Step 3: Save metadata to database
       final inserted = await SupabaseService.client
           .from('project_files')
           .insert({
             'project_id': projectId,
             'file_name': fileName,
-            'encrypted_content': encryptedContent,
+            'storage_path': storagePath,
             'file_type': fileType,
             'file_size': fileBytes.length,
           })
@@ -415,7 +435,7 @@ class ProjectStorageService {
     }
   }
 
-  /// Delete a file from a project
+  /// Delete a file from a project (also deletes from storage)
   static Future<void> deleteFile(String projectId, String fileId) async {
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
@@ -423,12 +443,29 @@ class ProjectStorageService {
     }
 
     try {
+      // Find file to get storage path
+      final project = _projectsById[projectId];
+      final file = project?.files.firstWhere((f) => f.id == fileId);
+
+      // Delete from database first
       await SupabaseService.client
           .from('project_files')
           .delete()
           .eq('id', fileId);
 
-      final project = _projectsById[projectId];
+      // Delete from storage
+      if (file != null) {
+        try {
+          await SupabaseService.client.storage
+              .from(bucketName)
+              .remove([file.storagePath]);
+        } catch (e) {
+          debugPrint('⚠️ [ProjectStorage] Failed to delete file from storage: $e');
+          // Continue even if storage deletion fails
+        }
+      }
+
+      // Update cache
       if (project != null) {
         _projectsById[projectId] = project.copyWith(
           files: project.files.where((f) => f.id != fileId).toList(),
@@ -449,8 +486,13 @@ class ProjectStorageService {
     return project?.files ?? [];
   }
 
-  /// Decrypt a file's content
+  /// Download and decrypt a file's content from Supabase Storage
   static Future<String> decryptFile(String fileId) async {
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) {
+      throw StateError('User must be signed in to download files.');
+    }
+
     if (!EncryptionService.hasKey) {
       final loaded = await EncryptionService.tryLoadKey();
       if (!loaded) {
@@ -459,24 +501,35 @@ class ProjectStorageService {
     }
 
     try {
-      // Find file in all projects
+      // Find file in all projects to get storage path
       ProjectFile? file;
       for (final project in _projectsById.values) {
-        file = project.files.firstWhere(
-          (f) => f.id == fileId,
-          orElse: () => throw StateError('File not found'),
-        );
-        if (file.id == fileId) break;
+        try {
+          file = project.files.firstWhere((f) => f.id == fileId);
+          break;
+        } catch (_) {
+          // File not in this project, continue searching
+        }
       }
 
       if (file == null) {
         throw StateError('File not found');
       }
 
-      final decrypted = await EncryptionService.decrypt(file.encryptedContent);
-      return decrypted;
+      // Download encrypted file from storage
+      final encryptedBytes = await SupabaseService.client.storage
+          .from(bucketName)
+          .download(file.storagePath);
+
+      // Convert bytes to string (JSON format)
+      final encryptedJson = utf8.decode(encryptedBytes);
+
+      // Decrypt the file content
+      final decryptedContent = await EncryptionService.decrypt(encryptedJson);
+
+      return decryptedContent;
     } catch (e, st) {
-      debugPrint('❌ [ProjectStorage] Failed to decrypt file: $e\n$st');
+      debugPrint('❌ [ProjectStorage] Failed to download/decrypt file: $e\n$st');
       rethrow;
     }
   }
