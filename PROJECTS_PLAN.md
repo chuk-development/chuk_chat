@@ -65,7 +65,7 @@ Many-to-many relationship between projects and chats.
 CREATE TABLE project_chats (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  chat_id TEXT NOT NULL REFERENCES encrypted_chats(id) ON DELETE CASCADE,
+  chat_id UUID NOT NULL REFERENCES encrypted_chats(id) ON DELETE CASCADE,
   added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(project_id, chat_id)
 );

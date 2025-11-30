@@ -63,7 +63,7 @@ CREATE POLICY "Users can delete their own projects"
 CREATE TABLE IF NOT EXISTS project_chats (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  chat_id TEXT NOT NULL REFERENCES encrypted_chats(id) ON DELETE CASCADE,
+  chat_id UUID NOT NULL REFERENCES encrypted_chats(id) ON DELETE CASCADE,
   added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
   -- Ensure a chat can only be added once per project
