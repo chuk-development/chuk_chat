@@ -8,7 +8,9 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:flutter/material.dart';
 
 class ProjectsPage extends StatefulWidget {
-  const ProjectsPage({super.key});
+  final void Function(String projectId)? onOpenProject;
+
+  const ProjectsPage({super.key, this.onOpenProject});
 
   @override
   State<ProjectsPage> createState() => _ProjectsPageState();
@@ -272,12 +274,18 @@ class _ProjectsPageState extends State<ProjectsPage> {
   }
 
   void _openProjectDetail(Project project) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ProjectDetailPage(projectId: project.id),
-      ),
-    );
+    if (widget.onOpenProject != null) {
+      // Use callback to open project in main chat UI
+      widget.onOpenProject!(project.id);
+    } else {
+      // Fallback to detail page if no callback provided
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ProjectDetailPage(projectId: project.id),
+        ),
+      );
+    }
   }
 }
 

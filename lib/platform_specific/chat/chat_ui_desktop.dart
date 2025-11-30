@@ -24,6 +24,7 @@ import 'package:chuk_chat/services/streaming_manager.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/constants/file_constants.dart';
 import 'package:chuk_chat/pages/pricing_page.dart';
+import 'package:chuk_chat/widgets/project_panel.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
@@ -64,6 +65,8 @@ class ChukChatUIDesktop extends StatefulWidget {
   final bool isCompactMode;
   final bool showReasoningTokens;
   final bool showModelInfo;
+  final String? projectId;
+  final VoidCallback? onExitProject;
 
   const ChukChatUIDesktop({
     // RENAMED CONSTRUCTOR
@@ -74,6 +77,8 @@ class ChukChatUIDesktop extends StatefulWidget {
     required this.isCompactMode,
     required this.showReasoningTokens,
     required this.showModelInfo,
+    this.projectId,
+    this.onExitProject,
   });
 
   @override
@@ -2081,9 +2086,16 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       );
     });
 
+    // Check if we're in project mode
+    final bool isProjectMode = widget.projectId != null;
+
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: DropTarget(
+      body: Row(
+        children: [
+          // Main chat area
+          Expanded(
+            child: DropTarget(
         onDragDone: (detail) {
           final List<String> filePaths = detail.files
               .map((file) => file.path)
@@ -2284,6 +2296,15 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             );
           },
         ),
+      ),
+          ),
+          // Project panel (right side) - only shown in project mode
+          if (isProjectMode && widget.projectId != null)
+            ProjectPanel(
+              projectId: widget.projectId!,
+              onClose: widget.onExitProject,
+            ),
+        ],
       ),
     );
   }

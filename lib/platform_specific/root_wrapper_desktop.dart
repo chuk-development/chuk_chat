@@ -59,6 +59,7 @@ class RootWrapperDesktop extends StatefulWidget {
 
 class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   bool _isSidebarExpanded = false;
+  String? _activeProjectId;
 
   final GlobalKey<ChukChatUIDesktopState> _chatUIKey = GlobalKey();
 
@@ -90,9 +91,29 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
 
   void _openProjectsPage() {
     if (_isSidebarExpanded) _toggleSidebar();
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const ProjectsPage()));
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ProjectsPage(
+          onOpenProject: _openProject,
+        ),
+      ),
+    );
+  }
+
+  void _openProject(String projectId) {
+    // Close any open pages and go back to root
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    setState(() {
+      _activeProjectId = projectId;
+      // Start a new chat for this project
+      _chatUIKey.currentState?.newChat();
+    });
+  }
+
+  void _exitProject() {
+    setState(() {
+      _activeProjectId = null;
+    });
   }
 
   void _openAssistantsPage() {
@@ -159,6 +180,8 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       isCompactMode: isCompactMode,
       showReasoningTokens: widget.showReasoningTokens,
       showModelInfo: widget.showModelInfo,
+      projectId: _activeProjectId,
+      onExitProject: _exitProject,
     );
 
     return Scaffold(
