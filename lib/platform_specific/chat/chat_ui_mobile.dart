@@ -1764,32 +1764,35 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
             ),
             const SizedBox(width: 2),
           ],
-          if (kFeatureVoiceMode) ...[
-            buildTinyIconButton(
-              icon: _audioHandler.isMicActive
-                  ? Icons.stop_rounded
-                  : Icons.mic_rounded,
-              onTap: _handleMicTap,
-              isActive: _audioHandler.isMicActive,
-              color: _audioHandler.isMicActive ? Colors.red : iconFg,
-            ),
-            const SizedBox(width: 2),
-          ],
+          // Mic button for audio recording/transcription (always shown)
+          buildTinyIconButton(
+            icon: _audioHandler.isMicActive
+                ? Icons.stop_rounded
+                : Icons.mic_rounded,
+            onTap: _handleMicTap,
+            isActive: _audioHandler.isMicActive,
+            color: _audioHandler.isMicActive ? Colors.red : iconFg,
+          ),
+          const SizedBox(width: 2),
           buildTinyActionButton(
-            icon: (kFeatureVoiceMode && _audioHandler.isMicActive)
+            icon: _audioHandler.isMicActive
                 ? Icons.send_rounded
                 : (_streamingHandler.isStreaming
                       ? Icons.stop_rounded
-                      : Icons.arrow_upward_rounded),
-            onTap: (kFeatureVoiceMode && _audioHandler.isMicActive)
+                      : (_controller.text.trim().isEmpty && !hasAttachments
+                            ? (kFeatureVoiceMode ? Icons.graphic_eq_rounded : Icons.arrow_upward_rounded)
+                            : Icons.arrow_upward_rounded)),
+            onTap: _audioHandler.isMicActive
                 ? _handleAudioSend
                 : (_streamingHandler.isStreaming
                       ? _sendMessage
-                      : _sendMessage),
-            color: (kFeatureVoiceMode && _audioHandler.isMicActive)
+                      : (_controller.text.trim().isEmpty && !hasAttachments && kFeatureVoiceMode
+                            ? () => _openComingSoonFeature('Voice Mode')
+                            : _sendMessage)),
+            color: _audioHandler.isMicActive
                 ? accent
                 : (_streamingHandler.isStreaming ? Colors.red : accent),
-            isLoading: kFeatureVoiceMode && _audioHandler.isTranscribingAudio,
+            isLoading: _audioHandler.isTranscribingAudio,
           ),
           const SizedBox(width: 4),
         ],

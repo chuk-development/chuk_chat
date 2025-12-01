@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'dart:math' as math; // For min/max
 import 'dart:async';
 import 'dart:convert';
+import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/models/chat_stream_event.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
@@ -2638,51 +2639,53 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 debugLabel: 'Mic button',
               ),
               const SizedBox(width: 8),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                child: _isMicActive
-                    ? GestureDetector(
-                        key: const ValueKey<String>('audio-send-button'),
-                        onTap: _isTranscribingAudio ? null : _handleAudioSend,
-                        child: Container(
-                          width: 44,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: accent,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: _isTranscribingAudio
-                              ? const Padding(
-                                  padding: EdgeInsets.all(8.0),
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      Colors.black,
+              // Voice Mode button (only when feature enabled) or Audio Send button
+              if (_isMicActive || kFeatureVoiceMode)
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  child: _isMicActive
+                      ? GestureDetector(
+                          key: const ValueKey<String>('audio-send-button'),
+                          onTap: _isTranscribingAudio ? null : _handleAudioSend,
+                          child: Container(
+                            width: 44,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: accent,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: _isTranscribingAudio
+                                ? const Padding(
+                                    padding: EdgeInsets.all(8.0),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.black,
+                                      ),
                                     ),
-                                  ),
-                                )
-                              : const Icon(Icons.send, color: Colors.black),
-                        ),
-                      )
-                    : GestureDetector(
-                        key: const ValueKey<String>('voice-mode-button'),
-                        onTap: () => _openComingSoonFeature('Voice Mode'),
-                        child: Container(
-                          width: 44,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: accent,
-                            borderRadius: BorderRadius.circular(10),
+                                  )
+                                : const Icon(Icons.send, color: Colors.black),
                           ),
-                          child: const Icon(
-                            Icons.graphic_eq,
-                            color: Colors.black,
+                        )
+                      : GestureDetector(
+                          key: const ValueKey<String>('voice-mode-button'),
+                          onTap: () => _openComingSoonFeature('Voice Mode'),
+                          child: Container(
+                            width: 44,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: accent,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(
+                              Icons.graphic_eq,
+                              color: Colors.black,
+                            ),
                           ),
                         ),
-                      ),
-              ),
+                ),
             ],
           ),
         ],
