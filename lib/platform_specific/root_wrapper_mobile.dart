@@ -229,12 +229,19 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     );
   }
 
-  void _handleChatTapped(int index) {
+  void _handleChatSelected(String? chatId) {
+    debugPrint('');
+    debugPrint('┌─────────────────────────────────────────────────────────────');
+    debugPrint('│ 📥 [ROOT-MOBILE] _handleChatSelected called');
+    debugPrint('│ 📥 [ROOT-MOBILE] New chatId: $chatId');
+    debugPrint('│ 📥 [ROOT-MOBILE] Old selectedChatId: ${ChatStorageService.selectedChatId}');
+    debugPrint('│ 📥 [ROOT-MOBILE] Calling setState() to rebuild...');
+    debugPrint('└─────────────────────────────────────────────────────────────');
     // Hide keyboard when switching chats
     FocusScope.of(context).unfocus();
 
-    // Update chat index immediately
-    ChatStorageService.selectedChatIndex = index;
+    // Update chat ID immediately
+    ChatStorageService.selectedChatId = chatId;
 
     // Close the sidebar and trigger rebuild
     setState(() {
@@ -324,7 +331,14 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
               child: ChukChatUIMobile(
                 key: _chatUIMobileKey,
                 onToggleSidebar: _toggleSidebar,
-                selectedChatIndex: ChatStorageService.selectedChatIndex,
+                selectedChatId: ChatStorageService.selectedChatId,
+                onChatIdChanged: (newId) {
+                  // Update the global state when chat UI creates/changes a chat
+                  // Use setState to ensure parent rebuilds with new ID
+                  setState(() {
+                    ChatStorageService.selectedChatId = newId;
+                  });
+                },
                 isSidebarExpanded: _isSidebarExpanded,
                 showReasoningTokens: widget.showReasoningTokens,
                 showModelInfo: widget.showModelInfo,
@@ -371,12 +385,12 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                   child: Opacity(
                     opacity: animValue,
                     child: SidebarMobile(
-                      onChatItemTapped: _handleChatTapped,
+                      onChatSelected: _handleChatSelected,
                       onSettingsTapped: _openSettingsPage,
                       onProjectsTapped: _openProjectsPage,
                       onAssistantsTapped: _openAssistantsPage,
                       onChatDeleted: _handleChatDeleted,
-                      selectedChatIndex: ChatStorageService.selectedChatIndex,
+                      selectedChatId: ChatStorageService.selectedChatId,
                       isCompactMode: true,
                     ),
                   ),

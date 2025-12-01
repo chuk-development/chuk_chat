@@ -12,22 +12,22 @@ import 'package:chuk_chat/widgets/credit_display.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 
 class SidebarMobile extends StatefulWidget {
-  final Function(int index) onChatItemTapped;
+  final Function(String? chatId) onChatSelected;
   final Function() onSettingsTapped;
   final Function() onProjectsTapped;
   final Function() onAssistantsTapped;
   final Future<void> Function(String chatId)? onChatDeleted;
-  final int selectedChatIndex;
+  final String? selectedChatId;
   final bool isCompactMode; // Not directly used in the UI, but kept for context
 
   const SidebarMobile({
     super.key,
-    required this.onChatItemTapped,
+    required this.onChatSelected,
     required this.onSettingsTapped,
     required this.onProjectsTapped,
     required this.onAssistantsTapped,
     this.onChatDeleted,
-    required this.selectedChatIndex,
+    required this.selectedChatId,
     required this.isCompactMode,
   });
 
@@ -235,12 +235,13 @@ class _SidebarMobileState extends State<SidebarMobile> {
   }
 
   void _openChat(StoredChat chat) {
-    final index = ChatStorageService.savedChats.indexWhere(
-      (stored) => stored.id == chat.id,
-    );
-    if (index != -1) {
-      widget.onChatItemTapped(index);
-    }
+    debugPrint('');
+    debugPrint('═══════════════════════════════════════════════════════════');
+    debugPrint('👆 [SIDEBAR-MOBILE] User clicked chat');
+    debugPrint('👆 [SIDEBAR-MOBILE] Chat ID: ${chat.id}');
+    debugPrint('👆 [SIDEBAR-MOBILE] Preview: "${chat.previewText.substring(0, chat.previewText.length > 40 ? 40 : chat.previewText.length)}..."');
+    debugPrint('═══════════════════════════════════════════════════════════');
+    widget.onChatSelected(chat.id);
   }
 
   void _showDebouncedDeleteNotification() {
@@ -444,7 +445,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
   @override
   void didUpdateWidget(covariant SidebarMobile oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.selectedChatIndex != oldWidget.selectedChatIndex) {
+    if (widget.selectedChatId != oldWidget.selectedChatId) {
       if (mounted) setState(() {});
     }
     // Also refresh filtered chats if the underlying ChatStorageService.savedChats list changes
@@ -670,20 +671,17 @@ class _SidebarMobileState extends State<SidebarMobile> {
                       ),
                     ),
                   ),
-                ..._filteredRecentChats.asMap().entries.map((entry) {
-                  final storedChat = entry.value;
-                  final index = ChatStorageService.savedChats.indexOf(
-                    storedChat,
-                  );
-                  if (index == -1) {
-                    return const SizedBox.shrink();
-                  }
-
+                ..._filteredRecentChats.map((storedChat) {
                   return _buildRecentItem(
                     storedChat,
-                    index: index,
                     onTap: () {
-                      widget.onChatItemTapped(index);
+                      debugPrint('');
+                      debugPrint('═══════════════════════════════════════════════════════════');
+                      debugPrint('👆 [SIDEBAR-MOBILE] User tapped recent chat');
+                      debugPrint('👆 [SIDEBAR-MOBILE] Chat ID: ${storedChat.id}');
+                      debugPrint('👆 [SIDEBAR-MOBILE] Preview: "${storedChat.previewText.substring(0, storedChat.previewText.length > 40 ? 40 : storedChat.previewText.length)}..."');
+                      debugPrint('═══════════════════════════════════════════════════════════');
+                      widget.onChatSelected(storedChat.id);
                     },
                     onDelete: () => _confirmAndDeleteChat(storedChat),
                     accentColor: accentColor,
@@ -871,7 +869,6 @@ class _SidebarMobileState extends State<SidebarMobile> {
 
   Widget _buildRecentItem(
     StoredChat chat, {
-    required int index,
     bool isLast = false,
     VoidCallback? onTap,
     VoidCallback? onDelete,
@@ -879,7 +876,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
     required Color iconColor,
     required Color textColor,
   }) {
-    bool isSelected = index == widget.selectedChatIndex;
+    bool isSelected = chat.id == widget.selectedChatId;
     final String title = _deriveChatTitle(chat);
     return ListTile(
       title: Text(

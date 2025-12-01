@@ -9,6 +9,7 @@ import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 const int _kChatPayloadVersion = 2;
 
@@ -137,6 +138,42 @@ class ChatStorageService {
   static RealtimeChannel? _realtimeChannel;
   static String? _realtimeUserId;
   static int selectedChatIndex = -1;
+
+  /// ID-BASED SELECTION: The currently selected chat ID.
+  /// null = new chat (no chat selected yet)
+  /// This is the primary source of truth for which chat is active.
+  static String? _selectedChatId;
+  static String? get selectedChatId => _selectedChatId;
+  static set selectedChatId(String? value) {
+    if (_selectedChatId != value) {
+      debugPrint('');
+      debugPrint('┌─────────────────────────────────────────────────────────────');
+      debugPrint('│ 📍 [SELECTED-CHAT-ID] CHANGED');
+      debugPrint('│ 📍 [SELECTED-CHAT-ID] OLD: $_selectedChatId');
+      debugPrint('│ 📍 [SELECTED-CHAT-ID] NEW: $value');
+      debugPrint('│ 📍 [SELECTED-CHAT-ID] Stack trace:');
+      try {
+        throw Exception('Stack trace');
+      } catch (e, st) {
+        final lines = st.toString().split('\n').take(8).join('\n│    ');
+        debugPrint('│    $lines');
+      }
+      debugPrint('└─────────────────────────────────────────────────────────────');
+    }
+    _selectedChatId = value;
+  }
+
+  /// GLOBAL LOCK: Prevents chat switching during message operations.
+  /// Set to true when a message send starts, cleared when streaming completes.
+  /// Check this in didUpdateWidget to prevent loading wrong chat.
+  static bool isMessageOperationInProgress = false;
+
+  /// The chat ID currently being worked on during a message operation.
+  /// Used to verify we don't accidentally switch away from an active chat.
+  static String? activeMessageChatId;
+
+  // UUID generator for chat IDs
+  static const Uuid _uuid = Uuid();
 
   // Track chats we're currently saving to ignore realtime events for them
   static final Set<String> _savingChats = <String>{};
@@ -333,8 +370,9 @@ class ChatStorageService {
     List<Map<String, dynamic>> messagesMaps, {
     String? chatId,
   }) async {
-    final effectiveChatId =
-        chatId ?? 'chat-${DateTime.now().millisecondsSinceEpoch}';
+    // CRITICAL: Always use a proper UUID to ensure _savingChats tracks the same ID
+    // that gets inserted into Supabase. This prevents race conditions with realtime events.
+    final effectiveChatId = chatId ?? _uuid.v4();
     debugPrint(
       '💾 [ChatStorage] saveChat: $effectiveChatId (${messagesMaps.length} messages)',
     );
@@ -356,7 +394,7 @@ class ChatStorageService {
     _savingChats.add(effectiveChatId);
 
     try {
-      final result = await _doSaveChat(messagesMaps, effectiveChatId, chatId);
+      final result = await _doSaveChat(messagesMaps, effectiveChatId);
       completer.complete(result);
       return result;
     } catch (e) {
@@ -374,7 +412,6 @@ class ChatStorageService {
   static Future<StoredChat?> _doSaveChat(
     List<Map<String, dynamic>> messagesMaps,
     String effectiveChatId,
-    String? originalChatId,
   ) async {
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
@@ -401,13 +438,14 @@ class ChatStorageService {
 
     final encryptedPayload = await EncryptionService.encrypt(payload);
 
+    // CRITICAL: Always include the effectiveChatId in the insert.
+    // This ensures the ID we track in _savingChats matches the ID in Supabase,
+    // preventing race conditions with realtime events that could cause duplicates.
     final Map<String, dynamic> insertData = {
+      'id': effectiveChatId,
       'user_id': user.id,
       'encrypted_payload': encryptedPayload,
     };
-    if (originalChatId != null) {
-      insertData['id'] = originalChatId;
-    }
 
     final inserted = await SupabaseService.client
         .from('encrypted_chats')
@@ -693,6 +731,9 @@ class ChatStorageService {
   static Future<void> reset() async {
     _chatsById.clear();
     selectedChatIndex = -1;
+    selectedChatId = null;
+    isMessageOperationInProgress = false;
+    activeMessageChatId = null;
     _savingChats.clear();
     _pendingSaves.clear();
     _notifyChanges();

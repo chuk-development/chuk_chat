@@ -508,7 +508,6 @@ class _MessageBubbleState extends State<MessageBubble>
   }
 
   Widget _buildImagesGrid(List<String> images) {
-    debugPrint('🖼️ [ImageDebug] Building images grid with ${images.length} images');
     return Wrap(
       spacing: 8,
       runSpacing: 8,

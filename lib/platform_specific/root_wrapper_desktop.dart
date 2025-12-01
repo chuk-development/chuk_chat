@@ -128,9 +128,16 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     );
   }
 
-  void _handleChatTapped(int index) {
+  void _handleChatSelected(String? chatId) {
+    debugPrint('');
+    debugPrint('┌─────────────────────────────────────────────────────────────');
+    debugPrint('│ 📥 [ROOT-DESKTOP] _handleChatSelected called');
+    debugPrint('│ 📥 [ROOT-DESKTOP] New chatId: $chatId');
+    debugPrint('│ 📥 [ROOT-DESKTOP] Old selectedChatId: ${ChatStorageService.selectedChatId}');
+    debugPrint('│ 📥 [ROOT-DESKTOP] Calling setState() to rebuild...');
+    debugPrint('└─────────────────────────────────────────────────────────────');
     setState(() {
-      ChatStorageService.selectedChatIndex = index;
+      ChatStorageService.selectedChatId = chatId;
     });
     // On desktop, the sidebar typically remains open after selecting a chat.
     // if (_isSidebarExpanded) _toggleSidebar();
@@ -175,7 +182,14 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     final Widget chatArea = ChukChatUIDesktop(
       key: _chatUIKey,
       onToggleSidebar: _toggleSidebar,
-      selectedChatIndex: ChatStorageService.selectedChatIndex,
+      selectedChatId: ChatStorageService.selectedChatId,
+      onChatIdChanged: (newId) {
+        // Update the global state when chat UI creates/changes a chat
+        // Use setState to ensure parent rebuilds with new ID
+        setState(() {
+          ChatStorageService.selectedChatId = newId;
+        });
+      },
       isSidebarExpanded: _isSidebarExpanded,
       isCompactMode: isCompactMode,
       showReasoningTokens: widget.showReasoningTokens,
@@ -207,11 +221,11 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
               child: IgnorePointer(
                 ignoring: !_isSidebarExpanded,
                 child: SidebarDesktop(
-                  onChatItemTapped: _handleChatTapped,
+                  onChatSelected: _handleChatSelected,
                   onSettingsTapped: _openSettingsPage,
                   onProjectsTapped: _openProjectsPage,
                   onChatDeleted: _handleChatDeleted,
-                  selectedChatIndex: ChatStorageService.selectedChatIndex,
+                  selectedChatId: ChatStorageService.selectedChatId,
                   isCompactMode: isCompactMode,
                   showAssistantsButton: !isCompactMode || _isSidebarExpanded,
                 ),

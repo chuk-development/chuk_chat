@@ -60,7 +60,8 @@ class _MessageRenderData {
 class ChukChatUIDesktop extends StatefulWidget {
   // RENAMED CLASS
   final VoidCallback onToggleSidebar;
-  final int selectedChatIndex;
+  final String? selectedChatId;
+  final Function(String?) onChatIdChanged;
   final bool isSidebarExpanded;
   final bool isCompactMode;
   final bool showReasoningTokens;
@@ -72,7 +73,8 @@ class ChukChatUIDesktop extends StatefulWidget {
     // RENAMED CONSTRUCTOR
     super.key,
     required this.onToggleSidebar,
-    required this.selectedChatIndex,
+    required this.selectedChatId,
+    required this.onChatIdChanged,
     required this.isSidebarExpanded,
     required this.isCompactMode,
     required this.showReasoningTokens,
@@ -146,7 +148,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
     });
-    _loadChatFromIndex(widget.selectedChatIndex);
+    _loadChatById(widget.selectedChatId);
     unawaited(_loadProviderSlugForModel(_selectedModelId));
     unawaited(_loadSystemPrompt());
     _modelSelectionListener = () {
@@ -175,17 +177,55 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   void didUpdateWidget(covariant ChukChatUIDesktop oldWidget) {
     // RENAMED WIDGET TYPE
     super.didUpdateWidget(oldWidget);
-    if (widget.selectedChatIndex != oldWidget.selectedChatIndex) {
-      // Save current chat before switching (only if it still exists)
-      if (_activeChatId != null) {
+    // ID-BASED: Only react when the actual chat ID changes
+    if (widget.selectedChatId != oldWidget.selectedChatId) {
+      debugPrint('');
+      debugPrint('┌─────────────────────────────────────────────────────────────');
+      debugPrint('│ 🔄 [CHAT-UI-DESKTOP] didUpdateWidget triggered');
+      debugPrint('│ 🔄 [CHAT-UI-DESKTOP] OLD widget.selectedChatId: ${oldWidget.selectedChatId}');
+      debugPrint('│ 🔄 [CHAT-UI-DESKTOP] NEW widget.selectedChatId: ${widget.selectedChatId}');
+      debugPrint('│ 🔄 [CHAT-UI-DESKTOP] Current _activeChatId: $_activeChatId');
+      debugPrint('│ 🔄 [CHAT-UI-DESKTOP] _isSending: $_isSending, _isStreaming: $_isStreaming');
+      debugPrint('└─────────────────────────────────────────────────────────────');
+
+      // Skip if we're already on this chat
+      if (widget.selectedChatId == _activeChatId) {
+        debugPrint('⚠️ [CHAT-UI-DESKTOP] SKIP - already on this chat');
+        return;
+      }
+
+      // CRITICAL FIX: Don't clear an active chat just because parent sent null
+      // This can happen due to stale parent rebuilds. If we have an active chat
+      // with messages, keep it instead of switching to a blank "new" chat.
+      if (widget.selectedChatId == null && _activeChatId != null && _messages.isNotEmpty) {
+        debugPrint('⚠️ [CHAT-UI-DESKTOP] IGNORING null from parent - we have active chat: $_activeChatId');
+        // Sync the parent back to our active chat
+        widget.onChatIdChanged(_activeChatId);
+        return;
+      }
+
+      // CRITICAL FIX: Only save if _activeChatId matches oldWidget.selectedChatId
+      // This ensures we have valid content for that chat (we finished loading it).
+      // If they don't match, we're out of sync and shouldn't persist garbage.
+      final chatIdToSave = oldWidget.selectedChatId;
+      if (chatIdToSave != null && chatIdToSave == _activeChatId && _messages.isNotEmpty) {
         final chatStillExists = ChatStorageService.savedChats.any(
-          (chat) => chat.id == _activeChatId,
+          (chat) => chat.id == chatIdToSave,
         );
         if (chatStillExists) {
-          _persistChat(waitForCompletion: false);
+          debugPrint('│ 💾 [CHAT-UI-DESKTOP] Persisting old chat: $chatIdToSave');
+          // Capture messages snapshot before loading new chat
+          final messagesCopy = _messages
+              .map((message) => Map<String, dynamic>.from(message))
+              .toList(growable: false);
+          unawaited(_persistChatInternal(messagesCopy, chatIdToSave));
         }
+      } else if (chatIdToSave != null && chatIdToSave != _activeChatId) {
+        debugPrint('│ ⚠️ [CHAT-UI-DESKTOP] SKIP persist - out of sync!');
+        debugPrint('│ ⚠️ [CHAT-UI-DESKTOP] chatIdToSave=$chatIdToSave but _activeChatId=$_activeChatId');
       }
-      _loadChatFromIndex(widget.selectedChatIndex);
+
+      _loadChatById(widget.selectedChatId);
       // Update UI based on new chat's streaming status
       setState(() {
         _isStreaming =
@@ -217,49 +257,72 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     super.dispose();
   }
 
-  void _loadChatFromIndex(int index) {
-    if (index == -1) {
+  void _loadChatById(String? chatId) {
+    debugPrint('');
+    debugPrint('┌─────────────────────────────────────────────────────────────');
+    debugPrint('│ 📂 [LOAD-CHAT-DESKTOP] _loadChatById called');
+    debugPrint('│ 📂 [LOAD-CHAT-DESKTOP] chatId param: $chatId');
+    debugPrint('│ 📂 [LOAD-CHAT-DESKTOP] Current _activeChatId: $_activeChatId');
+    debugPrint('└─────────────────────────────────────────────────────────────');
+
+    if (chatId == null) {
+      // New chat - clear everything
+      debugPrint('│ 📂 [LOAD-CHAT-DESKTOP] chatId is NULL - clearing for new chat');
       _messages.clear();
       _animCtrl.reset();
       _attachedFiles.clear();
       _activeChatId = null;
-    } else if (index >= 0 && index < ChatStorageService.savedChats.length) {
-      final storedChat = ChatStorageService.savedChats[index];
-      _activeChatId = storedChat.id;
-      debugPrint('📂 [ChatDebug] Loading chat with ${storedChat.messages.length} messages');
-
-      _messages
-        ..clear()
-        ..addAll(
-          storedChat.messages.map((message) {
-            final map = <String, String>{
-              'sender': message.sender,
-              'text': message.text,
-              'reasoning': message.reasoning ?? '',
-            };
-            if (message.modelId != null && message.modelId!.isNotEmpty) {
-              map['modelId'] = message.modelId!;
-            }
-            if (message.provider != null && message.provider!.isNotEmpty) {
-              map['provider'] = message.provider!;
-            }
-            // Include images if present
-            if (message.images != null && message.images!.isNotEmpty) {
-              map['images'] = message.images!;
-              debugPrint('🖼️ [ImageDebug] Loading message with images field (${message.images!.length} chars)');
-            }
-            // Include attachments if present
-            if (message.attachments != null && message.attachments!.isNotEmpty) {
-              map['attachments'] = message.attachments!;
-              debugPrint('📄 [AttachmentDebug] Loading message with attachments field');
-            }
-            return map;
-          }),
-        );
-      // Instant visibility
-      _animCtrl.value = 1.0;
     } else {
-      _activeChatId = null;
+      // Find chat by ID
+      final storedChat = ChatStorageService.savedChats.cast<StoredChat?>().firstWhere(
+        (chat) => chat?.id == chatId,
+        orElse: () => null,
+      );
+
+      if (storedChat != null) {
+        debugPrint('│ 📂 [LOAD-CHAT-DESKTOP] FOUND chat $chatId with ${storedChat.messages.length} messages');
+        debugPrint('│ 📂 [LOAD-CHAT-DESKTOP] Setting _activeChatId = ${storedChat.id}');
+        _activeChatId = storedChat.id;
+
+        _messages
+          ..clear()
+          ..addAll(
+            storedChat.messages.map((message) {
+              final map = <String, String>{
+                'sender': message.sender,
+                'text': message.text,
+                'reasoning': message.reasoning ?? '',
+              };
+              if (message.modelId != null && message.modelId!.isNotEmpty) {
+                map['modelId'] = message.modelId!;
+              }
+              if (message.provider != null && message.provider!.isNotEmpty) {
+                map['provider'] = message.provider!;
+              }
+              // Include images if present
+              if (message.images != null && message.images!.isNotEmpty) {
+                map['images'] = message.images!;
+              }
+              // Include attachments if present
+              if (message.attachments != null && message.attachments!.isNotEmpty) {
+                map['attachments'] = message.attachments!;
+                debugPrint('📄 [AttachmentDebug] Loading message with attachments field');
+              }
+              return map;
+            }),
+          );
+        // Instant visibility
+        _animCtrl.value = 1.0;
+      } else {
+        // Chat not found - treat as new chat
+        debugPrint('│ ⚠️ [LOAD-CHAT-DESKTOP] Chat $chatId NOT FOUND!');
+        debugPrint('│ ⚠️ [LOAD-CHAT-DESKTOP] Available chats: ${ChatStorageService.savedChats.map((c) => c.id).take(5).toList()}...');
+        debugPrint('│ ⚠️ [LOAD-CHAT-DESKTOP] Treating as new chat, setting _activeChatId = null');
+        _messages.clear();
+        _animCtrl.reset();
+        _attachedFiles.clear();
+        _activeChatId = null;
+      }
     }
     setState(() {
       _isImageActive = false;
@@ -276,12 +339,13 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _messages.clear();
       _animCtrl.reset();
       _activeChatId = null;
-      ChatStorageService.selectedChatIndex = -1;
       _isImageActive = false;
       _isMicActive = false;
       _attachedFiles.clear();
       _resetAudioLevels();
     });
+    // Notify parent that we're now on a new chat (null ID)
+    widget.onChatIdChanged(null);
     _scrollChatToBottom();
     Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
     await ChatStorageService.loadSavedChatsForSidebar();
@@ -1073,6 +1137,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   }
 
   Future<void> _sendMessage() async {
+    // SET GLOBAL LOCK IMMEDIATELY - before any async operations
+    // This prevents didUpdateWidget from switching chats during the entire operation
+    ChatStorageService.isMessageOperationInProgress = true;
+    debugPrint('🔒 [SendMessage] GLOBAL LOCK SET');
+
     if (_isSending && !_isStreaming) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1092,11 +1161,15 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           ),
         );
       }
+      ChatStorageService.isMessageOperationInProgress = false;
+      debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (already sending)');
       return;
     }
 
     if (_isStreaming) {
       _cancelStream();
+      ChatStorageService.isMessageOperationInProgress = false;
+      debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (cancelled)');
       return;
     }
 
@@ -1119,6 +1192,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           ),
         );
       }
+      ChatStorageService.isMessageOperationInProgress = false;
+      debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (uploading)');
       return;
     }
 
@@ -1136,7 +1211,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             : 0.0;
 
         if (remainingCredits < 0.01) {
-          if (!mounted) return;
+          if (!mounted) {
+            ChatStorageService.isMessageOperationInProgress = false;
+            debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (not mounted)');
+            return;
+          }
           await showDialog(
             context: context,
             builder: (context) => AlertDialog(
@@ -1162,6 +1241,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               ],
             ),
           );
+          ChatStorageService.isMessageOperationInProgress = false;
+          debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (insufficient credits)');
           return;
         }
       } catch (error) {
@@ -1208,6 +1289,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       if (result.errorMessage == 'Session expired. Please sign in again.') {
         await SupabaseService.signOut();
       }
+      ChatStorageService.isMessageOperationInProgress = false;
+      debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (invalid message)');
       return;
     }
 
@@ -1226,6 +1309,29 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     final bool firstMessageInChat = _messages.isEmpty;
 
+    // CRITICAL FIX: Sync _activeChatId with widget.selectedChatId if out of sync
+    // This handles cases where _activeChatId was cleared but user is still on existing chat
+    if (_activeChatId == null && widget.selectedChatId != null) {
+      _activeChatId = widget.selectedChatId;
+      debugPrint('');
+      debugPrint('┌─────────────────────────────────────────────────────────────');
+      debugPrint('│ ⚠️ [SEND-DESKTOP] SYNCED _activeChatId with widget.selectedChatId');
+      debugPrint('│ ⚠️ [SEND-DESKTOP] _activeChatId was null, now: $_activeChatId');
+      debugPrint('└─────────────────────────────────────────────────────────────');
+    }
+
+    // Generate chat ID ONCE at the start for truly NEW chats only
+    // This prevents race conditions where multiple _persistChat calls
+    // each generate their own UUID before the first one completes
+    if (_activeChatId == null) {
+      _activeChatId = _uuid.v4();
+      debugPrint('');
+      debugPrint('┌─────────────────────────────────────────────────────────────');
+      debugPrint('│ 🆔 [SEND-DESKTOP] PRE-GENERATED Chat ID: $_activeChatId');
+      debugPrint('│ 🆔 [SEND-DESKTOP] This ID will be used for all persist calls');
+      debugPrint('└─────────────────────────────────────────────────────────────');
+    }
+
     int placeholderIndex = -1;
     setState(() {
       // Store message with images and attachments (if any)
@@ -1240,10 +1346,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       // Store images as JSON-encoded string if present
       if (imageDataUrls != null && imageDataUrls.isNotEmpty) {
         userMessage['images'] = jsonEncode(imageDataUrls);
-        debugPrint('🖼️ [ImageDebug] Storing ${imageDataUrls.length} images in message');
-        debugPrint('🖼️ [ImageDebug] First image preview: ${imageDataUrls.first.substring(0, 50)}...');
-      } else {
-        debugPrint('🖼️ [ImageDebug] No images to store in this message');
       }
 
       // Store document attachments as JSON-encoded string if present
@@ -1407,6 +1509,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         onError: (error) {
           debugPrint('Stream error: $error');
           _autoSaveTimer?.cancel();
+          // RELEASE GLOBAL LOCK on error
+          ChatStorageService.isMessageOperationInProgress = false;
+          debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (stream error)');
           if (!mounted) {
             // Save even if not mounted
             _persistChat(waitForCompletion: false);
@@ -1442,6 +1547,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         onDone: () {
           debugPrint('Stream closed');
           _autoSaveTimer?.cancel();
+          // RELEASE GLOBAL LOCK when stream completes
+          ChatStorageService.isMessageOperationInProgress = false;
+          debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (stream done)');
 
           if (!mounted) {
             // Finalize and save even if not mounted
@@ -1920,16 +2028,33 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     List<Map<String, dynamic>> messagesCopy,
     String? chatId,
   ) async {
+    // Check if chat exists in storage (not just if chatId is null)
+    // With pre-generated IDs, chatId is never null but chat may not exist yet
+    final bool chatExistsInStorage = chatId != null &&
+        ChatStorageService.savedChats.any((c) => c.id == chatId);
+    final bool isNewChat = !chatExistsInStorage;
+
     try {
-      final stored = chatId == null
-          ? await ChatStorageService.saveChat(messagesCopy)
-          : await ChatStorageService.updateChat(chatId, messagesCopy);
+      final stored = isNewChat
+          // Use saveChat with pre-generated ID for new chats
+          ? await ChatStorageService.saveChat(messagesCopy, chatId: chatId)
+          : await ChatStorageService.updateChat(chatId!, messagesCopy);
       if (!mounted || stored == null) return;
       setState(() {
         _activeChatId = stored.id;
       });
-      // Don't update selectedChatIndex here - it causes navigation bugs
-      // when user switches chats. Let the UI manage selectedChatIndex.
+
+      // ID-BASED: Notify parent when a new chat is created
+      if (isNewChat) {
+        debugPrint('');
+        debugPrint('┌─────────────────────────────────────────────────────────────');
+        debugPrint('│ 🆕 [SEND-DESKTOP] NEW CHAT CREATED!');
+        debugPrint('│ 🆕 [SEND-DESKTOP] New chat ID: ${stored.id}');
+        debugPrint('│ 🆕 [SEND-DESKTOP] Calling widget.onChatIdChanged(${stored.id})');
+        debugPrint('│ 🆕 [SEND-DESKTOP] This should update ChatStorageService.selectedChatId');
+        debugPrint('└─────────────────────────────────────────────────────────────');
+        widget.onChatIdChanged(stored.id);
+      }
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2031,28 +2156,15 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       // Extract images if present (stored as JSON string)
       List<String>? images;
       final String? imagesJson = raw['images'];
-      debugPrint('🖼️ [ImageDebug] Message $index - Checking for images...');
-      debugPrint('🖼️ [ImageDebug] Raw images field: ${imagesJson != null ? "EXISTS (${imagesJson.length} chars)" : "NULL"}');
-
       if (imagesJson != null && imagesJson.isNotEmpty) {
         try {
           final decoded = jsonDecode(imagesJson);
-          debugPrint('🖼️ [ImageDebug] JSON decoded successfully, type: ${decoded.runtimeType}');
           if (decoded is List) {
             images = decoded.cast<String>();
-            debugPrint('🖼️ [ImageDebug] ✅ Extracted ${images.length} images from message $index');
-            if (images.isNotEmpty) {
-              debugPrint('🖼️ [ImageDebug] First image preview: ${images.first.substring(0, 50)}...');
-            }
-          } else {
-            debugPrint('🖼️ [ImageDebug] ❌ Decoded value is not a List: $decoded');
           }
         } catch (e) {
-          debugPrint('🖼️ [ImageDebug] ❌ Failed to decode images JSON: $e');
-          debugPrint('🖼️ [ImageDebug] Raw JSON: ${imagesJson.substring(0, imagesJson.length > 100 ? 100 : imagesJson.length)}');
+          debugPrint('Failed to decode images JSON: $e');
         }
-      } else {
-        debugPrint('🖼️ [ImageDebug] No images in message $index');
       }
 
       // Extract attachments if present (stored as JSON string)

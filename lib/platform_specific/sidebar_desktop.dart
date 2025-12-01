@@ -12,21 +12,21 @@ import 'package:chuk_chat/widgets/credit_display.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 
 class SidebarDesktop extends StatefulWidget {
-  final Function(int index) onChatItemTapped;
+  final Function(String? chatId) onChatSelected;
   final Function() onSettingsTapped;
   final Function() onProjectsTapped;
   final Future<void> Function(String chatId)? onChatDeleted;
-  final int selectedChatIndex;
+  final String? selectedChatId;
   final bool isCompactMode;
   final bool showAssistantsButton;
 
   const SidebarDesktop({
     super.key,
-    required this.onChatItemTapped,
+    required this.onChatSelected,
     required this.onSettingsTapped,
     required this.onProjectsTapped,
     this.onChatDeleted,
-    required this.selectedChatIndex,
+    required this.selectedChatId,
     required this.isCompactMode,
     required this.showAssistantsButton,
   });
@@ -131,7 +131,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
   @override
   void didUpdateWidget(covariant SidebarDesktop oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.selectedChatIndex != oldWidget.selectedChatIndex) {
+    if (widget.selectedChatId != oldWidget.selectedChatId) {
       if (mounted) setState(() {});
     }
     // Check if the underlying saved chats list has changed (e.g., new chat added)
@@ -219,12 +219,13 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
   }
 
   void _openChat(StoredChat chat) {
-    final index = ChatStorageService.savedChats.indexWhere(
-      (stored) => stored.id == chat.id,
-    );
-    if (index != -1) {
-      widget.onChatItemTapped(index);
-    }
+    debugPrint('');
+    debugPrint('═══════════════════════════════════════════════════════════');
+    debugPrint('👆 [SIDEBAR] User clicked chat: "${chat.previewText.substring(0, chat.previewText.length > 30 ? 30 : chat.previewText.length)}..."');
+    debugPrint('👆 [SIDEBAR] Chat ID: ${chat.id}');
+    debugPrint('👆 [SIDEBAR] Calling onChatSelected(${chat.id})');
+    debugPrint('═══════════════════════════════════════════════════════════');
+    widget.onChatSelected(chat.id);
   }
 
   @override
@@ -447,17 +448,16 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
                   return const SizedBox(height: 10);
                 }
                 final storedChat = _filteredRecentChats[chatIndex];
-                final originalIndex = ChatStorageService.savedChats.indexOf(
-                  storedChat,
-                );
-                if (originalIndex == -1) {
-                  return const SizedBox.shrink();
-                }
                 return _buildRecentItem(
                   storedChat,
-                  index: originalIndex,
                   onTap: () {
-                    widget.onChatItemTapped(originalIndex);
+                    debugPrint('');
+                    debugPrint('═══════════════════════════════════════════════════════════');
+                    debugPrint('👆 [SIDEBAR-DESKTOP] User tapped recent chat');
+                    debugPrint('👆 [SIDEBAR-DESKTOP] Chat ID: ${storedChat.id}');
+                    debugPrint('👆 [SIDEBAR-DESKTOP] Preview: "${storedChat.previewText.substring(0, storedChat.previewText.length > 40 ? 40 : storedChat.previewText.length)}..."');
+                    debugPrint('═══════════════════════════════════════════════════════════');
+                    widget.onChatSelected(storedChat.id);
                   },
                   onDelete: () => _confirmAndDeleteChat(storedChat),
                   accentColor: accent,
@@ -590,14 +590,13 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
 
   Widget _buildRecentItem(
     StoredChat chat, {
-    required int index,
     bool isLast = false,
     VoidCallback? onTap,
     VoidCallback? onDelete,
     required Color accentColor,
     required Color iconFgColor,
   }) {
-    final bool isSelected = index == widget.selectedChatIndex;
+    final bool isSelected = chat.id == widget.selectedChatId;
     final bool isStarred = chat.isStarred;
     final String title = _deriveChatTitle(chat);
     return RepaintBoundary(
