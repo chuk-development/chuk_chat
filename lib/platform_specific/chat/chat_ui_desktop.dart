@@ -817,8 +817,30 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       try {
         final decoded = jsonDecode(imagesJson);
         if (decoded is List) {
-          imagesForResend = decoded.cast<String>();
-          debugPrint('🔄 [ResendDebug] Reconstructed ${imagesForResend.length} images for resend');
+          final storedImages = decoded.cast<String>();
+          debugPrint('🔄 [ResendDebug] Found ${storedImages.length} images for resend');
+
+          // Convert encrypted storage paths to base64 data URLs
+          imagesForResend = [];
+          for (final img in storedImages) {
+            if (img.endsWith('.enc') && img.contains('/')) {
+              // This is a storage path - download, decrypt, and convert to base64
+              try {
+                debugPrint('🔄 [ResendDebug] Converting storage path to base64: $img');
+                final imageBytes = await ImageStorageService.downloadAndDecryptImage(img);
+                final base64Image = base64Encode(imageBytes);
+                final dataUrl = 'data:image/jpeg;base64,$base64Image';
+                imagesForResend.add(dataUrl);
+                debugPrint('🔄 [ResendDebug] Successfully converted image to base64');
+              } catch (e) {
+                debugPrint('🔄 [ResendDebug] Failed to convert image: $e');
+              }
+            } else if (img.startsWith('data:image')) {
+              // Already a base64 data URL
+              imagesForResend.add(img);
+            }
+          }
+          debugPrint('🔄 [ResendDebug] Converted ${imagesForResend.length} images for AI');
         }
       } catch (e) {
         debugPrint('🔄 [ResendDebug] Failed to parse images JSON: $e');
