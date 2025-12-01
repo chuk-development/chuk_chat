@@ -147,6 +147,7 @@ Services are organized in `lib/services/` and follow a **singleton-like pattern*
 
 2. **Chat & Storage**:
    - `ChatStorageService` - Local chat persistence with encryption
+   - `ChatSyncService` - Background sync between devices (polls every 5s)
    - `StreamingChatService` - Real-time chat message streaming
    - `LocalChatCacheService` - Local caching of chat data
    - `ChatApiService` (platform_specific) - API communication layer
@@ -192,10 +193,12 @@ Services are organized in `lib/services/` and follow a **singleton-like pattern*
    - `PasswordRevisionService` checks for forced logout conditions
    - `EncryptionService.tryLoadKey()` loads encryption key
    - `ChatStorageService.loadSavedChatsForSidebar()` loads encrypted chats
+   - `ChatSyncService.start()` begins background sync (5s polling interval)
    - `ModelPrefetchService.prefetch()` loads available models
    - Theme settings loaded from Supabase via `ThemeSettingsService`
    - Customization preferences loaded from Supabase via `CustomizationPreferencesService`
 5. Platform-appropriate root wrapper is displayed
+6. On logout: `ChatSyncService.stop()` stops background sync
 
 ### Data Models
 
@@ -459,8 +462,14 @@ This section provides a comprehensive map of ALL Dart files in the codebase, org
 
 **lib/services/chat_storage_service.dart**
 - **Purpose**: Encrypted local chat persistence
-- **Key Classes**: `ChatMessage` (with images, attachments fields), `ChatStorageService`
-- **What to Look For**: Chat CRUD, encryption integration, message fields preservation
+- **Key Classes**: `ChatMessage` (with images, attachments fields), `ChatStorageService`, `StoredChat`
+- **What to Look For**: Chat CRUD, encryption integration, message fields preservation, sync support methods
+
+**lib/services/chat_sync_service.dart**
+- **Purpose**: Background sync between devices
+- **Key Features**: Polls every 5 seconds, compares `id` + `updated_at` timestamps, fetches only changed chats
+- **Key Methods**: `start()`, `stop()`, `pause()`, `resume()`, `syncNow()`
+- **What to Look For**: Lightweight polling, app lifecycle integration, conflict handling
 
 **lib/services/streaming_chat_service.dart**
 - **Purpose**: HTTP Server-Sent Events (SSE) streaming

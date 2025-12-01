@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/chat_sync_service.dart';
 import 'package:chuk_chat/platform_specific/root_wrapper.dart';
 import 'package:chuk_chat/utils/color_extensions.dart'; // Import for hex conversion
 import 'package:chuk_chat/utils/grain_overlay.dart'; // Film grain overlay
@@ -58,7 +59,7 @@ class ChukChatApp extends StatefulWidget {
   State<ChukChatApp> createState() => _ChukChatAppState();
 }
 
-class _ChukChatAppState extends State<ChukChatApp> {
+class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
   // Theme state managed by ChukChatApp
   Brightness _currentThemeMode = kDefaultThemeMode;
   Color _currentAccentColor = kDefaultAccentColor;
@@ -96,6 +97,7 @@ class _ChukChatAppState extends State<ChukChatApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
 
     // Wait for Supabase to initialize, then set up everything
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -139,6 +141,8 @@ class _ChukChatAppState extends State<ChukChatApp> {
           if (hasKey) {
             try {
               await ChatStorageService.loadSavedChatsForSidebar();
+              // Start background sync after initial chat load
+              ChatSyncService.start();
             } catch (error, stackTrace) {
               debugPrint('Chat loading failed: $error');
               debugPrint('$stackTrace');
@@ -147,6 +151,7 @@ class _ChukChatAppState extends State<ChukChatApp> {
           } else {
             await EncryptionService.clearKey();
             await ChatStorageService.reset();
+            ChatSyncService.stop();
           }
         } catch (error, stackTrace) {
           debugPrint('Encryption key load failed: $error');
@@ -157,6 +162,8 @@ class _ChukChatAppState extends State<ChukChatApp> {
         _loadThemeSettingsFromSupabase();
         unawaited(ModelPrefetchService.prefetch());
       } else {
+        // User logged out - stop sync and clear data
+        ChatSyncService.stop();
         await EncryptionService.clearKey();
         await ChatStorageService.reset();
         _hasAppliedSupabaseTheme = false;
@@ -182,9 +189,29 @@ class _ChukChatAppState extends State<ChukChatApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _authSubscription?.cancel();
     _themeSyncDebounce?.cancel();
+    ChatSyncService.stop();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    switch (state) {
+      case AppLifecycleState.resumed:
+        // App came to foreground - resume sync
+        ChatSyncService.resume();
+        break;
+      case AppLifecycleState.paused:
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.detached:
+      case AppLifecycleState.hidden:
+        // App went to background - pause sync to save battery
+        ChatSyncService.pause();
+        break;
+    }
   }
 
   // Performance: Cache SharedPreferences instance

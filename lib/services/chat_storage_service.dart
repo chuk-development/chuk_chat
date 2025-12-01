@@ -74,11 +74,13 @@ class StoredChat {
     required this.createdAt,
     required this.isStarred,
     this.customName,
+    this.updatedAt,
   }) : messages = List<ChatMessage>.unmodifiable(messages);
 
   final String id;
   final List<ChatMessage> messages;
   final DateTime createdAt;
+  final DateTime? updatedAt;
   final bool isStarred;
   final String? customName;
 
@@ -107,6 +109,9 @@ class StoredChat {
       id: row['id'] as String,
       messages: messages,
       createdAt: DateTime.parse(row['created_at'] as String),
+      updatedAt: row['updated_at'] != null
+          ? DateTime.parse(row['updated_at'] as String)
+          : null,
       isStarred: (row['is_starred'] as bool?) ?? false,
       customName: customName,
     );
@@ -116,6 +121,7 @@ class StoredChat {
     String? id,
     List<ChatMessage>? messages,
     DateTime? createdAt,
+    DateTime? updatedAt,
     bool? isStarred,
     String? customName,
   }) {
@@ -123,6 +129,7 @@ class StoredChat {
       id: id ?? this.id,
       messages: messages ?? this.messages,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
       isStarred: isStarred ?? this.isStarred,
       customName: customName ?? this.customName,
     );
@@ -228,7 +235,7 @@ class ChatStorageService {
         debugPrint('🌐 [ChatStorage] Network status: ONLINE');
         rows = await SupabaseService.client
             .from('encrypted_chats')
-            .select('id, encrypted_payload, created_at, is_starred')
+            .select('id, encrypted_payload, created_at, is_starred, updated_at')
             .eq('user_id', user.id)
             .order('created_at', ascending: false);
         debugPrint('✅ [ChatStorage] Loaded ${rows.length} chats from remote');
@@ -491,7 +498,7 @@ class ChatStorageService {
     final inserted = await SupabaseService.client
         .from('encrypted_chats')
         .insert(insertData)
-        .select('id, encrypted_payload, created_at, is_starred')
+        .select('id, encrypted_payload, created_at, is_starred, updated_at')
         .single();
 
     final String finalId = inserted['id'] as String;
@@ -599,7 +606,7 @@ class ChatStorageService {
         })
         .eq('id', chatId)
         .eq('user_id', user.id)
-        .select('id, encrypted_payload, created_at, is_starred');
+        .select('id, encrypted_payload, created_at, is_starred, updated_at');
 
     if (updatedRows.isEmpty) {
       throw StateError('Chat not found or access denied.');
@@ -761,7 +768,7 @@ class ChatStorageService {
         .update({'encrypted_payload': encryptedPayload})
         .eq('id', chatId)
         .eq('user_id', user.id)
-        .select('id, encrypted_payload, created_at, is_starred');
+        .select('id, encrypted_payload, created_at, is_starred, updated_at');
 
     if (updatedRows.isEmpty) {
       throw StateError('Chat was not found or access is denied.');
@@ -790,7 +797,7 @@ class ChatStorageService {
           .update({'encrypted_payload': encryptedPayload})
           .eq('id', chat.id)
           .eq('user_id', user.id)
-          .select('id, encrypted_payload, created_at, is_starred');
+          .select('id, encrypted_payload, created_at, is_starred, updated_at');
 
       if (updatedRows.isNotEmpty) {
         final updatedRow = updatedRows.first;
@@ -837,4 +844,103 @@ class ChatStorageService {
     _notifyChanges();
   }
 
+  // ============================================================================
+  // SYNC SUPPORT METHODS
+  // ============================================================================
+
+  /// Merge a synced chat from cloud into local state.
+  /// Called by ChatSyncService when new or updated chats are detected.
+  static Future<void> mergeSyncedChat(Map<String, dynamic> row) async {
+    final chatId = row['id'] as String;
+
+    // Skip if we're currently saving this chat (to avoid conflicts)
+    if (_savingChats.contains(chatId)) {
+      debugPrint('⏭️ [ChatStorage] Skipping sync for chat being saved: $chatId');
+      return;
+    }
+
+    // Skip if there's a pending save operation
+    if (_pendingSaves.containsKey(chatId)) {
+      debugPrint('⏭️ [ChatStorage] Skipping sync for chat with pending save: $chatId');
+      return;
+    }
+
+    final encryptedPayload = row['encrypted_payload'] as String?;
+    if (encryptedPayload == null || encryptedPayload.isEmpty) return;
+
+    try {
+      final decrypted = await EncryptionService.decrypt(encryptedPayload);
+      final chatPayload = _deserializePayload(decrypted);
+      final chat = StoredChat.fromRow(
+        row,
+        chatPayload.messages,
+        customName: chatPayload.customName,
+      );
+
+      final existingChat = _chatsById[chatId];
+      if (existingChat != null) {
+        // Only update if the synced version is actually newer
+        final existingUpdatedAt = existingChat.updatedAt ?? existingChat.createdAt;
+        final syncedUpdatedAt = chat.updatedAt ?? chat.createdAt;
+
+        if (syncedUpdatedAt.isAfter(existingUpdatedAt)) {
+          debugPrint('🔄 [ChatStorage] Updating chat from sync: $chatId');
+          _chatsById[chatId] = chat;
+          _notifyChanges();
+        }
+      } else {
+        // New chat from another device
+        debugPrint('➕ [ChatStorage] Adding new chat from sync: $chatId');
+        _chatsById[chatId] = chat;
+        _notifyChanges();
+      }
+    } on SecretBoxAuthenticationError {
+      debugPrint('🔐 [ChatStorage] Failed to decrypt synced chat: $chatId');
+    } on FormatException catch (e) {
+      debugPrint('📄 [ChatStorage] Invalid format for synced chat: $chatId - $e');
+    } catch (e) {
+      debugPrint('❌ [ChatStorage] Error merging synced chat: $chatId - $e');
+    }
+  }
+
+  /// Remove a chat from local state only (without database operation).
+  /// Called by ChatSyncService when a chat was deleted on another device.
+  static void removeChatLocally(String chatId) {
+    if (!_chatsById.containsKey(chatId)) return;
+
+    debugPrint('🗑️ [ChatStorage] Removing locally deleted chat: $chatId');
+
+    // Find the index before removal
+    final deletedIndex = savedChats.indexWhere((c) => c.id == chatId);
+
+    _chatsById.remove(chatId);
+    _savingChats.remove(chatId);
+    _pendingSaves.remove(chatId);
+
+    // Adjust selectedChatIndex
+    if (deletedIndex != -1 && deletedIndex < selectedChatIndex) {
+      selectedChatIndex -= 1;
+    }
+    if (selectedChatIndex >= savedChats.length) {
+      selectedChatIndex = savedChats.isEmpty ? -1 : savedChats.length - 1;
+    }
+
+    // Clear selection if the deleted chat was selected
+    if (selectedChatId == chatId) {
+      selectedChatId = null;
+    }
+
+    _notifyChanges();
+  }
+
+  /// Get a map of chat IDs to their updated_at timestamps for sync comparison.
+  static Map<String, DateTime> getChatTimestamps() {
+    final timestamps = <String, DateTime>{};
+    for (final chat in _chatsById.values) {
+      timestamps[chat.id] = chat.updatedAt ?? chat.createdAt;
+    }
+    return timestamps;
+  }
+
 }
+
