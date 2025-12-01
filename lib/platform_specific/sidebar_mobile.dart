@@ -3,6 +3,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart'; // Assuming this exists
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/profile_service.dart';
@@ -486,21 +487,24 @@ class _SidebarMobileState extends State<SidebarMobile> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _buildQuickActionButton(
-                  icon: Icons.folder_open_outlined,
-                  label: 'Projects',
-                  onTap: widget.onProjectsTapped,
-                  iconColor: iconColorDefault,
-                  textColor: textColorDefault,
-                ),
-                const SizedBox(height: 6),
-                _buildQuickActionButton(
-                  icon: Icons.auto_awesome,
-                  label: 'Assistants',
-                  onTap: widget.onAssistantsTapped,
-                  iconColor: iconColorDefault,
-                  textColor: textColorDefault,
-                ),
+                if (kFeatureProjects) ...[
+                  _buildQuickActionButton(
+                    icon: Icons.folder_open_outlined,
+                    label: 'Projects',
+                    onTap: widget.onProjectsTapped,
+                    iconColor: iconColorDefault,
+                    textColor: textColorDefault,
+                  ),
+                  const SizedBox(height: 6),
+                ],
+                if (kFeatureAssistants)
+                  _buildQuickActionButton(
+                    icon: Icons.auto_awesome,
+                    label: 'Assistants',
+                    onTap: widget.onAssistantsTapped,
+                    iconColor: iconColorDefault,
+                    textColor: textColorDefault,
+                  ),
               ],
             ),
           ),

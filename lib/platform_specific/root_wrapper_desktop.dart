@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 
+import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/streaming_manager.dart';
@@ -328,8 +329,8 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
               ),
             ),
 
-          // Layer 6: Projects (External for Desktop)
-          if (!isCompactMode || _isSidebarExpanded)
+          // Layer 6: Projects (External for Desktop) - Feature Flag
+          if (kFeatureProjects && (!isCompactMode || _isSidebarExpanded))
             Positioned(
               top:
                   kTopInitialSpacing +
@@ -376,8 +377,8 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
               ),
             ),
 
-          // Layer 7: Assistants (External for Desktop)
-          if (!isCompactMode || _isSidebarExpanded)
+          // Layer 7: Assistants (External for Desktop) - Feature Flag
+          if (kFeatureAssistants && (!isCompactMode || _isSidebarExpanded))
             Positioned(
               top:
                   kTopInitialSpacing +
@@ -385,8 +386,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                   kSpacingBetweenTopButtons +
                   kButtonVisualHeight +
                   kSpacingBetweenTopButtons +
-                  kButtonVisualHeight +
-                  kSpacingBetweenTopButtons,
+                  (kFeatureProjects ? kButtonVisualHeight + kSpacingBetweenTopButtons : 0),
               left: kFixedLeftPadding,
               child: InkWell(
                 onTap: _openAssistantsPage,

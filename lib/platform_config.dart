@@ -14,3 +14,24 @@ const bool kPlatformDesktop = bool.fromEnvironment('PLATFORM_DESKTOP', defaultVa
 
 // Auto-detect if not explicitly set
 const bool kAutoDetectPlatform = !kPlatformMobile && !kPlatformDesktop;
+
+// ============================================================================
+// FEATURE FLAGS
+// ============================================================================
+// These flags control experimental/in-progress features.
+// Set to true to enable, false to disable (hide from UI).
+//
+// Build with features enabled:
+// flutter build apk --dart-define=FEATURE_VOICE_MODE=true --dart-define=FEATURE_PROJECTS=true
+//
+// Build with features disabled (default for production):
+// flutter build apk  (all features disabled by default)
+
+/// Voice mode - audio recording and transcription
+const bool kFeatureVoiceMode = bool.fromEnvironment('FEATURE_VOICE_MODE', defaultValue: false);
+
+/// Projects - workspace organization with custom system prompts
+const bool kFeatureProjects = bool.fromEnvironment('FEATURE_PROJECTS', defaultValue: false);
+
+/// Assistants - custom AI assistants (future feature)
+const bool kFeatureAssistants = bool.fromEnvironment('FEATURE_ASSISTANTS', defaultValue: false);

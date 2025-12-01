@@ -106,6 +106,12 @@ The app uses a **platform-specific architecture with tree-shaking optimization**
   - `kPlatformDesktop` - Set via `--dart-define=PLATFORM_DESKTOP=true`
   - `kAutoDetectPlatform` - Runtime detection when not explicitly set
 
+- **Feature Flags**: `lib/platform_config.dart` - Compile-time feature toggles
+  - `kFeatureVoiceMode` - Voice recording/transcription (default: false)
+  - `kFeatureProjects` - Project workspaces (default: false)
+  - `kFeatureAssistants` - Custom AI assistants (default: false)
+  - Enable with: `--dart-define=FEATURE_VOICE_MODE=true --dart-define=FEATURE_PROJECTS=true`
+
 - **Root Wrappers** (Conditional Imports with Tree-Shaking):
   - `lib/platform_specific/root_wrapper.dart` - Export with conditional imports
   - `lib/platform_specific/root_wrapper_io.dart` - Platform detection with tree-shaking

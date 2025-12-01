@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -1763,34 +1764,32 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
             ),
             const SizedBox(width: 2),
           ],
-          buildTinyIconButton(
-            icon: _audioHandler.isMicActive
-                ? Icons.stop_rounded
-                : Icons.mic_rounded,
-            onTap: _handleMicTap,
-            isActive: _audioHandler.isMicActive,
-            color: _audioHandler.isMicActive ? Colors.red : iconFg,
-          ),
-          const SizedBox(width: 2),
+          if (kFeatureVoiceMode) ...[
+            buildTinyIconButton(
+              icon: _audioHandler.isMicActive
+                  ? Icons.stop_rounded
+                  : Icons.mic_rounded,
+              onTap: _handleMicTap,
+              isActive: _audioHandler.isMicActive,
+              color: _audioHandler.isMicActive ? Colors.red : iconFg,
+            ),
+            const SizedBox(width: 2),
+          ],
           buildTinyActionButton(
-            icon: _audioHandler.isMicActive
+            icon: (kFeatureVoiceMode && _audioHandler.isMicActive)
                 ? Icons.send_rounded
                 : (_streamingHandler.isStreaming
                       ? Icons.stop_rounded
-                      : (_controller.text.trim().isEmpty && !hasAttachments
-                            ? Icons.graphic_eq_rounded
-                            : Icons.arrow_upward_rounded)),
-            onTap: _audioHandler.isMicActive
+                      : Icons.arrow_upward_rounded),
+            onTap: (kFeatureVoiceMode && _audioHandler.isMicActive)
                 ? _handleAudioSend
                 : (_streamingHandler.isStreaming
                       ? _sendMessage
-                      : (_controller.text.trim().isEmpty && !hasAttachments
-                            ? () => _openComingSoonFeature('Voice Mode')
-                            : _sendMessage)),
-            color: _audioHandler.isMicActive
+                      : _sendMessage),
+            color: (kFeatureVoiceMode && _audioHandler.isMicActive)
                 ? accent
                 : (_streamingHandler.isStreaming ? Colors.red : accent),
-            isLoading: _audioHandler.isTranscribingAudio,
+            isLoading: kFeatureVoiceMode && _audioHandler.isTranscribingAudio,
           ),
           const SizedBox(width: 4),
         ],
