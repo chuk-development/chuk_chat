@@ -945,8 +945,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       debugPrint('💾 [MessageDebug] Message added to _messages list. Total messages: ${_messages.length}');
 
       _controller.clear();
-      if (hasAttachments) {
-        _fileHandler.clearAll();
+      // Always clear attachments after sending (not just uploaded ones)
+      // Clear directly without relying on callback since we're already in setState
+      if (_fileHandler.attachedFiles.isNotEmpty) {
+        _fileHandler.attachedFiles.clear();
       }
       _messages.add({
         'sender': 'ai',
