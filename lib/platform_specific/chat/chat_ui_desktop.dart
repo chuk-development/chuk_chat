@@ -118,6 +118,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   String? _activeRecordingPath;
   bool _isSending = false;
   bool _isTranscribingAudio = false;
+  bool _isLoadingChat = false; // Loading indicator for chat switching
   StreamSubscription<ChatStreamEvent>? _streamSubscription;
   StreamSubscription<void>? _providerRefreshSubscription;
   bool _isStreaming = false;
@@ -265,72 +266,85 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     debugPrint('│ 📂 [LOAD-CHAT-DESKTOP] Current _activeChatId: $_activeChatId');
     debugPrint('└─────────────────────────────────────────────────────────────');
 
-    if (chatId == null) {
-      // New chat - clear everything
-      debugPrint('│ 📂 [LOAD-CHAT-DESKTOP] chatId is NULL - clearing for new chat');
-      _messages.clear();
-      _animCtrl.reset();
-      _attachedFiles.clear();
-      _activeChatId = null;
-    } else {
-      // Find chat by ID
-      final storedChat = ChatStorageService.savedChats.cast<StoredChat?>().firstWhere(
-        (chat) => chat?.id == chatId,
-        orElse: () => null,
-      );
+    // Show loading indicator immediately
+    setState(() {
+      _isLoadingChat = true;
+    });
 
-      if (storedChat != null) {
-        debugPrint('│ 📂 [LOAD-CHAT-DESKTOP] FOUND chat $chatId with ${storedChat.messages.length} messages');
-        debugPrint('│ 📂 [LOAD-CHAT-DESKTOP] Setting _activeChatId = ${storedChat.id}');
-        _activeChatId = storedChat.id;
+    // Use microtask to allow UI to update with loading indicator first
+    Future.microtask(() {
+      if (!mounted) return;
 
-        _messages
-          ..clear()
-          ..addAll(
-            storedChat.messages.map((message) {
-              final map = <String, String>{
-                'sender': message.sender,
-                'text': message.text,
-                'reasoning': message.reasoning ?? '',
-              };
-              if (message.modelId != null && message.modelId!.isNotEmpty) {
-                map['modelId'] = message.modelId!;
-              }
-              if (message.provider != null && message.provider!.isNotEmpty) {
-                map['provider'] = message.provider!;
-              }
-              // Include images if present
-              if (message.images != null && message.images!.isNotEmpty) {
-                map['images'] = message.images!;
-              }
-              // Include attachments if present
-              if (message.attachments != null && message.attachments!.isNotEmpty) {
-                map['attachments'] = message.attachments!;
-                debugPrint('📄 [AttachmentDebug] Loading message with attachments field');
-              }
-              return map;
-            }),
-          );
-        // Instant visibility
-        _animCtrl.value = 1.0;
-      } else {
-        // Chat not found - treat as new chat
-        debugPrint('│ ⚠️ [LOAD-CHAT-DESKTOP] Chat $chatId NOT FOUND!');
-        debugPrint('│ ⚠️ [LOAD-CHAT-DESKTOP] Available chats: ${ChatStorageService.savedChats.map((c) => c.id).take(5).toList()}...');
-        debugPrint('│ ⚠️ [LOAD-CHAT-DESKTOP] Treating as new chat, setting _activeChatId = null');
+      if (chatId == null) {
+        // New chat - clear everything
+        debugPrint('│ 📂 [LOAD-CHAT-DESKTOP] chatId is NULL - clearing for new chat');
         _messages.clear();
         _animCtrl.reset();
         _attachedFiles.clear();
         _activeChatId = null;
+      } else {
+        // Find chat by ID
+        final storedChat = ChatStorageService.savedChats.cast<StoredChat?>().firstWhere(
+          (chat) => chat?.id == chatId,
+          orElse: () => null,
+        );
+
+        if (storedChat != null) {
+          debugPrint('│ 📂 [LOAD-CHAT-DESKTOP] FOUND chat $chatId with ${storedChat.messages.length} messages');
+          debugPrint('│ 📂 [LOAD-CHAT-DESKTOP] Setting _activeChatId = ${storedChat.id}');
+          _activeChatId = storedChat.id;
+
+          _messages
+            ..clear()
+            ..addAll(
+              storedChat.messages.map((message) {
+                final map = <String, String>{
+                  'sender': message.sender,
+                  'text': message.text,
+                  'reasoning': message.reasoning ?? '',
+                };
+                if (message.modelId != null && message.modelId!.isNotEmpty) {
+                  map['modelId'] = message.modelId!;
+                }
+                if (message.provider != null && message.provider!.isNotEmpty) {
+                  map['provider'] = message.provider!;
+                }
+                // Include images if present
+                if (message.images != null && message.images!.isNotEmpty) {
+                  map['images'] = message.images!;
+                }
+                // Include attachments if present
+                if (message.attachments != null && message.attachments!.isNotEmpty) {
+                  map['attachments'] = message.attachments!;
+                  debugPrint('📄 [AttachmentDebug] Loading message with attachments field');
+                }
+                return map;
+              }),
+            );
+          // Instant visibility
+          _animCtrl.value = 1.0;
+        } else {
+          // Chat not found - treat as new chat
+          debugPrint('│ ⚠️ [LOAD-CHAT-DESKTOP] Chat $chatId NOT FOUND!');
+          debugPrint('│ ⚠️ [LOAD-CHAT-DESKTOP] Available chats: ${ChatStorageService.savedChats.map((c) => c.id).take(5).toList()}...');
+          debugPrint('│ ⚠️ [LOAD-CHAT-DESKTOP] Treating as new chat, setting _activeChatId = null');
+          _messages.clear();
+          _animCtrl.reset();
+          _attachedFiles.clear();
+          _activeChatId = null;
+        }
       }
-    }
-    setState(() {
-      _isImageActive = false;
-      _isMicActive = false;
-      _resetAudioLevels();
+
+      if (!mounted) return;
+      setState(() {
+        _isLoadingChat = false;
+        _isImageActive = false;
+        _isMicActive = false;
+        _resetAudioLevels();
+      });
+      _scrollChatToBottom(animate: false);
+      Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
     });
-    _scrollChatToBottom(animate: false);
-    Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
   }
 
   void newChat() async {
@@ -2272,6 +2286,19 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                               ),
                             ],
                           ),
+                        ),
+                      ),
+                    ),
+                  ),
+                // Loading indicator when switching chats
+                if (_isLoadingChat)
+                  Positioned.fill(
+                    child: Container(
+                      color: bg.withValues(alpha: 0.7),
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          color: accent,
+                          strokeWidth: 3,
                         ),
                       ),
                     ),

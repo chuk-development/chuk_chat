@@ -8,7 +8,6 @@ import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 const int _kChatPayloadVersion = 2;
@@ -135,8 +134,6 @@ class ChatStorageService {
 
   static final StreamController<void> _changesController =
       StreamController<void>.broadcast();
-  static RealtimeChannel? _realtimeChannel;
-  static String? _realtimeUserId;
   static int selectedChatIndex = -1;
 
   /// ID-BASED SELECTION: The currently selected chat ID.
@@ -296,6 +293,19 @@ class ChatStorageService {
     }
 
     _notifyChanges();
+
+    // Log all loaded chats for debugging
+    if (_chatsById.isNotEmpty) {
+      debugPrint('📋 [ChatStorage] Current chats in memory (${_chatsById.length}):');
+      for (final entry in _chatsById.entries) {
+        final chat = entry.value;
+        final firstUserMsg = chat.messages.where((m) => m.role == 'user').firstOrNull;
+        final title = (firstUserMsg?.text.length ?? 0) > 40
+            ? '${firstUserMsg!.text.substring(0, 40)}...'
+            : (firstUserMsg?.text ?? 'No user message');
+        debugPrint('   - ${entry.key.substring(0, 8)}... : "$title" (${chat.messages.length} msgs)');
+      }
+    }
 
     if (loadedFromCache && remoteError != null) {
       debugPrint(
@@ -461,7 +471,15 @@ class ChatStorageService {
     _notifyChanges();
 
     unawaited(LocalChatCacheService.upsert(user.id, inserted));
+
+    // Log with title for debugging
+    final firstUserMsg = messages.where((m) => m.role == 'user').firstOrNull;
+    final title = (firstUserMsg?.text.length ?? 0) > 50
+        ? '${firstUserMsg!.text.substring(0, 50)}...'
+        : (firstUserMsg?.text ?? 'No user message');
     debugPrint('✅ [ChatStorage] Saved new chat: $finalId');
+    debugPrint('   📝 Title: "$title"');
+    debugPrint('   📊 Messages: ${messages.length} (${messages.where((m) => m.role == "user").length} user, ${messages.where((m) => m.role == "assistant").length} assistant)');
 
     return chat;
   }
@@ -562,7 +580,15 @@ class ChatStorageService {
     _notifyChanges();
 
     unawaited(LocalChatCacheService.upsert(user.id, updatedRow));
+
+    // Log with title for debugging
+    final firstUserMsg = messages.where((m) => m.role == 'user').firstOrNull;
+    final title = (firstUserMsg?.text.length ?? 0) > 50
+        ? '${firstUserMsg!.text.substring(0, 50)}...'
+        : (firstUserMsg?.text ?? 'No user message');
     debugPrint('✅ [ChatStorage] Updated chat: $chatId');
+    debugPrint('   📝 Title: "$title"');
+    debugPrint('   📊 Messages: ${messages.length} (${messages.where((m) => m.role == "user").length} user, ${messages.where((m) => m.role == "assistant").length} assistant)');
 
     return chat;
   }
@@ -739,156 +765,4 @@ class ChatStorageService {
     _notifyChanges();
   }
 
-  // ============ REALTIME SUBSCRIPTION ============
-
-  static Future<void> startRealtimeSubscription() async {
-    final userId = SupabaseService.auth.currentUser?.id;
-    if (userId == null) return;
-    if (_realtimeChannel != null && _realtimeUserId == userId) return;
-
-    await _stopRealtimeSubscription();
-    _realtimeUserId = userId;
-
-    final channel = SupabaseService.client.channel('encrypted_chats_$userId');
-
-    void handleChange(PostgresChangePayload payload) {
-      unawaited(_handleRealtimeChange(payload));
-    }
-
-    channel
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'encrypted_chats',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'user_id',
-            value: userId,
-          ),
-          callback: handleChange,
-        )
-        .onPostgresChanges(
-          event: PostgresChangeEvent.update,
-          schema: 'public',
-          table: 'encrypted_chats',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'user_id',
-            value: userId,
-          ),
-          callback: handleChange,
-        )
-        .onPostgresChanges(
-          event: PostgresChangeEvent.delete,
-          schema: 'public',
-          table: 'encrypted_chats',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'user_id',
-            value: userId,
-          ),
-          callback: handleChange,
-        );
-
-    channel.subscribe();
-    _realtimeChannel = channel;
-  }
-
-  static Future<void> _stopRealtimeSubscription() async {
-    if (_realtimeChannel == null) {
-      _realtimeUserId = null;
-      return;
-    }
-    try {
-      await _realtimeChannel!.unsubscribe();
-    } catch (e) {
-      debugPrint('⚠️ [ChatStorage] Error unsubscribing: $e');
-    } finally {
-      _realtimeChannel = null;
-      _realtimeUserId = null;
-    }
-  }
-
-  static Future<void> _handleRealtimeChange(
-    PostgresChangePayload payload,
-  ) async {
-    try {
-      final chatId =
-          (payload.newRecord['id'] ?? payload.oldRecord['id']) as String?;
-      if (chatId == null) return;
-
-      // CRITICAL: Ignore realtime events for chats we're currently saving
-      if (_savingChats.contains(chatId)) {
-        debugPrint(
-          '🔄 [Realtime] Ignoring event for chat being saved: $chatId',
-        );
-        return;
-      }
-
-      switch (payload.eventType) {
-        case PostgresChangeEvent.delete:
-          if (_chatsById.containsKey(chatId)) {
-            _chatsById.remove(chatId);
-            _notifyChanges();
-            debugPrint('🗑️ [Realtime] Removed chat: $chatId');
-          }
-          final userId = SupabaseService.auth.currentUser?.id;
-          if (userId != null) {
-            unawaited(LocalChatCacheService.delete(userId, chatId));
-          }
-          return;
-
-        case PostgresChangeEvent.insert:
-        case PostgresChangeEvent.update:
-          // Only process if we don't already have this chat (for INSERT)
-          // or if it's an UPDATE from another device
-          if (payload.eventType == PostgresChangeEvent.insert &&
-              _chatsById.containsKey(chatId)) {
-            debugPrint(
-              '🔄 [Realtime] Ignoring INSERT for existing chat: $chatId',
-            );
-            return;
-          }
-
-          final record = payload.newRecord;
-          final encryptedPayload = record['encrypted_payload'] as String?;
-          if (encryptedPayload == null || encryptedPayload.isEmpty) return;
-
-          if (!EncryptionService.hasKey) {
-            final loaded = await EncryptionService.tryLoadKey();
-            if (!loaded) return;
-          }
-
-          try {
-            final decrypted = await EncryptionService.decrypt(encryptedPayload);
-            final chatPayload = _deserializePayload(decrypted);
-            final chat = StoredChat.fromRow(
-              record,
-              chatPayload.messages,
-              customName: chatPayload.customName,
-            );
-
-            _chatsById[chatId] = chat;
-            _notifyChanges();
-            debugPrint(
-              '🔄 [Realtime] ${payload.eventType == PostgresChangeEvent.insert ? 'Added' : 'Updated'} chat: $chatId',
-            );
-
-            final userId = SupabaseService.auth.currentUser?.id;
-            if (userId != null) {
-              unawaited(LocalChatCacheService.upsert(userId, record));
-            }
-          } catch (e) {
-            debugPrint('❌ [Realtime] Failed to process chat: $e');
-          }
-          return;
-
-        case PostgresChangeEvent.all:
-          await loadChats();
-          return;
-      }
-    } catch (e, st) {
-      debugPrint('❌ [Realtime] Error: $e\n$st');
-    }
-  }
 }

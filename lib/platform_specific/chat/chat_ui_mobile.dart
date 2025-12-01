@@ -81,12 +81,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   late final VoidCallback _modelSelectionListener;
 
   // Stream subscriptions
-  StreamSubscription<void>? _chatStorageSubscription;
   StreamSubscription<void>? _providerRefreshSubscription;
 
   // Network and UI state
   bool _isOffline = false;
-  bool _isSendingMessage = false; // Flag to block realtime updates during send
+  bool _isSendingMessage = false; // Flag to prevent rapid send spam
+  bool _isLoadingChat = false; // Loading indicator for chat switching
   late final VoidCallback _networkStatusListener;
   Timer? _audioVisualizerTimer;
 
@@ -196,11 +196,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           unawaited(_loadProviderSlugForModel(_selectedModelId));
         });
 
-    // Chat storage listener
-    _chatStorageSubscription = ChatStorageService.changes.listen((_) {
-      _handleRealtimeChatUpdate();
-    });
-
     // Network status listener
     _networkStatusListener = () {
       final bool isOnline = NetworkStatusService.isOnline;
@@ -305,7 +300,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       _streamingHandler.cancelStream(_activeChatId);
     }
     _audioVisualizerTimer?.cancel();
-    _chatStorageSubscription?.cancel();
     _providerRefreshSubscription?.cancel();
     NetworkStatusService.isOnlineListenable.removeListener(
       _networkStatusListener,
@@ -332,95 +326,108 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     debugPrint('│ 📂 [LOAD-CHAT-MOBILE] Current _activeChatId: $_activeChatId');
     debugPrint('└─────────────────────────────────────────────────────────────');
 
-    if (chatId == null) {
-      // New chat - clear everything
-      debugPrint('│ 📂 [LOAD-CHAT-MOBILE] chatId is NULL - clearing for new chat');
-      _messages.clear();
-      _fileHandler.clearAll();
-      _activeChatId = null;
-    } else {
-      // Find chat by ID
-      final storedChat = ChatStorageService.savedChats.cast<StoredChat?>().firstWhere(
-        (chat) => chat?.id == chatId,
-        orElse: () => null,
-      );
+    // Show loading indicator immediately
+    setState(() {
+      _isLoadingChat = true;
+    });
 
-      if (storedChat != null) {
-        debugPrint('│ 📂 [LOAD-CHAT-MOBILE] FOUND chat $chatId with ${storedChat.messages.length} messages');
-        debugPrint('│ 📂 [LOAD-CHAT-MOBILE] Setting _activeChatId = ${storedChat.id}');
-        _activeChatId = storedChat.id;
-        _messages
-          ..clear()
-          ..addAll(
-            storedChat.messages.map((message) {
-              final map = <String, String>{
-                'sender': message.sender,
-                'text': message.text,
-                'reasoning': message.reasoning ?? '',
-              };
-              if (message.modelId != null && message.modelId!.isNotEmpty) {
-                map['modelId'] = message.modelId!;
-              }
-              if (message.provider != null && message.provider!.isNotEmpty) {
-                map['provider'] = message.provider!;
-              }
-              // Include images if present
-              if (message.images != null && message.images!.isNotEmpty) {
-                map['images'] = message.images!;
-              }
-              // Include attachments if present
-              if (message.attachments != null && message.attachments!.isNotEmpty) {
-                map['attachments'] = message.attachments!;
-                debugPrint('📄 [AttachmentDebug] Loading message with attachments field');
-              }
-              return map;
-            }),
-          );
-      } else {
-        // Chat not found - treat as new chat
-        debugPrint('│ ⚠️ [LOAD-CHAT-MOBILE] Chat $chatId NOT FOUND!');
-        debugPrint('│ ⚠️ [LOAD-CHAT-MOBILE] Available chats: ${ChatStorageService.savedChats.map((c) => c.id).take(5).toList()}...');
-        debugPrint('│ ⚠️ [LOAD-CHAT-MOBILE] Treating as new chat, setting _activeChatId = null');
+    // Use microtask to allow UI to update with loading indicator first
+    Future.microtask(() {
+      if (!mounted) return;
+
+      if (chatId == null) {
+        // New chat - clear everything
+        debugPrint('│ 📂 [LOAD-CHAT-MOBILE] chatId is NULL - clearing for new chat');
         _messages.clear();
         _fileHandler.clearAll();
         _activeChatId = null;
-      }
-    }
-
-    // Check for background streaming
-    final bool chatIsStreaming =
-        _activeChatId != null &&
-        _streamingHandler.isChatStreaming(_activeChatId!);
-
-    if (chatIsStreaming && _activeChatId != null) {
-      final int? streamingMsgIndex = _streamingHandler.getStreamingMessageIndex(
-        _activeChatId!,
-      );
-      if (streamingMsgIndex != null &&
-          streamingMsgIndex >= 0 &&
-          streamingMsgIndex < _messages.length) {
-        final String? bufferedContent = _streamingHandler.getBufferedContent(
-          _activeChatId!,
+      } else {
+        // Find chat by ID
+        final storedChat = ChatStorageService.savedChats.cast<StoredChat?>().firstWhere(
+          (chat) => chat?.id == chatId,
+          orElse: () => null,
         );
-        final String? bufferedReasoning = _streamingHandler
-            .getBufferedReasoning(_activeChatId!);
 
-        if (bufferedContent != null) {
-          final Map<String, String> updatedMessage = Map<String, String>.from(
-            _messages[streamingMsgIndex],
-          );
-          updatedMessage['text'] = bufferedContent;
-          updatedMessage['reasoning'] = bufferedReasoning ?? '';
-          _messages[streamingMsgIndex] = updatedMessage;
+        if (storedChat != null) {
+          debugPrint('│ 📂 [LOAD-CHAT-MOBILE] FOUND chat $chatId with ${storedChat.messages.length} messages');
+          debugPrint('│ 📂 [LOAD-CHAT-MOBILE] Setting _activeChatId = ${storedChat.id}');
+          _activeChatId = storedChat.id;
+          _messages
+            ..clear()
+            ..addAll(
+              storedChat.messages.map((message) {
+                final map = <String, String>{
+                  'sender': message.sender,
+                  'text': message.text,
+                  'reasoning': message.reasoning ?? '',
+                };
+                if (message.modelId != null && message.modelId!.isNotEmpty) {
+                  map['modelId'] = message.modelId!;
+                }
+                if (message.provider != null && message.provider!.isNotEmpty) {
+                  map['provider'] = message.provider!;
+                }
+                // Include images if present
+                if (message.images != null && message.images!.isNotEmpty) {
+                  map['images'] = message.images!;
+                }
+                // Include attachments if present
+                if (message.attachments != null && message.attachments!.isNotEmpty) {
+                  map['attachments'] = message.attachments!;
+                  debugPrint('📄 [AttachmentDebug] Loading message with attachments field');
+                }
+                return map;
+              }),
+            );
+        } else {
+          // Chat not found - treat as new chat
+          debugPrint('│ ⚠️ [LOAD-CHAT-MOBILE] Chat $chatId NOT FOUND!');
+          debugPrint('│ ⚠️ [LOAD-CHAT-MOBILE] Available chats: ${ChatStorageService.savedChats.map((c) => c.id).take(5).toList()}...');
+          debugPrint('│ ⚠️ [LOAD-CHAT-MOBILE] Treating as new chat, setting _activeChatId = null');
+          _messages.clear();
+          _fileHandler.clearAll();
+          _activeChatId = null;
         }
       }
-    }
 
-    setState(() {});
-    _scrollChatToBottom(force: true);
-    if (!widget.isSidebarExpanded) {
-      _textFieldFocusNode.requestFocus();
-    }
+      // Check for background streaming
+      final bool chatIsStreaming =
+          _activeChatId != null &&
+          _streamingHandler.isChatStreaming(_activeChatId!);
+
+      if (chatIsStreaming && _activeChatId != null) {
+        final int? streamingMsgIndex = _streamingHandler.getStreamingMessageIndex(
+          _activeChatId!,
+        );
+        if (streamingMsgIndex != null &&
+            streamingMsgIndex >= 0 &&
+            streamingMsgIndex < _messages.length) {
+          final String? bufferedContent = _streamingHandler.getBufferedContent(
+            _activeChatId!,
+          );
+          final String? bufferedReasoning = _streamingHandler
+              .getBufferedReasoning(_activeChatId!);
+
+          if (bufferedContent != null) {
+            final Map<String, String> updatedMessage = Map<String, String>.from(
+              _messages[streamingMsgIndex],
+            );
+            updatedMessage['text'] = bufferedContent;
+            updatedMessage['reasoning'] = bufferedReasoning ?? '';
+            _messages[streamingMsgIndex] = updatedMessage;
+          }
+        }
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _isLoadingChat = false;
+      });
+      _scrollChatToBottom(force: true);
+      if (!widget.isSidebarExpanded) {
+        _textFieldFocusNode.requestFocus();
+      }
+    });
   }
 
   void newChat() async {
@@ -443,92 +450,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     }
     await ChatStorageService.loadSavedChatsForSidebar();
     debugPrint('🆕 [NewChat] After loadSavedChats, _activeChatId: $_activeChatId');
-  }
-
-  void _handleRealtimeChatUpdate() {
-    if (!mounted) return;
-    final String? chatIdAtStart = _activeChatId;
-    if (chatIdAtStart == null) return;
-
-    // CRITICAL: Don't update if this chat is currently streaming or sending
-    // Otherwise we'll overwrite the streaming AI response or cause race conditions
-    if (_streamingHandler.isChatStreaming(chatIdAtStart)) {
-      debugPrint('⚠️ [Realtime] Skipping update - chat is streaming');
-      return;
-    }
-
-    if (_streamingHandler.isSending) {
-      debugPrint('⚠️ [Realtime] Skipping update - message is being sent');
-      return;
-    }
-
-    // Also skip if we're in the middle of a message send operation
-    if (_isSendingMessage) {
-      debugPrint('⚠️ [Realtime] Skipping update - _isSendingMessage flag is set');
-      return;
-    }
-
-    final chatIndex = ChatStorageService.savedChats.indexWhere(
-      (chat) => chat.id == chatIdAtStart,
-    );
-    if (chatIndex == -1) return;
-
-    final updatedChat = ChatStorageService.savedChats[chatIndex];
-    final currentMessageCount = _messages.length;
-    final newMessageCount = updatedChat.messages.length;
-
-    if (newMessageCount != currentMessageCount ||
-        _messagesHaveChanged(updatedChat.messages)) {
-      if (_activeChatId != chatIdAtStart) {
-        return;
-      }
-
-      debugPrint('📥 [Realtime] Applying chat update: ${updatedChat.messages.length} messages');
-      setState(() {
-        _messages.clear();
-        _messages.addAll(
-          updatedChat.messages.map((message) {
-            final map = <String, String>{
-              'sender': message.sender,
-              'text': message.text,
-              'reasoning': message.reasoning ?? '',
-            };
-            if (message.modelId != null && message.modelId!.isNotEmpty) {
-              map['modelId'] = message.modelId!;
-            }
-            if (message.provider != null && message.provider!.isNotEmpty) {
-              map['provider'] = message.provider!;
-            }
-            // Include images if present
-            if (message.images != null && message.images!.isNotEmpty) {
-              map['images'] = message.images!;
-              debugPrint('🖼️ [Realtime] Update includes images (${message.images!.length} chars)');
-            }
-            // Include attachments if present
-            if (message.attachments != null && message.attachments!.isNotEmpty) {
-              map['attachments'] = message.attachments!;
-              debugPrint('📄 [Realtime] Update includes attachments');
-            }
-            return map;
-          }),
-        );
-      });
-      _scrollChatToBottom();
-    }
-  }
-
-  bool _messagesHaveChanged(List<ChatMessage> newMessages) {
-    if (newMessages.length != _messages.length) return true;
-    for (int i = 0; i < newMessages.length; i++) {
-      final newMsg = newMessages[i];
-      final currentMsg = _messages[i];
-      if (newMsg.sender != currentMsg['sender'] ||
-          newMsg.text != currentMsg['text'] ||
-          (newMsg.reasoning ?? '') != (currentMsg['reasoning'] ?? '')) {
-        return true;
-      }
-    }
-    return false;
   }
 
   // --- AUDIO HANDLERS ---
@@ -1489,21 +1410,26 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       10 + composerReservedSpace,
     );
 
+    final Color accent = theme.colorScheme.primary;
+    final Color bg = theme.scaffoldBackgroundColor;
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       resizeToAvoidBottomInset: false,
-      body: Padding(
-        padding: EdgeInsets.only(bottom: keyboardInset),
-        child: GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onTap: () {
-            FocusScope.of(context).unfocus();
-          },
-          child: Column(
-            children: [
-              Expanded(
-                child: hasMessages
-                    ? Align(
+      body: Stack(
+        children: [
+          Padding(
+            padding: EdgeInsets.only(bottom: keyboardInset),
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: () {
+                FocusScope.of(context).unfocus();
+              },
+              child: Column(
+                children: [
+                  Expanded(
+                    child: hasMessages
+                        ? Align(
                         alignment: Alignment.center,
                         child: Container(
                           constraints: BoxConstraints(
@@ -1684,6 +1610,21 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
             ],
           ),
         ),
+      ),
+      // Loading indicator when switching chats
+      if (_isLoadingChat)
+        Positioned.fill(
+          child: Container(
+            color: bg.withValues(alpha: 0.7),
+            child: Center(
+              child: CircularProgressIndicator(
+                color: accent,
+                strokeWidth: 3,
+              ),
+            ),
+          ),
+        ),
+        ],
       ),
     );
   }
