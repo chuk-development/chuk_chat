@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -343,6 +344,32 @@ class ChatStorageService {
     return _ChatPayload(messages, customName: customName);
   }
 
+  /// Extract image storage paths from messages
+  /// Images are stored as JSON arrays in the 'images' field of messages
+  /// Each entry can be a storage path (like "user-id/uuid.enc") or a base64 data URL
+  /// We only want storage paths for cleanup purposes
+  static List<String> _extractImagePaths(List<ChatMessage> messages) {
+    final paths = <String>[];
+    for (final msg in messages) {
+      if (msg.images != null && msg.images!.isNotEmpty) {
+        try {
+          final imagesData = jsonDecode(msg.images!) as List<dynamic>;
+          for (final img in imagesData) {
+            final imgStr = img.toString();
+            // Storage paths end with .enc and contain a user ID pattern
+            // They look like: "user-uuid/image-uuid.enc"
+            if (imgStr.endsWith('.enc') && imgStr.contains('/')) {
+              paths.add(imgStr);
+            }
+          }
+        } catch (_) {
+          // Invalid JSON, skip
+        }
+      }
+    }
+    return paths;
+  }
+
   static List<ChatMessage> _mapToChatMessages(
     List<Map<String, dynamic>> messagesMaps,
   ) {
@@ -448,6 +475,9 @@ class ChatStorageService {
 
     final encryptedPayload = await EncryptionService.encrypt(payload);
 
+    // Extract image paths for cleanup on delete
+    final imagePaths = _extractImagePaths(messages);
+
     // CRITICAL: Always include the effectiveChatId in the insert.
     // This ensures the ID we track in _savingChats matches the ID in Supabase,
     // preventing race conditions with realtime events that could cause duplicates.
@@ -455,6 +485,7 @@ class ChatStorageService {
       'id': effectiveChatId,
       'user_id': user.id,
       'encrypted_payload': encryptedPayload,
+      if (imagePaths.isNotEmpty) 'image_paths': imagePaths,
     };
 
     final inserted = await SupabaseService.client
@@ -557,9 +588,15 @@ class ChatStorageService {
       jsonEncode(payloadMap),
     );
 
+    // Extract image paths for cleanup on delete
+    final imagePaths = _extractImagePaths(messages);
+
     final updatedRows = await SupabaseService.client
         .from('encrypted_chats')
-        .update({'encrypted_payload': encryptedPayload})
+        .update({
+          'encrypted_payload': encryptedPayload,
+          'image_paths': imagePaths.isNotEmpty ? imagePaths : null,
+        })
         .eq('id', chatId)
         .eq('user_id', user.id)
         .select('id, encrypted_payload, created_at, is_starred');
@@ -593,13 +630,48 @@ class ChatStorageService {
     return chat;
   }
 
-  /// Delete a chat
+  /// Delete a chat and its associated images from storage
   static Future<void> deleteChat(String chatId) async {
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
       throw StateError('User must be signed in to delete chats.');
     }
 
+    // First, fetch the image_paths before deleting the row
+    List<String> imagePaths = [];
+    try {
+      final rows = await SupabaseService.client
+          .from('encrypted_chats')
+          .select('image_paths')
+          .eq('id', chatId)
+          .eq('user_id', user.id);
+
+      if (rows.isNotEmpty && rows.first['image_paths'] != null) {
+        final pathsData = rows.first['image_paths'];
+        if (pathsData is List) {
+          imagePaths = pathsData.cast<String>();
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ [ChatStorage] Failed to fetch image_paths: $e');
+      // Continue with deletion even if fetching paths fails
+    }
+
+    // Delete associated images from storage (best effort, don't block on failures)
+    if (imagePaths.isNotEmpty) {
+      debugPrint('🖼️ [ChatStorage] Deleting ${imagePaths.length} images for chat: $chatId');
+      for (final path in imagePaths) {
+        try {
+          await ImageStorageService.deleteEncryptedImage(path);
+          debugPrint('   ✅ Deleted image: $path');
+        } catch (e) {
+          debugPrint('   ⚠️ Failed to delete image $path: $e');
+          // Continue deleting other images even if one fails
+        }
+      }
+    }
+
+    // Delete the chat row
     await SupabaseService.client
         .from('encrypted_chats')
         .delete()

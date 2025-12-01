@@ -239,6 +239,13 @@ The app uses the following Supabase tables:
    - Columns: `id`, `project_id`, `file_name`, `encrypted_content`, `file_type`, `file_size`, `uploaded_at`
    - Files are encrypted client-side before upload
 
+7. **encrypted_chats** - Stores encrypted chat conversations
+   - Columns: `id`, `user_id`, `encrypted_payload`, `created_at`, `is_starred`, `image_paths`
+   - `encrypted_payload`: AES-256-GCM encrypted JSON containing messages and customName
+   - `image_paths`: text[] array of Supabase Storage paths for images (e.g., "user-uuid/image-uuid.enc")
+   - When a chat is deleted, images in `image_paths` are automatically deleted from storage
+   - Managed via `ChatStorageService`
+
 All tables use Row Level Security (RLS) with policies ensuring users can only access their own data.
 
 ### Projects Feature
@@ -865,7 +872,7 @@ This section provides a comprehensive map of ALL Dart files in the codebase, org
 - **Build Artifacts**: `releases/`, `debian/`, `rpm/`, and `AppDir/` directories are git-ignored.
 - **Dependencies**: Uses flutter_lints for code quality. Run `flutter analyze` before committing.
 - **Documentation**: Do NOT create separate markdown documentation files. All documentation should be in this CLAUDE.md file.
-- **IMPORTANT: Always commit changes after completing a task**. Update this CLAUDE.md file with any new features or changes, then commit with a descriptive message.
+- **IMPORTANT: Always commit AND PUSH changes after completing a task**. Update this CLAUDE.md file with any new features or changes, then commit with a descriptive message and push to remote.
 
 ## Common Tasks
 
