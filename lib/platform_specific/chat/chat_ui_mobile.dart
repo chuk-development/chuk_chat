@@ -91,6 +91,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   late final VoidCallback _networkStatusListener;
   Timer? _audioVisualizerTimer;
 
+  // Computed property - checks if CURRENT chat is streaming
+  bool get _isCurrentChatStreaming =>
+      _activeChatId != null && _streamingHandler.isChatStreaming(_activeChatId!);
+
   static const double _kMaxChatContentWidth = 760.0;
   static const double _kAttachmentBarMarginBottom = 8.0;
   static const double _kHorizontalPaddingSmall = 8.0;
@@ -788,14 +792,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     ChatStorageService.isMessageOperationInProgress = true;
     debugPrint('🔒 [SendMessage] GLOBAL LOCK SET');
 
-    if (_streamingHandler.isSending && !_streamingHandler.isStreaming) {
+    if (_streamingHandler.isSending && !_isCurrentChatStreaming) {
       _showSnackBar('Please wait');
       ChatStorageService.isMessageOperationInProgress = false;
       debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (already sending)');
       return;
     }
 
-    if (_streamingHandler.isStreaming) {
+    if (_isCurrentChatStreaming) {
       // Note: _updateCancelledMessage() will release the lock
       _streamingHandler.cancelStream(_activeChatId);
       _updateCancelledMessage();
@@ -1478,7 +1482,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                   final String sender = raw['sender'] ?? 'ai';
                                   final bool isAiMessage = sender != 'user';
                                   final bool isStreamingMessage =
-                                      _streamingHandler.isStreaming &&
+                                      _isCurrentChatStreaming &&
                                       i == _messages.length - 1 &&
                                       isAiMessage;
                                   final String displayText = (raw['text'] ?? '')
@@ -1799,21 +1803,21 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           buildTinyActionButton(
             icon: _audioHandler.isMicActive
                 ? Icons.send_rounded
-                : (_streamingHandler.isStreaming
+                : (_isCurrentChatStreaming
                       ? Icons.stop_rounded
                       : (_controller.text.trim().isEmpty && !hasAttachments
                             ? (kFeatureVoiceMode ? Icons.graphic_eq_rounded : Icons.arrow_upward_rounded)
                             : Icons.arrow_upward_rounded)),
             onTap: _audioHandler.isMicActive
                 ? _handleAudioSend
-                : (_streamingHandler.isStreaming
+                : (_isCurrentChatStreaming
                       ? _sendMessage
                       : (_controller.text.trim().isEmpty && !hasAttachments && kFeatureVoiceMode
                             ? () => _openComingSoonFeature('Voice Mode')
                             : _sendMessage)),
             color: _audioHandler.isMicActive
                 ? accent
-                : (_streamingHandler.isStreaming ? Colors.red : accent),
+                : (_isCurrentChatStreaming ? Colors.red : accent),
             isLoading: _audioHandler.isTranscribingAudio,
           ),
           const SizedBox(width: 4),

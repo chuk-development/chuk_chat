@@ -52,28 +52,43 @@ class StreamingManager {
             activeStream.contentBuffer.toString(),
             activeStream.reasoningBuffer.toString(),
           );
+        } else if (event is ErrorEvent) {
+          // Handle error events from the stream (e.g., API errors)
+          debugPrint('Stream ErrorEvent for chat $chatId: ${event.message}');
+          onError(event.message);
+          _cleanupStream(chatId);
+        } else if (event is DoneEvent) {
+          // Handle done events from the stream (successful completion)
+          debugPrint('Stream DoneEvent for chat $chatId');
+          final finalContent = activeStream.contentBuffer.toString();
+          final finalReasoning = activeStream.reasoningBuffer.toString();
+          onComplete(finalContent, finalReasoning);
+          _cleanupStream(chatId);
         }
+        // UsageEvent and MetaEvent are ignored (just logging)
       },
       onError: (error) {
-        debugPrint('Stream error for chat $chatId: $error');
+        debugPrint('Stream subscription error for chat $chatId: $error');
         onError('Error: $error');
         _cleanupStream(chatId);
       },
       onDone: () {
-        debugPrint('Stream completed for chat $chatId');
+        // Stream closed - if we haven't completed via DoneEvent, complete now
         final activeStream = _activeStreams[chatId];
-        if (activeStream == null) return;
+        if (activeStream == null || !activeStream.isActive) return;
 
+        debugPrint('Stream subscription closed for chat $chatId');
         final finalContent = activeStream.contentBuffer.toString();
         final finalReasoning = activeStream.reasoningBuffer.toString();
 
+        // Only call onComplete if there's content (avoid duplicate calls if DoneEvent already fired)
         if (finalContent.isNotEmpty) {
           onComplete(finalContent, finalReasoning);
         }
 
         _cleanupStream(chatId);
       },
-      cancelOnError: true,
+      cancelOnError: false, // Don't cancel on error, let ErrorEvent handle it
     );
 
     _activeStreams[chatId] = _ActiveStream(

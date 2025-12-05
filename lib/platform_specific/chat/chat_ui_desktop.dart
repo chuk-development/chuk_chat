@@ -120,10 +120,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   bool _isSending = false;
   bool _isTranscribingAudio = false;
   bool _isLoadingChat = false; // Loading indicator for chat switching
-  StreamSubscription<ChatStreamEvent>? _streamSubscription;
   StreamSubscription<void>? _providerRefreshSubscription;
-  bool _isStreaming = false;
   final StreamingManager _streamingManager = StreamingManager();
+
+  // Computed property - checks if CURRENT chat is streaming
+  bool get _isStreaming => _activeChatId != null && _streamingManager.isStreaming(_activeChatId!);
   Timer? _autoSaveTimer;
   int? _editingMessageIndex;
 
@@ -228,12 +229,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       }
 
       _loadChatById(widget.selectedChatId);
-      // Update UI based on new chat's streaming status
-      setState(() {
-        _isStreaming =
-            _activeChatId != null &&
-            _streamingManager.isStreaming(_activeChatId!);
-      });
+      // Trigger rebuild to reflect new chat's streaming status
+      // _isStreaming getter will automatically check the new _activeChatId
+      setState(() {});
     }
   }
 
@@ -242,7 +240,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // Don't cancel streams - they continue in background
     // _streamingManager handles all streams globally
     _autoSaveTimer?.cancel();
-    _streamSubscription?.cancel();
     _providerRefreshSubscription?.cancel();
     _controller.dispose();
     _scrollController.dispose();
@@ -930,9 +927,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     final String? systemPrompt = await _resolveSystemPromptForSend();
 
-    try {
-      setState(() => _isStreaming = true);
+    // Capture chatId for this streaming operation
+    final String chatIdForStream = _activeChatId!;
 
+    try {
       final Stream<ChatStreamEvent> eventStream =
           WebSocketChatService.sendStreamingChat(
             accessToken: accessToken,
@@ -946,55 +944,53 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             images: imagesForResend,
           );
 
-      final StringBuffer contentBuffer = StringBuffer();
-      final StringBuffer reasoningBuffer = StringBuffer();
-
-      await for (final event in eventStream) {
-        switch (event) {
-          case ContentEvent(:final text):
-            contentBuffer.write(text);
-            if (mounted && _isValidMessageIndex(placeholderIndex)) {
-              setState(() {
-                _messages[placeholderIndex]['text'] = contentBuffer.toString();
-              });
-              _scrollChatToBottom();
-            }
-            break;
-          case ReasoningEvent(:final text):
-            reasoningBuffer.write(text);
-            if (mounted && _isValidMessageIndex(placeholderIndex)) {
-              setState(() {
-                _messages[placeholderIndex]['reasoning'] = reasoningBuffer
-                    .toString();
-              });
-            }
-            break;
-          case DoneEvent():
-            break;
-          case ErrorEvent(:final message):
-            _finalizeAiMessage(placeholderIndex, 'Error: $message');
-            break;
-          case UsageEvent():
-          case MetaEvent():
-            break;
-        }
-      }
-
-      final String finalContent = contentBuffer.toString().trim();
-      if (finalContent.isEmpty) {
-        _finalizeAiMessage(placeholderIndex, 'No response received.');
-      }
+      // Use StreamingManager for proper tracking
+      await _streamingManager.startStream(
+        chatId: chatIdForStream,
+        messageIndex: placeholderIndex,
+        stream: eventStream,
+        onUpdate: (content, reasoning) {
+          if (mounted && _isValidMessageIndex(placeholderIndex) && _activeChatId == chatIdForStream) {
+            setState(() {
+              _messages[placeholderIndex]['text'] = content;
+              _messages[placeholderIndex]['reasoning'] = reasoning;
+            });
+            _scrollChatToBottom();
+          }
+        },
+        onComplete: (finalContent, finalReasoning) {
+          if (mounted) {
+            setState(() {
+              _isSending = false;
+            });
+          }
+          if (finalContent.isEmpty) {
+            _finalizeAiMessage(placeholderIndex, 'No response received.');
+          } else {
+            _finalizeAiMessage(placeholderIndex, finalContent, reasoning: finalReasoning);
+          }
+          // Persist with captured chatId
+          _persistChatWithId(chatIdForStream);
+        },
+        onError: (errorMessage) {
+          if (mounted) {
+            setState(() {
+              _isSending = false;
+            });
+          }
+          _finalizeAiMessage(placeholderIndex, 'Error: $errorMessage');
+          _persistChatWithId(chatIdForStream);
+        },
+      );
     } catch (e) {
       debugPrint('Streaming error: $e');
       _finalizeAiMessage(placeholderIndex, 'Error: $e');
-    } finally {
       if (mounted) {
         setState(() {
-          _isStreaming = false;
           _isSending = false;
         });
       }
-      _persistChat();
+      _persistChatWithId(chatIdForStream);
     }
   }
 
@@ -1163,13 +1159,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   }
 
   void _cancelStream() {
-    if (_streamSubscription != null && _isStreaming) {
-      debugPrint('Cancelling stream...');
-      _streamSubscription?.cancel();
-      _streamSubscription = null;
+    if (_activeChatId != null && _isStreaming) {
+      debugPrint('Cancelling stream for chat $_activeChatId...');
+      unawaited(_streamingManager.cancelStream(_activeChatId!));
 
       setState(() {
-        _isStreaming = false;
         _isSending = false;
         if (_messages.isNotEmpty &&
             (_messages.last['sender'] == 'ai' ||
@@ -1449,12 +1443,15 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _scrollChatToBottom(force: true);
     Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
 
-    setState(() {
-      _isStreaming = true;
-    });
+    // Capture chatId for this streaming operation - ensures correct persistence even if user switches chats
+    final String chatIdForStream = _activeChatId!;
 
-    final StringBuffer contentBuffer = StringBuffer();
-    final StringBuffer reasoningBuffer = StringBuffer();
+    // Start auto-save timer during streaming (uses captured chatId)
+    _autoSaveTimer?.cancel();
+    _autoSaveTimer = Timer.periodic(
+      const Duration(seconds: 2),
+      (_) => _persistChatWithId(chatIdForStream),
+    );
 
     try {
       final stream = WebSocketChatService.sendStreamingChat(
@@ -1468,202 +1465,109 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         images: imageDataUrls,
       );
 
-      // Start auto-save timer during streaming
-      _autoSaveTimer?.cancel();
-      _autoSaveTimer = Timer.periodic(
-        const Duration(seconds: 2),
-        (_) => _persistChat(waitForCompletion: false),
-      );
-
-      _streamSubscription = stream.listen(
-        (event) {
-          // Continue processing even if not mounted - stream runs in background
-          final bool canUpdateUI = mounted;
-
-          if (event is ContentEvent) {
-            contentBuffer.write(event.text);
-            // Always update messages, even if not mounted
-            if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
-              _messages[placeholderIndex]['text'] = contentBuffer.toString();
-              _messages[placeholderIndex]['reasoning'] = reasoningBuffer
-                  .toString();
-            }
-            if (canUpdateUI) {
-              _updateAiMessage(
-                placeholderIndex,
-                contentBuffer.toString(),
-                reasoningBuffer.toString(),
-              );
-              _scrollChatToBottom();
-            }
-          } else if (event is ReasoningEvent) {
-            reasoningBuffer.write(event.text);
-            // Always update messages, even if not mounted
-            if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
-              _messages[placeholderIndex]['text'] = contentBuffer.toString();
-              _messages[placeholderIndex]['reasoning'] = reasoningBuffer
-                  .toString();
-            }
-            if (canUpdateUI) {
-              _updateAiMessage(
-                placeholderIndex,
-                contentBuffer.toString(),
-                reasoningBuffer.toString(),
-              );
-            }
-          } else if (event is UsageEvent) {
-            debugPrint('Usage: ${event.usage}');
-          } else if (event is MetaEvent) {
-            debugPrint('Meta: ${event.meta}');
-          } else if (event is ErrorEvent) {
-            debugPrint('Stream error: ${event.message}');
-            _finalizeAiMessage(placeholderIndex, 'Error: ${event.message}');
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    event.message,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  behavior: SnackBarBehavior.floating,
-                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  duration: const Duration(seconds: 2),
-                  dismissDirection: DismissDirection.horizontal,
-                ),
-              );
-            }
-          } else if (event is DoneEvent) {
-            debugPrint('Stream completed successfully');
-            final String finalContent = contentBuffer.toString().trim();
-            final String finalReasoning = reasoningBuffer.toString().trim();
-            if (finalContent.isEmpty) {
-              _finalizeAiMessage(
-                placeholderIndex,
-                'The model returned an empty response.',
-              );
-            } else {
-              _finalizeAiMessage(
-                placeholderIndex,
-                finalContent,
-                reasoning: finalReasoning,
-              );
-            }
+      // Use StreamingManager for proper multi-chat streaming support
+      unawaited(_streamingManager.startStream(
+        chatId: chatIdForStream,
+        messageIndex: placeholderIndex,
+        stream: stream,
+        onUpdate: (content, reasoning) {
+          // Always update _messages even if viewing different chat
+          if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
+            _messages[placeholderIndex]['text'] = content;
+            _messages[placeholderIndex]['reasoning'] = reasoning;
+          }
+          // Only update UI if user is still viewing this chat
+          if (mounted && _activeChatId == chatIdForStream) {
+            _updateAiMessage(placeholderIndex, content, reasoning);
+            _scrollChatToBottom();
           }
         },
-        onError: (error) {
-          debugPrint('Stream error: $error');
-          _autoSaveTimer?.cancel();
-          // RELEASE GLOBAL LOCK on error
-          ChatStorageService.isMessageOperationInProgress = false;
-          debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (stream error)');
-          if (!mounted) {
-            // Save even if not mounted
-            _persistChat(waitForCompletion: false);
-            return;
-          }
-
-          String errorMessage = 'Failed to reach the AI service';
-          if (error is WebSocketChatException) {
-            errorMessage = error.message;
-          }
-
-          _finalizeAiMessage(placeholderIndex, errorMessage);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                errorMessage,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              duration: const Duration(seconds: 2),
-              dismissDirection: DismissDirection.horizontal,
-            ),
-          );
-        },
-        onDone: () {
-          debugPrint('Stream closed');
+        onComplete: (finalContent, finalReasoning) {
+          debugPrint('Stream completed for chat $chatIdForStream');
           _autoSaveTimer?.cancel();
           // RELEASE GLOBAL LOCK when stream completes
           ChatStorageService.isMessageOperationInProgress = false;
           debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (stream done)');
 
-          if (!mounted) {
-            // Finalize and save even if not mounted
-            if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
-              _messages[placeholderIndex]['text'] = contentBuffer.toString();
-              _messages[placeholderIndex]['reasoning'] = reasoningBuffer
-                  .toString();
-            }
-            _persistChat(waitForCompletion: false);
-            _isStreaming = false;
-            _isSending = false;
-            _streamSubscription = null;
-            return;
+          // Update messages
+          if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
+            final effectiveContent = finalContent.isEmpty
+                ? 'The model returned an empty response.'
+                : finalContent;
+            _messages[placeholderIndex]['text'] = effectiveContent;
+            _messages[placeholderIndex]['reasoning'] = finalReasoning;
           }
 
-          if (!_isStreaming) {
-            _streamSubscription = null;
-            return;
+          // Update UI if user is still viewing this chat
+          if (mounted && _activeChatId == chatIdForStream) {
+            setState(() {
+              _isSending = false;
+            });
+            final effectiveContent = finalContent.isEmpty
+                ? 'The model returned an empty response.'
+                : finalContent;
+            _finalizeAiMessage(placeholderIndex, effectiveContent, reasoning: finalReasoning);
+          } else if (mounted) {
+            // User switched to different chat, just update sending state
+            setState(() {
+              _isSending = false;
+            });
           }
 
-          setState(() {
-            _isStreaming = false;
-            _isSending = false;
-          });
-
-          final String finalContent = contentBuffer.toString().trim();
-          final String currentText =
-              (placeholderIndex >= 0 && placeholderIndex < _messages.length)
-              ? (_messages[placeholderIndex]['text'] ?? '')
-              : '';
-
-          if (currentText.contains('[Cancelled]') ||
-              currentText.contains('[Response cancelled]')) {
-            _streamSubscription = null;
-            return;
-          }
-
-          if (finalContent.isNotEmpty) {
-            _finalizeAiMessage(
-              placeholderIndex,
-              finalContent,
-              reasoning: reasoningBuffer.toString().trim(),
-            );
-          } else if (_messages.isNotEmpty &&
-              placeholderIndex < _messages.length &&
-              (_messages[placeholderIndex]['text'] ?? '').trim().isEmpty) {
-            _finalizeAiMessage(
-              placeholderIndex,
-              'No response received from the model.',
-            );
-          }
-
-          _streamSubscription = null;
+          // Always persist to correct chat
+          _persistChatWithId(chatIdForStream);
         },
-        cancelOnError: true,
-      );
+        onError: (errorMessage) {
+          debugPrint('Stream error for chat $chatIdForStream: $errorMessage');
+          _autoSaveTimer?.cancel();
+          // RELEASE GLOBAL LOCK on error
+          ChatStorageService.isMessageOperationInProgress = false;
+          debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (stream error)');
+
+          // Update messages with error
+          if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
+            _messages[placeholderIndex]['text'] = 'Error: $errorMessage';
+          }
+
+          // Update UI if user is still viewing this chat
+          if (mounted && _activeChatId == chatIdForStream) {
+            setState(() {
+              _isSending = false;
+            });
+            _finalizeAiMessage(placeholderIndex, 'Error: $errorMessage');
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  errorMessage,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                ),
+                behavior: SnackBarBehavior.floating,
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                duration: const Duration(seconds: 2),
+                dismissDirection: DismissDirection.horizontal,
+              ),
+            );
+          } else if (mounted) {
+            setState(() {
+              _isSending = false;
+            });
+          }
+
+          // Always persist to correct chat
+          _persistChatWithId(chatIdForStream);
+        },
+      ));
     } catch (error) {
       debugPrint('Failed to start stream: $error');
+      _autoSaveTimer?.cancel();
+      ChatStorageService.isMessageOperationInProgress = false;
       _finalizeAiMessage(placeholderIndex, 'Failed to start streaming: $error');
       if (mounted) {
+        setState(() {
+          _isSending = false;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -1672,15 +1576,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             ),
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             duration: const Duration(seconds: 2),
             dismissDirection: DismissDirection.horizontal,
           ),
         );
       }
+      _persistChatWithId(chatIdForStream);
     }
   }
 
@@ -1723,10 +1626,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   void _finalizeAiMessage(int index, String content, {String? reasoning}) {
     _autoSaveTimer?.cancel();
     if (index < 0 || index >= _messages.length) {
-      _streamSubscription?.cancel();
-      _streamSubscription = null;
       _isSending = false;
-      _isStreaming = false;
       return;
     }
 
@@ -1739,7 +1639,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         message['reasoning'] = reasoning ?? '';
         _messages[index] = message;
         _isSending = false;
-        _isStreaming = false;
       });
     } else {
       final Map<String, String> message = Map<String, String>.from(
@@ -1749,11 +1648,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       message['reasoning'] = reasoning ?? '';
       _messages[index] = message;
       _isSending = false;
-      _isStreaming = false;
     }
-
-    _streamSubscription?.cancel();
-    _streamSubscription = null;
 
     if (mounted) {
       _scrollChatToBottom();
@@ -2083,6 +1978,15 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     } else {
       unawaited(operation);
     }
+  }
+
+  /// Persist chat with a specific chatId (for background streaming to correct chat)
+  void _persistChatWithId(String chatId) {
+    if (_messages.isEmpty) return;
+    final messagesCopy = _messages
+        .map((message) => Map<String, dynamic>.from(message))
+        .toList(growable: false);
+    unawaited(_persistChatInternal(messagesCopy, chatId));
   }
 
   Future<void> _persistChatInternal(
