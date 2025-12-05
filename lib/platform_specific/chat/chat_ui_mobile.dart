@@ -792,15 +792,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     ChatStorageService.isMessageOperationInProgress = true;
     debugPrint('🔒 [SendMessage] GLOBAL LOCK SET');
 
-    if (_streamingHandler.isSending && !_isCurrentChatStreaming) {
-      _showSnackBar('Please wait');
-      ChatStorageService.isMessageOperationInProgress = false;
-      debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (already sending)');
-      return;
-    }
-
     if (_isCurrentChatStreaming) {
-      // Note: _updateCancelledMessage() will release the lock
+      // Current chat is streaming - cancel it
       _streamingHandler.cancelStream(_activeChatId);
       _updateCancelledMessage();
       return;

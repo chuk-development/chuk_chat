@@ -334,10 +334,24 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       }
 
       if (!mounted) return;
+
+      // If this chat is streaming, restore buffered content from StreamingManager
+      if (_activeChatId != null && _streamingManager.isStreaming(_activeChatId!)) {
+        final bufferedContent = _streamingManager.getBufferedContent(_activeChatId!);
+        final bufferedReasoning = _streamingManager.getBufferedReasoning(_activeChatId!);
+        final streamingIndex = _streamingManager.getStreamingMessageIndex(_activeChatId!);
+
+        if (streamingIndex != null && streamingIndex < _messages.length) {
+          _messages[streamingIndex]['text'] = bufferedContent ?? 'Thinking...';
+          _messages[streamingIndex]['reasoning'] = bufferedReasoning ?? '';
+        }
+      }
+
       setState(() {
         _isLoadingChat = false;
         _isImageActive = false;
         _isMicActive = false;
+        _isSending = _isStreaming; // Reset sending state based on current chat
         _resetAudioLevels();
       });
       _scrollChatToBottom(animate: false, force: true);
@@ -359,6 +373,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _activeChatId = null;
       _isImageActive = false;
       _isMicActive = false;
+      _isSending = false; // Reset for new chat
       _attachedFiles.clear();
       _resetAudioLevels();
     });
@@ -1190,31 +1205,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     ChatStorageService.isMessageOperationInProgress = true;
     debugPrint('🔒 [SendMessage] GLOBAL LOCK SET');
 
-    if (_isSending && !_isStreaming) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text(
-              'Please wait for the current response to finish.',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            duration: const Duration(seconds: 2),
-            dismissDirection: DismissDirection.horizontal,
-          ),
-        );
-      }
-      ChatStorageService.isMessageOperationInProgress = false;
-      debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (already sending)');
-      return;
-    }
-
     if (_isStreaming) {
+      // Current chat is streaming - cancel it
       _cancelStream();
       ChatStorageService.isMessageOperationInProgress = false;
       debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (cancelled)');
