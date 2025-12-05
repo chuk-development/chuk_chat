@@ -343,13 +343,19 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         _isMicActive = false;
         _resetAudioLevels();
       });
-      _scrollChatToBottom(animate: false);
+      _scrollChatToBottom(animate: false, force: true);
       Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
     });
   }
 
-  void newChat() async {
-    await _persistChat(waitForCompletion: true);
+  void newChat() {
+    // Capture current chat data for background persistence
+    final chatIdToSave = _activeChatId;
+    final messagesToSave = _messages.isNotEmpty
+        ? _messages.map((m) => Map<String, dynamic>.from(m)).toList()
+        : null;
+
+    // Clear UI immediately for instant response
     setState(() {
       _messages.clear();
       _animCtrl.reset();
@@ -359,11 +365,22 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _attachedFiles.clear();
       _resetAudioLevels();
     });
+
     // Notify parent that we're now on a new chat (null ID)
     widget.onChatIdChanged(null);
-    _scrollChatToBottom();
+    _scrollChatToBottom(force: true);
     Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
-    await ChatStorageService.loadSavedChatsForSidebar();
+
+    // Persist old chat and refresh sidebar in background (don't await)
+    if (messagesToSave != null && chatIdToSave != null) {
+      unawaited(_persistChatInternal(messagesToSave, chatIdToSave).then((_) {
+        // Refresh sidebar after persist completes
+        unawaited(ChatStorageService.loadSavedChatsForSidebar());
+      }));
+    } else {
+      // No chat to save, just refresh sidebar
+      unawaited(ChatStorageService.loadSavedChatsForSidebar());
+    }
   }
 
   void _openComingSoonFeature(String featureName) {
@@ -861,7 +878,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     // Don't persist "Thinking..." placeholder - wait for actual response
     // _persistChat(); // Removed - will persist after streaming completes
-    _scrollChatToBottom();
+    _scrollChatToBottom(force: true);
 
     final session =
         await SupabaseService.refreshSession() ??
@@ -1429,7 +1446,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // _persistChat(); // Removed - will persist after streaming completes
 
     if (firstMessageInChat) _animCtrl.forward();
-    _scrollChatToBottom();
+    _scrollChatToBottom(force: true);
     Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
 
     setState(() {
@@ -1928,7 +1945,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           ),
         );
       });
-      _scrollChatToBottom(); // Scroll to ensure attachment bar is visible
+      _scrollChatToBottom(force: true); // Scroll to ensure attachment bar is visible
 
       // Handle images differently - compress, encrypt, and upload to storage
       if (isImage) {
@@ -2026,22 +2043,29 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     setState(() {
       _attachedFiles.removeWhere((f) => f.id == fileId);
     });
-    _scrollChatToBottom();
+    _scrollChatToBottom(force: true);
     Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
   }
 
-  void _scrollChatToBottom({bool animate = true}) {
+  void _scrollChatToBottom({bool animate = true, bool force = false}) {
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) return;
-      if (animate) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-        );
-      } else {
-        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+
+      // Only auto-scroll if user is already near bottom (within 100px) or force is true
+      final position = _scrollController.position;
+      final isNearBottom = position.maxScrollExtent - position.pixels < 100;
+
+      if (force || isNearBottom) {
+        if (animate) {
+          _scrollController.animateTo(
+            position.maxScrollExtent,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+          );
+        } else {
+          _scrollController.jumpTo(position.maxScrollExtent);
+        }
       }
     });
   }

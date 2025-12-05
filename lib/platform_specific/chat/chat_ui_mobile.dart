@@ -431,10 +431,16 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     });
   }
 
-  void newChat() async {
+  void newChat() {
     debugPrint('🆕 [NewChat] Starting newChat(), current _activeChatId: $_activeChatId');
-    await _persistChat(waitForCompletion: true);
-    debugPrint('🆕 [NewChat] After persist, _activeChatId: $_activeChatId');
+
+    // Capture current chat data for background persistence
+    final chatIdToSave = _activeChatId;
+    final messagesToSave = _messages.isNotEmpty
+        ? _messages.map((m) => Map<String, String>.from(m)).toList()
+        : null;
+
+    // Clear UI immediately for instant response
     setState(() {
       _messages.clear();
       _activeChatId = null;
@@ -442,6 +448,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       _controller.clear();
       _messageActionsHandler.cancelEdit();
     });
+
     // Notify parent that we're now on a new chat (null ID)
     widget.onChatIdChanged(null);
     debugPrint('🆕 [NewChat] After setState, _activeChatId: $_activeChatId');
@@ -449,8 +456,23 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     if (!widget.isSidebarExpanded) {
       _textFieldFocusNode.requestFocus();
     }
-    await ChatStorageService.loadSavedChatsForSidebar();
-    debugPrint('🆕 [NewChat] After loadSavedChats, _activeChatId: $_activeChatId');
+
+    // Persist old chat and refresh sidebar in background (don't await)
+    if (messagesToSave != null && chatIdToSave != null) {
+      unawaited(_persistenceHandler.persistChat(
+        messages: messagesToSave,
+        chatId: chatIdToSave,
+        waitForCompletion: false,
+        isOffline: _isOffline,
+      ).then((_) {
+        // Refresh sidebar after persist completes
+        unawaited(ChatStorageService.loadSavedChatsForSidebar());
+      }));
+    } else {
+      // No chat to save, just refresh sidebar
+      unawaited(ChatStorageService.loadSavedChatsForSidebar());
+    }
+    debugPrint('🆕 [NewChat] Background operations started');
   }
 
   // --- AUDIO HANDLERS ---
