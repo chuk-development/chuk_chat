@@ -353,7 +353,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
       // Mark that we've finished loading this chat's messages
       // This is used by persist logic to ensure we only save correct content
-      _loadedMessagesChatId = _activeChatId;
+      // CRITICAL: Use chatId parameter, not _activeChatId which may have changed!
+      _loadedMessagesChatId = chatId;
 
       // If this chat is streaming, restore buffered content from StreamingManager
       if (_activeChatId != null && _streamingManager.isStreaming(_activeChatId!)) {
