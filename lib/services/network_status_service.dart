@@ -4,9 +4,20 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 
 /// Provides utilities for checking general internet reachability.
+///
+/// Uses a lenient approach to avoid false "offline" states on slow connections:
+/// - Probes run in parallel for faster detection
+/// - Requires multiple consecutive failures before declaring offline
+/// - Longer timeouts to accommodate slow mobile networks (4G/3G)
 class NetworkStatusService {
-  static const Duration _defaultTimeout = Duration(seconds: 4);
-  static const Duration _quickTimeout = Duration(seconds: 2);
+  // Generous timeouts for slow mobile networks
+  static const Duration _defaultTimeout = Duration(seconds: 10);
+  static const Duration _quickTimeout = Duration(seconds: 6);
+  static const Duration _perProbeTimeout = Duration(seconds: 8);
+
+  // Require consecutive failures before declaring offline
+  static int _consecutiveFailures = 0;
+  static const int _failuresRequiredForOffline = 2;
 
   static final List<_ConnectivityProbe> _probes = <_ConnectivityProbe>[
     _ConnectivityProbe(
@@ -34,9 +45,10 @@ class NetworkStatusService {
   // Cache last check time to avoid hammering network
   static DateTime? _lastCheckTime;
   static bool? _lastCheckResult;
-  static const Duration _cacheValidDuration = Duration(seconds: 5);
+  static const Duration _cacheValidDuration = Duration(seconds: 10);
 
   /// Returns `true` when at least one probe succeeds within the timeout.
+  /// Uses parallel probing for faster detection on slow networks.
   static Future<bool> hasInternetConnection({
     Duration timeout = _defaultTimeout,
     bool useCache = true,
@@ -49,41 +61,74 @@ class NetworkStatusService {
       }
     }
 
-    final DateTime deadline = DateTime.now().add(timeout);
+    // Run all probes in parallel - first success wins
+    final result = await _checkWithParallelProbes(timeout);
 
-    for (final _ConnectivityProbe probe in _probes) {
-      final Duration remaining = deadline.difference(DateTime.now());
-      if (remaining <= Duration.zero) {
+    _lastCheckResult = result;
+    _lastCheckTime = DateTime.now();
+
+    if (result) {
+      _consecutiveFailures = 0;
+      _updateStatus(true);
+    } else {
+      _consecutiveFailures++;
+      // Only declare offline after consecutive failures
+      if (_consecutiveFailures >= _failuresRequiredForOffline) {
         _updateStatus(false);
-        _lastCheckResult = false;
-        _lastCheckTime = DateTime.now();
-        return false;
       }
-
-      try {
-        final http.Response response = await http
-            .get(probe.uri, headers: probe.headers)
-            .timeout(remaining);
-        if (probe.expectedStatusCodes.contains(response.statusCode)) {
-          _updateStatus(true);
-          _lastCheckResult = true;
-          _lastCheckTime = DateTime.now();
-          return true;
-        }
-      } on TimeoutException catch (_) {
-        // Try the next probe.
-      } on Exception catch (_) {
-        // Try the next probe.
-      }
+      // If we haven't hit the threshold yet, don't change status
+      // This prevents brief slowdowns from triggering offline
     }
 
-    _updateStatus(false);
-    _lastCheckResult = false;
-    _lastCheckTime = DateTime.now();
-    return false;
+    return result;
   }
 
-  /// Quick check with shorter timeout (2 seconds)
+  /// Run probes in parallel - returns true if ANY probe succeeds
+  static Future<bool> _checkWithParallelProbes(Duration overallTimeout) async {
+    final completer = Completer<bool>();
+    int completedProbes = 0;
+    final totalProbes = _probes.length;
+
+    // Start all probes in parallel
+    for (final probe in _probes) {
+      _checkSingleProbe(probe).then((success) {
+        if (completer.isCompleted) return;
+
+        if (success) {
+          // First success - we're online!
+          completer.complete(true);
+        } else {
+          completedProbes++;
+          // All probes failed
+          if (completedProbes >= totalProbes) {
+            completer.complete(false);
+          }
+        }
+      });
+    }
+
+    // Overall timeout fallback
+    return completer.future.timeout(
+      overallTimeout,
+      onTimeout: () => false,
+    );
+  }
+
+  /// Check a single probe with its own timeout
+  static Future<bool> _checkSingleProbe(_ConnectivityProbe probe) async {
+    try {
+      final response = await http
+          .get(probe.uri, headers: probe.headers)
+          .timeout(_perProbeTimeout);
+      return probe.expectedStatusCodes.contains(response.statusCode);
+    } on TimeoutException catch (_) {
+      return false;
+    } on Exception catch (_) {
+      return false;
+    }
+  }
+
+  /// Quick check with moderate timeout - still lenient for slow networks
   static Future<bool> quickCheck() async {
     return hasInternetConnection(timeout: _quickTimeout, useCache: false);
   }
@@ -94,6 +139,11 @@ class NetworkStatusService {
       _isOnlineNotifier.value = isOnline;
       debugPrint('Network status changed: ${isOnline ? 'ONLINE' : 'OFFLINE'}');
     }
+  }
+
+  /// Reset consecutive failure count (call when user initiates action)
+  static void resetFailureCount() {
+    _consecutiveFailures = 0;
   }
 
   /// Manually set offline (for testing or explicit offline mode)
