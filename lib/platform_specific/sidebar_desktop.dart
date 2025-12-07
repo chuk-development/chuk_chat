@@ -219,6 +219,16 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
   }
 
   void _openChat(StoredChat chat) {
+    // CRITICAL: Block rapid chat switching while another chat is loading
+    // This prevents race conditions that cause data corruption
+    if (ChatStorageService.isLoadingChat) {
+      debugPrint('');
+      debugPrint('═══════════════════════════════════════════════════════════');
+      debugPrint('🚫 [SIDEBAR] BLOCKED - Chat is still loading');
+      debugPrint('🚫 [SIDEBAR] User tried to click: "${chat.previewText.substring(0, chat.previewText.length > 30 ? 30 : chat.previewText.length)}..."');
+      debugPrint('═══════════════════════════════════════════════════════════');
+      return;
+    }
     debugPrint('');
     debugPrint('═══════════════════════════════════════════════════════════');
     debugPrint('👆 [SIDEBAR] User clicked chat: "${chat.previewText.substring(0, chat.previewText.length > 30 ? 30 : chat.previewText.length)}..."');
@@ -451,6 +461,14 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
                 return _buildRecentItem(
                   storedChat,
                   onTap: () {
+                    // CRITICAL: Block rapid chat switching while another chat is loading
+                    if (ChatStorageService.isLoadingChat) {
+                      debugPrint('');
+                      debugPrint('═══════════════════════════════════════════════════════════');
+                      debugPrint('🚫 [SIDEBAR-DESKTOP] BLOCKED - Chat is still loading');
+                      debugPrint('═══════════════════════════════════════════════════════════');
+                      return;
+                    }
                     debugPrint('');
                     debugPrint('═══════════════════════════════════════════════════════════');
                     debugPrint('👆 [SIDEBAR-DESKTOP] User tapped recent chat');

@@ -177,6 +177,11 @@ class ChatStorageService {
   /// Used to verify we don't accidentally switch away from an active chat.
   static String? activeMessageChatId;
 
+  /// LOADING LOCK: Prevents rapid chat switching while a chat is loading.
+  /// Set to true when _loadChatById starts, cleared when loading completes.
+  /// Sidebar should check this before allowing chat selection.
+  static bool isLoadingChat = false;
+
   // UUID generator for chat IDs
   static const Uuid _uuid = Uuid();
 

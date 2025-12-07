@@ -241,6 +241,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   @override
   void dispose() {
+    // CRITICAL: Clear loading lock if we're disposed while loading
+    // This prevents the flag from getting stuck
+    if (_isLoadingChat) {
+      ChatStorageService.isLoadingChat = false;
+    }
     // Don't cancel streams - they continue in background
     // _streamingManager handles all streams globally
     _autoSaveTimer?.cancel();
@@ -273,6 +278,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // chatIdToSave with _activeChatId for persist logic
     _activeChatId = chatId;
 
+    // CRITICAL: Set global loading lock to prevent rapid chat switching
+    // Sidebar checks this flag before allowing chat selection
+    ChatStorageService.isLoadingChat = true;
+
     // Show loading indicator immediately
     setState(() {
       _isLoadingChat = true;
@@ -287,6 +296,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       if (_activeChatId != chatId) {
         debugPrint('│ ⚠️ [LOAD-CHAT-DESKTOP] Stale load detected, aborting');
         debugPrint('│ ⚠️ [LOAD-CHAT-DESKTOP] Expected: $chatId, Current: $_activeChatId');
+        // Note: Don't clear isLoadingChat here - the newer load operation owns it
         return;
       }
 
@@ -367,6 +377,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           _messages[streamingIndex]['reasoning'] = bufferedReasoning ?? '';
         }
       }
+
+      // CRITICAL: Clear global loading lock - chat is now fully loaded
+      ChatStorageService.isLoadingChat = false;
 
       setState(() {
         _isLoadingChat = false;

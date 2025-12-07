@@ -130,6 +130,16 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   }
 
   void _handleChatSelected(String? chatId) {
+    // CRITICAL: Block rapid chat switching while another chat is loading
+    // This is a second line of defense (sidebar also checks this)
+    if (ChatStorageService.isLoadingChat) {
+      debugPrint('');
+      debugPrint('┌─────────────────────────────────────────────────────────────');
+      debugPrint('│ 🚫 [ROOT-DESKTOP] BLOCKED - Chat is still loading');
+      debugPrint('│ 🚫 [ROOT-DESKTOP] Ignoring selection: $chatId');
+      debugPrint('└─────────────────────────────────────────────────────────────');
+      return;
+    }
     debugPrint('');
     debugPrint('┌─────────────────────────────────────────────────────────────');
     debugPrint('│ 📥 [ROOT-DESKTOP] _handleChatSelected called');
@@ -290,6 +300,11 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
               left: kFixedLeftPadding,
               child: InkWell(
                 onTap: () {
+                  // Block new chat while another chat is loading
+                  if (ChatStorageService.isLoadingChat) {
+                    debugPrint('🚫 [ROOT-DESKTOP] BLOCKED newChat - Chat is still loading');
+                    return;
+                  }
                   _chatUIKey.currentState?.newChat();
                   if (_isSidebarExpanded) _toggleSidebar();
                 },
