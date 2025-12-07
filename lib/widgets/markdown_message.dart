@@ -451,6 +451,15 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
       return;
     }
 
+    // Skip highlighting for text that's mostly non-ASCII (CJK, Arabic, etc.)
+    // These cause errors in the highlight package and aren't code anyway
+    if (_isMostlyNonAscii(code)) {
+      setState(() {
+        _highlightedSpans = [TextSpan(text: code, style: widget.textStyle)];
+      });
+      return;
+    }
+
     // Normalize and validate language
     final String normalizedLanguage = (language ?? '').trim().toLowerCase();
     final bool shouldAutoDetect = normalizedLanguage.isEmpty;
@@ -499,6 +508,32 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
         });
       }
     }
+  }
+
+  /// Check if text is mostly non-ASCII characters (CJK, Arabic, Cyrillic, etc.)
+  /// These cause parsing errors in the highlight package and are unlikely to be code
+  bool _isMostlyNonAscii(String text) {
+    if (text.isEmpty) return false;
+
+    int nonAsciiCount = 0;
+    int totalChars = 0;
+
+    for (final int codeUnit in text.runes) {
+      // Skip whitespace and common punctuation
+      if (codeUnit <= 32 || (codeUnit >= 33 && codeUnit <= 47) ||
+          (codeUnit >= 58 && codeUnit <= 64) || (codeUnit >= 91 && codeUnit <= 96) ||
+          (codeUnit >= 123 && codeUnit <= 126)) {
+        continue;
+      }
+      totalChars++;
+      // Non-ASCII is anything above 127
+      if (codeUnit > 127) {
+        nonAsciiCount++;
+      }
+    }
+
+    // If more than 50% of meaningful characters are non-ASCII, skip highlighting
+    return totalChars > 0 && (nonAsciiCount / totalChars) > 0.5;
   }
 
   @override
@@ -570,6 +605,12 @@ List<hi.Node> _parseCode(Map<String, dynamic> args) {
       return [];
     }
 
+    // Skip highlighting for text that's mostly non-ASCII (CJK, Arabic, etc.)
+    // These cause errors in the highlight package and aren't code anyway
+    if (_isMostlyNonAsciiCode(code)) {
+      return [];
+    }
+
     // Register all languages to ensure syntax highlighting works for any language
     // inside the isolate.
     try {
@@ -618,6 +659,31 @@ List<hi.Node> _parseCode(Map<String, dynamic> args) {
     // Silently return empty to fall back to plain text
     return [];
   }
+}
+
+/// Top-level helper for checking if text is mostly non-ASCII (for isolate use)
+bool _isMostlyNonAsciiCode(String text) {
+  if (text.isEmpty) return false;
+
+  int nonAsciiCount = 0;
+  int totalChars = 0;
+
+  for (final int codeUnit in text.runes) {
+    // Skip whitespace and common punctuation
+    if (codeUnit <= 32 || (codeUnit >= 33 && codeUnit <= 47) ||
+        (codeUnit >= 58 && codeUnit <= 64) || (codeUnit >= 91 && codeUnit <= 96) ||
+        (codeUnit >= 123 && codeUnit <= 126)) {
+      continue;
+    }
+    totalChars++;
+    // Non-ASCII is anything above 127
+    if (codeUnit > 127) {
+      nonAsciiCount++;
+    }
+  }
+
+  // If more than 50% of meaningful characters are non-ASCII, skip highlighting
+  return totalChars > 0 && (nonAsciiCount / totalChars) > 0.5;
 }
 
 // Helper to convert nodes to spans (Main thread)
