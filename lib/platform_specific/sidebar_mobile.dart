@@ -730,7 +730,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
                         ),
                       ),
                       const SizedBox(width: 12),
-                      CreditBadge(
+                      BalanceBadge(
                         textStyle: TextStyle(
                           color: accentColor,
                           fontWeight: FontWeight.w600,

@@ -327,3 +327,184 @@ class _CreditBadgeState extends State<CreditBadge>
     );
   }
 }
+
+/// Smart badge that shows credits for subscribed users OR free messages for non-subscribed users
+class BalanceBadge extends StatefulWidget {
+  const BalanceBadge({
+    super.key,
+    this.textStyle,
+    this.placeholderStyle,
+    this.padding,
+  });
+
+  final TextStyle? textStyle;
+  final TextStyle? placeholderStyle;
+  final EdgeInsetsGeometry? padding;
+
+  @override
+  State<BalanceBadge> createState() => _BalanceBadgeState();
+}
+
+class _BalanceBadgeState extends State<BalanceBadge> {
+  bool _loading = true;
+  double _credits = 0.0;
+  int _freeMessagesRemaining = 0;
+  int _freeMessagesTotal = 10;
+  bool _hasSubscription = false;
+  RealtimeChannel? _channel;
+
+  @override
+  void initState() {
+    super.initState();
+    _initListener();
+  }
+
+  @override
+  void dispose() {
+    if (_channel != null) {
+      _supabase.removeChannel(_channel!);
+      _channel = null;
+    }
+    super.dispose();
+  }
+
+  void _initListener() {
+    final user = _supabase.auth.currentUser;
+    if (user == null) return;
+
+    _channel = _supabase.channel('balance_updates_${identityHashCode(this)}')
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.update,
+        schema: 'public',
+        table: 'profiles',
+        filter: PostgresChangeFilter(
+          type: PostgresChangeFilterType.eq,
+          column: 'id',
+          value: user.id,
+        ),
+        callback: (_) => _loadBalance(silent: true),
+      )
+      ..subscribe();
+
+    _loadBalance(silent: false);
+  }
+
+  Future<void> _loadBalance({bool silent = false}) async {
+    if (!silent && mounted) {
+      setState(() => _loading = true);
+    }
+
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) {
+        if (mounted) setState(() => _loading = false);
+        return;
+      }
+
+      // Fetch profile data including credits and free messages
+      final profile = await _supabase
+          .from('profiles')
+          .select('total_credits_allocated, current_plan, free_messages_total, free_messages_used')
+          .eq('id', user.id)
+          .single();
+
+      // Get remaining credits via RPC
+      final creditsResponse = await _supabase.rpc(
+        'get_credits_remaining',
+        params: {'p_user_id': user.id},
+      );
+
+      final double credits = (creditsResponse is num) ? creditsResponse.toDouble() : 0.0;
+      final bool hasSubscription = profile['current_plan'] != null;
+      final int freeTotal = (profile['free_messages_total'] as int?) ?? 10;
+      final int freeUsed = (profile['free_messages_used'] as int?) ?? 0;
+      final int freeRemaining = (freeTotal - freeUsed).clamp(0, freeTotal);
+
+      if (!mounted) return;
+      setState(() {
+        _credits = credits;
+        _hasSubscription = hasSubscription;
+        _freeMessagesTotal = freeTotal;
+        _freeMessagesRemaining = freeRemaining;
+        _loading = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading balance: $e');
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final TextStyle resolvedTextStyle =
+        widget.textStyle ??
+        Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ) ??
+        const TextStyle(fontSize: 14, fontWeight: FontWeight.w600);
+
+    final EdgeInsetsGeometry resolvedPadding =
+        widget.padding ?? const EdgeInsets.symmetric(horizontal: 8, vertical: 4);
+
+    if (_loading) {
+      final TextStyle placeholderStyle =
+          widget.placeholderStyle ??
+              resolvedTextStyle.copyWith(
+                color: resolvedTextStyle.color?.withValues(alpha: 0.6) ??
+                    Theme.of(context).hintColor,
+              );
+
+      return Padding(
+        padding: resolvedPadding,
+        child: Text('--', style: placeholderStyle),
+      );
+    }
+
+    // Subscribed user with credits > 0.01: show credits
+    if (_hasSubscription || _credits >= 0.01) {
+      final String formatted = '€${_credits.toStringAsFixed(2)}';
+      return Tooltip(
+        message: 'Remaining credits: $formatted',
+        waitDuration: const Duration(milliseconds: 500),
+        child: Container(
+          padding: resolvedPadding,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(formatted, style: resolvedTextStyle),
+        ),
+      );
+    }
+
+    // Non-subscribed user: show free messages
+    final Color badgeColor;
+    if (_freeMessagesRemaining == 0) {
+      badgeColor = Colors.red;
+    } else if (_freeMessagesRemaining <= 3) {
+      badgeColor = Colors.orange;
+    } else {
+      badgeColor = Theme.of(context).colorScheme.primary;
+    }
+
+    final String freeFormatted = '$_freeMessagesRemaining/$_freeMessagesTotal free';
+
+    return Tooltip(
+      message: _freeMessagesRemaining == 0
+          ? 'No free messages remaining. Subscribe to continue.'
+          : '$_freeMessagesRemaining of $_freeMessagesTotal free messages remaining',
+      waitDuration: const Duration(milliseconds: 500),
+      child: Container(
+        padding: resolvedPadding,
+        decoration: BoxDecoration(
+          color: badgeColor.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          freeFormatted,
+          style: resolvedTextStyle.copyWith(color: badgeColor),
+        ),
+      ),
+    );
+  }
+}

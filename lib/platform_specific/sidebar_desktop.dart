@@ -517,7 +517,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
                         ),
                       ),
                       const SizedBox(width: 12),
-                      CreditBadge(
+                      BalanceBadge(
                         textStyle: TextStyle(
                           color: accent,
                           fontWeight: FontWeight.w600,
