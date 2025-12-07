@@ -11,11 +11,16 @@ class ChatPersistenceHandler {
   Function(String chatId)? onChatIdAssigned;
 
   /// Save or update chat in storage
+  ///
+  /// [silent] - If true, don't call onChatIdAssigned callback.
+  /// Use silent=true when persisting an old chat in the background while
+  /// user has already moved to a new chat (e.g., in newChat()).
   Future<StoredChat?> persistChat({
     required List<Map<String, String>> messages,
     String? chatId,
     bool waitForCompletion = false,
     bool isOffline = false,
+    bool silent = false,
   }) async {
     if (messages.isEmpty) return null;
 
@@ -27,6 +32,7 @@ class ChatPersistenceHandler {
       messagesCopy,
       chatId,
       isOffline: isOffline,
+      silent: silent,
     );
 
     if (waitForCompletion) {
@@ -50,12 +56,13 @@ class ChatPersistenceHandler {
     List<Map<String, String>> messagesCopy,
     String? chatId, {
     required bool isOffline,
+    bool silent = false,
   }) async {
     // CRITICAL: Capture chatId at the start to prevent race conditions
     final String? chatIdAtStart = chatId;
 
     debugPrint(
-      '📝 [ChatPersistence] Starting persist: chatId=$chatId, messages=${messagesCopy.length}, offline=$isOffline',
+      '📝 [ChatPersistence] Starting persist: chatId=$chatId, messages=${messagesCopy.length}, offline=$isOffline, silent=$silent',
     );
 
     try {
@@ -82,9 +89,12 @@ class ChatPersistenceHandler {
         '✅ [ChatPersistence] Success: chatId=${stored.id}, messages=${stored.messages.length}',
       );
 
-      // Notify about chat ID assignment
-      if (chatIdAtStart == null || chatIdAtStart != stored.id) {
+      // Notify about chat ID assignment (unless silent mode)
+      // Silent mode is used when persisting old chat in background after user moved to new chat
+      if (!silent && (chatIdAtStart == null || chatIdAtStart != stored.id)) {
         onChatIdAssigned?.call(stored.id);
+      } else if (silent) {
+        debugPrint('│ 🔇 [ChatPersistence] Silent mode - skipping onChatIdAssigned callback');
       }
 
       // Note: We don't set selectedChatIndex here - that's managed by the UI layer

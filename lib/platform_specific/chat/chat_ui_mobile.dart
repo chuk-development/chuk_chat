@@ -252,31 +252,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         return;
       }
 
-      // CRITICAL FIX: Only save if _activeChatId matches oldWidget.selectedChatId
-      // This ensures we have valid content for that chat (we finished loading it).
-      // If they don't match, we're out of sync and shouldn't persist garbage.
-      final chatIdToSave = oldWidget.selectedChatId;
-      if (chatIdToSave != null && chatIdToSave == _activeChatId && _messages.isNotEmpty) {
-        final chatStillExists = ChatStorageService.savedChats.any(
-          (chat) => chat.id == chatIdToSave,
-        );
-        if (chatStillExists) {
-          debugPrint('│ 💾 [CHAT-UI-MOBILE] Persisting old chat: $chatIdToSave');
-          // Capture messages snapshot before clearing
-          final messagesCopy = _messages
-              .map((message) => Map<String, String>.from(message))
-              .toList(growable: false);
-          unawaited(_persistenceHandler.persistChat(
-            messages: messagesCopy,
-            chatId: chatIdToSave,
-            waitForCompletion: false,
-            isOffline: _isOffline,
-          ));
-        }
-      } else if (chatIdToSave != null && chatIdToSave != _activeChatId) {
-        debugPrint('│ ⚠️ [CHAT-UI-MOBILE] SKIP persist - out of sync!');
-        debugPrint('│ ⚠️ [CHAT-UI-MOBILE] chatIdToSave=$chatIdToSave but _activeChatId=$_activeChatId');
-      }
+      // CRITICAL: NO persist during chat switch!
+      // Persisting here causes data corruption because _messages may already contain
+      // the NEW chat's content by the time didUpdateWidget fires (due to async timing).
+      // Instead, we rely on:
+      // 1. Immediate persist after message send/receive
+      // 2. Persist in newChat() before clearing
+      // 3. Chats are already saved to Supabase during message operations
+      debugPrint('│ 📝 [CHAT-UI-MOBILE] Chat switch - NOT persisting (already saved on message ops)');
 
       setState(() {
         _messages.clear();
@@ -462,12 +445,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     }
 
     // Persist old chat and refresh sidebar in background (don't await)
+    // CRITICAL: Use silent=true to prevent onChatIdAssigned from changing
+    // the selected chat - we're now on a NEW chat!
     if (messagesToSave != null && chatIdToSave != null) {
       unawaited(_persistenceHandler.persistChat(
         messages: messagesToSave,
         chatId: chatIdToSave,
         waitForCompletion: false,
         isOffline: _isOffline,
+        silent: true,
       ).then((_) {
         // Refresh sidebar after persist completes
         unawaited(ChatStorageService.loadSavedChatsForSidebar());
