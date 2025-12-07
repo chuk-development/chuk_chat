@@ -1285,27 +1285,68 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (not mounted)');
               return;
             }
+            final theme = Theme.of(context);
             await showDialog(
               context: context,
-              builder: (context) => AlertDialog(
-                title: const Text('Free Messages Exhausted'),
-                content: const Text(
-                  'You have used all 10 free messages.\n\nSubscribe to continue chatting with unlimited messages.',
+              builder: (dialogContext) => AlertDialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                title: Row(
+                  children: [
+                    Icon(
+                      Icons.chat_bubble_outline,
+                      color: theme.colorScheme.primary,
+                      size: 28,
+                    ),
+                    const SizedBox(width: 12),
+                    const Text('Free Messages Used'),
+                  ],
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'You\'ve used all 10 free messages.',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: theme.textTheme.bodyLarge?.color,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Subscribe to get unlimited messages and access to all AI models.',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.8),
+                      ),
+                    ),
+                  ],
                 ),
                 actions: [
                   TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: const Text('Maybe Later'),
                   ),
-                  ElevatedButton(
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.rocket_launch, size: 18),
+                    label: const Text('Subscribe Now'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: theme.colorScheme.primary,
+                      foregroundColor: theme.colorScheme.onPrimary,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
                     onPressed: () {
-                      Navigator.pop(context);
+                      Navigator.pop(dialogContext);
                       Navigator.push(
                         context,
                         MaterialPageRoute(builder: (_) => const PricingPage()),
                       );
                     },
-                    child: const Text('Subscribe'),
                   ),
                 ],
               ),

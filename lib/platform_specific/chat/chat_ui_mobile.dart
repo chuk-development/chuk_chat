@@ -20,7 +20,6 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:uuid/uuid.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:async';
-import 'package:chuk_chat/pages/pricing_page.dart';
 
 // Import new handlers
 import 'package:chuk_chat/platform_specific/chat/handlers/audio_recording_handler.dart';
@@ -843,27 +842,74 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
               debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (not mounted)');
               return;
             }
+            final theme = Theme.of(context);
             await showDialog(
               context: context,
-              builder: (context) => AlertDialog(
-                title: const Text('Free Messages Exhausted'),
-                content: const Text(
-                  'You have used all 10 free messages.\n\nSubscribe to continue chatting with unlimited messages.',
+              builder: (dialogContext) => AlertDialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                title: Row(
+                  children: [
+                    Icon(
+                      Icons.chat_bubble_outline,
+                      color: theme.colorScheme.primary,
+                      size: 28,
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text('Free Messages Used'),
+                    ),
+                  ],
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'You\'ve used all 10 free messages.',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: theme.textTheme.bodyLarge?.color,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: theme.colorScheme.primary.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.computer,
+                            color: theme.colorScheme.primary,
+                            size: 24,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Visit chuk.chat on desktop to subscribe and get unlimited messages.',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: theme.textTheme.bodyMedium?.color,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
                 actions: [
                   TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
-                  ),
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const PricingPage()),
-                      );
-                    },
-                    child: const Text('Subscribe'),
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: const Text('OK'),
                   ),
                 ],
               ),
