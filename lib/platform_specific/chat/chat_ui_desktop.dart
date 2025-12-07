@@ -264,6 +264,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     debugPrint('│ 📂 [LOAD-CHAT-DESKTOP] Current _activeChatId: $_activeChatId');
     debugPrint('└─────────────────────────────────────────────────────────────');
 
+    // CRITICAL: Update _activeChatId SYNCHRONOUSLY before any async work
+    // This ensures didUpdateWidget always sees the correct value when comparing
+    // chatIdToSave with _activeChatId for persist logic
+    _activeChatId = chatId;
+
     // Show loading indicator immediately
     setState(() {
       _isLoadingChat = true;
@@ -273,13 +278,21 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     Future.microtask(() {
       if (!mounted) return;
 
+      // CRITICAL: Check for stale load - if user switched to another chat
+      // while waiting in the microtask queue, abort this load
+      if (_activeChatId != chatId) {
+        debugPrint('│ ⚠️ [LOAD-CHAT-DESKTOP] Stale load detected, aborting');
+        debugPrint('│ ⚠️ [LOAD-CHAT-DESKTOP] Expected: $chatId, Current: $_activeChatId');
+        return;
+      }
+
       if (chatId == null) {
         // New chat - clear everything
         debugPrint('│ 📂 [LOAD-CHAT-DESKTOP] chatId is NULL - clearing for new chat');
         _messages.clear();
         _animCtrl.reset();
         _attachedFiles.clear();
-        _activeChatId = null;
+        // _activeChatId already set to null synchronously above
       } else {
         // Find chat by ID
         final storedChat = ChatStorageService.savedChats.cast<StoredChat?>().firstWhere(
@@ -289,8 +302,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
         if (storedChat != null) {
           debugPrint('│ 📂 [LOAD-CHAT-DESKTOP] FOUND chat $chatId with ${storedChat.messages.length} messages');
-          debugPrint('│ 📂 [LOAD-CHAT-DESKTOP] Setting _activeChatId = ${storedChat.id}');
-          _activeChatId = storedChat.id;
+          // _activeChatId already set synchronously above
 
           _messages
             ..clear()
