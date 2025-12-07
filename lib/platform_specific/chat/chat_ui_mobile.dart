@@ -810,10 +810,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       debugPrint('⚠️ [SendMessage] SYNCED _activeChatId with widget.selectedChatId: $_activeChatId');
     }
 
-    // Check if user has sufficient credits
+    // Check if user has sufficient credits OR free messages
     final user = SupabaseService.auth.currentUser;
     if (user != null) {
       try {
+        // Check credits first (subscribed users)
         final creditsRemainingResponse = await SupabaseService.client.rpc(
           'get_credits_remaining',
           params: {'p_user_id': user.id},
@@ -824,44 +825,59 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
             : 0.0;
 
         if (remainingCredits < 0.01) {
-          if (!mounted) {
+          // No credits - check free messages (non-subscribed users)
+          final freeMessagesResponse = await SupabaseService.client.rpc(
+            'get_free_messages_remaining',
+            params: {'p_user_id': user.id},
+          );
+
+          final int freeMessagesRemaining = (freeMessagesResponse is num)
+              ? freeMessagesResponse.toInt()
+              : 0;
+
+          if (freeMessagesRemaining <= 0) {
+            // No credits AND no free messages - show upgrade dialog
+            if (!mounted) {
+              _isSendingMessage = false;
+              ChatStorageService.isMessageOperationInProgress = false;
+              debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (not mounted)');
+              return;
+            }
+            await showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('Free Messages Exhausted'),
+                content: const Text(
+                  'You have used all 10 free messages.\n\nSubscribe to continue chatting with unlimited messages.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancel'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const PricingPage()),
+                      );
+                    },
+                    child: const Text('Subscribe'),
+                  ),
+                ],
+              ),
+            );
             _isSendingMessage = false;
             ChatStorageService.isMessageOperationInProgress = false;
-            debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (not mounted)');
+            debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (no credits and no free messages)');
             return;
           }
-          await showDialog(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: const Text('Insufficient Credits'),
-              content: Text(
-                'You have €${remainingCredits.toStringAsFixed(2)} credits remaining. You need at least €0.01 to send a message.\n\nPlease subscribe or upgrade your plan to continue using the AI chat.',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const PricingPage()),
-                    );
-                  },
-                  child: const Text('View Plans'),
-                ),
-              ],
-            ),
-          );
-          _isSendingMessage = false;
-          ChatStorageService.isMessageOperationInProgress = false;
-          debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (insufficient credits)');
-          return;
+          // User has free messages - proceed
+          debugPrint('User has $freeMessagesRemaining free messages remaining');
         }
       } catch (error) {
-        debugPrint('Error checking credits: $error');
+        debugPrint('Error checking credits/free messages: $error');
         // Continue with sending - API will handle the check as well
       }
     }

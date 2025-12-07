@@ -257,6 +257,31 @@ The app uses the following Supabase tables:
 
 All tables use Row Level Security (RLS) with policies ensuring users can only access their own data.
 
+### Free Messages Feature
+
+Non-subscribed users get **10 free messages** (lifetime, never reset). Once a user subscribes, they use credits instead.
+
+**Database Columns (in `profiles` table)**:
+- `free_messages_total` (INTEGER, default 10) - Maximum free messages
+- `free_messages_used` (INTEGER, default 0) - Messages consumed
+
+**RPC Functions**:
+- `get_free_messages_remaining(p_user_id)` - Returns remaining count (callable by authenticated users)
+- `increment_free_messages_used(p_user_id)` - Atomically decrements (server-only via service role)
+
+**Flow**:
+1. User sends message
+2. Server checks credits first (subscribed users)
+3. If no credits → check free messages
+4. If no free messages → HTTP 402 "You have used all 10 free messages"
+5. On success → decrement free message count
+
+**Implementation**:
+- Migration: `migrations/free_messages.sql`
+- API server: `main.py` - `check_free_messages_remaining()`, `decrement_free_message()`
+- Flutter widget: `lib/widgets/free_message_display.dart` - `FreeMessageDisplay`, `FreeMessageBadge`
+- Chat UI check: Both desktop and mobile check free messages before sending
+
 ### Projects Feature
 
 The app includes a **Projects** feature that allows users to create workspaces for organizing chats and files with custom AI behavior:
@@ -623,9 +648,14 @@ This section provides a comprehensive map of ALL Dart files in the codebase, org
 - **What to Look For**: Dropdown logic, model filtering
 
 #### **lib/widgets/credit_display.dart**
-- **Purpose**: Credit/token balance display
-- **Key Classes**: `CreditBalances`
-- **What to Look For**: Credit UI
+- **Purpose**: Credit/token balance display for subscribed users
+- **Key Classes**: `CreditBalances`, `CreditDisplay`, `CreditBadge`
+- **What to Look For**: Credit UI, realtime updates
+
+#### **lib/widgets/free_message_display.dart**
+- **Purpose**: Free message quota display for non-subscribed users
+- **Key Classes**: `FreeMessageQuota`, `FreeMessageDisplay`, `FreeMessageBadge`, `FreeMessageService`
+- **What to Look For**: Free message UI, realtime updates, service helper
 
 #### **lib/widgets/password_strength_meter.dart**
 - **Purpose**: Password strength indicator
