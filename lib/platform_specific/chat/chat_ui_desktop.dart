@@ -398,8 +398,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
 
     // Persist old chat and refresh sidebar in background (don't await)
+    // CRITICAL: Use silent=true to prevent _persistChatInternal from changing
+    // _activeChatId or calling widget.onChatIdChanged - we're now on a NEW chat!
     if (messagesToSave != null && chatIdToSave != null) {
-      unawaited(_persistChatInternal(messagesToSave, chatIdToSave).then((_) {
+      unawaited(_persistChatInternal(messagesToSave, chatIdToSave, silent: true).then((_) {
         // Refresh sidebar after persist completes
         unawaited(ChatStorageService.loadSavedChatsForSidebar());
       }));
@@ -1995,10 +1997,16 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     unawaited(_persistChatInternal(messagesCopy, chatId));
   }
 
+  /// Persist chat messages to storage.
+  ///
+  /// [silent] - If true, don't update _activeChatId or notify parent.
+  /// Use silent=true when persisting an old chat in the background while
+  /// user has already moved to a new chat (e.g., in newChat()).
   Future<void> _persistChatInternal(
     List<Map<String, dynamic>> messagesCopy,
-    String? chatId,
-  ) async {
+    String? chatId, {
+    bool silent = false,
+  }) async {
     // Check if chat exists in storage (not just if chatId is null)
     // With pre-generated IDs, chatId is never null but chat may not exist yet
     final bool chatExistsInStorage = chatId != null &&
@@ -2011,6 +2019,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           ? await ChatStorageService.saveChat(messagesCopy, chatId: chatId)
           : await ChatStorageService.updateChat(chatId!, messagesCopy);
       if (!mounted || stored == null) return;
+
+      // If silent, don't update state or notify parent - this is a background save
+      // of an old chat while user is on a different chat
+      if (silent) {
+        debugPrint('│ 🔇 [PERSIST] Silent save completed for chat: ${stored.id}');
+        return;
+      }
+
       setState(() {
         _activeChatId = stored.id;
       });
