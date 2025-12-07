@@ -94,6 +94,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   final TextEditingController _controller = TextEditingController();
   final List<Map<String, String>> _messages = [];
   String? _activeChatId;
+  /// Tracks which chat's messages are actually loaded in _messages.
+  /// Set AFTER messages are loaded (async), unlike _activeChatId (sync).
+  /// Used by persist logic to ensure we don't save wrong chat's messages.
+  String? _loadedMessagesChatId;
   final ScrollController _scrollController = ScrollController();
   final ScrollController _composerScrollController = ScrollController();
   late ChatApiService _chatApiService;
@@ -187,8 +191,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       debugPrint('│ 🔄 [CHAT-UI-DESKTOP] didUpdateWidget triggered');
       debugPrint('│ 🔄 [CHAT-UI-DESKTOP] OLD widget.selectedChatId: ${oldWidget.selectedChatId}');
       debugPrint('│ 🔄 [CHAT-UI-DESKTOP] NEW widget.selectedChatId: ${widget.selectedChatId}');
-      debugPrint('│ 🔄 [CHAT-UI-DESKTOP] Current _activeChatId: $_activeChatId');
-      debugPrint('│ 🔄 [CHAT-UI-DESKTOP] _isSending: $_isSending, _isStreaming: $_isStreaming');
+      debugPrint('│ 🔄 [CHAT-UI-DESKTOP] _activeChatId: $_activeChatId');
+      debugPrint('│ 🔄 [CHAT-UI-DESKTOP] _loadedMessagesChatId: $_loadedMessagesChatId');
       debugPrint('└─────────────────────────────────────────────────────────────');
 
       // Skip if we're already on this chat
@@ -207,11 +211,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         return;
       }
 
-      // CRITICAL FIX: Only save if _activeChatId matches oldWidget.selectedChatId
-      // This ensures we have valid content for that chat (we finished loading it).
-      // If they don't match, we're out of sync and shouldn't persist garbage.
+      // CRITICAL FIX: Only save if _loadedMessagesChatId matches oldWidget.selectedChatId
+      // This ensures _messages actually contains that chat's content (async load completed).
+      // _activeChatId is set synchronously but _messages loads async - they can be out of sync!
       final chatIdToSave = oldWidget.selectedChatId;
-      if (chatIdToSave != null && chatIdToSave == _activeChatId && _messages.isNotEmpty) {
+      if (chatIdToSave != null && chatIdToSave == _loadedMessagesChatId && _messages.isNotEmpty) {
         final chatStillExists = ChatStorageService.savedChats.any(
           (chat) => chat.id == chatIdToSave,
         );
@@ -223,9 +227,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               .toList(growable: false);
           unawaited(_persistChatInternal(messagesCopy, chatIdToSave));
         }
-      } else if (chatIdToSave != null && chatIdToSave != _activeChatId) {
-        debugPrint('│ ⚠️ [CHAT-UI-DESKTOP] SKIP persist - out of sync!');
-        debugPrint('│ ⚠️ [CHAT-UI-DESKTOP] chatIdToSave=$chatIdToSave but _activeChatId=$_activeChatId');
+      } else if (chatIdToSave != null && chatIdToSave != _loadedMessagesChatId) {
+        debugPrint('│ ⚠️ [CHAT-UI-DESKTOP] SKIP persist - messages not loaded for this chat');
+        debugPrint('│ ⚠️ [CHAT-UI-DESKTOP] chatIdToSave=$chatIdToSave but _loadedMessagesChatId=$_loadedMessagesChatId');
       }
 
       _loadChatById(widget.selectedChatId);
@@ -347,6 +351,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
       if (!mounted) return;
 
+      // Mark that we've finished loading this chat's messages
+      // This is used by persist logic to ensure we only save correct content
+      _loadedMessagesChatId = _activeChatId;
+
       // If this chat is streaming, restore buffered content from StreamingManager
       if (_activeChatId != null && _streamingManager.isStreaming(_activeChatId!)) {
         final bufferedContent = _streamingManager.getBufferedContent(_activeChatId!);
@@ -383,6 +391,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _messages.clear();
       _animCtrl.reset();
       _activeChatId = null;
+      _loadedMessagesChatId = null; // Messages are now cleared (new chat state)
       _isImageActive = false;
       _isMicActive = false;
       _isSending = false; // Reset for new chat
@@ -1365,6 +1374,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // This handles cases where _activeChatId was cleared but user is still on existing chat
     if (_activeChatId == null && widget.selectedChatId != null) {
       _activeChatId = widget.selectedChatId;
+      _loadedMessagesChatId = widget.selectedChatId; // Messages will be for this chat
       debugPrint('');
       debugPrint('┌─────────────────────────────────────────────────────────────');
       debugPrint('│ ⚠️ [SEND-DESKTOP] SYNCED _activeChatId with widget.selectedChatId');
@@ -1377,6 +1387,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // each generate their own UUID before the first one completes
     if (_activeChatId == null) {
       _activeChatId = _uuid.v4();
+      _loadedMessagesChatId = _activeChatId; // Messages will be for this new chat
       debugPrint('');
       debugPrint('┌─────────────────────────────────────────────────────────────');
       debugPrint('│ 🆔 [SEND-DESKTOP] PRE-GENERATED Chat ID: $_activeChatId');
@@ -2011,6 +2022,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       if (!mounted || stored == null) return;
       setState(() {
         _activeChatId = stored.id;
+        _loadedMessagesChatId = stored.id; // Messages are confirmed for this chat
       });
 
       // ID-BASED: Notify parent when a new chat is created
