@@ -1,4 +1,5 @@
 // lib/widgets/encrypted_image_widget.dart
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
@@ -27,11 +28,32 @@ class _EncryptedImageWidgetState extends State<EncryptedImageWidget> {
   bool _isLoading = true;
   String? _error;
   bool _isDeleted = false;
+  StreamSubscription<String>? _deletionSubscription;
 
   @override
   void initState() {
     super.initState();
     _loadImage();
+    _listenForDeletion();
+  }
+
+  @override
+  void dispose() {
+    _deletionSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _listenForDeletion() {
+    _deletionSubscription = ImageStorageService.onImageDeleted.listen((deletedPath) {
+      if (deletedPath == widget.storagePath && mounted) {
+        setState(() {
+          _imageBytes = null;
+          _isDeleted = true;
+          _isLoading = false;
+          _error = null;
+        });
+      }
+    });
   }
 
   @override
@@ -43,10 +65,12 @@ class _EncryptedImageWidgetState extends State<EncryptedImageWidget> {
   }
 
   Future<void> _loadImage() async {
+    // Skip loading if already marked as deleted
+    if (_isDeleted) return;
+
     setState(() {
       _isLoading = true;
       _error = null;
-      _isDeleted = false;
     });
 
     try {

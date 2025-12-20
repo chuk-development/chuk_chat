@@ -1,4 +1,5 @@
 // lib/services/image_storage_service.dart
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -39,6 +40,31 @@ class ImageStorageService {
 
   static const String bucketName = 'images';
   static const Uuid _uuid = Uuid();
+
+  /// Stream controller for notifying when images are deleted
+  static final StreamController<String> _deletedImagesController =
+      StreamController<String>.broadcast();
+
+  /// Stream of deleted image paths - widgets can listen to this to update
+  static Stream<String> get onImageDeleted => _deletedImagesController.stream;
+
+  /// In-memory cache for decrypted images
+  static final Map<String, Uint8List> _imageCache = {};
+
+  /// Clear a specific image from cache
+  static void clearFromCache(String storagePath) {
+    _imageCache.remove(storagePath);
+  }
+
+  /// Clear all cached images
+  static void clearCache() {
+    _imageCache.clear();
+  }
+
+  /// Get cached image if available
+  static Uint8List? getCached(String storagePath) {
+    return _imageCache[storagePath];
+  }
 
   /// Uploads an encrypted image to Supabase Storage
   /// Steps:
@@ -95,7 +121,16 @@ class ImageStorageService {
 
   /// Downloads and decrypts an image from Supabase Storage
   /// Returns the decrypted image bytes
-  static Future<Uint8List> downloadAndDecryptImage(String storagePath) async {
+  /// Uses in-memory cache to avoid re-downloading
+  static Future<Uint8List> downloadAndDecryptImage(String storagePath, {bool bypassCache = false}) async {
+    // Check cache first (unless bypassing)
+    if (!bypassCache) {
+      final cached = _imageCache[storagePath];
+      if (cached != null) {
+        return cached;
+      }
+    }
+
     // Ensure user is authenticated
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
@@ -121,18 +156,32 @@ class ImageStorageService {
         encryptedJson,
       );
 
+      // Cache the result
+      _imageCache[storagePath] = decryptedBytes;
+
       return decryptedBytes;
     } catch (e) {
+      // Remove from cache if download fails (image might be deleted)
+      _imageCache.remove(storagePath);
       throw Exception('Failed to download or decrypt image: $e');
     }
   }
 
   /// Deletes an encrypted image from Supabase Storage
+  /// Also clears cache and notifies listeners
   static Future<void> deleteEncryptedImage(String storagePath) async {
     try {
       await SupabaseService.client.storage.from(bucketName).remove([
         storagePath,
       ]);
+
+      // Clear from cache
+      _imageCache.remove(storagePath);
+
+      // Notify listeners that this image was deleted
+      _deletedImagesController.add(storagePath);
+
+      debugPrint('🗑️ [ImageStorage] Deleted and notified: $storagePath');
     } catch (e) {
       throw Exception('Failed to delete encrypted image: $e');
     }
