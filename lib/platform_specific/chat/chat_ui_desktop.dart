@@ -861,13 +861,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     final String originalUserInput = trimmedText;
     late int placeholderIndex;
 
-    // Preserve the original model and provider from the user message being resent
-    final String? originalModelId = _messages[index]['modelId'];
-    final String? originalProvider = _messages[index]['provider'];
+    // Always use the currently selected model and provider for resend
+    // This allows users to switch models and resend with the new selection
+    final String modelIdToUse = _selectedModelId;
+    final String? providerToUse = _selectedProviderSlug;
 
-    // Use original model/provider if available, otherwise use currently selected
-    final String modelIdToUse = originalModelId ?? _selectedModelId;
-    final String? providerToUse = originalProvider ?? _selectedProviderSlug;
+    // Update the user message with the new model/provider
+    _messages[index]['modelId'] = modelIdToUse;
+    _messages[index]['provider'] = providerToUse ?? '';
 
     // Reconstruct images from stored JSON for resend
     List<String>? imagesForResend;
