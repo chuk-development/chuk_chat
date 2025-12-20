@@ -661,60 +661,270 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
   }
 
   void _showImagePreview(StoredImage image) {
-    final bytes = _thumbnailCache[image.path];
-    if (bytes == null) return;
+    final initialIndex = _images.indexOf(image);
+    if (initialIndex == -1) return;
 
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.all(16),
-        child: Stack(
-          children: [
-            // Image
-            Center(
-              child: InteractiveViewer(
-                child: Image.memory(bytes),
-              ),
-            ),
-            // Close button
-            Positioned(
-              top: 0,
-              right: 0,
-              child: IconButton(
-                icon: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: const BoxDecoration(
-                    color: Colors.black54,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.close, color: Colors.white),
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.black87,
+        pageBuilder: (context, animation, secondaryAnimation) {
+          return _FullScreenImageViewer(
+            images: _images,
+            initialIndex: initialIndex,
+            thumbnailCache: _thumbnailCache,
+            onDelete: (img) {
+              Navigator.pop(context);
+              _deleteImage(img);
+            },
+            onLoadImage: _loadThumbnail,
+          );
+        },
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+      ),
+    );
+  }
+}
+
+class _FullScreenImageViewer extends StatefulWidget {
+  final List<StoredImage> images;
+  final int initialIndex;
+  final Map<String, Uint8List> thumbnailCache;
+  final void Function(StoredImage) onDelete;
+  final Future<Uint8List?> Function(String) onLoadImage;
+
+  const _FullScreenImageViewer({
+    required this.images,
+    required this.initialIndex,
+    required this.thumbnailCache,
+    required this.onDelete,
+    required this.onLoadImage,
+  });
+
+  @override
+  State<_FullScreenImageViewer> createState() => _FullScreenImageViewerState();
+}
+
+class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
+  late PageController _pageController;
+  late int _currentIndex;
+  final Map<String, Uint8List> _loadedImages = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+    _pageController = PageController(initialPage: widget.initialIndex);
+    _loadedImages.addAll(widget.thumbnailCache);
+
+    // Preload adjacent images
+    _preloadAdjacentImages(_currentIndex);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _preloadAdjacentImages(int index) async {
+    final indicesToLoad = [index - 1, index, index + 1]
+        .where((i) => i >= 0 && i < widget.images.length)
+        .toList();
+
+    for (final i in indicesToLoad) {
+      final path = widget.images[i].path;
+      if (!_loadedImages.containsKey(path)) {
+        final bytes = await widget.onLoadImage(path);
+        if (bytes != null && mounted) {
+          setState(() {
+            _loadedImages[path] = bytes;
+          });
+        }
+      }
+    }
+  }
+
+  void _onPageChanged(int index) {
+    setState(() {
+      _currentIndex = index;
+    });
+    _preloadAdjacentImages(index);
+  }
+
+  String _formatDate(DateTime? date) {
+    if (date == null) return '';
+    return '${date.day}/${date.month}/${date.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currentImage = widget.images[_currentIndex];
+
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Stack(
+        children: [
+          // Dismiss on tap background
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(color: Colors.transparent),
+          ),
+
+          // PageView for swiping
+          PageView.builder(
+            controller: _pageController,
+            onPageChanged: _onPageChanged,
+            itemCount: widget.images.length,
+            itemBuilder: (context, index) {
+              final image = widget.images[index];
+              final bytes = _loadedImages[image.path];
+
+              return GestureDetector(
+                onTap: () {}, // Prevent dismissing when tapping image
+                child: Center(
+                  child: bytes != null
+                      ? InteractiveViewer(
+                          minScale: 0.5,
+                          maxScale: 4.0,
+                          child: Image.memory(
+                            bytes,
+                            fit: BoxFit.contain,
+                          ),
+                        )
+                      : const CircularProgressIndicator(color: Colors.white),
                 ),
-                onPressed: () => Navigator.pop(context),
-              ),
+              );
+            },
+          ),
+
+          // Top bar with close button and counter
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 8,
+            left: 16,
+            right: 16,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Close button
+                _buildIconButton(
+                  icon: Icons.close,
+                  onTap: () => Navigator.pop(context),
+                ),
+                // Image counter
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    '${_currentIndex + 1} / ${widget.images.length}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                // Placeholder for symmetry
+                const SizedBox(width: 40),
+              ],
             ),
-            // Delete button
-            Positioned(
-              bottom: 16,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    _deleteImage(image);
-                  },
-                  icon: const Icon(Icons.delete),
+          ),
+
+          // Bottom bar with info and delete
+          Positioned(
+            bottom: MediaQuery.of(context).padding.bottom + 16,
+            left: 16,
+            right: 16,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Image info
+                if (currentImage.createdAt != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      _formatDate(currentImage.createdAt),
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                // Delete button
+                ElevatedButton.icon(
+                  onPressed: () => widget.onDelete(currentImage),
+                  icon: const Icon(Icons.delete_outline),
                   label: const Text('Delete'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
+                    backgroundColor: Colors.red.shade700,
                     foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
                   ),
+                ),
+              ],
+            ),
+          ),
+
+          // Left arrow (if not first)
+          if (_currentIndex > 0)
+            Positioned(
+              left: 8,
+              top: 0,
+              bottom: 0,
+              child: Center(
+                child: _buildIconButton(
+                  icon: Icons.chevron_left,
+                  onTap: () {
+                    _pageController.previousPage(
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                    );
+                  },
                 ),
               ),
             ),
-          ],
+
+          // Right arrow (if not last)
+          if (_currentIndex < widget.images.length - 1)
+            Positioned(
+              right: 8,
+              top: 0,
+              bottom: 0,
+              child: Center(
+                child: _buildIconButton(
+                  icon: Icons.chevron_right,
+                  onTap: () {
+                    _pageController.nextPage(
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                    );
+                  },
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIconButton({required IconData icon, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: const BoxDecoration(
+          color: Colors.black54,
+          shape: BoxShape.circle,
         ),
+        child: Icon(icon, color: Colors.white, size: 24),
       ),
     );
   }
