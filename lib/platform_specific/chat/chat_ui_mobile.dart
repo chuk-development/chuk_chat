@@ -1199,6 +1199,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     final String displayMessageText = validationResult.displayMessageText!;
     final List<String>? imageDataUrls = validationResult.images;
 
+    // CRITICAL: Capture attached files BEFORE clearing them
+    // These need to be passed to the streaming handler for the API call
+    final List<AttachedFile> attachedFilesForApi = List.from(_fileHandler.attachedFiles);
+    debugPrint('📎 [SendMessage] Captured ${attachedFilesForApi.length} attached files for API call');
+
     // Add user message
     setState(() {
       // Store message with images and attachments (if any)
@@ -1216,7 +1221,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       }
 
       // Store document attachments as JSON-encoded string if present
-      final documentAttachments = _fileHandler.attachedFiles
+      final documentAttachments = attachedFilesForApi
           .where((f) => !f.isImage && f.markdownContent != null)
           .map((f) => {
                 'fileName': f.fileName,
@@ -1230,11 +1235,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       }
 
       // Store original AttachedFile objects for resend functionality
-      if (_fileHandler.attachedFiles.isNotEmpty) {
+      if (attachedFilesForApi.isNotEmpty) {
         userMessage['attachedFilesJson'] = jsonEncode(
-          _fileHandler.attachedFiles.map((f) => f.toJson()).toList(),
+          attachedFilesForApi.map((f) => f.toJson()).toList(),
         );
-        debugPrint('💾 [AttachmentDebug] Storing ${_fileHandler.attachedFiles.length} attached files for resend');
+        debugPrint('💾 [AttachmentDebug] Storing ${attachedFilesForApi.length} attached files for resend');
       }
 
       _messages.add(userMessage);
@@ -1301,11 +1306,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     // Send with streaming handler using the CAPTURED chatId, not _activeChatId
     // This prevents race conditions where _activeChatId could be changed by callbacks
     debugPrint('📤 [ChatDebug] Sending to streaming handler with chatId: $chatIdForThisMessage');
+    debugPrint('📤 [ChatDebug] Sending ${attachedFilesForApi.length} attached files to API');
     // NOTE: _isSendingMessage is cleared in _finalizeAiMessage() when streaming completes,
     // NOT here. This prevents race conditions where didUpdateWidget fires while streaming.
     await _streamingHandler.sendMessage(
       userInput: originalUserInput,
-      attachedFiles: _fileHandler.attachedFiles,
+      attachedFiles: attachedFilesForApi,
       selectedModelId: _selectedModelId,
       selectedProviderSlug: _selectedProviderSlug,
       messages: _messages,
