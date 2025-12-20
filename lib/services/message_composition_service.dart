@@ -90,6 +90,15 @@ class MessageCompositionService {
       (f) => f.markdownContent != null || f.encryptedImagePath != null,
     );
 
+    // Debug: Log what we received
+    debugPrint('📝 [MessageComposition] prepareMessage called:');
+    debugPrint('  - userInput: ${userInput.length} chars');
+    debugPrint('  - attachedFiles: ${attachedFiles.length}');
+    for (final f in attachedFiles) {
+      debugPrint('    - ${f.fileName}: isImage=${f.isImage}, encPath=${f.encryptedImagePath != null}, markdown=${f.markdownContent != null}');
+    }
+    debugPrint('  - hasAttachments: $hasAttachments');
+
     if (!hasText && !hasAttachments) {
       return MessageCompositionResult.error('No content to send');
     }
@@ -176,6 +185,8 @@ class MessageCompositionService {
       final documentFiles = attachedFiles
           .where((f) => !f.isImage && f.markdownContent != null)
           .toList();
+
+      debugPrint('🖼️ [MessageComposition] Found ${imageFiles.length} images, ${documentFiles.length} documents');
 
       // Build display message with attachment names
       final attachmentNames = <String>[];

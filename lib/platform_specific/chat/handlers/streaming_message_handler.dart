@@ -62,6 +62,12 @@ class StreamingMessageHandler {
       return;
     }
 
+    // Debug: Log attached files
+    debugPrint('📎 [StreamingHandler] Received ${attachedFiles.length} attached files');
+    for (final f in attachedFiles) {
+      debugPrint('  - ${f.fileName}: isImage=${f.isImage}, encryptedPath=${f.encryptedImagePath}, isUploading=${f.isUploading}');
+    }
+
     // Build API history
     final List<Map<String, String>> apiHistory = _buildApiHistory(
       messages,
@@ -93,6 +99,15 @@ class StreamingMessageHandler {
     final String? effectiveSystemPrompt = result.effectiveSystemPrompt;
     final String aiPromptContent = result.aiPromptContent!;
     final List<String>? images = result.images;
+
+    // Debug: Log what images we're sending
+    debugPrint('🚀 [StreamingHandler] Sending to API:');
+    debugPrint('  - images: ${images?.length ?? 0}');
+    if (images != null && images.isNotEmpty) {
+      for (int i = 0; i < images.length; i++) {
+        debugPrint('  - image[$i]: ${images[i].substring(0, 50)}...');
+      }
+    }
 
     _isSending = true;
     _isStreaming = true;
