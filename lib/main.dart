@@ -76,6 +76,13 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
   // Customization preferences
   bool _autoSendVoiceTranscription = false;
 
+  // Image generation preferences
+  bool _imageGenEnabled = false;
+  String _imageGenDefaultSize = 'landscape_4_3';
+  int _imageGenCustomWidth = 1024;
+  int _imageGenCustomHeight = 768;
+  bool _imageGenUseCustomSize = false;
+
   // Keys for SharedPreferences
   static const String _kThemeModeKey = 'themeMode';
   static const String _kAccentColorKey = 'accentColor';
@@ -85,6 +92,11 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
   static const String _kShowReasoningTokensKey = 'showReasoningTokens';
   static const String _kShowModelInfoKey = 'showModelInfo';
   static const String _kAutoSendVoiceTranscriptionKey = 'autoSendVoiceTranscription';
+  static const String _kImageGenEnabledKey = 'imageGenEnabled';
+  static const String _kImageGenDefaultSizeKey = 'imageGenDefaultSize';
+  static const String _kImageGenCustomWidthKey = 'imageGenCustomWidth';
+  static const String _kImageGenCustomHeightKey = 'imageGenCustomHeight';
+  static const String _kImageGenUseCustomSizeKey = 'imageGenUseCustomSize';
 
   StreamSubscription<AuthState>? _authSubscription;
   bool _hasAppliedSupabaseTheme = false;
@@ -172,9 +184,9 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
       }
     });
 
-    // Load theme and chats after auth subscription is set up
+    // Load theme after auth subscription is set up
+    // Note: Chats are loaded in onAuthStateChange when user is signed in
     await _loadThemeSettingsFromPrefs();
-    unawaited(_loadChatsAsync());
 
     // Load theme from Supabase if logged in
     try {
@@ -234,15 +246,6 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _loadChatsAsync() async {
-    try {
-      await ChatStorageService.loadSavedChatsForSidebar();
-      if (mounted) setState(() {});
-    } catch (error) {
-      debugPrint('Failed to load chats: $error');
-    }
-  }
-
   Future<void> _loadThemeSettingsFromPrefs() async {
     final prefs = await _getPrefs();
 
@@ -278,6 +281,11 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
       _showReasoningTokens = prefs.getBool(_kShowReasoningTokensKey) ?? kDefaultShowReasoningTokens;
       _showModelInfo = prefs.getBool(_kShowModelInfoKey) ?? kDefaultShowModelInfo;
       _autoSendVoiceTranscription = prefs.getBool(_kAutoSendVoiceTranscriptionKey) ?? false;
+      _imageGenEnabled = prefs.getBool(_kImageGenEnabledKey) ?? false;
+      _imageGenDefaultSize = prefs.getString(_kImageGenDefaultSizeKey) ?? 'landscape_4_3';
+      _imageGenCustomWidth = prefs.getInt(_kImageGenCustomWidthKey) ?? 1024;
+      _imageGenCustomHeight = prefs.getInt(_kImageGenCustomHeightKey) ?? 768;
+      _imageGenUseCustomSize = prefs.getBool(_kImageGenUseCustomSizeKey) ?? false;
       _cachedThemeData = null; // Invalidate theme cache
     });
   }
@@ -362,6 +370,51 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
     _debouncedSyncCustomizationSettings();
   }
 
+  void _setImageGenEnabled(bool enabled) async {
+    final prefs = await _getPrefs();
+    await prefs.setBool(_kImageGenEnabledKey, enabled);
+    setState(() {
+      _imageGenEnabled = enabled;
+    });
+    _debouncedSyncCustomizationSettings();
+  }
+
+  void _setImageGenDefaultSize(String size) async {
+    final prefs = await _getPrefs();
+    await prefs.setString(_kImageGenDefaultSizeKey, size);
+    setState(() {
+      _imageGenDefaultSize = size;
+    });
+    _debouncedSyncCustomizationSettings();
+  }
+
+  void _setImageGenCustomWidth(int width) async {
+    final prefs = await _getPrefs();
+    await prefs.setInt(_kImageGenCustomWidthKey, width);
+    setState(() {
+      _imageGenCustomWidth = width;
+    });
+    _debouncedSyncCustomizationSettings();
+  }
+
+  void _setImageGenCustomHeight(int height) async {
+    final prefs = await _getPrefs();
+    await prefs.setInt(_kImageGenCustomHeightKey, height);
+    setState(() {
+      _imageGenCustomHeight = height;
+    });
+    _debouncedSyncCustomizationSettings();
+  }
+
+  void _setImageGenUseCustomSize(bool useCustom) async {
+    final prefs = await _getPrefs();
+    await prefs.setBool(_kImageGenUseCustomSizeKey, useCustom);
+    setState(() {
+      _imageGenUseCustomSize = useCustom;
+    });
+    _debouncedSyncCustomizationSettings();
+  }
+
   // Performance: Debounce theme sync to avoid excessive Supabase calls
   void _debouncedSyncThemeSettings() {
     _themeSyncDebounce?.cancel();
@@ -388,6 +441,11 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
         _showReasoningTokens = customizationPrefs.showReasoningTokens;
         _showModelInfo = customizationPrefs.showModelInfo;
         _autoSendVoiceTranscription = customizationPrefs.autoSendVoiceTranscription;
+        _imageGenEnabled = customizationPrefs.imageGenEnabled;
+        _imageGenDefaultSize = customizationPrefs.imageGenDefaultSize;
+        _imageGenCustomWidth = customizationPrefs.imageGenCustomWidth;
+        _imageGenCustomHeight = customizationPrefs.imageGenCustomHeight;
+        _imageGenUseCustomSize = customizationPrefs.imageGenUseCustomSize;
         _hasAppliedSupabaseTheme = true;
         _cachedThemeData = null; // Invalidate cache
       });
@@ -410,6 +468,11 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
     await prefs.setBool(_kShowReasoningTokensKey, _showReasoningTokens);
     await prefs.setBool(_kShowModelInfoKey, _showModelInfo);
     await prefs.setBool(_kAutoSendVoiceTranscriptionKey, _autoSendVoiceTranscription);
+    await prefs.setBool(_kImageGenEnabledKey, _imageGenEnabled);
+    await prefs.setString(_kImageGenDefaultSizeKey, _imageGenDefaultSize);
+    await prefs.setInt(_kImageGenCustomWidthKey, _imageGenCustomWidth);
+    await prefs.setInt(_kImageGenCustomHeightKey, _imageGenCustomHeight);
+    await prefs.setBool(_kImageGenUseCustomSizeKey, _imageGenUseCustomSize);
   }
 
   Future<void> _syncThemeSettings() async {
@@ -450,6 +513,11 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
       autoSendVoiceTranscription: _autoSendVoiceTranscription,
       showReasoningTokens: _showReasoningTokens,
       showModelInfo: _showModelInfo,
+      imageGenEnabled: _imageGenEnabled,
+      imageGenDefaultSize: _imageGenDefaultSize,
+      imageGenCustomWidth: _imageGenCustomWidth,
+      imageGenCustomHeight: _imageGenCustomHeight,
+      imageGenUseCustomSize: _imageGenUseCustomSize,
     );
 
     try {
@@ -521,6 +589,16 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
             setShowModelInfo: _setShowModelInfo,
             autoSendVoiceTranscription: _autoSendVoiceTranscription,
             setAutoSendVoiceTranscription: _setAutoSendVoiceTranscription,
+            imageGenEnabled: _imageGenEnabled,
+            setImageGenEnabled: _setImageGenEnabled,
+            imageGenDefaultSize: _imageGenDefaultSize,
+            setImageGenDefaultSize: _setImageGenDefaultSize,
+            imageGenCustomWidth: _imageGenCustomWidth,
+            setImageGenCustomWidth: _setImageGenCustomWidth,
+            imageGenCustomHeight: _imageGenCustomHeight,
+            setImageGenCustomHeight: _setImageGenCustomHeight,
+            imageGenUseCustomSize: _imageGenUseCustomSize,
+            setImageGenUseCustomSize: _setImageGenUseCustomSize,
           );
         },
       ),

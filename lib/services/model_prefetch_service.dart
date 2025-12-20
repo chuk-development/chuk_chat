@@ -16,7 +16,8 @@ class ModelPrefetchService {
 
   /// Timeout duration for HTTP requests in the prefetch service.
   /// This prevents the prefetch operation from hanging indefinitely.
-  static const Duration _httpTimeout = Duration(seconds: 5);
+  /// Set to 15 seconds to allow for slower network conditions.
+  static const Duration _httpTimeout = Duration(seconds: 15);
 
   /// Prefetch the user's model/provider preferences and cache the available
   /// models early in the app lifecycle so dropdowns can render instantly.

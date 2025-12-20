@@ -347,8 +347,11 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       ModelSelectionDropdown._cachedProviderLimits.addAll(providerLimits);
     }
 
-    ModelSelectionDropdown.selectedModelNotifier.value = _selectedModelId;
-    widget.onModelSelected(_selectedModelId);
+    // Only notify if model actually changed to avoid duplicate callbacks
+    if (newModelId != previousModelId) {
+      ModelSelectionDropdown.selectedModelNotifier.value = _selectedModelId;
+      widget.onModelSelected(_selectedModelId);
+    }
     _updateSelectedModelName();
   }
 

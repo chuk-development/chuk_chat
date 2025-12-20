@@ -41,29 +41,29 @@ print_error() { echo -e "${RED}❌ $1${NC}"; }
 # Extract app information
 extract_app_info() {
     print_info "Extracting app information from pubspec.yaml..."
-    
+
     APP_NAME=$(grep '^name:' pubspec.yaml | sed 's/^name:[[:space:]]*//' | sed 's/[[:space:]]*$//')
     VERSION=$(grep '^version:' pubspec.yaml | sed 's/^version:[[:space:]]*//' | sed 's/+.*//' | sed 's/[[:space:]]*$//')
-    
+
     if [ -z "$APP_NAME" ] || [ -z "$VERSION" ]; then
         print_error "Could not extract app name or version from pubspec.yaml"
         exit 1
     fi
-    
+
     # Convert app name to package name (replace underscores with hyphens)
     PACKAGE_NAME=$(echo "$APP_NAME" | sed 's/_/-/g')
-    
+
     print_success "App: $APP_NAME, Version: $VERSION, Package: $PACKAGE_NAME"
 }
 
 # Find the best app icon
 find_app_icon() {
     print_info "Finding app icon..."
-    
+
     # Look for the highest resolution icon
     ICON_PATH=""
     ICON_SIZES=("xxxhdpi" "xxhdpi" "xhdpi" "hdpi" "mdpi")
-    
+
     for size in "${ICON_SIZES[@]}"; do
         if [ -f "android/app/src/main/res/mipmap-${size}/ic_launcher.png" ]; then
             ICON_PATH="android/app/src/main/res/mipmap-${size}/ic_launcher.png"
@@ -71,7 +71,7 @@ find_app_icon() {
             break
         fi
     done
-    
+
     # Fallback to web icons
     if [ -z "$ICON_PATH" ]; then
         if [ -f "web/icons/Icon-512.png" ]; then
@@ -82,7 +82,7 @@ find_app_icon() {
             print_success "Using favicon: $ICON_PATH"
         fi
     fi
-    
+
     if [ -z "$ICON_PATH" ]; then
         print_warning "No app icon found, using default"
         ICON_PATH=""
@@ -134,28 +134,28 @@ build_linux() {
 create_deb() {
     local arch=$1
     print_info "Creating .deb package for $arch..."
-    
+
     # Create directory structure
     mkdir -p debian/DEBIAN
     mkdir -p "debian/usr/local/bin/$APP_NAME"
     mkdir -p "debian/usr/share/applications"
     mkdir -p "debian/usr/share/icons/hicolor/256x256/apps"
-    
+
     # Copy Flutter build
     if [ "$arch" = "amd64" ]; then
         cp -r build/linux/x64/release/bundle/* "debian/usr/local/bin/$APP_NAME/"
     else
         cp -r build/linux/arm64/release/bundle/* "debian/usr/local/bin/$APP_NAME/"
     fi
-    
+
     # Fix permissions on the executable
     chmod +x "debian/usr/local/bin/$APP_NAME/${APP_NAME//-/_}"
-    
+
     # Copy app icon if available
     if [ -n "$ICON_PATH" ] && [ -f "$ICON_PATH" ]; then
         cp "$ICON_PATH" "debian/usr/share/icons/hicolor/256x256/apps/$PACKAGE_NAME.png"
     fi
-    
+
     # Create desktop file
     cat > "debian/usr/share/applications/$PACKAGE_NAME.desktop" <<EOF
 [Desktop Entry]
@@ -169,7 +169,7 @@ Terminal=false
 Categories=Network;Chat;
 StartupWMClass=${APP_NAME//-/_}
 EOF
-    
+
     # Create control file
     cat > debian/DEBIAN/control <<EOF
 Package: $PACKAGE_NAME
@@ -203,10 +203,10 @@ EOF
     # Make scripts executable
     chmod +x debian/DEBIAN/postinst
     chmod +x debian/DEBIAN/prerm
-    
+
     # Build deb package
     dpkg-deb --build debian "releases/linux/${PACKAGE_NAME}_${VERSION}_${arch}.deb"
-    
+
     print_success "Created ${PACKAGE_NAME}_${VERSION}_${arch}.deb"
 }
 
@@ -214,17 +214,17 @@ EOF
 create_rpm() {
     local arch=$1
     print_info "Creating .rpm package for $arch..."
-    
+
     # Check if rpmbuild is available
     if ! command -v rpmbuild &> /dev/null; then
         print_warning "rpmbuild not found. Skipping RPM package creation."
         print_info "Install rpm-build package to create RPM packages: sudo apt install rpm (Ubuntu/Debian) or sudo yum install rpm-build (RHEL/CentOS)"
         return 0
     fi
-    
+
     # Create directory structure
     mkdir -p rpm/BUILD rpm/RPMS rpm/SOURCES rpm/SPECS rpm/SRPMS
-    
+
     # Copy Flutter build to sources
     mkdir -p "rpm/SOURCES/$PACKAGE_NAME-$VERSION"
     if [ "$arch" = "amd64" ]; then
@@ -232,12 +232,12 @@ create_rpm() {
     else
         cp -r build/linux/arm64/release/bundle/* "rpm/SOURCES/$PACKAGE_NAME-$VERSION/"
     fi
-    
+
     # Create tarball
     cd rpm/SOURCES
     tar -czf "$PACKAGE_NAME-$VERSION.tar.gz" "$PACKAGE_NAME-$VERSION"
     cd ../..
-    
+
     # Create spec file
     cat > "rpm/SPECS/$PACKAGE_NAME.spec" <<EOF
 Name: $PACKAGE_NAME
@@ -296,10 +296,10 @@ EOF
 
     # Build RPM
     rpmbuild --define "_topdir $(pwd)/rpm" -ba "rpm/SPECS/$PACKAGE_NAME.spec"
-    
+
     # Move the built RPM to releases directory
     find rpm/RPMS -name "*.rpm" -exec cp {} "releases/linux/${PACKAGE_NAME}_${VERSION}_${arch}.rpm" \;
-    
+
     print_success "Created ${PACKAGE_NAME}_${VERSION}_${arch}.rpm"
 }
 
@@ -307,59 +307,74 @@ EOF
 create_appimage() {
     local arch=$1
     print_info "Creating AppImage for $arch..."
-    
-    # Check if appimagetool is available
-    if ! command -v appimagetool &> /dev/null; then
+
+    # Use local appimagetool from tools/ directory, or fall back to system-installed
+    local APPIMAGETOOL=""
+    local SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+    if [ -x "$SCRIPT_DIR/tools/appimagetool" ]; then
+        APPIMAGETOOL="$SCRIPT_DIR/tools/appimagetool"
+        print_info "Using local appimagetool from tools/"
+    elif command -v appimagetool &> /dev/null; then
+        APPIMAGETOOL="appimagetool"
+    else
         print_warning "appimagetool not found. Skipping AppImage creation."
         print_info "Download from: https://github.com/AppImage/AppImageKit/releases"
+        print_info "Or place appimagetool in the tools/ directory"
         return 0
     fi
-    
+
     # Create AppDir structure
     mkdir -p "AppDir/usr/bin"
     mkdir -p "AppDir/usr/share/applications"
     mkdir -p "AppDir/usr/share/icons/hicolor/256x256/apps"
-    
+
     # Copy Flutter build
     if [ "$arch" = "amd64" ]; then
         cp -r build/linux/x64/release/bundle/* "AppDir/usr/bin/"
     else
         cp -r build/linux/arm64/release/bundle/* "AppDir/usr/bin/"
     fi
-    
+
     # Fix permissions
     chmod +x AppDir/usr/bin/chuk_chat
-    
+
     # Copy app icon if available
     if [ -n "$ICON_PATH" ] && [ -f "$ICON_PATH" ]; then
         cp "$ICON_PATH" "AppDir/usr/share/icons/hicolor/256x256/apps/chuk-chat.png"
     fi
-    
-    # Create desktop file
+
+    # Create desktop file in usr/share/applications
     cat > AppDir/usr/share/applications/chuk-chat.desktop <<EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
 Name=Chuk Chat
 Comment=Modern chat application
-Exec=usr/bin/chuk_chat
+Exec=chuk_chat
 Icon=chuk-chat
 Terminal=false
 Categories=Network;Chat;
 StartupWMClass=chuk_chat
 EOF
-    
+
+    # AppImage requires .desktop file and icon symlinked in AppDir root
+    ln -sf usr/share/applications/chuk-chat.desktop AppDir/chuk-chat.desktop
+    if [ -n "$ICON_PATH" ] && [ -f "$ICON_PATH" ]; then
+        ln -sf usr/share/icons/hicolor/256x256/apps/chuk-chat.png AppDir/chuk-chat.png
+    fi
+
     # Create AppRun
     cat > AppDir/AppRun <<'EOF'
 #!/bin/bash
-cd "$(dirname "$0")"
-exec ./usr/bin/chuk_chat "$@"
+HERE="$(dirname "$(readlink -f "$0")")"
+exec "$HERE/usr/bin/chuk_chat" "$@"
 EOF
     chmod +x AppDir/AppRun
-    
+
     # Create AppImage
-    appimagetool AppDir "releases/linux/${PACKAGE_NAME}_${VERSION}_${arch}.AppImage"
-    
+    ARCH=$arch $APPIMAGETOOL AppDir "releases/linux/${PACKAGE_NAME}_${VERSION}_${arch}.AppImage"
+
     print_success "Created ${PACKAGE_NAME}_${VERSION}_${arch}.AppImage"
 }
 
@@ -426,12 +441,12 @@ build_linux_packages() {
     print_header "Building Linux packages..."
     for arch in amd64 arm64; do
         print_header "Building Linux for architecture: $arch"
-        
+
         if build_linux $arch; then
             create_deb $arch
             create_rpm $arch
             create_appimage $arch
-            
+
             # Clean up for next architecture
             rm -rf debian rpm AppDir
         else
@@ -444,7 +459,7 @@ build_deb_packages() {
     print_header "Building DEB packages..."
     for arch in amd64 arm64; do
         print_header "Building DEB for architecture: $arch"
-        
+
         if build_linux $arch; then
             create_deb $arch
             rm -rf debian
@@ -458,7 +473,7 @@ build_rpm_packages() {
     print_header "Building RPM packages..."
     for arch in amd64 arm64; do
         print_header "Building RPM for architecture: $arch"
-        
+
         if build_linux $arch; then
             create_rpm $arch
             rm -rf rpm
@@ -472,7 +487,7 @@ build_appimage_packages() {
     print_header "Building AppImage packages..."
     for arch in amd64 arm64; do
         print_header "Building AppImage for architecture: $arch"
-        
+
         if build_linux $arch; then
             create_appimage $arch
             rm -rf AppDir
@@ -557,15 +572,15 @@ main() {
         show_usage
         exit 0
     fi
-    
+
     local target=$1
-    
+
     print_header "Starting build process for $APP_NAME..."
-    
+
     extract_app_info
     find_app_icon
     cleanup
-    
+
     case $target in
         "linux")
             build_linux_packages
@@ -595,7 +610,7 @@ main() {
             exit 1
             ;;
     esac
-    
+
     print_success "Build completed! All packages are in the releases/ directory:"
     echo ""
     print_info "Linux packages:"
@@ -603,7 +618,7 @@ main() {
     echo ""
     print_info "Android packages:"
     ls -la releases/android/ 2>/dev/null || echo "  No Android packages found"
-    
+
     print_info "Package summary:"
     echo "  📦 Linux DEB packages: $(ls releases/linux/*.deb 2>/dev/null | wc -l) files"
     echo "  📦 Linux RPM packages: $(ls releases/linux/*.rpm 2>/dev/null | wc -l) files"
@@ -614,23 +629,23 @@ main() {
 # Check dependencies
 check_dependencies() {
     print_info "Checking dependencies..."
-    
+
     local missing_deps=()
-    
+
     if ! command -v flutter &> /dev/null; then
         missing_deps+=("flutter")
     fi
-    
+
     if ! command -v dpkg-deb &> /dev/null; then
         missing_deps+=("dpkg-deb")
     fi
-    
+
     if [ ${#missing_deps[@]} -ne 0 ]; then
         print_error "Missing dependencies: ${missing_deps[*]}"
         print_error "Please install the missing dependencies and try again."
         exit 1
     fi
-    
+
     print_success "All required dependencies found"
 }
 

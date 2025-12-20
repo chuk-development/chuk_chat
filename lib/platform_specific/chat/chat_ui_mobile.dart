@@ -28,6 +28,8 @@ import 'package:chuk_chat/platform_specific/chat/handlers/message_actions_handle
 import 'package:chuk_chat/platform_specific/chat/handlers/chat_persistence_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/streaming_message_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/widgets/mobile_chat_widgets.dart';
+import 'package:chuk_chat/services/image_generation_service.dart';
+import 'package:chuk_chat/pages/pricing_page.dart';
 
 class ChukChatUIMobile extends StatefulWidget {
   final VoidCallback onToggleSidebar;
@@ -37,6 +39,12 @@ class ChukChatUIMobile extends StatefulWidget {
   final bool showReasoningTokens;
   final bool showModelInfo;
   final bool autoSendVoiceTranscription;
+  // Image generation settings
+  final bool imageGenEnabled;
+  final String imageGenDefaultSize;
+  final int imageGenCustomWidth;
+  final int imageGenCustomHeight;
+  final bool imageGenUseCustomSize;
 
   const ChukChatUIMobile({
     super.key,
@@ -47,6 +55,11 @@ class ChukChatUIMobile extends StatefulWidget {
     required this.showReasoningTokens,
     required this.showModelInfo,
     required this.autoSendVoiceTranscription,
+    this.imageGenEnabled = false,
+    this.imageGenDefaultSize = 'landscape_4_3',
+    this.imageGenCustomWidth = 1024,
+    this.imageGenCustomHeight = 768,
+    this.imageGenUseCustomSize = false,
   });
 
   @override
@@ -89,6 +102,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   bool _isLoadingChat = false; // Loading indicator for chat switching
   late final VoidCallback _networkStatusListener;
   Timer? _audioVisualizerTimer;
+
+  // Image generation state
+  bool _isImageGenMode = false;
+  bool _isGeneratingImage = false;
 
   // Computed property - checks if CURRENT chat is streaming
   bool get _isCurrentChatStreaming =>
@@ -771,6 +788,209 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     }
   }
 
+  /// Generate an image from the current text prompt
+  Future<void> _generateImage() async {
+    final String prompt = _controller.text.trim();
+    if (prompt.isEmpty) {
+      _showSnackBar('Please enter a prompt to generate an image.');
+      return;
+    }
+
+    if (_isGeneratingImage || _isCurrentChatStreaming || _isSendingMessage) {
+      _showSnackBar('Please wait for the current operation to complete.');
+      return;
+    }
+
+    // Generate chat ID if needed (new chat)
+    if (_activeChatId == null) {
+      _activeChatId = _uuid.v4();
+      debugPrint('🆔 [ImageGen] PRE-GENERATED Chat ID: $_activeChatId');
+    }
+
+    final bool firstMessageInChat = _messages.isEmpty;
+    int placeholderIndex = -1;
+
+    setState(() {
+      _isGeneratingImage = true;
+      // Add user message with the prompt
+      _messages.add({
+        'sender': 'user',
+        'text': prompt,
+        'reasoning': '',
+      });
+      _controller.clear();
+      // Add AI placeholder message
+      _messages.add({
+        'sender': 'ai',
+        'text': 'Generating image...',
+        'reasoning': '',
+      });
+      placeholderIndex = _messages.length - 1;
+    });
+
+    if (firstMessageInChat && mounted) {
+      // Trigger any first message animations if needed
+    }
+    _scrollChatToBottom(force: true);
+
+    try {
+      // Determine size settings
+      String? sizePreset;
+      int? customWidth;
+      int? customHeight;
+
+      if (widget.imageGenUseCustomSize) {
+        customWidth = widget.imageGenCustomWidth;
+        customHeight = widget.imageGenCustomHeight;
+      } else {
+        sizePreset = widget.imageGenDefaultSize;
+      }
+
+      final result = await ImageGenerationService.generateImage(
+        prompt: prompt,
+        sizePreset: sizePreset,
+        customWidth: customWidth,
+        customHeight: customHeight,
+        storeEncrypted: true,
+      );
+
+      if (!mounted) return;
+
+      if (result.success) {
+        // Update AI message with generated image
+        setState(() {
+          final aiMessage = <String, String>{
+            'sender': 'ai',
+            'text': '', // No text, just image
+            'reasoning': '',
+          };
+
+          // Store the encrypted path for persistence
+          if (result.encryptedPath != null) {
+            aiMessage['images'] = jsonEncode([result.encryptedPath!]);
+          }
+
+          // Add cost info if available
+          if (result.costEur != null) {
+            aiMessage['text'] = 'Image generated (${result.costEur!.toStringAsFixed(2)} EUR)';
+          }
+
+          if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
+            _messages[placeholderIndex] = aiMessage;
+          }
+          _isGeneratingImage = false;
+          _isImageGenMode = false; // Turn off image gen mode after success
+        });
+
+        _persistChat();
+        _scrollChatToBottom(force: true);
+        _showSnackBar('Image generated successfully!');
+      } else {
+        // Handle error
+        setState(() {
+          if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
+            _messages[placeholderIndex]['text'] = 'Error: ${result.errorMessage ?? "Image generation failed"}';
+          }
+          _isGeneratingImage = false;
+        });
+
+        _persistChat();
+
+        // Check if it's a payment error
+        if (result.errorMessage?.contains('credits') == true ||
+            result.errorMessage?.contains('Insufficient') == true) {
+          _showInsufficientCreditsDialog();
+        } else {
+          _showSnackBar(result.errorMessage ?? 'Image generation failed');
+        }
+      }
+    } catch (e) {
+      debugPrint('Image generation error: $e');
+      if (!mounted) return;
+
+      setState(() {
+        if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
+          _messages[placeholderIndex]['text'] = 'Error: $e';
+        }
+        _isGeneratingImage = false;
+      });
+
+      _persistChat();
+      _showSnackBar('Image generation failed: $e');
+    }
+  }
+
+  /// Show dialog when user has insufficient credits for image generation
+  void _showInsufficientCreditsDialog() {
+    if (!mounted) return;
+    final theme = Theme.of(context);
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Row(
+          children: [
+            Icon(
+              Icons.auto_awesome,
+              color: theme.colorScheme.primary,
+              size: 28,
+            ),
+            const SizedBox(width: 12),
+            const Text('Insufficient Credits'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Image generation requires credits.',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: theme.textTheme.bodyLarge?.color,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Subscribe to get credits for AI image generation and chat messages.',
+              style: TextStyle(
+                fontSize: 14,
+                color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.8),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Maybe Later'),
+          ),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.rocket_launch, size: 18),
+            label: const Text('Subscribe Now'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: theme.colorScheme.primary,
+              foregroundColor: theme.colorScheme.onPrimary,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PricingPage()),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _sendMessage() async {
     // SET GLOBAL LOCK IMMEDIATELY - before any async operations or early returns
     // This prevents didUpdateWidget from loading a different chat during send
@@ -958,6 +1178,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       return;
     }
 
+    // Check if widget was disposed during async operation
+    if (!mounted) {
+      _isSendingMessage = false;
+      ChatStorageService.isMessageOperationInProgress = false;
+      debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (widget disposed during prepareMessage)');
+      return;
+    }
+
     // Generate chat ID if new chat and capture it immediately
     // CRITICAL: Capture the chatId in a local variable to prevent race conditions.
     // _activeChatId could be changed by callbacks during async operations below.
@@ -1039,6 +1267,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       waitForCompletion: true,
       isOffline: _isOffline,
     );
+
+    // Check if widget was disposed during persist operation
+    if (!mounted) {
+      _isSendingMessage = false;
+      ChatStorageService.isMessageOperationInProgress = false;
+      debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (widget disposed during persistChat)');
+      return;
+    }
 
     // Verify the stored chat ID matches what we expected
     if (storedChat != null && storedChat.id != chatIdForThisMessage) {
@@ -1736,6 +1972,23 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
             isActive: hasAttachments,
             color: iconFg,
           ),
+          // Image Generation Button (when feature enabled)
+          if (kFeatureImageGen && widget.imageGenEnabled) ...[
+            const SizedBox(width: 2),
+            buildTinyIconButton(
+              icon: Icons.auto_awesome,
+              onTap: _isGeneratingImage
+                  ? () {} // No-op while generating
+                  : () {
+                      setState(() {
+                        _isImageGenMode = !_isImageGenMode;
+                      });
+                      debugPrint('Image Gen mode toggled: $_isImageGenMode');
+                    },
+              isActive: _isImageGenMode || _isGeneratingImage,
+              color: _isImageGenMode || _isGeneratingImage ? accent : iconFg,
+            ),
+          ],
           const SizedBox(width: 2),
           GestureDetector(
             onTap: () {},
@@ -1779,7 +2032,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                 : buildKeyboardListener(
                     focusNode: _rawKeyboardListenerFocusNode,
                     controller: _controller,
-                    onSend: _sendMessage,
+                    onSend: _isImageGenMode && !_isCurrentChatStreaming
+                        ? _generateImage
+                        : _sendMessage,
                     child: Scrollbar(
                       controller: _composerScrollController,
                       child: TextField(
@@ -1846,20 +2101,24 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                 ? Icons.send_rounded
                 : (_isCurrentChatStreaming
                       ? Icons.stop_rounded
-                      : (_controller.text.trim().isEmpty && !hasAttachments
-                            ? (kFeatureVoiceMode ? Icons.graphic_eq_rounded : Icons.arrow_upward_rounded)
-                            : Icons.arrow_upward_rounded)),
+                      : _isImageGenMode
+                          ? Icons.auto_awesome
+                          : (_controller.text.trim().isEmpty && !hasAttachments
+                                ? (kFeatureVoiceMode ? Icons.graphic_eq_rounded : Icons.arrow_upward_rounded)
+                                : Icons.arrow_upward_rounded)),
             onTap: _audioHandler.isMicActive
                 ? _handleAudioSend
                 : (_isCurrentChatStreaming
                       ? _sendMessage
-                      : (_controller.text.trim().isEmpty && !hasAttachments && kFeatureVoiceMode
-                            ? () => _openComingSoonFeature('Voice Mode')
-                            : _sendMessage)),
+                      : _isImageGenMode && !_isGeneratingImage
+                          ? _generateImage
+                          : (_controller.text.trim().isEmpty && !hasAttachments && kFeatureVoiceMode
+                                ? () => _openComingSoonFeature('Voice Mode')
+                                : _sendMessage)),
             color: _audioHandler.isMicActive
                 ? accent
                 : (_isCurrentChatStreaming ? Colors.red : accent),
-            isLoading: _audioHandler.isTranscribingAudio,
+            isLoading: _audioHandler.isTranscribingAudio || _isGeneratingImage,
           ),
           const SizedBox(width: 4),
         ],

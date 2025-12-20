@@ -43,6 +43,18 @@ class SettingsPage extends StatelessWidget {
   final bool autoSendVoiceTranscription;
   final Function(bool) setAutoSendVoiceTranscription;
 
+  // Image generation settings
+  final bool imageGenEnabled;
+  final Function(bool) setImageGenEnabled;
+  final String imageGenDefaultSize;
+  final Function(String) setImageGenDefaultSize;
+  final int imageGenCustomWidth;
+  final Function(int) setImageGenCustomWidth;
+  final int imageGenCustomHeight;
+  final Function(int) setImageGenCustomHeight;
+  final bool imageGenUseCustomSize;
+  final Function(bool) setImageGenUseCustomSize;
+
   const SettingsPage({
     super.key,
     required this.currentThemeMode,
@@ -61,6 +73,16 @@ class SettingsPage extends StatelessWidget {
     required this.setShowModelInfo,
     required this.autoSendVoiceTranscription,
     required this.setAutoSendVoiceTranscription,
+    required this.imageGenEnabled,
+    required this.setImageGenEnabled,
+    required this.imageGenDefaultSize,
+    required this.setImageGenDefaultSize,
+    required this.imageGenCustomWidth,
+    required this.setImageGenCustomWidth,
+    required this.imageGenCustomHeight,
+    required this.setImageGenCustomHeight,
+    required this.imageGenUseCustomSize,
+    required this.setImageGenUseCustomSize,
   });
 
   @override
@@ -130,6 +152,16 @@ class SettingsPage extends StatelessWidget {
                     setShowReasoningTokens: setShowReasoningTokens,
                     showModelInfo: showModelInfo,
                     setShowModelInfo: setShowModelInfo,
+                    imageGenEnabled: imageGenEnabled,
+                    setImageGenEnabled: setImageGenEnabled,
+                    imageGenDefaultSize: imageGenDefaultSize,
+                    setImageGenDefaultSize: setImageGenDefaultSize,
+                    imageGenCustomWidth: imageGenCustomWidth,
+                    setImageGenCustomWidth: setImageGenCustomWidth,
+                    imageGenCustomHeight: imageGenCustomHeight,
+                    setImageGenCustomHeight: setImageGenCustomHeight,
+                    imageGenUseCustomSize: imageGenUseCustomSize,
+                    setImageGenUseCustomSize: setImageGenUseCustomSize,
                   ),
                 ),
               );

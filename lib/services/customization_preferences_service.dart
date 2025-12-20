@@ -7,23 +7,44 @@ class CustomizationPreferences {
     required this.autoSendVoiceTranscription,
     required this.showReasoningTokens,
     required this.showModelInfo,
+    required this.imageGenEnabled,
+    required this.imageGenDefaultSize,
+    required this.imageGenCustomWidth,
+    required this.imageGenCustomHeight,
+    required this.imageGenUseCustomSize,
   });
 
   final String userId;
   final bool autoSendVoiceTranscription;
   final bool showReasoningTokens;
   final bool showModelInfo;
+  // Image generation settings
+  final bool imageGenEnabled;
+  final String imageGenDefaultSize;
+  final int imageGenCustomWidth;
+  final int imageGenCustomHeight;
+  final bool imageGenUseCustomSize;
 
   CustomizationPreferences copyWith({
     bool? autoSendVoiceTranscription,
     bool? showReasoningTokens,
     bool? showModelInfo,
+    bool? imageGenEnabled,
+    String? imageGenDefaultSize,
+    int? imageGenCustomWidth,
+    int? imageGenCustomHeight,
+    bool? imageGenUseCustomSize,
   }) {
     return CustomizationPreferences(
       userId: userId,
       autoSendVoiceTranscription: autoSendVoiceTranscription ?? this.autoSendVoiceTranscription,
       showReasoningTokens: showReasoningTokens ?? this.showReasoningTokens,
       showModelInfo: showModelInfo ?? this.showModelInfo,
+      imageGenEnabled: imageGenEnabled ?? this.imageGenEnabled,
+      imageGenDefaultSize: imageGenDefaultSize ?? this.imageGenDefaultSize,
+      imageGenCustomWidth: imageGenCustomWidth ?? this.imageGenCustomWidth,
+      imageGenCustomHeight: imageGenCustomHeight ?? this.imageGenCustomHeight,
+      imageGenUseCustomSize: imageGenUseCustomSize ?? this.imageGenUseCustomSize,
     );
   }
 
@@ -33,6 +54,11 @@ class CustomizationPreferences {
       'auto_send_voice_transcription': autoSendVoiceTranscription,
       'show_reasoning_tokens': showReasoningTokens,
       'show_model_info': showModelInfo,
+      'image_gen_enabled': imageGenEnabled,
+      'image_gen_default_size': imageGenDefaultSize,
+      'image_gen_custom_width': imageGenCustomWidth,
+      'image_gen_custom_height': imageGenCustomHeight,
+      'image_gen_use_custom_size': imageGenUseCustomSize,
     };
   }
 
@@ -42,6 +68,11 @@ class CustomizationPreferences {
       autoSendVoiceTranscription: false, // Default is OFF - user must enable it
       showReasoningTokens: true,
       showModelInfo: true,
+      imageGenEnabled: false, // Default is OFF - user must enable it
+      imageGenDefaultSize: 'landscape_4_3',
+      imageGenCustomWidth: 1024,
+      imageGenCustomHeight: 768,
+      imageGenUseCustomSize: false,
     );
   }
 
@@ -51,6 +82,11 @@ class CustomizationPreferences {
       autoSendVoiceTranscription: (map['auto_send_voice_transcription'] as bool?) ?? false,
       showReasoningTokens: (map['show_reasoning_tokens'] as bool?) ?? true,
       showModelInfo: (map['show_model_info'] as bool?) ?? true,
+      imageGenEnabled: (map['image_gen_enabled'] as bool?) ?? false,
+      imageGenDefaultSize: (map['image_gen_default_size'] as String?) ?? 'landscape_4_3',
+      imageGenCustomWidth: (map['image_gen_custom_width'] as int?) ?? 1024,
+      imageGenCustomHeight: (map['image_gen_custom_height'] as int?) ?? 768,
+      imageGenUseCustomSize: (map['image_gen_use_custom_size'] as bool?) ?? false,
     );
   }
 }

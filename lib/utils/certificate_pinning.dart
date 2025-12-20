@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'dart:io';
+import 'package:cryptography/cryptography.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:flutter/foundation.dart';
@@ -60,15 +62,17 @@ class CertificatePinning {
 
   /// Certificate pins for known domains.
   ///
-  /// Configured for api.chuk.dev with primary and backup certificates.
-  /// Certificate expires: January 7, 2026
+  /// Configured for api.chuk.chat with primary and backup certificates.
+  /// NOTE: You must update these hashes with actual certificate fingerprints.
+  /// To get the fingerprint, run:
+  ///   openssl s_client -connect api.chuk.chat:443 2>/dev/null | openssl x509 -outform DER | openssl dgst -sha256 -binary | base64
   /// See SECURITY.md for certificate rotation instructions.
   static final List<CertificatePin> _pins = [
     CertificatePin(
-      domain: 'api.chuk.dev',
+      domain: 'api.chuk.chat',
       sha256Hashes: [
-        'bd7NPPpXedasuFCk8HN7QGbJNpWwrcO++lerFEbCh2I=',  // Primary certificate (expires Jan 2026)
-        'bd7NPPpXedasuFCk8HN7QGbJNpWwrcO++lerFEbCh2I=',  // Backup (same for now, update before rotation)
+        '6SjgbPUGy4S9HIjSAYwbZy0SGs9igY0W9+Ly2HxGlI4=',  // Primary certificate
+        '6SjgbPUGy4S9HIjSAYwbZy0SGs9igY0W9+Ly2HxGlI4=',  // Backup (update before cert rotation)
       ],
       includeSubdomains: true,
     ),
@@ -171,10 +175,10 @@ class CertificatePinning {
   }
 
   /// Validate a certificate against configured pins.
-  static CertificateValidationResult validateCertificate({
+  static Future<CertificateValidationResult> validateCertificate({
     required X509Certificate certificate,
     required String host,
-  }) {
+  }) async {
     if (!isEnabled) {
       return CertificateValidationResult.success();
     }
@@ -190,8 +194,8 @@ class CertificatePinning {
       );
     }
 
-    // Extract certificate fingerprint (SHA-256 of public key)
-    final fingerprint = _getCertificateFingerprint(certificate);
+    // Extract certificate fingerprint (SHA-256 hash of DER-encoded certificate)
+    final fingerprint = await _getCertificateFingerprint(certificate);
 
     if (pin.sha256Hashes.contains(fingerprint)) {
       if (kDebugMode) {
@@ -230,15 +234,17 @@ class CertificatePinning {
   }
 
   /// Extract SHA-256 fingerprint from certificate.
-  static String _getCertificateFingerprint(X509Certificate certificate) {
+  /// Returns base64-encoded SHA-256 hash of the DER-encoded certificate.
+  static Future<String> _getCertificateFingerprint(X509Certificate certificate) async {
     // Get DER-encoded certificate
     final derBytes = certificate.der;
 
-    // Calculate SHA-256 hash
-    // Note: This is a simplified version. In production, you'd want to
-    // hash the public key specifically, not the entire certificate.
-    // For now, we return a placeholder that matches the pin format.
-    return derBytes.toString();
+    // Calculate SHA-256 hash using cryptography package
+    final sha256 = Sha256();
+    final hash = await sha256.hash(derBytes);
+
+    // Return as base64-encoded string (matches standard pin format)
+    return base64.encode(hash.bytes);
   }
 
   /// Add a certificate pin dynamically (for testing or runtime configuration).

@@ -110,7 +110,8 @@ The app uses a **platform-specific architecture with tree-shaking optimization**
   - `kFeatureVoiceMode` - Voice Mode "Coming Soon" button (default: false) - Note: Mic/transcription always works
   - `kFeatureProjects` - Project workspaces (default: false)
   - `kFeatureAssistants` - Custom AI assistants (default: false)
-  - Enable with: `--dart-define=FEATURE_VOICE_MODE=true --dart-define=FEATURE_PROJECTS=true`
+  - `kFeatureImageGen` - AI Image Generation via Z-Image Turbo (default: false)
+  - Enable with: `--dart-define=FEATURE_VOICE_MODE=true --dart-define=FEATURE_PROJECTS=true --dart-define=FEATURE_IMAGE_GEN=true`
 
 - **Root Wrappers** (Conditional Imports with Tree-Shaking):
   - `lib/platform_specific/root_wrapper.dart` - Export with conditional imports
@@ -312,6 +313,48 @@ The app includes a **Projects** feature that allows users to create workspaces f
 **Database Migration**: Run `migrations/projects.sql` in Supabase SQL Editor to create tables
 
 **Documentation**: See `PROJECTS_PLAN.md` for detailed implementation plan and feature spec
+
+### Image Generation Feature
+
+The app includes **AI Image Generation** using the Z-Image Turbo API (fal.ai):
+
+**Feature Flag**: Enable with `--dart-define=FEATURE_IMAGE_GEN=true`
+
+**Key Features**:
+- Generate images from text prompts directly in chat
+- Toggle button (sparkle icon) in input area to switch between chat and image gen mode
+- Configurable size presets (square, portrait, landscape) or custom dimensions
+- Generated images are encrypted and stored in Supabase storage
+- Billing: $0.005/megapixel, converted to EUR, rounded UP to nearest cent
+
+**Size Presets**:
+| Preset | Dimensions | ~Cost EUR |
+|--------|------------|-----------|
+| square_hd | 1024×1024 | 0.01 |
+| square | 512×512 | 0.01 |
+| portrait_4_3 | 768×1024 | 0.01 |
+| portrait_16_9 | 576×1024 | 0.01 |
+| landscape_4_3 | 1024×768 | 0.01 |
+| landscape_16_9 | 1024×576 | 0.01 |
+
+**Architecture**:
+- `lib/services/image_generation_service.dart` - API calls, download, encrypt, store
+- `lib/pages/customization_page.dart` - Settings UI (enable toggle, size presets, custom dimensions)
+- `lib/platform_specific/chat/chat_ui_desktop.dart` - Desktop toggle button and `_generateImage()`
+- `lib/platform_specific/chat/chat_ui_mobile.dart` - Mobile toggle button and `_generateImage()`
+
+**User Settings** (stored in `customization_preferences` table):
+- `image_gen_enabled` - Master toggle (default: false)
+- `image_gen_default_size` - Size preset (default: 'landscape_4_3')
+- `image_gen_custom_width` - Custom width in pixels (default: 1024)
+- `image_gen_custom_height` - Custom height in pixels (default: 768)
+- `image_gen_use_custom_size` - Use custom dimensions instead of preset (default: false)
+
+**API Endpoint**: `POST /v1/ai/generate-image` on api_server
+- Requires credits (no free messages for image gen)
+- Returns: `{ success, image_url, width, height, seed, billing: { cost_eur } }`
+
+**Database Migration**: Run `migrations/image_gen_settings.sql` in Supabase SQL Editor
 
 ## Key Files to Understand
 
@@ -585,6 +628,11 @@ This section provides a comprehensive map of ALL Dart files in the codebase, org
 **lib/services/image_storage_service.dart**
 - **Purpose**: Encrypted image storage
 - **What to Look For**: Image save/load with encryption
+
+**lib/services/image_generation_service.dart**
+- **Purpose**: AI image generation via Z-Image Turbo API
+- **Key Classes**: `ImageGenerationResult`, `ImageSizePresets`, `ImageGenerationService`
+- **What to Look For**: API calls, image download, encryption, storage
 
 **lib/services/image_compression_service.dart**
 - **Purpose**: Image optimization for API
@@ -883,6 +931,7 @@ This section provides a comprehensive map of ALL Dart files in the codebase, org
 - Attachment preview: `lib/widgets/attachment_preview_bar.dart`
 - Image compression: `lib/services/image_compression_service.dart`
 - Image storage: `lib/services/image_storage_service.dart`
+- Image generation: `lib/services/image_generation_service.dart`
 - File constants: `lib/constants/file_constants.dart`
 - Attachment handler: `lib/platform_specific/chat/handlers/file_attachment_handler.dart`
 

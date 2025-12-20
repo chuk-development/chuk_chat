@@ -33,6 +33,17 @@ class RootWrapperMobile extends StatefulWidget {
   final Function(bool) setShowModelInfo;
   final bool autoSendVoiceTranscription;
   final Function(bool) setAutoSendVoiceTranscription;
+  // Image generation settings
+  final bool imageGenEnabled;
+  final Function(bool) setImageGenEnabled;
+  final String imageGenDefaultSize;
+  final Function(String) setImageGenDefaultSize;
+  final int imageGenCustomWidth;
+  final Function(int) setImageGenCustomWidth;
+  final int imageGenCustomHeight;
+  final Function(int) setImageGenCustomHeight;
+  final bool imageGenUseCustomSize;
+  final Function(bool) setImageGenUseCustomSize;
 
   const RootWrapperMobile({
     super.key,
@@ -52,6 +63,16 @@ class RootWrapperMobile extends StatefulWidget {
     required this.setShowModelInfo,
     required this.autoSendVoiceTranscription,
     required this.setAutoSendVoiceTranscription,
+    required this.imageGenEnabled,
+    required this.setImageGenEnabled,
+    required this.imageGenDefaultSize,
+    required this.setImageGenDefaultSize,
+    required this.imageGenCustomWidth,
+    required this.setImageGenCustomWidth,
+    required this.imageGenCustomHeight,
+    required this.setImageGenCustomHeight,
+    required this.imageGenUseCustomSize,
+    required this.setImageGenUseCustomSize,
   });
 
   @override
@@ -193,6 +214,16 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
           setShowModelInfo: widget.setShowModelInfo,
           autoSendVoiceTranscription: widget.autoSendVoiceTranscription,
           setAutoSendVoiceTranscription: widget.setAutoSendVoiceTranscription,
+          imageGenEnabled: widget.imageGenEnabled,
+          setImageGenEnabled: widget.setImageGenEnabled,
+          imageGenDefaultSize: widget.imageGenDefaultSize,
+          setImageGenDefaultSize: widget.setImageGenDefaultSize,
+          imageGenCustomWidth: widget.imageGenCustomWidth,
+          setImageGenCustomWidth: widget.setImageGenCustomWidth,
+          imageGenCustomHeight: widget.imageGenCustomHeight,
+          setImageGenCustomHeight: widget.setImageGenCustomHeight,
+          imageGenUseCustomSize: widget.imageGenUseCustomSize,
+          setImageGenUseCustomSize: widget.setImageGenUseCustomSize,
         ),
       ),
     );
@@ -331,6 +362,12 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                 showReasoningTokens: widget.showReasoningTokens,
                 showModelInfo: widget.showModelInfo,
                 autoSendVoiceTranscription: widget.autoSendVoiceTranscription,
+                // Image generation settings
+                imageGenEnabled: widget.imageGenEnabled,
+                imageGenDefaultSize: widget.imageGenDefaultSize,
+                imageGenCustomWidth: widget.imageGenCustomWidth,
+                imageGenCustomHeight: widget.imageGenCustomHeight,
+                imageGenUseCustomSize: widget.imageGenUseCustomSize,
               ),
             ),
           ],

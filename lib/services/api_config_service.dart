@@ -10,8 +10,8 @@ class ApiConfigService {
   static const String _envApiPort = String.fromEnvironment('API_PORT');
 
   // Default configuration
-  static const String _defaultPort = '8000';
-  static const String _defaultProtocol = 'http';
+  static const String _defaultPort = '443';
+  static const String _defaultProtocol = 'https';
   static const String _defaultProductionUrl = 'https://api.chuk.chat';
 
   // Production configuration (should be set via environment variables)

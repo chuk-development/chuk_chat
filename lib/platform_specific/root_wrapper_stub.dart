@@ -21,6 +21,17 @@ class RootWrapper extends StatelessWidget {
   final Function(bool) setShowModelInfo;
   final bool autoSendVoiceTranscription;
   final Function(bool) setAutoSendVoiceTranscription;
+  // Image generation settings
+  final bool imageGenEnabled;
+  final Function(bool) setImageGenEnabled;
+  final String imageGenDefaultSize;
+  final Function(String) setImageGenDefaultSize;
+  final int imageGenCustomWidth;
+  final Function(int) setImageGenCustomWidth;
+  final int imageGenCustomHeight;
+  final Function(int) setImageGenCustomHeight;
+  final bool imageGenUseCustomSize;
+  final Function(bool) setImageGenUseCustomSize;
 
   const RootWrapper({
     super.key,
@@ -40,6 +51,16 @@ class RootWrapper extends StatelessWidget {
     required this.setShowModelInfo,
     required this.autoSendVoiceTranscription,
     required this.setAutoSendVoiceTranscription,
+    required this.imageGenEnabled,
+    required this.setImageGenEnabled,
+    required this.imageGenDefaultSize,
+    required this.setImageGenDefaultSize,
+    required this.imageGenCustomWidth,
+    required this.setImageGenCustomWidth,
+    required this.imageGenCustomHeight,
+    required this.setImageGenCustomHeight,
+    required this.imageGenUseCustomSize,
+    required this.setImageGenUseCustomSize,
   });
 
   @override

@@ -12,6 +12,12 @@ class UserPreferencesService {
   static Future<Map<String, String>>? _providerPrefsInFlight;
   static const Duration _kProviderPreferencesTtl = Duration(minutes: 1);
 
+  // Cache for selected model to avoid redundant Supabase calls
+  static String? _cachedSelectedModel;
+  static DateTime? _selectedModelFetchedAt;
+  static Future<String?>? _selectedModelInFlight;
+  static const Duration _kSelectedModelTtl = Duration(minutes: 1);
+
   /// Save the user's selected model to Supabase
   static Future<bool> saveSelectedModel(String modelId) async {
     try {
@@ -35,6 +41,9 @@ class UserPreferencesService {
       if (response.isNotEmpty) {
         debugPrint('Successfully saved model preference: $modelId');
         await ModelCacheService.saveSelectedModel(userId, modelId);
+        // Update in-memory cache immediately
+        _cachedSelectedModel = modelId;
+        _selectedModelFetchedAt = DateTime.now();
         // Notify via event bus instead of direct widget reference
         ModelSelectionEventBus().notifyModelSelected(modelId);
         return true;
@@ -60,42 +69,72 @@ class UserPreferencesService {
 
   /// Load the user's selected model from Supabase
   static Future<String?> loadSelectedModel() async {
-    try {
-      final session = SupabaseService.auth.currentSession;
-      if (session == null) {
-        debugPrint('No authenticated session found');
-        return null;
-      }
+    final DateTime now = DateTime.now();
 
-      final userId = session.user.id;
+    // Return in-flight request if one exists
+    if (_selectedModelInFlight != null) {
+      return await _selectedModelInFlight!;
+    }
 
-      final response = await SupabaseService.client
-          .from('user_preferences')
-          .select('selected_model_id')
-          .eq('user_id', userId)
-          .maybeSingle();
+    // Return cached value if still valid
+    if (_cachedSelectedModel != null &&
+        _selectedModelFetchedAt != null &&
+        now.difference(_selectedModelFetchedAt!) < _kSelectedModelTtl) {
+      debugPrint('Using cached model preference: $_cachedSelectedModel');
+      return _cachedSelectedModel;
+    }
 
-      if (response != null && response['selected_model_id'] != null) {
-        final modelId = response['selected_model_id'] as String;
-        debugPrint('Loaded model preference: $modelId');
-        await ModelCacheService.saveSelectedModel(userId, modelId);
-        return modelId;
-      } else {
-        await ModelCacheService.saveSelectedModel(userId, '');
-        debugPrint('No model preference found for user');
-        return null;
-      }
-    } catch (e) {
-      final userId = SupabaseService.auth.currentUser?.id;
-      if (userId != null) {
-        final cached = await ModelCacheService.loadSelectedModel(userId);
-        if (cached != null && cached.isNotEmpty) {
-          debugPrint('Loaded cached model preference: $cached');
-          return cached;
+    Future<String?> performFetch() async {
+      try {
+        final session = SupabaseService.auth.currentSession;
+        if (session == null) {
+          debugPrint('No authenticated session found');
+          return null;
         }
+
+        final userId = session.user.id;
+
+        final response = await SupabaseService.client
+            .from('user_preferences')
+            .select('selected_model_id')
+            .eq('user_id', userId)
+            .maybeSingle();
+
+        if (response != null && response['selected_model_id'] != null) {
+          final modelId = response['selected_model_id'] as String;
+          debugPrint('Loaded model preference: $modelId');
+          await ModelCacheService.saveSelectedModel(userId, modelId);
+          _cachedSelectedModel = modelId;
+          _selectedModelFetchedAt = DateTime.now();
+          return modelId;
+        } else {
+          await ModelCacheService.saveSelectedModel(userId, '');
+          _cachedSelectedModel = null;
+          _selectedModelFetchedAt = DateTime.now();
+          debugPrint('No model preference found for user');
+          return null;
+        }
+      } catch (e) {
+        final userId = SupabaseService.auth.currentUser?.id;
+        if (userId != null) {
+          final cached = await ModelCacheService.loadSelectedModel(userId);
+          if (cached != null && cached.isNotEmpty) {
+            debugPrint('Loaded cached model preference: $cached');
+            _cachedSelectedModel = cached;
+            _selectedModelFetchedAt = DateTime.now();
+            return cached;
+          }
+        }
+        debugPrint('Error loading model preference: $e');
+        return null;
       }
-      debugPrint('Error loading model preference: $e');
-      return null;
+    }
+
+    try {
+      _selectedModelInFlight = performFetch();
+      return await _selectedModelInFlight!;
+    } finally {
+      _selectedModelInFlight = null;
     }
   }
 
@@ -120,6 +159,9 @@ class UserPreferencesService {
       if (deletedCount > 0) {
         debugPrint('Cleared $deletedCount model preference(s) for user');
         await ModelCacheService.saveSelectedModel(userId, '');
+        // Clear in-memory cache
+        _cachedSelectedModel = null;
+        _selectedModelFetchedAt = null;
         return true;
       }
       debugPrint('No model preferences found to clear for user');

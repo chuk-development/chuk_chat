@@ -33,6 +33,17 @@ class RootWrapperDesktop extends StatefulWidget {
   final Function(bool) setShowModelInfo;
   final bool autoSendVoiceTranscription;
   final Function(bool) setAutoSendVoiceTranscription;
+  // Image generation settings
+  final bool imageGenEnabled;
+  final Function(bool) setImageGenEnabled;
+  final String imageGenDefaultSize;
+  final Function(String) setImageGenDefaultSize;
+  final int imageGenCustomWidth;
+  final Function(int) setImageGenCustomWidth;
+  final int imageGenCustomHeight;
+  final Function(int) setImageGenCustomHeight;
+  final bool imageGenUseCustomSize;
+  final Function(bool) setImageGenUseCustomSize;
 
   const RootWrapperDesktop({
     super.key,
@@ -52,6 +63,16 @@ class RootWrapperDesktop extends StatefulWidget {
     required this.setShowModelInfo,
     required this.autoSendVoiceTranscription,
     required this.setAutoSendVoiceTranscription,
+    required this.imageGenEnabled,
+    required this.setImageGenEnabled,
+    required this.imageGenDefaultSize,
+    required this.setImageGenDefaultSize,
+    required this.imageGenCustomWidth,
+    required this.setImageGenCustomWidth,
+    required this.imageGenCustomHeight,
+    required this.setImageGenCustomHeight,
+    required this.imageGenUseCustomSize,
+    required this.setImageGenUseCustomSize,
   });
 
   @override
@@ -85,6 +106,16 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
           setShowModelInfo: widget.setShowModelInfo,
           autoSendVoiceTranscription: widget.autoSendVoiceTranscription,
           setAutoSendVoiceTranscription: widget.setAutoSendVoiceTranscription,
+          imageGenEnabled: widget.imageGenEnabled,
+          setImageGenEnabled: widget.setImageGenEnabled,
+          imageGenDefaultSize: widget.imageGenDefaultSize,
+          setImageGenDefaultSize: widget.setImageGenDefaultSize,
+          imageGenCustomWidth: widget.imageGenCustomWidth,
+          setImageGenCustomWidth: widget.setImageGenCustomWidth,
+          imageGenCustomHeight: widget.imageGenCustomHeight,
+          setImageGenCustomHeight: widget.setImageGenCustomHeight,
+          imageGenUseCustomSize: widget.imageGenUseCustomSize,
+          setImageGenUseCustomSize: widget.setImageGenUseCustomSize,
         ),
       ),
     );
@@ -207,6 +238,12 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       showModelInfo: widget.showModelInfo,
       projectId: _activeProjectId,
       onExitProject: _exitProject,
+      // Image generation settings
+      imageGenEnabled: widget.imageGenEnabled,
+      imageGenDefaultSize: widget.imageGenDefaultSize,
+      imageGenCustomWidth: widget.imageGenCustomWidth,
+      imageGenCustomHeight: widget.imageGenCustomHeight,
+      imageGenUseCustomSize: widget.imageGenUseCustomSize,
     );
 
     return Scaffold(

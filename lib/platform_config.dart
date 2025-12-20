@@ -35,3 +35,6 @@ const bool kFeatureProjects = bool.fromEnvironment('FEATURE_PROJECTS', defaultVa
 
 /// Assistants - custom AI assistants (future feature)
 const bool kFeatureAssistants = bool.fromEnvironment('FEATURE_ASSISTANTS', defaultValue: false);
+
+/// Image Generation - AI image creation via Z-Image Turbo
+const bool kFeatureImageGen = bool.fromEnvironment('FEATURE_IMAGE_GEN', defaultValue: false);
