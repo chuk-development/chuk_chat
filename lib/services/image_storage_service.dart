@@ -1,11 +1,37 @@
 // lib/services/image_storage_service.dart
 import 'dart:convert';
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/image_compression_service.dart';
 import 'package:uuid/uuid.dart';
+
+/// Represents a stored image with metadata
+class StoredImage {
+  final String path;
+  final String name;
+  final DateTime? createdAt;
+  final int? size;
+
+  const StoredImage({
+    required this.path,
+    required this.name,
+    this.createdAt,
+    this.size,
+  });
+}
+
+/// Represents a chat that uses a specific image
+class ChatUsingImage {
+  final String chatId;
+  final String chatName;
+
+  const ChatUsingImage({
+    required this.chatId,
+    required this.chatName,
+  });
+}
 
 /// Service for storing and retrieving encrypted images in Supabase Storage
 class ImageStorageService {
@@ -121,6 +147,110 @@ class ImageStorageService {
       return response.length;
     } catch (e) {
       throw Exception('Failed to get image size: $e');
+    }
+  }
+
+  /// Lists all images stored by the current user
+  /// Returns a list of StoredImage objects with metadata
+  static Future<List<StoredImage>> listUserImages() async {
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) {
+      throw Exception('User must be authenticated to list images');
+    }
+
+    try {
+      final List<FileObject> files = await SupabaseService.client.storage
+          .from(bucketName)
+          .list(path: user.id);
+
+      return files
+          .where((file) => file.name.endsWith('.enc'))
+          .map((file) => StoredImage(
+                path: '${user.id}/${file.name}',
+                name: file.name,
+                createdAt: file.createdAt != null
+                    ? DateTime.tryParse(file.createdAt!)
+                    : null,
+                size: file.metadata?['size'] as int?,
+              ))
+          .toList();
+    } catch (e) {
+      debugPrint('Failed to list user images: $e');
+      throw Exception('Failed to list images: $e');
+    }
+  }
+
+  /// Finds all chats that use a specific image
+  /// Returns a list of ChatUsingImage with chat ID and name
+  static Future<List<ChatUsingImage>> findChatsUsingImage(
+      String storagePath) async {
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) {
+      throw Exception('User must be authenticated');
+    }
+
+    try {
+      // Query encrypted_chats where image_paths contains this path
+      // Using the PostgreSQL array contains operator
+      final rows = await SupabaseService.client
+          .from('encrypted_chats')
+          .select('id, encrypted_payload')
+          .eq('user_id', user.id)
+          .contains('image_paths', [storagePath]);
+
+      final List<ChatUsingImage> result = [];
+
+      for (final row in rows) {
+        final chatId = row['id'] as String;
+        String chatName = 'Unnamed Chat';
+
+        // Try to decrypt the payload to get the chat name
+        final encryptedPayload = row['encrypted_payload'] as String?;
+        if (encryptedPayload != null && EncryptionService.hasKey) {
+          try {
+            final decrypted =
+                await EncryptionService.decrypt(encryptedPayload);
+            final payload = jsonDecode(decrypted) as Map<String, dynamic>;
+            chatName = payload['customName'] as String? ?? 'Unnamed Chat';
+
+            // If no custom name, try to derive from first message
+            if (chatName == 'Unnamed Chat') {
+              final messages = payload['messages'] as List<dynamic>?;
+              if (messages != null && messages.isNotEmpty) {
+                final firstUserMsg = messages.firstWhere(
+                  (m) => m['role'] == 'user',
+                  orElse: () => null,
+                );
+                if (firstUserMsg != null) {
+                  final text = firstUserMsg['text'] as String? ?? '';
+                  chatName = text.length > 30
+                      ? '${text.substring(0, 30)}...'
+                      : text;
+                }
+              }
+            }
+          } catch (e) {
+            debugPrint('Failed to decrypt chat name: $e');
+          }
+        }
+
+        result.add(ChatUsingImage(chatId: chatId, chatName: chatName));
+      }
+
+      return result;
+    } catch (e) {
+      debugPrint('Failed to find chats using image: $e');
+      throw Exception('Failed to find chats using image: $e');
+    }
+  }
+
+  /// Checks if an image exists in storage
+  static Future<bool> imageExists(String storagePath) async {
+    try {
+      await SupabaseService.client.storage.from(bucketName).download(storagePath);
+      return true;
+    } catch (e) {
+      return false;
     }
   }
 }

@@ -9,6 +9,7 @@ import 'package:chuk_chat/services/streaming_manager.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_desktop.dart';
 import 'package:chuk_chat/platform_specific/sidebar_desktop.dart'; // UPDATED
 import 'package:chuk_chat/pages/projects_page.dart';
+import 'package:chuk_chat/pages/media_manager_page.dart';
 import 'package:chuk_chat/pages/settings_page.dart';
 import 'package:chuk_chat/pages/coming_soon_page.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
@@ -160,6 +161,15 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     );
   }
 
+  void _openMediaPage() {
+    if (_isSidebarExpanded) _toggleSidebar();
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const MediaManagerPage(),
+      ),
+    );
+  }
+
   void _handleChatSelected(String? chatId) {
     // CRITICAL: Block rapid chat switching while another chat is loading
     // This is a second line of defense (sidebar also checks this)
@@ -272,6 +282,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                   onChatSelected: _handleChatSelected,
                   onSettingsTapped: _openSettingsPage,
                   onProjectsTapped: _openProjectsPage,
+                  onMediaTapped: _openMediaPage,
                   onChatDeleted: _handleChatDeleted,
                   selectedChatId: ChatStorageService.selectedChatId,
                   isCompactMode: isCompactMode,
@@ -465,6 +476,56 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                             padding: const EdgeInsets.only(left: 12.0),
                             child: Text(
                               'Assistants',
+                              style: TextStyle(color: iconFg, fontSize: 16),
+                              softWrap: false,
+                              overflow: TextOverflow.clip,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+          // Layer 8: Media Manager (External for Desktop) - Feature Flag
+          if (kFeatureMediaManager && (!isCompactMode || _isSidebarExpanded))
+            Positioned(
+              top:
+                  kTopInitialSpacing +
+                  kMenuButtonHeight +
+                  kSpacingBetweenTopButtons +
+                  kButtonVisualHeight +
+                  kSpacingBetweenTopButtons +
+                  (kFeatureProjects ? kButtonVisualHeight + kSpacingBetweenTopButtons : 0) +
+                  (kFeatureAssistants ? kButtonVisualHeight + kSpacingBetweenTopButtons : 0),
+              left: kFixedLeftPadding,
+              child: InkWell(
+                onTap: _openMediaPage,
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  height: kButtonVisualHeight,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.photo_library_outlined, color: iconFg),
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        curve: Curves.easeOut,
+                        width: _isSidebarExpanded ? 100 : 0,
+                        constraints: BoxConstraints(
+                          minWidth: _isSidebarExpanded ? 100 : 0,
+                        ),
+                        child: ClipRect(
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: 12.0),
+                            child: Text(
+                              'Media',
                               style: TextStyle(color: iconFg, fontSize: 16),
                               softWrap: false,
                               overflow: TextOverflow.clip,

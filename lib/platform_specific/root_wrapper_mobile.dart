@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/pages/projects_page.dart';
+import 'package:chuk_chat/pages/media_manager_page.dart';
 import 'package:chuk_chat/pages/settings_page.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_mobile.dart';
 import 'package:chuk_chat/platform_specific/sidebar_mobile.dart'; // UPDATED: Use mobile sidebar
@@ -248,6 +249,15 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     );
   }
 
+  void _openMediaPage() {
+    if (_isSidebarExpanded) _toggleSidebar();
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const MediaManagerPage(),
+      ),
+    );
+  }
+
   void _handleChatSelected(String? chatId) {
     debugPrint('');
     debugPrint('┌─────────────────────────────────────────────────────────────');
@@ -413,6 +423,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                       onChatSelected: _handleChatSelected,
                       onSettingsTapped: _openSettingsPage,
                       onProjectsTapped: _openProjectsPage,
+                      onMediaTapped: _openMediaPage,
                       onAssistantsTapped: _openAssistantsPage,
                       onChatDeleted: _handleChatDeleted,
                       selectedChatId: ChatStorageService.selectedChatId,

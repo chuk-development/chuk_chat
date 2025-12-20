@@ -111,7 +111,8 @@ The app uses a **platform-specific architecture with tree-shaking optimization**
   - `kFeatureProjects` - Project workspaces (default: false)
   - `kFeatureAssistants` - Custom AI assistants (default: false)
   - `kFeatureImageGen` - AI Image Generation via Z-Image Turbo (default: false)
-  - Enable with: `--dart-define=FEATURE_VOICE_MODE=true --dart-define=FEATURE_PROJECTS=true --dart-define=FEATURE_IMAGE_GEN=true`
+  - `kFeatureMediaManager` - Media Manager for viewing/deleting stored images (default: false)
+  - Enable with: `--dart-define=FEATURE_VOICE_MODE=true --dart-define=FEATURE_PROJECTS=true --dart-define=FEATURE_IMAGE_GEN=true --dart-define=FEATURE_MEDIA_MANAGER=true`
 
 - **Root Wrappers** (Conditional Imports with Tree-Shaking):
   - `lib/platform_specific/root_wrapper.dart` - Export with conditional imports
@@ -356,6 +357,35 @@ The app includes **AI Image Generation** using the Z-Image Turbo API (fal.ai):
 
 **Database Migration**: Run `migrations/image_gen_settings.sql` in Supabase SQL Editor
 
+### Media Manager Feature
+
+The app includes a **Media Manager** for viewing and managing stored images:
+
+**Feature Flag**: Enable with `--dart-define=FEATURE_MEDIA_MANAGER=true`
+
+**Key Features**:
+- View all encrypted images stored in Supabase Storage
+- Grid view on desktop, compact grid on mobile
+- Multi-select mode for batch deletion
+- Warns user if image is used in chats before deletion
+- Shows "Image deleted" placeholder in chats when referenced image is deleted
+
+**Architecture**:
+- `lib/services/image_storage_service.dart` - Extended with `listUserImages()`, `findChatsUsingImage()`, `imageExists()`
+- `lib/pages/media_manager_page.dart` - Main UI for viewing/deleting images
+- `lib/widgets/encrypted_image_widget.dart` - Updated to show "Image deleted" placeholder for missing images
+
+**Data Models** (in `image_storage_service.dart`):
+- `StoredImage` - Represents a stored image with path, name, createdAt, size
+- `ChatUsingImage` - Represents a chat that uses a specific image (chatId, chatName)
+
+**How It Works**:
+1. Lists all `.enc` files in user's Supabase Storage folder (`images/{user_id}/`)
+2. Decrypts and displays thumbnails in a grid
+3. On delete: queries `encrypted_chats.image_paths` to find referencing chats
+4. If image is used: shows warning with chat names, asks for confirmation
+5. After deletion: `EncryptedImageWidget` shows "Image deleted" placeholder
+
 ## Key Files to Understand
 
 - `lib/main.dart:109` - App initialization and theme bootstrapping
@@ -466,6 +496,11 @@ This section provides a comprehensive map of ALL Dart files in the codebase, org
 - **Purpose**: Project detail with tabs
 - **Features**: Manage chats, files, and settings for a project
 - **What to Look For**: Chat assignment, file upload (coming soon), project settings
+
+#### **lib/pages/media_manager_page.dart**
+- **Purpose**: Media management UI for viewing/deleting stored images
+- **Features**: Grid view of encrypted images, multi-select deletion, chat usage warnings
+- **What to Look For**: Image loading, deletion with confirmation, "Image deleted" handling
 
 #### **lib/pages/coming_soon_page.dart**
 - **Purpose**: Placeholder for unimplemented features

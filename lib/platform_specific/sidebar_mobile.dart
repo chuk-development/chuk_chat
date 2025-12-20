@@ -16,6 +16,7 @@ class SidebarMobile extends StatefulWidget {
   final Function(String? chatId) onChatSelected;
   final Function() onSettingsTapped;
   final Function() onProjectsTapped;
+  final Function() onMediaTapped;
   final Function() onAssistantsTapped;
   final Future<void> Function(String chatId)? onChatDeleted;
   final String? selectedChatId;
@@ -26,6 +27,7 @@ class SidebarMobile extends StatefulWidget {
     required this.onChatSelected,
     required this.onSettingsTapped,
     required this.onProjectsTapped,
+    required this.onMediaTapped,
     required this.onAssistantsTapped,
     this.onChatDeleted,
     required this.selectedChatId,
@@ -497,11 +499,21 @@ class _SidebarMobileState extends State<SidebarMobile> {
                   ),
                   const SizedBox(height: 6),
                 ],
-                if (kFeatureAssistants)
+                if (kFeatureAssistants) ...[
                   _buildQuickActionButton(
                     icon: Icons.auto_awesome,
                     label: 'Assistants',
                     onTap: widget.onAssistantsTapped,
+                    iconColor: iconColorDefault,
+                    textColor: textColorDefault,
+                  ),
+                  const SizedBox(height: 6),
+                ],
+                if (kFeatureMediaManager)
+                  _buildQuickActionButton(
+                    icon: Icons.photo_library_outlined,
+                    label: 'Media',
+                    onTap: widget.onMediaTapped,
                     iconColor: iconColorDefault,
                     textColor: textColorDefault,
                   ),

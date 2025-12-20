@@ -26,6 +26,7 @@ class _EncryptedImageWidgetState extends State<EncryptedImageWidget> {
   Uint8List? _imageBytes;
   bool _isLoading = true;
   String? _error;
+  bool _isDeleted = false;
 
   @override
   void initState() {
@@ -45,6 +46,7 @@ class _EncryptedImageWidgetState extends State<EncryptedImageWidget> {
     setState(() {
       _isLoading = true;
       _error = null;
+      _isDeleted = false;
     });
 
     try {
@@ -59,8 +61,16 @@ class _EncryptedImageWidgetState extends State<EncryptedImageWidget> {
       }
     } catch (e) {
       if (mounted) {
+        final errorStr = e.toString().toLowerCase();
+        // Check if the error indicates the image was deleted/not found
+        final isNotFound = errorStr.contains('not found') ||
+            errorStr.contains('404') ||
+            errorStr.contains('does not exist') ||
+            errorStr.contains('object not found');
+
         setState(() {
-          _error = 'Failed to load image: $e';
+          _isDeleted = isNotFound;
+          _error = isNotFound ? null : 'Failed to load image: $e';
           _isLoading = false;
         });
       }
@@ -79,6 +89,42 @@ class _EncryptedImageWidgetState extends State<EncryptedImageWidget> {
             valueColor: AlwaysStoppedAnimation(
               Theme.of(context).colorScheme.primary,
             ),
+          ),
+        ),
+      );
+    }
+
+    // Show "Image deleted" placeholder when image was not found
+    if (_isDeleted) {
+      return Container(
+        width: widget.width,
+        height: widget.height,
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+          ),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.image_not_supported_outlined,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                size: 32,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Image deleted',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontSize: 12,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
           ),
         ),
       );

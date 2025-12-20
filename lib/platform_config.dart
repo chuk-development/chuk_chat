@@ -38,3 +38,6 @@ const bool kFeatureAssistants = bool.fromEnvironment('FEATURE_ASSISTANTS', defau
 
 /// Image Generation - AI image creation via Z-Image Turbo
 const bool kFeatureImageGen = bool.fromEnvironment('FEATURE_IMAGE_GEN', defaultValue: false);
+
+/// Media Manager - View and manage stored media (images) in Supabase
+const bool kFeatureMediaManager = bool.fromEnvironment('FEATURE_MEDIA_MANAGER', defaultValue: false);
