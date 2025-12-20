@@ -303,6 +303,43 @@ EOF
     print_success "Created ${PACKAGE_NAME}_${VERSION}_${arch}.rpm"
 }
 
+# Download appimagetool if not present
+download_appimagetool() {
+    local SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local TOOLS_DIR="$SCRIPT_DIR/tools"
+    local APPIMAGETOOL_PATH="$TOOLS_DIR/appimagetool"
+
+    if [ -x "$APPIMAGETOOL_PATH" ]; then
+        return 0
+    fi
+
+    print_info "appimagetool not found, downloading..."
+
+    # Create tools directory if it doesn't exist
+    mkdir -p "$TOOLS_DIR"
+
+    # Download appimagetool for x86_64 (works on most build systems)
+    local DOWNLOAD_URL="https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
+
+    if command -v curl &> /dev/null; then
+        curl -L -o "$APPIMAGETOOL_PATH" "$DOWNLOAD_URL"
+    elif command -v wget &> /dev/null; then
+        wget -O "$APPIMAGETOOL_PATH" "$DOWNLOAD_URL"
+    else
+        print_error "Neither curl nor wget found. Cannot download appimagetool."
+        return 1
+    fi
+
+    if [ -f "$APPIMAGETOOL_PATH" ]; then
+        chmod +x "$APPIMAGETOOL_PATH"
+        print_success "Downloaded appimagetool to $APPIMAGETOOL_PATH"
+        return 0
+    else
+        print_error "Failed to download appimagetool"
+        return 1
+    fi
+}
+
 # Create AppImage
 create_appimage() {
     local arch=$1
@@ -312,15 +349,18 @@ create_appimage() {
     local APPIMAGETOOL=""
     local SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+    # Try to download if not present
+    if [ ! -x "$SCRIPT_DIR/tools/appimagetool" ]; then
+        download_appimagetool
+    fi
+
     if [ -x "$SCRIPT_DIR/tools/appimagetool" ]; then
         APPIMAGETOOL="$SCRIPT_DIR/tools/appimagetool"
         print_info "Using local appimagetool from tools/"
     elif command -v appimagetool &> /dev/null; then
         APPIMAGETOOL="appimagetool"
     else
-        print_warning "appimagetool not found. Skipping AppImage creation."
-        print_info "Download from: https://github.com/AppImage/AppImageKit/releases"
-        print_info "Or place appimagetool in the tools/ directory"
+        print_warning "appimagetool not found and download failed. Skipping AppImage creation."
         return 0
     fi
 

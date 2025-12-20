@@ -62,6 +62,9 @@ debian/
 rpm/
 AppDir/
 
+# Build tools (downloaded automatically)
+tools/
+
 # Generated files
 combined_code_for_llm.txt
 generate_llm_input.sh
