@@ -29,7 +29,8 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
   @override
   void initState() {
     super.initState();
-    _loadProjects();
+    // Load projects from server first, then update local list
+    ProjectStorageService.loadProjects().then((_) => _loadProjects());
     _projectChangesSubscription = ProjectStorageService.changes.listen((_) {
       _loadProjects();
     });
@@ -100,7 +101,7 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
                 ? Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.folder, color: iconFgColor, size: 18),
+                      Icon(Icons.folder, color: iconFgColor, size: 20),
                       const SizedBox(width: 6),
                       ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 80),
@@ -119,22 +120,20 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
                       ),
                     ],
                   )
+                // Same size as other icon buttons: 44x36
                 : SizedBox(
-                    width: 36,
+                    width: 44,
+                    height: 36,
                     child: Icon(
                       Icons.folder_outlined,
                       color: iconFgColor,
-                      size: 18,
+                      size: 20,
                     ),
                   ),
           );
         },
       ),
     );
-
-    if (_projects.isEmpty && widget.selectedProjectId == null) {
-      return buttonContent;
-    }
 
     return PopupMenuButton<String?>(
       color: bgColor,
@@ -185,35 +184,51 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
 
         if (_projects.isNotEmpty) {
           items.add(const PopupMenuDivider(height: 8));
-        }
 
-        // Project options
-        for (final project in _projects) {
-          final isSelected = widget.selectedProjectId == project.id;
+          // Project options
+          for (final project in _projects) {
+            final isSelected = widget.selectedProjectId == project.id;
+            items.add(
+              PopupMenuItem<String?>(
+                value: project.id,
+                height: 40,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.folder,
+                      color: isSelected ? iconFgColor : iconFgColor.withValues(alpha: 0.6),
+                      size: 18,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        project.name,
+                        style: TextStyle(
+                          color: isSelected ? iconFgColor : iconFgColor.withValues(alpha: 0.8),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (isSelected) Icon(Icons.check, color: iconFgColor, size: 18),
+                  ],
+                ),
+              ),
+            );
+          }
+        } else {
+          // No projects yet
           items.add(
             PopupMenuItem<String?>(
-              value: project.id,
+              enabled: false,
               height: 40,
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.folder,
-                    color: isSelected ? iconFgColor : iconFgColor.withValues(alpha: 0.6),
-                    size: 18,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      project.name,
-                      style: TextStyle(
-                        color: isSelected ? iconFgColor : iconFgColor.withValues(alpha: 0.8),
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (isSelected) Icon(Icons.check, color: iconFgColor, size: 18),
-                ],
+              child: Text(
+                'No projects yet',
+                style: TextStyle(
+                  color: iconFgColor.withValues(alpha: 0.5),
+                  fontStyle: FontStyle.italic,
+                ),
               ),
             ),
           );
