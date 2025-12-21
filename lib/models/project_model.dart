@@ -302,4 +302,7 @@ class ProjectFile {
     const imageExts = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'};
     return imageExts.contains(extension);
   }
+
+  /// Check if file is a PDF
+  bool get isPdf => extension == 'pdf';
 }

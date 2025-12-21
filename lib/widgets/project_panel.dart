@@ -91,6 +91,8 @@ class _ProjectPanelState extends State<ProjectPanel> {
           'html', 'htm', 'css', 'scss',
           // Images
           'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp',
+          // Documents
+          'pdf',
         ],
         allowMultiple: false,
       );

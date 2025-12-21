@@ -115,7 +115,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   final FocusNode _rawKeyboardListenerFocusNode = FocusNode();
 
   late AnimationController _animCtrl;
-  String _selectedModelId = 'deepseek/deepseek-chat-v3.1';
+  String _selectedModelId = ''; // Will be loaded from user preferences
   String? _selectedProviderSlug;
   String? _systemPrompt;
   String? _selectedProjectId;
@@ -170,7 +170,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     });
     _selectedProjectId = widget.projectId;
     _loadChatById(widget.selectedChatId);
-    unawaited(_loadProviderSlugForModel(_selectedModelId));
+    unawaited(_loadSavedModelPreference());
     unawaited(_loadSystemPrompt());
     _modelSelectionListener = () {
       final String newModelId =
@@ -488,6 +488,40 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     }
     await _loadProviderSlugForModel(_selectedModelId);
     return _selectedProviderSlug;
+  }
+
+  /// Load the user's saved model preference
+  Future<void> _loadSavedModelPreference() async {
+    try {
+      final savedModelId = await UserPreferencesService.loadSelectedModel();
+      if (!mounted) return;
+
+      if (savedModelId != null && savedModelId.isNotEmpty) {
+        setState(() {
+          _selectedModelId = savedModelId;
+        });
+        debugPrint('Loaded saved model preference: $savedModelId');
+        // Update the global notifier so dropdown stays in sync
+        ModelSelectionDropdown.selectedModelNotifier.value = savedModelId;
+        await _loadProviderSlugForModel(savedModelId);
+      } else {
+        // Fallback to a default model if none saved
+        const defaultModel = 'openai/gpt-4o-mini';
+        setState(() {
+          _selectedModelId = defaultModel;
+        });
+        debugPrint('No saved model preference, using default: $defaultModel');
+        await _loadProviderSlugForModel(defaultModel);
+      }
+    } catch (e) {
+      debugPrint('Error loading saved model preference: $e');
+      // Fallback to default on error
+      if (mounted && _selectedModelId.isEmpty) {
+        setState(() {
+          _selectedModelId = 'openai/gpt-4o-mini';
+        });
+      }
+    }
   }
 
   Future<void> _loadSystemPrompt() async {

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:markdown_widget/markdown_widget.dart';
+import 'package:pdfx/pdfx.dart';
 import 'package:chuk_chat/models/project_model.dart';
 import 'package:chuk_chat/services/project_storage_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
@@ -40,6 +41,7 @@ class _ProjectFileViewerState extends State<ProjectFileViewer>
   // Original file content
   String? _textContent;
   Uint8List? _imageBytes;
+  PdfControllerPinch? _pdfController;
 
   // Markdown summary
   String? _markdownSummary;
@@ -66,6 +68,7 @@ class _ProjectFileViewerState extends State<ProjectFileViewer>
     _tabController.dispose();
     _contentController.dispose();
     _markdownController.dispose();
+    _pdfController?.dispose();
     super.dispose();
   }
 
@@ -81,7 +84,12 @@ class _ProjectFileViewerState extends State<ProjectFileViewer>
         widget.file.id,
       );
 
-      if (widget.file.isImage) {
+      if (widget.file.isPdf) {
+        // Load PDF document - PdfControllerPinch expects a Future
+        _pdfController = PdfControllerPinch(
+          document: PdfDocument.openData(bytes),
+        );
+      } else if (widget.file.isImage) {
         _imageBytes = bytes;
       } else {
         _textContent = utf8.decode(bytes, allowMalformed: true);
@@ -233,7 +241,14 @@ class _ProjectFileViewerState extends State<ProjectFileViewer>
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(widget.file.isImage ? Icons.image : Icons.code, size: 18),
+                      Icon(
+                        widget.file.isPdf
+                            ? Icons.picture_as_pdf
+                            : widget.file.isImage
+                                ? Icons.image
+                                : Icons.code,
+                        size: 18,
+                      ),
                       const SizedBox(width: 8),
                       const Text('Original'),
                     ],
@@ -299,6 +314,65 @@ class _ProjectFileViewerState extends State<ProjectFileViewer>
             ),
           ],
         ),
+      );
+    }
+
+    // PDF content
+    if (widget.file.isPdf && _pdfController != null) {
+      return Column(
+        children: [
+          // PDF page indicator
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: PdfPageNumber(
+              controller: _pdfController!,
+              builder: (_, loadingState, page, pagesCount) => Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: iconFg.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  loadingState == PdfLoadingState.loading
+                      ? 'Loading...'
+                      : 'Page $page of $pagesCount',
+                  style: TextStyle(color: iconFg, fontSize: 12),
+                ),
+              ),
+            ),
+          ),
+          // PDF viewer
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: iconFg.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: iconFg.withValues(alpha: 0.2)),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: PdfViewPinch(
+                  controller: _pdfController!,
+                  builders: PdfViewPinchBuilders<DefaultBuilderOptions>(
+                    options: const DefaultBuilderOptions(),
+                    documentLoaderBuilder: (_) => const Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                    pageLoaderBuilder: (_) => const Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                    errorBuilder: (_, error) => Center(
+                      child: Text(
+                        'Error loading PDF: $error',
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       );
     }
 
