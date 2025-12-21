@@ -195,7 +195,8 @@ class _SidebarMobileState extends State<SidebarMobile> {
   }
 
   String _deriveChatTitle(StoredChat chat) {
-    return chat.previewText;
+    // Use custom name (AI-generated title) if available, otherwise fall back to first message
+    return chat.customName ?? chat.previewText;
   }
 
   Future<void> _toggleStarred(StoredChat chat) async {

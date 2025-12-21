@@ -67,11 +67,16 @@ class TitleGenerationService {
 
       final accessToken = session.accessToken;
 
-      // Build prompt for title generation
-      final prompt = '''Generate a short, concise title (3-6 words) for a chat conversation that starts with this message.
-Only respond with the title, nothing else. No quotes, no explanation.
+      // System prompt for title generation
+      const systemPrompt = '''You are a title generator. Your ONLY job is to create short, concise titles (3-6 words) for chat conversations.
+Rules:
+- Output ONLY the title, nothing else
+- No quotes, no explanation, no punctuation at the end
+- No thinking or reasoning - just the title
+- Keep it under 6 words''';
 
-User message: $firstMessage''';
+      // User message - the actual content to create a title for
+      final userMessage = 'Create a title for this message: $firstMessage';
 
       debugPrint('📝 [TitleGen] Generating title for: ${firstMessage.substring(0, firstMessage.length.clamp(0, 50))}...');
 
@@ -80,11 +85,12 @@ User message: $firstMessage''';
 
       await for (final event in WebSocketChatService.sendStreamingChat(
         accessToken: accessToken,
-        message: prompt,
+        message: userMessage,
         modelId: _titleModel,
         providerSlug: _titleProvider,
-        maxTokens: 128, // Short for titles
-        temperature: 0.7,
+        systemPrompt: systemPrompt,
+        maxTokens: 32, // Very short for titles
+        temperature: 0.3, // Lower temperature for more focused output
       )) {
         switch (event) {
           case ContentEvent(:final text):
@@ -103,12 +109,18 @@ User message: $firstMessage''';
       }
 
       String title = titleBuffer.toString().trim();
+      debugPrint('📝 [TitleGen] Raw buffer content: $title');
+
       if (title.isEmpty) {
         debugPrint('📝 [TitleGen] Empty response');
         return null;
       }
 
       // Clean up the title
+      // Remove any thinking tags that might be present (qwen models sometimes include these)
+      title = title.replaceAll(RegExp(r'<think>.*?</think>', dotAll: true), '').trim();
+      title = title.replaceAll(RegExp(r'<thinking>.*?</thinking>', dotAll: true), '').trim();
+
       // Remove quotes if present
       if ((title.startsWith('"') && title.endsWith('"')) ||
           (title.startsWith("'") && title.endsWith("'"))) {
@@ -121,7 +133,7 @@ User message: $firstMessage''';
         title = '${title.substring(0, 47)}...';
       }
 
-      debugPrint('📝 [TitleGen] Generated title: $title');
+      debugPrint('📝 [TitleGen] Final cleaned title: $title');
       return title;
     } catch (e) {
       debugPrint('📝 [TitleGen] Error: $e');
@@ -133,21 +145,35 @@ User message: $firstMessage''';
   /// Generate and apply a title to a chat.
   /// Should be called after the first message is sent.
   static Future<void> generateAndApplyTitle(String chatId, String firstMessage) async {
+    debugPrint('📝 [TitleGen] generateAndApplyTitle called for chat: $chatId');
+    debugPrint('📝 [TitleGen] First message: ${firstMessage.substring(0, firstMessage.length.clamp(0, 50))}...');
+
     try {
       // Check if chat already has a custom name
       final chat = ChatStorageService.getChatById(chatId);
+      debugPrint('📝 [TitleGen] Chat lookup result: ${chat != null ? "found" : "NOT FOUND"}');
+      if (chat != null) {
+        debugPrint('📝 [TitleGen] Chat customName: ${chat.customName}');
+      }
+
       if (chat?.customName != null) {
         debugPrint('📝 [TitleGen] Chat already has a title, skipping');
         return;
       }
 
       final title = await generateTitle(firstMessage);
+      debugPrint('📝 [TitleGen] Generated title result: $title');
+
       if (title != null && title.isNotEmpty) {
+        debugPrint('📝 [TitleGen] Calling renameChat($chatId, $title)');
         await ChatStorageService.renameChat(chatId, title);
-        debugPrint('📝 [TitleGen] Applied title to chat $chatId: $title');
+        debugPrint('📝 [TitleGen] Successfully applied title to chat $chatId: $title');
+      } else {
+        debugPrint('📝 [TitleGen] Title was null or empty, not applying');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       debugPrint('📝 [TitleGen] Error applying title: $e');
+      debugPrint('📝 [TitleGen] Stack trace: $stackTrace');
     }
   }
 }
