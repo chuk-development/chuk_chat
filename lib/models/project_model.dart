@@ -264,35 +264,35 @@ class ProjectFile {
   bool get isPreviewable {
     final ext = fileName.split('.').last.toLowerCase();
     const previewableExts = {
-      'txt',
-      'md',
-      'markdown',
-      'json',
-      'yaml',
-      'yml',
-      'xml',
-      'csv',
-      'dart',
-      'js',
-      'ts',
-      'py',
-      'java',
-      'cpp',
-      'c',
-      'h',
-      'rs',
-      'go',
-      'rb',
-      'php',
-      'swift',
-      'kt',
-      'html',
-      'htm',
-      'css',
-      'scss',
+      // Text files
+      'txt', 'md', 'markdown', 'log', 'readme',
+      // Data files
+      'json', 'yaml', 'yml', 'csv', 'xml', 'toml', 'ini', 'cfg', 'conf',
+      // Shell/scripts
+      'sh', 'bash', 'zsh', 'fish', 'bat', 'cmd', 'ps1',
+      // Programming languages
+      'dart', 'js', 'ts', 'jsx', 'tsx', 'py', 'pyw',
+      'java', 'kt', 'kts', 'scala', 'groovy',
+      'cpp', 'c', 'h', 'hpp', 'cc', 'cxx',
+      'cs', 'fs', 'vb',
+      'rs', 'go', 'rb', 'php', 'swift', 'lua', 'r',
+      'pl', 'pm', 'ex', 'exs', 'erl', 'hrl',
+      'clj', 'cljs', 'cljc', 'hs', 'lhs',
+      // Web
+      'html', 'htm', 'css', 'scss', 'sass', 'less',
+      'vue', 'svelte', 'astro',
+      // Database/query
+      'sql', 'graphql', 'gql',
+      // DevOps/config
+      'dockerfile', 'containerfile', 'vagrantfile',
+      'makefile', 'cmake', 'gradle',
+      'env', 'gitignore', 'dockerignore', 'editorconfig',
     };
     return previewableExts.contains(ext);
   }
+
+  /// Check if file is a text-based file (not binary)
+  bool get isTextFile => isPreviewable;
 
   /// Get file extension
   String get extension => fileName.split('.').last.toLowerCase();
