@@ -282,6 +282,10 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
   }
 
   Future<void> _handleChatDeleted(String _) async {
+    // Prevent keyboard from opening when sidebar is visible
+    if (_isSidebarExpanded) {
+      FocusScope.of(context).unfocus();
+    }
     setState(() {});
   }
 
