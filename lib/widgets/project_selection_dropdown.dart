@@ -29,8 +29,12 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
   @override
   void initState() {
     super.initState();
-    // Load projects from server first, then update local list
-    ProjectStorageService.loadProjects().then((_) => _loadProjects());
+    // Load from cache first (instant), then refresh from server
+    ProjectStorageService.loadFromCache().then((_) {
+      _loadProjects();
+      // Then load from server in background
+      ProjectStorageService.loadProjects().then((_) => _loadProjects());
+    });
     _projectChangesSubscription = ProjectStorageService.changes.listen((_) {
       _loadProjects();
     });

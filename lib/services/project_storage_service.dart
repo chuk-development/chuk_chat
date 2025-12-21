@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import 'package:chuk_chat/models/project_model.dart';
@@ -13,10 +14,12 @@ import 'package:chuk_chat/services/supabase_service.dart';
 /// Service for managing project workspaces, chat assignments, and file attachments
 class ProjectStorageService {
   static const String bucketName = 'project-files';
+  static const String _cacheKey = 'cached_projects';
   static const Uuid _uuid = Uuid();
 
   // SINGLE SOURCE OF TRUTH - all projects stored here
   static final Map<String, Project> _projectsById = <String, Project>{};
+  static bool _cacheLoaded = false;
 
   static final StreamController<void> _changesController =
       StreamController<void>.broadcast();
@@ -43,16 +46,62 @@ class ProjectStorageService {
 
   static Stream<void> get changes => _changesController.stream;
 
-  static void _notifyChanges() {
+  static void _notifyChanges({bool updateCache = true}) {
     if (!_changesController.isClosed) {
       _changesController.add(null);
+    }
+    // Auto-save to cache when data changes
+    if (updateCache && _cacheLoaded) {
+      _saveToCache();
+    }
+  }
+
+  // ============ LOCAL CACHE ============
+
+  /// Load projects from local cache (fast, for instant UI)
+  static Future<void> loadFromCache() async {
+    if (_cacheLoaded) return;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cached = prefs.getString(_cacheKey);
+      if (cached != null && cached.isNotEmpty) {
+        final List<dynamic> jsonList = jsonDecode(cached);
+        _projectsById.clear();
+        for (final json in jsonList) {
+          final project = Project.fromJson(json);
+          _projectsById[project.id] = project;
+        }
+        debugPrint('✅ [ProjectStorage] Loaded ${_projectsById.length} projects from cache');
+        _cacheLoaded = true;
+        _notifyChanges();
+      }
+    } catch (e) {
+      debugPrint('⚠️ [ProjectStorage] Failed to load cache: $e');
+    }
+  }
+
+  /// Save projects to local cache
+  static Future<void> _saveToCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonList = _projectsById.values.map((p) => p.toJson()).toList();
+      await prefs.setString(_cacheKey, jsonEncode(jsonList));
+      debugPrint('✅ [ProjectStorage] Saved ${jsonList.length} projects to cache');
+    } catch (e) {
+      debugPrint('⚠️ [ProjectStorage] Failed to save cache: $e');
     }
   }
 
   // ============ PROJECT CRUD OPERATIONS ============
 
-  /// Load all projects from Supabase
+  /// Load all projects from Supabase (updates cache)
   static Future<void> loadProjects() async {
+    // First load from cache for instant UI
+    if (!_cacheLoaded) {
+      await loadFromCache();
+    }
+
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
       debugPrint('⚠️ [ProjectStorage] No user signed in, clearing projects');
@@ -62,14 +111,14 @@ class ProjectStorageService {
     }
 
     try {
-      // Load projects
+      // Load projects from server
       final projectRows = await SupabaseService.client
           .from('projects')
           .select('*')
           .eq('user_id', user.id)
           .order('created_at', ascending: false);
 
-      debugPrint('✅ [ProjectStorage] Loaded ${projectRows.length} projects');
+      debugPrint('✅ [ProjectStorage] Loaded ${projectRows.length} projects from server');
 
       // Load all project-chat relationships
       final projectChatRows = await SupabaseService.client
@@ -118,10 +167,13 @@ class ProjectStorageService {
         _projectsById[projectId] = project;
       }
 
+      // Save to cache for next time
+      await _saveToCache();
       _notifyChanges();
     } catch (e, st) {
       debugPrint('❌ [ProjectStorage] Failed to load projects: $e\n$st');
-      rethrow;
+      // Don't rethrow if we have cached data
+      if (_projectsById.isEmpty) rethrow;
     }
   }
 

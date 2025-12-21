@@ -630,7 +630,8 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       return 44.0;
     }
 
-    double width = math.max(120.0, _buttonWidth);
+    // Limit max width to 180px for cleaner UI
+    double width = math.max(120.0, math.min(_buttonWidth, 180.0));
     if (maxAvailableWidth.isFinite) {
       width = math.min(width, maxAvailableWidth);
     }
