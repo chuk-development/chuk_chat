@@ -53,19 +53,22 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
 
   String get _selectedProjectName {
     if (widget.selectedProjectId == null) {
-      return 'No Project';
+      return '';
     }
     final project = _projects.firstWhere(
       (p) => p.id == widget.selectedProjectId,
       orElse: () => Project(
         id: '',
-        name: 'Unknown',
+        name: '?',
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       ),
     );
     return project.name;
   }
+
+  // Show as icon-only when no project selected or in compact mode
+  bool get _showIconOnly => widget.isCompactMode || widget.selectedProjectId == null;
 
   @override
   Widget build(BuildContext context) {
@@ -74,6 +77,7 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
     final bgColor = theme.scaffoldBackgroundColor;
 
     final ValueNotifier<bool> isHovered = ValueNotifier<bool>(false);
+    final hasProject = widget.selectedProjectId != null;
 
     final buttonContent = MouseRegion(
       onEnter: (_) => isHovered.value = true,
@@ -84,52 +88,44 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
           return AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             curve: Curves.easeOutCubic,
-            padding: widget.isCompactMode
-                ? EdgeInsets.zero
-                : const EdgeInsets.symmetric(horizontal: 10),
+            padding: _showIconOnly
+                ? const EdgeInsets.symmetric(horizontal: 8)
+                : const EdgeInsets.symmetric(horizontal: 8),
             height: 36,
-            width: widget.isCompactMode ? 44 : null,
-            constraints: widget.isCompactMode
-                ? null
-                : const BoxConstraints(minWidth: 120, maxWidth: 200),
+            constraints: _showIconOnly
+                ? const BoxConstraints(minWidth: 36, maxWidth: 36)
+                : const BoxConstraints(minWidth: 36, maxWidth: 140),
             decoration: BoxDecoration(
               color: bgColor,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                color: widget.selectedProjectId != null
+                color: hasProject
                     ? iconFgColor
                     : hovered
                         ? iconFgColor
                         : iconFgColor.withValues(alpha: 0.3),
-                width: widget.selectedProjectId != null ? 1.5 : (hovered ? 1.2 : 0.8),
+                width: hasProject ? 1.5 : (hovered ? 1.2 : 0.8),
               ),
             ),
-            alignment: widget.isCompactMode ? Alignment.center : Alignment.centerLeft,
             child: Row(
-              mainAxisSize: widget.isCompactMode ? MainAxisSize.max : MainAxisSize.min,
-              mainAxisAlignment:
-                  widget.isCompactMode ? MainAxisAlignment.center : MainAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
-                  widget.selectedProjectId != null ? Icons.folder : Icons.folder_outlined,
+                  hasProject ? Icons.folder : Icons.folder_outlined,
                   color: iconFgColor,
-                  size: 20,
+                  size: 18,
                 ),
-                if (!widget.isCompactMode) ...[
-                  const SizedBox(width: 8),
+                if (!_showIconOnly) ...[
+                  const SizedBox(width: 6),
                   Flexible(
                     child: Text(
                       _selectedProjectName,
-                      style: TextStyle(color: iconFgColor, fontSize: 14),
+                      style: TextStyle(color: iconFgColor, fontSize: 13),
                       softWrap: false,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  Icon(
-                    Icons.keyboard_arrow_down,
-                    color: iconFgColor.withValues(alpha: 0.8),
-                    size: 16,
                   ),
                 ],
               ],
@@ -145,7 +141,7 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
 
     return PopupMenuButton<String?>(
       color: bgColor,
-      constraints: const BoxConstraints(minWidth: 200, maxWidth: 280),
+      constraints: const BoxConstraints(minWidth: 180, maxWidth: 260),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
