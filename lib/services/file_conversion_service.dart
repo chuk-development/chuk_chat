@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
+import 'package:chuk_chat/constants/file_constants.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/utils/file_upload_validator.dart';
 import 'package:chuk_chat/utils/upload_rate_limiter.dart';
@@ -13,36 +14,12 @@ import 'package:chuk_chat/utils/certificate_pinning.dart';
 /// Service for converting files to markdown using the /v1/ai/convert-file endpoint.
 /// Supports documents, images (with EXIF/OCR), audio (with transcription),
 /// archives, e-books, and email files.
+///
+/// Note: Plain text files (code, config, etc.) are handled directly by
+/// ChatApiService and ProjectStorageService without using this API.
+/// This service is only used for binary files (PDF, Office docs, audio, etc.)
 class FileConversionService {
   static String get _apiBaseUrl => ApiConfigService.apiBaseUrl;
-
-  /// Supported file extensions grouped by category
-  static const Set<String> supportedExtensions = {
-    // Documents
-    'pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx',
-    'odt', 'ods', 'odp', 'odg', 'odf',
-    // Text
-    'csv', 'json', 'jsonl', 'xml', 'html', 'htm', 'md', 'markdown',
-    'txt', 'text',
-    // Images (with EXIF and OCR)
-    'png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff', 'tif', 'webp',
-    // Audio (with transcription)
-    'wav', 'mp3', 'm4a', 'aac', 'flac', 'ogg',
-    // Archives
-    'zip',
-    // E-books
-    'epub',
-    // Email
-    'msg', 'eml',
-    // Code and other text formats
-    'py', 'js', 'ts', 'jsx', 'tsx', 'java', 'c', 'cpp', 'h', 'hpp',
-    'go', 'rs', 'rb', 'php', 'swift', 'kt', 'cs', 'sh', 'bash',
-    'yaml', 'yml', 'toml', 'ini', 'cfg', 'conf',
-    'sql', 'prisma', 'graphql', 'proto',
-    'css', 'scss', 'sass', 'less',
-    'vue', 'svelte',
-    'ipynb', 'rss', 'atom',
-  };
 
   /// Convert a file to markdown using the /v1/ai/convert-file endpoint.
   ///
@@ -141,7 +118,8 @@ class FileConversionService {
       final fileName = file.path.split('/').last;
       final fileExtension = fileName.split('.').last.toLowerCase();
 
-      if (!supportedExtensions.contains(fileExtension)) {
+      // Check if file type is supported (use FileConstants as single source of truth)
+      if (!FileConstants.allowedExtensions.contains(fileExtension)) {
         return {
           'success': false,
           'error': 'Unsupported file type: .$fileExtension',
@@ -287,26 +265,31 @@ class FileConversionService {
   }
 
   /// Check if a file extension is supported for conversion
+  /// Uses FileConstants as the single source of truth
   static bool isExtensionSupported(String extension) {
-    return supportedExtensions.contains(extension.toLowerCase());
+    return FileConstants.allowedExtensions.contains(extension.toLowerCase());
   }
 
   /// Get the category of a file extension (for display purposes)
+  /// Uses FileConstants for consistent file type detection
   static String getFileCategory(String extension) {
     final ext = extension.toLowerCase();
 
-    if ({'pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'odt', 'ods', 'odp'}.contains(ext)) {
-      return 'document';
-    } else if ({'png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff', 'tif', 'webp'}.contains(ext)) {
+    if (FileConstants.convertApiExtensions.contains(ext)) {
+      // Binary files that need API conversion
+      if (FileConstants.audioExtensions.contains(ext)) {
+        return 'audio';
+      } else if ({'epub'}.contains(ext)) {
+        return 'ebook';
+      } else if ({'msg', 'eml'}.contains(ext)) {
+        return 'email';
+      } else {
+        return 'document';
+      }
+    } else if (FileConstants.isImage(ext)) {
       return 'image';
-    } else if ({'wav', 'mp3', 'm4a', 'aac', 'flac', 'ogg'}.contains(ext)) {
-      return 'audio';
     } else if ({'zip'}.contains(ext)) {
       return 'archive';
-    } else if ({'epub'}.contains(ext)) {
-      return 'ebook';
-    } else if ({'msg', 'eml'}.contains(ext)) {
-      return 'email';
     } else {
       return 'text';
     }

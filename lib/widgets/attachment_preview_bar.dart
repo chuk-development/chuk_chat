@@ -5,6 +5,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/constants/file_constants.dart';
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/widgets/encrypted_image_widget.dart';
 
@@ -514,87 +515,15 @@ String _truncateForPreview(String text) {
   return '$truncated\n… preview truncated to $_kMaxPlainTextCharacters characters.';
 }
 
-const Set<String> _imageExtensions = {
-  'png',
-  'jpg',
-  'jpeg',
-  'gif',
-  'bmp',
-  'webp',
-  'heic',
-  'heif',
-};
-
-const Set<String> _plainTextExtensions = {
-  'txt',
-  'md',
-  'markdown',
-  'json',
-  'jsonl',
-  'yaml',
-  'yml',
-  'csv',
-  'tsv',
-  'xml',
-  'html',
-  'htm',
-  'css',
-  'scss',
-  'less',
-  'js',
-  'mjs',
-  'cjs',
-  'ts',
-  'tsx',
-  'jsx',
-  'dart',
-  'java',
-  'kt',
-  'kts',
-  'swift',
-  'c',
-  'h',
-  'hpp',
-  'cc',
-  'cpp',
-  'cs',
-  'rs',
-  'go',
-  'py',
-  'rb',
-  'php',
-  'sql',
-  'sh',
-  'zsh',
-  'bash',
-  'ps1',
-  'ini',
-  'cfg',
-  'conf',
-  'env',
-  'log',
-  'lock',
-  'toml',
-  'gradle',
-  'groovy',
-  'pl',
-  'lua',
-  'scala',
-  'r',
-  'm',
-  'tex',
-  'srt',
-  'vtt',
-};
-
+// Use FileConstants for consistent file type detection across the app
 bool _isImageFile(String fileName) {
   final String ext = _extractExtension(fileName);
-  return _imageExtensions.contains(ext);
+  return FileConstants.isImage(ext);
 }
 
 bool _isPlainTextFile(String fileName) {
   final String ext = _extractExtension(fileName);
-  return _plainTextExtensions.contains(ext);
+  return FileConstants.isPlainText(ext);
 }
 
 String _extensionLabel(String fileName) {
