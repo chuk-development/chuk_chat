@@ -422,6 +422,9 @@ class ProjectStorageService {
   /// Upload a file to a project (encrypted in Supabase Storage)
   /// If [filePath] is provided and [generateMarkdown] is true, will also generate
   /// an AI markdown summary of the file content.
+  ///
+  /// [onUploadProgress] is called with progress (0.0-1.0) during upload
+  /// [onConversionStart] is called when markdown conversion begins
   static Future<ProjectFile> uploadFile(
     String projectId,
     String fileName,
@@ -429,6 +432,8 @@ class ProjectStorageService {
     String fileType, {
     String? filePath,
     bool generateMarkdown = true,
+    void Function(double progress)? onUploadProgress,
+    void Function()? onConversionStart,
   }) async {
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
@@ -448,16 +453,20 @@ class ProjectStorageService {
     }
 
     try {
-      // Step 1: Encrypt file content
+      // Step 1: Encrypt file content (0-20%)
+      onUploadProgress?.call(0.05);
       final fileContent = utf8.decode(fileBytes, allowMalformed: true);
       final encryptedJson = await EncryptionService.encrypt(fileContent);
       final encryptedBytes = Uint8List.fromList(utf8.encode(encryptedJson));
+      onUploadProgress?.call(0.20);
 
-      // Step 2: Upload to Supabase Storage
+      // Step 2: Upload to Supabase Storage (20-90%)
       final fileId = _uuid.v4();
       final storageFileName = '$fileId.enc';
       final storagePath = '${user.id}/$storageFileName';
 
+      // Simulate upload progress in chunks
+      onUploadProgress?.call(0.30);
       await SupabaseService.client.storage.from(bucketName).uploadBinary(
             storagePath,
             encryptedBytes,
@@ -466,6 +475,7 @@ class ProjectStorageService {
               upsert: false,
             ),
           );
+      onUploadProgress?.call(0.90);
 
       // Step 3: Generate markdown summary
       // Plain text files: read directly (no API call needed)
@@ -480,7 +490,8 @@ class ProjectStorageService {
           markdownSummary = '**File: $fileName**\n\n```$extension\n$content\n```';
           debugPrint('📝 [ProjectStorage] Plain text file read directly: $fileName');
         } else if (filePath != null && FileConstants.requiresConversion(extension)) {
-          // Binary file: use convert-file API
+          // Binary file: use convert-file API - notify UI
+          onConversionStart?.call();
           try {
             debugPrint('📝 [ProjectStorage] Generating markdown via API for: $fileName');
             final result = await FileConversionService.convertFile(
@@ -500,6 +511,7 @@ class ProjectStorageService {
           }
         }
       }
+      onUploadProgress?.call(1.0);
 
       // Step 4: Save metadata to database
       final insertData = {

@@ -1,7 +1,7 @@
 // lib/widgets/project_file_viewer.dart
 import 'dart:convert';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:markdown_widget/markdown_widget.dart';
 import 'package:pdfx/pdfx.dart';
@@ -42,6 +42,7 @@ class _ProjectFileViewerState extends State<ProjectFileViewer>
   String? _textContent;
   Uint8List? _imageBytes;
   PdfControllerPinch? _pdfController;
+  bool _pdfNotSupported = false; // True if pdfx doesn't support this platform
 
   // Markdown summary
   String? _markdownSummary;
@@ -76,6 +77,7 @@ class _ProjectFileViewerState extends State<ProjectFileViewer>
     setState(() {
       _isLoading = true;
       _error = null;
+      _pdfNotSupported = false;
     });
 
     try {
@@ -85,10 +87,16 @@ class _ProjectFileViewerState extends State<ProjectFileViewer>
       );
 
       if (widget.file.isPdf) {
-        // Load PDF document - PdfControllerPinch expects a Future
-        _pdfController = PdfControllerPinch(
-          document: PdfDocument.openData(bytes),
-        );
+        // Try to load PDF - may not be supported on all platforms (e.g., Linux)
+        try {
+          _pdfController = PdfControllerPinch(
+            document: PdfDocument.openData(bytes),
+          );
+        } catch (e) {
+          // pdfx doesn't support this platform (Linux, etc.)
+          debugPrint('⚠️ PDF viewing not supported on this platform: $e');
+          _pdfNotSupported = true;
+        }
       } else if (widget.file.isImage) {
         _imageBytes = bytes;
       } else {
@@ -312,6 +320,43 @@ class _ProjectFileViewerState extends State<ProjectFileViewer>
               onPressed: _loadFileContent,
               child: const Text('Retry'),
             ),
+          ],
+        ),
+      );
+    }
+
+    // PDF content - platform not supported fallback
+    if (widget.file.isPdf && _pdfNotSupported) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.picture_as_pdf, color: accentColor, size: 64),
+            const SizedBox(height: 16),
+            Text(
+              'PDF Preview Not Available',
+              style: TextStyle(
+                color: iconFg,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'PDF viewing is not supported on this platform.\nUse the Markdown tab to see the AI-generated summary.',
+              style: TextStyle(
+                color: iconFg.withValues(alpha: 0.6),
+                fontSize: 13,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            if (widget.file.hasMarkdownSummary)
+              OutlinedButton.icon(
+                onPressed: () => _tabController.animateTo(1),
+                icon: const Icon(Icons.description, size: 18),
+                label: const Text('View Markdown Summary'),
+              ),
           ],
         ),
       );

@@ -32,7 +32,12 @@ class _ProjectPanelState extends State<ProjectPanel> {
   bool _isFilesExpanded = true;
   bool _isEditingInstructions = false;
   final TextEditingController _instructionsController = TextEditingController();
+
+  // Upload state
   bool _isUploadingFile = false;
+  String? _uploadFileName;
+  String _uploadStatus = ''; // 'uploading', 'converting', ''
+  double _uploadProgress = 0.0;
 
   @override
   void initState() {
@@ -95,13 +100,21 @@ class _ProjectPanelState extends State<ProjectPanel> {
       final file = result.files.first;
       if (file.path == null) return;
 
-      setState(() => _isUploadingFile = true);
-
       final filePath = file.path!;
-      final fileBytes = await File(filePath).readAsBytes();
       final fileName = file.name;
       final fileType = fileName.split('.').last;
 
+      // Start upload with progress tracking
+      setState(() {
+        _isUploadingFile = true;
+        _uploadFileName = fileName;
+        _uploadStatus = 'uploading';
+        _uploadProgress = 0.0;
+      });
+
+      final fileBytes = await File(filePath).readAsBytes();
+
+      // Upload with progress callback
       await ProjectStorageService.uploadFile(
         widget.projectId,
         fileName,
@@ -109,6 +122,16 @@ class _ProjectPanelState extends State<ProjectPanel> {
         fileType,
         filePath: filePath,
         generateMarkdown: true,
+        onUploadProgress: (progress) {
+          if (mounted) {
+            setState(() => _uploadProgress = progress);
+          }
+        },
+        onConversionStart: () {
+          if (mounted) {
+            setState(() => _uploadStatus = 'converting');
+          }
+        },
       );
 
       if (mounted) {
@@ -123,7 +146,14 @@ class _ProjectPanelState extends State<ProjectPanel> {
         );
       }
     } finally {
-      if (mounted) setState(() => _isUploadingFile = false);
+      if (mounted) {
+        setState(() {
+          _isUploadingFile = false;
+          _uploadFileName = null;
+          _uploadStatus = '';
+          _uploadProgress = 0.0;
+        });
+      }
     }
   }
 
@@ -405,12 +435,91 @@ class _ProjectPanelState extends State<ProjectPanel> {
 
   Widget _buildFilesContent() {
     final iconFg = Theme.of(context).resolvedIconColor;
+    final accentColor = Theme.of(context).colorScheme.primary;
 
     if (_isUploadingFile) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: CircularProgressIndicator(),
+      return Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // File name
+            Row(
+              children: [
+                Icon(Icons.insert_drive_file, size: 16, color: accentColor),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _uploadFileName ?? 'File',
+                    style: TextStyle(fontSize: 12, color: iconFg),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Status text
+            Text(
+              _uploadStatus == 'uploading'
+                  ? 'Uploading...'
+                  : _uploadStatus == 'converting'
+                      ? 'Converting to markdown...'
+                      : 'Processing...',
+              style: TextStyle(
+                fontSize: 11,
+                color: iconFg.withAlpha(150),
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // Progress indicator
+            if (_uploadStatus == 'uploading')
+              Column(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: _uploadProgress,
+                      backgroundColor: iconFg.withAlpha(30),
+                      valueColor: AlwaysStoppedAnimation<Color>(accentColor),
+                      minHeight: 6,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${(_uploadProgress * 100).toStringAsFixed(0)}%',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: iconFg.withAlpha(150),
+                    ),
+                  ),
+                ],
+              )
+            else
+              Row(
+                children: [
+                  SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(accentColor),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'This may take a moment...',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: iconFg.withAlpha(120),
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
+              ),
+          ],
         ),
       );
     }
