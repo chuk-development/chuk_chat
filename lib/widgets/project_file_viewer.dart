@@ -89,8 +89,10 @@ class _ProjectFileViewerState extends State<ProjectFileViewer>
       if (widget.file.isPdf) {
         // Try to load PDF - may not be supported on all platforms (e.g., Linux)
         try {
+          // Await the document to catch async errors
+          final pdfDocument = await PdfDocument.openData(bytes);
           _pdfController = PdfControllerPinch(
-            document: PdfDocument.openData(bytes),
+            document: Future.value(pdfDocument),
           );
         } catch (e) {
           // pdfx doesn't support this platform (Linux, etc.)

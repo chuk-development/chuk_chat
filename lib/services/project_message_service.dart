@@ -5,8 +5,27 @@ import 'package:flutter/foundation.dart';
 
 /// Service for composing AI messages with project context
 class ProjectMessageService {
-  // Maximum total file content length to include in context (to avoid token limits)
-  static const int maxTotalFileContentLength = 50000; // ~50KB
+  // Maximum total content length to include in context (to avoid token limits)
+  // This is for the actual text sent to LLM, not raw file sizes
+  static const int maxTotalContentLength = 500000; // ~500KB of text content
+
+  /// Estimate how much content a file will add to the context
+  static int _estimateContentLength(ProjectFile file) {
+    // For files with markdown summaries (PDFs, etc.), use summary length
+    if (file.hasMarkdownSummary) {
+      return file.markdownSummary!.length + 200; // +200 for headers
+    }
+    // For PDFs without markdown, we only add a small note
+    if (file.isPdf) {
+      return 150; // Just a note saying content unavailable
+    }
+    // For images, just metadata
+    if (file.isImage) {
+      return 100;
+    }
+    // For text files, use file size as estimate (will be decrypted)
+    return file.fileSize + 200; // +200 for code block markers
+  }
 
   /// Build a system message with project context
   static Future<String> buildProjectSystemMessage(String projectId) async {
@@ -49,16 +68,18 @@ class ProjectMessageService {
 
       // Include files until we hit the size limit
       for (final file in sortedFiles) {
-        // Estimate content length (file size is a rough proxy)
-        if (totalContentLength + file.fileSize > maxTotalFileContentLength) {
+        // Estimate actual content length (markdown summary for PDFs, not raw file size)
+        final estimatedLength = _estimateContentLength(file);
+        if (totalContentLength + estimatedLength > maxTotalContentLength) {
           debugPrint(
-            '⚠️ [ProjectMessage] Skipping file ${file.fileName} due to size limit',
+            '⚠️ [ProjectMessage] Skipping file ${file.fileName} due to size limit '
+            '(estimated: $estimatedLength, total: $totalContentLength, max: $maxTotalContentLength)',
           );
           continue;
         }
 
         includedFiles.add(file);
-        totalContentLength += file.fileSize;
+        totalContentLength += estimatedLength;
       }
 
       // Include file contents (prefer markdown summary for non-text files like PDFs)
