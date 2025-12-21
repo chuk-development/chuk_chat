@@ -61,25 +61,46 @@ class ProjectMessageService {
         totalContentLength += file.fileSize;
       }
 
-      // Decrypt and include file contents
+      // Include file contents (prefer markdown summary for non-text files like PDFs)
       for (final file in includedFiles) {
         try {
-          final content = await ProjectStorageService.decryptFile(file.id);
-
-          buffer.writeln('File: ${file.fileName}');
-          buffer.writeln('Type: ${file.fileType}');
-          buffer.writeln('Size: ${file.fileSizeFormatted}');
-          buffer.writeln('Uploaded: ${file.uploadedAt.toLocal()}');
+          buffer.writeln('### File: ${file.fileName}');
+          buffer.writeln('- Type: ${file.fileType.toUpperCase()}');
+          buffer.writeln('- Size: ${file.fileSizeFormatted}');
+          buffer.writeln('- Uploaded: ${file.uploadedAt.toLocal()}');
           buffer.writeln();
-          buffer.writeln('Content:');
-          buffer.writeln('```');
-          buffer.writeln(content);
-          buffer.writeln('```');
+
+          // For PDFs and other binary files, prefer the AI-generated markdown summary
+          if (file.hasMarkdownSummary) {
+            buffer.writeln('**Document Summary (AI-generated from ${file.fileType.toUpperCase()}):**');
+            buffer.writeln();
+            buffer.writeln(file.markdownSummary!);
+          } else if (file.isPdf) {
+            // PDF without markdown summary - note that content isn't directly readable
+            buffer.writeln('*This is a PDF document. The markdown summary is not yet available.*');
+            buffer.writeln('*Consider re-uploading to generate an AI summary.*');
+          } else if (file.isImage) {
+            // Image file - describe it
+            buffer.writeln('*This is an image file (${file.extension.toUpperCase()}).*');
+            if (file.hasMarkdownSummary) {
+              buffer.writeln();
+              buffer.writeln('**Image Analysis:**');
+              buffer.writeln(file.markdownSummary!);
+            }
+          } else {
+            // Text-based file - include actual content
+            final content = await ProjectStorageService.decryptFile(file.id);
+            buffer.writeln('**File Content:**');
+            buffer.writeln('```${file.extension}');
+            buffer.writeln(content);
+            buffer.writeln('```');
+          }
+
           buffer.writeln();
           buffer.writeln('---');
           buffer.writeln();
         } catch (e) {
-          debugPrint('❌ [ProjectMessage] Failed to decrypt file ${file.id}: $e');
+          debugPrint('❌ [ProjectMessage] Failed to process file ${file.id}: $e');
           // Skip this file but continue with others
           buffer.writeln('File: ${file.fileName} (content unavailable)');
           buffer.writeln();

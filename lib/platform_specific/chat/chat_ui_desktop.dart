@@ -505,22 +505,13 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         ModelSelectionDropdown.selectedModelNotifier.value = savedModelId;
         await _loadProviderSlugForModel(savedModelId);
       } else {
-        // Fallback to a default model if none saved
-        const defaultModel = 'openai/gpt-4o-mini';
-        setState(() {
-          _selectedModelId = defaultModel;
-        });
-        debugPrint('No saved model preference, using default: $defaultModel');
-        await _loadProviderSlugForModel(defaultModel);
+        // No model saved - keep empty, user must select one
+        debugPrint('No saved model preference - user must select a model');
+        // _selectedModelId stays empty
       }
     } catch (e) {
       debugPrint('Error loading saved model preference: $e');
-      // Fallback to default on error
-      if (mounted && _selectedModelId.isEmpty) {
-        setState(() {
-          _selectedModelId = 'openai/gpt-4o-mini';
-        });
-      }
+      // Keep empty on error - user must select
     }
   }
 
@@ -1530,6 +1521,31 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       }
       ChatStorageService.isMessageOperationInProgress = false;
       debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (uploading)');
+      return;
+    }
+
+    // Check if a model is selected
+    if (_selectedModelId.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              'Please select a model first.',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            duration: const Duration(seconds: 3),
+            dismissDirection: DismissDirection.horizontal,
+          ),
+        );
+      }
+      ChatStorageService.isMessageOperationInProgress = false;
+      debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (no model selected)');
       return;
     }
 
