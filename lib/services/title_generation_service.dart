@@ -1,18 +1,15 @@
 // lib/services/title_generation_service.dart
-import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:chuk_chat/services/api_config_service.dart';
+import 'package:chuk_chat/models/chat_stream_event.dart';
+import 'package:chuk_chat/services/websocket_chat_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 
 /// Service for automatically generating chat titles using AI.
-/// Uses qwen/qwen3-8b model via Fireworks provider.
+/// Uses qwen/qwen3-8b model via Fireworks provider over WebSocket.
 class TitleGenerationService {
-  static String get _apiBaseUrl => ApiConfigService.apiBaseUrl;
 
   // Model and provider for title generation
   // Using qwen3-8b via fireworks (fast and cheap for title generation)
@@ -78,74 +75,54 @@ User message: $firstMessage''';
 
       debugPrint('📝 [TitleGen] Generating title for: ${firstMessage.substring(0, firstMessage.length.clamp(0, 50))}...');
 
-      // Use multipart form data (API expects form data, not JSON)
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse('$_apiBaseUrl/v1/ai/chat'),
-      );
-      request.headers['Authorization'] = 'Bearer $accessToken';
-      request.fields['model_id'] = _titleModel;
-      request.fields['provider_slug'] = _titleProvider;
-      request.fields['message'] = prompt;
+      // Use WebSocket streaming (same as main chat)
+      final StringBuffer titleBuffer = StringBuffer();
 
-      final client = http.Client();
-      try {
-        final streamedResponse = await client.send(request).timeout(
-          const Duration(seconds: 20),
-        );
-
-        if (streamedResponse.statusCode != 200) {
-          final body = await streamedResponse.stream.bytesToString();
-          debugPrint('📝 [TitleGen] Failed: ${streamedResponse.statusCode} - $body');
-          return null;
+      await for (final event in WebSocketChatService.sendStreamingChat(
+        accessToken: accessToken,
+        message: prompt,
+        modelId: _titleModel,
+        providerSlug: _titleProvider,
+        maxTokens: 128, // Short for titles
+        temperature: 0.7,
+      )) {
+        switch (event) {
+          case ContentEvent(:final text):
+            titleBuffer.write(text);
+          case ErrorEvent(:final message):
+            debugPrint('📝 [TitleGen] Error: $message');
+            return null;
+          case DoneEvent():
+            break;
+          case ReasoningEvent():
+          case UsageEvent():
+          case MetaEvent():
+            // Ignore these for title generation
+            break;
         }
-
-        // Collect streaming response
-        final StringBuffer titleBuffer = StringBuffer();
-        await for (final chunk in streamedResponse.stream.transform(utf8.decoder)) {
-          // Parse SSE data lines
-          final lines = chunk.split('\n');
-          for (final line in lines) {
-            if (line.startsWith('data: ')) {
-              final data = line.substring(6).trim();
-              if (data == '[DONE]') continue;
-              try {
-                final json = jsonDecode(data);
-                final content = json['content'] as String?;
-                if (content != null) {
-                  titleBuffer.write(content);
-                }
-              } catch (_) {
-                // Skip malformed JSON
-              }
-            }
-          }
-        }
-
-        String title = titleBuffer.toString().trim();
-        if (title.isEmpty) {
-          debugPrint('📝 [TitleGen] Empty response');
-          return null;
-        }
-
-        // Clean up the title
-        // Remove quotes if present
-        if ((title.startsWith('"') && title.endsWith('"')) ||
-            (title.startsWith("'") && title.endsWith("'"))) {
-          title = title.substring(1, title.length - 1);
-        }
-        // Remove any trailing punctuation that looks weird
-        title = title.replaceAll(RegExp(r'[.!?]+$'), '').trim();
-        // Limit length
-        if (title.length > 50) {
-          title = '${title.substring(0, 47)}...';
-        }
-
-        debugPrint('📝 [TitleGen] Generated title: $title');
-        return title;
-      } finally {
-        client.close();
       }
+
+      String title = titleBuffer.toString().trim();
+      if (title.isEmpty) {
+        debugPrint('📝 [TitleGen] Empty response');
+        return null;
+      }
+
+      // Clean up the title
+      // Remove quotes if present
+      if ((title.startsWith('"') && title.endsWith('"')) ||
+          (title.startsWith("'") && title.endsWith("'"))) {
+        title = title.substring(1, title.length - 1);
+      }
+      // Remove any trailing punctuation that looks weird
+      title = title.replaceAll(RegExp(r'[.!?]+$'), '').trim();
+      // Limit length
+      if (title.length > 50) {
+        title = '${title.substring(0, 47)}...';
+      }
+
+      debugPrint('📝 [TitleGen] Generated title: $title');
+      return title;
     } catch (e) {
       debugPrint('📝 [TitleGen] Error: $e');
     }
