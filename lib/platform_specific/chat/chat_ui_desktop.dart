@@ -166,13 +166,17 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _chatApiService = ChatApiService(
       onUploadStatusUpdate: _handleFileUploadUpdate,
     );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
-    });
     _selectedProjectId = widget.projectId;
     _loadChatById(widget.selectedChatId);
-    unawaited(_loadSavedModelPreference());
-    unawaited(_loadSystemPrompt());
+
+    // Defer network-dependent loading to after first frame for faster startup
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+      unawaited(_loadSavedModelPreference());
+      unawaited(_loadSystemPrompt());
+    });
+
     _modelSelectionListener = () {
       final String newModelId =
           ModelSelectionDropdown.selectedModelNotifier.value;

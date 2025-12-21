@@ -199,19 +199,30 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
     });
 
     try {
+      // Load saved model preference (fast local cache)
       final savedModelId = await UserPreferencesService.loadSelectedModel();
       if (savedModelId != null && savedModelId.isNotEmpty) {
         _selectedModelId = savedModelId;
       }
 
+      // Hydrate from cache first for fast initial display
       await _hydrateFromCache();
-      await _fetchModels();
+
+      // Mark loading complete after cache - UI is now usable
+      if (mounted && _allModels.isNotEmpty) {
+        setState(() => _isLoadingModels = false);
+      }
+
+      // Fetch fresh models in background (don't await)
+      unawaited(_fetchModels().catchError((e) {
+        debugPrint('Background model fetch failed: $e');
+      }));
     } catch (error) {
       _errorMessage = 'Error initializing model selection: $error';
       _selectedModelName = 'Error Loading';
       debugPrint('Error initializing model selection: $error');
     } finally {
-      if (mounted) {
+      if (mounted && _isLoadingModels) {
         setState(() => _isLoadingModels = false);
       }
     }

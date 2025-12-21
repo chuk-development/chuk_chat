@@ -239,14 +239,23 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   }
 
   void _loadInitialData() {
+    // Load chat synchronously (uses microtask internally)
     _loadChatById(widget.selectedChatId);
-    unawaited(_loadSavedModelPreference());
-    unawaited(_loadSystemPrompt());
-    unawaited(NetworkStatusService.quickCheck());
-    // Load projects for project selection feature
-    if (kFeatureProjects) {
-      unawaited(ProjectStorageService.loadFromCache());
-    }
+
+    // Defer all network-dependent loading to after first frame
+    // This ensures the UI renders immediately
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // Load model preference first (needed for sending)
+      unawaited(_loadSavedModelPreference());
+      // These can load in parallel after UI is shown
+      unawaited(_loadSystemPrompt());
+      unawaited(NetworkStatusService.quickCheck());
+      // Load projects for project selection feature
+      if (kFeatureProjects) {
+        unawaited(ProjectStorageService.loadFromCache());
+      }
+    });
   }
 
   @override
