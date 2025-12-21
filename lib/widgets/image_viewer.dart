@@ -25,6 +25,7 @@ class _ImageViewerState extends State<ImageViewer> {
   late int _currentIndex;
   final TransformationController _transformationController =
       TransformationController();
+  final FocusNode _focusNode = FocusNode();
 
   @override
   void initState() {
@@ -37,7 +38,30 @@ class _ImageViewerState extends State<ImageViewer> {
   void dispose() {
     _pageController.dispose();
     _transformationController.dispose();
+    _focusNode.dispose();
     super.dispose();
+  }
+
+  void _handleKeyEvent(KeyEvent event) {
+    if (event is! KeyDownEvent) return;
+
+    if (event.logicalKey == LogicalKeyboardKey.escape) {
+      Navigator.of(context).pop();
+    } else if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      if (_hasMultipleImages && _currentIndex > 0) {
+        _pageController.previousPage(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+      }
+    } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+      if (_hasMultipleImages && _currentIndex < widget.allImages!.length - 1) {
+        _pageController.nextPage(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+      }
+    }
   }
 
   Uint8List _base64ToBytes(String dataUrl) {
@@ -52,7 +76,11 @@ class _ImageViewerState extends State<ImageViewer> {
   Widget build(BuildContext context) {
     final iconColor = Theme.of(context).colorScheme.onSurface;
 
-    return Scaffold(
+    return KeyboardListener(
+      focusNode: _focusNode,
+      autofocus: true,
+      onKeyEvent: _handleKeyEvent,
+      child: Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.black.withValues(alpha: 0.7),
@@ -161,6 +189,7 @@ class _ImageViewerState extends State<ImageViewer> {
               ),
           ],
         ],
+      ),
       ),
     );
   }

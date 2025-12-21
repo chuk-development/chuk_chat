@@ -1,7 +1,6 @@
 // lib/pages/media_manager_page.dart
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 
@@ -711,6 +710,7 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
   late PageController _pageController;
   late int _currentIndex;
   final Map<String, Uint8List> _loadedImages = {};
+  final FocusNode _focusNode = FocusNode();
 
   @override
   void initState() {
@@ -726,7 +726,30 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
   @override
   void dispose() {
     _pageController.dispose();
+    _focusNode.dispose();
     super.dispose();
+  }
+
+  void _handleKeyEvent(KeyEvent event) {
+    if (event is! KeyDownEvent) return;
+
+    if (event.logicalKey == LogicalKeyboardKey.escape) {
+      Navigator.of(context).pop();
+    } else if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      if (_currentIndex > 0) {
+        _pageController.previousPage(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+      }
+    } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+      if (_currentIndex < widget.images.length - 1) {
+        _pageController.nextPage(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+      }
+    }
   }
 
   Future<void> _preloadAdjacentImages(int index) async {
@@ -763,9 +786,13 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
   Widget build(BuildContext context) {
     final currentImage = widget.images[_currentIndex];
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Stack(
+    return KeyboardListener(
+      focusNode: _focusNode,
+      autofocus: true,
+      onKeyEvent: _handleKeyEvent,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Stack(
         children: [
           // Dismiss on tap background
           GestureDetector(
@@ -910,7 +937,8 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
                 ),
               ),
             ),
-        ],
+          ],
+        ),
       ),
     );
   }
