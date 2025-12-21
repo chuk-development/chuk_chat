@@ -77,20 +77,15 @@ User message: $firstMessage''';
 
       debugPrint('📝 [TitleGen] Generating title for: ${firstMessage.substring(0, firstMessage.length.clamp(0, 50))}...');
 
-      // Use streaming endpoint and collect full response
-      final request = http.Request(
+      // Use multipart form data (API expects form data, not JSON)
+      final request = http.MultipartRequest(
         'POST',
         Uri.parse('$_apiBaseUrl/v1/ai/chat'),
       );
       request.headers['Authorization'] = 'Bearer $accessToken';
-      request.headers['Content-Type'] = 'application/json';
-      request.body = jsonEncode({
-        'model_id': _titleModel,
-        'provider_slug': _titleProvider,
-        'message': prompt,
-        'max_tokens': 30,
-        'temperature': 0.7,
-      });
+      request.fields['model_id'] = _titleModel;
+      request.fields['provider_slug'] = _titleProvider;
+      request.fields['message'] = prompt;
 
       final client = http.Client();
       try {
@@ -99,7 +94,8 @@ User message: $firstMessage''';
         );
 
         if (streamedResponse.statusCode != 200) {
-          debugPrint('📝 [TitleGen] Failed: ${streamedResponse.statusCode}');
+          final body = await streamedResponse.stream.bytesToString();
+          debugPrint('📝 [TitleGen] Failed: ${streamedResponse.statusCode} - $body');
           return null;
         }
 
