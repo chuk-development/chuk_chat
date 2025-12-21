@@ -93,7 +93,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   late final StreamingMessageHandler _streamingHandler;
 
   // Model and provider state
-  String _selectedModelId = 'deepseek/deepseek-chat-v3.1';
+  String _selectedModelId = ''; // Will be loaded from user preferences
   String? _selectedProviderSlug;
   String? _systemPrompt;
   late final VoidCallback _modelSelectionListener;
@@ -240,7 +240,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
   void _loadInitialData() {
     _loadChatById(widget.selectedChatId);
-    unawaited(_loadProviderSlugForModel(_selectedModelId));
+    unawaited(_loadSavedModelPreference());
     unawaited(_loadSystemPrompt());
     unawaited(NetworkStatusService.quickCheck());
     // Load projects for project selection feature
@@ -1489,6 +1489,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       return;
     }
 
+    // Check if a model is selected
+    if (_selectedModelId.isEmpty) {
+      _showSnackBar('Please select a model first');
+      ChatStorageService.isMessageOperationInProgress = false;
+      debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (no model selected)');
+      return;
+    }
+
     // Set flag to block realtime updates during send operation
     _isSendingMessage = true;
     debugPrint('📨 [SendMessage] Starting send, _activeChatId BEFORE: $_activeChatId');
@@ -2107,6 +2115,40 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       });
     } catch (e) {
       debugPrint('Error loading system prompt: $e');
+    }
+  }
+
+  /// Load the user's saved model preference
+  Future<void> _loadSavedModelPreference() async {
+    try {
+      final savedModelId = await UserPreferencesService.loadSelectedModel();
+      if (!mounted) return;
+
+      if (savedModelId != null && savedModelId.isNotEmpty) {
+        setState(() {
+          _selectedModelId = savedModelId;
+        });
+        debugPrint('Loaded saved model preference: $savedModelId');
+        // Update the global notifier so dropdown stays in sync
+        ModelSelectionDropdown.selectedModelNotifier.value = savedModelId;
+        await _loadProviderSlugForModel(savedModelId);
+      } else {
+        // No model saved - use fallback
+        debugPrint('No saved model preference - using fallback');
+        const fallbackModelId = 'deepseek/deepseek-chat-v3.1';
+        setState(() {
+          _selectedModelId = fallbackModelId;
+        });
+        ModelSelectionDropdown.selectedModelNotifier.value = fallbackModelId;
+        await _loadProviderSlugForModel(fallbackModelId);
+      }
+    } catch (e) {
+      debugPrint('Error loading saved model preference: $e');
+      // Use fallback on error
+      const fallbackModelId = 'deepseek/deepseek-chat-v3.1';
+      setState(() {
+        _selectedModelId = fallbackModelId;
+      });
     }
   }
 

@@ -56,14 +56,14 @@ class TitleGenerationService {
   static Future<String?> generateTitle(String firstMessage) async {
     // Check if feature is enabled
     if (!await isEnabled()) {
-      debugPrint('Auto title generation is disabled');
+      debugPrint('📝 [TitleGen] Auto title generation is disabled');
       return null;
     }
 
     try {
       final session = SupabaseService.auth.currentSession;
       if (session == null) {
-        debugPrint('No session for title generation');
+        debugPrint('📝 [TitleGen] No session for title generation');
         return null;
       }
 
@@ -75,48 +75,82 @@ Only respond with the title, nothing else. No quotes, no explanation.
 
 User message: $firstMessage''';
 
-      debugPrint('Generating title for message: ${firstMessage.substring(0, firstMessage.length.clamp(0, 50))}...');
+      debugPrint('📝 [TitleGen] Generating title for: ${firstMessage.substring(0, firstMessage.length.clamp(0, 50))}...');
 
-      // Make non-streaming request
-      final response = await http.post(
-        Uri.parse('$_apiBaseUrl/v1/ai/chat/simple'),
-        headers: {
-          'Authorization': 'Bearer $accessToken',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'model_id': _titleModel,
-          'provider_slug': _titleProvider,
-          'message': prompt,
-          'max_tokens': 20,
-          'temperature': 0.7,
-        }),
-      ).timeout(const Duration(seconds: 15));
+      // Use streaming endpoint and collect full response
+      final request = http.Request(
+        'POST',
+        Uri.parse('$_apiBaseUrl/v1/ai/chat'),
+      );
+      request.headers['Authorization'] = 'Bearer $accessToken';
+      request.headers['Content-Type'] = 'application/json';
+      request.body = jsonEncode({
+        'model_id': _titleModel,
+        'provider_slug': _titleProvider,
+        'message': prompt,
+        'max_tokens': 30,
+        'temperature': 0.7,
+      });
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        String? title = data['content'] as String?;
+      final client = http.Client();
+      try {
+        final streamedResponse = await client.send(request).timeout(
+          const Duration(seconds: 20),
+        );
 
-        if (title != null && title.isNotEmpty) {
-          // Clean up the title
-          title = title.trim();
-          // Remove quotes if present
-          if ((title.startsWith('"') && title.endsWith('"')) ||
-              (title.startsWith("'") && title.endsWith("'"))) {
-            title = title.substring(1, title.length - 1);
-          }
-          // Limit length
-          if (title.length > 50) {
-            title = '${title.substring(0, 47)}...';
-          }
-          debugPrint('Generated title: $title');
-          return title;
+        if (streamedResponse.statusCode != 200) {
+          debugPrint('📝 [TitleGen] Failed: ${streamedResponse.statusCode}');
+          return null;
         }
-      } else {
-        debugPrint('Title generation failed: ${response.statusCode} - ${response.body}');
+
+        // Collect streaming response
+        final StringBuffer titleBuffer = StringBuffer();
+        await for (final chunk in streamedResponse.stream.transform(utf8.decoder)) {
+          // Parse SSE data lines
+          final lines = chunk.split('\n');
+          for (final line in lines) {
+            if (line.startsWith('data: ')) {
+              final data = line.substring(6).trim();
+              if (data == '[DONE]') continue;
+              try {
+                final json = jsonDecode(data);
+                final content = json['content'] as String?;
+                if (content != null) {
+                  titleBuffer.write(content);
+                }
+              } catch (_) {
+                // Skip malformed JSON
+              }
+            }
+          }
+        }
+
+        String title = titleBuffer.toString().trim();
+        if (title.isEmpty) {
+          debugPrint('📝 [TitleGen] Empty response');
+          return null;
+        }
+
+        // Clean up the title
+        // Remove quotes if present
+        if ((title.startsWith('"') && title.endsWith('"')) ||
+            (title.startsWith("'") && title.endsWith("'"))) {
+          title = title.substring(1, title.length - 1);
+        }
+        // Remove any trailing punctuation that looks weird
+        title = title.replaceAll(RegExp(r'[.!?]+$'), '').trim();
+        // Limit length
+        if (title.length > 50) {
+          title = '${title.substring(0, 47)}...';
+        }
+
+        debugPrint('📝 [TitleGen] Generated title: $title');
+        return title;
+      } finally {
+        client.close();
       }
     } catch (e) {
-      debugPrint('Error generating title: $e');
+      debugPrint('📝 [TitleGen] Error: $e');
     }
 
     return null;
@@ -129,17 +163,17 @@ User message: $firstMessage''';
       // Check if chat already has a custom name
       final chat = ChatStorageService.getChatById(chatId);
       if (chat?.customName != null) {
-        debugPrint('Chat already has a title, skipping generation');
+        debugPrint('📝 [TitleGen] Chat already has a title, skipping');
         return;
       }
 
       final title = await generateTitle(firstMessage);
       if (title != null && title.isNotEmpty) {
         await ChatStorageService.renameChat(chatId, title);
-        debugPrint('Applied generated title to chat $chatId: $title');
+        debugPrint('📝 [TitleGen] Applied title to chat $chatId: $title');
       }
     } catch (e) {
-      debugPrint('Error applying generated title: $e');
+      debugPrint('📝 [TitleGen] Error applying title: $e');
     }
   }
 }
