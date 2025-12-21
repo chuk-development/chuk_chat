@@ -15,6 +15,7 @@ class TitleGenerationService {
   static String get _apiBaseUrl => ApiConfigService.apiBaseUrl;
 
   // Model and provider for title generation
+  // Using qwen3-8b via fireworks (fast and cheap for title generation)
   static const String _titleModel = 'qwen/qwen3-8b';
   static const String _titleProvider = 'fireworks';
 

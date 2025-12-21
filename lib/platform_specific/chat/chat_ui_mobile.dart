@@ -349,7 +349,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     debugPrint('│ 📂 [LOAD-CHAT-MOBILE] _loadChatById called');
     debugPrint('│ 📂 [LOAD-CHAT-MOBILE] chatId param: $chatId');
     debugPrint('│ 📂 [LOAD-CHAT-MOBILE] Current _activeChatId: $_activeChatId');
+    debugPrint('│ 📂 [LOAD-CHAT-MOBILE] Sidebar expanded: ${widget.isSidebarExpanded}');
     debugPrint('└─────────────────────────────────────────────────────────────');
+
+    // Capture sidebar state NOW - before any async operations
+    final bool sidebarWasExpanded = widget.isSidebarExpanded;
 
     // Show loading indicator immediately
     setState(() {
@@ -449,7 +453,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         _isLoadingChat = false;
       });
       _scrollChatToBottom(force: true);
-      if (!widget.isSidebarExpanded) {
+      // Use captured sidebar state to prevent focus when sidebar was open
+      if (!sidebarWasExpanded && !widget.isSidebarExpanded) {
         _textFieldFocusNode.requestFocus();
       }
     });
