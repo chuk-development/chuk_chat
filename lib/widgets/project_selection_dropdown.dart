@@ -144,6 +144,7 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
       ),
       onCanceled: () => widget.textFieldFocusNode.requestFocus(),
       onSelected: (value) {
+        debugPrint('📁 Project dropdown selected: $value');
         widget.textFieldFocusNode.requestFocus();
         widget.onProjectSelected(value);
       },

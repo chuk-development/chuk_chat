@@ -2915,12 +2915,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                               ProjectSelectionDropdown(
                                 selectedProjectId: _selectedProjectId,
                                 onProjectSelected: (projectId) {
+                                  debugPrint('📁 onProjectSelected callback: $projectId (was: $_selectedProjectId)');
                                   setState(() {
                                     _selectedProjectId = projectId;
                                   });
-                                  debugPrint(
-                                    'Selected project ID: $_selectedProjectId',
-                                  );
+                                  debugPrint('📁 After setState: $_selectedProjectId');
                                 },
                                 textFieldFocusNode: _textFieldFocusNode,
                               ),
