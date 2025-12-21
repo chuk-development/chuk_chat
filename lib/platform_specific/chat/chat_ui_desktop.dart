@@ -2909,6 +2909,22 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                               isActive: _isImageActive,
                               debugLabel: 'Image button',
                             ),
+                            // Project Selection Dropdown (only when feature enabled)
+                            if (kFeatureProjects) ...[
+                              const SizedBox(width: 8),
+                              ProjectSelectionDropdown(
+                                selectedProjectId: _selectedProjectId,
+                                onProjectSelected: (projectId) {
+                                  setState(() {
+                                    _selectedProjectId = projectId;
+                                  });
+                                  debugPrint(
+                                    'Selected project ID: $_selectedProjectId',
+                                  );
+                                },
+                                textFieldFocusNode: _textFieldFocusNode,
+                              ),
+                            ],
                             // Image Generation Button (when feature enabled)
                             if (kFeatureImageGen && widget.imageGenEnabled) ...[
                               const SizedBox(width: 8),
@@ -2928,43 +2944,23 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                 debugLabel: 'Image Gen button',
                               ),
                             ],
-                            // Spacer to push the dropdowns to the right edge
+                            // Spacer to push model dropdown to the right edge
                             Expanded(
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  // Project Selection Dropdown (only when feature enabled)
-                                  if (kFeatureProjects) ...[
-                                    ProjectSelectionDropdown(
-                                      selectedProjectId: _selectedProjectId,
-                                      onProjectSelected: (projectId) {
-                                        setState(() {
-                                          _selectedProjectId = projectId;
-                                        });
-                                        debugPrint(
-                                          'Selected project ID: $_selectedProjectId',
-                                        );
-                                      },
-                                      textFieldFocusNode: _textFieldFocusNode,
-                                      isCompactMode: isCompactMode,
-                                    ),
-                                    const SizedBox(width: 8),
-                                  ],
-                                  // Model Selection Dropdown
-                                  ModelSelectionDropdown(
-                                    initialSelectedModelId: _selectedModelId,
-                                    onModelSelected: (newModelId) {
-                                      setState(() {
-                                        _selectedModelId = newModelId;
-                                      });
-                                      debugPrint(
-                                        'Selected model ID: $_selectedModelId',
-                                      );
-                                    },
-                                    textFieldFocusNode: _textFieldFocusNode,
-                                    isCompactMode: isCompactMode,
-                                  ),
-                                ],
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: ModelSelectionDropdown(
+                                  initialSelectedModelId: _selectedModelId,
+                                  onModelSelected: (newModelId) {
+                                    setState(() {
+                                      _selectedModelId = newModelId;
+                                    });
+                                    debugPrint(
+                                      'Selected model ID: $_selectedModelId',
+                                    );
+                                  },
+                                  textFieldFocusNode: _textFieldFocusNode,
+                                  isCompactMode: isCompactMode,
+                                ),
                               ),
                             ),
                           ],

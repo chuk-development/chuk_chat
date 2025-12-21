@@ -10,14 +10,12 @@ class ProjectSelectionDropdown extends StatefulWidget {
   final String? selectedProjectId;
   final ValueChanged<String?> onProjectSelected;
   final FocusNode textFieldFocusNode;
-  final bool isCompactMode;
 
   const ProjectSelectionDropdown({
     super.key,
     required this.selectedProjectId,
     required this.onProjectSelected,
     required this.textFieldFocusNode,
-    this.isCompactMode = false,
   });
 
   @override
@@ -52,9 +50,7 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
   }
 
   String get _selectedProjectName {
-    if (widget.selectedProjectId == null) {
-      return '';
-    }
+    if (widget.selectedProjectId == null) return '';
     final project = _projects.firstWhere(
       (p) => p.id == widget.selectedProjectId,
       orElse: () => Project(
@@ -67,8 +63,7 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
     return project.name;
   }
 
-  // Show as icon-only when no project selected or in compact mode
-  bool get _showIconOnly => widget.isCompactMode || widget.selectedProjectId == null;
+  bool get _hasProject => widget.selectedProjectId != null;
 
   @override
   Widget build(BuildContext context) {
@@ -77,7 +72,6 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
     final bgColor = theme.scaffoldBackgroundColor;
 
     final ValueNotifier<bool> isHovered = ValueNotifier<bool>(false);
-    final hasProject = widget.selectedProjectId != null;
 
     final buttonContent = MouseRegion(
       onEnter: (_) => isHovered.value = true,
@@ -88,48 +82,51 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
           return AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             curve: Curves.easeOutCubic,
-            padding: _showIconOnly
-                ? const EdgeInsets.symmetric(horizontal: 8)
-                : const EdgeInsets.symmetric(horizontal: 8),
             height: 36,
-            constraints: _showIconOnly
-                ? const BoxConstraints(minWidth: 36, maxWidth: 36)
-                : const BoxConstraints(minWidth: 36, maxWidth: 140),
+            padding: EdgeInsets.symmetric(horizontal: _hasProject ? 8 : 0),
             decoration: BoxDecoration(
               color: bgColor,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                color: hasProject
+                color: _hasProject
                     ? iconFgColor
                     : hovered
                         ? iconFgColor
                         : iconFgColor.withValues(alpha: 0.3),
-                width: hasProject ? 1.5 : (hovered ? 1.2 : 0.8),
+                width: _hasProject ? 1.5 : (hovered ? 1.2 : 0.8),
               ),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  hasProject ? Icons.folder : Icons.folder_outlined,
-                  color: iconFgColor,
-                  size: 18,
-                ),
-                if (!_showIconOnly) ...[
-                  const SizedBox(width: 6),
-                  Flexible(
-                    child: Text(
-                      _selectedProjectName,
-                      style: TextStyle(color: iconFgColor, fontSize: 13),
-                      softWrap: false,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+            child: _hasProject
+                ? Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.folder, color: iconFgColor, size: 18),
+                      const SizedBox(width: 6),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 80),
+                        child: Text(
+                          _selectedProjectName,
+                          style: TextStyle(color: iconFgColor, fontSize: 13),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      Icon(
+                        Icons.keyboard_arrow_down,
+                        color: iconFgColor.withValues(alpha: 0.7),
+                        size: 16,
+                      ),
+                    ],
+                  )
+                : SizedBox(
+                    width: 36,
+                    child: Icon(
+                      Icons.folder_outlined,
+                      color: iconFgColor,
+                      size: 18,
                     ),
                   ),
-                ],
-              ],
-            ),
           );
         },
       ),
@@ -144,13 +141,9 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
       constraints: const BoxConstraints(minWidth: 180, maxWidth: 260),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: iconFgColor.withValues(alpha: 0.3),
-        ),
+        side: BorderSide(color: iconFgColor.withValues(alpha: 0.3)),
       ),
-      onCanceled: () {
-        widget.textFieldFocusNode.requestFocus();
-      },
+      onCanceled: () => widget.textFieldFocusNode.requestFocus(),
       onSelected: (value) {
         widget.textFieldFocusNode.requestFocus();
         widget.onProjectSelected(value);
