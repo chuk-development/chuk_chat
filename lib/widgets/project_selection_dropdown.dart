@@ -146,15 +146,17 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
       onSelected: (value) {
         debugPrint('📁 Project dropdown selected: $value');
         widget.textFieldFocusNode.requestFocus();
-        widget.onProjectSelected(value);
+        // Convert empty string back to null for "No Project"
+        final projectId = (value == null || value.isEmpty) ? null : value;
+        widget.onProjectSelected(projectId);
       },
       itemBuilder: (context) {
         final items = <PopupMenuEntry<String?>>[];
 
-        // "No Project" option
+        // "No Project" option - use empty string instead of null
         items.add(
           PopupMenuItem<String?>(
-            value: null,
+            value: '',
             height: 40,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
@@ -169,14 +171,14 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
                   child: Text(
                     'No Project',
                     style: TextStyle(
-                      color: widget.selectedProjectId == null
+                      color: !_hasProject
                           ? iconFgColor
                           : iconFgColor.withValues(alpha: 0.8),
                       fontStyle: FontStyle.italic,
                     ),
                   ),
                 ),
-                if (widget.selectedProjectId == null)
+                if (!_hasProject)
                   Icon(Icons.check, color: iconFgColor, size: 18),
               ],
             ),
