@@ -78,40 +78,44 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
 
     final ValueNotifier<bool> isHovered = ValueNotifier<bool>(false);
 
+    // When project is active: invert colors (like other active buttons)
+    final Color effectiveBgColor = _hasProject ? iconFgColor : bgColor;
+    final Color effectiveIconColor = _hasProject ? bgColor : iconFgColor;
+
     final buttonContent = MouseRegion(
       onEnter: (_) => isHovered.value = true,
       onExit: (_) => isHovered.value = false,
       child: ValueListenableBuilder<bool>(
         valueListenable: isHovered,
         builder: (context, hovered, child) {
+          final Color borderColor = _hasProject
+              ? iconFgColor.withValues(alpha: 0.6)
+              : hovered
+                  ? iconFgColor
+                  : iconFgColor.withValues(alpha: 0.3);
+          final double borderWidth = _hasProject ? 1.0 : (hovered ? 1.2 : 0.8);
+
           return AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             curve: Curves.easeOutCubic,
             height: 36,
             padding: EdgeInsets.symmetric(horizontal: _hasProject ? 8 : 0),
             decoration: BoxDecoration(
-              color: bgColor,
+              color: effectiveBgColor,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: _hasProject
-                    ? iconFgColor
-                    : hovered
-                        ? iconFgColor
-                        : iconFgColor.withValues(alpha: 0.3),
-                width: _hasProject ? 1.5 : (hovered ? 1.2 : 0.8),
-              ),
+              border: Border.all(color: borderColor, width: borderWidth),
             ),
             child: _hasProject
                 ? Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.folder, color: iconFgColor, size: 20),
+                      Icon(Icons.folder, color: effectiveIconColor, size: 20),
                       const SizedBox(width: 6),
                       ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 80),
                         child: Text(
                           _selectedProjectName,
-                          style: TextStyle(color: iconFgColor, fontSize: 13),
+                          style: TextStyle(color: effectiveIconColor, fontSize: 13),
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1,
                         ),
@@ -119,7 +123,7 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
                       const SizedBox(width: 2),
                       Icon(
                         Icons.keyboard_arrow_down,
-                        color: iconFgColor.withValues(alpha: 0.7),
+                        color: effectiveIconColor.withValues(alpha: 0.7),
                         size: 16,
                       ),
                     ],
@@ -130,7 +134,7 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
                     height: 36,
                     child: Icon(
                       Icons.folder_outlined,
-                      color: iconFgColor,
+                      color: effectiveIconColor,
                       size: 20,
                     ),
                   ),
