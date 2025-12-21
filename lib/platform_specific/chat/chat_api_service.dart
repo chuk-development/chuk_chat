@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import 'package:chuk_chat/constants/file_constants.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/file_conversion_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -34,35 +35,50 @@ class ChatApiService {
     );
   }
 
-  /// Uploads a file to the API and processes its content using the new
-  /// /ai/convert-file endpoint. Reports status updates via the
-  /// `onUploadStatusUpdate` callback.
+  /// Uploads a file and processes its content.
+  /// - Plain text files (code, config, etc.) are read directly without API call
+  /// - Binary files (PDF, Office docs, audio) use the /ai/convert-file endpoint
+  /// Reports status updates via the `onUploadStatusUpdate` callback.
   Future<void> performFileUpload(
     File file,
     String fileName,
     String fileId,
   ) async {
-    final session =
-        await SupabaseService.refreshSession() ??
-        SupabaseService.auth.currentSession;
-    if (session == null || session.accessToken.isEmpty) {
-      onUploadStatusUpdate?.call(
-        fileId,
-        null,
-        false,
-        'Session expired. Please sign in again before uploading.',
-      );
-      await SupabaseService.signOut();
-      return;
-    }
-    final String accessToken = session.accessToken;
-
     // Report initial uploading state
     onUploadStatusUpdate?.call(fileId, null, true, null);
 
     try {
-      // Use the new FileConversionService which supports more file types
-      // and uses the /ai/convert-file endpoint with proper timeout handling
+      final extension = fileName.contains('.')
+          ? fileName.split('.').last.toLowerCase()
+          : '';
+
+      // Plain text files: read directly, no API call needed
+      if (FileConstants.isPlainText(extension)) {
+        final content = await file.readAsString();
+        // Wrap in markdown code block with extension for syntax highlighting
+        final markdown = '**File: $fileName**\n\n```$extension\n$content\n```';
+
+        onUploadStatusUpdate?.call(fileId, markdown, false, null);
+        debugPrint('Plain text file "$fileName" read directly (no API call).');
+        return;
+      }
+
+      // Binary files (PDF, Office docs, audio): use convert-file API
+      final session =
+          await SupabaseService.refreshSession() ??
+          SupabaseService.auth.currentSession;
+      if (session == null || session.accessToken.isEmpty) {
+        onUploadStatusUpdate?.call(
+          fileId,
+          null,
+          false,
+          'Session expired. Please sign in again before uploading.',
+        );
+        await SupabaseService.signOut();
+        return;
+      }
+      final String accessToken = session.accessToken;
+
       final result = await FileConversionService.convertFile(
         filePath: file.path,
         accessToken: accessToken,
@@ -89,12 +105,12 @@ class ChatApiService {
         debugPrint('File conversion failed for "$fileName": $errorMessage');
       }
     } catch (e) {
-      debugPrint('Unexpected error converting "$fileName": $e');
+      debugPrint('Unexpected error processing "$fileName": $e');
       onUploadStatusUpdate?.call(
         fileId,
         null,
         false,
-        'Error converting "$fileName": ${e.toString()}',
+        'Error processing "$fileName": ${e.toString()}',
       );
     }
   }

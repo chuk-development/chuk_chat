@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/constants/file_constants.dart';
 import 'package:chuk_chat/models/project_model.dart';
 import 'package:chuk_chat/services/project_storage_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
@@ -81,37 +82,11 @@ class _ProjectPanelState extends State<ProjectPanel> {
 
   Future<void> _pickAndUploadFile() async {
     try {
+      // Use shared FileConstants for consistent file type support
+      // between normal chats and project chats
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: [
-          // Text files
-          'txt', 'md', 'markdown', 'log', 'readme',
-          // Data files
-          'json', 'yaml', 'yml', 'csv', 'xml', 'toml', 'ini', 'cfg', 'conf',
-          // Shell/scripts
-          'sh', 'bash', 'zsh', 'fish', 'bat', 'cmd', 'ps1',
-          // Programming languages
-          'dart', 'js', 'ts', 'jsx', 'tsx', 'py', 'pyw',
-          'java', 'kt', 'kts', 'scala', 'groovy',
-          'cpp', 'c', 'h', 'hpp', 'cc', 'cxx',
-          'cs', 'fs', 'vb',
-          'rs', 'go', 'rb', 'php', 'swift', 'lua', 'r',
-          'pl', 'pm', 'ex', 'exs', 'erl', 'hrl',
-          'clj', 'cljs', 'cljc', 'hs', 'lhs',
-          // Web
-          'html', 'htm', 'css', 'scss', 'sass', 'less',
-          'vue', 'svelte', 'astro',
-          // Database/query
-          'sql', 'graphql', 'gql',
-          // DevOps/config
-          'dockerfile', 'containerfile', 'vagrantfile',
-          'makefile', 'cmake', 'gradle',
-          'env', 'gitignore', 'dockerignore', 'editorconfig',
-          // Images
-          'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp',
-          // Documents
-          'pdf',
-        ],
+        allowedExtensions: FileConstants.allowedExtensions,
         allowMultiple: false,
       );
 

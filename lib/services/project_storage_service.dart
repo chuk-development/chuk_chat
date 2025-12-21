@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
+import 'package:chuk_chat/constants/file_constants.dart';
 import 'package:chuk_chat/models/project_model.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
@@ -466,25 +467,37 @@ class ProjectStorageService {
             ),
           );
 
-      // Step 3: Generate markdown summary (if file path provided)
+      // Step 3: Generate markdown summary
+      // Plain text files: read directly (no API call needed)
+      // Binary files (PDF, Office docs): use convert-file API
       String? markdownSummary;
-      if (generateMarkdown && filePath != null) {
-        try {
-          debugPrint('📝 [ProjectStorage] Generating markdown for: $fileName');
-          final result = await FileConversionService.convertFile(
-            filePath: filePath,
-            accessToken: session.accessToken,
-            userId: user.id,
-          );
-          if (result['success'] == true && result['markdown'] != null) {
-            markdownSummary = result['markdown'] as String;
-            debugPrint('✅ [ProjectStorage] Markdown generated successfully');
-          } else {
-            debugPrint('⚠️ [ProjectStorage] Markdown generation failed: ${result['error']}');
+      if (generateMarkdown) {
+        final extension = fileType.toLowerCase();
+
+        if (FileConstants.isPlainText(extension)) {
+          // Plain text file: use content directly
+          final content = utf8.decode(fileBytes, allowMalformed: true);
+          markdownSummary = '**File: $fileName**\n\n```$extension\n$content\n```';
+          debugPrint('📝 [ProjectStorage] Plain text file read directly: $fileName');
+        } else if (filePath != null && FileConstants.requiresConversion(extension)) {
+          // Binary file: use convert-file API
+          try {
+            debugPrint('📝 [ProjectStorage] Generating markdown via API for: $fileName');
+            final result = await FileConversionService.convertFile(
+              filePath: filePath,
+              accessToken: session.accessToken,
+              userId: user.id,
+            );
+            if (result['success'] == true && result['markdown'] != null) {
+              markdownSummary = result['markdown'] as String;
+              debugPrint('✅ [ProjectStorage] Markdown generated successfully');
+            } else {
+              debugPrint('⚠️ [ProjectStorage] Markdown generation failed: ${result['error']}');
+            }
+          } catch (e) {
+            debugPrint('⚠️ [ProjectStorage] Markdown generation error: $e');
+            // Continue without markdown - don't fail the upload
           }
-        } catch (e) {
-          debugPrint('⚠️ [ProjectStorage] Markdown generation error: $e');
-          // Continue without markdown - don't fail the upload
         }
       }
 

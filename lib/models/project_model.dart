@@ -1,5 +1,6 @@
 // lib/models/project_model.dart
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/constants/file_constants.dart';
 
 /// Represents a project workspace that groups chats, files, and custom system prompts
 class Project {
@@ -261,35 +262,8 @@ class ProjectFile {
   }
 
   /// Check if file is a text-based file that can be previewed
-  bool get isPreviewable {
-    final ext = fileName.split('.').last.toLowerCase();
-    const previewableExts = {
-      // Text files
-      'txt', 'md', 'markdown', 'log', 'readme',
-      // Data files
-      'json', 'yaml', 'yml', 'csv', 'xml', 'toml', 'ini', 'cfg', 'conf',
-      // Shell/scripts
-      'sh', 'bash', 'zsh', 'fish', 'bat', 'cmd', 'ps1',
-      // Programming languages
-      'dart', 'js', 'ts', 'jsx', 'tsx', 'py', 'pyw',
-      'java', 'kt', 'kts', 'scala', 'groovy',
-      'cpp', 'c', 'h', 'hpp', 'cc', 'cxx',
-      'cs', 'fs', 'vb',
-      'rs', 'go', 'rb', 'php', 'swift', 'lua', 'r',
-      'pl', 'pm', 'ex', 'exs', 'erl', 'hrl',
-      'clj', 'cljs', 'cljc', 'hs', 'lhs',
-      // Web
-      'html', 'htm', 'css', 'scss', 'sass', 'less',
-      'vue', 'svelte', 'astro',
-      // Database/query
-      'sql', 'graphql', 'gql',
-      // DevOps/config
-      'dockerfile', 'containerfile', 'vagrantfile',
-      'makefile', 'cmake', 'gradle',
-      'env', 'gitignore', 'dockerignore', 'editorconfig',
-    };
-    return previewableExts.contains(ext);
-  }
+  /// Uses shared FileConstants for consistency with chat file handling
+  bool get isPreviewable => FileConstants.isPlainText(extension);
 
   /// Check if file is a text-based file (not binary)
   bool get isTextFile => isPreviewable;
@@ -298,10 +272,8 @@ class ProjectFile {
   String get extension => fileName.split('.').last.toLowerCase();
 
   /// Check if file is an image
-  bool get isImage {
-    const imageExts = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'};
-    return imageExts.contains(extension);
-  }
+  /// Uses shared FileConstants for consistency with chat file handling
+  bool get isImage => FileConstants.isImage(extension);
 
   /// Check if file is a PDF
   bool get isPdf => extension == 'pdf';
