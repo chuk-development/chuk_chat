@@ -125,7 +125,6 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
 
   void _openProjectsPage() {
     // Toggle projects panel - don't close sidebar
-    debugPrint('📂 _openProjectsPage called, current panel: $_activePanel');
     setState(() {
       if (_activePanel == 'projects') {
         _activePanel = null;
@@ -133,7 +132,6 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
         _activePanel = 'projects';
       }
     });
-    debugPrint('📂 After setState, panel: $_activePanel');
   }
 
   void _openProject(String projectId) {
@@ -171,7 +169,6 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
 
   void _openMediaPage() {
     // Toggle media panel - don't close sidebar
-    debugPrint('🖼️ _openMediaPage called, current panel: $_activePanel');
     setState(() {
       if (_activePanel == 'media') {
         _activePanel = null;
@@ -179,7 +176,6 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
         _activePanel = 'media';
       }
     });
-    debugPrint('🖼️ After setState, panel: $_activePanel');
   }
 
   void _handleChatSelected(String? chatId) {
@@ -271,7 +267,6 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     // Panel width for Projects/Media
     const double panelWidth = 400.0;
     final bool showPanel = _activePanel != null && !isCompactMode;
-    debugPrint('🔧 Build: _activePanel=$_activePanel, isCompactMode=$isCompactMode, showPanel=$showPanel');
 
     return Scaffold(
       body: Stack(
