@@ -5,7 +5,9 @@ import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 
 class MediaManagerPage extends StatefulWidget {
-  const MediaManagerPage({super.key});
+  final bool embedded;
+
+  const MediaManagerPage({super.key, this.embedded = false});
 
   @override
   State<MediaManagerPage> createState() => _MediaManagerPageState();
@@ -366,6 +368,51 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
   Widget build(BuildContext context) {
     final iconFg = Theme.of(context).resolvedIconColor;
     final isMobile = MediaQuery.of(context).size.width < 800;
+
+    // In embedded mode, show simplified UI without Scaffold
+    if (widget.embedded) {
+      return Column(
+        children: [
+          // Toolbar for embedded mode
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                if (_isSelectionMode) ...[
+                  Text(
+                    '${_selectedImages.length} selected',
+                    style: TextStyle(color: iconFg, fontWeight: FontWeight.w500),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.red),
+                    onPressed: _deleteSelectedImages,
+                    tooltip: 'Delete selected',
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.close, color: iconFg),
+                    onPressed: _exitSelectionMode,
+                    tooltip: 'Cancel',
+                  ),
+                ] else ...[
+                  Text(
+                    '${_images.length} image${_images.length == 1 ? '' : 's'}',
+                    style: TextStyle(color: iconFg.withValues(alpha: 0.7)),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: Icon(Icons.refresh, color: iconFg),
+                    onPressed: _loadImages,
+                    tooltip: 'Refresh',
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Expanded(child: _buildBody(isMobile, iconFg)),
+        ],
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(

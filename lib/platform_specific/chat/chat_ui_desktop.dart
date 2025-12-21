@@ -27,6 +27,8 @@ import 'package:chuk_chat/services/image_generation_service.dart';
 import 'package:chuk_chat/constants/file_constants.dart';
 import 'package:chuk_chat/pages/pricing_page.dart';
 import 'package:chuk_chat/widgets/project_panel.dart';
+import 'package:chuk_chat/widgets/project_selection_dropdown.dart';
+import 'package:chuk_chat/services/project_message_service.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
@@ -116,6 +118,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   String _selectedModelId = 'deepseek/deepseek-chat-v3.1';
   String? _selectedProviderSlug;
   String? _systemPrompt;
+  String? _selectedProjectId;
   late final VoidCallback _modelSelectionListener;
 
   bool _isImageActive = false;
@@ -165,6 +168,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
     });
+    _selectedProjectId = widget.projectId;
     _loadChatById(widget.selectedChatId);
     unawaited(_loadProviderSlugForModel(_selectedModelId));
     unawaited(_loadSystemPrompt());
@@ -194,6 +198,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   void didUpdateWidget(covariant ChukChatUIDesktop oldWidget) {
     // RENAMED WIDGET TYPE
     super.didUpdateWidget(oldWidget);
+
+    // Sync project ID from parent if it changes
+    if (widget.projectId != oldWidget.projectId) {
+      setState(() {
+        _selectedProjectId = widget.projectId;
+      });
+    }
+
     // ID-BASED: Only react when the actual chat ID changes
     if (widget.selectedChatId != oldWidget.selectedChatId) {
       debugPrint('');
@@ -494,21 +506,39 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   }
 
   Future<String?> _resolveSystemPromptForSend() async {
-    if (_systemPrompt != null) return _systemPrompt;
-    try {
-      final prompt = await UserPreferencesService.loadSystemPrompt();
-      if (mounted) {
-        setState(() {
-          _systemPrompt = prompt;
-        });
-      } else {
-        _systemPrompt = prompt;
+    // Start with user's base system prompt
+    String? basePrompt = _systemPrompt;
+    if (basePrompt == null) {
+      try {
+        basePrompt = await UserPreferencesService.loadSystemPrompt();
+        if (mounted) {
+          setState(() {
+            _systemPrompt = basePrompt;
+          });
+        } else {
+          _systemPrompt = basePrompt;
+        }
+      } catch (error) {
+        debugPrint('Error resolving system prompt for send: $error');
       }
-      return prompt;
-    } catch (error) {
-      debugPrint('Error resolving system prompt for send: $error');
-      return _systemPrompt;
     }
+
+    // If a project is active, prepend project context
+    if (_selectedProjectId != null) {
+      try {
+        final projectContext = await ProjectMessageService.buildProjectSystemMessage(_selectedProjectId!);
+        // Combine project context with user's system prompt
+        if (basePrompt != null && basePrompt.isNotEmpty) {
+          return '$projectContext\n\n---\n\nAdditional User Instructions:\n$basePrompt';
+        }
+        return projectContext;
+      } catch (error) {
+        debugPrint('Error building project system message: $error');
+        // Fall back to base prompt if project context fails
+      }
+    }
+
+    return basePrompt;
   }
 
   bool get _modelSupportsImageInput =>
@@ -2898,24 +2928,43 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                 debugLabel: 'Image Gen button',
                               ),
                             ],
-                            // Spacer to push the dropdown to the right edge while
-                            // still letting it grow with longer model names.
+                            // Spacer to push the dropdowns to the right edge
                             Expanded(
-                              child: Align(
-                                alignment: Alignment.centerRight,
-                                child: ModelSelectionDropdown(
-                                  initialSelectedModelId: _selectedModelId,
-                                  onModelSelected: (newModelId) {
-                                    setState(() {
-                                      _selectedModelId = newModelId;
-                                    });
-                                    debugPrint(
-                                      'Selected model ID: $_selectedModelId',
-                                    );
-                                  },
-                                  textFieldFocusNode: _textFieldFocusNode,
-                                  isCompactMode: isCompactMode,
-                                ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  // Project Selection Dropdown (only when feature enabled)
+                                  if (kFeatureProjects) ...[
+                                    ProjectSelectionDropdown(
+                                      selectedProjectId: _selectedProjectId,
+                                      onProjectSelected: (projectId) {
+                                        setState(() {
+                                          _selectedProjectId = projectId;
+                                        });
+                                        debugPrint(
+                                          'Selected project ID: $_selectedProjectId',
+                                        );
+                                      },
+                                      textFieldFocusNode: _textFieldFocusNode,
+                                      isCompactMode: isCompactMode,
+                                    ),
+                                    const SizedBox(width: 8),
+                                  ],
+                                  // Model Selection Dropdown
+                                  ModelSelectionDropdown(
+                                    initialSelectedModelId: _selectedModelId,
+                                    onModelSelected: (newModelId) {
+                                      setState(() {
+                                        _selectedModelId = newModelId;
+                                      });
+                                      debugPrint(
+                                        'Selected model ID: $_selectedModelId',
+                                      );
+                                    },
+                                    textFieldFocusNode: _textFieldFocusNode,
+                                    isCompactMode: isCompactMode,
+                                  ),
+                                ],
                               ),
                             ),
                           ],

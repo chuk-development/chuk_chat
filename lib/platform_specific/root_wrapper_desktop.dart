@@ -83,6 +83,7 @@ class RootWrapperDesktop extends StatefulWidget {
 class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   bool _isSidebarExpanded = false;
   String? _activeProjectId;
+  String? _activePanel; // 'projects', 'media', or null
 
   final GlobalKey<ChukChatUIDesktopState> _chatUIKey = GlobalKey();
 
@@ -123,21 +124,20 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   }
 
   void _openProjectsPage() {
-    if (_isSidebarExpanded) _toggleSidebar();
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ProjectsPage(
-          onOpenProject: _openProject,
-        ),
-      ),
-    );
+    // Toggle projects panel - don't close sidebar
+    setState(() {
+      if (_activePanel == 'projects') {
+        _activePanel = null;
+      } else {
+        _activePanel = 'projects';
+      }
+    });
   }
 
   void _openProject(String projectId) {
-    // Close any open pages and go back to root
-    Navigator.of(context).popUntil((route) => route.isFirst);
     setState(() {
       _activeProjectId = projectId;
+      _activePanel = null; // Close projects panel
       // Start a new chat for this project
       _chatUIKey.currentState?.newChat();
     });
@@ -146,6 +146,12 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   void _exitProject() {
     setState(() {
       _activeProjectId = null;
+    });
+  }
+
+  void _closePanel() {
+    setState(() {
+      _activePanel = null;
     });
   }
 
@@ -162,12 +168,14 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   }
 
   void _openMediaPage() {
-    if (_isSidebarExpanded) _toggleSidebar();
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const MediaManagerPage(),
-      ),
-    );
+    // Toggle media panel - don't close sidebar
+    setState(() {
+      if (_activePanel == 'media') {
+        _activePanel = null;
+      } else {
+        _activePanel = 'media';
+      }
+    });
   }
 
   void _handleChatSelected(String? chatId) {
@@ -256,6 +264,10 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       imageGenUseCustomSize: widget.imageGenUseCustomSize,
     );
 
+    // Panel width for Projects/Media
+    const double panelWidth = 400.0;
+    final bool showPanel = _activePanel != null && !isCompactMode;
+
     return Scaffold(
       body: Stack(
         children: [
@@ -264,7 +276,77 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
               left: (!isCompactMode && _isSidebarExpanded)
                   ? effectiveSidebarWidth
                   : 0,
+              right: showPanel ? panelWidth : 0,
               child: chatArea,
+            ),
+
+          // Projects/Media Panel (right side)
+          if (showPanel)
+            Positioned(
+              right: 0,
+              top: 0,
+              bottom: 0,
+              width: panelWidth,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  border: Border(
+                    left: BorderSide(
+                      color: iconFg.withValues(alpha: 0.2),
+                    ),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    // Panel header with close button
+                    Container(
+                      height: 56,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          bottom: BorderSide(
+                            color: iconFg.withValues(alpha: 0.1),
+                          ),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _activePanel == 'projects'
+                                ? Icons.folder_open
+                                : Icons.photo_library_outlined,
+                            color: iconFg,
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            _activePanel == 'projects' ? 'Projects' : 'Media',
+                            style: TextStyle(
+                              color: iconFg,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            icon: Icon(Icons.close, color: iconFg),
+                            onPressed: _closePanel,
+                            tooltip: 'Close',
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Panel content
+                    Expanded(
+                      child: _activePanel == 'projects'
+                          ? ProjectsPage(
+                              onOpenProject: _openProject,
+                              embedded: true,
+                            )
+                          : const MediaManagerPage(embedded: true),
+                    ),
+                  ],
+                ),
+              ),
             ),
 
           // Always build sidebar to preserve state, but hide it when collapsed

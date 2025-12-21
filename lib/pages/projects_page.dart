@@ -9,8 +9,9 @@ import 'package:flutter/material.dart';
 
 class ProjectsPage extends StatefulWidget {
   final void Function(String projectId)? onOpenProject;
+  final bool embedded;
 
-  const ProjectsPage({super.key, this.onOpenProject});
+  const ProjectsPage({super.key, this.onOpenProject, this.embedded = false});
 
   @override
   State<ProjectsPage> createState() => _ProjectsPageState();
@@ -154,6 +155,89 @@ class _ProjectsPageState extends State<ProjectsPage> {
     final iconFg = Theme.of(context).resolvedIconColor;
     final isMobile = MediaQuery.of(context).size.width < 800;
 
+    final body = Column(
+      children: [
+        // Create button for embedded mode
+        if (widget.embedded)
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _createProject,
+                    icon: const Icon(Icons.add),
+                    label: const Text('Create Project'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        // Search bar
+        Padding(
+          padding: EdgeInsets.fromLTRB(16, widget.embedded ? 0 : 16, 16, 16),
+          child: TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: 'Search projects...',
+              prefixIcon: Icon(Icons.search, color: iconFg),
+              suffixIcon: _searchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: Icon(Icons.clear, color: iconFg),
+                      onPressed: () => _searchController.clear(),
+                    )
+                  : null,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+        ),
+
+        // Project list
+        Expanded(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _filteredProjects.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.folder_open,
+                              size: 64, color: iconFg.withOpacity(0.3)),
+                          const SizedBox(height: 16),
+                          Text(
+                            _searchQuery.isEmpty
+                                ? 'No projects yet'
+                                : 'No projects found',
+                            style: TextStyle(color: iconFg.withOpacity(0.5)),
+                          ),
+                          if (_searchQuery.isEmpty) ...[
+                            const SizedBox(height: 8),
+                            TextButton.icon(
+                              onPressed: _createProject,
+                              icon: const Icon(Icons.add),
+                              label: const Text('Create your first project'),
+                            ),
+                          ],
+                        ],
+                      ),
+                    )
+                  : RefreshIndicator(
+                      onRefresh: _loadProjects,
+                      child: isMobile && !widget.embedded
+                          ? _buildMobileList()
+                          : _buildDesktopGrid(),
+                    ),
+        ),
+      ],
+    );
+
+    // In embedded mode, just return the body without Scaffold
+    if (widget.embedded) {
+      return body;
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Projects'),
@@ -169,67 +253,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // Search bar
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Search projects...',
-                prefixIcon: Icon(Icons.search, color: iconFg),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: Icon(Icons.clear, color: iconFg),
-                        onPressed: () => _searchController.clear(),
-                      )
-                    : null,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-            ),
-          ),
-
-          // Project list
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _filteredProjects.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.folder_open,
-                                size: 64, color: iconFg.withOpacity(0.3)),
-                            const SizedBox(height: 16),
-                            Text(
-                              _searchQuery.isEmpty
-                                  ? 'No projects yet'
-                                  : 'No projects found',
-                              style: TextStyle(color: iconFg.withOpacity(0.5)),
-                            ),
-                            if (_searchQuery.isEmpty) ...[
-                              const SizedBox(height: 8),
-                              TextButton.icon(
-                                onPressed: _createProject,
-                                icon: const Icon(Icons.add),
-                                label: const Text('Create your first project'),
-                              ),
-                            ],
-                          ],
-                        ),
-                      )
-                    : RefreshIndicator(
-                        onRefresh: _loadProjects,
-                        child: isMobile
-                            ? _buildMobileList()
-                            : _buildDesktopGrid(),
-                      ),
-          ),
-        ],
-      ),
+      body: body,
       floatingActionButton: isMobile
           ? FloatingActionButton(
               onPressed: _createProject,
