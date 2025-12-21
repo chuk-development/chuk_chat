@@ -87,11 +87,13 @@ Encrypted files attached to projects.
 id                UUID PRIMARY KEY
 project_id        UUID REFERENCES projects
 file_name         TEXT
-encrypted_content TEXT
+storage_path      TEXT  -- Path in Supabase storage bucket
 file_type         TEXT
 file_size         INTEGER
 uploaded_at       TIMESTAMP
+markdown_summary  TEXT  -- AI-generated markdown summary (optional)
 ```
+Files stored encrypted in `project-files` bucket. Markdown generated via `/ai/convert-file` API.
 
 ## RPC Functions
 
@@ -105,5 +107,7 @@ uploaded_at       TIMESTAMP
 ## Migrations
 Located in `migrations/` folder:
 - `free_messages.sql` - Free messages feature
-- `projects.sql` - Projects feature
+- `projects.sql` - Projects feature (tables + RLS policies)
+- `project_files_markdown.sql` - Add markdown_summary column (run after projects.sql)
+- `project_files_storage.sql` - Storage bucket RLS policies for project-files
 - `image_gen_settings.sql` - Image generation settings
