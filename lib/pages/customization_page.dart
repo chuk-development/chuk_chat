@@ -61,6 +61,9 @@ class _CustomizationPageState extends State<CustomizationPage> {
   // Auto title generation state
   bool _autoGenerateTitles = false;
   bool _isLoadingTitleSetting = true;
+  bool _hasCustomPrompt = false;
+  final TextEditingController _promptController = TextEditingController();
+  bool _isPromptExpanded = false;
 
   // Size preset options with their dimensions
   static const Map<String, Map<String, dynamic>> _sizePresets = {
@@ -88,12 +91,56 @@ class _CustomizationPageState extends State<CustomizationPage> {
 
   Future<void> _loadAutoTitleSetting() async {
     final enabled = await TitleGenerationService.isEnabled();
+    final prompt = await TitleGenerationService.getSystemPrompt();
+    final hasCustom = await TitleGenerationService.hasCustomSystemPrompt();
     if (mounted) {
       setState(() {
         _autoGenerateTitles = enabled;
+        _hasCustomPrompt = hasCustom;
+        _promptController.text = prompt;
         _isLoadingTitleSetting = false;
       });
     }
+  }
+
+  Future<void> _saveSystemPrompt() async {
+    await TitleGenerationService.setSystemPrompt(_promptController.text);
+    final hasCustom = await TitleGenerationService.hasCustomSystemPrompt();
+    if (mounted) {
+      setState(() {
+        _hasCustomPrompt = hasCustom;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('System prompt saved'),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  Future<void> _resetSystemPrompt() async {
+    await TitleGenerationService.resetSystemPrompt();
+    if (mounted) {
+      setState(() {
+        _hasCustomPrompt = false;
+        _promptController.text = TitleGenerationService.defaultSystemPrompt;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('System prompt reset to default'),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _promptController.dispose();
+    super.dispose();
   }
 
   @override
@@ -208,10 +255,15 @@ class _CustomizationPageState extends State<CustomizationPage> {
             scaffoldBg: scaffoldBg,
             iconFg: iconFg,
           ),
+          // System prompt editor (only shown when auto-generate is enabled)
+          if (_autoGenerateTitles && !_isLoadingTitleSetting) ...[
+            const SizedBox(height: 12),
+            _buildSystemPromptEditor(scaffoldBg, iconFg),
+          ],
           const SizedBox(height: 8),
           _buildInfoCard(
             context,
-            'When enabled, a short title will be automatically generated for new chats based on your first message. Uses a fast, lightweight AI model.',
+            'When enabled, a short title will be automatically generated for new chats based on your first message. Uses a fast, lightweight AI model (qwen3-8b).',
             scaffoldBg,
             iconFg,
           ),
@@ -269,6 +321,129 @@ class _CustomizationPageState extends State<CustomizationPage> {
               'Image generation costs approximately 0.01 EUR per image (1 megapixel). Cost scales with image resolution.',
               scaffoldBg,
               iconFg,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSystemPromptEditor(Color scaffoldBg, Color iconFg) {
+    final theme = Theme.of(context);
+    return Card(
+      color: scaffoldBg.lighten(0.05),
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: iconFg.withValues(alpha: 0.3), width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header with expand/collapse
+          InkWell(
+            onTap: () {
+              setState(() {
+                _isPromptExpanded = !_isPromptExpanded;
+              });
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  Icon(Icons.edit_note, color: iconFg, size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Title Generation Prompt',
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _hasCustomPrompt ? 'Using custom prompt' : 'Using default prompt',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: iconFg.withValues(alpha: 0.7),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    _isPromptExpanded ? Icons.expand_less : Icons.expand_more,
+                    color: iconFg,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Expandable content
+          if (_isPromptExpanded) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'System prompt used to generate titles:',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: iconFg.withValues(alpha: 0.7),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _promptController,
+                    maxLines: 6,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontFamily: 'monospace',
+                      fontSize: 13,
+                    ),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: scaffoldBg,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: iconFg.withValues(alpha: 0.3)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: iconFg.withValues(alpha: 0.3)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: theme.colorScheme.primary),
+                      ),
+                      contentPadding: const EdgeInsets.all(12),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton.icon(
+                        onPressed: _resetSystemPrompt,
+                        icon: Icon(Icons.restore, size: 18),
+                        label: const Text('Reset'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: iconFg.withValues(alpha: 0.7),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton.icon(
+                        onPressed: _saveSystemPrompt,
+                        icon: Icon(Icons.save, size: 18),
+                        label: const Text('Save'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ],
         ],

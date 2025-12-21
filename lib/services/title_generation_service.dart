@@ -16,11 +16,22 @@ class TitleGenerationService {
   static const String _titleModel = 'qwen/qwen3-8b';
   static const String _titleProvider = 'fireworks';
 
-  // Settings key
+  // Settings keys
   static const String _settingsKey = 'auto_generate_titles';
+  static const String _systemPromptKey = 'title_gen_system_prompt';
 
-  // In-memory cache of setting
+  // Default system prompt - ChatGPT-style concise title generation
+  static const String defaultSystemPrompt = '''Generate a brief title for this conversation based on the user's first message.
+
+Rules:
+- 2-6 words maximum
+- Capture the main topic or intent
+- No quotes or punctuation
+- No explanations, just the title''';
+
+  // In-memory cache of settings
   static bool? _autoGenerateTitlesEnabled;
+  static String? _customSystemPrompt;
 
   /// Check if auto title generation is enabled
   static Future<bool> isEnabled() async {
@@ -49,6 +60,58 @@ class TitleGenerationService {
     }
   }
 
+  /// Get the current system prompt (custom or default)
+  static Future<String> getSystemPrompt() async {
+    if (_customSystemPrompt != null) {
+      return _customSystemPrompt!;
+    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _customSystemPrompt = prefs.getString(_systemPromptKey);
+      return _customSystemPrompt ?? defaultSystemPrompt;
+    } catch (e) {
+      debugPrint('Error loading system prompt: $e');
+      return defaultSystemPrompt;
+    }
+  }
+
+  /// Set a custom system prompt
+  static Future<void> setSystemPrompt(String prompt) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prompt.trim().isEmpty || prompt.trim() == defaultSystemPrompt.trim()) {
+        // Clear custom prompt if empty or same as default
+        await prefs.remove(_systemPromptKey);
+        _customSystemPrompt = null;
+        debugPrint('System prompt reset to default');
+      } else {
+        await prefs.setString(_systemPromptKey, prompt);
+        _customSystemPrompt = prompt;
+        debugPrint('Custom system prompt saved');
+      }
+    } catch (e) {
+      debugPrint('Error saving system prompt: $e');
+    }
+  }
+
+  /// Reset system prompt to default
+  static Future<void> resetSystemPrompt() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_systemPromptKey);
+      _customSystemPrompt = null;
+      debugPrint('System prompt reset to default');
+    } catch (e) {
+      debugPrint('Error resetting system prompt: $e');
+    }
+  }
+
+  /// Check if using custom system prompt
+  static Future<bool> hasCustomSystemPrompt() async {
+    final prompt = await getSystemPrompt();
+    return prompt != defaultSystemPrompt;
+  }
+
   /// Generate a title for a chat based on the first user message.
   /// Returns null if generation fails or feature is disabled.
   static Future<String?> generateTitle(String firstMessage) async {
@@ -67,16 +130,11 @@ class TitleGenerationService {
 
       final accessToken = session.accessToken;
 
-      // System prompt for title generation
-      const systemPrompt = '''You are a title generator. Your ONLY job is to create short, concise titles (3-6 words) for chat conversations.
-Rules:
-- Output ONLY the title, nothing else
-- No quotes, no explanation, no punctuation at the end
-- No thinking or reasoning - just the title
-- Keep it under 6 words''';
+      // Get system prompt (custom or default)
+      final systemPrompt = await getSystemPrompt();
 
-      // User message - the actual content to create a title for
-      final userMessage = 'Create a title for this message: $firstMessage';
+      // User message - just the content, system prompt handles the instruction
+      final userMessage = firstMessage;
 
       debugPrint('📝 [TitleGen] Generating title for: ${firstMessage.substring(0, firstMessage.length.clamp(0, 50))}...');
 
