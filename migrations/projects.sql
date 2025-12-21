@@ -123,6 +123,7 @@ CREATE TABLE IF NOT EXISTS project_files (
   file_type TEXT NOT NULL,
   file_size BIGINT NOT NULL,
   uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  markdown_summary TEXT,  -- AI-generated markdown summary of the file content
 
   -- Constraints
   CONSTRAINT file_name_not_empty CHECK (LENGTH(TRIM(file_name)) > 0),

@@ -120,6 +120,7 @@ class ProjectFile {
   final String fileType;
   final int fileSize;
   final DateTime uploadedAt;
+  final String? markdownSummary;
 
   ProjectFile({
     required this.id,
@@ -129,6 +130,7 @@ class ProjectFile {
     required this.fileType,
     required this.fileSize,
     required this.uploadedAt,
+    this.markdownSummary,
   });
 
   factory ProjectFile.fromJson(Map<String, dynamic> json) {
@@ -140,6 +142,7 @@ class ProjectFile {
       fileType: json['file_type'] as String,
       fileSize: json['file_size'] as int,
       uploadedAt: DateTime.parse(json['uploaded_at'] as String),
+      markdownSummary: json['markdown_summary'] as String?,
     );
   }
 
@@ -151,7 +154,34 @@ class ProjectFile {
         'file_type': fileType,
         'file_size': fileSize,
         'uploaded_at': uploadedAt.toIso8601String(),
+        if (markdownSummary != null) 'markdown_summary': markdownSummary,
       };
+
+  ProjectFile copyWith({
+    String? id,
+    String? projectId,
+    String? fileName,
+    String? storagePath,
+    String? fileType,
+    int? fileSize,
+    DateTime? uploadedAt,
+    String? markdownSummary,
+  }) {
+    return ProjectFile(
+      id: id ?? this.id,
+      projectId: projectId ?? this.projectId,
+      fileName: fileName ?? this.fileName,
+      storagePath: storagePath ?? this.storagePath,
+      fileType: fileType ?? this.fileType,
+      fileSize: fileSize ?? this.fileSize,
+      uploadedAt: uploadedAt ?? this.uploadedAt,
+      markdownSummary: markdownSummary ?? this.markdownSummary,
+    );
+  }
+
+  /// Check if this file has an AI-generated markdown summary
+  bool get hasMarkdownSummary =>
+      markdownSummary != null && markdownSummary!.trim().isNotEmpty;
 
   /// Get formatted file size (e.g., "1.5 MB")
   String get fileSizeFormatted {
@@ -266,4 +296,10 @@ class ProjectFile {
 
   /// Get file extension
   String get extension => fileName.split('.').last.toLowerCase();
+
+  /// Check if file is an image
+  bool get isImage {
+    const imageExts = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'};
+    return imageExts.contains(extension);
+  }
 }

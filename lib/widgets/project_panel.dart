@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:chuk_chat/models/project_model.dart';
 import 'package:chuk_chat/services/project_storage_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/project_file_viewer.dart';
 
 /// Right-side panel for project settings (Instructions + Files)
 class ProjectPanel extends StatefulWidget {
@@ -83,10 +84,13 @@ class _ProjectPanelState extends State<ProjectPanel> {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: [
+          // Text/code files
           'txt', 'md', 'json', 'yaml', 'yml', 'csv', 'xml',
           'dart', 'js', 'ts', 'py', 'java', 'cpp', 'c', 'h',
           'rs', 'go', 'rb', 'php', 'swift', 'kt',
           'html', 'htm', 'css', 'scss',
+          // Images
+          'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp',
         ],
         allowMultiple: false,
       );
@@ -98,7 +102,8 @@ class _ProjectPanelState extends State<ProjectPanel> {
 
       setState(() => _isUploadingFile = true);
 
-      final fileBytes = await File(file.path!).readAsBytes();
+      final filePath = file.path!;
+      final fileBytes = await File(filePath).readAsBytes();
       final fileName = file.name;
       final fileType = fileName.split('.').last;
 
@@ -107,6 +112,8 @@ class _ProjectPanelState extends State<ProjectPanel> {
         fileName,
         fileBytes,
         fileType,
+        filePath: filePath,
+        generateMarkdown: true,
       );
 
       if (mounted) {
@@ -466,44 +473,72 @@ class _ProjectPanelState extends State<ProjectPanel> {
     );
   }
 
+  void _openFileViewer(ProjectFile file) {
+    ProjectFileViewer.show(context, file, widget.projectId);
+  }
+
   Widget _buildFileItem(ProjectFile file) {
     final iconFg = Theme.of(context).resolvedIconColor;
     final accentColor = Theme.of(context).colorScheme.primary;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Icon(file.fileIcon, size: 20, color: accentColor),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  file.fileName,
-                  style: TextStyle(fontSize: 13, color: iconFg),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  file.fileSizeFormatted,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: iconFg.withAlpha(150),
+    return InkWell(
+      onTap: () => _openFileViewer(file),
+      borderRadius: BorderRadius.circular(6),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+        child: Row(
+          children: [
+            Icon(file.fileIcon, size: 20, color: accentColor),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    file.fileName,
+                    style: TextStyle(fontSize: 13, color: iconFg),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-              ],
+                  Row(
+                    children: [
+                      Text(
+                        file.fileSizeFormatted,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: iconFg.withAlpha(150),
+                        ),
+                      ),
+                      if (file.hasMarkdownSummary) ...[
+                        const SizedBox(width: 8),
+                        Icon(
+                          Icons.description,
+                          size: 12,
+                          color: accentColor.withAlpha(180),
+                        ),
+                        const SizedBox(width: 2),
+                        Text(
+                          'Summary',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: accentColor.withAlpha(180),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-          IconButton(
-            icon: Icon(Icons.close, size: 16, color: iconFg.withAlpha(150)),
-            onPressed: () => _deleteFile(file),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
-            tooltip: 'Remove file',
-          ),
-        ],
+            IconButton(
+              icon: Icon(Icons.close, size: 16, color: iconFg.withAlpha(150)),
+              onPressed: () => _deleteFile(file),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+              tooltip: 'Remove file',
+            ),
+          ],
+        ),
       ),
     );
   }

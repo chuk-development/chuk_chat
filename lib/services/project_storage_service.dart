@@ -9,6 +9,7 @@ import 'package:uuid/uuid.dart';
 import 'package:chuk_chat/models/project_model.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/services/file_conversion_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
 /// Service for managing project workspaces, chat assignments, and file attachments
@@ -418,15 +419,24 @@ class ProjectStorageService {
   // ============ FILE MANAGEMENT ============
 
   /// Upload a file to a project (encrypted in Supabase Storage)
+  /// If [filePath] is provided and [generateMarkdown] is true, will also generate
+  /// an AI markdown summary of the file content.
   static Future<ProjectFile> uploadFile(
     String projectId,
     String fileName,
     Uint8List fileBytes,
-    String fileType,
-  ) async {
+    String fileType, {
+    String? filePath,
+    bool generateMarkdown = true,
+  }) async {
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
       throw StateError('User must be signed in to upload files.');
+    }
+
+    final session = SupabaseService.auth.currentSession;
+    if (session == null) {
+      throw StateError('No active session. Please sign in again.');
     }
 
     if (!EncryptionService.hasKey) {
@@ -438,7 +448,7 @@ class ProjectStorageService {
 
     try {
       // Step 1: Encrypt file content
-      final fileContent = utf8.decode(fileBytes);
+      final fileContent = utf8.decode(fileBytes, allowMalformed: true);
       final encryptedJson = await EncryptionService.encrypt(fileContent);
       final encryptedBytes = Uint8List.fromList(utf8.encode(encryptedJson));
 
@@ -456,16 +466,43 @@ class ProjectStorageService {
             ),
           );
 
-      // Step 3: Save metadata to database
+      // Step 3: Generate markdown summary (if file path provided)
+      String? markdownSummary;
+      if (generateMarkdown && filePath != null) {
+        try {
+          debugPrint('📝 [ProjectStorage] Generating markdown for: $fileName');
+          final result = await FileConversionService.convertFile(
+            filePath: filePath,
+            accessToken: session.accessToken,
+            userId: user.id,
+          );
+          if (result['success'] == true && result['markdown'] != null) {
+            markdownSummary = result['markdown'] as String;
+            debugPrint('✅ [ProjectStorage] Markdown generated successfully');
+          } else {
+            debugPrint('⚠️ [ProjectStorage] Markdown generation failed: ${result['error']}');
+          }
+        } catch (e) {
+          debugPrint('⚠️ [ProjectStorage] Markdown generation error: $e');
+          // Continue without markdown - don't fail the upload
+        }
+      }
+
+      // Step 4: Save metadata to database
+      final insertData = {
+        'project_id': projectId,
+        'file_name': fileName,
+        'storage_path': storagePath,
+        'file_type': fileType,
+        'file_size': fileBytes.length,
+      };
+      if (markdownSummary != null) {
+        insertData['markdown_summary'] = markdownSummary;
+      }
+
       final inserted = await SupabaseService.client
           .from('project_files')
-          .insert({
-            'project_id': projectId,
-            'file_name': fileName,
-            'storage_path': storagePath,
-            'file_type': fileType,
-            'file_size': fileBytes.length,
-          })
+          .insert(insertData)
           .select()
           .single();
 
@@ -583,6 +620,164 @@ class ProjectStorageService {
       return decryptedContent;
     } catch (e, st) {
       debugPrint('❌ [ProjectStorage] Failed to download/decrypt file: $e\n$st');
+      rethrow;
+    }
+  }
+
+  /// Download and decrypt a file, returning raw bytes
+  static Future<Uint8List> downloadFile(String projectId, String fileId) async {
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) {
+      throw StateError('User must be signed in to download files.');
+    }
+
+    if (!EncryptionService.hasKey) {
+      final loaded = await EncryptionService.tryLoadKey();
+      if (!loaded) {
+        throw StateError('Encryption key is missing. Please sign in again.');
+      }
+    }
+
+    try {
+      // Find file in project
+      final project = _projectsById[projectId];
+      final file = project?.files.firstWhere((f) => f.id == fileId);
+
+      if (file == null) {
+        throw StateError('File not found');
+      }
+
+      // Download encrypted file from storage
+      final encryptedBytes = await SupabaseService.client.storage
+          .from(bucketName)
+          .download(file.storagePath);
+
+      // Convert bytes to string (JSON format)
+      final encryptedJson = utf8.decode(encryptedBytes);
+
+      // Decrypt the file content
+      final decryptedContent = await EncryptionService.decrypt(encryptedJson);
+
+      // Return as bytes
+      return Uint8List.fromList(utf8.encode(decryptedContent));
+    } catch (e, st) {
+      debugPrint('❌ [ProjectStorage] Failed to download file: $e\n$st');
+      rethrow;
+    }
+  }
+
+  /// Update a file's encrypted content
+  static Future<void> updateFileContent(
+    String projectId,
+    String fileId,
+    Uint8List newBytes,
+  ) async {
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) {
+      throw StateError('User must be signed in to update files.');
+    }
+
+    if (!EncryptionService.hasKey) {
+      final loaded = await EncryptionService.tryLoadKey();
+      if (!loaded) {
+        throw StateError('Encryption key is missing. Please sign in again.');
+      }
+    }
+
+    try {
+      // Find file in project
+      final project = _projectsById[projectId];
+      final file = project?.files.firstWhere((f) => f.id == fileId);
+
+      if (file == null) {
+        throw StateError('File not found');
+      }
+
+      // Encrypt new content
+      final fileContent = utf8.decode(newBytes);
+      final encryptedJson = await EncryptionService.encrypt(fileContent);
+      final encryptedBytes = Uint8List.fromList(utf8.encode(encryptedJson));
+
+      // Upload to storage (upsert to replace existing)
+      await SupabaseService.client.storage.from(bucketName).uploadBinary(
+            file.storagePath,
+            encryptedBytes,
+            fileOptions: const FileOptions(
+              contentType: 'application/octet-stream',
+              upsert: true,
+            ),
+          );
+
+      // Update file size in database
+      await SupabaseService.client
+          .from('project_files')
+          .update({'file_size': newBytes.length})
+          .eq('id', fileId);
+
+      // Update cache
+      if (project != null) {
+        final updatedFiles = project.files.map((f) {
+          if (f.id == fileId) {
+            return ProjectFile(
+              id: f.id,
+              projectId: f.projectId,
+              fileName: f.fileName,
+              storagePath: f.storagePath,
+              fileType: f.fileType,
+              fileSize: newBytes.length,
+              uploadedAt: f.uploadedAt,
+              markdownSummary: f.markdownSummary,
+            );
+          }
+          return f;
+        }).toList();
+
+        _projectsById[projectId] = project.copyWith(files: updatedFiles);
+        _notifyChanges();
+      }
+
+      debugPrint('✅ [ProjectStorage] Updated file content: $fileId');
+    } catch (e, st) {
+      debugPrint('❌ [ProjectStorage] Failed to update file: $e\n$st');
+      rethrow;
+    }
+  }
+
+  /// Update a file's markdown summary
+  static Future<void> updateFileMarkdown(
+    String projectId,
+    String fileId,
+    String? markdown,
+  ) async {
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) {
+      throw StateError('User must be signed in to update files.');
+    }
+
+    try {
+      // Update in database
+      await SupabaseService.client
+          .from('project_files')
+          .update({'markdown_summary': markdown})
+          .eq('id', fileId);
+
+      // Update cache
+      final project = _projectsById[projectId];
+      if (project != null) {
+        final updatedFiles = project.files.map((f) {
+          if (f.id == fileId) {
+            return f.copyWith(markdownSummary: markdown);
+          }
+          return f;
+        }).toList();
+
+        _projectsById[projectId] = project.copyWith(files: updatedFiles);
+        _notifyChanges();
+      }
+
+      debugPrint('✅ [ProjectStorage] Updated file markdown: $fileId');
+    } catch (e, st) {
+      debugPrint('❌ [ProjectStorage] Failed to update markdown: $e\n$st');
       rethrow;
     }
   }
