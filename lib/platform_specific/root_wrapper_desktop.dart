@@ -264,9 +264,21 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       imageGenUseCustomSize: widget.imageGenUseCustomSize,
     );
 
-    // Panel width for Projects/Media
-    const double panelWidth = 400.0;
-    final bool showPanel = _activePanel != null && !isCompactMode;
+    // Panel width for Projects/Media - responsive based on screen width
+    // Minimum chat width of 300px required to show panel
+    const double minChatWidth = 300.0;
+    const double minPanelWidth = 320.0;
+    final double sidebarWidth = _isSidebarExpanded ? effectiveSidebarWidth : 0;
+    final double availableForPanel = screenWidth - sidebarWidth - minChatWidth;
+    final double panelWidth = availableForPanel >= minPanelWidth
+        ? math.min(400.0, availableForPanel)
+        : 0;
+    final bool showPanel = _activePanel != null && !isCompactMode && panelWidth > 0;
+
+    // Debug: Log panel state when active
+    if (_activePanel != null) {
+      debugPrint('📐 Panel: screen=$screenWidth, sidebar=$sidebarWidth, available=$availableForPanel, panelWidth=$panelWidth, showPanel=$showPanel');
+    }
 
     return Scaffold(
       body: Stack(
