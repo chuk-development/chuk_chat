@@ -29,6 +29,7 @@ import 'package:chuk_chat/pages/pricing_page.dart';
 import 'package:chuk_chat/widgets/project_panel.dart';
 import 'package:chuk_chat/widgets/project_selection_dropdown.dart';
 import 'package:chuk_chat/services/project_message_service.dart';
+import 'package:chuk_chat/services/title_generation_service.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
@@ -1813,6 +1814,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     // Capture chatId for this streaming operation - ensures correct persistence even if user switches chats
     final String chatIdForStream = _activeChatId!;
+
+    // Auto-generate title for new chats (fire and forget)
+    if (firstMessageInChat) {
+      unawaited(TitleGenerationService.generateAndApplyTitle(
+        chatIdForStream,
+        displayMessageText,
+      ));
+    }
 
     // Start auto-save timer during streaming (uses captured chatId)
     _autoSaveTimer?.cancel();

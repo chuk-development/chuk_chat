@@ -141,8 +141,19 @@ class _ProjectPanelState extends State<ProjectPanel> {
       }
     } catch (e) {
       if (mounted) {
+        // Extract clean error message from StateError
+        String errorMessage;
+        if (e is StateError) {
+          errorMessage = e.message;
+        } else {
+          errorMessage = e.toString();
+        }
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Upload failed: $e')),
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red[700],
+            duration: const Duration(seconds: 5),
+          ),
         );
       }
     } finally {

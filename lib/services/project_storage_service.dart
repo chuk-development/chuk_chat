@@ -487,6 +487,17 @@ class ProjectStorageService {
         if (FileConstants.isPlainText(extension)) {
           // Plain text file: use content directly
           final content = utf8.decode(fileBytes, allowMalformed: true);
+
+          // Check token limit (40k tokens ≈ 160k chars)
+          if (content.length > FileConversionService.maxCharsPerFile) {
+            final estimatedTokens = (content.length / 4).round();
+            throw StateError(
+              'File is too large (~$estimatedTokens tokens). '
+              'Maximum allowed is ${FileConversionService.maxTokensPerFile} tokens. '
+              'Try a smaller file.',
+            );
+          }
+
           markdownSummary = '**File: $fileName**\n\n```$extension\n$content\n```';
           debugPrint('📝 [ProjectStorage] Plain text file read directly: $fileName');
         } else if (filePath != null && FileConstants.requiresConversion(extension)) {
@@ -503,11 +514,20 @@ class ProjectStorageService {
               markdownSummary = result['markdown'] as String;
               debugPrint('✅ [ProjectStorage] Markdown generated successfully');
             } else {
-              debugPrint('⚠️ [ProjectStorage] Markdown generation failed: ${result['error']}');
+              // Propagate the error to the UI instead of silently continuing
+              final error = result['error'] as String?;
+              if (error != null && error.contains('tokens')) {
+                // Token limit error - throw to show to user
+                throw StateError(error);
+              }
+              debugPrint('⚠️ [ProjectStorage] Markdown generation failed: $error');
             }
           } catch (e) {
+            if (e is StateError) {
+              rethrow; // Re-throw token limit errors
+            }
             debugPrint('⚠️ [ProjectStorage] Markdown generation error: $e');
-            // Continue without markdown - don't fail the upload
+            // Continue without markdown - don't fail the upload for other errors
           }
         }
       }

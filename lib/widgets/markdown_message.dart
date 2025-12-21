@@ -462,15 +462,19 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
 
     // Normalize and validate language
     final String normalizedLanguage = (language ?? '').trim().toLowerCase();
-    final bool shouldAutoDetect = normalizedLanguage.isEmpty;
+
+    // Check if language is in our registry - if not, skip highlighting entirely
+    // This avoids the "get language error" spam from the highlight package's auto-detection
+    final bool isKnownLanguage = normalizedLanguage.isNotEmpty &&
+        highlight_registry.allLanguages.containsKey(normalizedLanguage);
 
     // Pass only necessary data to the isolate
     try {
       // Run heavy parsing in an isolate
       final List<hi.Node> nodes = await compute(_parseCode, {
         'code': code,
-        'language': normalizedLanguage,
-        'autoDetect': shouldAutoDetect,
+        'language': isKnownLanguage ? normalizedLanguage : null,
+        'skipHighlighting': !isKnownLanguage && normalizedLanguage.isEmpty,
       }).timeout(
         const Duration(seconds: 5),
         onTimeout: () {
@@ -599,15 +603,22 @@ List<hi.Node> _parseCode(Map<String, dynamic> args) {
   try {
     final String code = args['code'] as String? ?? '';
     final String? language = args['language'] as String?;
-    final bool autoDetect = args['autoDetect'] as bool? ?? false;
+    final bool skipHighlighting = args['skipHighlighting'] as bool? ?? false;
 
-    if (code.isEmpty) {
+    // Skip highlighting if explicitly requested (unknown language or empty)
+    if (skipHighlighting || code.isEmpty) {
       return [];
     }
 
     // Skip highlighting for text that's mostly non-ASCII (CJK, Arabic, etc.)
     // These cause errors in the highlight package and aren't code anyway
     if (_isMostlyNonAsciiCode(code)) {
+      return [];
+    }
+
+    // If no language specified, return empty to render as plain text
+    // This avoids auto-detection which causes "get language error" spam
+    if (language == null || language.isEmpty) {
       return [];
     }
 
@@ -624,21 +635,16 @@ List<hi.Node> _parseCode(Map<String, dynamic> args) {
     // Replace Windows line endings for consistency
     final String normalizedCode = code.replaceAll('\r\n', '\n');
 
-    // Safely validate and normalize language
-    String? validatedLanguage;
-    if (language != null && language.isNotEmpty) {
-      final String langLower = language.toLowerCase();
-      if (highlight_registry.allLanguages.containsKey(langLower)) {
-        validatedLanguage = langLower;
-      }
-      // Silently fall back to auto-detection for unknown languages
+    // Double-check language is registered (should be, since we validated before calling)
+    if (!highlight_registry.allLanguages.containsKey(language)) {
+      return [];
     }
 
     try {
       final hi.Result result = hi.highlight.parse(
         normalizedCode,
-        language: autoDetect || validatedLanguage == null ? null : validatedLanguage,
-        autoDetection: autoDetect || validatedLanguage == null,
+        language: language,
+        autoDetection: false, // Never use auto-detection to avoid "get language error"
       );
       return result.nodes ?? [];
     } on FormatException catch (_) {

@@ -10,6 +10,7 @@ import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/message_composition_service.dart';
+import 'package:chuk_chat/services/title_generation_service.dart';
 import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/pages/coming_soon_page.dart';
@@ -29,7 +30,11 @@ import 'package:chuk_chat/platform_specific/chat/handlers/chat_persistence_handl
 import 'package:chuk_chat/platform_specific/chat/handlers/streaming_message_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/widgets/mobile_chat_widgets.dart';
 import 'package:chuk_chat/services/image_generation_service.dart';
+import 'package:chuk_chat/services/project_storage_service.dart';
+import 'package:chuk_chat/services/project_message_service.dart';
+import 'package:chuk_chat/models/project_model.dart';
 import 'package:chuk_chat/pages/pricing_page.dart';
+import 'package:chuk_chat/pages/project_management_page.dart';
 
 class ChukChatUIMobile extends StatefulWidget {
   final VoidCallback onToggleSidebar;
@@ -106,6 +111,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   // Image generation state
   bool _isImageGenMode = false;
   bool _isGeneratingImage = false;
+
+  // Project state
+  String? _selectedProjectId;
 
   // Computed property - checks if CURRENT chat is streaming
   bool get _isCurrentChatStreaming =>
@@ -235,6 +243,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     unawaited(_loadProviderSlugForModel(_selectedModelId));
     unawaited(_loadSystemPrompt());
     unawaited(NetworkStatusService.quickCheck());
+    // Load projects for project selection feature
+    if (kFeatureProjects) {
+      unawaited(ProjectStorageService.loadFromCache());
+    }
   }
 
   @override
@@ -684,11 +696,470 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                     ),
                   ],
                 ),
+                // Project selection row (when feature enabled)
+                if (kFeatureProjects) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      buildAttachmentSheetOption(
+                        context: sheetContext,
+                        icon: _selectedProjectId != null
+                            ? Icons.folder_open
+                            : Icons.folder_outlined,
+                        label: 'Project',
+                        isEnabled: true,
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          _showProjectSelectionSheet();
+                        },
+                      ),
+                    ],
+                  ),
+                  if (_selectedProjectId != null) ...[
+                    const SizedBox(height: 8),
+                    _buildSelectedProjectBadge(theme),
+                  ],
+                ],
               ],
             ),
           ),
         );
       },
+    );
+  }
+
+  /// Show project selection bottom sheet
+  void _showProjectSelectionSheet() {
+    if (!mounted) return;
+    final theme = Theme.of(context);
+    final projects = ProjectStorageService.activeProjects;
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: theme.colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final Color indicatorColor = theme.dividerColor.withValues(alpha: 0.3);
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: indicatorColor,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'Projects',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                // No project option
+                _buildProjectOption(
+                  sheetContext,
+                  theme,
+                  null,
+                  'No Project',
+                  Icons.close,
+                ),
+                if (projects.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.folder_open,
+                          size: 48,
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'No projects yet',
+                          style: TextStyle(
+                            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(sheetContext);
+                            _createNewProject();
+                          },
+                          icon: const Icon(Icons.add),
+                          label: const Text('Create Project'),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.of(context).size.height * 0.4,
+                    ),
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: projects.length + 1, // +1 for create button
+                      itemBuilder: (context, index) {
+                        if (index == projects.length) {
+                          // Create new project button at the end
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: OutlinedButton.icon(
+                              onPressed: () {
+                                Navigator.pop(sheetContext);
+                                _createNewProject();
+                              },
+                              icon: const Icon(Icons.add),
+                              label: const Text('Create New Project'),
+                            ),
+                          );
+                        }
+                        final project = projects[index];
+                        return _buildProjectOption(
+                          sheetContext,
+                          theme,
+                          project.id,
+                          project.name,
+                          Icons.folder,
+                          subtitle: ProjectMessageService.getProjectContextSummary(project),
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _createNewProject() async {
+    final nameController = TextEditingController();
+    final descController = TextEditingController();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Create Project'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Project Name',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: descController,
+              decoration: const InputDecoration(
+                labelText: 'Description (optional)',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 2,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true && nameController.text.trim().isNotEmpty && mounted) {
+      try {
+        final project = await ProjectStorageService.createProject(
+          nameController.text.trim(),
+          description: descController.text.trim().isEmpty ? null : descController.text.trim(),
+        );
+        _showSnackBar('Project "${project.name}" created');
+        // Open the project management page
+        if (mounted) {
+          _openProjectManagement(project.id);
+        }
+      } catch (e) {
+        _showSnackBar('Failed to create project: $e');
+      }
+    }
+  }
+
+  void _openProjectManagement(String projectId) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ProjectManagementPage(
+          projectId: projectId,
+          onStartNewChat: (selectedProjectId) {
+            // Start new chat with project context
+            _startNewChatWithProject(selectedProjectId);
+          },
+        ),
+      ),
+    );
+  }
+
+  void _startNewChatWithProject(String? projectId) {
+    // Clear current chat and set project
+    setState(() {
+      _activeChatId = null;
+      _messages.clear();
+      _selectedProjectId = projectId;
+      _controller.clear();
+    });
+    widget.onChatIdChanged(null);
+    if (projectId != null) {
+      final project = ProjectStorageService.getProject(projectId);
+      if (project != null) {
+        _showSnackBar('New chat with project: ${project.name}');
+      }
+    }
+  }
+
+  Widget _buildProjectOption(
+    BuildContext sheetContext,
+    ThemeData theme,
+    String? projectId,
+    String name,
+    IconData icon, {
+    String? subtitle,
+  }) {
+    final isSelected = _selectedProjectId == projectId;
+    // Check if this project already contains the current chat
+    final project = projectId != null ? ProjectStorageService.getProject(projectId) : null;
+    final bool chatInProject = project != null && _activeChatId != null &&
+        project.chatIds.contains(_activeChatId);
+
+    return ListTile(
+      leading: Icon(
+        icon,
+        color: isSelected ? theme.colorScheme.primary : null,
+      ),
+      title: Text(
+        name,
+        style: TextStyle(
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+          color: isSelected ? theme.colorScheme.primary : null,
+        ),
+      ),
+      subtitle: subtitle != null ? Text(subtitle) : null,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (isSelected)
+            Icon(Icons.check, color: theme.colorScheme.primary),
+          if (projectId != null) ...[
+            // Link/unlink chat button
+            if (_activeChatId != null) ...[
+              const SizedBox(width: 4),
+              IconButton(
+                icon: Icon(
+                  chatInProject ? Icons.link_off : Icons.link,
+                  size: 20,
+                  color: chatInProject
+                      ? Colors.orange
+                      : theme.colorScheme.primary.withValues(alpha: 0.7),
+                ),
+                tooltip: chatInProject ? 'Remove chat from project' : 'Add chat to project',
+                onPressed: () async {
+                  Navigator.of(sheetContext).pop();
+                  if (chatInProject) {
+                    await _removeChatFromProject(projectId);
+                  } else {
+                    await _addChatToProject(projectId);
+                  }
+                },
+              ),
+            ],
+            // Manage project button
+            IconButton(
+              icon: Icon(
+                Icons.settings,
+                size: 20,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+              ),
+              tooltip: 'Manage project',
+              onPressed: () {
+                Navigator.of(sheetContext).pop();
+                _openProjectManagement(projectId);
+              },
+            ),
+          ],
+        ],
+      ),
+      onTap: () {
+        Navigator.of(sheetContext).pop();
+        setState(() {
+          _selectedProjectId = projectId;
+        });
+        if (projectId != null) {
+          _showSnackBar('Project selected: $name');
+        } else {
+          _showSnackBar('Project cleared');
+        }
+      },
+    );
+  }
+
+  Future<void> _addChatToProject(String projectId) async {
+    if (_activeChatId == null) {
+      _showSnackBar('No active chat to add');
+      return;
+    }
+    try {
+      await ProjectStorageService.addChatToProject(projectId, _activeChatId!);
+      _showSnackBar('Chat added to project');
+      setState(() {});
+    } catch (e) {
+      _showSnackBar('Failed to add chat: $e');
+    }
+  }
+
+  Future<void> _removeChatFromProject(String projectId) async {
+    if (_activeChatId == null) return;
+    try {
+      await ProjectStorageService.removeChatFromProject(projectId, _activeChatId!);
+      _showSnackBar('Chat removed from project');
+      setState(() {});
+    } catch (e) {
+      _showSnackBar('Failed to remove chat: $e');
+    }
+  }
+
+  Widget _buildSelectedProjectBadge(ThemeData theme) {
+    final project = ProjectStorageService.getProject(_selectedProjectId!);
+    if (project == null) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.folder,
+            size: 16,
+            color: theme.colorScheme.onPrimaryContainer,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            project.name,
+            style: TextStyle(
+              fontSize: 12,
+              color: theme.colorScheme.onPrimaryContainer,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(width: 6),
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _selectedProjectId = null;
+              });
+            },
+            child: Icon(
+              Icons.close,
+              size: 14,
+              color: theme.colorScheme.onPrimaryContainer,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Build a compact project indicator for the input area
+  Widget _buildProjectIndicator(ThemeData theme) {
+    final project = ProjectStorageService.getProject(_selectedProjectId!);
+    if (project == null) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: theme.colorScheme.primary.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.folder,
+            size: 18,
+            color: theme.colorScheme.primary,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  project.name,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: theme.colorScheme.onSurface,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  ProjectMessageService.getProjectContextSummary(project),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _selectedProjectId = null;
+              });
+              _showSnackBar('Project cleared');
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: Icon(
+                Icons.close,
+                size: 18,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1300,13 +1771,25 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         debugPrint('│ 🆕 [SEND-MOBILE] This should update ChatStorageService.selectedChatId');
         debugPrint('└─────────────────────────────────────────────────────────────');
         widget.onChatIdChanged(storedChat.id);
+
+        // Auto-generate title for new chats (fire and forget)
+        unawaited(TitleGenerationService.generateAndApplyTitle(
+          storedChat.id,
+          displayMessageText,
+        ));
       }
     }
+
+    // Resolve system prompt with project context (if any)
+    final resolvedSystemPrompt = await _resolveSystemPromptForSend();
 
     // Send with streaming handler using the CAPTURED chatId, not _activeChatId
     // This prevents race conditions where _activeChatId could be changed by callbacks
     debugPrint('📤 [ChatDebug] Sending to streaming handler with chatId: $chatIdForThisMessage');
     debugPrint('📤 [ChatDebug] Sending ${attachedFilesForApi.length} attached files to API');
+    if (_selectedProjectId != null) {
+      debugPrint('📁 [ChatDebug] Project context included: $_selectedProjectId');
+    }
     // NOTE: _isSendingMessage is cleared in _finalizeAiMessage() when streaming completes,
     // NOT here. This prevents race conditions where didUpdateWidget fires while streaming.
     await _streamingHandler.sendMessage(
@@ -1315,7 +1798,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       selectedModelId: _selectedModelId,
       selectedProviderSlug: _selectedProviderSlug,
       messages: _messages,
-      systemPrompt: _systemPrompt,
+      systemPrompt: resolvedSystemPrompt,
       activeChatId: chatIdForThisMessage,
       placeholderIndex: placeholderIndex,
       getProviderSlug: _ensureProviderSlugForCurrentModel,
@@ -1337,6 +1820,43 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       }
     }
     return history;
+  }
+
+  /// Resolve system prompt with project context (if any)
+  Future<String?> _resolveSystemPromptForSend() async {
+    // Start with user's base system prompt
+    String? basePrompt = _systemPrompt;
+    if (basePrompt == null) {
+      try {
+        basePrompt = await UserPreferencesService.loadSystemPrompt();
+        if (mounted) {
+          setState(() {
+            _systemPrompt = basePrompt;
+          });
+        } else {
+          _systemPrompt = basePrompt;
+        }
+      } catch (error) {
+        debugPrint('Error resolving system prompt for send: $error');
+      }
+    }
+
+    // If a project is active, prepend project context
+    if (_selectedProjectId != null && kFeatureProjects) {
+      try {
+        final projectContext = await ProjectMessageService.buildProjectSystemMessage(_selectedProjectId!);
+        // Combine project context with user's system prompt
+        if (basePrompt != null && basePrompt.isNotEmpty) {
+          return '$projectContext\n\n---\n\nAdditional User Instructions:\n$basePrompt';
+        }
+        return projectContext;
+      } catch (error) {
+        debugPrint('Error building project system message: $error');
+        // Fall back to base prompt if project context fails
+      }
+    }
+
+    return basePrompt;
   }
 
   void _updateCancelledMessage() {
@@ -1437,6 +1957,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     _persistChat();
     _scrollChatToBottom(force: true);
 
+    // Resolve system prompt with project context (if any)
+    final resolvedSystemPrompt = await _resolveSystemPromptForSend();
+
     // Send using streaming handler with preserved model/provider and attached files
     await _streamingHandler.sendMessage(
       userInput: originalUserInput,
@@ -1444,7 +1967,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       selectedModelId: modelIdToUse,
       selectedProviderSlug: providerToUse,
       messages: _messages,
-      systemPrompt: _systemPrompt,
+      systemPrompt: resolvedSystemPrompt,
       activeChatId: chatId,
       placeholderIndex: placeholderIndex,
       getProviderSlug: () async => providerToUse,
@@ -1890,6 +2413,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          // Project indicator
+                          if (kFeatureProjects && _selectedProjectId != null)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: _buildProjectIndicator(theme),
+                            ),
                           if (hasAttachments)
                             Padding(
                               padding: const EdgeInsets.only(

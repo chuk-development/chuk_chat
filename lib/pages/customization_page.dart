@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/services/title_generation_service.dart';
 
 class CustomizationPage extends StatefulWidget {
   final bool autoSendVoiceTranscription;
@@ -57,6 +58,9 @@ class _CustomizationPageState extends State<CustomizationPage> {
   late int _selectedImageGenCustomWidth;
   late int _selectedImageGenCustomHeight;
   late bool _selectedImageGenUseCustomSize;
+  // Auto title generation state
+  bool _autoGenerateTitles = false;
+  bool _isLoadingTitleSetting = true;
 
   // Size preset options with their dimensions
   static const Map<String, Map<String, dynamic>> _sizePresets = {
@@ -79,6 +83,17 @@ class _CustomizationPageState extends State<CustomizationPage> {
     _selectedImageGenCustomWidth = widget.imageGenCustomWidth;
     _selectedImageGenCustomHeight = widget.imageGenCustomHeight;
     _selectedImageGenUseCustomSize = widget.imageGenUseCustomSize;
+    _loadAutoTitleSetting();
+  }
+
+  Future<void> _loadAutoTitleSetting() async {
+    final enabled = await TitleGenerationService.isEnabled();
+    if (mounted) {
+      setState(() {
+        _autoGenerateTitles = enabled;
+        _isLoadingTitleSetting = false;
+      });
+    }
   }
 
   @override
@@ -166,6 +181,39 @@ class _CustomizationPageState extends State<CustomizationPage> {
             },
             scaffoldBg: scaffoldBg,
             iconFg: iconFg,
+          ),
+          const SizedBox(height: 24),
+
+          // Auto Chat Titles Section
+          _buildSectionHeader(
+            context,
+            'Chat Titles',
+            Icons.title,
+            iconFg,
+          ),
+          const SizedBox(height: 12),
+          _buildToggleCard(
+            context,
+            title: 'Auto-generate chat titles',
+            subtitle: 'Use AI to generate titles for new chats',
+            value: _isLoadingTitleSetting ? false : _autoGenerateTitles,
+            onChanged: _isLoadingTitleSetting
+                ? null
+                : (bool value) async {
+                    setState(() {
+                      _autoGenerateTitles = value;
+                    });
+                    await TitleGenerationService.setEnabled(value);
+                  },
+            scaffoldBg: scaffoldBg,
+            iconFg: iconFg,
+          ),
+          const SizedBox(height: 8),
+          _buildInfoCard(
+            context,
+            'When enabled, a short title will be automatically generated for new chats based on your first message. Uses a fast, lightweight AI model.',
+            scaffoldBg,
+            iconFg,
           ),
 
           // Image Generation Section (only if feature flag enabled)
@@ -427,7 +475,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
     required String title,
     required String subtitle,
     required bool value,
-    required ValueChanged<bool> onChanged,
+    ValueChanged<bool>? onChanged,
     required Color scaffoldBg,
     required Color iconFg,
   }) {

@@ -21,6 +21,10 @@ import 'package:chuk_chat/utils/certificate_pinning.dart';
 class FileConversionService {
   static String get _apiBaseUrl => ApiConfigService.apiBaseUrl;
 
+  /// Maximum tokens per file (40k tokens ≈ 160k characters at ~4 chars/token)
+  static const int maxTokensPerFile = 40000;
+  static const int maxCharsPerFile = 160000; // ~4 chars per token
+
   /// Convert a file to markdown using the /v1/ai/convert-file endpoint.
   ///
   /// Returns a map with:
@@ -190,6 +194,17 @@ class FileConversionService {
         return {
           'success': false,
           'error': 'No markdown content returned from API',
+          'markdown': null,
+        };
+      }
+
+      // Check if converted content exceeds token limit (40k tokens ≈ 160k chars)
+      if (markdown.length > maxCharsPerFile) {
+        final estimatedTokens = (markdown.length / 4).round();
+        debugPrint('⚠️ File too large after conversion: ${markdown.length} chars (~$estimatedTokens tokens)');
+        return {
+          'success': false,
+          'error': 'File is too large (~$estimatedTokens tokens). Maximum allowed is $maxTokensPerFile tokens. Try a smaller file.',
           'markdown': null,
         };
       }

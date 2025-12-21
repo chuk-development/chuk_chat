@@ -199,6 +199,11 @@ class ChatStorageService {
     return List.unmodifiable(list);
   }
 
+  /// Get a chat by its ID (returns null if not found)
+  static StoredChat? getChatById(String chatId) {
+    return _chatsById[chatId];
+  }
+
   static Stream<void> get changes => _changesController.stream;
 
   static void _notifyChanges() {

@@ -1,6 +1,8 @@
 // lib/services/project_message_service.dart
 import 'package:chuk_chat/models/project_model.dart';
+import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/services/project_storage_service.dart';
+import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:flutter/foundation.dart';
 
 /// Service for composing AI messages with project context
@@ -138,13 +140,106 @@ class ProjectMessageService {
       }
     }
 
+    // Include chat history from associated chats
+    if (project.chatIds.isNotEmpty) {
+      buffer.writeln('---');
+      buffer.writeln();
+      buffer.writeln('Previous Conversations in this Project:');
+      buffer.writeln();
+
+      int chatContentLength = 0;
+      int includedChats = 0;
+      final maxChatContentLength = 100000; // ~100KB for chat history (~25k tokens)
+
+      for (final chatId in project.chatIds) {
+        if (chatContentLength >= maxChatContentLength) {
+          debugPrint('⚠️ [ProjectMessage] Skipping remaining chats due to size limit');
+          break;
+        }
+
+        try {
+          final chat = ChatStorageService.getChatById(chatId);
+          if (chat == null) continue;
+
+          // Build chat summary
+          final chatSummary = _buildChatSummary(chat, maxChatContentLength - chatContentLength);
+          if (chatSummary.isEmpty) continue;
+
+          final chatTitle = chat.customName ?? chat.previewText;
+          buffer.writeln('### Chat: $chatTitle');
+          buffer.writeln('(${chat.messages.length} messages, ${_formatDate(chat.createdAt)})');
+          buffer.writeln();
+          buffer.writeln(chatSummary);
+          buffer.writeln();
+          buffer.writeln('---');
+          buffer.writeln();
+
+          chatContentLength += chatSummary.length;
+          includedChats++;
+        } catch (e) {
+          debugPrint('⚠️ [ProjectMessage] Failed to load chat $chatId: $e');
+        }
+      }
+
+      final excludedChats = project.chatIds.length - includedChats;
+      if (excludedChats > 0) {
+        buffer.writeln(
+          'Note: $excludedChats additional chat(s) excluded due to size limits.',
+        );
+        buffer.writeln();
+      }
+    }
+
     buffer.writeln('---');
     buffer.writeln();
     buffer.writeln(
-      'Please use the above project context, files, and custom instructions when responding to the user.',
+      'Please use the above project context, files, chat history, and custom instructions when responding to the user.',
     );
 
     return buffer.toString();
+  }
+
+  /// Build a summary of chat messages (up to maxLength characters)
+  static String _buildChatSummary(StoredChat chat, int maxLength) {
+    final buffer = StringBuffer();
+
+    for (final message in chat.messages) {
+      final role = message.role == 'user' ? 'User' : 'Assistant';
+      final content = message.text.trim();
+      if (content.isEmpty) continue;
+
+      // Truncate very long messages
+      final truncatedContent = content.length > 2000
+          ? '${content.substring(0, 2000)}... [truncated]'
+          : content;
+
+      final line = '**$role:** $truncatedContent\n\n';
+
+      if (buffer.length + line.length > maxLength) {
+        buffer.writeln('... [earlier messages truncated]');
+        break;
+      }
+
+      buffer.write(line);
+    }
+
+    return buffer.toString();
+  }
+
+  /// Format date for display
+  static String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date);
+
+    if (diff.inDays == 0) {
+      return 'today';
+    } else if (diff.inDays == 1) {
+      return 'yesterday';
+    } else if (diff.inDays < 7) {
+      return '${diff.inDays} days ago';
+    } else {
+      return '${date.day}/${date.month}/${date.year}';
+    }
   }
 
   /// Inject project context into message list
@@ -196,6 +291,6 @@ class ProjectMessageService {
 
   /// Check if a project has meaningful context
   static bool hasContext(Project project) {
-    return project.hasCustomPrompt || project.fileCount > 0;
+    return project.hasCustomPrompt || project.fileCount > 0 || project.chatCount > 0;
   }
 }
