@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/widgets/credit_display.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -134,6 +135,7 @@ class _PricingPageState extends State<PricingPage> {
   Map<String, dynamic>? _userStatus;
   bool _isLoading = true;
   bool _isProcessing = false;
+  bool _agreedToTerms = false;
 
   @override
   void initState() {
@@ -160,6 +162,13 @@ class _PricingPageState extends State<PricingPage> {
 
   Future<void> _handleSubscribe() async {
     if (_isProcessing) return;
+
+    if (!_agreedToTerms) {
+      _showError(
+        'Please agree to the terms and acknowledge loss of withdrawal rights.',
+      );
+      return;
+    }
 
     setState(() => _isProcessing = true);
     try {
@@ -538,10 +547,82 @@ class _PricingPageState extends State<PricingPage> {
                     ),
                     if (!isMobile && !hasSubscription) ...[
                       const SizedBox(height: 20),
+                      // Consent checkbox
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: Checkbox(
+                              value: _agreedToTerms,
+                              onChanged: (value) {
+                                setState(() => _agreedToTerms = value ?? false);
+                              },
+                              activeColor: accent,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () {
+                                setState(
+                                  () => _agreedToTerms = !_agreedToTerms,
+                                );
+                              },
+                              child: Text.rich(
+                                TextSpan(
+                                  style: TextStyle(
+                                    color: iconFg.withValues(alpha: 0.8),
+                                    fontSize: 12,
+                                    height: 1.4,
+                                  ),
+                                  children: [
+                                    const TextSpan(
+                                      text:
+                                          'I want immediate access to Chuk Chat and acknowledge that I lose my ',
+                                    ),
+                                    TextSpan(
+                                      text: 'right of withdrawal',
+                                      style: TextStyle(
+                                        color: accent,
+                                        decoration: TextDecoration.underline,
+                                      ),
+                                      recognizer: TapGestureRecognizer()
+                                        ..onTap = () => _launchExternalUrl(
+                                          'https://chuk.chat/en/cancellation/',
+                                        ),
+                                    ),
+                                    const TextSpan(
+                                      text:
+                                          ' once the service begins. I agree to the ',
+                                    ),
+                                    TextSpan(
+                                      text: 'Terms of Service',
+                                      style: TextStyle(
+                                        color: accent,
+                                        decoration: TextDecoration.underline,
+                                      ),
+                                      recognizer: TapGestureRecognizer()
+                                        ..onTap = () => _launchExternalUrl(
+                                          'https://chuk.chat/en/terms/',
+                                        ),
+                                    ),
+                                    const TextSpan(text: '.'),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: _isProcessing ? null : _handleSubscribe,
+                          onPressed: _isProcessing || !_agreedToTerms
+                              ? null
+                              : _handleSubscribe,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: accent,
                             foregroundColor: Colors.white,
