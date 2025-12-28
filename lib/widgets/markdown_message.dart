@@ -85,10 +85,12 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
       _rebuildCache();
     }
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: _cachedContent!,
+    return SelectionArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: _cachedContent!,
+      ),
     );
   }
 
@@ -853,19 +855,26 @@ class LatexNode extends SpanNode {
     }
 
     try {
-      // Use SelectableMath for selectable LaTeX text
-      final mathWidget = SelectableMath.tex(
+      // Use Math.tex so selection can flow through via parent SelectionArea
+      final mathWidget = Math.tex(
         tex,
         textStyle: TextStyle(color: textColor, fontSize: 14),
         mathStyle: isBlock ? MathStyle.display : MathStyle.text,
         onErrorFallback: (FlutterMathException e) {
-          return SelectableText(
-            tex,
-            style: TextStyle(
-              fontFamily: 'monospace',
-              fontSize: 13,
-              color: textColor.withValues(alpha: 0.7),
-              backgroundColor: textColor.withValues(alpha: 0.1),
+          // Fallback shows raw LaTeX in monospace
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            decoration: BoxDecoration(
+              color: textColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              tex,
+              style: TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 13,
+                color: textColor.withValues(alpha: 0.7),
+              ),
             ),
           );
         },
@@ -891,13 +900,19 @@ class LatexNode extends SpanNode {
       return mathWidget;
     } catch (e) {
       debugPrint('LaTeX rendering error: $e');
-      return SelectableText(
-        tex,
-        style: TextStyle(
-          fontFamily: 'monospace',
-          fontSize: 13,
-          color: textColor.withValues(alpha: 0.7),
-          backgroundColor: textColor.withValues(alpha: 0.1),
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        decoration: BoxDecoration(
+          color: textColor.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(
+          tex,
+          style: TextStyle(
+            fontFamily: 'monospace',
+            fontSize: 13,
+            color: textColor.withValues(alpha: 0.7),
+          ),
         ),
       );
     }
