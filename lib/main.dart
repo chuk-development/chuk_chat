@@ -161,15 +161,18 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
               // Keep the key so a transient chat load issue does not force re-authentication.
             }
           } else {
-            await EncryptionService.clearKey();
-            await ChatStorageService.reset();
+            // Key not available - user needs to re-enter password on next login
+            // DON'T clear cached chats - they might be recoverable after re-auth
+            // Only clear the key state, not the chat cache
+            debugPrint('Encryption key not available - user may need to re-authenticate');
             ChatSyncService.stop();
           }
         } catch (error, stackTrace) {
           debugPrint('Encryption key load failed: $error');
           debugPrint('$stackTrace');
-          await EncryptionService.clearKey();
-          await ChatStorageService.reset();
+          // DON'T clear cached chats on transient errors
+          // User might be able to recover by re-authenticating
+          ChatSyncService.stop();
         }
         _loadThemeSettingsFromSupabase();
         unawaited(ModelPrefetchService.prefetch());

@@ -18,23 +18,47 @@ class PasswordRevisionService {
 
   /// Returns true when the cached revision does not match the remote one.
   /// When this happens the caller should sign the user out locally.
+  ///
+  /// This method is designed to be safe - it will return false (no mismatch)
+  /// if there are any storage errors, to prevent false-positive logouts.
   static Future<bool> hasRevisionMismatch(User user) async {
-    final remote = _readRemoteRevision(user);
-    final storageKey = _storageKey(user.id);
-    _lastCachedUserId = user.id;
+    try {
+      final remote = _readRemoteRevision(user);
+      final storageKey = _storageKey(user.id);
+      _lastCachedUserId = user.id;
 
-    if (remote == null || remote.isEmpty) {
-      await _storage.delete(key: storageKey);
+      if (remote == null || remote.isEmpty) {
+        try {
+          await _storage.delete(key: storageKey);
+        } catch (_) {
+          // Ignore storage errors during cleanup
+        }
+        return false;
+      }
+
+      String? local;
+      try {
+        local = await _storage.read(key: storageKey);
+      } catch (e) {
+        // If we can't read local storage, don't force logout
+        // This prevents random logouts due to storage issues
+        return false;
+      }
+
+      if (local == null) {
+        try {
+          await _storage.write(key: storageKey, value: remote);
+        } catch (_) {
+          // Ignore write errors - we'll try again next time
+        }
+        return false;
+      }
+
+      return local != remote;
+    } catch (e) {
+      // Any unexpected error should not cause a logout
       return false;
     }
-
-    final local = await _storage.read(key: storageKey);
-    if (local == null) {
-      await _storage.write(key: storageKey, value: remote);
-      return false;
-    }
-
-    return local != remote;
   }
 
   /// Ensures that a user has a password revision marker, creating one if
