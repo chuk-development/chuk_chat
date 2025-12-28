@@ -122,7 +122,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   String? _selectedProjectId;
   late final VoidCallback _modelSelectionListener;
 
-  bool _isImageActive = false;
   bool _isImageGenMode = false; // Image generation mode toggle
   bool _isGeneratingImage = false; // Loading state for image generation
   bool _isMicActive = false;
@@ -394,7 +393,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
       setState(() {
         _isLoadingChat = false;
-        _isImageActive = false;
+        _isImageGenMode = false;
         _isMicActive = false;
         _isSending = _isStreaming; // Reset sending state based on current chat
         _resetAudioLevels();
@@ -416,7 +415,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _messages.clear();
       _animCtrl.reset();
       _activeChatId = null;
-      _isImageActive = false;
+      _isImageGenMode = false;
       _isMicActive = false;
       _isSending = false; // Reset for new chat
       _attachedFiles.clear();
@@ -2952,21 +2951,25 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                               isActive: hasAttachments,
                               debugLabel: 'Add button',
                             ),
-                            const SizedBox(width: 8),
-                            // Image Button (attach images)
-                            _buildIconBtn(
-                              icon: Icons.image,
-                              onTap: () {
-                                setState(
-                                  () => _isImageActive = !_isImageActive,
-                                );
-                                debugPrint(
-                                  'Image button toggled: $_isImageActive',
-                                );
-                              },
-                              isActive: _isImageActive,
-                              debugLabel: 'Image button',
-                            ),
+                            // Image Generation Button - only when image gen enabled
+                            if (kFeatureImageGen && widget.imageGenEnabled) ...[
+                              const SizedBox(width: 8),
+                              _buildIconBtn(
+                                icon: Icons.image,
+                                onTap: _isGeneratingImage
+                                    ? () {} // No-op while generating
+                                    : () {
+                                        setState(
+                                          () => _isImageGenMode = !_isImageGenMode,
+                                        );
+                                        debugPrint(
+                                          'Image Gen mode toggled: $_isImageGenMode',
+                                        );
+                                      },
+                                isActive: _isImageGenMode || _isGeneratingImage,
+                                debugLabel: 'Image Gen button',
+                              ),
+                            ],
                             // Project Selection Dropdown (only when feature enabled)
                             if (kFeatureProjects) ...[
                               const SizedBox(width: 8),
@@ -2980,25 +2983,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                   debugPrint('📁 After setState: $_selectedProjectId');
                                 },
                                 textFieldFocusNode: _textFieldFocusNode,
-                              ),
-                            ],
-                            // Image Generation Button (when feature enabled)
-                            if (kFeatureImageGen && widget.imageGenEnabled) ...[
-                              const SizedBox(width: 8),
-                              _buildIconBtn(
-                                icon: Icons.auto_awesome,
-                                onTap: _isGeneratingImage
-                                    ? () {} // No-op while generating
-                                    : () {
-                                        setState(
-                                          () => _isImageGenMode = !_isImageGenMode,
-                                        );
-                                        debugPrint(
-                                          'Image Gen mode toggled: $_isImageGenMode',
-                                        );
-                                      },
-                                isActive: _isImageGenMode || _isGeneratingImage,
-                                debugLabel: 'Image Gen button',
                               ),
                             ],
                             // Spacer to push model dropdown to the right edge
