@@ -853,24 +853,19 @@ class LatexNode extends SpanNode {
     }
 
     try {
-      final mathWidget = Math.tex(
+      // Use SelectableMath for selectable LaTeX text
+      final mathWidget = SelectableMath.tex(
         tex,
         textStyle: TextStyle(color: textColor, fontSize: 14),
         mathStyle: isBlock ? MathStyle.display : MathStyle.text,
         onErrorFallback: (FlutterMathException e) {
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-            decoration: BoxDecoration(
-              color: textColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              tex,
-              style: TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 13,
-                color: textColor.withValues(alpha: 0.7),
-              ),
+          return SelectableText(
+            tex,
+            style: TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 13,
+              color: textColor.withValues(alpha: 0.7),
+              backgroundColor: textColor.withValues(alpha: 0.1),
             ),
           );
         },
@@ -896,19 +891,13 @@ class LatexNode extends SpanNode {
       return mathWidget;
     } catch (e) {
       debugPrint('LaTeX rendering error: $e');
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-        decoration: BoxDecoration(
-          color: textColor.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Text(
-          tex,
-          style: TextStyle(
-            fontFamily: 'monospace',
-            fontSize: 13,
-            color: textColor.withValues(alpha: 0.7),
-          ),
+      return SelectableText(
+        tex,
+        style: TextStyle(
+          fontFamily: 'monospace',
+          fontSize: 13,
+          color: textColor.withValues(alpha: 0.7),
+          backgroundColor: textColor.withValues(alpha: 0.1),
         ),
       );
     }
