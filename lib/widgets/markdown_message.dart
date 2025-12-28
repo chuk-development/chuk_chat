@@ -5,8 +5,10 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:highlight/highlight.dart' as hi;
 import 'package:chuk_chat/utils/highlight_registry.dart' as highlight_registry;
+import 'package:markdown/markdown.dart' as m;
 import 'package:markdown_widget/markdown_widget.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -255,6 +257,18 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
 
     final MarkdownGenerator generator = MarkdownGenerator(
       linesMargin: const EdgeInsets.symmetric(vertical: 4),
+      inlineSyntaxList: [
+        LatexSyntax(),
+      ],
+      generators: [
+        SpanNodeGeneratorWithTag(
+          tag: _latexTag,
+          generator: (e, config, visitor) => LatexNode(
+            e.attributes,
+            textColor: widget.textColor,
+          ),
+        ),
+      ],
       richTextBuilder: (span) {
         final TextSpan textSpan = span is TextSpan
             ? span
@@ -773,6 +787,131 @@ List<TextSpan> _collectSpans(
     return fallbackText.isNotEmpty
         ? <TextSpan>[TextSpan(text: fallbackText, style: baseStyle)]
         : <TextSpan>[];
+  }
+}
+
+/// Tag used to identify LaTeX elements
+const String _latexTag = 'latex';
+
+/// LaTeX inline syntax parser - matches $...$ and $$...$$ and \(...\) and \[...\]
+class LatexSyntax extends m.InlineSyntax {
+  LatexSyntax() : super(r'(\$\$[\s\S]+?\$\$)|(\$[^\$\n]+?\$)|(\\\([\s\S]+?\\\))|(\\\[[\s\S]+?\\\])');
+
+  @override
+  bool onMatch(m.InlineParser parser, Match match) {
+    final String input = match.input.substring(match.start, match.end);
+    String content;
+    bool isBlock;
+
+    if (input.startsWith(r'\[') && input.endsWith(r'\]')) {
+      // Block math: \[...\]
+      content = input.substring(2, input.length - 2).trim();
+      isBlock = true;
+    } else if (input.startsWith(r'\(') && input.endsWith(r'\)')) {
+      // Inline math: \(...\)
+      content = input.substring(2, input.length - 2).trim();
+      isBlock = false;
+    } else if (input.startsWith(r'$$') && input.endsWith(r'$$')) {
+      // Block math: $$...$$
+      content = input.substring(2, input.length - 2).trim();
+      isBlock = true;
+    } else {
+      // Inline math: $...$
+      content = input.substring(1, input.length - 1).trim();
+      isBlock = false;
+    }
+
+    final m.Element el = m.Element.text(_latexTag, content);
+    el.attributes['isBlock'] = isBlock.toString();
+    el.attributes['content'] = content;
+    parser.addNode(el);
+    return true;
+  }
+}
+
+/// LaTeX node that renders math using flutter_math_fork
+class LatexNode extends SpanNode {
+  final Map<String, String> attributes;
+  final Color textColor;
+
+  LatexNode(this.attributes, {required this.textColor});
+
+  @override
+  InlineSpan build() {
+    final String content = attributes['content'] ?? '';
+    final bool isBlock = attributes['isBlock'] == 'true';
+
+    return WidgetSpan(
+      alignment: PlaceholderAlignment.middle,
+      child: _buildMathWidget(content, isBlock),
+    );
+  }
+
+  Widget _buildMathWidget(String tex, bool isBlock) {
+    if (tex.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    try {
+      final mathWidget = Math.tex(
+        tex,
+        textStyle: TextStyle(color: textColor, fontSize: 14),
+        mathStyle: isBlock ? MathStyle.display : MathStyle.text,
+        onErrorFallback: (FlutterMathException e) {
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            decoration: BoxDecoration(
+              color: textColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              tex,
+              style: TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 13,
+                color: textColor.withValues(alpha: 0.7),
+              ),
+            ),
+          );
+        },
+      );
+
+      if (isBlock) {
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: textColor.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: textColor.withValues(alpha: 0.1)),
+          ),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: mathWidget,
+          ),
+        );
+      }
+
+      return mathWidget;
+    } catch (e) {
+      debugPrint('LaTeX rendering error: $e');
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        decoration: BoxDecoration(
+          color: textColor.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(
+          tex,
+          style: TextStyle(
+            fontFamily: 'monospace',
+            fontSize: 13,
+            color: textColor.withValues(alpha: 0.7),
+          ),
+        ),
+      );
+    }
   }
 }
 
