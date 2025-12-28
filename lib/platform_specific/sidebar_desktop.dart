@@ -584,26 +584,38 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
   }) {
     final String title = _deriveChatTitle(chat);
     return RepaintBoundary(
-      child: ListTile(
-        leading: _leadingIconPlaceholder(Icons.star, iconFgColor: accent),
-        title: Text(
-          title,
-          style: TextStyle(color: iconFg),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        onTap: () => _openChat(chat),
-        dense: true,
-        contentPadding: const EdgeInsets.only(
-          left: _sidebarHorizontalPadding,
-          right: 8.0,
-        ),
-        iconColor: accent,
-        textColor: iconFg,
-        trailing: IconButton(
-          icon: Icon(Icons.star, color: accent),
-          tooltip: 'Remove from starred',
-          onPressed: () => _toggleStarred(chat),
+      child: GestureDetector(
+        onSecondaryTapDown: (details) {
+          _showChatContextMenu(
+            context,
+            details.globalPosition,
+            chat,
+            accentColor: accent,
+            iconFgColor: iconFg,
+            onDelete: () => _confirmAndDeleteChat(chat),
+          );
+        },
+        child: ListTile(
+          leading: _leadingIconPlaceholder(Icons.star, iconFgColor: accent),
+          title: Text(
+            title,
+            style: TextStyle(color: iconFg),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          onTap: () => _openChat(chat),
+          dense: true,
+          contentPadding: const EdgeInsets.only(
+            left: _sidebarHorizontalPadding,
+            right: 8.0,
+          ),
+          iconColor: accent,
+          textColor: iconFg,
+          trailing: IconButton(
+            icon: Icon(Icons.star, color: accent),
+            tooltip: 'Remove from starred',
+            onPressed: () => _toggleStarred(chat),
+          ),
         ),
       ),
     );
@@ -618,97 +630,156 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
     required Color iconFgColor,
   }) {
     final bool isSelected = chat.id == widget.selectedChatId;
-    final bool isStarred = chat.isStarred;
     final String title = _deriveChatTitle(chat);
     return RepaintBoundary(
-      child: ListTile(
-        title: Text(
-          title,
-          style: TextStyle(
-            color: isLast
-                ? iconFgColor.withValues(alpha: 0.38)
-                : (isSelected ? accentColor : iconFgColor),
-            fontSize: 15,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        onTap: onTap,
-        dense: true,
-        contentPadding: const EdgeInsets.only(
-          left: _sidebarHorizontalPadding,
-          right: 8.0,
-        ),
-        tileColor: isSelected ? accentColor.withValues(alpha: 0.1) : null,
-        selectedTileColor: accentColor.withValues(alpha: 0.1),
-        selectedColor: accentColor,
-        trailing: PopupMenuButton<String>(
-          icon: Icon(
-            Icons.more_horiz,
-            color: iconFgColor.withValues(alpha: 0.7),
-          ),
-          tooltip: 'Chat options',
-          onSelected: (value) {
-            switch (value) {
-              case 'star':
-                _toggleStarred(chat);
-                break;
-              case 'edit':
-                _renameChatDialog(chat);
-                break;
-              case 'delete':
-                if (onDelete != null) onDelete();
-                break;
-            }
-          },
-          itemBuilder: (context) => [
-            PopupMenuItem(
-              value: 'star',
-              child: Row(
-                children: [
-                  Icon(
-                    isStarred ? Icons.star : Icons.star_border,
-                    color: isStarred ? accentColor : iconFgColor,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 12),
-                  Text(isStarred ? 'Remove from starred' : 'Add to starred'),
-                ],
-              ),
+      child: GestureDetector(
+        onSecondaryTapDown: (details) {
+          _showChatContextMenu(
+            context,
+            details.globalPosition,
+            chat,
+            accentColor: accentColor,
+            iconFgColor: iconFgColor,
+            onDelete: onDelete,
+          );
+        },
+        child: ListTile(
+          title: Text(
+            title,
+            style: TextStyle(
+              color: isLast
+                  ? iconFgColor.withValues(alpha: 0.38)
+                  : (isSelected ? accentColor : iconFgColor),
+              fontSize: 15,
             ),
-            PopupMenuItem(
-              value: 'edit',
-              child: Row(
-                children: [
-                  Icon(Icons.edit_outlined, color: iconFgColor, size: 20),
-                  const SizedBox(width: 12),
-                  const Text('Rename'),
-                ],
-              ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          onTap: onTap,
+          dense: true,
+          contentPadding: const EdgeInsets.only(
+            left: _sidebarHorizontalPadding,
+            right: 8.0,
+          ),
+          tileColor: isSelected ? accentColor.withValues(alpha: 0.1) : null,
+          selectedTileColor: accentColor.withValues(alpha: 0.1),
+          selectedColor: accentColor,
+          trailing: PopupMenuButton<String>(
+            icon: Icon(
+              Icons.more_horiz,
+              color: iconFgColor.withValues(alpha: 0.7),
             ),
-            PopupMenuItem(
-              value: 'delete',
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.delete_outline,
-                    color: Colors.redAccent.withValues(alpha: 0.8),
-                    size: 20,
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Delete',
-                    style: TextStyle(
-                      color: Colors.redAccent.withValues(alpha: 0.8),
-                    ),
-                  ),
-                ],
+            tooltip: 'Chat options',
+            onSelected: (value) {
+              _handleMenuSelection(value, chat, onDelete);
+            },
+            itemBuilder: (context) => _buildMenuItems(
+              chat,
+              accentColor: accentColor,
+              iconFgColor: iconFgColor,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Handle menu item selection
+  void _handleMenuSelection(String value, StoredChat chat, VoidCallback? onDelete) {
+    switch (value) {
+      case 'star':
+        _toggleStarred(chat);
+        break;
+      case 'edit':
+        _renameChatDialog(chat);
+        break;
+      case 'delete':
+        if (onDelete != null) onDelete();
+        break;
+    }
+  }
+
+  // Build menu items for both PopupMenuButton and context menu
+  List<PopupMenuEntry<String>> _buildMenuItems(
+    StoredChat chat, {
+    required Color accentColor,
+    required Color iconFgColor,
+  }) {
+    final bool isStarred = chat.isStarred;
+    return [
+      PopupMenuItem(
+        value: 'star',
+        child: Row(
+          children: [
+            Icon(
+              isStarred ? Icons.star : Icons.star_border,
+              color: isStarred ? accentColor : iconFgColor,
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            Text(isStarred ? 'Remove from starred' : 'Add to starred'),
+          ],
+        ),
+      ),
+      PopupMenuItem(
+        value: 'edit',
+        child: Row(
+          children: [
+            Icon(Icons.edit_outlined, color: iconFgColor, size: 20),
+            const SizedBox(width: 12),
+            const Text('Rename'),
+          ],
+        ),
+      ),
+      PopupMenuItem(
+        value: 'delete',
+        child: Row(
+          children: [
+            Icon(
+              Icons.delete_outline,
+              color: Colors.redAccent.withValues(alpha: 0.8),
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Delete',
+              style: TextStyle(
+                color: Colors.redAccent.withValues(alpha: 0.8),
               ),
             ),
           ],
         ),
       ),
-    );
+    ];
+  }
+
+  // Show context menu on right-click
+  void _showChatContextMenu(
+    BuildContext context,
+    Offset position,
+    StoredChat chat, {
+    required Color accentColor,
+    required Color iconFgColor,
+    VoidCallback? onDelete,
+  }) {
+    showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        position.dx,
+        position.dy,
+        position.dx + 1,
+        position.dy + 1,
+      ),
+      items: _buildMenuItems(
+        chat,
+        accentColor: accentColor,
+        iconFgColor: iconFgColor,
+      ),
+    ).then((value) {
+      if (value != null) {
+        _handleMenuSelection(value, chat, onDelete);
+      }
+    });
   }
 
   Future<void> _renameChatDialog(StoredChat chat) async {
