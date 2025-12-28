@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
+import 'package:chuk_chat/services/streaming_manager.dart';
 import 'package:chuk_chat/services/profile_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart'; // Import the color extensions
@@ -50,7 +51,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
   ProfileRecord? _profile;
   StreamSubscription<void>? _chatUpdatesSub;
   Timer? _deleteNotificationTimer;
-  int _pendingDeleteCount = 0;
+  String? _lastDeletedChatTitle;
   bool _isOfflineMode = false;
 
   @override
@@ -630,6 +631,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
     required Color iconFgColor,
   }) {
     final bool isSelected = chat.id == widget.selectedChatId;
+    final bool isStreaming = StreamingManager().isStreaming(chat.id);
     final String title = _deriveChatTitle(chat);
     return RepaintBoundary(
       child: GestureDetector(
@@ -644,6 +646,16 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
           );
         },
         child: ListTile(
+          leading: isStreaming
+              ? SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(accentColor),
+                  ),
+                )
+              : null,
           title: Text(
             title,
             style: TextStyle(
@@ -869,19 +881,22 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
     }
   }
 
-  void _showDebouncedDeleteNotification() {
+  void _showDebouncedDeleteNotification(String chatTitle) {
+    _lastDeletedChatTitle = chatTitle;
     _deleteNotificationTimer?.cancel();
-    _deleteNotificationTimer = Timer(const Duration(milliseconds: 800), () {
+    _deleteNotificationTimer = Timer(const Duration(milliseconds: 400), () {
       if (!mounted) return;
-      final count = _pendingDeleteCount;
-      _pendingDeleteCount = 0;
+      final title = _lastDeletedChatTitle;
+      _lastDeletedChatTitle = null;
 
       final messenger = ScaffoldMessenger.of(context);
-      final message = count == 1 ? 'Deleted' : '$count chats deleted';
+      final displayTitle = title != null && title.length > 30
+          ? '${title.substring(0, 30)}...'
+          : title;
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            message,
+            '"$displayTitle" deleted',
             style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
           ),
           behavior: SnackBarBehavior.floating,
@@ -890,7 +905,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
             borderRadius: BorderRadius.circular(12),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          duration: const Duration(seconds: 1),
+          duration: const Duration(seconds: 2),
           dismissDirection: DismissDirection.horizontal,
         ),
       );
@@ -899,13 +914,19 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
 
   Future<void> _confirmAndDeleteChat(StoredChat chat) async {
     final messenger = ScaffoldMessenger.of(context);
+    // Get chat title for display
+    final chatTitle = chat.customName ??
+        (chat.previewText.length > 40
+            ? '${chat.previewText.substring(0, 40)}...'
+            : chat.previewText);
+
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Delete chat?'),
-          content: const Text(
-            'This will remove the chat forever. Once deleted, it cannot be recovered.',
+          content: Text(
+            '"$chatTitle"\n\nThis will be removed forever. Once deleted, it cannot be recovered.',
           ),
           actions: [
             TextButton(
@@ -934,8 +955,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
       if (widget.onChatDeleted != null) {
         await widget.onChatDeleted!(chat.id);
       }
-      _pendingDeleteCount++;
-      _showDebouncedDeleteNotification();
+      _showDebouncedDeleteNotification(chatTitle);
     } on StateError catch (error) {
       messenger.showSnackBar(
         SnackBar(

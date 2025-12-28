@@ -59,7 +59,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
   Timer? _searchDebounce;
   int _filterGeneration = 0;
   Timer? _deleteNotificationTimer;
-  int _pendingDeleteCount = 0;
+  String? _lastDeletedChatTitle;
   bool _isOfflineMode = false;
 
   @override
@@ -248,28 +248,29 @@ class _SidebarMobileState extends State<SidebarMobile> {
     widget.onChatSelected(chat.id);
   }
 
-  void _showDebouncedDeleteNotification() {
+  void _showDebouncedDeleteNotification(String chatTitle) {
+    _lastDeletedChatTitle = chatTitle;
     _deleteNotificationTimer?.cancel();
-    _deleteNotificationTimer = Timer(const Duration(milliseconds: 800), () {
+    _deleteNotificationTimer = Timer(const Duration(milliseconds: 400), () {
       if (!mounted) return;
-      final count = _pendingDeleteCount;
-      _pendingDeleteCount = 0;
+      final title = _lastDeletedChatTitle;
+      _lastDeletedChatTitle = null;
 
       final messenger = ScaffoldMessenger.of(context);
-      final message = count == 1
-          ? 'Deleted'
-          : '$count chats deleted';
+      final displayTitle = title != null && title.length > 30
+          ? '${title.substring(0, 30)}...'
+          : title;
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            message,
+            '"$displayTitle" deleted',
             style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
           ),
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          duration: const Duration(seconds: 1),
+          duration: const Duration(seconds: 2),
           dismissDirection: DismissDirection.horizontal,
         ),
       );
@@ -278,13 +279,19 @@ class _SidebarMobileState extends State<SidebarMobile> {
 
   Future<void> _confirmAndDeleteChat(StoredChat chat) async {
     final messenger = ScaffoldMessenger.of(context);
+    // Get chat title for display
+    final chatTitle = chat.customName ??
+        (chat.previewText.length > 40
+            ? '${chat.previewText.substring(0, 40)}...'
+            : chat.previewText);
+
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Delete chat?'),
-          content: const Text(
-            'Deleting this chat removes it forever. This action cannot be undone.',
+          content: Text(
+            '"$chatTitle"\n\nThis will be removed forever. Once deleted, it cannot be recovered.',
           ),
           actions: [
             TextButton(
@@ -311,8 +318,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
       if (widget.onChatDeleted != null) {
         await widget.onChatDeleted!(chat.id);
       }
-      _pendingDeleteCount++;
-      _showDebouncedDeleteNotification();
+      _showDebouncedDeleteNotification(chatTitle);
     } on StateError catch (error) {
       messenger.showSnackBar(
         SnackBar(
