@@ -156,6 +156,46 @@ class StreamingManager {
     if (stream == null || !stream.isActive) return null;
     return stream.messageIndex;
   }
+
+  /// Store background messages for a streaming chat
+  /// Called when user switches away from an actively streaming chat
+  void setBackgroundMessages(String chatId, List<Map<String, dynamic>> messages, {
+    String? modelId,
+    String? provider,
+  }) {
+    final stream = _activeStreams[chatId];
+    if (stream == null || !stream.isActive) return;
+
+    stream.backgroundMessages = messages;
+    stream.modelId = modelId;
+    stream.provider = provider;
+    debugPrint('[StreamingManager] Stored ${messages.length} background messages for chat $chatId');
+  }
+
+  /// Get background messages with current buffer content applied
+  /// Returns null if chat is not streaming in background
+  List<Map<String, dynamic>>? getBackgroundMessages(String chatId) {
+    final stream = _activeStreams[chatId];
+    if (stream == null || !stream.isActive || stream.backgroundMessages == null) {
+      return null;
+    }
+
+    // Return copy with current buffer content applied to the AI placeholder
+    final messages = stream.backgroundMessages!
+        .map((m) => Map<String, dynamic>.from(m))
+        .toList();
+    if (stream.messageIndex < messages.length) {
+      messages[stream.messageIndex]['text'] = stream.contentBuffer.toString();
+      messages[stream.messageIndex]['reasoning'] = stream.reasoningBuffer.toString();
+    }
+    return messages;
+  }
+
+  /// Check if a chat has background messages stored
+  bool hasBackgroundMessages(String chatId) {
+    final stream = _activeStreams[chatId];
+    return stream != null && stream.isActive && stream.backgroundMessages != null;
+  }
 }
 
 class _ActiveStream {
@@ -165,6 +205,11 @@ class _ActiveStream {
   final StringBuffer contentBuffer = StringBuffer();
   final StringBuffer reasoningBuffer = StringBuffer();
   bool isActive = true;
+
+  // Background message storage for when user switches away during streaming
+  List<Map<String, dynamic>>? backgroundMessages;
+  String? modelId;
+  String? provider;
 
   _ActiveStream({
     required this.subscription,

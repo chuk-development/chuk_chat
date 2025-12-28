@@ -287,6 +287,22 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     debugPrint('│ 📂 [LOAD-CHAT-DESKTOP] Current _activeChatId: $_activeChatId');
     debugPrint('└─────────────────────────────────────────────────────────────');
 
+    // BACKGROUND STREAMING: If current chat is streaming, snapshot messages
+    // to StreamingManager before switching away. This allows the stream to
+    // continue in background and persist correctly when complete.
+    if (_activeChatId != null && _streamingManager.isStreaming(_activeChatId!)) {
+      final messagesCopy = _messages
+          .map((m) => Map<String, dynamic>.from(m))
+          .toList();
+      _streamingManager.setBackgroundMessages(
+        _activeChatId!,
+        messagesCopy,
+        modelId: _selectedModelId,
+        provider: _selectedProviderSlug,
+      );
+      debugPrint('│ 📦 [LOAD-CHAT-DESKTOP] Snapshotted ${messagesCopy.length} messages for background stream: $_activeChatId');
+    }
+
     // CRITICAL: Update _activeChatId SYNCHRONOUSLY before any async work
     // This ensures didUpdateWidget always sees the correct value when comparing
     // chatIdToSave with _activeChatId for persist logic
@@ -409,6 +425,20 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     final messagesToSave = _messages.isNotEmpty
         ? _messages.map((m) => Map<String, dynamic>.from(m)).toList()
         : null;
+
+    // BACKGROUND STREAMING: If current chat is streaming, snapshot messages
+    // to StreamingManager so the stream can persist correctly when complete.
+    if (chatIdToSave != null && _streamingManager.isStreaming(chatIdToSave)) {
+      if (messagesToSave != null) {
+        _streamingManager.setBackgroundMessages(
+          chatIdToSave,
+          messagesToSave,
+          modelId: _selectedModelId,
+          provider: _selectedProviderSlug,
+        );
+        debugPrint('[NEW-CHAT] Snapshotted ${messagesToSave.length} messages for background stream: $chatIdToSave');
+      }
+    }
 
     // Clear UI immediately for instant response
     setState(() {
@@ -1059,27 +1089,57 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           }
         },
         onComplete: (finalContent, finalReasoning) {
-          if (mounted) {
-            setState(() {
-              _isSending = false;
-            });
-          }
-          if (finalContent.isEmpty) {
-            _finalizeAiMessage(placeholderIndex, 'No response received.');
+          final effectiveContent = finalContent.isEmpty ? 'No response received.' : finalContent;
+
+          // Check if user is still viewing the same chat
+          if (_activeChatId == chatIdForStream) {
+            // User is still here - normal processing with UI update
+            if (mounted) {
+              setState(() {
+                _isSending = false;
+              });
+            }
+            _finalizeAiMessage(placeholderIndex, effectiveContent, reasoning: finalReasoning);
+            _persistChatWithId(chatIdForStream);
           } else {
-            _finalizeAiMessage(placeholderIndex, finalContent, reasoning: finalReasoning);
+            // User switched to different chat - use background messages
+            debugPrint('[STREAM] User switched away, using background messages for $chatIdForStream');
+            final backgroundMsgs = _streamingManager.getBackgroundMessages(chatIdForStream);
+            if (backgroundMsgs != null && placeholderIndex < backgroundMsgs.length) {
+              backgroundMsgs[placeholderIndex]['text'] = effectiveContent;
+              backgroundMsgs[placeholderIndex]['reasoning'] = finalReasoning;
+              _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
+            } else {
+              // No background messages - this shouldn't happen if snapshot was made correctly
+              // DO NOT use _persistChatWithId here as _messages belongs to a DIFFERENT chat!
+              debugPrint('[STREAM] WARNING: No background messages for $chatIdForStream - stream result may be lost');
+            }
           }
-          // Persist with captured chatId
-          _persistChatWithId(chatIdForStream);
         },
         onError: (errorMessage) {
-          if (mounted) {
-            setState(() {
-              _isSending = false;
-            });
+          // Check if user is still viewing the same chat
+          if (_activeChatId == chatIdForStream) {
+            // User is still here - normal processing with UI update
+            if (mounted) {
+              setState(() {
+                _isSending = false;
+              });
+            }
+            _finalizeAiMessage(placeholderIndex, 'Error: $errorMessage');
+            _persistChatWithId(chatIdForStream);
+          } else {
+            // User switched to different chat - use background messages
+            debugPrint('[STREAM] Error occurred, user switched away, using background messages for $chatIdForStream');
+            final backgroundMsgs = _streamingManager.getBackgroundMessages(chatIdForStream);
+            if (backgroundMsgs != null && placeholderIndex < backgroundMsgs.length) {
+              backgroundMsgs[placeholderIndex]['text'] = 'Error: $errorMessage';
+              backgroundMsgs[placeholderIndex]['reasoning'] = '';
+              _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
+            } else {
+              // No background messages - DO NOT persist wrong messages
+              debugPrint('[STREAM] WARNING: No background messages for error in $chatIdForStream');
+            }
           }
-          _finalizeAiMessage(placeholderIndex, 'Error: $errorMessage');
-          _persistChatWithId(chatIdForStream);
         },
       );
     } catch (e) {
@@ -1825,7 +1885,19 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _autoSaveTimer?.cancel();
     _autoSaveTimer = Timer.periodic(
       const Duration(seconds: 2),
-      (_) => _persistChatWithId(chatIdForStream),
+      (_) {
+        // Only persist if still viewing the same chat
+        // If user switched, _messages belongs to a different chat!
+        if (_activeChatId == chatIdForStream) {
+          _persistChatWithId(chatIdForStream);
+        } else {
+          // Get background messages and persist those instead
+          final backgroundMsgs = _streamingManager.getBackgroundMessages(chatIdForStream);
+          if (backgroundMsgs != null) {
+            _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
+          }
+        }
+      },
     );
 
     try {
@@ -1846,13 +1918,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         messageIndex: placeholderIndex,
         stream: stream,
         onUpdate: (content, reasoning) {
-          // Always update _messages even if viewing different chat
-          if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
-            _messages[placeholderIndex]['text'] = content;
-            _messages[placeholderIndex]['reasoning'] = reasoning;
-          }
-          // Only update UI if user is still viewing this chat
+          // ONLY update _messages if user is still viewing the SAME chat
+          // If user switched chats, _messages now belongs to a DIFFERENT chat!
+          // The streaming content is already buffered in StreamingManager.
           if (mounted && _activeChatId == chatIdForStream) {
+            if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
+              _messages[placeholderIndex]['text'] = content;
+              _messages[placeholderIndex]['reasoning'] = reasoning;
+            }
             _updateAiMessage(placeholderIndex, content, reasoning);
             _scrollChatToBottom();
           }
@@ -1864,33 +1937,38 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           ChatStorageService.isMessageOperationInProgress = false;
           debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (stream done)');
 
-          // Update messages
-          if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
-            final effectiveContent = finalContent.isEmpty
-                ? 'The model returned an empty response.'
-                : finalContent;
-            _messages[placeholderIndex]['text'] = effectiveContent;
-            _messages[placeholderIndex]['reasoning'] = finalReasoning;
-          }
+          final effectiveContent = finalContent.isEmpty
+              ? 'The model returned an empty response.'
+              : finalContent;
 
-          // Update UI if user is still viewing this chat
-          if (mounted && _activeChatId == chatIdForStream) {
-            setState(() {
-              _isSending = false;
-            });
-            final effectiveContent = finalContent.isEmpty
-                ? 'The model returned an empty response.'
-                : finalContent;
+          // Check if user is still viewing the SAME chat
+          if (_activeChatId == chatIdForStream) {
+            // User is still here - update _messages and UI
+            if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
+              _messages[placeholderIndex]['text'] = effectiveContent;
+              _messages[placeholderIndex]['reasoning'] = finalReasoning;
+            }
+            if (mounted) {
+              setState(() {
+                _isSending = false;
+              });
+            }
             _finalizeAiMessage(placeholderIndex, effectiveContent, reasoning: finalReasoning);
-          } else if (mounted) {
-            // User switched to different chat, just update sending state
-            setState(() {
-              _isSending = false;
-            });
+            _persistChatWithId(chatIdForStream);
+          } else {
+            // User switched to a DIFFERENT chat - use background messages
+            // DO NOT touch _messages as it belongs to the other chat!
+            // DO NOT touch _isSending as it's the other chat's state!
+            debugPrint('[STREAM] User switched away, using background messages for $chatIdForStream');
+            final backgroundMsgs = _streamingManager.getBackgroundMessages(chatIdForStream);
+            if (backgroundMsgs != null && placeholderIndex < backgroundMsgs.length) {
+              backgroundMsgs[placeholderIndex]['text'] = effectiveContent;
+              backgroundMsgs[placeholderIndex]['reasoning'] = finalReasoning;
+              _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
+            } else {
+              debugPrint('[STREAM] WARNING: No background messages for $chatIdForStream - stream result may be lost');
+            }
           }
-
-          // Always persist to correct chat
-          _persistChatWithId(chatIdForStream);
         },
         onError: (errorMessage) {
           debugPrint('Stream error for chat $chatIdForStream: $errorMessage');
@@ -1899,39 +1977,50 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           ChatStorageService.isMessageOperationInProgress = false;
           debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (stream error)');
 
-          // Update messages with error
-          if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
-            _messages[placeholderIndex]['text'] = 'Error: $errorMessage';
-          }
+          final errorText = 'Error: $errorMessage';
 
-          // Update UI if user is still viewing this chat
-          if (mounted && _activeChatId == chatIdForStream) {
-            setState(() {
-              _isSending = false;
-            });
-            _finalizeAiMessage(placeholderIndex, 'Error: $errorMessage');
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  errorMessage,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          // Check if user is still viewing the SAME chat
+          if (_activeChatId == chatIdForStream) {
+            // User is still here - update _messages and UI
+            if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
+              _messages[placeholderIndex]['text'] = errorText;
+            }
+            if (mounted) {
+              setState(() {
+                _isSending = false;
+              });
+            }
+            _finalizeAiMessage(placeholderIndex, errorText);
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    errorMessage,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                  ),
+                  behavior: SnackBarBehavior.floating,
+                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  duration: const Duration(seconds: 2),
+                  dismissDirection: DismissDirection.horizontal,
                 ),
-                behavior: SnackBarBehavior.floating,
-                margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                duration: const Duration(seconds: 2),
-                dismissDirection: DismissDirection.horizontal,
-              ),
-            );
-          } else if (mounted) {
-            setState(() {
-              _isSending = false;
-            });
+              );
+            }
+            _persistChatWithId(chatIdForStream);
+          } else {
+            // User switched to a DIFFERENT chat - use background messages
+            // DO NOT touch _messages as it belongs to the other chat!
+            // DO NOT touch _isSending as it's the other chat's state!
+            debugPrint('[STREAM] User switched away during error, using background messages for $chatIdForStream');
+            final backgroundMsgs = _streamingManager.getBackgroundMessages(chatIdForStream);
+            if (backgroundMsgs != null && placeholderIndex < backgroundMsgs.length) {
+              backgroundMsgs[placeholderIndex]['text'] = errorText;
+              _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
+            } else {
+              debugPrint('[STREAM] WARNING: No background messages for $chatIdForStream - error result may be lost');
+            }
           }
-
-          // Always persist to correct chat
-          _persistChatWithId(chatIdForStream);
         },
       ));
     } catch (error) {
@@ -2362,6 +2451,13 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         .map((message) => Map<String, dynamic>.from(message))
         .toList(growable: false);
     unawaited(_persistChatInternal(messagesCopy, chatId));
+  }
+
+  /// Persist specific messages to a specific chat (for background streaming)
+  /// Used when user has switched away from a streaming chat
+  void _persistChatWithIdAndMessages(String chatId, List<Map<String, dynamic>> messages) {
+    if (messages.isEmpty) return;
+    unawaited(_persistChatInternal(messages, chatId, silent: true));
   }
 
   /// Persist chat messages to storage.

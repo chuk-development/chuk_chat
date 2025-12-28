@@ -646,16 +646,6 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
           );
         },
         child: ListTile(
-          leading: isStreaming
-              ? SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(accentColor),
-                  ),
-                )
-              : null,
           title: Text(
             title,
             style: TextStyle(
@@ -676,20 +666,43 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
           tileColor: isSelected ? accentColor.withValues(alpha: 0.1) : null,
           selectedTileColor: accentColor.withValues(alpha: 0.1),
           selectedColor: accentColor,
-          trailing: PopupMenuButton<String>(
-            icon: Icon(
-              Icons.more_horiz,
-              color: iconFgColor.withValues(alpha: 0.7),
-            ),
-            tooltip: 'Chat options',
-            onSelected: (value) {
-              _handleMenuSelection(value, chat, onDelete);
-            },
-            itemBuilder: (context) => _buildMenuItems(
-              chat,
-              accentColor: accentColor,
-              iconFgColor: iconFgColor,
-            ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Streaming indicator - small pulsing dot
+              if (isStreaming)
+                Container(
+                  width: 8,
+                  height: 8,
+                  margin: const EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    color: accentColor,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: accentColor.withValues(alpha: 0.5),
+                        blurRadius: 4,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                ),
+              PopupMenuButton<String>(
+                icon: Icon(
+                  Icons.more_horiz,
+                  color: iconFgColor.withValues(alpha: 0.7),
+                ),
+                tooltip: 'Chat options',
+                onSelected: (value) {
+                  _handleMenuSelection(value, chat, onDelete);
+                },
+                itemBuilder: (context) => _buildMenuItems(
+                  chat,
+                  accentColor: accentColor,
+                  iconFgColor: iconFgColor,
+                ),
+              ),
+            ],
           ),
         ),
       ),
