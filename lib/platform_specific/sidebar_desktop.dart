@@ -56,7 +56,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
   @override
   void initState() {
     super.initState();
-    _loadChatsAndRefresh(); // Initial load and filter
+    _filterRecentChats(); // Just filter - main.dart already loads chats
     _searchController.addListener(_onSearchChanged);
     _loadProfile();
     _chatUpdatesSub = ChatStorageService.changes.listen((_) {

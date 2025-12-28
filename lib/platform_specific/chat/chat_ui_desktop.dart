@@ -428,17 +428,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _scrollChatToBottom(force: true);
     Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
 
-    // Persist old chat and refresh sidebar in background (don't await)
+    // Persist old chat in background (don't await)
     // CRITICAL: Use silent=true to prevent _persistChatInternal from changing
     // _activeChatId or calling widget.onChatIdChanged - we're now on a NEW chat!
+    // Sidebar auto-updates via ChatStorageService.changes stream
     if (messagesToSave != null && chatIdToSave != null) {
-      unawaited(_persistChatInternal(messagesToSave, chatIdToSave, silent: true).then((_) {
-        // Refresh sidebar after persist completes
-        unawaited(ChatStorageService.loadSavedChatsForSidebar());
-      }));
-    } else {
-      // No chat to save, just refresh sidebar
-      unawaited(ChatStorageService.loadSavedChatsForSidebar());
+      unawaited(_persistChatInternal(messagesToSave, chatIdToSave, silent: true));
     }
   }
 

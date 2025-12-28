@@ -82,6 +82,30 @@ Future<Uint8List> _decryptBytesInBackground(_DecryptionParams params) async {
   return Uint8List.fromList(cleartextBytes);
 }
 
+/// Top-level function for background string decryption (for chat text)
+Future<String> _decryptStringInBackground(_DecryptionParams params) async {
+  final cipher = AesGcm.with256bits();
+  final secretKey = SecretKey(params.keyBytes);
+
+  final Map<String, dynamic> payload = jsonDecode(params.encrypted);
+  final version = payload['v'];
+  if (version != params.payloadVersion) {
+    throw StateError('Unsupported ciphertext version: $version');
+  }
+
+  final nonce = base64Decode(payload['nonce'] as String);
+  final cipherText = base64Decode(payload['ciphertext'] as String);
+  final mac = Mac(base64Decode(payload['mac'] as String));
+  final secretBox = SecretBox(cipherText, nonce: nonce, mac: mac);
+
+  final cleartextBytes = await cipher.decrypt(
+    secretBox,
+    secretKey: secretKey,
+  );
+
+  return utf8.decode(cleartextBytes);
+}
+
 class EncryptionService {
   const EncryptionService._();
 
@@ -414,6 +438,21 @@ class EncryptionService {
 
     // Run decryption in background isolate to avoid blocking UI
     return await compute(_decryptBytesInBackground, params);
+  }
+
+  /// Decrypt string in background isolate (for chat payloads)
+  /// Use this for chat text to avoid blocking the UI thread
+  static Future<String> decryptInBackground(String encrypted) async {
+    final secretKey = await _ensureKey();
+    final keyBytes = await secretKey.extractBytes();
+
+    final params = _DecryptionParams(
+      encrypted: encrypted,
+      keyBytes: keyBytes,
+      payloadVersion: _payloadVersion,
+    );
+
+    return await compute(_decryptStringInBackground, params);
   }
 
   static Future<SecretKey> _ensureKey() async {

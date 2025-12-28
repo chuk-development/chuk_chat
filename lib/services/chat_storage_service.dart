@@ -192,6 +192,14 @@ class ChatStorageService {
   static final Map<String, Completer<StoredChat?>> _pendingSaves =
       <String, Completer<StoredChat?>>{};
 
+  // Cache-first loading: track if cache has been loaded
+  static bool _cacheLoaded = false;
+
+  // Prevent concurrent loadChats() calls
+  static Completer<void>? _loadingCompleter;
+  static bool get _isLoading =>
+      _loadingCompleter != null && !_loadingCompleter!.isCompleted;
+
   // Get chats as a sorted list (most recent first)
   static List<StoredChat> get savedChats {
     final list = _chatsById.values.toList();
@@ -223,115 +231,195 @@ class ChatStorageService {
     }
   }
 
-  /// Load all chats from Supabase or cache
-  static Future<void> loadChats() async {
+  /// Load chats from local cache only (instant, no network).
+  /// Call this for immediate UI population, then sync in background.
+  static Future<void> loadFromCache() async {
+    if (_cacheLoaded && _chatsById.isNotEmpty) return;
+
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
-      debugPrint('⚠️ [ChatStorage] No user signed in, clearing chats');
       _chatsById.clear();
       _notifyChanges();
       return;
     }
 
-    List<Map<String, dynamic>> rows = [];
-    bool loadedFromCache = false;
-    Object? remoteError;
-    StackTrace? remoteStack;
+    try {
+      final rows = await LocalChatCacheService.load(user.id);
+      if (rows.isEmpty) {
+        debugPrint('📦 [ChatStorage] Cache empty');
+        return;
+      }
 
-    final isOnline = await _checkNetworkStatus();
+      debugPrint('📦 [ChatStorage] Loading ${rows.length} chats from cache...');
 
-    if (isOnline) {
-      try {
-        debugPrint('🌐 [ChatStorage] Network status: ONLINE');
-        rows = await SupabaseService.client
-            .from('encrypted_chats')
-            .select('id, encrypted_payload, created_at, is_starred, updated_at')
-            .eq('user_id', user.id)
-            .order('created_at', ascending: false);
-        debugPrint('✅ [ChatStorage] Loaded ${rows.length} chats from remote');
+      // Decrypt in parallel using background isolates
+      final decryptFutures = rows.map((map) async {
+        final encryptedPayload = map['encrypted_payload'] as String?;
+        if (encryptedPayload == null || encryptedPayload.isEmpty) return null;
 
-        // Update cache with remote data
-        for (final row in rows) {
-          unawaited(LocalChatCacheService.upsert(user.id, row));
+        try {
+          final decrypted =
+              await EncryptionService.decryptInBackground(encryptedPayload);
+          final chatPayload = _deserializePayload(decrypted);
+          return StoredChat.fromRow(
+            map,
+            chatPayload.messages,
+            customName: chatPayload.customName,
+          );
+        } catch (_) {
+          return null;
         }
-      } catch (error, stackTrace) {
-        remoteError = error;
-        remoteStack = stackTrace;
-        debugPrint('❌ [ChatStorage] Failed to load from remote: $error');
+      }).toList();
 
-        // Fall back to cache
+      final chats = await Future.wait(decryptFutures, eagerError: false);
+
+      _chatsById.clear();
+      for (final chat in chats) {
+        if (chat != null) {
+          _chatsById[chat.id] = chat;
+        }
+      }
+
+      _cacheLoaded = true;
+      _notifyChanges();
+      debugPrint('✅ [ChatStorage] Loaded ${_chatsById.length} chats from cache');
+    } catch (e) {
+      debugPrint('❌ [ChatStorage] Cache load failed: $e');
+    }
+  }
+
+  /// Load all chats from Supabase or cache
+  static Future<void> loadChats() async {
+    // Prevent concurrent loads - wait for existing operation
+    if (_isLoading) {
+      debugPrint('⏳ [ChatStorage] Load already in progress, waiting...');
+      return _loadingCompleter!.future;
+    }
+    _loadingCompleter = Completer<void>();
+
+    try {
+      final user = SupabaseService.auth.currentUser;
+      if (user == null) {
+        debugPrint('⚠️ [ChatStorage] No user signed in, clearing chats');
+        _chatsById.clear();
+        _notifyChanges();
+        return;
+      }
+
+      List<Map<String, dynamic>> rows = [];
+      bool loadedFromCache = false;
+      Object? remoteError;
+      StackTrace? remoteStack;
+
+      final isOnline = await _checkNetworkStatus();
+
+      if (isOnline) {
+        try {
+          debugPrint('🌐 [ChatStorage] Network status: ONLINE');
+          rows = await SupabaseService.client
+              .from('encrypted_chats')
+              .select('id, encrypted_payload, created_at, is_starred, updated_at')
+              .eq('user_id', user.id)
+              .order('created_at', ascending: false);
+          debugPrint('✅ [ChatStorage] Loaded ${rows.length} chats from remote');
+
+          // Update cache with remote data
+          for (final row in rows) {
+            unawaited(LocalChatCacheService.upsert(user.id, row));
+          }
+        } catch (error, stackTrace) {
+          remoteError = error;
+          remoteStack = stackTrace;
+          debugPrint('❌ [ChatStorage] Failed to load from remote: $error');
+
+          // Fall back to cache
+          try {
+            rows = await LocalChatCacheService.load(user.id);
+            loadedFromCache = true;
+            debugPrint(
+              '📦 [ChatStorage] Loaded ${rows.length} chats from cache (fallback)',
+            );
+          } catch (cacheError) {
+            debugPrint('❌ [ChatStorage] Failed to load from cache: $cacheError');
+            rows = [];
+          }
+        }
+      } else {
+        debugPrint('🌐 [ChatStorage] Network status: OFFLINE');
         try {
           rows = await LocalChatCacheService.load(user.id);
           loadedFromCache = true;
           debugPrint(
-            '📦 [ChatStorage] Loaded ${rows.length} chats from cache (fallback)',
+            '📦 [ChatStorage] Loaded ${rows.length} chats from cache (offline)',
           );
-        } catch (cacheError) {
-          debugPrint('❌ [ChatStorage] Failed to load from cache: $cacheError');
+        } catch (error) {
+          debugPrint('❌ [ChatStorage] Failed to load from cache: $error');
           rows = [];
         }
       }
-    } else {
-      debugPrint('🌐 [ChatStorage] Network status: OFFLINE');
-      try {
-        rows = await LocalChatCacheService.load(user.id);
-        loadedFromCache = true;
+
+      // Clear and rebuild the chats map
+      _chatsById.clear();
+
+      // Decrypt all chats in parallel using background isolates
+      final decryptFutures = rows.map((map) async {
+        final encryptedPayload = map['encrypted_payload'] as String?;
+        if (encryptedPayload == null || encryptedPayload.isEmpty) return null;
+
+        try {
+          final decrypted =
+              await EncryptionService.decryptInBackground(encryptedPayload);
+          final chatPayload = _deserializePayload(decrypted);
+          return StoredChat.fromRow(
+            map,
+            chatPayload.messages,
+            customName: chatPayload.customName,
+          );
+        } on SecretBoxAuthenticationError {
+          return null;
+        } on FormatException {
+          return null;
+        } on StateError {
+          return null;
+        }
+      }).toList();
+
+      final chats = await Future.wait(decryptFutures, eagerError: false);
+      for (final chat in chats) {
+        if (chat != null) {
+          _chatsById[chat.id] = chat;
+        }
+      }
+
+      _notifyChanges();
+
+      // Log all loaded chats for debugging
+      if (_chatsById.isNotEmpty) {
         debugPrint(
-          '📦 [ChatStorage] Loaded ${rows.length} chats from cache (offline)',
+            '📋 [ChatStorage] Current chats in memory (${_chatsById.length}):');
+        for (final entry in _chatsById.entries) {
+          final chat = entry.value;
+          final firstUserMsg =
+              chat.messages.where((m) => m.role == 'user').firstOrNull;
+          final title = (firstUserMsg?.text.length ?? 0) > 40
+              ? '${firstUserMsg!.text.substring(0, 40)}...'
+              : (firstUserMsg?.text ?? 'No user message');
+          debugPrint(
+              '   - ${entry.key.substring(0, 8)}... : "$title" (${chat.messages.length} msgs)');
+        }
+      }
+
+      if (loadedFromCache && remoteError != null) {
+        debugPrint(
+          'ChatStorageService loaded chats from offline cache: $remoteError',
         );
-      } catch (error) {
-        debugPrint('❌ [ChatStorage] Failed to load from cache: $error');
-        rows = [];
+        if (remoteStack != null) {
+          debugPrint('Stack trace: $remoteStack');
+        }
       }
-    }
-
-    // Clear and rebuild the chats map
-    _chatsById.clear();
-
-    for (final map in rows) {
-      final encryptedPayload = map['encrypted_payload'] as String?;
-      if (encryptedPayload == null || encryptedPayload.isEmpty) continue;
-
-      try {
-        final decrypted = await EncryptionService.decrypt(encryptedPayload);
-        final chatPayload = _deserializePayload(decrypted);
-        final chat = StoredChat.fromRow(
-          map,
-          chatPayload.messages,
-          customName: chatPayload.customName,
-        );
-        _chatsById[chat.id] = chat;
-      } on SecretBoxAuthenticationError {
-        continue;
-      } on FormatException {
-        continue;
-      } on StateError {
-        continue;
-      }
-    }
-
-    _notifyChanges();
-
-    // Log all loaded chats for debugging
-    if (_chatsById.isNotEmpty) {
-      debugPrint('📋 [ChatStorage] Current chats in memory (${_chatsById.length}):');
-      for (final entry in _chatsById.entries) {
-        final chat = entry.value;
-        final firstUserMsg = chat.messages.where((m) => m.role == 'user').firstOrNull;
-        final title = (firstUserMsg?.text.length ?? 0) > 40
-            ? '${firstUserMsg!.text.substring(0, 40)}...'
-            : (firstUserMsg?.text ?? 'No user message');
-        debugPrint('   - ${entry.key.substring(0, 8)}... : "$title" (${chat.messages.length} msgs)');
-      }
-    }
-
-    if (loadedFromCache && remoteError != null) {
-      debugPrint(
-        'ChatStorageService loaded chats from offline cache: $remoteError',
-      );
-      if (remoteStack != null) {
-        debugPrint('Stack trace: $remoteStack');
-      }
+    } finally {
+      _loadingCompleter?.complete();
+      _loadingCompleter = null;
     }
   }
 
@@ -718,11 +806,19 @@ class ChatStorageService {
     debugPrint('🗑️ [ChatStorage] Deleted chat: $chatId');
   }
 
-  /// Load chats for sidebar (only if empty)
+  /// Load chats for sidebar - cache first, then sync handles remote updates.
+  /// This is the main entry point for loading chats on startup.
   static Future<void> loadSavedChatsForSidebar() async {
+    // Step 1: Load from cache immediately (instant UI)
+    if (!_cacheLoaded) {
+      await loadFromCache();
+    }
+
+    // Step 2: If cache was empty, do full remote load
     if (_chatsById.isEmpty) {
       await loadChats();
     }
+    // If cache had data, sync service handles remote updates
   }
 
   /// Set chat starred status
@@ -851,6 +947,8 @@ class ChatStorageService {
     activeMessageChatId = null;
     _savingChats.clear();
     _pendingSaves.clear();
+    _cacheLoaded = false;
+    _loadingCompleter = null;
     _notifyChanges();
   }
 
