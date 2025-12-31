@@ -32,7 +32,6 @@ import 'package:chuk_chat/platform_specific/chat/widgets/mobile_chat_widgets.dar
 import 'package:chuk_chat/services/image_generation_service.dart';
 import 'package:chuk_chat/services/project_storage_service.dart';
 import 'package:chuk_chat/services/project_message_service.dart';
-import 'package:chuk_chat/models/project_model.dart';
 import 'package:chuk_chat/pages/pricing_page.dart';
 import 'package:chuk_chat/pages/project_management_page.dart';
 

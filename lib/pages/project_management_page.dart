@@ -247,10 +247,12 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
           widget.projectId,
           selected.id,
         );
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Chat added to project')),
         );
       } catch (e) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to add chat: $e')),
         );
@@ -261,10 +263,12 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
   Future<void> _removeChat(String chatId) async {
     try {
       await ProjectStorageService.removeChatFromProject(widget.projectId, chatId);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Chat removed from project')),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to remove chat: $e')),
       );
@@ -449,7 +453,6 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
 
   Widget _buildFileCard(ProjectFile file) {
     final theme = Theme.of(context);
-    final iconFg = theme.resolvedIconColor;
     final accentColor = theme.colorScheme.primary;
 
     return Card(
@@ -486,8 +489,10 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
                 ],
               ),
               onTap: () {
-                Future.delayed(Duration.zero, () {
-                  ProjectFileViewer.show(context, file, widget.projectId);
+                final currentContext = context;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!mounted) return;
+                  ProjectFileViewer.show(currentContext, file, widget.projectId);
                 });
               },
             ),
@@ -814,10 +819,12 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
           name: nameController.text.trim(),
           description: descController.text.trim(),
         );
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Project updated')),
         );
       } catch (e) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to update: $e')),
         );

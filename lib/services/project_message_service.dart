@@ -1,6 +1,5 @@
 // lib/services/project_message_service.dart
 import 'package:chuk_chat/models/project_model.dart';
-import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/services/project_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:flutter/foundation.dart';

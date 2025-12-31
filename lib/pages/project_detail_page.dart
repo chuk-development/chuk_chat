@@ -215,11 +215,11 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(Icons.chat,
-                          size: 64, color: iconFg.withOpacity(0.3)),
+                          size: 64, color: iconFg.withValues(alpha: 0.3)),
                       const SizedBox(height: 16),
                       Text(
                         'No chats in this project',
-                        style: TextStyle(color: iconFg.withOpacity(0.5)),
+                        style: TextStyle(color: iconFg.withValues(alpha: 0.5)),
                       ),
                     ],
                   ),
@@ -266,11 +266,11 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.attach_file, size: 64, color: iconFg.withOpacity(0.3)),
+          Icon(Icons.attach_file, size: 64, color: iconFg.withValues(alpha: 0.3)),
           const SizedBox(height: 16),
           Text(
             'File upload coming soon',
-            style: TextStyle(color: iconFg.withOpacity(0.5)),
+            style: TextStyle(color: iconFg.withValues(alpha: 0.5)),
           ),
         ],
       ),

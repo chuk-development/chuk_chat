@@ -204,13 +204,13 @@ class _ProjectsPageState extends State<ProjectsPage> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(Icons.folder_open,
-                              size: 64, color: iconFg.withOpacity(0.3)),
+                              size: 64, color: iconFg.withValues(alpha: 0.3)),
                           const SizedBox(height: 16),
                           Text(
                             _searchQuery.isEmpty
                                 ? 'No projects yet'
                                 : 'No projects found',
-                            style: TextStyle(color: iconFg.withOpacity(0.5)),
+                            style: TextStyle(color: iconFg.withValues(alpha: 0.5)),
                           ),
                           if (_searchQuery.isEmpty) ...[
                             const SizedBox(height: 8),
@@ -382,7 +382,7 @@ class _ProjectCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     project.description!,
-                    style: TextStyle(color: iconFg.withOpacity(0.7)),
+                    style: TextStyle(color: iconFg.withValues(alpha: 0.7)),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -399,11 +399,11 @@ class _ProjectCard extends StatelessWidget {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.chat, size: 16, color: iconFg.withOpacity(0.6)),
+                      Icon(Icons.chat, size: 16, color: iconFg.withValues(alpha: 0.6)),
                       const SizedBox(width: 4),
                       Text(
                         '${project.chatCount}',
-                        style: TextStyle(color: iconFg.withOpacity(0.6)),
+                        style: TextStyle(color: iconFg.withValues(alpha: 0.6)),
                       ),
                     ],
                   ),
@@ -411,11 +411,11 @@ class _ProjectCard extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(Icons.attach_file,
-                          size: 16, color: iconFg.withOpacity(0.6)),
+                          size: 16, color: iconFg.withValues(alpha: 0.6)),
                       const SizedBox(width: 4),
                       Text(
                         '${project.fileCount}',
-                        style: TextStyle(color: iconFg.withOpacity(0.6)),
+                        style: TextStyle(color: iconFg.withValues(alpha: 0.6)),
                       ),
                     ],
                   ),

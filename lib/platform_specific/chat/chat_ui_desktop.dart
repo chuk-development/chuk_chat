@@ -2480,7 +2480,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       final stored = isNewChat
           // Use saveChat with pre-generated ID for new chats
           ? await ChatStorageService.saveChat(messagesCopy, chatId: chatId)
-          : await ChatStorageService.updateChat(chatId!, messagesCopy);
+          : await ChatStorageService.updateChat(chatId, messagesCopy);
       if (!mounted || stored == null) return;
 
       // If silent, don't update state or notify parent - this is a background save
