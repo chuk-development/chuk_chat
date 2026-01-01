@@ -45,3 +45,13 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+msix_config:
+  display_name: chuk_chat
+  publisher_display_name: chuk Development
+  identity_name: chuk.chat
+  publisher: CN=chuk Development
+  msix_version: 1.0.0.0
+  logo_path: assets/icon.png
+  capabilities: internetClient
+  store: false
