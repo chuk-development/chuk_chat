@@ -3,10 +3,20 @@ name: Cross-Platform Build & Release
 on:
   workflow_dispatch:
     inputs:
+      platforms:
+        description: 'Platforms to build (comma-separated: android,linux,windows,macos,ios or "all")'
+        required: true
+        default: 'all'
+        type: string
       enable_all_features:
         description: 'Build with all features enabled'
         required: false
         default: 'true'
+        type: boolean
+      enable_signing:
+        description: 'Enable Android signing (requires secrets)'
+        required: false
+        default: 'false'
         type: boolean
 
 permissions:
@@ -19,12 +29,38 @@ jobs:
     outputs:
       version: ${{ steps.bump.outputs.version }}
       tag: ${{ steps.bump.outputs.tag }}
+      build_android: ${{ steps.check.outputs.build_android }}
+      build_linux: ${{ steps.check.outputs.build_linux }}
+      build_windows: ${{ steps.check.outputs.build_windows }}
+      build_macos: ${{ steps.check.outputs.build_macos }}
+      build_ios: ${{ steps.check.outputs.build_ios }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check which platforms to build
+        id: check
+        run: |
+          PLATFORMS="${{ inputs.platforms }}"
+          echo "Requested platforms: $PLATFORMS"
+
+          if [ "$PLATFORMS" = "all" ]; then
+            echo "build_android=true" >> $GITHUB_OUTPUT
+            echo "build_linux=true" >> $GITHUB_OUTPUT
+            echo "build_windows=true" >> $GITHUB_OUTPUT
+            echo "build_macos=true" >> $GITHUB_OUTPUT
+            echo "build_ios=false" >> $GITHUB_OUTPUT  # iOS disabled by default
+          else
+            # Check each platform
+            [[ "$PLATFORMS" == *"android"* ]] && echo "build_android=true" >> $GITHUB_OUTPUT || echo "build_android=false" >> $GITHUB_OUTPUT
+            [[ "$PLATFORMS" == *"linux"* ]] && echo "build_linux=true" >> $GITHUB_OUTPUT || echo "build_linux=false" >> $GITHUB_OUTPUT
+            [[ "$PLATFORMS" == *"windows"* ]] && echo "build_windows=true" >> $GITHUB_OUTPUT || echo "build_windows=false" >> $GITHUB_OUTPUT
+            [[ "$PLATFORMS" == *"macos"* ]] && echo "build_macos=true" >> $GITHUB_OUTPUT || echo "build_macos=false" >> $GITHUB_OUTPUT
+            [[ "$PLATFORMS" == *"ios"* ]] && echo "build_ios=true" >> $GITHUB_OUTPUT || echo "build_ios=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Bump version
         id: bump
@@ -66,9 +102,10 @@ jobs:
           git push
 
   build-android:
-    name: Build Android APK
+    name: Build Android APKs
     runs-on: ubuntu-latest
     needs: version-bump
+    if: needs.version-bump.outputs.build_android == 'true'
     timeout-minutes: 30
 
     steps:
@@ -93,8 +130,8 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Create key.properties (if secrets available)
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+      - name: Create key.properties (if signing enabled)
+        if: ${{ inputs.enable_signing && secrets.ANDROID_KEYSTORE_BASE64 != '' }}
         run: |
           echo "storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" > android/key.properties
           echo "keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}" >> android/key.properties
@@ -102,11 +139,11 @@ jobs:
           echo "storeFile=upload-keystore.jks" >> android/key.properties
 
       - name: Decode keystore
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        if: ${{ inputs.enable_signing && secrets.ANDROID_KEYSTORE_BASE64 != '' }}
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/upload-keystore.jks
 
-      - name: Build Android APK (with all features)
+      - name: Build Split APKs (with all features)
         if: ${{ inputs.enable_all_features }}
         run: |
           flutter build apk \
@@ -116,35 +153,61 @@ jobs:
             --dart-define=FEATURE_PROJECTS=true \
             --dart-define=FEATURE_VOICE_MODE=true \
             --tree-shake-icons \
-            --target-platform android-arm64 \
+            --split-per-abi \
             --release
 
-      - name: Build Android APK (basic)
+      - name: Build Split APKs (basic)
         if: ${{ !inputs.enable_all_features }}
         run: |
           flutter build apk \
             --dart-define=PLATFORM_MOBILE=true \
             --tree-shake-icons \
-            --target-platform android-arm64 \
+            --split-per-abi \
             --release
 
-      - name: Rename APK
+      - name: Build Universal APK (with all features)
+        if: ${{ inputs.enable_all_features }}
         run: |
-          mv build/app/outputs/flutter-apk/app-release.apk \
-             build/app/outputs/flutter-apk/chuk_chat-${{ needs.version-bump.outputs.tag }}-android.apk
+          flutter build apk \
+            --dart-define=PLATFORM_MOBILE=true \
+            --dart-define=FEATURE_MEDIA_MANAGER=true \
+            --dart-define=FEATURE_IMAGE_GEN=true \
+            --dart-define=FEATURE_PROJECTS=true \
+            --dart-define=FEATURE_VOICE_MODE=true \
+            --tree-shake-icons \
+            --release
 
-      - name: Upload Android APK
+      - name: Build Universal APK (basic)
+        if: ${{ !inputs.enable_all_features }}
+        run: |
+          flutter build apk \
+            --dart-define=PLATFORM_MOBILE=true \
+            --tree-shake-icons \
+            --release
+
+      - name: Rename APKs
+        run: |
+          cd build/app/outputs/flutter-apk
+          # Rename split APKs
+          mv app-arm64-v8a-release.apk chuk_chat-${{ needs.version-bump.outputs.tag }}-android-arm64.apk || true
+          mv app-armeabi-v7a-release.apk chuk_chat-${{ needs.version-bump.outputs.tag }}-android-arm32.apk || true
+          mv app-x86_64-release.apk chuk_chat-${{ needs.version-bump.outputs.tag }}-android-x64.apk || true
+          # Rename universal APK
+          mv app-release.apk chuk_chat-${{ needs.version-bump.outputs.tag }}-android-universal.apk || true
+
+      - name: Upload Android APKs
         uses: actions/upload-artifact@v4
         with:
-          name: android-apk
-          path: build/app/outputs/flutter-apk/chuk_chat-${{ needs.version-bump.outputs.tag }}-android.apk
+          name: android-apks
+          path: build/app/outputs/flutter-apk/chuk_chat-*.apk
           retention-days: 30
 
   build-linux:
-    name: Build Linux
+    name: Build Linux (.deb, AppImage, RPM)
     runs-on: ubuntu-latest
     needs: version-bump
-    timeout-minutes: 30
+    if: needs.version-bump.outputs.build_linux == 'true'
+    timeout-minutes: 45
 
     steps:
       - name: Checkout code
@@ -155,7 +218,7 @@ jobs:
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev dpkg-dev rpm file wget fuse libfuse2
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -181,22 +244,174 @@ jobs:
         if: ${{ !inputs.enable_all_features }}
         run: flutter build linux --release
 
-      - name: Create Linux archive
+      - name: Create .deb package
         run: |
-          cd build/linux/x64/release/bundle
-          tar -czf ../../../../../chuk_chat-${{ needs.version-bump.outputs.tag }}-linux-x64.tar.gz *
+          VERSION="${{ needs.version-bump.outputs.version }}"
+          VERSION_NO_BUILD=$(echo $VERSION | cut -d'+' -f1)
 
-      - name: Upload Linux build
+          # Create package structure
+          mkdir -p debian/DEBIAN
+          mkdir -p debian/usr/bin
+          mkdir -p debian/usr/share/applications
+          mkdir -p debian/usr/share/icons/hicolor/512x512/apps
+
+          # Copy application files
+          cp -r build/linux/x64/release/bundle/* debian/usr/bin/
+
+          # Create control file
+          cat > debian/DEBIAN/control <<EOF
+          Package: chuk-chat
+          Version: $VERSION_NO_BUILD
+          Section: net
+          Priority: optional
+          Architecture: amd64
+          Maintainer: chuk_chat <noreply@chuk.chat>
+          Description: Cross-platform encrypted chat application
+           chuk_chat is a cross-platform chat application with E2E encryption,
+           Supabase backend, and AI chat capabilities.
+          EOF
+
+          # Create desktop entry
+          cat > debian/usr/share/applications/chuk-chat.desktop <<EOF
+          [Desktop Entry]
+          Name=chuk_chat
+          Comment=Encrypted Chat Application
+          Exec=/usr/bin/chuk_chat
+          Icon=chuk-chat
+          Terminal=false
+          Type=Application
+          Categories=Network;InstantMessaging;
+          EOF
+
+          # Build .deb
+          dpkg-deb --build debian chuk_chat-${{ needs.version-bump.outputs.tag }}-linux-amd64.deb
+
+      - name: Create AppImage
+        run: |
+          VERSION="${{ needs.version-bump.outputs.version }}"
+          VERSION_NO_BUILD=$(echo $VERSION | cut -d'+' -f1)
+
+          # Download linuxdeploy and appimagetool
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          chmod +x linuxdeploy-x86_64.AppImage
+
+          # Create AppDir structure
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/512x512/apps
+
+          # Copy application files
+          cp -r build/linux/x64/release/bundle/* AppDir/usr/bin/
+
+          # Create desktop entry
+          cat > AppDir/usr/share/applications/chuk-chat.desktop <<EOF
+          [Desktop Entry]
+          Name=chuk_chat
+          Comment=Encrypted Chat Application
+          Exec=chuk_chat
+          Icon=chuk-chat
+          Terminal=false
+          Type=Application
+          Categories=Network;InstantMessaging;
+          EOF
+
+          # Create a simple icon (if not exists)
+          touch AppDir/usr/share/icons/hicolor/512x512/apps/chuk-chat.png
+
+          # Build AppImage
+          ARCH=x86_64 ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage || true
+
+          # Rename AppImage if it was created
+          if ls chuk_chat-*.AppImage 1> /dev/null 2>&1; then
+            mv chuk_chat-*.AppImage chuk_chat-${{ needs.version-bump.outputs.tag }}-linux-x86_64.AppImage
+          else
+            # Fallback: create a simple archive
+            cd AppDir && tar -czf ../chuk_chat-${{ needs.version-bump.outputs.tag }}-linux-x86_64.AppImage.tar.gz * && cd ..
+          fi
+
+      - name: Create RPM package
+        run: |
+          VERSION="${{ needs.version-bump.outputs.version }}"
+          VERSION_NO_BUILD=$(echo $VERSION | cut -d'+' -f1)
+
+          # Create RPM build structure
+          mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+          mkdir -p rpm-package/usr/bin
+          mkdir -p rpm-package/usr/share/applications
+
+          # Copy application files
+          cp -r build/linux/x64/release/bundle/* rpm-package/usr/bin/
+
+          # Create desktop entry
+          cat > rpm-package/usr/share/applications/chuk-chat.desktop <<EOF
+          [Desktop Entry]
+          Name=chuk_chat
+          Comment=Encrypted Chat Application
+          Exec=/usr/bin/chuk_chat
+          Icon=chuk-chat
+          Terminal=false
+          Type=Application
+          Categories=Network;InstantMessaging;
+          EOF
+
+          # Create tarball
+          tar -czf ~/rpmbuild/SOURCES/chuk-chat-$VERSION_NO_BUILD.tar.gz -C rpm-package .
+
+          # Create spec file
+          cat > ~/rpmbuild/SPECS/chuk-chat.spec <<EOF
+          Name:           chuk-chat
+          Version:        $VERSION_NO_BUILD
+          Release:        1%{?dist}
+          Summary:        Cross-platform encrypted chat application
+
+          License:        Proprietary
+          URL:            https://github.com/chuk-development/chuk_chat
+          Source0:        chuk-chat-%{version}.tar.gz
+
+          BuildArch:      x86_64
+          Requires:       gtk3
+
+          %description
+          chuk_chat is a cross-platform chat application with E2E encryption,
+          Supabase backend, and AI chat capabilities.
+
+          %prep
+          %setup -q -c
+
+          %install
+          mkdir -p %{buildroot}
+          cp -r * %{buildroot}/
+
+          %files
+          /usr/bin/*
+          /usr/share/applications/chuk-chat.desktop
+
+          %changelog
+          * $(date "+%a %b %d %Y") GitHub Actions <noreply@chuk.chat> - $VERSION_NO_BUILD-1
+          - Automated build
+          EOF
+
+          # Build RPM
+          rpmbuild -bb ~/rpmbuild/SPECS/chuk-chat.spec
+
+          # Copy RPM to workspace
+          cp ~/rpmbuild/RPMS/x86_64/chuk-chat-*.rpm chuk_chat-${{ needs.version-bump.outputs.tag }}-linux-x86_64.rpm || true
+
+      - name: Upload Linux packages
         uses: actions/upload-artifact@v4
         with:
-          name: linux-build
-          path: chuk_chat-${{ needs.version-bump.outputs.tag }}-linux-x64.tar.gz
+          name: linux-packages
+          path: |
+            chuk_chat-${{ needs.version-bump.outputs.tag }}-linux-amd64.deb
+            chuk_chat-${{ needs.version-bump.outputs.tag }}-linux-x86_64.AppImage*
+            chuk_chat-${{ needs.version-bump.outputs.tag }}-linux-x86_64.rpm
           retention-days: 30
 
   build-windows:
-    name: Build Windows
+    name: Build Windows MSIX
     runs-on: windows-latest
     needs: version-bump
+    if: needs.version-bump.outputs.build_windows == 'true'
     timeout-minutes: 30
 
     steps:
@@ -211,6 +426,10 @@ jobs:
           flutter-version: '3.24.5'
           channel: 'stable'
           cache: true
+
+      - name: Add msix to dependencies
+        run: |
+          flutter pub add msix --dev
 
       - name: Get dependencies
         run: flutter pub get
@@ -229,21 +448,35 @@ jobs:
         if: ${{ !inputs.enable_all_features }}
         run: flutter build windows --release
 
-      - name: Create Windows archive
+      - name: Create MSIX package
         run: |
-          Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath chuk_chat-${{ needs.version-bump.outputs.tag }}-windows-x64.zip
+          # Create msix config
+          $version = "${{ needs.version-bump.outputs.version }}" -replace '\+.*',''
 
-      - name: Upload Windows build
+          flutter pub run msix:create `
+            --display-name "chuk_chat" `
+            --publisher-display-name "chuk_chat" `
+            --identity-name "chuk.chat" `
+            --version "$version.0" `
+            --capabilities "internetClient" `
+            --store false
+
+      - name: Rename MSIX
+        run: |
+          Move-Item -Path build\windows\x64\runner\Release\chuk_chat.msix -Destination chuk_chat-${{ needs.version-bump.outputs.tag }}-windows-x64.msix
+
+      - name: Upload Windows MSIX
         uses: actions/upload-artifact@v4
         with:
-          name: windows-build
-          path: chuk_chat-${{ needs.version-bump.outputs.tag }}-windows-x64.zip
+          name: windows-msix
+          path: chuk_chat-${{ needs.version-bump.outputs.tag }}-windows-x64.msix
           retention-days: 30
 
   build-macos:
-    name: Build macOS
+    name: Build macOS .dmg
     runs-on: macos-latest
     needs: version-bump
+    if: needs.version-bump.outputs.build_macos == 'true'
     timeout-minutes: 30
 
     steps:
@@ -276,22 +509,34 @@ jobs:
         if: ${{ !inputs.enable_all_features }}
         run: flutter build macos --release
 
-      - name: Create macOS archive
-        run: |
-          cd build/macos/Build/Products/Release
-          zip -r ../../../../../chuk_chat-${{ needs.version-bump.outputs.tag }}-macos.zip chuk_chat.app
+      - name: Install create-dmg
+        run: brew install create-dmg
 
-      - name: Upload macOS build
+      - name: Create .dmg
+        run: |
+          create-dmg \
+            --volname "chuk_chat Installer" \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --app-drop-link 600 185 \
+            chuk_chat-${{ needs.version-bump.outputs.tag }}-macos.dmg \
+            build/macos/Build/Products/Release/chuk_chat.app \
+            || cp -r build/macos/Build/Products/Release/chuk_chat.app chuk_chat.app && \
+               hdiutil create -volname "chuk_chat" -srcfolder chuk_chat.app -ov -format UDZO chuk_chat-${{ needs.version-bump.outputs.tag }}-macos.dmg
+
+      - name: Upload macOS .dmg
         uses: actions/upload-artifact@v4
         with:
-          name: macos-build
-          path: chuk_chat-${{ needs.version-bump.outputs.tag }}-macos.zip
+          name: macos-dmg
+          path: chuk_chat-${{ needs.version-bump.outputs.tag }}-macos.dmg
           retention-days: 30
 
   build-ios:
     name: Build iOS
     runs-on: macos-latest
     needs: version-bump
+    if: needs.version-bump.outputs.build_ios == 'true'
     timeout-minutes: 30
 
     steps:
@@ -345,8 +590,13 @@ jobs:
   create-release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: [version-bump, build-android, build-linux, build-windows, build-macos, build-ios]
-    if: success()
+    needs: [version-bump, build-android, build-linux, build-windows, build-macos]
+    if: |
+      always() &&
+      (needs.build-android.result == 'success' || needs.build-android.result == 'skipped') &&
+      (needs.build-linux.result == 'success' || needs.build-linux.result == 'skipped') &&
+      (needs.build-windows.result == 'success' || needs.build-windows.result == 'skipped') &&
+      (needs.build-macos.result == 'success' || needs.build-macos.result == 'skipped')
 
     steps:
       - name: Download all artifacts
@@ -369,11 +619,19 @@ jobs:
 
             ### 📦 Downloads
 
-            - **Android**: APK for ARM64 devices
-            - **Linux**: x64 archive (tar.gz)
-            - **Windows**: x64 archive (zip)
-            - **macOS**: Universal binary (zip)
-            - **iOS**: Unsigned build (zip) - requires manual signing
+            **Android APKs** (choose one):
+            - **Universal APK**: Works on all Android devices (larger size)
+            - **ARM64 APK**: For modern Android devices (recommended, smaller)
+            - **ARM32 APK**: For older Android devices
+            - **x64 APK**: For Android emulators and x86 devices
+
+            **Desktop**:
+            - **Windows**: MSIX installer (double-click to install)
+            - **Linux**: Choose your package format:
+              - **.deb** for Debian/Ubuntu (`sudo dpkg -i`)
+              - **AppImage** for universal Linux (just run it)
+              - **.rpm** for Fedora/RHEL/openSUSE (`sudo rpm -i`)
+            - **macOS**: .dmg disk image (drag to Applications folder)
 
             ### ✨ Features
 
@@ -381,29 +639,60 @@ jobs:
 
             ### 📝 Installation
 
-            **Android**: Install the APK directly on your device
+            **Android**:
+            - Download the Universal APK (easiest) or the APK matching your device architecture
+            - Enable "Install from Unknown Sources" in your Android settings
+            - Install the APK
 
-            **Linux**: Extract and run
+            **Windows**:
+            - Download the .msix file
+            - Double-click to install
+            - Or use: `Add-AppxPackage chuk_chat-*.msix` in PowerShell
+
+            **Linux**:
+
+            *Debian/Ubuntu (.deb):*
             ```bash
-            tar -xzf chuk_chat-${{ needs.version-bump.outputs.tag }}-linux-x64.tar.gz
-            ./chuk_chat
+            sudo dpkg -i chuk_chat-${{ needs.version-bump.outputs.tag }}-linux-amd64.deb
+            sudo apt-get install -f  # Fix dependencies if needed
+            chuk-chat
             ```
 
-            **Windows**: Extract and run `chuk_chat.exe`
+            *AppImage (universal):*
+            ```bash
+            chmod +x chuk_chat-${{ needs.version-bump.outputs.tag }}-linux-x86_64.AppImage
+            ./chuk_chat-${{ needs.version-bump.outputs.tag }}-linux-x86_64.AppImage
+            ```
 
-            **macOS**: Extract and move `chuk_chat.app` to Applications
+            *Fedora/RHEL (.rpm):*
+            ```bash
+            sudo rpm -i chuk_chat-${{ needs.version-bump.outputs.tag }}-linux-x86_64.rpm
+            # Or: sudo dnf install chuk_chat-*.rpm
+            chuk-chat
+            ```
 
-            **iOS**: Requires manual code signing with Xcode
+            **macOS**:
+            - Download the .dmg file
+            - Open the .dmg
+            - Drag chuk_chat.app to Applications folder
+            - First launch: Right-click → Open (bypass Gatekeeper)
+
+            ### 🔐 Signing Status
+
+            ${{ inputs.enable_signing && '- ✅ Android APKs are signed' || '- ⚠️ Android APKs are unsigned (development build)' }}
+            - Windows MSIX is self-signed
+            - macOS .dmg is unsigned (requires "Open" via right-click)
+            - Linux .deb is unsigned
 
             ---
             🤖 Built with [GitHub Actions](https://github.com/features/actions)
           draft: false
           prerelease: false
           files: |
-            artifacts/android-apk/*
-            artifacts/linux-build/*
-            artifacts/windows-build/*
-            artifacts/macos-build/*
+            artifacts/android-apks/*
+            artifacts/linux-packages/*
+            artifacts/windows-msix/*
+            artifacts/macos-dmg/*
             artifacts/ios-build/*
 
   summary:
@@ -419,22 +708,23 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Version**: ${{ needs.version-bump.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "**Tag**: ${{ needs.version-bump.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Platforms**: ${{ inputs.platforms }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Build Status" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Platform | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| 📱 Android  | ${{ needs.build-android.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🐧 Linux    | ${{ needs.build-linux.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🪟 Windows  | ${{ needs.build-windows.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🍎 macOS    | ${{ needs.build-macos.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 📱 iOS      | ${{ needs.build-ios.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🎉 Release  | ${{ needs.create-release.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Platform | Status | Output |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|--------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 📱 Android  | ${{ needs.build-android.result }} | Split APKs (arm64, arm32, x64) + Universal APK |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🐧 Linux    | ${{ needs.build-linux.result }} | .deb, AppImage, .rpm |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🪟 Windows  | ${{ needs.build-windows.result }} | MSIX installer |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🍎 macOS    | ${{ needs.build-macos.result }} | .dmg disk image |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📱 iOS      | ${{ needs.build-ios.result }} | .zip (disabled by default) |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🎉 Release  | ${{ needs.create-release.result }} | GitHub Release |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ "${{ needs.create-release.result }}" == "success" ]; then
             echo "✅ **Release created successfully!**" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "View release: [Release ${{ needs.version-bump.outputs.tag }}](https://github.com/${{ github.repository }}/releases/tag/${{ needs.version-bump.outputs.tag }})" >> $GITHUB_STEP_SUMMARY
           else
-            echo "❌ Release creation failed. Check logs above." >> $GITHUB_STEP_SUMMARY
+            echo "ℹ️ Release status: ${{ needs.create-release.result }}" >> $GITHUB_STEP_SUMMARY
           fi

@@ -4,13 +4,15 @@
 
 Der `build-cross-platform.yml` Workflow baut die App für alle unterstützten Plattformen **UND** erstellt automatisch eine neue Version mit GitHub Release.
 
-### 🚀 Platforms
+### 🚀 Platforms & Formats
 
-- **Android** (APK, ARM64)
-- **Linux** (x64, tar.gz)
-- **Windows** (x64, zip)
-- **macOS** (Universal Binary, zip)
-- **iOS** (Unsigned, zip)
+| Platform | Formats | Beschreibung |
+|----------|---------|--------------|
+| **Android** | Split APKs + Universal APK | arm64, arm32, x64, universal |
+| **Linux** | .deb, AppImage, .rpm | Debian/Ubuntu, Universal, Fedora/RHEL |
+| **Windows** | MSIX | Windows Installer Package |
+| **macOS** | .dmg | Disk Image (drag & drop) |
+| **iOS** | .zip | Unsigned (optional, disabled by default) |
 
 ### ⚡ Automatische Version & Release
 
@@ -26,8 +28,9 @@ Der Workflow führt **automatisch** folgende Schritte aus:
    - Pushed automatisch zum `master` Branch
 
 3. ✅ **Builds erstellen**
-   - Alle 5 Plattformen parallel (~30-40 Min)
+   - Gewählte Plattformen parallel (~30-45 Min)
    - Mit optionalen Feature Flags
+   - Mit/ohne Android Signing
 
 4. ✅ **GitHub Release erstellen**
    - Tag: `v1.0.7` (ohne Build-Nummer)
@@ -41,10 +44,26 @@ Der Workflow führt **automatisch** folgende Schritte aus:
 
 1. Gehe zu **Actions** → **Cross-Platform Build & Release**
 2. Klicke auf **Run workflow**
-3. Optional: Deaktiviere "Build with all features enabled" für Basic Build
-4. Klicke auf **Run workflow**
+3. **Platforms**: Wähle Plattformen:
+   - `all` - Alle Plattformen (außer iOS)
+   - `android` - Nur Android
+   - `linux` - Nur Linux
+   - `windows` - Nur Windows
+   - `macos` - Nur macOS
+   - `android,linux` - Mehrere (comma-separated)
+   - `ios` - iOS (explizit angeben)
+4. **Features**: An/Aus für alle Feature Flags
+5. **Signing**: An/Aus für Android APK Signing
+6. Klicke auf **Run workflow**
 
-**Das war's!** Der Workflow erledigt den Rest automatisch.
+**Beispiele:**
+```yaml
+platforms: "all"                  # Alle außer iOS
+platforms: "android"              # Nur Android
+platforms: "android,linux"        # Android + Linux
+platforms: "windows,macos"        # Windows + macOS
+platforms: "android,windows,ios"  # Mit iOS
+```
 
 ### 🎯 Was passiert
 
@@ -55,12 +74,24 @@ Der Workflow führt **automatisch** folgende Schritte aus:
    ├─ Updated pubspec.yaml
    └─ Committed & pushed neue Version
 
-2. Build (parallel)
-   ├─ Android APK
-   ├─ Linux x64
-   ├─ Windows x64
-   ├─ macOS
-   └─ iOS
+2. Build (parallel, pro Platform)
+   │
+   ├─ Android
+   │  ├─ arm64 APK (modern devices)
+   │  ├─ arm32 APK (older devices)
+   │  ├─ x64 APK (emulators)
+   │  └─ Universal APK (all devices)
+   │
+   ├─ Linux
+   │  ├─ .deb (Debian/Ubuntu)
+   │  ├─ AppImage (universal)
+   │  └─ .rpm (Fedora/RHEL)
+   │
+   ├─ Windows
+   │  └─ .msix (installer)
+   │
+   └─ macOS
+      └─ .dmg (disk image)
 
 3. GitHub Release
    ├─ Erstellt Tag (z.B. v1.0.7)
@@ -70,6 +101,33 @@ Der Workflow führt **automatisch** folgende Schritte aus:
 
 4. Summary
    └─ Build-Status für alle Plattformen
+```
+
+### 📦 Output Files
+
+**Android** (4 APKs):
+```
+chuk_chat-v1.0.7-android-arm64.apk      # Modern devices (recommended)
+chuk_chat-v1.0.7-android-arm32.apk      # Older devices
+chuk_chat-v1.0.7-android-x64.apk        # Emulators
+chuk_chat-v1.0.7-android-universal.apk  # All devices (largest)
+```
+
+**Linux** (3 packages):
+```
+chuk_chat-v1.0.7-linux-amd64.deb        # Debian/Ubuntu
+chuk_chat-v1.0.7-linux-x86_64.AppImage  # Universal (no install)
+chuk_chat-v1.0.7-linux-x86_64.rpm       # Fedora/RHEL/openSUSE
+```
+
+**Windows**:
+```
+chuk_chat-v1.0.7-windows-x64.msix       # MSIX installer
+```
+
+**macOS**:
+```
+chuk_chat-v1.0.7-macos.dmg              # Disk image
 ```
 
 ### ✨ Build-Optionen
@@ -88,9 +146,14 @@ Der Workflow führt **automatisch** folgende Schritte aus:
 - Kleinere Build-Größe
 - Schnellerer Build (~20% schneller)
 
+**Android Signing:**
+- Optional aktivierbar
+- Benötigt GitHub Secrets
+- Standard: unsigned (development)
+
 ### 🔐 Android Signing (Optional)
 
-Für **signierte Android APKs** müssen folgende **GitHub Secrets** gesetzt werden:
+Für **signierte Android APKs** aktiviere "Enable Android signing" und setze diese **GitHub Secrets**:
 
 | Secret | Beschreibung |
 |--------|--------------|
@@ -110,41 +173,106 @@ cat keystore.base64.txt
 2. Klicke **New repository secret**
 3. Füge alle 4 Secrets hinzu
 
-**Ohne Secrets**: Unsigned APK wird erstellt (funktioniert trotzdem).
+**Ohne Secrets oder ohne Aktivierung**: Unsigned APK wird erstellt.
 
-### 📦 Artifacts & Downloads
+### 📥 Installation
 
-**Nach dem Build:**
+**Android:**
+- Universal APK: Funktioniert überall (größer)
+- ARM64 APK: Moderne Geräte (empfohlen, kleiner)
+- ARM32 APK: Ältere Geräte
+- x64 APK: Emulatoren
 
-1. Gehe zu **Releases** im GitHub Repo
-2. Finde die neueste Version (z.B. `v1.0.7`)
-3. Downloade die gewünschte Plattform:
+```bash
+# APK installieren
+adb install chuk_chat-*.apk
+# Oder direkt auf dem Gerät (Unknown Sources aktivieren)
+```
 
-| Datei | Plattform | Größe |
-|-------|-----------|-------|
-| `chuk_chat-v1.0.7-android.apk` | Android ARM64 | ~50 MB |
-| `chuk_chat-v1.0.7-linux-x64.tar.gz` | Linux x64 | ~60 MB |
-| `chuk_chat-v1.0.7-windows-x64.zip` | Windows x64 | ~70 MB |
-| `chuk_chat-v1.0.7-macos.zip` | macOS Universal | ~80 MB |
-| `chuk_chat-v1.0.7-ios.zip` | iOS (unsigned) | ~50 MB |
+**Linux (Debian/Ubuntu):**
+```bash
+sudo dpkg -i chuk_chat-v1.0.7-linux-amd64.deb
+sudo apt-get install -f  # Dependencies
+chuk-chat
+```
 
-**Artifacts werden auch in Actions gespeichert** (30 Tage).
+**Linux (AppImage - Universal):**
+```bash
+chmod +x chuk_chat-v1.0.7-linux-x86_64.AppImage
+./chuk_chat-v1.0.7-linux-x86_64.AppImage
+# Keine Installation nötig!
+```
+
+**Linux (Fedora/RHEL/openSUSE):**
+```bash
+sudo rpm -i chuk_chat-v1.0.7-linux-x86_64.rpm
+# Oder:
+sudo dnf install chuk_chat-v1.0.7-linux-x86_64.rpm
+chuk-chat
+```
+
+**Windows:**
+```powershell
+# Doppelklick auf .msix
+# Oder in PowerShell:
+Add-AppxPackage .\chuk_chat-v1.0.7-windows-x64.msix
+```
+
+**macOS:**
+```bash
+# 1. DMG öffnen
+# 2. App in Applications ziehen
+# 3. Erste Start: Rechtsklick → Öffnen (Gatekeeper bypass)
+```
 
 ### ⏱️ Build-Zeiten
 
 Ungefähre Dauer (parallel):
 
-| Plattform | Zeit | Runner |
+| Plattform | Zeit | Output |
 |-----------|------|--------|
-| Version Bump | ~30s | Ubuntu |
-| Android | ~10-15 Min | Ubuntu |
-| Linux | ~10-15 Min | Ubuntu |
-| Windows | ~15-20 Min | Windows |
-| macOS | ~15-20 Min | macOS |
-| iOS | ~15-20 Min | macOS |
-| Release | ~2 Min | Ubuntu |
+| Version Bump | ~30s | pubspec.yaml update |
+| Android | ~10-15 Min | 4 APKs |
+| Linux | ~15-20 Min | .deb + AppImage + .rpm |
+| Windows | ~15-20 Min | MSIX |
+| macOS | ~15-20 Min | DMG |
+| iOS | ~15-20 Min | ZIP (wenn aktiviert) |
+| Release | ~2 Min | GitHub Release |
 
-**Gesamt: ~30-40 Min** (alles läuft parallel).
+**Gesamt (alle Plattformen): ~30-45 Min**
+
+### 🚀 Use Cases
+
+**Nur Android bauen** (schnellster Build):
+```yaml
+platforms: "android"
+enable_all_features: true
+enable_signing: false
+```
+→ ~10-15 Min, 4 APKs
+
+**Desktop-Plattformen** (Windows + macOS + Linux):
+```yaml
+platforms: "windows,macos,linux"
+enable_all_features: true
+```
+→ ~30-40 Min, MSIX + DMG + 3 Linux packages
+
+**Production Release** (alle Plattformen, signiert):
+```yaml
+platforms: "all"
+enable_all_features: true
+enable_signing: true
+```
+→ ~30-45 Min, alle Formate, signierte APKs
+
+**Quick Test Build** (nur Android, basic):
+```yaml
+platforms: "android"
+enable_all_features: false
+enable_signing: false
+```
+→ ~8-10 Min, 4 unsigned APKs
 
 ### 📝 Release Notes Beispiel
 
@@ -155,31 +283,28 @@ Cross-platform build with version 1.0.7+4005
 
 ### 📦 Downloads
 
-- **Android**: APK for ARM64 devices
-- **Linux**: x64 archive (tar.gz)
-- **Windows**: x64 archive (zip)
-- **macOS**: Universal binary (zip)
-- **iOS**: Unsigned build (zip) - requires manual signing
+**Android APKs** (choose one):
+- **Universal APK**: Works on all Android devices (larger size)
+- **ARM64 APK**: For modern Android devices (recommended, smaller)
+- **ARM32 APK**: For older Android devices
+- **x64 APK**: For Android emulators and x86 devices
+
+**Desktop**:
+- **Windows**: MSIX installer (double-click to install)
+- **Linux**: Choose your package format:
+  - **.deb** for Debian/Ubuntu (`sudo dpkg -i`)
+  - **AppImage** for universal Linux (just run it)
+  - **.rpm** for Fedora/RHEL/openSUSE (`sudo rpm -i`)
+- **macOS**: .dmg disk image (drag to Applications folder)
 
 ### ✨ Features
-
 - ✅ All features enabled (Media Manager, Image Gen, Projects, Voice Mode)
 
-### 📝 Installation
-
-**Android**: Install the APK directly on your device
-
-**Linux**: Extract and run
-```bash
-tar -xzf chuk_chat-v1.0.7-linux-x64.tar.gz
-./chuk_chat
-```
-
-**Windows**: Extract and run `chuk_chat.exe`
-
-**macOS**: Extract and move `chuk_chat.app` to Applications
-
-**iOS**: Requires manual code signing with Xcode
+### 🔐 Signing Status
+- ⚠️ Android APKs are unsigned (development build)
+- Windows MSIX is self-signed
+- macOS .dmg is unsigned (requires "Open" via right-click)
+- Linux packages are unsigned
 ```
 
 ### 🐛 Troubleshooting
@@ -187,19 +312,55 @@ tar -xzf chuk_chat-v1.0.7-linux-x64.tar.gz
 **Build schlägt fehl:**
 1. Prüfe die Logs im Actions Tab
 2. Stelle sicher, dass `flutter analyze` lokal erfolgreich ist
-3. Bei Android: Prüfe Secrets (falls verwendet)
+3. Bei Android: Prüfe Secrets (falls signing enabled)
 
 **Version-Bump schlägt fehl:**
 - Prüfe, ob `pubspec.yaml` im richtigen Format ist (`version: X.Y.Z+BUILD`)
 - Stelle sicher, dass der Bot Push-Rechte hat
 
 **Release wird nicht erstellt:**
-- Prüfe, ob alle Builds erfolgreich waren
+- Prüfe, ob alle gewählten Builds erfolgreich waren
 - Ein fehlgeschlagener Build verhindert das Release
 
-**iOS Code Signing:**
-- Der Workflow erstellt unsigned iOS Builds (`--no-codesign`)
-- Für App Store Deployment: Verwende Xcode lokal oder fastlane
+**AppImage funktioniert nicht:**
+- `chmod +x` ausführen
+- FUSE installieren: `sudo apt install fuse libfuse2`
+
+**RPM/DEB Dependencies fehlen:**
+- `.deb`: `sudo apt-get install -f`
+- `.rpm`: `sudo dnf install` installiert Dependencies automatisch
+
+**Windows MSIX lässt sich nicht installieren:**
+- Developer Mode aktivieren
+- Oder Zertifikat manuell vertrauen
+
+**macOS "App kann nicht geöffnet werden":**
+- Rechtsklick → Öffnen (Gatekeeper bypass)
+- Oder in Systemeinstellungen → Sicherheit erlauben
+
+### 💡 Tipps
+
+**Schneller testen:**
+- Nur eine Plattform wählen (`platforms: "android"`)
+- Basic Build verwenden (`enable_all_features: false`)
+- Builds laufen parallel - mehrere Plattformen dauern nicht viel länger
+
+**Production Deployment:**
+- Android: Signing aktivieren, signierte APKs hochladen
+- Windows: MSIX im Microsoft Store veröffentlichen
+- macOS: App signieren und notarisieren für App Store
+- Linux: Repositories erstellen (PPA, AUR, etc.)
+
+**AppImage ist universell:**
+- Funktioniert auf allen Linux-Distros
+- Keine Installation nötig
+- Perfekt für User ohne Admin-Rechte
+
+**Platform-spezifische Tipps:**
+- Android: ARM64 APK für 99% der Geräte
+- Linux: AppImage für maximale Kompatibilität
+- Windows: MSIX für modernen Installer
+- macOS: DMG für einfache Distribution
 
 ### 🎯 Workflow-Details
 
@@ -212,12 +373,12 @@ permissions:
 **Job-Abhängigkeiten:**
 ```
 version-bump
-    ├─> build-android
-    ├─> build-linux
-    ├─> build-windows
-    ├─> build-macos
-    └─> build-ios
-            └─> create-release
+    ├─> build-android   (if platforms contains "android")
+    ├─> build-linux     (if platforms contains "linux")
+    ├─> build-windows   (if platforms contains "windows")
+    ├─> build-macos     (if platforms contains "macos")
+    └─> build-ios       (if platforms contains "ios")
+            └─> create-release (if any build succeeded)
                     └─> summary
 ```
 
@@ -228,19 +389,20 @@ MAJOR=1
 MINOR=0
 PATCH=6 → 7
 BUILD=4004 → 4005
+
+# Tag: v1.0.7 (ohne Build-Nummer)
 ```
 
-### 💡 Tipps
+**Platform Selection Logic:**
+```bash
+# Input: "android,linux"
+# Output:
+#   build_android=true
+#   build_linux=true
+#   build_windows=false
+#   build_macos=false
+#   build_ios=false
 
-**Schneller testen:**
-- Deaktiviere Plattformen, die du nicht brauchst (kommentiere Jobs aus)
-- Verwende Basic Build für schnellere Builds
-
-**Eigene Release Notes:**
-- Editiere den Release nach der Erstellung in GitHub
-- Füge Changelog, Screenshots, etc. hinzu
-
-**Versioning:**
-- Der Workflow erhöht automatisch nur PATCH
-- Für MAJOR/MINOR Bumps: Ändere manuell vor dem Workflow
-- Build-Nummer wird immer automatisch erhöht
+# Input: "all"
+# Output: Alle true, außer iOS=false
+```
