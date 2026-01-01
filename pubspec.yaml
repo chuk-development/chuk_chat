@@ -52,6 +52,6 @@ msix_config:
   identity_name: chuk.chat
   publisher: CN=chuk Development
   msix_version: 1.0.0.0
-  logo_path: assets/icon.png
+  logo_path: web/icons/Icon-512.png
   capabilities: internetClient
   store: false
