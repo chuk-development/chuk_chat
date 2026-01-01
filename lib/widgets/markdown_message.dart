@@ -98,11 +98,16 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
     final ThemeData theme = Theme.of(context);
     final Color codeBackground = _codeBackground();
     final Map<String, TextStyle> syntaxTheme = _getSyntaxTheme(context);
+    // Use light blue as default for unrecognized tokens (like VS Code)
+    // This ensures ALL code elements have some color
+    final Color defaultCodeColor = theme.brightness == Brightness.dark
+        ? const Color(0xFF9CDCFE) // Light blue - same as variables in VS Code
+        : const Color(0xFF2E3440); // Dark for light mode
     final TextStyle codeTextStyle = TextStyle(
       fontFamily: 'monospace',
       fontSize: 13,
       height: 1.4,
-      color: widget.textColor,
+      color: defaultCodeColor,
     );
     final Color codeBorderColor = widget.textColor.withValues(alpha: 0.2);
     final Color accentColor = theme.colorScheme.primary;
@@ -339,57 +344,260 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
   Map<String, TextStyle> _getSyntaxTheme(BuildContext context) {
     final Brightness brightness = Theme.of(context).brightness;
     if (brightness == Brightness.dark) {
+      // VS Code Dark+ Theme - EXACT COLORS from your screenshot
       return <String, TextStyle>{
-        'keyword': const TextStyle(color: Color(0xFF82AAFF)),
-        'built_in': const TextStyle(color: Color(0xFF82AAFF)),
-        'type': const TextStyle(color: Color(0xFFC792EA)),
-        'literal': const TextStyle(color: Color(0xFFF78C6C)),
-        'number': const TextStyle(color: Color(0xFFF78C6C)),
-        'string': const TextStyle(color: Color(0xFFC3E88D)),
-        'subst': const TextStyle(color: Color(0xFFEEFFFF)),
-        'symbol': const TextStyle(color: Color(0xFFEAB676)),
-        'class': const TextStyle(color: Color(0xFFFFCB6B)),
-        'function': const TextStyle(color: Color(0xFF82AAFF)),
-        'title': const TextStyle(color: Color(0xFF82AAFF)),
-        'params': const TextStyle(color: Color(0xFFEEFFFF)),
-        'operator': const TextStyle(color: Color(0xFF89DDFF)),
-        'punctuation': const TextStyle(color: Color(0xFF89DDFF)),
+        // Keywords: if, for, return, while, let, const, var, etc. - PURPLE/MAGENTA
+        'keyword': const TextStyle(color: Color(0xFFC586C0)),
+        'control': const TextStyle(color: Color(0xFFC586C0)),
+        'repeat': const TextStyle(color: Color(0xFFC586C0)),
+        'conditional': const TextStyle(color: Color(0xFFC586C0)),
+        'exception': const TextStyle(color: Color(0xFFC586C0)),
+
+        // Function keyword: function, def - BLUE
+        'keyword.function': const TextStyle(color: Color(0xFF569CD6)),
+        'keyword.return': const TextStyle(color: Color(0xFFC586C0)),
+
+        // Built-in types: String, Number, Boolean, etc. - YELLOW
+        'built_in': const TextStyle(color: Color(0xFFDCDCAA)),
+        'type.builtin': const TextStyle(color: Color(0xFFDCDCAA)),
+
+        // Function names - YELLOW
+        'function': const TextStyle(color: Color(0xFFDCDCAA)),
+        'title': const TextStyle(color: Color(0xFFDCDCAA)),
+        'title.function': const TextStyle(color: Color(0xFFDCDCAA)),
+        'def': const TextStyle(color: Color(0xFFDCDCAA)),
+
+        // Class names - TEAL/CYAN
+        'type': const TextStyle(color: Color(0xFF4EC9B0)),
+        'class': const TextStyle(color: Color(0xFF4EC9B0)),
+        'title.class': const TextStyle(color: Color(0xFF4EC9B0)),
+        'constructor': const TextStyle(color: Color(0xFF4EC9B0)),
+
+        // Strings - ORANGE/CORAL
+        'string': const TextStyle(color: Color(0xFFCE9178)),
+        'char': const TextStyle(color: Color(0xFFCE9178)),
+        'quote': const TextStyle(color: Color(0xFFCE9178)),
+
+        // Numbers - LIGHT GREEN
+        'number': const TextStyle(color: Color(0xFFB5CEA8)),
+        'literal': const TextStyle(color: Color(0xFFB5CEA8)),
+
+        // Booleans and constants: true, false, null, None, NaN - BLUE
+        'boolean': const TextStyle(color: Color(0xFF569CD6)),
+        'constant': const TextStyle(color: Color(0xFF569CD6)),
+        'literal.boolean': const TextStyle(color: Color(0xFF569CD6)),
+
+        // Variables and identifiers - LIGHT BLUE
+        'variable': const TextStyle(color: Color(0xFF9CDCFE)),
+        'identifier': const TextStyle(color: Color(0xFF9CDCFE)),
+        'variable.language': const TextStyle(color: Color(0xFF9CDCFE)),
+
+        // Parameters - LIGHT BLUE
+        'params': const TextStyle(color: Color(0xFF9CDCFE)),
+        'param': const TextStyle(color: Color(0xFF9CDCFE)),
+        'argument': const TextStyle(color: Color(0xFF9CDCFE)),
+        'variable.parameter': const TextStyle(color: Color(0xFF9CDCFE)),
+
+        // Properties and attributes - LIGHT BLUE
+        'property': const TextStyle(color: Color(0xFF9CDCFE)),
+        'attr': const TextStyle(color: Color(0xFF9CDCFE)),
+        'attribute': const TextStyle(color: Color(0xFF9CDCFE)),
+        'field': const TextStyle(color: Color(0xFF9CDCFE)),
+
+        // Operators: =, +, -, *, ==, etc. - WHITE
+        'operator': const TextStyle(color: Color(0xFFD4D4D4)),
+        'assignment': const TextStyle(color: Color(0xFFD4D4D4)),
+        'keyword.operator': const TextStyle(color: Color(0xFFD4D4D4)),
+
+        // Punctuation: (), {}, [], :, ,, ; - WHITE
+        'punctuation': const TextStyle(color: Color(0xFFD4D4D4)),
+        'bracket': const TextStyle(color: Color(0xFFD4D4D4)),
+        'delimiter': const TextStyle(color: Color(0xFFD4D4D4)),
+
+        // Symbols - WHITE
+        'symbol': const TextStyle(color: Color(0xFFD4D4D4)),
+
+        // Function/method calls - YELLOW
+        'call': const TextStyle(color: Color(0xFFDCDCAA)),
+        'title.function.call': const TextStyle(color: Color(0xFFDCDCAA)),
+        'builtin.function': const TextStyle(color: Color(0xFFDCDCAA)),
+        'function.builtin': const TextStyle(color: Color(0xFFDCDCAA)),
+
+        // Special values - LIGHT BLUE
+        'subst': const TextStyle(color: Color(0xFF9CDCFE)),
+        'name': const TextStyle(color: Color(0xFF9CDCFE)),
+
+        // Comments - GREEN
         'comment': const TextStyle(
-          color: Color(0xFF676E95),
+          color: Color(0xFF6A9955),
           fontStyle: FontStyle.italic,
         ),
-        'meta': const TextStyle(color: Color(0xFF75A7F0)),
-        'attr': const TextStyle(color: Color(0xFFADD7FF)),
-        'attribute': const TextStyle(color: Color(0xFFADD7FF)),
-        'property': const TextStyle(color: Color(0xFFADD7FF)),
-        'variable': const TextStyle(color: Color(0xFFEEFFFF)),
+        'doctag': const TextStyle(
+          color: Color(0xFF6A9955),
+          fontStyle: FontStyle.italic,
+        ),
+        'doc': const TextStyle(
+          color: Color(0xFF6A9955),
+          fontStyle: FontStyle.italic,
+        ),
+
+        // Meta and preprocessing - PURPLE
+        'meta': const TextStyle(color: Color(0xFFC586C0)),
+        'meta-keyword': const TextStyle(color: Color(0xFFC586C0)),
+        'meta-string': const TextStyle(color: Color(0xFFCE9178)),
+
+        // Decorators and annotations - YELLOW
+        'decorator': const TextStyle(color: Color(0xFFDCDCAA)),
+        'annotation': const TextStyle(color: Color(0xFFDCDCAA)),
+
+        // HTML/XML Tags - TEAL
+        'tag': const TextStyle(color: Color(0xFF4EC9B0)),
+        'tag-name': const TextStyle(color: Color(0xFF4EC9B0)),
+
+        // Regex - ORANGE
+        'regexp': const TextStyle(color: Color(0xFFCE9178)),
+        'escape': const TextStyle(color: Color(0xFFD7BA7D)),
+
+        // CSS Selectors
+        'selector-tag': const TextStyle(color: Color(0xFF4EC9B0)),
+        'selector-id': const TextStyle(color: Color(0xFFDCDCAA)),
+        'selector-class': const TextStyle(color: Color(0xFFD7BA7D)),
+        'selector-attr': const TextStyle(color: Color(0xFF9CDCFE)),
+        'selector-pseudo': const TextStyle(color: Color(0xFF4EC9B0)),
+
+        // Additional
+        'template-tag': const TextStyle(color: Color(0xFFC586C0)),
+        'template-variable': const TextStyle(color: Color(0xFF9CDCFE)),
+        'addition': const TextStyle(color: Color(0xFF6A9955)),
+        'deletion': const TextStyle(color: Color(0xFFF48771)),
+        'link': const TextStyle(color: Color(0xFF569CD6)),
+        'section': const TextStyle(color: Color(0xFFDCDCAA)),
+        'emphasis': const TextStyle(fontStyle: FontStyle.italic),
+        'strong': const TextStyle(fontWeight: FontWeight.bold),
+
+        // Module and namespace
+        'module': const TextStyle(color: Color(0xFF4EC9B0)),
+        'namespace': const TextStyle(color: Color(0xFF4EC9B0)),
+
+        // Keys - LIGHT BLUE
+        'key': const TextStyle(color: Color(0xFF9CDCFE)),
+        'literal.string.key': const TextStyle(color: Color(0xFF9CDCFE)),
+
+        // Labels - LIGHT BLUE
+        'label': const TextStyle(color: Color(0xFF9CDCFE)),
       };
     }
 
+    // Solarized Light inspired - RICH colors with STRONG contrast
     return <String, TextStyle>{
-      'keyword': const TextStyle(color: Color(0xFF7C4DFF)),
-      'built_in': const TextStyle(color: Color(0xFF7C4DFF)),
-      'type': const TextStyle(color: Color(0xFF5E35B1)),
-      'literal': const TextStyle(color: Color(0xFFD81B60)),
-      'number': const TextStyle(color: Color(0xFF1E88E5)),
-      'string': const TextStyle(color: Color(0xFF2E7D32)),
-      'subst': const TextStyle(color: Color(0xFF3E2723)),
-      'symbol': const TextStyle(color: Color(0xFFF57C00)),
-      'class': const TextStyle(color: Color(0xFF6D4C41)),
-      'function': const TextStyle(color: Color(0xFF0D47A1)),
-      'title': const TextStyle(color: Color(0xFF0D47A1)),
-      'params': const TextStyle(color: Color(0xFF283593)),
-      'operator': const TextStyle(color: Color(0xFF3949AB)),
-      'punctuation': const TextStyle(color: Color(0xFF3949AB)),
+      // Keywords: if, for, return, class, def, while, import, from, etc.
+      'keyword': const TextStyle(color: Color(0xFF859900), fontWeight: FontWeight.w600),
+      'control': const TextStyle(color: Color(0xFF859900), fontWeight: FontWeight.w600),
+      'repeat': const TextStyle(color: Color(0xFF859900), fontWeight: FontWeight.w600),
+      'conditional': const TextStyle(color: Color(0xFF859900), fontWeight: FontWeight.w600),
+
+      // Built-in functions: print, len, range, input, etc.
+      'built_in': const TextStyle(color: Color(0xFFCB4B16), fontWeight: FontWeight.w500),
+
+      // Function definitions and calls - BLUE
+      'function': const TextStyle(color: Color(0xFF268BD2)),
+      'title': const TextStyle(color: Color(0xFF268BD2)),
+      'def': const TextStyle(color: Color(0xFF268BD2)),
+
+      // Types, classes, and constructors - YELLOW
+      'type': const TextStyle(color: Color(0xFFB58900)),
+      'class': const TextStyle(color: Color(0xFFB58900), fontWeight: FontWeight.w600),
+      'constructor': const TextStyle(color: Color(0xFFB58900)),
+
+      // Strings - CYAN/TEAL
+      'string': const TextStyle(color: Color(0xFF2AA198)),
+      'char': const TextStyle(color: Color(0xFF2AA198)),
+      'quote': const TextStyle(color: Color(0xFF2AA198)),
+
+      // Numbers - MAGENTA
+      'number': const TextStyle(color: Color(0xFFD33682)),
+      'literal': const TextStyle(color: Color(0xFFD33682)),
+      'boolean': const TextStyle(color: Color(0xFFD33682)),
+
+      // Parameters and function arguments - GRAY
+      'params': const TextStyle(color: Color(0xFF657B83)),
+      'param': const TextStyle(color: Color(0xFF657B83)),
+      'argument': const TextStyle(color: Color(0xFF657B83)),
+
+      // Variables and identifiers - BLUE
+      'variable': const TextStyle(color: Color(0xFF268BD2)),
+      'identifier': const TextStyle(color: Color(0xFF268BD2)),
+
+      // Properties and attributes - BLUE
+      'property': const TextStyle(color: Color(0xFF268BD2)),
+      'attr': const TextStyle(color: Color(0xFF268BD2)),
+      'attribute': const TextStyle(color: Color(0xFF268BD2)),
+      'field': const TextStyle(color: Color(0xFF268BD2)),
+
+      // Operators: =, +, -, *, /, ==, !=, etc. - GREEN
+      'operator': const TextStyle(color: Color(0xFF859900)),
+      'assignment': const TextStyle(color: Color(0xFF859900)),
+
+      // Punctuation: (), {}, [], :, ,, . - DARK GRAY
+      'punctuation': const TextStyle(color: Color(0xFF586E75)),
+      'bracket': const TextStyle(color: Color(0xFF586E75)),
+      'delimiter': const TextStyle(color: Color(0xFF586E75)),
+
+      // Symbols - GREEN
+      'symbol': const TextStyle(color: Color(0xFF859900)),
+
+      // Special values and constants - MAGENTA
+      'subst': const TextStyle(color: Color(0xFF586E75)),
+      'constant': const TextStyle(color: Color(0xFFD33682)),
+      'name': const TextStyle(color: Color(0xFF268BD2)),
+
+      // Meta and preprocessing - ORANGE
+      'meta': const TextStyle(color: Color(0xFFCB4B16)),
+      'meta-keyword': const TextStyle(color: Color(0xFF859900)),
+      'meta-string': const TextStyle(color: Color(0xFF2AA198)),
+
+      // Tags (HTML, XML) - GREEN
+      'tag': const TextStyle(color: Color(0xFF859900)),
+      'tag-name': const TextStyle(color: Color(0xFF859900)),
+
+      // Decorators and annotations - BLUE
+      'decorator': const TextStyle(color: Color(0xFF268BD2)),
+      'annotation': const TextStyle(color: Color(0xFF268BD2)),
+
+      // Comments - LIGHT GRAY
       'comment': const TextStyle(
-        color: Color(0xFF757575),
+        color: Color(0xFF93A1A1),
         fontStyle: FontStyle.italic,
       ),
-      'meta': const TextStyle(color: Color(0xFF00897B)),
-      'attr': const TextStyle(color: Color(0xFFAF3D00)),
-      'attribute': const TextStyle(color: Color(0xFFAF3D00)),
-      'property': const TextStyle(color: Color(0xFFAF3D00)),
-      'variable': const TextStyle(color: Color(0xFF1A237E)),
+      'doctag': const TextStyle(
+        color: Color(0xFF93A1A1),
+        fontStyle: FontStyle.italic,
+      ),
+      'doc': const TextStyle(
+        color: Color(0xFF93A1A1),
+        fontStyle: FontStyle.italic,
+      ),
+
+      // Regex and special strings - CYAN
+      'regexp': const TextStyle(color: Color(0xFF2AA198)),
+      'escape': const TextStyle(color: Color(0xFFD33682)),
+
+      // CSS/HTML Selectors
+      'selector-tag': const TextStyle(color: Color(0xFF859900)),
+      'selector-id': const TextStyle(color: Color(0xFF268BD2)),
+      'selector-class': const TextStyle(color: Color(0xFF268BD2)),
+      'selector-attr': const TextStyle(color: Color(0xFF268BD2)),
+      'selector-pseudo': const TextStyle(color: Color(0xFFCB4B16)),
+
+      // Additional language-specific
+      'template-tag': const TextStyle(color: Color(0xFF859900)),
+      'template-variable': const TextStyle(color: Color(0xFF268BD2)),
+      'addition': const TextStyle(color: Color(0xFF859900)),
+      'deletion': const TextStyle(color: Color(0xFFDC322F)),
+      'link': const TextStyle(color: Color(0xFF268BD2)),
+      'section': const TextStyle(color: Color(0xFFB58900)),
+      'emphasis': const TextStyle(fontStyle: FontStyle.italic),
+      'strong': const TextStyle(fontWeight: FontWeight.bold),
     };
   }
 }
@@ -447,8 +655,8 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
   void _scheduleHighlight() {
     _debounceTimer?.cancel();
     // Use a short delay to debounce rapid updates (e.g. streaming)
-    // This prevents spawning too many isolates for every single character
-    _debounceTimer = Timer(const Duration(milliseconds: 150), () {
+    // Reduced to 50ms for faster highlighting without sacrificing performance
+    _debounceTimer = Timer(const Duration(milliseconds: 50), () {
       _highlightCode();
     });
   }
@@ -492,7 +700,7 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
         'language': isKnownLanguage ? normalizedLanguage : null,
         'skipHighlighting': !isKnownLanguage && normalizedLanguage.isEmpty,
       }).timeout(
-        const Duration(seconds: 5),
+        const Duration(seconds: 2),
         onTimeout: () {
           debugPrint('Highlight timeout for language: ${normalizedLanguage.isEmpty ? '(auto-detect)' : normalizedLanguage}');
           return <hi.Node>[];
@@ -748,11 +956,27 @@ List<TextSpan> _collectSpans(
 
   try {
     final String className = node.className ?? '';
-    final TextStyle? themeStyle = className.isNotEmpty
+
+    // DEBUG: Log unknown classNames
+    if (className.isNotEmpty && !theme.containsKey(className)) {
+      debugPrint('⚠️ Unknown syntax className: "$className" - value: "${node.value}"');
+    }
+
+    TextStyle? themeStyle = className.isNotEmpty
         ? theme[className]
         : parentThemeStyle;
+
+    // FALLBACK: If no theme style found, give it a default colorful style
+    // This ensures ALL tokens get some color, not just recognized ones
+    if (themeStyle == null && className.isNotEmpty) {
+      // Use a pleasant color for unrecognized tokens
+      themeStyle = const TextStyle(
+        color: Color(0xFF9AEDFE), // Light cyan for dark mode (default)
+      );
+    }
+
     final TextStyle effectiveStyle = (themeStyle != null
-        ? themeStyle.merge(baseStyle)
+        ? baseStyle.merge(themeStyle)
         : baseStyle);
 
     if (node.value != null && node.value!.isNotEmpty) {
