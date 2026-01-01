@@ -44,26 +44,24 @@ Der Workflow führt **automatisch** folgende Schritte aus:
 
 1. Gehe zu **Actions** → **Cross-Platform Build & Release**
 2. Klicke auf **Run workflow**
-3. **Platforms**: Wähle Plattformen:
-   - `all` - Alle Plattformen (außer iOS)
-   - `android` - Nur Android
-   - `linux` - Nur Linux
-   - `windows` - Nur Windows
-   - `macos` - Nur macOS
-   - `android,linux` - Mehrere (comma-separated)
-   - `ios` - iOS (explizit angeben)
-4. **Features**: An/Aus für alle Feature Flags
-5. **Signing**: An/Aus für Android APK Signing
-6. Klicke auf **Run workflow**
+3. **Wähle Plattformen** (Checkboxen):
+   - ✅ 📱 **Build Android** - Split APKs + Universal
+   - ✅ 🐧 **Build Linux** - .deb, AppImage, .rpm
+   - ✅ 🪟 **Build Windows** - MSIX
+   - ✅ 🍎 **Build macOS** - .dmg
+   - ⬜ 📱 **Build iOS** - unsigned .zip (optional)
+4. **Build-Optionen**:
+   - ✅ **Enable all features** - Alle Feature Flags aktivieren
+   - ⬜ **Enable Android signing** - APKs signieren (benötigt Secrets)
+5. Klicke auf **Run workflow**
+
+**Standard**: Alle Plattformen (außer iOS) mit allen Features, ohne Signing
 
 **Beispiele:**
-```yaml
-platforms: "all"                  # Alle außer iOS
-platforms: "android"              # Nur Android
-platforms: "android,linux"        # Android + Linux
-platforms: "windows,macos"        # Windows + macOS
-platforms: "android,windows,ios"  # Mit iOS
-```
+- Nur Android: Nur Android-Checkbox aktivieren
+- Nur Windows: Nur Windows-Checkbox aktivieren
+- Desktop (Win+Mac+Linux): Alle Desktop-Checkboxen aktivieren
+- Alles mit iOS: Alle Checkboxen aktivieren
 
 ### 🎯 Was passiert
 
@@ -244,34 +242,35 @@ Ungefähre Dauer (parallel):
 ### 🚀 Use Cases
 
 **Nur Android bauen** (schnellster Build):
-```yaml
-platforms: "android"
-enable_all_features: true
-enable_signing: false
-```
+- ✅ Build Android
+- ⬜ Alle anderen
+- ✅ Enable all features
+- ⬜ Enable signing
 → ~10-15 Min, 4 APKs
 
 **Desktop-Plattformen** (Windows + macOS + Linux):
-```yaml
-platforms: "windows,macos,linux"
-enable_all_features: true
-```
+- ⬜ Build Android
+- ✅ Build Linux
+- ✅ Build Windows
+- ✅ Build macOS
+- ⬜ Build iOS
 → ~30-40 Min, MSIX + DMG + 3 Linux packages
 
 **Production Release** (alle Plattformen, signiert):
-```yaml
-platforms: "all"
-enable_all_features: true
-enable_signing: true
-```
+- ✅ Build Android
+- ✅ Build Linux
+- ✅ Build Windows
+- ✅ Build macOS
+- ⬜ Build iOS
+- ✅ Enable all features
+- ✅ Enable signing
 → ~30-45 Min, alle Formate, signierte APKs
 
 **Quick Test Build** (nur Android, basic):
-```yaml
-platforms: "android"
-enable_all_features: false
-enable_signing: false
-```
+- ✅ Build Android
+- ⬜ Alle anderen Plattformen
+- ⬜ Enable all features
+- ⬜ Enable signing
 → ~8-10 Min, 4 unsigned APKs
 
 ### 📝 Release Notes Beispiel

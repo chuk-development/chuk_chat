@@ -3,20 +3,40 @@ name: Cross-Platform Build & Release
 on:
   workflow_dispatch:
     inputs:
-      platforms:
-        description: 'Platforms to build (comma-separated: android,linux,windows,macos,ios or "all")'
-        required: true
-        default: 'all'
-        type: string
-      enable_all_features:
-        description: 'Build with all features enabled'
+      build_android:
+        description: '📱 Build Android (Split APKs + Universal)'
         required: false
-        default: 'true'
+        default: true
+        type: boolean
+      build_linux:
+        description: '🐧 Build Linux (.deb, AppImage, .rpm)'
+        required: false
+        default: true
+        type: boolean
+      build_windows:
+        description: '🪟 Build Windows (MSIX)'
+        required: false
+        default: true
+        type: boolean
+      build_macos:
+        description: '🍎 Build macOS (.dmg)'
+        required: false
+        default: true
+        type: boolean
+      build_ios:
+        description: '📱 Build iOS (unsigned .zip)'
+        required: false
+        default: false
+        type: boolean
+      enable_all_features:
+        description: '✨ Build with all features enabled'
+        required: false
+        default: true
         type: boolean
       enable_signing:
-        description: 'Enable Android signing (requires secrets)'
+        description: '🔐 Enable Android signing (requires secrets)'
         required: false
-        default: 'false'
+        default: false
         type: boolean
 
 permissions:
@@ -29,11 +49,11 @@ jobs:
     outputs:
       version: ${{ steps.bump.outputs.version }}
       tag: ${{ steps.bump.outputs.tag }}
-      build_android: ${{ steps.check.outputs.build_android }}
-      build_linux: ${{ steps.check.outputs.build_linux }}
-      build_windows: ${{ steps.check.outputs.build_windows }}
-      build_macos: ${{ steps.check.outputs.build_macos }}
-      build_ios: ${{ steps.check.outputs.build_ios }}
+      build_android: ${{ inputs.build_android }}
+      build_linux: ${{ inputs.build_linux }}
+      build_windows: ${{ inputs.build_windows }}
+      build_macos: ${{ inputs.build_macos }}
+      build_ios: ${{ inputs.build_ios }}
 
     steps:
       - name: Checkout code
@@ -41,26 +61,18 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Check which platforms to build
-        id: check
+      - name: Display selected platforms
         run: |
-          PLATFORMS="${{ inputs.platforms }}"
-          echo "Requested platforms: $PLATFORMS"
-
-          if [ "$PLATFORMS" = "all" ]; then
-            echo "build_android=true" >> $GITHUB_OUTPUT
-            echo "build_linux=true" >> $GITHUB_OUTPUT
-            echo "build_windows=true" >> $GITHUB_OUTPUT
-            echo "build_macos=true" >> $GITHUB_OUTPUT
-            echo "build_ios=false" >> $GITHUB_OUTPUT  # iOS disabled by default
-          else
-            # Check each platform
-            [[ "$PLATFORMS" == *"android"* ]] && echo "build_android=true" >> $GITHUB_OUTPUT || echo "build_android=false" >> $GITHUB_OUTPUT
-            [[ "$PLATFORMS" == *"linux"* ]] && echo "build_linux=true" >> $GITHUB_OUTPUT || echo "build_linux=false" >> $GITHUB_OUTPUT
-            [[ "$PLATFORMS" == *"windows"* ]] && echo "build_windows=true" >> $GITHUB_OUTPUT || echo "build_windows=false" >> $GITHUB_OUTPUT
-            [[ "$PLATFORMS" == *"macos"* ]] && echo "build_macos=true" >> $GITHUB_OUTPUT || echo "build_macos=false" >> $GITHUB_OUTPUT
-            [[ "$PLATFORMS" == *"ios"* ]] && echo "build_ios=true" >> $GITHUB_OUTPUT || echo "build_ios=false" >> $GITHUB_OUTPUT
-          fi
+          echo "Selected platforms:"
+          echo "  Android: ${{ inputs.build_android }}"
+          echo "  Linux: ${{ inputs.build_linux }}"
+          echo "  Windows: ${{ inputs.build_windows }}"
+          echo "  macOS: ${{ inputs.build_macos }}"
+          echo "  iOS: ${{ inputs.build_ios }}"
+          echo ""
+          echo "Options:"
+          echo "  All features: ${{ inputs.enable_all_features }}"
+          echo "  Android signing: ${{ inputs.enable_signing }}"
 
       - name: Bump version
         id: bump
@@ -708,7 +720,13 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Version**: ${{ needs.version-bump.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "**Tag**: ${{ needs.version-bump.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Platforms**: ${{ inputs.platforms }}" >> $GITHUB_STEP_SUMMARY
+          PLATFORMS=""
+          ${{ inputs.build_android }} && PLATFORMS="${PLATFORMS}Android "
+          ${{ inputs.build_linux }} && PLATFORMS="${PLATFORMS}Linux "
+          ${{ inputs.build_windows }} && PLATFORMS="${PLATFORMS}Windows "
+          ${{ inputs.build_macos }} && PLATFORMS="${PLATFORMS}macOS "
+          ${{ inputs.build_ios }} && PLATFORMS="${PLATFORMS}iOS "
+          echo "**Platforms**: ${PLATFORMS:-None}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Build Status" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
