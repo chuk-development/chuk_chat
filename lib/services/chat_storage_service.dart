@@ -273,6 +273,29 @@ class ChatStorageService {
     }
   }
 
+  /// Decrypt a single chat row. Returns null if decryption fails.
+  static Future<StoredChat?> _decryptChatRow(Map<String, dynamic> row) async {
+    final encryptedPayload = row['encrypted_payload'] as String?;
+    if (encryptedPayload == null || encryptedPayload.isEmpty) return null;
+
+    try {
+      final decrypted =
+          await EncryptionService.decryptInBackground(encryptedPayload);
+      final chatPayload = await _deserializePayloadAsync(decrypted);
+      return StoredChat.fromRow(
+        row,
+        chatPayload.messages,
+        customName: chatPayload.customName,
+      );
+    } on SecretBoxAuthenticationError {
+      return null;
+    } on FormatException {
+      return null;
+    } on StateError {
+      return null;
+    }
+  }
+
   /// Load chats from local cache only (instant, no network).
   /// Call this for immediate UI population, then sync in background.
   static Future<void> loadFromCache() async {
@@ -294,36 +317,46 @@ class ChatStorageService {
 
       debugPrint('📦 [ChatStorage] Loading ${rows.length} chats from cache...');
 
-      // Decrypt in parallel using background isolates
-      final decryptFutures = rows.map((map) async {
-        final encryptedPayload = map['encrypted_payload'] as String?;
-        if (encryptedPayload == null || encryptedPayload.isEmpty) return null;
-
-        try {
-          final decrypted =
-              await EncryptionService.decryptInBackground(encryptedPayload);
-          final chatPayload = await _deserializePayloadAsync(decrypted);
-          return StoredChat.fromRow(
-            map,
-            chatPayload.messages,
-            customName: chatPayload.customName,
-          );
-        } catch (_) {
-          return null;
-        }
-      }).toList();
-
-      final chats = await Future.wait(decryptFutures, eagerError: false);
+      // Progressive loading: first batch for fast UI, then rest in background
+      const int firstBatchSize = 15;
+      final firstBatch = rows.take(firstBatchSize).toList();
+      final remainingBatch = rows.skip(firstBatchSize).toList();
 
       _chatsById.clear();
-      for (final chat in chats) {
+
+      // Decrypt first batch immediately
+      final firstBatchFutures = firstBatch.map(_decryptChatRow).toList();
+      final firstChats =
+          await Future.wait(firstBatchFutures, eagerError: false);
+      for (final chat in firstChats) {
         if (chat != null) {
           _chatsById[chat.id] = chat;
         }
       }
 
       _cacheLoaded = true;
-      _notifyChanges();
+
+      // Notify UI immediately with first batch
+      if (_chatsById.isNotEmpty) {
+        _notifyChanges();
+        debugPrint(
+          '⚡ [ChatStorage] First ${_chatsById.length} chats from cache (fast)',
+        );
+      }
+
+      // Decrypt remaining in background
+      if (remainingBatch.isNotEmpty) {
+        final remainingFutures = remainingBatch.map(_decryptChatRow).toList();
+        final remainingChats =
+            await Future.wait(remainingFutures, eagerError: false);
+        for (final chat in remainingChats) {
+          if (chat != null) {
+            _chatsById[chat.id] = chat;
+          }
+        }
+        _notifyChanges();
+      }
+
       debugPrint('✅ [ChatStorage] Loaded ${_chatsById.length} chats from cache');
     } catch (e) {
       debugPrint('❌ [ChatStorage] Cache load failed: $e');
@@ -401,37 +434,50 @@ class ChatStorageService {
       // Clear and rebuild the chats map
       _chatsById.clear();
 
-      // Decrypt all chats in parallel using background isolates
-      final decryptFutures = rows.map((map) async {
-        final encryptedPayload = map['encrypted_payload'] as String?;
-        if (encryptedPayload == null || encryptedPayload.isEmpty) return null;
+      // Progressive loading: decrypt first batch immediately for fast UI,
+      // then decrypt remaining chats in background
+      const int firstBatchSize = 15;
+      final firstBatch = rows.take(firstBatchSize).toList();
+      final remainingBatch = rows.skip(firstBatchSize).toList();
 
-        try {
-          final decrypted =
-              await EncryptionService.decryptInBackground(encryptedPayload);
-          final chatPayload = await _deserializePayloadAsync(decrypted);
-          return StoredChat.fromRow(
-            map,
-            chatPayload.messages,
-            customName: chatPayload.customName,
-          );
-        } on SecretBoxAuthenticationError {
-          return null;
-        } on FormatException {
-          return null;
-        } on StateError {
-          return null;
-        }
-      }).toList();
-
-      final chats = await Future.wait(decryptFutures, eagerError: false);
-      for (final chat in chats) {
+      // Decrypt first batch immediately (visible in sidebar)
+      final firstBatchFutures = firstBatch.map(_decryptChatRow).toList();
+      final firstChats = await Future.wait(firstBatchFutures, eagerError: false);
+      for (final chat in firstChats) {
         if (chat != null) {
           _chatsById[chat.id] = chat;
         }
       }
 
-      _notifyChanges();
+      // Notify UI immediately so sidebar shows first chats
+      if (_chatsById.isNotEmpty) {
+        _notifyChanges();
+        debugPrint(
+          '⚡ [ChatStorage] First ${_chatsById.length} chats ready (fast path)',
+        );
+      }
+
+      // Decrypt remaining chats in background
+      if (remainingBatch.isNotEmpty) {
+        debugPrint(
+          '🔄 [ChatStorage] Decrypting ${remainingBatch.length} more chats in background...',
+        );
+        final remainingFutures = remainingBatch.map(_decryptChatRow).toList();
+        final remainingChats =
+            await Future.wait(remainingFutures, eagerError: false);
+        for (final chat in remainingChats) {
+          if (chat != null) {
+            _chatsById[chat.id] = chat;
+          }
+        }
+        _notifyChanges();
+        debugPrint(
+          '✅ [ChatStorage] All ${_chatsById.length} chats loaded',
+        );
+      } else if (_chatsById.isEmpty) {
+        // No chats at all - still notify
+        _notifyChanges();
+      }
 
       // Log all loaded chats for debugging
       if (_chatsById.isNotEmpty) {
