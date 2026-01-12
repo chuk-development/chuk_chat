@@ -1,8 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 
 final SupabaseClient _supabase = Supabase.instance.client;
+
+// Cache keys for offline credit display
+const String _kCachedCredits = 'cached_credits';
+const String _kCachedHasSubscription = 'cached_has_subscription';
+const String _kCachedFreeMessagesRemaining = 'cached_free_messages_remaining';
+const String _kCachedFreeMessagesTotal = 'cached_free_messages_total';
 
 class CreditBalances {
   const CreditBalances({
@@ -352,10 +360,12 @@ class _BalanceBadgeState extends State<BalanceBadge> {
   int _freeMessagesTotal = 10;
   bool _hasSubscription = false;
   RealtimeChannel? _channel;
+  VoidCallback? _networkListener;
 
   @override
   void initState() {
     super.initState();
+    _loadFromCacheThenRemote();
     _initListener();
   }
 
@@ -365,6 +375,10 @@ class _BalanceBadgeState extends State<BalanceBadge> {
       _supabase.removeChannel(_channel!);
       _channel = null;
     }
+    if (_networkListener != null) {
+      NetworkStatusService.isOnlineListenable.removeListener(_networkListener!);
+      _networkListener = null;
+    }
     super.dispose();
   }
 
@@ -372,6 +386,7 @@ class _BalanceBadgeState extends State<BalanceBadge> {
     final user = _supabase.auth.currentUser;
     if (user == null) return;
 
+    // Listen for profile updates via Supabase Realtime
     _channel = _supabase.channel('balance_updates_${identityHashCode(this)}')
       ..onPostgresChanges(
         event: PostgresChangeEvent.update,
@@ -386,7 +401,61 @@ class _BalanceBadgeState extends State<BalanceBadge> {
       )
       ..subscribe();
 
-    _loadBalance(silent: false);
+    // Listen for network status changes - refresh when back online
+    _networkListener = () {
+      if (NetworkStatusService.isOnline && mounted) {
+        debugPrint('🌐 [Credits] Back online - refreshing balance');
+        _loadBalance(silent: true);
+      }
+    };
+    NetworkStatusService.isOnlineListenable.addListener(_networkListener!);
+  }
+
+  /// Load cached data first for instant display, then fetch from remote
+  Future<void> _loadFromCacheThenRemote() async {
+    // Step 1: Load from cache immediately
+    await _loadFromCache();
+
+    // Step 2: Try to load from remote (will update cache on success)
+    await _loadBalance(silent: true);
+  }
+
+  /// Load balance from local cache for offline display
+  Future<void> _loadFromCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedCredits = prefs.getDouble(_kCachedCredits);
+      final cachedHasSub = prefs.getBool(_kCachedHasSubscription);
+      final cachedFreeRemaining = prefs.getInt(_kCachedFreeMessagesRemaining);
+      final cachedFreeTotal = prefs.getInt(_kCachedFreeMessagesTotal);
+
+      if (cachedCredits != null || cachedFreeRemaining != null) {
+        if (!mounted) return;
+        setState(() {
+          _credits = cachedCredits ?? 0.0;
+          _hasSubscription = cachedHasSub ?? false;
+          _freeMessagesRemaining = cachedFreeRemaining ?? 0;
+          _freeMessagesTotal = cachedFreeTotal ?? 10;
+          _loading = false;
+        });
+        debugPrint('📦 [Credits] Loaded from cache: €$_credits, $_freeMessagesRemaining/$_freeMessagesTotal free');
+      }
+    } catch (e) {
+      debugPrint('⚠️ [Credits] Cache load failed: $e');
+    }
+  }
+
+  /// Save balance to local cache
+  Future<void> _saveToCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble(_kCachedCredits, _credits);
+      await prefs.setBool(_kCachedHasSubscription, _hasSubscription);
+      await prefs.setInt(_kCachedFreeMessagesRemaining, _freeMessagesRemaining);
+      await prefs.setInt(_kCachedFreeMessagesTotal, _freeMessagesTotal);
+    } catch (e) {
+      debugPrint('⚠️ [Credits] Cache save failed: $e');
+    }
   }
 
   Future<void> _loadBalance({bool silent = false}) async {
@@ -428,9 +497,14 @@ class _BalanceBadgeState extends State<BalanceBadge> {
         _freeMessagesRemaining = freeRemaining;
         _loading = false;
       });
+
+      // Save to cache for offline access
+      await _saveToCache();
+      debugPrint('✅ [Credits] Loaded from remote: €$_credits, $_freeMessagesRemaining/$_freeMessagesTotal free');
     } catch (e) {
-      debugPrint('Error loading balance: $e');
+      debugPrint('⚠️ [Credits] Remote load failed (using cache): $e');
       if (mounted) setState(() => _loading = false);
+      // Don't clear data on error - keep showing cached values
     }
   }
 

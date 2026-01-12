@@ -5,15 +5,34 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ModelCacheService {
   const ModelCacheService._();
 
-  static const String _kModelsKey = 'cached_models_v1';
+  static const String _kModelsKey = 'cached_models_v2';
+  static const String _kModelsTimestampKey = 'cached_models_timestamp_v2';
   static const String _kSelectedModelKeyPrefix = 'cached_selected_model_';
   static const String _kProviderPrefsKeyPrefix = 'cached_provider_prefs_';
+
+  /// Cache validity duration - models don't change often
+  static const Duration _cacheValidDuration = Duration(hours: 24);
 
   static Future<void> saveAvailableModels(
     List<Map<String, dynamic>> models,
   ) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kModelsKey, jsonEncode(models));
+    await prefs.setInt(
+      _kModelsTimestampKey,
+      DateTime.now().millisecondsSinceEpoch,
+    );
+  }
+
+  /// Check if cached models are still valid (less than 24h old)
+  static Future<bool> isCacheValid() async {
+    final prefs = await SharedPreferences.getInstance();
+    final timestamp = prefs.getInt(_kModelsTimestampKey);
+    if (timestamp == null) return false;
+
+    final cachedAt = DateTime.fromMillisecondsSinceEpoch(timestamp);
+    final age = DateTime.now().difference(cachedAt);
+    return age < _cacheValidDuration;
   }
 
   static Future<List<Map<String, dynamic>>> loadAvailableModels() async {

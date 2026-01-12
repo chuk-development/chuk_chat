@@ -15,17 +15,29 @@ class ModelPrefetchService {
   static bool _isPrefetching = false;
 
   /// Timeout duration for HTTP requests in the prefetch service.
-  /// This prevents the prefetch operation from hanging indefinitely.
-  /// Set to 15 seconds to allow for slower network conditions.
-  static const Duration _httpTimeout = Duration(seconds: 15);
+  /// Short timeout (3s) - we prefer using cached data over waiting for slow network.
+  /// If fetch fails, cached models will still work.
+  static const Duration _httpTimeout = Duration(seconds: 3);
 
   /// Prefetch the user's model/provider preferences and cache the available
   /// models early in the app lifecycle so dropdowns can render instantly.
+  ///
+  /// This is optimized for fast startup:
+  /// - Uses short timeout (3s) to avoid blocking
+  /// - Skips network fetch if cache is valid (< 24h old)
+  /// - Fails silently - cached data will be used as fallback
   static Future<void> prefetch() async {
     if (_isPrefetching) return;
     _isPrefetching = true;
 
     try {
+      // Check if we have valid cached models - skip fetch if so
+      final cacheValid = await ModelCacheService.isCacheValid();
+      if (cacheValid) {
+        debugPrint('📦 [ModelPrefetch] Cache valid, skipping network fetch');
+        return;
+      }
+
       final session =
           await SupabaseService.refreshSession() ??
           SupabaseService.auth.currentSession;
@@ -48,6 +60,7 @@ class ModelPrefetchService {
       }
 
       // Fetch models list and cache for quick reuse.
+      debugPrint('🌐 [ModelPrefetch] Fetching models from network...');
       final response = await http
           .get(
             Uri.parse('${ApiConfigService.apiBaseUrl}/v1/models_info'),
@@ -63,17 +76,15 @@ class ModelPrefetchService {
               .map((entry) => Map<String, dynamic>.from(entry))
               .toList(growable: false);
           await ModelCacheService.saveAvailableModels(payload);
+          debugPrint('✅ [ModelPrefetch] Cached ${payload.length} models');
         }
       }
-    } on TimeoutException catch (error, stackTrace) {
-      debugPrint(
-        'Model prefetch timed out after ${_httpTimeout.inSeconds} seconds: $error',
-      );
-      debugPrint('$stackTrace');
-      // TimeoutException is handled gracefully - no retry needed as this is a prefetch operation
-    } catch (error, stackTrace) {
-      debugPrint('Model prefetch failed: $error');
-      debugPrint('$stackTrace');
+    } on TimeoutException {
+      // Short timeout is expected on slow networks - use cached data
+      debugPrint('⏱️ [ModelPrefetch] Timeout - using cached models');
+    } catch (error) {
+      // Fail silently - cached models will be used
+      debugPrint('⚠️ [ModelPrefetch] Failed, using cache: $error');
     } finally {
       _isPrefetching = false;
     }

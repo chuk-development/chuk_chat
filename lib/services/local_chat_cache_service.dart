@@ -1,6 +1,59 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+/// Top-level function for background JSON parsing of cache data
+/// Must be top-level to work with compute()
+List<Map<String, dynamic>> _parseAndSanitizeCacheInIsolate(String raw) {
+  final decoded = jsonDecode(raw);
+  if (decoded is! Map<String, dynamic>) {
+    return const <Map<String, dynamic>>[];
+  }
+  // Version check - hardcoded since we can't access class constants in isolate
+  final version = decoded['version'];
+  if (version is! int || version != 1) {
+    return const <Map<String, dynamic>>[];
+  }
+  final chatsRaw = decoded['chats'];
+  if (chatsRaw is! List) {
+    return const <Map<String, dynamic>>[];
+  }
+  final List<Map<String, dynamic>> chats = [];
+  for (final entry in chatsRaw) {
+    if (entry is Map<String, dynamic>) {
+      // Inline sanitization
+      final id = entry['id'];
+      final encryptedPayload = entry['encrypted_payload'];
+      final createdAtRaw = entry['created_at'];
+      if (id is! String || encryptedPayload is! String) {
+        continue;
+      }
+      String? createdAt;
+      if (createdAtRaw is String) {
+        createdAt = createdAtRaw;
+      } else if (createdAtRaw == null) {
+        createdAt = DateTime.now().toUtc().toIso8601String();
+      } else {
+        continue;
+      }
+      chats.add(<String, dynamic>{
+        'id': id,
+        'encrypted_payload': encryptedPayload,
+        'created_at': createdAt,
+        'is_starred': (entry['is_starred'] as bool?) ?? false,
+        if (entry['updated_at'] is String) 'updated_at': entry['updated_at'],
+      });
+    }
+  }
+  // Sort by created_at descending
+  chats.sort((a, b) {
+    final aDate = a['created_at'] as String;
+    final bDate = b['created_at'] as String;
+    return bDate.compareTo(aDate);
+  });
+  return chats;
+}
 
 class LocalChatCacheService {
   static const int _cacheVersion = 1;
@@ -77,29 +130,8 @@ class LocalChatCacheService {
     final raw = prefs.getString(key);
     if (raw == null) return const <Map<String, dynamic>>[];
     try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map<String, dynamic>) {
-        return const <Map<String, dynamic>>[];
-      }
-      final version = decoded['version'];
-      if (version is! int || version != _cacheVersion) {
-        return const <Map<String, dynamic>>[];
-      }
-      final chatsRaw = decoded['chats'];
-      if (chatsRaw is! List) {
-        return const <Map<String, dynamic>>[];
-      }
-      final List<Map<String, dynamic>> chats = [];
-      for (final entry in chatsRaw) {
-        if (entry is Map<String, dynamic>) {
-          final sanitized = _sanitizeRow(entry);
-          if (sanitized != null) {
-            chats.add(sanitized);
-          }
-        }
-      }
-      _sortByCreatedAtDescending(chats);
-      return chats;
+      // Parse and sanitize in background isolate to avoid UI blocking
+      return await compute(_parseAndSanitizeCacheInIsolate, raw);
     } catch (_) {
       return const <Map<String, dynamic>>[];
     }

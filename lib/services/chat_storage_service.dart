@@ -13,6 +13,42 @@ import 'package:uuid/uuid.dart';
 
 const int _kChatPayloadVersion = 2;
 
+/// Result from background JSON deserialization
+/// Using Maps instead of ChatMessage to cross isolate boundary efficiently
+class _DeserializeResult {
+  _DeserializeResult(this.messages, {this.customName});
+  final List<Map<String, dynamic>> messages;
+  final String? customName;
+}
+
+/// Top-level function for background JSON deserialization
+/// Must be top-level (not a class method) to work with compute()
+_DeserializeResult _deserializePayloadIsolate(String json) {
+  final Map<String, dynamic> map = jsonDecode(json) as Map<String, dynamic>;
+  final int version = (map['v'] as int?) ?? 1;
+  final String? customName = map['customName'] as String?;
+
+  if (version == 2) {
+    final List<dynamic> rawMessages = map['messages'] as List<dynamic>;
+    final messages = rawMessages
+        .map((m) => m as Map<String, dynamic>)
+        .toList();
+    return _DeserializeResult(messages, customName: customName);
+  }
+
+  // Version 1 migration - normalize field names
+  final List<dynamic> rawMessages = map['messages'] as List<dynamic>;
+  final messages = rawMessages.map((m) {
+    final msg = m as Map<String, dynamic>;
+    return <String, dynamic>{
+      'role': msg['role'] as String? ?? 'user',
+      'text': msg['text'] as String? ?? '',
+      if (msg['reasoning'] != null) 'reasoning': msg['reasoning'],
+    };
+  }).toList();
+  return _DeserializeResult(messages, customName: customName);
+}
+
 /// Represents a single message in a chat.
 class ChatMessage {
   ChatMessage({
@@ -140,8 +176,10 @@ class ChatStorageService {
   // SINGLE SOURCE OF TRUTH - all chats stored here
   static final Map<String, StoredChat> _chatsById = <String, StoredChat>{};
 
-  static final StreamController<void> _changesController =
-      StreamController<void>.broadcast();
+  /// Stream controller that emits the changed chat ID, or null for bulk changes.
+  /// This allows listeners to only rebuild affected items instead of everything.
+  static final StreamController<String?> _changesController =
+      StreamController<String?>.broadcast();
   static int selectedChatIndex = -1;
 
   /// ID-BASED SELECTION: The currently selected chat ID.
@@ -212,11 +250,15 @@ class ChatStorageService {
     return _chatsById[chatId];
   }
 
-  static Stream<void> get changes => _changesController.stream;
+  /// Stream of chat changes. Emits the changed chat ID, or null for bulk changes.
+  /// Listeners can use this to only rebuild affected items.
+  static Stream<String?> get changes => _changesController.stream;
 
-  static void _notifyChanges() {
+  /// Notify listeners of a change. Pass chatId for single-chat updates,
+  /// or null for bulk changes (e.g., initial load, sync).
+  static void _notifyChanges([String? chatId]) {
     if (!_changesController.isClosed) {
-      _changesController.add(null);
+      _changesController.add(chatId);
     }
   }
 
@@ -260,7 +302,7 @@ class ChatStorageService {
         try {
           final decrypted =
               await EncryptionService.decryptInBackground(encryptedPayload);
-          final chatPayload = _deserializePayload(decrypted);
+          final chatPayload = await _deserializePayloadAsync(decrypted);
           return StoredChat.fromRow(
             map,
             chatPayload.messages,
@@ -323,10 +365,8 @@ class ChatStorageService {
               .order('created_at', ascending: false);
           debugPrint('✅ [ChatStorage] Loaded ${rows.length} chats from remote');
 
-          // Update cache with remote data
-          for (final row in rows) {
-            unawaited(LocalChatCacheService.upsert(user.id, row));
-          }
+          // Update cache with remote data (use replaceAll to avoid race conditions)
+          unawaited(LocalChatCacheService.replaceAll(user.id, rows));
         } catch (error, stackTrace) {
           remoteError = error;
           remoteStack = stackTrace;
@@ -369,7 +409,7 @@ class ChatStorageService {
         try {
           final decrypted =
               await EncryptionService.decryptInBackground(encryptedPayload);
-          final chatPayload = _deserializePayload(decrypted);
+          final chatPayload = await _deserializePayloadAsync(decrypted);
           return StoredChat.fromRow(
             map,
             chatPayload.messages,
@@ -447,6 +487,16 @@ class ChatStorageService {
       );
     }).toList();
     return _ChatPayload(messages, customName: customName);
+  }
+
+  /// Deserialize chat payload in background isolate to avoid UI blocking
+  static Future<_ChatPayload> _deserializePayloadAsync(String json) async {
+    final result = await compute(_deserializePayloadIsolate, json);
+    // Convert maps to ChatMessage objects (fast, just object instantiation)
+    final messages = result.messages
+        .map((m) => ChatMessage.fromJson(m))
+        .toList();
+    return _ChatPayload(messages, customName: result.customName);
   }
 
   /// Extract image storage paths from messages
@@ -604,7 +654,7 @@ class ChatStorageService {
 
     // Add to our map - this is the ONLY place we add new chats
     _chatsById[finalId] = chat;
-    _notifyChanges();
+    _notifyChanges(finalId);
 
     unawaited(LocalChatCacheService.upsert(user.id, inserted));
 
@@ -719,7 +769,7 @@ class ChatStorageService {
 
     // Update in our map - this is the ONLY place we update chats
     _chatsById[chatId] = chat;
-    _notifyChanges();
+    _notifyChanges(chatId);
 
     unawaited(LocalChatCacheService.upsert(user.id, updatedRow));
 
@@ -801,7 +851,7 @@ class ChatStorageService {
       selectedChatIndex = savedChats.isEmpty ? -1 : savedChats.length - 1;
     }
 
-    _notifyChanges();
+    _notifyChanges(chatId);
     unawaited(LocalChatCacheService.delete(user.id, chatId));
     debugPrint('🗑️ [ChatStorage] Deleted chat: $chatId');
   }
@@ -814,11 +864,16 @@ class ChatStorageService {
       await loadFromCache();
     }
 
-    // Step 2: If cache was empty, do full remote load
+    // Step 2: Always load from remote to ensure cache is complete
+    // This updates the cache with ALL chats, not just the ones we had cached
+    // Use unawaited so we don't block the UI - cache already provides instant display
     if (_chatsById.isEmpty) {
+      // No cache - must wait for remote
       await loadChats();
+    } else {
+      // Have cache - load remote in background to sync all chats
+      unawaited(loadChats());
     }
-    // If cache had data, sync service handles remote updates
   }
 
   /// Set chat starred status
@@ -843,7 +898,7 @@ class ChatStorageService {
     final existingChat = _chatsById[chatId];
     if (existingChat != null) {
       _chatsById[chatId] = existingChat.copyWith(isStarred: remoteStar);
-      _notifyChanges();
+      _notifyChanges(chatId);
     }
 
     unawaited(LocalChatCacheService.updateStarred(user.id, chatId, remoteStar));
@@ -881,7 +936,7 @@ class ChatStorageService {
     }
 
     _chatsById[chatId] = updatedChat;
-    _notifyChanges();
+    _notifyChanges(chatId);
     unawaited(LocalChatCacheService.upsert(user.id, updatedRows.first));
   }
 
@@ -986,6 +1041,8 @@ class ChatStorageService {
       );
 
       final existingChat = _chatsById[chatId];
+      final user = SupabaseService.auth.currentUser;
+
       if (existingChat != null) {
         // Only update if the synced version is actually newer
         final existingUpdatedAt = existingChat.updatedAt ?? existingChat.createdAt;
@@ -994,13 +1051,21 @@ class ChatStorageService {
         if (syncedUpdatedAt.isAfter(existingUpdatedAt)) {
           debugPrint('🔄 [ChatStorage] Updating chat from sync: $chatId');
           _chatsById[chatId] = chat;
-          _notifyChanges();
+          _notifyChanges(chatId);
+          // Also update local cache for offline access
+          if (user != null) {
+            unawaited(LocalChatCacheService.upsert(user.id, row));
+          }
         }
       } else {
         // New chat from another device
         debugPrint('➕ [ChatStorage] Adding new chat from sync: $chatId');
         _chatsById[chatId] = chat;
-        _notifyChanges();
+        _notifyChanges(chatId);
+        // Also add to local cache for offline access
+        if (user != null) {
+          unawaited(LocalChatCacheService.upsert(user.id, row));
+        }
       }
     } on SecretBoxAuthenticationError {
       debugPrint('🔐 [ChatStorage] Failed to decrypt synced chat: $chatId');
@@ -1038,7 +1103,7 @@ class ChatStorageService {
       selectedChatId = null;
     }
 
-    _notifyChanges();
+    _notifyChanges(chatId);
   }
 
   /// Get a map of chat IDs to their updated_at timestamps for sync comparison.

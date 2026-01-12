@@ -49,7 +49,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
   String _searchQuery = '';
   List<StoredChat> _filteredRecentChats = [];
   ProfileRecord? _profile;
-  StreamSubscription<void>? _chatUpdatesSub;
+  StreamSubscription<String?>? _chatUpdatesSub;
   Timer? _deleteNotificationTimer;
   String? _lastDeletedChatTitle;
   bool _isOfflineMode = false;
@@ -60,11 +60,18 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
     _filterRecentChats(); // Just filter - main.dart already loads chats
     _searchController.addListener(_onSearchChanged);
     _loadProfile();
-    _chatUpdatesSub = ChatStorageService.changes.listen((_) {
+    _chatUpdatesSub = ChatStorageService.changes.listen((changedChatId) {
       if (!mounted) return;
-      setState(() {
-        _filterRecentChats();
-      });
+      if (changedChatId == null) {
+        // Bulk change (initial load, sync) - refilter everything
+        setState(() {
+          _filterRecentChats();
+        });
+      } else {
+        // Single chat changed - just trigger rebuild without refiltering
+        // The chat data is already updated in ChatStorageService
+        setState(() {});
+      }
     });
     // Monitor network status for offline indicators
     NetworkStatusService.isOnlineListenable.addListener(_onNetworkStatusChanged);

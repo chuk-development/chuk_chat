@@ -55,7 +55,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
   Timer? _refreshTimer;
   Future<void>? _refreshInFlight;
   bool _refreshPending = false;
-  StreamSubscription<void>? _chatUpdatesSub;
+  StreamSubscription<String?>? _chatUpdatesSub;
   Timer? _searchDebounce;
   int _filterGeneration = 0;
   Timer? _deleteNotificationTimer;
@@ -69,9 +69,15 @@ class _SidebarMobileState extends State<SidebarMobile> {
     _startAutoRefresh();
     _searchController.addListener(_onSearchChanged);
     unawaited(_loadProfile());
-    _chatUpdatesSub = ChatStorageService.changes.listen((_) {
+    _chatUpdatesSub = ChatStorageService.changes.listen((changedChatId) {
       if (!mounted) return;
-      unawaited(_filterRecentChats());
+      if (changedChatId == null) {
+        // Bulk change (initial load, sync) - refilter everything
+        unawaited(_filterRecentChats());
+      } else {
+        // Single chat changed - just trigger rebuild without refiltering
+        setState(() {});
+      }
     });
     // Monitor network status for offline indicators
     NetworkStatusService.isOnlineListenable.addListener(_onNetworkStatusChanged);

@@ -15,6 +15,7 @@ import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/password_revision_service.dart';
 import 'package:chuk_chat/services/model_prefetch_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/theme_settings_service.dart';
 import 'package:chuk_chat/services/customization_preferences_service.dart';
 import 'package:chuk_chat/widgets/auth_gate.dart';
@@ -177,13 +178,28 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
         _loadThemeSettingsFromSupabase();
         unawaited(ModelPrefetchService.prefetch());
       } else {
-        // User logged out - stop sync and clear data
-        ChatSyncService.stop();
-        await EncryptionService.clearKey();
-        await ChatStorageService.reset();
-        _hasAppliedSupabaseTheme = false;
-        _loadThemeSettingsFromPrefs();
-        await PasswordRevisionService.clearCachedRevision();
+        // Session is null - check if this is a real logout or just offline
+        final isOnline = await NetworkStatusService.hasInternetConnection(
+          useCache: false,  // Force fresh check
+        );
+
+        if (isOnline) {
+          // User actually logged out - stop sync and clear data
+          debugPrint('🔐 [Auth] User logged out (online) - clearing data');
+          ChatSyncService.stop();
+          await EncryptionService.clearKey();
+          await ChatStorageService.reset();
+          _hasAppliedSupabaseTheme = false;
+          _loadThemeSettingsFromPrefs();
+          await PasswordRevisionService.clearCachedRevision();
+        } else {
+          // We're offline - don't treat this as logout
+          // Keep cached data so user can still view chats offline
+          debugPrint('📴 [Auth] Session unavailable but offline - keeping cache');
+          ChatSyncService.stop();
+          // DON'T clear encryption key or chat cache!
+          // User can still view cached chats offline
+        }
       }
     });
 
