@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:chuk_chat/services/image_storage_service.dart';
 
 /// Full-screen image viewer with zoom and pan capabilities
 class ImageViewer extends StatefulWidget {
@@ -26,6 +27,9 @@ class _ImageViewerState extends State<ImageViewer> {
   final TransformationController _transformationController =
       TransformationController();
   final FocusNode _focusNode = FocusNode();
+
+  /// Cache for loaded image bytes (storage path -> bytes)
+  final Map<String, Uint8List> _imageCache = {};
 
   @override
   void initState() {
@@ -64,9 +68,26 @@ class _ImageViewerState extends State<ImageViewer> {
     }
   }
 
-  Uint8List _base64ToBytes(String dataUrl) {
-    final base64String = dataUrl.split(',').last;
-    return base64Decode(base64String);
+  /// Load image bytes from Base64 data URL or storage path.
+  Future<Uint8List> _loadImageBytes(String imageSource) async {
+    // Check cache first
+    if (_imageCache.containsKey(imageSource)) {
+      return _imageCache[imageSource]!;
+    }
+
+    Uint8List bytes;
+    if (imageSource.startsWith('data:image/')) {
+      // Base64 data URL (legacy format)
+      final base64String = imageSource.split(',').last;
+      bytes = base64Decode(base64String);
+    } else {
+      // Storage path - download and decrypt
+      bytes = await ImageStorageService.downloadAndDecryptImage(imageSource);
+    }
+
+    // Cache the result
+    _imageCache[imageSource] = bytes;
+    return bytes;
   }
 
   bool get _hasMultipleImages =>
@@ -194,32 +215,63 @@ class _ImageViewerState extends State<ImageViewer> {
     );
   }
 
-  Widget _buildImageView(String imageDataUrl) {
-    return Center(
-      child: InteractiveViewer(
-        transformationController: _transformationController,
-        minScale: 0.5,
-        maxScale: 4.0,
-        child: Image.memory(
-          _base64ToBytes(imageDataUrl),
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.broken_image, size: 64, color: Colors.grey),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Failed to load image',
-                    style: TextStyle(color: Colors.grey[400]),
+  Widget _buildImageView(String imageSource) {
+    return FutureBuilder<Uint8List>(
+      future: _loadImageBytes(imageSource),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(color: Colors.white),
+          );
+        }
+
+        if (snapshot.hasError || !snapshot.hasData) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.broken_image, size: 64, color: Colors.grey),
+                const SizedBox(height: 16),
+                Text(
+                  'Failed to load image',
+                  style: TextStyle(color: Colors.grey[400]),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Center(
+          child: InteractiveViewer(
+            transformationController: _transformationController,
+            minScale: 0.5,
+            maxScale: 4.0,
+            child: Image.memory(
+              snapshot.data!,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.broken_image,
+                        size: 64,
+                        color: Colors.grey,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Failed to load image',
+                        style: TextStyle(color: Colors.grey[400]),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            );
-          },
-        ),
-      ),
+                );
+              },
+            ),
+          ),
+        );
+      },
     );
   }
 

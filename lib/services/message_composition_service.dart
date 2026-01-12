@@ -1,9 +1,7 @@
 // lib/services/message_composition_service.dart
-import 'dart:convert';
 import 'dart:math' as math;
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
-import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/utils/input_validator.dart';
 import 'package:chuk_chat/utils/token_estimator.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
@@ -226,28 +224,19 @@ class MessageCompositionService {
 
       // Build AI prompt with attachments
       final promptParts = <String>[];
-      final imageDataUrls = <String>[];
+      final imageStoragePaths = <String>[];
 
-      // Prepare encrypted images as base64 data URLs
+      // Collect storage paths for images (NOT Base64)
+      // Base64 conversion happens on-the-fly in WebSocketChatService when sending to AI
       if (imageFiles.isNotEmpty) {
         for (final imageFile in imageFiles) {
-          try {
-            // Download and decrypt image
-            final imageBytes =
-                await ImageStorageService.downloadAndDecryptImage(
-                  imageFile.encryptedImagePath!,
-                );
-            // Convert to base64 data URL (JPEG format)
-            final base64Image = base64Encode(imageBytes);
-            final dataUrl = 'data:image/jpeg;base64,$base64Image';
-            imageDataUrls.add(dataUrl);
-          } catch (e) {
-            debugPrint(
-              'Failed to load encrypted image ${imageFile.fileName}: $e',
-            );
-            // Skip failed images
+          if (imageFile.encryptedImagePath != null) {
+            imageStoragePaths.add(imageFile.encryptedImagePath!);
           }
         }
+        debugPrint(
+          '🖼️ [MessageComposition] Collected ${imageStoragePaths.length} image storage paths',
+        );
       }
 
       // Add documents with markdown content
@@ -280,7 +269,7 @@ class MessageCompositionService {
       return _MessageContent(
         displayText: displayMessageText,
         aiPromptContent: aiPromptContent,
-        images: imageDataUrls,
+        images: imageStoragePaths,
       );
     }
 

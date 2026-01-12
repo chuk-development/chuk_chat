@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
+import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/utils/secure_token_handler.dart';
 import 'package:chuk_chat/models/chat_stream_event.dart';
 
@@ -103,8 +104,15 @@ class WebSocketChatService {
         requestPayload['system_prompt'] = systemPrompt;
       }
 
+      // Convert image storage paths to Base64 data URLs on-the-fly
       if (images != null && images.isNotEmpty) {
-        requestPayload['images'] = images;
+        final base64Images = await _convertImagesToBase64(images);
+        if (base64Images.isNotEmpty) {
+          requestPayload['images'] = base64Images;
+          if (kDebugMode) {
+            debugPrint('🖼️ Converted ${base64Images.length} images to Base64');
+          }
+        }
       }
 
       // Send the request
@@ -204,6 +212,36 @@ class WebSocketChatService {
         debugPrint('🧹 WebSocket closed and resources cleaned up');
       }
     }
+  }
+
+  /// Convert image storage paths or existing Base64 URLs to Base64 data URLs.
+  /// This is called on-the-fly when sending to AI - images are NOT stored as Base64.
+  static Future<List<String>> _convertImagesToBase64(
+    List<String> imagePaths,
+  ) async {
+    final base64Images = <String>[];
+
+    for (final path in imagePaths) {
+      try {
+        // Check if already a Base64 data URL (legacy support)
+        if (path.startsWith('data:image/')) {
+          base64Images.add(path);
+          continue;
+        }
+
+        // Storage path - download, decrypt, and convert to Base64
+        final bytes = await ImageStorageService.downloadAndDecryptImage(path);
+        final base64 = base64Encode(bytes);
+        base64Images.add('data:image/jpeg;base64,$base64');
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('⚠️ Failed to convert image to Base64: $path - $e');
+        }
+        // Skip failed images
+      }
+    }
+
+    return base64Images;
   }
 }
 

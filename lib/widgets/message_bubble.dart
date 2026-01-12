@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
 import 'package:chuk_chat/widgets/document_viewer.dart';
@@ -667,6 +668,9 @@ class _CachedImageThumbnail extends StatefulWidget {
     required this.onTap,
   });
 
+  /// Can be either:
+  /// - A Base64 data URL: "data:image/jpeg;base64,..."
+  /// - A storage path: "user-id/uuid.enc"
   final String imageDataUrl;
   final VoidCallback onTap;
 
@@ -677,6 +681,7 @@ class _CachedImageThumbnail extends StatefulWidget {
 class _CachedImageThumbnailState extends State<_CachedImageThumbnail>
     with AutomaticKeepAliveClientMixin {
   Uint8List? _cachedBytes;
+  bool _isLoading = true;
 
   @override
   bool get wantKeepAlive => true;
@@ -684,21 +689,52 @@ class _CachedImageThumbnailState extends State<_CachedImageThumbnail>
   @override
   void initState() {
     super.initState();
-    _decodeImage();
+    _loadImage();
   }
 
-  void _decodeImage() {
+  Future<void> _loadImage() async {
     try {
-      final base64String = widget.imageDataUrl.split(',').last;
-      _cachedBytes = base64Decode(base64String);
+      if (widget.imageDataUrl.startsWith('data:image/')) {
+        // Base64 data URL (legacy format)
+        final base64String = widget.imageDataUrl.split(',').last;
+        _cachedBytes = base64Decode(base64String);
+      } else {
+        // Storage path - download and decrypt
+        _cachedBytes = await ImageStorageService.downloadAndDecryptImage(
+          widget.imageDataUrl,
+        );
+      }
     } catch (e) {
-      debugPrint('Failed to decode image: $e');
+      debugPrint('Failed to load image: $e');
+    }
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
     super.build(context); // Required for AutomaticKeepAliveClientMixin
+
+    if (_isLoading) {
+      return Container(
+        width: 100,
+        height: 100,
+        decoration: BoxDecoration(
+          color: Colors.grey.withValues(alpha: 0.3),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Center(
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
 
     if (_cachedBytes == null) {
       return Container(
