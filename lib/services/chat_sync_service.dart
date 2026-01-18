@@ -3,6 +3,7 @@ import 'dart:async';
 
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:flutter/foundation.dart';
 
@@ -78,6 +79,12 @@ class ChatSyncService {
   static Future<void> _performSync() async {
     if (_isSyncing) return; // Prevent concurrent syncs
     if (!_isEnabled) return;
+
+    // Skip sync if we know we're offline (use cached status to avoid delays)
+    if (!NetworkStatusService.isOnline) {
+      debugPrint('⏸️ [ChatSync] Skipping sync - offline');
+      return;
+    }
 
     final user = SupabaseService.auth.currentUser;
     if (user == null) return;
@@ -159,6 +166,12 @@ class ChatSyncService {
       }
     } catch (e) {
       debugPrint('❌ [ChatSync] Sync failed: $e');
+      // If this looks like a network error, trigger a network check
+      // This updates the offline indicator if we actually lost connectivity
+      if (NetworkStatusService.isNetworkError(e)) {
+        debugPrint('🌐 [ChatSync] Network error detected, checking connectivity...');
+        unawaited(NetworkStatusService.hasInternetConnection(useCache: false));
+      }
     } finally {
       _isSyncing = false;
     }

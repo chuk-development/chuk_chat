@@ -232,17 +232,32 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
     super.didChangeAppLifecycleState(state);
     switch (state) {
       case AppLifecycleState.resumed:
-        // App came to foreground - resume sync
-        ChatSyncService.resume();
+        // App came to foreground - check network status first, then resume sync
+        // This prevents false "offline" states when unlocking the phone
+        unawaited(_onAppResumed());
         break;
       case AppLifecycleState.paused:
       case AppLifecycleState.inactive:
       case AppLifecycleState.detached:
       case AppLifecycleState.hidden:
         // App went to background - pause sync to save battery
+        // DON'T change network status - we're not offline, just backgrounded
         ChatSyncService.pause();
         break;
     }
+  }
+
+  Future<void> _onAppResumed() async {
+    // Reset failure count to give network a fresh chance
+    NetworkStatusService.resetFailureCount();
+    // Check network status immediately (don't use cache - it may be stale)
+    final isOnline = await NetworkStatusService.hasInternetConnection(
+      useCache: false,
+      timeout: const Duration(seconds: 3),
+    );
+    debugPrint('📱 [Lifecycle] App resumed, network status: ${isOnline ? "ONLINE" : "OFFLINE"}');
+    // Resume sync after network status is updated
+    ChatSyncService.resume();
   }
 
   // Performance: Cache SharedPreferences instance

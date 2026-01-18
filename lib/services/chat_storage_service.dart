@@ -324,10 +324,8 @@ class ChatStorageService {
 
       _chatsById.clear();
 
-      // Decrypt first batch immediately
-      final firstBatchFutures = firstBatch.map(_decryptChatRow).toList();
-      final firstChats =
-          await Future.wait(firstBatchFutures, eagerError: false);
+      // Batch decrypt first 15 chats in ONE isolate (much faster!)
+      final firstChats = await _decryptChatRowsBatch(firstBatch);
       for (final chat in firstChats) {
         if (chat != null) {
           _chatsById[chat.id] = chat;
@@ -344,11 +342,9 @@ class ChatStorageService {
         );
       }
 
-      // Decrypt remaining in background
+      // Decrypt remaining in background (also batched)
       if (remainingBatch.isNotEmpty) {
-        final remainingFutures = remainingBatch.map(_decryptChatRow).toList();
-        final remainingChats =
-            await Future.wait(remainingFutures, eagerError: false);
+        final remainingChats = await _decryptChatRowsBatch(remainingBatch);
         for (final chat in remainingChats) {
           if (chat != null) {
             _chatsById[chat.id] = chat;
@@ -361,6 +357,55 @@ class ChatStorageService {
     } catch (e) {
       debugPrint('❌ [ChatStorage] Cache load failed: $e');
     }
+  }
+
+  /// Batch decrypt multiple chat rows in a single isolate
+  /// Much faster than decrypting one by one
+  static Future<List<StoredChat?>> _decryptChatRowsBatch(
+    List<Map<String, dynamic>> rows,
+  ) async {
+    if (rows.isEmpty) return [];
+
+    // Extract encrypted payloads
+    final encryptedPayloads = <String>[];
+    final validIndices = <int>[];
+
+    for (int i = 0; i < rows.length; i++) {
+      final payload = rows[i]['encrypted_payload'] as String?;
+      if (payload != null && payload.isNotEmpty) {
+        encryptedPayloads.add(payload);
+        validIndices.add(i);
+      }
+    }
+
+    if (encryptedPayloads.isEmpty) return List.filled(rows.length, null);
+
+    // Batch decrypt all payloads in one isolate
+    final decryptedList = await EncryptionService.decryptBatchInBackground(
+      encryptedPayloads,
+    );
+
+    // Deserialize and create StoredChat objects
+    final results = List<StoredChat?>.filled(rows.length, null);
+
+    for (int j = 0; j < validIndices.length; j++) {
+      final i = validIndices[j];
+      final decrypted = decryptedList[j];
+      if (decrypted == null) continue;
+
+      try {
+        final chatPayload = await _deserializePayloadAsync(decrypted);
+        results[i] = StoredChat.fromRow(
+          rows[i],
+          chatPayload.messages,
+          customName: chatPayload.customName,
+        );
+      } catch (_) {
+        // Skip invalid chats
+      }
+    }
+
+    return results;
   }
 
   /// Load all chats from Supabase or cache
@@ -440,9 +485,8 @@ class ChatStorageService {
       final firstBatch = rows.take(firstBatchSize).toList();
       final remainingBatch = rows.skip(firstBatchSize).toList();
 
-      // Decrypt first batch immediately (visible in sidebar)
-      final firstBatchFutures = firstBatch.map(_decryptChatRow).toList();
-      final firstChats = await Future.wait(firstBatchFutures, eagerError: false);
+      // Batch decrypt first 15 chats in ONE isolate (much faster!)
+      final firstChats = await _decryptChatRowsBatch(firstBatch);
       for (final chat in firstChats) {
         if (chat != null) {
           _chatsById[chat.id] = chat;
@@ -457,14 +501,12 @@ class ChatStorageService {
         );
       }
 
-      // Decrypt remaining chats in background
+      // Decrypt remaining chats in background (also batched)
       if (remainingBatch.isNotEmpty) {
         debugPrint(
           '🔄 [ChatStorage] Decrypting ${remainingBatch.length} more chats in background...',
         );
-        final remainingFutures = remainingBatch.map(_decryptChatRow).toList();
-        final remainingChats =
-            await Future.wait(remainingFutures, eagerError: false);
+        final remainingChats = await _decryptChatRowsBatch(remainingBatch);
         for (final chat in remainingChats) {
           if (chat != null) {
             _chatsById[chat.id] = chat;

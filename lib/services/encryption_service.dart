@@ -35,6 +35,19 @@ class _DecryptionParams {
   });
 }
 
+/// Parameters for batch background decryption
+class _BatchDecryptionParams {
+  final List<String> encryptedList;
+  final List<int> keyBytes;
+  final String payloadVersion;
+
+  _BatchDecryptionParams({
+    required this.encryptedList,
+    required this.keyBytes,
+    required this.payloadVersion,
+  });
+}
+
 /// Top-level function for background encryption
 Future<String> _encryptBytesInBackground(_EncryptionParams params) async {
   final cipher = AesGcm.with256bits();
@@ -104,6 +117,41 @@ Future<String> _decryptStringInBackground(_DecryptionParams params) async {
   );
 
   return utf8.decode(cleartextBytes);
+}
+
+/// Top-level function for batch background decryption
+/// Decrypts multiple strings in a single isolate for better performance
+Future<List<String?>> _decryptBatchInBackground(_BatchDecryptionParams params) async {
+  final cipher = AesGcm.with256bits();
+  final secretKey = SecretKey(params.keyBytes);
+  final results = <String?>[];
+
+  for (final encrypted in params.encryptedList) {
+    try {
+      final Map<String, dynamic> payload = jsonDecode(encrypted);
+      final version = payload['v'];
+      if (version != params.payloadVersion) {
+        results.add(null);
+        continue;
+      }
+
+      final nonce = base64Decode(payload['nonce'] as String);
+      final cipherText = base64Decode(payload['ciphertext'] as String);
+      final mac = Mac(base64Decode(payload['mac'] as String));
+      final secretBox = SecretBox(cipherText, nonce: nonce, mac: mac);
+
+      final cleartextBytes = await cipher.decrypt(
+        secretBox,
+        secretKey: secretKey,
+      );
+
+      results.add(utf8.decode(cleartextBytes));
+    } catch (_) {
+      results.add(null);
+    }
+  }
+
+  return results;
 }
 
 class EncryptionService {
@@ -453,6 +501,24 @@ class EncryptionService {
     );
 
     return await compute(_decryptStringInBackground, params);
+  }
+
+  /// Decrypt multiple strings in a single background isolate
+  /// Much faster than calling decryptInBackground multiple times
+  /// Returns list with null for items that failed to decrypt
+  static Future<List<String?>> decryptBatchInBackground(List<String> encryptedList) async {
+    if (encryptedList.isEmpty) return [];
+
+    final secretKey = await _ensureKey();
+    final keyBytes = await secretKey.extractBytes();
+
+    final params = _BatchDecryptionParams(
+      encryptedList: encryptedList,
+      keyBytes: keyBytes,
+      payloadVersion: _payloadVersion,
+    );
+
+    return await compute(_decryptBatchInBackground, params);
   }
 
   static Future<SecretKey> _ensureKey() async {
