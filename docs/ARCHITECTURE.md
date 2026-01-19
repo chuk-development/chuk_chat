@@ -50,6 +50,8 @@ Services in `lib/services/` use singleton-like patterns (static methods or const
 | `WebSocketChatService` | WebSocket streaming (mobile-friendly) |
 | `StreamingManager` | Concurrent stream management |
 | `MessageCompositionService` | Prepare messages for API |
+| `TitleGenerationService` | AI-powered chat title generation |
+| `SessionHelper` | Session validation utilities |
 
 ### Model Management
 | Service | Purpose |

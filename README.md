@@ -166,45 +166,97 @@ For detailed build instructions, see [BUILD.md](BUILD.md).
 
 ```
 lib/
-├── main.dart                     # App entry point
-├── constants.dart                # Theme constants and builders
-├── platform_config.dart          # Platform detection and tree-shaking config
+├── main.dart                     # App entry point, theme/auth state
+├── constants.dart                # Theme constants, buildAppTheme()
+├── platform_config.dart          # Platform detection and feature flags
 ├── supabase_config.dart          # Supabase configuration
+├── model_selector_page.dart      # Full-page model selection
+│
+├── constants/                    # App constants
+│   └── file_constants.dart       # File limits (10MB max, extensions)
+│
+├── core/                         # Core utilities
+│   └── model_selection_events.dart  # Event bus for model selection
+│
 ├── models/                       # Data models
-│   ├── model_item.dart
-│   ├── attached_file.dart
-│   └── chat_stream_event.dart
+│   ├── chat_model.dart           # ModelItem, AttachedFile
+│   ├── chat_stream_event.dart    # Stream event types
+│   └── project_model.dart        # Project, ProjectFile
+│
 ├── pages/                        # App screens
-│   ├── login_page.dart
-│   ├── settings_page.dart
-│   └── ...
+│   ├── login_page.dart           # Login/signup UI
+│   ├── settings_page.dart        # Settings navigation hub
+│   ├── theme_page.dart           # Theme/appearance settings
+│   ├── customization_page.dart   # Behavior preferences
+│   ├── account_settings_page.dart # Account management
+│   ├── system_prompt_page.dart   # System prompt editor
+│   ├── about_page.dart           # App info and links
+│   ├── pricing_page.dart         # Model pricing/credits
+│   ├── projects_page.dart        # Projects list
+│   ├── project_detail_page.dart  # Project detail (tabs)
+│   ├── project_management_page.dart # Mobile project management
+│   ├── media_manager_page.dart   # Image management
+│   └── model_selector/models/    # Model selector models
+│       └── model_info.dart       # Model/provider pricing
+│
 ├── platform_specific/            # Platform-adaptive UI
 │   ├── root_wrapper.dart         # Conditional import wrapper
 │   ├── root_wrapper_io.dart      # Platform detection logic
 │   ├── root_wrapper_desktop.dart # Desktop layout
 │   ├── root_wrapper_mobile.dart  # Mobile layout
-│   ├── sidebar_desktop.dart
-│   ├── sidebar_mobile.dart
+│   ├── root_wrapper_stub.dart    # Stub for conditional imports
+│   ├── sidebar_desktop.dart      # Desktop navigation
+│   ├── sidebar_mobile.dart       # Mobile drawer
 │   └── chat/
-│       ├── chat_ui_desktop.dart
-│       └── chat_ui_mobile.dart
+│       ├── chat_ui_desktop.dart  # Desktop chat UI
+│       ├── chat_ui_mobile.dart   # Mobile chat UI
+│       ├── chat_api_service.dart # API layer
+│       ├── widgets/              # Platform-specific widgets
+│       │   ├── desktop_chat_widgets.dart
+│       │   └── mobile_chat_widgets.dart
+│       └── handlers/             # Chat handlers
+│           ├── streaming_message_handler.dart
+│           ├── chat_persistence_handler.dart
+│           ├── file_attachment_handler.dart
+│           ├── audio_recording_handler.dart
+│           └── message_actions_handler.dart
+│
 ├── services/                     # Business logic and API
-│   ├── auth_service.dart
-│   ├── encryption_service.dart
-│   ├── chat_storage_service.dart
-│   ├── streaming_chat_service.dart
-│   ├── websocket_chat_service.dart
-│   ├── file_conversion_service.dart
+│   ├── auth_service.dart         # Sign-in/up/out
+│   ├── supabase_service.dart     # Supabase init, session
+│   ├── encryption_service.dart   # AES-256-GCM encryption
+│   ├── chat_storage_service.dart # Encrypted chat persistence
+│   ├── chat_sync_service.dart    # Background sync
+│   ├── streaming_chat_service.dart # HTTP SSE streaming
+│   ├── websocket_chat_service.dart # WebSocket streaming
+│   ├── streaming_manager.dart    # Concurrent streams
+│   ├── title_generation_service.dart # AI chat title generation
+│   ├── session_helper.dart       # Session validation
+│   ├── project_storage_service.dart # Project CRUD
+│   ├── project_message_service.dart # Project context injection
+│   ├── image_storage_service.dart # Encrypted image storage
+│   ├── image_generation_service.dart # AI image generation
 │   └── ...
+│
 ├── utils/                        # Utilities and helpers
-│   ├── input_validator.dart
-│   ├── file_upload_validator.dart
-│   ├── certificate_pinning.dart
-│   ├── api_rate_limiter.dart
-│   ├── secure_token_handler.dart
+│   ├── input_validator.dart      # Password/email validation
+│   ├── file_upload_validator.dart # File validation
+│   ├── certificate_pinning.dart  # SSL certificate pinning
+│   ├── api_rate_limiter.dart     # Rate limiting
+│   ├── upload_rate_limiter.dart  # Upload rate limiting
+│   ├── secure_token_handler.dart # Token handling
+│   ├── grain_overlay.dart        # Film grain effect
 │   └── ...
+│
 └── widgets/                      # Reusable UI components
-    ├── password_strength_meter.dart
+    ├── message_bubble.dart       # Message display
+    ├── markdown_message.dart     # Markdown rendering
+    ├── auth_gate.dart            # Auth guard
+    ├── model_selection_dropdown.dart # Model dropdown
+    ├── project_panel.dart        # Project settings panel
+    ├── project_file_viewer.dart  # Project file viewer
+    ├── project_selection_dropdown.dart # Project dropdown
+    ├── password_strength_meter.dart # Password strength
     └── ...
 ```
 

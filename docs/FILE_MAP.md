@@ -24,8 +24,14 @@ Complete map of all Dart files in the codebase.
 | `pricing_page.dart` | Model pricing/credits |
 | `projects_page.dart` | Projects list |
 | `project_detail_page.dart` | Project detail (tabs) |
+| `project_management_page.dart` | Mobile-friendly project management |
 | `media_manager_page.dart` | Image management |
 | `coming_soon_page.dart` | Placeholder |
+
+### Model Selector (`lib/pages/model_selector/`)
+| File | Purpose |
+|------|---------|
+| `models/model_info.dart` | Model/provider pricing details |
 
 ## Models (`lib/models/`)
 | File | Purpose |
@@ -55,6 +61,8 @@ Complete map of all Dart files in the codebase.
 | `streaming_manager.dart` | Concurrent streams |
 | `message_composition_service.dart` | Prepare messages for API |
 | `local_chat_cache_service.dart` | In-memory cache |
+| `title_generation_service.dart` | AI-powered chat title generation |
+| `session_helper.dart` | Session validation utilities |
 
 ### Projects
 | File | Purpose |
@@ -101,6 +109,9 @@ Complete map of all Dart files in the codebase.
 | `credit_display.dart` | Credit balance |
 | `free_message_display.dart` | Free message quota |
 | `password_strength_meter.dart` | Password strength |
+| `project_file_viewer.dart` | Project file viewer dialog |
+| `project_panel.dart` | Right-side project settings panel |
+| `project_selection_dropdown.dart` | Project selection dropdown |
 
 ## Platform-Specific (`lib/platform_specific/`)
 ### Root Wrappers
@@ -110,6 +121,7 @@ Complete map of all Dart files in the codebase.
 | `root_wrapper_io.dart` | Platform detection |
 | `root_wrapper_desktop.dart` | Desktop layout |
 | `root_wrapper_mobile.dart` | Mobile layout |
+| `root_wrapper_stub.dart` | Stub for conditional imports |
 
 ### Sidebars
 | File | Purpose |
@@ -123,6 +135,12 @@ Complete map of all Dart files in the codebase.
 | `chat_ui_desktop.dart` | Desktop chat |
 | `chat_ui_mobile.dart` | Mobile chat |
 | `chat_api_service.dart` | API layer |
+
+### Chat Widgets (`lib/platform_specific/chat/widgets/`)
+| File | Purpose |
+|------|---------|
+| `desktop_chat_widgets.dart` | Desktop-specific chat UI widgets |
+| `mobile_chat_widgets.dart` | Mobile-specific chat UI widgets |
 
 ### Handlers (`lib/platform_specific/chat/handlers/`)
 | File | Purpose |
@@ -146,6 +164,8 @@ Complete map of all Dart files in the codebase.
 | `api_request_queue.dart` | Request queuing |
 | `exponential_backoff.dart` | Retry logic |
 | `file_upload_validator.dart` | File validation |
+| `upload_rate_limiter.dart` | Upload rate limiting (DoS protection) |
+| `certificate_pinning.dart` | SSL certificate pinning |
 | `service_logger.dart` | Logging |
 | `service_error_handler.dart` | Error handling |
 | `highlight_registry.dart` | Syntax highlighting |

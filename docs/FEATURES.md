@@ -22,13 +22,19 @@ Workspaces for organizing chats with custom AI behavior.
 - Add existing chats to projects
 - Upload encrypted files as context
 - Files included in AI messages (up to 50KB)
+- Project panel for managing files and instructions
+- Mobile-friendly project management page
 
 **Files:**
 - `lib/models/project_model.dart` - Data models
 - `lib/services/project_storage_service.dart` - CRUD operations
 - `lib/services/project_message_service.dart` - Inject context into AI
 - `lib/pages/projects_page.dart` - Projects list
-- `lib/pages/project_detail_page.dart` - Project detail
+- `lib/pages/project_detail_page.dart` - Project detail (tabs)
+- `lib/pages/project_management_page.dart` - Mobile project management
+- `lib/widgets/project_panel.dart` - Right-side settings panel (desktop)
+- `lib/widgets/project_file_viewer.dart` - File viewer dialog
+- `lib/widgets/project_selection_dropdown.dart` - Project dropdown in chat
 
 **Flag:** `--dart-define=FEATURE_PROJECTS=true`
 
@@ -101,3 +107,31 @@ Full theme customization with Supabase sync.
 - `lib/pages/theme_page.dart` - Settings UI
 - `lib/services/theme_settings_service.dart` - Sync service
 - `lib/utils/grain_overlay.dart` - Grain effect
+
+## Auto Title Generation
+AI-powered automatic chat title generation.
+
+**Features:**
+- Generates concise 2-6 word titles based on first message
+- Uses Qwen3-8b model via Fireworks (fast and cheap)
+- Customizable system prompt
+- Toggle in customization settings
+
+**Files:**
+- `lib/services/title_generation_service.dart` - Title generation service
+- `lib/pages/customization_page.dart` - Settings toggle
+
+## Security Features
+
+**Certificate Pinning:**
+- SSL certificate pinning for API requests
+- Protection against MITM attacks in production
+
+**Rate Limiting:**
+- API rate limiting to prevent abuse
+- Upload rate limiting (10 uploads per 5 minutes)
+
+**Files:**
+- `lib/utils/certificate_pinning.dart` - SSL pinning implementation
+- `lib/utils/api_rate_limiter.dart` - API rate limiting
+- `lib/utils/upload_rate_limiter.dart` - Upload rate limiting
