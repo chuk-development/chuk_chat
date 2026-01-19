@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/supabase_config.dart';
 
 class SupabaseService {
@@ -64,9 +65,20 @@ class SupabaseService {
         _lastRefreshTime = DateTime.now();
         return response.session ?? auth.currentSession;
       } on AuthException catch (error) {
-        debugPrint('Failed to refresh session: ${error.message}');
         _lastRefreshTime = DateTime.now();
+        // Check if this is a network error - keep existing session
+        if (NetworkStatusService.isNetworkError(error)) {
+          debugPrint('📴 Session refresh failed (network): ${error.message} - keeping session');
+          return auth.currentSession; // Keep existing session on network error
+        }
+        // Actual auth error (e.g., token revoked)
+        debugPrint('⚠️ Session refresh auth error: ${error.message}');
         return null;
+      } catch (e) {
+        // Generic error (SocketException, etc.) - likely network related
+        _lastRefreshTime = DateTime.now();
+        debugPrint('📴 Session refresh error: $e - keeping session');
+        return auth.currentSession; // Keep existing session
       }
     }
 

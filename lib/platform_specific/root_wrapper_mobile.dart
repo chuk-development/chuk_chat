@@ -10,6 +10,7 @@ import 'package:chuk_chat/pages/settings_page.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_mobile.dart';
 import 'package:chuk_chat/platform_specific/sidebar_mobile.dart'; // UPDATED: Use mobile sidebar
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:chuk_chat/pages/coming_soon_page.dart';
@@ -127,35 +128,29 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
 
   Future<void> _refreshSessionOnResume() async {
     try {
+      // First check if we're online - don't try to refresh on bad network
+      final isOnline = await NetworkStatusService.hasInternetConnection(
+        timeout: const Duration(seconds: 5),
+      );
+
+      if (!isOnline) {
+        debugPrint('📴 App resumed offline - skipping session refresh');
+        return;
+      }
+
       debugPrint('App resumed - refreshing session...');
       final session = await SupabaseService.refreshSession();
 
       if (session == null) {
-        // Session couldn't be refreshed - user needs to sign in again
-        debugPrint('Session expired - user needs to sign in again');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text(
-                'Session expired. Please sign in again.',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-              ),
-              behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              duration: const Duration(seconds: 3),
-              dismissDirection: DismissDirection.horizontal,
-            ),
-          );
-        }
-        // Sign out to force re-authentication
-        await SupabaseService.signOut();
+        // NEVER sign out automatically - user keeps cached credentials
+        // This could be a temporary network issue
+        debugPrint('⚠️ Session refresh returned null - keeping user logged in');
       } else {
-        debugPrint('Session refreshed successfully');
+        debugPrint('✅ Session refreshed successfully');
       }
     } catch (e) {
-      debugPrint('Error refreshing session on resume: $e');
+      // NEVER sign out on errors - could be network related
+      debugPrint('⚠️ Error refreshing session on resume: $e - keeping user logged in');
     }
   }
 
