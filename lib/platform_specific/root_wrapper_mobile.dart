@@ -10,7 +10,6 @@ import 'package:chuk_chat/pages/settings_page.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_mobile.dart';
 import 'package:chuk_chat/platform_specific/sidebar_mobile.dart'; // UPDATED: Use mobile sidebar
 import 'package:chuk_chat/services/chat_storage_service.dart';
-import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:chuk_chat/pages/coming_soon_page.dart';
@@ -127,30 +126,16 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
   }
 
   Future<void> _refreshSessionOnResume() async {
+    // No network check here - just try to refresh
+    // If it fails due to network, that's fine - user stays logged in
+    // This avoids false "offline" detection when screen unlocks
     try {
-      // First check if we're online - don't try to refresh on bad network
-      final isOnline = await NetworkStatusService.hasInternetConnection(
-        timeout: const Duration(seconds: 5),
-      );
-
-      if (!isOnline) {
-        debugPrint('📴 App resumed offline - skipping session refresh');
-        return;
-      }
-
-      debugPrint('App resumed - refreshing session...');
       final session = await SupabaseService.refreshSession();
-
-      if (session == null) {
-        // NEVER sign out automatically - user keeps cached credentials
-        // This could be a temporary network issue
-        debugPrint('⚠️ Session refresh returned null - keeping user logged in');
-      } else {
-        debugPrint('✅ Session refreshed successfully');
+      if (session != null) {
+        debugPrint('✅ Session refreshed on resume');
       }
     } catch (e) {
-      // NEVER sign out on errors - could be network related
-      debugPrint('⚠️ Error refreshing session on resume: $e - keeping user logged in');
+      debugPrint('⚠️ Session refresh on resume failed: $e');
     }
   }
 
