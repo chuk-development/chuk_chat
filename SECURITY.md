@@ -1,4 +1,36 @@
-# Security
+# Security Policy
+
+## Reporting a Vulnerability
+
+**Do not open a public issue for security vulnerabilities.**
+
+Please report security issues directly to: support@chuk.dev
+
+Include:
+- Description of the vulnerability
+- Steps to reproduce
+- Potential impact
+- Suggested fix (if any)
+
+## Response Time
+
+We aim to respond within 48 hours and provide a fix within 7 days for critical issues.
+
+## Scope
+
+This policy covers:
+- Chuk Chat mobile app (iOS/Android)
+- Chuk Chat desktop app
+- Backend API
+- End-to-end encryption implementation
+
+## Bug Bounty
+
+Currently no formal bug bounty program, but we credit researchers in our changelog (with permission).
+
+---
+
+# Security Implementation
 
 ## Overview
 
@@ -195,10 +227,6 @@ If the certificate expires before rotation (emergency scenario):
 2. **Same Day**: Deploy new certificate on server
 3. **Within 24h**: Release proper update with new certificate pin
 4. **Post-Mortem**: Document what went wrong and update processes
-
-## Reporting Security Issues
-
-To report a security vulnerability, please contact the project maintainers directly. Do not open public issues for security vulnerabilities.
 
 ## Security Updates
 
