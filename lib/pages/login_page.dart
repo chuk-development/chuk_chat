@@ -380,7 +380,7 @@ class _LoginPageState extends State<LoginPage> {
                                       ),
                                       recognizer: TapGestureRecognizer()
                                         ..onTap = () {
-                                          _launchUrl('https://chuk.chat/terms.html');
+                                          _launchUrl('https://chuk.chat/en/terms/');
                                         },
                                     ),
                                     const TextSpan(
@@ -394,7 +394,7 @@ class _LoginPageState extends State<LoginPage> {
                                       ),
                                       recognizer: TapGestureRecognizer()
                                         ..onTap = () {
-                                          _launchUrl('https://chuk.chat/privacy.html');
+                                          _launchUrl('https://chuk.chat/en/privacy/');
                                         },
                                     ),
                                   ],

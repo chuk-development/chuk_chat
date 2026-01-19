@@ -103,7 +103,7 @@ class AboutPage extends StatelessWidget {
                       children: [
                         Expanded(
                           child: OutlinedButton(
-                            onPressed: () => _launchUrl('https://chuk.chat/terms.html'),
+                            onPressed: () => _launchUrl('https://chuk.chat/en/terms/'),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: accent,
                               side: BorderSide(color: accent.withValues(alpha: 0.5)),
@@ -115,7 +115,7 @@ class AboutPage extends StatelessWidget {
                         const SizedBox(width: 12),
                         Expanded(
                           child: OutlinedButton(
-                            onPressed: () => _launchUrl('https://chuk.chat/privacy.html'),
+                            onPressed: () => _launchUrl('https://chuk.chat/en/privacy/'),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: accent,
                               side: BorderSide(color: accent.withValues(alpha: 0.5)),
