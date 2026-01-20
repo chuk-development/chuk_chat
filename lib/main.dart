@@ -135,56 +135,20 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
     ) async {
       if (event.session != null) {
         final user = event.session!.user;
-        try {
-          final shouldForceLogout =
-              await PasswordRevisionService.hasRevisionMismatch(user);
-          if (shouldForceLogout) {
-            await PasswordRevisionService.clearCachedRevision(userId: user.id);
-            await SupabaseService.auth.signOut();
-            await EncryptionService.clearKey();
-            await ChatStorageService.reset();
-            await ProjectStorageService.reset();
-            _hasAppliedSupabaseTheme = false;
-            _loadThemeSettingsFromPrefs();
-            return;
-          }
-          await PasswordRevisionService.ensureRevisionSeeded(user);
-        } catch (error, stackTrace) {
-          debugPrint('Password revision sync failed: $error');
-          debugPrint('$stackTrace');
-          await PasswordRevisionService.clearCachedRevision(userId: user.id);
-        }
+        debugPrint('✨ [Auth] Session active - starting background init (UI NOT blocked)');
 
-        try {
-          final hasKey = await EncryptionService.tryLoadKey();
-          if (hasKey) {
-            try {
-              await ChatStorageService.loadSavedChatsForSidebar();
-              // Start background sync after initial chat load
-              ChatSyncService.start();
-              // Load projects in background
-              unawaited(ProjectStorageService.loadProjects());
-            } catch (error, stackTrace) {
-              debugPrint('Chat loading failed: $error');
-              debugPrint('$stackTrace');
-              // Keep the key so a transient chat load issue does not force re-authentication.
-            }
-          } else {
-            // Key not available - user needs to re-enter password on next login
-            // DON'T clear cached chats - they might be recoverable after re-auth
-            // Only clear the key state, not the chat cache
-            debugPrint('Encryption key not available - user may need to re-authenticate');
-            ChatSyncService.stop();
-          }
-        } catch (error, stackTrace) {
-          debugPrint('Encryption key load failed: $error');
-          debugPrint('$stackTrace');
-          // DON'T clear cached chats on transient errors
-          // User might be able to recover by re-authenticating
-          ChatSyncService.stop();
-        }
-        _loadThemeSettingsFromSupabase();
+        // STEP 1: Start ALL background operations in parallel - DON'T BLOCK UI!
+        // Each operation runs independently and updates UI when ready
+        unawaited(_initUserSession(user));
+
+        // STEP 2: Load theme from Supabase in background
+        unawaited(_loadThemeSettingsFromSupabaseAsync());
+
+        // STEP 3: Other background tasks
+        unawaited(_checkPasswordRevision(user));
         unawaited(ModelPrefetchService.prefetch());
+
+        debugPrint('✨ [Auth] All background tasks launched - UI is FREE');
       } else {
         // Session is null - check if this is a real logout or just offline
         final isOnline = await NetworkStatusService.hasInternetConnection(
@@ -267,6 +231,74 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
     debugPrint('📱 [Lifecycle] App resumed, network status: ${isOnline ? "ONLINE" : "OFFLINE"}');
     // Resume sync after network status is updated
     ChatSyncService.resume();
+  }
+
+  /// Initialize user session - encryption key, chats, projects
+  /// Runs in background to not block UI
+  Future<void> _initUserSession(User user) async {
+    final stopwatch = Stopwatch()..start();
+    debugPrint('🚀 [Init] Starting user session init...');
+
+    try {
+      final hasKey = await EncryptionService.tryLoadKey();
+      debugPrint('🔑 [Init] Encryption key loaded in ${stopwatch.elapsedMilliseconds}ms');
+
+      if (hasKey) {
+        // Load chats from cache - this notifies UI immediately when cache is loaded
+        unawaited(ChatStorageService.loadSavedChatsForSidebar().then((_) {
+          debugPrint('📦 [Init] Chats loaded in ${stopwatch.elapsedMilliseconds}ms');
+          // Start background sync AFTER cache is loaded
+          ChatSyncService.start();
+        }).catchError((error, stackTrace) {
+          debugPrint('Chat loading failed: $error');
+          debugPrint('$stackTrace');
+        }));
+
+        // Load projects in parallel
+        unawaited(ProjectStorageService.loadProjects());
+      } else {
+        debugPrint('Encryption key not available - user may need to re-authenticate');
+        ChatSyncService.stop();
+      }
+    } catch (error, stackTrace) {
+      debugPrint('Encryption key load failed: $error');
+      debugPrint('$stackTrace');
+      ChatSyncService.stop();
+    }
+  }
+
+  /// Load theme from Supabase in background - doesn't block UI
+  Future<void> _loadThemeSettingsFromSupabaseAsync() async {
+    try {
+      await _loadThemeSettingsFromSupabase();
+    } catch (e) {
+      debugPrint('Theme load from Supabase failed: $e');
+    }
+  }
+
+  /// Check password revision in background - force logout if password changed elsewhere
+  /// This runs async to not block the initial UI load
+  Future<void> _checkPasswordRevision(User user) async {
+    try {
+      final shouldForceLogout =
+          await PasswordRevisionService.hasRevisionMismatch(user);
+      if (shouldForceLogout) {
+        debugPrint('🔐 [Auth] Password revision mismatch - forcing logout');
+        await PasswordRevisionService.clearCachedRevision(userId: user.id);
+        await SupabaseService.auth.signOut();
+        await EncryptionService.clearKey();
+        await ChatStorageService.reset();
+        await ProjectStorageService.reset();
+        _hasAppliedSupabaseTheme = false;
+        _loadThemeSettingsFromPrefs();
+        return;
+      }
+      await PasswordRevisionService.ensureRevisionSeeded(user);
+    } catch (error, stackTrace) {
+      debugPrint('Password revision sync failed: $error');
+      debugPrint('$stackTrace');
+      await PasswordRevisionService.clearCachedRevision(userId: user.id);
+    }
   }
 
   // Performance: Cache SharedPreferences instance

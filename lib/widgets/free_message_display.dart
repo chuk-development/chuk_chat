@@ -1,8 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 
 final SupabaseClient _supabase = Supabase.instance.client;
+
+// Cache keys for free message display
+const String _kCachedFreeTotal = 'cached_free_msg_total';
+const String _kCachedFreeUsed = 'cached_free_msg_used';
 
 /// Data class holding free message quota information
 class FreeMessageQuota {
@@ -38,6 +45,9 @@ mixin _FreeMessageListenerMixin<T extends StatefulWidget> on State<T> {
     final String resolvedChannelName =
         channelName ?? 'free_message_updates_${identityHashCode(this)}';
 
+    // Load from cache first, then sync from remote
+    _loadFromCacheThenRemote();
+
     // Ensure previous channel is cleaned up before creating a new one
     _freeMessageChannel?.unsubscribe();
     _freeMessageChannel = _supabase.channel(resolvedChannelName)
@@ -55,13 +65,66 @@ mixin _FreeMessageListenerMixin<T extends StatefulWidget> on State<T> {
         },
       )
       ..subscribe();
+  }
 
-    refreshFreeMessages(reloadSilently: false);
+  /// Load from cache first for instant UI, then sync from remote in background
+  Future<void> _loadFromCacheThenRemote() async {
+    // Step 1: Load from cache immediately (fast, no network)
+    await _loadFromCache();
+
+    // Step 2: Sync from remote in BACKGROUND (don't block UI!)
+    unawaited(refreshFreeMessages(reloadSilently: true));
+  }
+
+  /// Load free messages from local cache for instant display
+  Future<void> _loadFromCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedTotal = prefs.getInt(_kCachedFreeTotal);
+      final cachedUsed = prefs.getInt(_kCachedFreeUsed);
+
+      // Only end loading if we have cached data - otherwise wait for remote
+      if (cachedTotal != null) {
+        if (!mounted) return;
+        final int total = cachedTotal;
+        final int used = cachedUsed ?? 0;
+        final int remaining = (total - used).clamp(0, total);
+
+        setState(() {
+          freeMessageQuota = FreeMessageQuota(
+            total: total,
+            used: used,
+            remaining: remaining,
+          );
+          freeMessageLoading = false;
+          _hasLoadedOnce = true;
+        });
+        debugPrint('📦 [FreeMsg] Loaded from cache: $remaining / $total');
+      } else {
+        // No cache - keep loading, remote will update soon
+        debugPrint('📦 [FreeMsg] No cache - waiting for remote');
+      }
+    } catch (e) {
+      debugPrint('⚠️ [FreeMsg] Cache load failed: $e');
+      // On error, keep loading - remote will handle it
+    }
+  }
+
+  /// Save free messages to cache for offline access
+  Future<void> _saveToCache(int total, int used) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_kCachedFreeTotal, total);
+      await prefs.setInt(_kCachedFreeUsed, used);
+    } catch (e) {
+      debugPrint('⚠️ [FreeMsg] Cache save failed: $e');
+    }
   }
 
   @protected
   Future<void> refreshFreeMessages({bool reloadSilently = false}) async {
-    if (!reloadSilently || !_hasLoadedOnce) {
+    // Only show loading spinner if this is a non-silent reload AND we haven't loaded once
+    if (!reloadSilently && !_hasLoadedOnce) {
       if (mounted) {
         setState(() {
           freeMessageLoading = true;
@@ -102,13 +165,17 @@ mixin _FreeMessageListenerMixin<T extends StatefulWidget> on State<T> {
         freeMessageLoading = false;
         _hasLoadedOnce = true;
       });
+
+      // Save to cache in background
+      unawaited(_saveToCache(total, used));
+      debugPrint('✅ [FreeMsg] Loaded from remote: $remaining / $total');
     } catch (error) {
       if (!mounted) return;
       setState(() {
         freeMessageLoading = false;
         _hasLoadedOnce = true;
       });
-      debugPrint('Error loading free messages: $error');
+      debugPrint('⚠️ [FreeMsg] Remote load failed (using cache): $error');
     }
   }
 

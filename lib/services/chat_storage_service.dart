@@ -458,7 +458,14 @@ class ChatStorageService {
     }
 
     // If we have encrypted titles, batch decrypt them
+    // BUT only if encryption key is already loaded - don't block waiting for it!
     if (encryptedTitles.isNotEmpty) {
+      if (!EncryptionService.hasKey) {
+        debugPrint('⏭️ [ChatStorage] Skipping title decryption - key not loaded yet');
+        // Keep using cached/fallback titles - decryption will happen on next sync
+        return results;
+      }
+
       try {
         final decryptedTitles = await EncryptionService.decryptBatchInBackground(encryptedTitles);
 
@@ -1223,34 +1230,33 @@ class ChatStorageService {
       return;
     }
 
-    // Prevent concurrent loads
+    // Prevent concurrent loads - return existing future if already loading
     if (_isLoading) {
       debugPrint('⏳ [ChatStorage] Sidebar load already in progress, waiting...');
       return _loadingCompleter!.future;
     }
-    _loadingCompleter = Completer<void>();
 
-    final stopwatch = Stopwatch()..start();
+    // Already loaded from cache - nothing to do
+    if (_cacheLoaded) {
+      debugPrint('✅ [ChatStorage] Cache already loaded, skipping');
+      return;
+    }
+
+    _loadingCompleter = Completer<void>();
 
     try {
       // Load from local cache FIRST (instant UI)
       // ChatSyncService will handle network sync after this completes
-      if (!_cacheLoaded) {
-        await _loadTitlesFromCache(user.id);
-        final cacheTime = stopwatch.elapsedMilliseconds;
-        debugPrint('📦 [ChatStorage] Loaded ${_chatsById.length} chats from cache (${cacheTime}ms)');
+      await _loadTitlesFromCache(user.id);
 
-        // Notify UI immediately WITHOUT debounce - critical for instant sidebar
-        _notifyChangesImmediate();
-        _cacheLoaded = true;
+      // Notify UI immediately WITHOUT debounce - critical for instant sidebar
+      _notifyChangesImmediate();
+      _cacheLoaded = true;
 
-        debugPrint('✅ [ChatStorage] Sidebar ready in ${cacheTime}ms (UI notified)');
-      }
+      debugPrint('✅ [ChatStorage] Sidebar ready (${_chatsById.length} chats, UI notified)');
 
       // Mark initial load complete - ChatSyncService can now start syncing
       _initialSyncComplete = true;
-
-      stopwatch.stop();
     } catch (e) {
       debugPrint('❌ [ChatStorage] Sidebar load failed: $e');
       rethrow;

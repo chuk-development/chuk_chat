@@ -240,31 +240,51 @@ class EncryptionService {
 
   static Future<bool> tryLoadKey() {
     return _runExclusive(() async {
-      final currentUser = SupabaseService.auth.currentUser;
-      if (currentUser == null) {
+      final user = SupabaseService.auth.currentUser;
+      if (user == null) {
         _cachedKey = null;
         _cachedUserId = null;
         return false;
       }
-      User user = currentUser;
-      try {
-        final response = await SupabaseService.auth.getUser();
-        user = response.user ?? user;
-      } catch (_) {
-        // Ignore refresh failures; fall back to cached metadata.
-      }
+      // NOTE: Don't call getUser() here - it's a network call that blocks for 5-7 seconds!
+      // Use currentUser which is already cached from the auth session.
 
       final userId = user.id;
       final keyKey = '$_storagePrefix$userId';
       final saltKey = '$_storageSaltPrefix$userId';
       final versionKey = '$_storageVersionPrefix$userId';
 
+      // Load key from secure storage (fast, local operation)
       final encoded = await _storage.read(key: keyKey);
       if (encoded == null) {
         _cachedKey = null;
         _cachedUserId = null;
         return false;
       }
+
+      // Load and cache the key immediately - don't wait for metadata sync
+      _cachedKey = SecretKey(
+        _decodeBase64OrThrow(
+          encoded,
+          'Stored encryption key is corrupted; please sign in again.',
+        ),
+      );
+      _cachedUserId = user.id;
+
+      // Sync metadata in BACKGROUND - don't block key loading
+      unawaited(_syncMetadataInBackground(user, saltKey, versionKey));
+
+      return true;
+    });
+  }
+
+  /// Sync encryption metadata to Supabase in background (non-blocking)
+  static Future<void> _syncMetadataInBackground(
+    User user,
+    String saltKey,
+    String versionKey,
+  ) async {
+    try {
       final saltBase64 = await _storage.read(key: saltKey);
       final remoteSaltBase64 = user.userMetadata?[_metadataSaltKey] as String?;
       final remoteVersion = user.userMetadata?[_metadataVersionKey] as String?;
@@ -284,30 +304,17 @@ class EncryptionService {
       }
 
       if (metadataUpdates.isNotEmpty) {
-        try {
-          final updated = await _updateUserMetadata(user, metadataUpdates);
-          if (updated != null) {
-            user = updated;
-          }
-        } catch (_) {
-          // Ignore metadata sync failures during background load.
-        }
+        await _updateUserMetadata(user, metadataUpdates);
       }
 
       final version = await _storage.read(key: versionKey);
       if (version == null) {
         await _storage.write(key: versionKey, value: _payloadVersion);
       }
-
-      _cachedKey = SecretKey(
-        _decodeBase64OrThrow(
-          encoded,
-          'Stored encryption key is corrupted; please sign in again.',
-        ),
-      );
-      _cachedUserId = user.id;
-      return true;
-    });
+    } catch (e) {
+      // Ignore metadata sync failures - not critical for key loading
+      debugPrint('⚠️ [Encryption] Background metadata sync failed: $e');
+    }
   }
 
   static Future<void> rotateKeyForPasswordChange({

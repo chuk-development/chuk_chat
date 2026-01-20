@@ -8,11 +8,15 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 
 final SupabaseClient _supabase = Supabase.instance.client;
 
-// Cache keys for offline credit display
+// Cache keys for offline credit display (BalanceBadge)
 const String _kCachedCredits = 'cached_credits';
 const String _kCachedHasSubscription = 'cached_has_subscription';
 const String _kCachedFreeMessagesRemaining = 'cached_free_messages_remaining';
 const String _kCachedFreeMessagesTotal = 'cached_free_messages_total';
+
+// Cache keys for CreditListenerMixin (CreditDisplay/CreditBadge)
+const String _kCachedTotalCreditsAllocated = 'cached_total_credits_allocated';
+const String _kCachedRemainingCredits = 'cached_remaining_credits';
 
 class CreditBalances {
   const CreditBalances({
@@ -46,6 +50,9 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
     final String resolvedChannelName =
         channelName ?? 'credit_updates_${identityHashCode(this)}';
 
+    // Load from cache first, then sync from remote
+    _loadCreditsFromCacheThenRemote();
+
     // Ensure previous channel is cleaned up before creating a new one
     _creditChannel?.unsubscribe();
     _creditChannel = _supabase.channel(resolvedChannelName)
@@ -63,13 +70,66 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
         },
       )
       ..subscribe();
+  }
 
-    refreshCredits(reloadSilently: false);
+  /// Load from cache first for instant UI, then sync from remote in background
+  Future<void> _loadCreditsFromCacheThenRemote() async {
+    // Step 1: Load from cache immediately (fast, no network)
+    await _loadCreditsFromCache();
+
+    // Step 2: Sync from remote in BACKGROUND (don't block UI!)
+    unawaited(refreshCredits(reloadSilently: true));
+  }
+
+  /// Load credits from local cache for instant display
+  Future<void> _loadCreditsFromCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedTotal = prefs.getDouble(_kCachedTotalCreditsAllocated);
+      final cachedRemaining = prefs.getDouble(_kCachedRemainingCredits);
+
+      // Only end loading if we have cached data - otherwise wait for remote
+      if (cachedTotal != null) {
+        if (!mounted) return;
+        final double total = cachedTotal;
+        final double remaining = cachedRemaining ?? 0.0;
+        final double used = total - remaining;
+
+        setState(() {
+          creditBalances = CreditBalances(
+            totalCredits: total,
+            usedCredits: used.clamp(0.0, total),
+            remainingCredits: remaining,
+          );
+          creditLoading = false;
+          _hasLoadedOnce = true;
+        });
+        debugPrint('📦 [CreditMixin] Loaded from cache: €$remaining / €$total');
+      } else {
+        // No cache - keep loading, remote will update soon
+        debugPrint('📦 [CreditMixin] No cache - waiting for remote');
+      }
+    } catch (e) {
+      debugPrint('⚠️ [CreditMixin] Cache load failed: $e');
+      // On error, keep loading - remote will handle it
+    }
+  }
+
+  /// Save credits to cache for offline access
+  Future<void> _saveCreditsToCache(double total, double remaining) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble(_kCachedTotalCreditsAllocated, total);
+      await prefs.setDouble(_kCachedRemainingCredits, remaining);
+    } catch (e) {
+      debugPrint('⚠️ [CreditMixin] Cache save failed: $e');
+    }
   }
 
   @protected
   Future<void> refreshCredits({bool reloadSilently = false}) async {
-    if (!reloadSilently || !_hasLoadedOnce) {
+    // Only show loading spinner if this is a non-silent reload AND we haven't loaded once
+    if (!reloadSilently && !_hasLoadedOnce) {
       if (mounted) {
         setState(() {
           creditLoading = true;
@@ -122,13 +182,17 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
         creditLoading = false;
         _hasLoadedOnce = true;
       });
+
+      // Save to cache in background
+      unawaited(_saveCreditsToCache(totalCredits, remainingCredits));
+      debugPrint('✅ [CreditMixin] Loaded from remote: €$remainingCredits / €$totalCredits');
     } catch (error) {
       if (!mounted) return;
       setState(() {
         creditLoading = false;
         _hasLoadedOnce = true;
       });
-      debugPrint('Error loading credits: $error');
+      debugPrint('⚠️ [CreditMixin] Remote load failed (using cache): $error');
     }
   }
 
@@ -429,24 +493,22 @@ class _BalanceBadgeState extends State<BalanceBadge> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final cachedCredits = prefs.getDouble(_kCachedCredits);
-      final cachedHasSub = prefs.getBool(_kCachedHasSubscription);
-      final cachedFreeRemaining = prefs.getInt(_kCachedFreeMessagesRemaining);
-      final cachedFreeTotal = prefs.getInt(_kCachedFreeMessagesTotal);
 
-      if (cachedCredits != null || cachedFreeRemaining != null) {
+      // Only end loading if we have cached credits - otherwise wait for remote
+      if (cachedCredits != null) {
         if (!mounted) return;
         setState(() {
-          _credits = cachedCredits ?? 0.0;
-          // Default to paid user if no cache - server will correct if free
-          _hasSubscription = cachedHasSub ?? true;
-          _freeMessagesRemaining = cachedFreeRemaining ?? 0;
-          _freeMessagesTotal = cachedFreeTotal ?? 10;
+          _credits = cachedCredits;
           _loading = false;
         });
-        debugPrint('📦 [Credits] Loaded from cache: €$_credits, sub=$_hasSubscription');
+        debugPrint('📦 [BalanceBadge] Loaded from cache: €$_credits');
+      } else {
+        // No cache - keep loading, remote will update soon
+        debugPrint('📦 [BalanceBadge] No cache - waiting for remote');
       }
     } catch (e) {
-      debugPrint('⚠️ [Credits] Cache load failed: $e');
+      debugPrint('⚠️ [BalanceBadge] Cache load failed: $e');
+      // On error, keep loading - remote will handle it
     }
   }
 
@@ -537,54 +599,22 @@ class _BalanceBadgeState extends State<BalanceBadge> {
 
       return Padding(
         padding: resolvedPadding,
-        child: Text('--', style: placeholderStyle),
+        child: Text('€--', style: placeholderStyle),
       );
     }
 
-    // Subscribed user with credits > 0.01: show credits
-    if (_hasSubscription || _credits >= 0.01) {
-      final String formatted = '€${_credits.toStringAsFixed(2)}';
-      return Tooltip(
-        message: 'Remaining credits: $formatted',
-        waitDuration: const Duration(milliseconds: 500),
-        child: Container(
-          padding: resolvedPadding,
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(formatted, style: resolvedTextStyle),
-        ),
-      );
-    }
-
-    // Non-subscribed user: show free messages
-    final Color badgeColor;
-    if (_freeMessagesRemaining == 0) {
-      badgeColor = Colors.red;
-    } else if (_freeMessagesRemaining <= 3) {
-      badgeColor = Colors.orange;
-    } else {
-      badgeColor = Theme.of(context).colorScheme.primary;
-    }
-
-    final String freeFormatted = '$_freeMessagesRemaining/$_freeMessagesTotal free';
-
+    // ALWAYS show credits - never show free messages
+    final String formatted = '€${_credits.toStringAsFixed(2)}';
     return Tooltip(
-      message: _freeMessagesRemaining == 0
-          ? 'No free messages remaining. Subscribe to continue.'
-          : '$_freeMessagesRemaining of $_freeMessagesTotal free messages remaining',
+      message: 'Remaining credits: $formatted',
       waitDuration: const Duration(milliseconds: 500),
       child: Container(
         padding: resolvedPadding,
         decoration: BoxDecoration(
-          color: badgeColor.withValues(alpha: 0.12),
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Text(
-          freeFormatted,
-          style: resolvedTextStyle.copyWith(color: badgeColor),
-        ),
+        child: Text(formatted, style: resolvedTextStyle),
       ),
     );
   }
