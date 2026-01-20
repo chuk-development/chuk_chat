@@ -269,6 +269,15 @@ class ChatStorageService {
   /// This allows listeners to only rebuild affected items instead of everything.
   static final StreamController<String?> _changesController =
       StreamController<String?>.broadcast();
+
+  // Debounce for _notifyChanges to prevent rapid-fire UI rebuilds
+  static Timer? _notifyDebounceTimer;
+  static final Set<String?> _pendingNotifications = <String?>{};
+  static const Duration _notifyDebounceDelay = Duration(milliseconds: 100);
+
+  /// Track if initial sync has completed (for ChatSyncService coordination)
+  static bool _initialSyncComplete = false;
+  static bool get initialSyncComplete => _initialSyncComplete;
   static int selectedChatIndex = -1;
 
   /// ID-BASED SELECTION: The currently selected chat ID.
@@ -475,7 +484,35 @@ class ChatStorageService {
 
   /// Notify listeners of a change. Pass chatId for single-chat updates,
   /// or null for bulk changes (e.g., initial load, sync).
+  /// Uses debouncing to prevent rapid-fire UI rebuilds during sync operations.
   static void _notifyChanges([String? chatId]) {
+    if (_changesController.isClosed) return;
+
+    // Collect pending notifications
+    _pendingNotifications.add(chatId);
+
+    // Cancel existing timer
+    _notifyDebounceTimer?.cancel();
+
+    // Start new debounce timer
+    _notifyDebounceTimer = Timer(_notifyDebounceDelay, () {
+      if (_changesController.isClosed) return;
+
+      // If any notification is null (bulk change), just emit null once
+      if (_pendingNotifications.contains(null)) {
+        _changesController.add(null);
+      } else {
+        // Emit individual chat IDs
+        for (final id in _pendingNotifications) {
+          _changesController.add(id);
+        }
+      }
+      _pendingNotifications.clear();
+    });
+  }
+
+  /// Notify immediately without debounce (for critical updates like cache load)
+  static void _notifyChangesImmediate([String? chatId]) {
     if (!_changesController.isClosed) {
       _changesController.add(chatId);
     }
@@ -1177,12 +1214,12 @@ class ChatStorageService {
 
   /// Load chats for sidebar - title-only for instant display.
   /// This is the main entry point for loading chats on startup.
-  /// Strategy: Load from cache FIRST (instant), then sync from network in background.
+  /// Strategy: Load from cache FIRST (instant), then let ChatSyncService handle network sync.
   static Future<void> loadSavedChatsForSidebar() async {
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
       _chatsById.clear();
-      _notifyChanges();
+      _notifyChangesImmediate();
       return;
     }
 
@@ -1196,21 +1233,22 @@ class ChatStorageService {
     final stopwatch = Stopwatch()..start();
 
     try {
-      // STEP 1: Load from local cache FIRST (instant UI)
+      // Load from local cache FIRST (instant UI)
+      // ChatSyncService will handle network sync after this completes
       if (!_cacheLoaded) {
         await _loadTitlesFromCache(user.id);
         final cacheTime = stopwatch.elapsedMilliseconds;
         debugPrint('📦 [ChatStorage] Loaded ${_chatsById.length} chats from cache (${cacheTime}ms)');
 
-        // Notify UI immediately - this is SYNCHRONOUS
-        _notifyChanges();
+        // Notify UI immediately WITHOUT debounce - critical for instant sidebar
+        _notifyChangesImmediate();
         _cacheLoaded = true;
 
         debugPrint('✅ [ChatStorage] Sidebar ready in ${cacheTime}ms (UI notified)');
       }
 
-      // STEP 2: Sync from network in background (don't block UI)
-      unawaited(_syncTitlesFromNetwork(user.id));
+      // Mark initial load complete - ChatSyncService can now start syncing
+      _initialSyncComplete = true;
 
       stopwatch.stop();
     } catch (e) {
@@ -1220,6 +1258,14 @@ class ChatStorageService {
       _loadingCompleter?.complete();
       _loadingCompleter = null;
     }
+  }
+
+  /// Sync titles from network (public API for ChatSyncService)
+  /// Call this after initial cache load to get updates from server.
+  static Future<void> syncTitlesFromNetwork() async {
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) return;
+    await _syncTitlesFromNetwork(user.id);
   }
 
   /// Load titles from local SharedPreferences cache (instant, no network, no decryption)
@@ -1269,8 +1315,10 @@ class ChatStorageService {
   }
 
   /// Sync titles from network and update cache (runs in background)
+  /// Only notifies UI if there are actual changes to prevent unnecessary rebuilds.
   static Future<void> _syncTitlesFromNetwork(String userId) async {
     final stopwatch = Stopwatch()..start();
+    bool hasChanges = false;
 
     try {
       debugPrint('🔄 [ChatStorage] Syncing titles from network...');
@@ -1284,8 +1332,11 @@ class ChatStorageService {
       debugPrint('📦 [ChatStorage] Fetched ${rows.length} chat metadata (${stopwatch.elapsedMilliseconds}ms)');
 
       if (rows.isEmpty) {
-        _chatsById.clear();
-        _notifyChanges();
+        if (_chatsById.isNotEmpty) {
+          _chatsById.clear();
+          hasChanges = true;
+        }
+        if (hasChanges) _notifyChanges();
         await _saveTitlesToCache(userId, []);
         return;
       }
@@ -1293,27 +1344,55 @@ class ChatStorageService {
       // Batch decrypt titles
       final chats = await _decryptTitlesBatch(rows);
 
+      // Track existing IDs for deletion detection
+      final oldIds = _chatsById.keys.toSet();
+      final newIds = <String>{};
+
       // Merge with existing fully-loaded chats
       for (final chat in chats) {
         if (chat == null) continue;
+        newIds.add(chat.id);
+
         final existing = _chatsById[chat.id];
-        if (existing != null && existing.isFullyLoaded) {
-          _chatsById[chat.id] = existing.copyWith(
-            isStarred: chat.isStarred,
-            title: chat.title,
-          );
-        } else {
+
+        // Check if this is a new chat or has changes
+        if (existing == null) {
           _chatsById[chat.id] = chat;
+          hasChanges = true;
+        } else if (existing.isStarred != chat.isStarred ||
+                   existing.title != chat.title) {
+          // Chat exists but has changes
+          if (existing.isFullyLoaded) {
+            _chatsById[chat.id] = existing.copyWith(
+              isStarred: chat.isStarred,
+              title: chat.title,
+            );
+          } else {
+            _chatsById[chat.id] = chat;
+          }
+          hasChanges = true;
         }
+        // If no changes, keep existing (preserves fully loaded state)
       }
 
       // Remove deleted chats
-      final serverIds = rows.map((r) => r['id'] as String).toSet();
-      _chatsById.removeWhere((id, _) => !serverIds.contains(id));
+      final deletedIds = oldIds.difference(newIds);
+      if (deletedIds.isNotEmpty) {
+        for (final id in deletedIds) {
+          _chatsById.remove(id);
+        }
+        hasChanges = true;
+      }
 
-      _notifyChanges();
+      // Only notify if something changed
+      if (hasChanges) {
+        debugPrint('🔔 [ChatStorage] Changes detected, notifying UI');
+        _notifyChanges();
+      } else {
+        debugPrint('✓ [ChatStorage] No changes detected, skipping UI notify');
+      }
 
-      // Save decrypted titles to cache for next startup
+      // Always update cache (timestamps might have changed)
       await _saveTitlesToCache(userId, _chatsById.values.toList());
 
       stopwatch.stop();
@@ -1468,8 +1547,11 @@ class ChatStorageService {
     _savingChats.clear();
     _pendingSaves.clear();
     _cacheLoaded = false;
+    _initialSyncComplete = false;
     _loadingCompleter = null;
-    _notifyChanges();
+    _notifyDebounceTimer?.cancel();
+    _pendingNotifications.clear();
+    _notifyChangesImmediate();
   }
 
   // ============================================================================

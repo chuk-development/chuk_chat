@@ -15,6 +15,7 @@ class ChatSyncService {
   static Timer? _syncTimer;
   static bool _isSyncing = false;
   static bool _isEnabled = false;
+  static bool _hasCompletedFirstSync = false;
 
   /// How often to poll for changes (in seconds)
   static const int _pollIntervalSeconds = 5;
@@ -44,6 +45,7 @@ class ChatSyncService {
     _isEnabled = false;
     _syncTimer?.cancel();
     _syncTimer = null;
+    _hasCompletedFirstSync = false; // Reset for next login
     debugPrint('⏹️ [ChatSync] Stopped sync service');
   }
 
@@ -80,6 +82,13 @@ class ChatSyncService {
     if (_isSyncing) return; // Prevent concurrent syncs
     if (!_isEnabled) return;
 
+    // Wait for initial cache load to complete before syncing
+    // This prevents race conditions and duplicate work on startup
+    if (!ChatStorageService.initialSyncComplete) {
+      debugPrint('⏳ [ChatSync] Waiting for initial cache load...');
+      return;
+    }
+
     // Skip sync if we know we're offline (use cached status to avoid delays)
     if (!NetworkStatusService.isOnline) {
       debugPrint('⏸️ [ChatSync] Skipping sync - offline');
@@ -92,6 +101,14 @@ class ChatSyncService {
     if (!EncryptionService.hasKey) return;
 
     _isSyncing = true;
+
+    // On first sync after startup, sync titles from network
+    // This ensures we have the latest titles without full payload fetch
+    if (!_hasCompletedFirstSync) {
+      debugPrint('🔄 [ChatSync] First sync - syncing titles from network...');
+      await ChatStorageService.syncTitlesFromNetwork();
+      _hasCompletedFirstSync = true;
+    }
 
     try {
       // Step 1: Fetch lightweight metadata from cloud (id + updated_at only)
