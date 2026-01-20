@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_sync_service.dart';
+import 'package:chuk_chat/services/project_storage_service.dart';
 import 'package:chuk_chat/platform_specific/root_wrapper.dart';
 import 'package:chuk_chat/utils/color_extensions.dart'; // Import for hex conversion
 import 'package:chuk_chat/utils/grain_overlay.dart'; // Film grain overlay
@@ -142,6 +143,7 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
             await SupabaseService.auth.signOut();
             await EncryptionService.clearKey();
             await ChatStorageService.reset();
+            await ProjectStorageService.reset();
             _hasAppliedSupabaseTheme = false;
             _loadThemeSettingsFromPrefs();
             return;
@@ -160,6 +162,8 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
               await ChatStorageService.loadSavedChatsForSidebar();
               // Start background sync after initial chat load
               ChatSyncService.start();
+              // Load projects in background
+              unawaited(ProjectStorageService.loadProjects());
             } catch (error, stackTrace) {
               debugPrint('Chat loading failed: $error');
               debugPrint('$stackTrace');
@@ -193,6 +197,7 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
           ChatSyncService.stop();
           await EncryptionService.clearKey();
           await ChatStorageService.reset();
+            await ProjectStorageService.reset();
           _hasAppliedSupabaseTheme = false;
           _loadThemeSettingsFromPrefs();
           await PasswordRevisionService.clearCachedRevision();

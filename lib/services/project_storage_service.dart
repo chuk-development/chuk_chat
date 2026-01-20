@@ -22,9 +22,15 @@ class ProjectStorageService {
   // SINGLE SOURCE OF TRUTH - all projects stored here
   static final Map<String, Project> _projectsById = <String, Project>{};
   static bool _cacheLoaded = false;
+  static bool _isLoadingFromNetwork = false;
 
   static final StreamController<void> _changesController =
       StreamController<void>.broadcast();
+
+  // Debounce for _notifyChanges to prevent rapid-fire UI rebuilds
+  static Timer? _notifyDebounceTimer;
+  static bool _hasPendingNotification = false;
+  static const Duration _notifyDebounceDelay = Duration(milliseconds: 100);
 
   // Currently selected project (for chat UI context)
   static String? selectedProjectId;
@@ -48,13 +54,35 @@ class ProjectStorageService {
 
   static Stream<void> get changes => _changesController.stream;
 
+  /// Notify listeners of changes with debouncing to prevent rapid-fire UI rebuilds.
+  /// Only saves to cache if explicitly requested and not during network loading.
   static void _notifyChanges({bool updateCache = true}) {
+    if (_changesController.isClosed) return;
+
+    _hasPendingNotification = true;
+
+    // Cancel existing timer
+    _notifyDebounceTimer?.cancel();
+
+    // Start new debounce timer
+    _notifyDebounceTimer = Timer(_notifyDebounceDelay, () {
+      if (_changesController.isClosed) return;
+      if (_hasPendingNotification) {
+        _changesController.add(null);
+        _hasPendingNotification = false;
+      }
+    });
+
+    // Auto-save to cache when data changes (but not during network load - that saves at the end)
+    if (updateCache && _cacheLoaded && !_isLoadingFromNetwork) {
+      unawaited(_saveToCache());
+    }
+  }
+
+  /// Notify immediately without debounce (for critical updates like initial cache load)
+  static void _notifyChangesImmediate() {
     if (!_changesController.isClosed) {
       _changesController.add(null);
-    }
-    // Auto-save to cache when data changes
-    if (updateCache && _cacheLoaded) {
-      _saveToCache();
     }
   }
 
@@ -76,7 +104,8 @@ class ProjectStorageService {
         }
         debugPrint('✅ [ProjectStorage] Loaded ${_projectsById.length} projects from cache');
         _cacheLoaded = true;
-        _notifyChanges();
+        // Use immediate notify for cache load - don't auto-save (we just loaded!)
+        _notifyChangesImmediate();
       }
     } catch (e) {
       debugPrint('⚠️ [ProjectStorage] Failed to load cache: $e');
@@ -108,9 +137,11 @@ class ProjectStorageService {
     if (user == null) {
       debugPrint('⚠️ [ProjectStorage] No user signed in, clearing projects');
       _projectsById.clear();
-      _notifyChanges();
+      _notifyChanges(updateCache: false);
       return;
     }
+
+    _isLoadingFromNetwork = true;
 
     try {
       // Load projects from server
@@ -169,13 +200,16 @@ class ProjectStorageService {
         _projectsById[projectId] = project;
       }
 
-      // Save to cache for next time
+      // Save to cache for next time (only once, not via _notifyChanges)
       await _saveToCache();
-      _notifyChanges();
+      // Notify without auto-save since we just saved
+      _notifyChanges(updateCache: false);
     } catch (e, st) {
       debugPrint('❌ [ProjectStorage] Failed to load projects: $e\n$st');
       // Don't rethrow if we have cached data
       if (_projectsById.isEmpty) rethrow;
+    } finally {
+      _isLoadingFromNetwork = false;
     }
   }
 
@@ -833,7 +867,11 @@ class ProjectStorageService {
   static Future<void> reset() async {
     _projectsById.clear();
     selectedProjectId = null;
-    _notifyChanges();
+    _cacheLoaded = false;
+    _isLoadingFromNetwork = false;
+    _notifyDebounceTimer?.cancel();
+    _hasPendingNotification = false;
+    _notifyChangesImmediate();
   }
 
   /// Load projects for sidebar (only if empty)

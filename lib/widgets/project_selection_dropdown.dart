@@ -29,12 +29,8 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
   @override
   void initState() {
     super.initState();
-    // Load from cache first (instant), then refresh from server
-    ProjectStorageService.loadFromCache().then((_) {
-      _loadProjects();
-      // Then load from server in background
-      ProjectStorageService.loadProjects().then((_) => _loadProjects());
-    });
+    // Use cached data immediately - don't trigger network on every chat switch
+    _loadProjects();
     _projectChangesSubscription = ProjectStorageService.changes.listen((_) {
       _loadProjects();
     });
