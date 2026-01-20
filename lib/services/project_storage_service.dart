@@ -24,6 +24,11 @@ class ProjectStorageService {
   static bool _cacheLoaded = false;
   static bool _isLoadingFromNetwork = false;
 
+  // Prevent concurrent loadProjects() calls
+  static Completer<void>? _loadingCompleter;
+  static bool get _isLoading =>
+      _loadingCompleter != null && !_loadingCompleter!.isCompleted;
+
   static final StreamController<void> _changesController =
       StreamController<void>.broadcast();
 
@@ -127,8 +132,9 @@ class ProjectStorageService {
   // ============ PROJECT CRUD OPERATIONS ============
 
   /// Load all projects from Supabase (updates cache)
+  /// Uses cache-first pattern: loads from cache immediately, then syncs from network.
   static Future<void> loadProjects() async {
-    // First load from cache for instant UI
+    // First load from cache for instant UI (if not already loaded)
     if (!_cacheLoaded) {
       await loadFromCache();
     }
@@ -141,6 +147,12 @@ class ProjectStorageService {
       return;
     }
 
+    // Prevent concurrent loads - wait for existing load to finish
+    if (_isLoading) {
+      debugPrint('⏳ [ProjectStorage] Load already in progress, waiting...');
+      return _loadingCompleter!.future;
+    }
+    _loadingCompleter = Completer<void>();
     _isLoadingFromNetwork = true;
 
     try {
@@ -152,6 +164,16 @@ class ProjectStorageService {
           .order('created_at', ascending: false);
 
       debugPrint('✅ [ProjectStorage] Loaded ${projectRows.length} projects from server');
+
+      // Skip network fetch work if no projects
+      if (projectRows.isEmpty) {
+        if (_projectsById.isNotEmpty) {
+          _projectsById.clear();
+          await _saveToCache();
+          _notifyChanges(updateCache: false);
+        }
+        return;
+      }
 
       // Load all project-chat relationships
       final projectChatRows = await SupabaseService.client
@@ -210,6 +232,8 @@ class ProjectStorageService {
       if (_projectsById.isEmpty) rethrow;
     } finally {
       _isLoadingFromNetwork = false;
+      _loadingCompleter?.complete();
+      _loadingCompleter = null;
     }
   }
 
@@ -869,6 +893,7 @@ class ProjectStorageService {
     selectedProjectId = null;
     _cacheLoaded = false;
     _isLoadingFromNetwork = false;
+    _loadingCompleter = null;
     _notifyDebounceTimer?.cancel();
     _hasPendingNotification = false;
     _notifyChangesImmediate();
