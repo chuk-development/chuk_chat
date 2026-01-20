@@ -175,14 +175,20 @@ class ProjectStorageService {
         return;
       }
 
-      // Load all project-chat relationships
-      final projectChatRows = await SupabaseService.client
+      // Load project-chat relationships AND project files in PARALLEL
+      final projectIds = projectRows.map((p) => p['id'] as String).toList();
+      final chatsFuture = SupabaseService.client
           .from('project_chats')
           .select('project_id, chat_id')
-          .inFilter(
-        'project_id',
-        projectRows.map((p) => p['id'] as String).toList(),
-      );
+          .inFilter('project_id', projectIds);
+      final filesFuture = SupabaseService.client
+          .from('project_files')
+          .select('*')
+          .inFilter('project_id', projectIds);
+
+      final results = await Future.wait<dynamic>([chatsFuture, filesFuture]);
+      final projectChatRows = results[0] as List<dynamic>;
+      final fileRows = results[1] as List<dynamic>;
 
       // Group chat IDs by project ID
       final Map<String, List<String>> chatIdsByProject = {};
@@ -191,15 +197,6 @@ class ProjectStorageService {
         final chatId = row['chat_id'] as String;
         chatIdsByProject.putIfAbsent(projectId, () => []).add(chatId);
       }
-
-      // Load all project files
-      final fileRows = await SupabaseService.client
-          .from('project_files')
-          .select('*')
-          .inFilter(
-        'project_id',
-        projectRows.map((p) => p['id'] as String).toList(),
-      );
 
       // Group files by project ID
       final Map<String, List<ProjectFile>> filesByProject = {};
