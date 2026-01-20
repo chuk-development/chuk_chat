@@ -471,8 +471,14 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
     if (user == null) return;
 
     try {
-      final settings = await const ThemeSettingsService().loadOrCreate();
-      final customizationPrefs = await const CustomizationPreferencesService().loadOrCreate();
+      // Load both settings in PARALLEL for faster startup
+      final results = await Future.wait([
+        const ThemeSettingsService().loadOrCreate(),
+        const CustomizationPreferencesService().loadOrCreate(),
+      ]);
+      final settings = results[0] as ThemeSettings;
+      final customizationPrefs = results[1] as CustomizationPreferences;
+
       if (!mounted) return;
       // Performance: Batch all updates into single setState
       setState(() {
@@ -492,7 +498,8 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
         _hasAppliedSupabaseTheme = true;
         _cachedThemeData = null; // Invalidate cache
       });
-      await _persistThemeSettingsToPrefs();
+      // Persist to prefs in background
+      unawaited(_persistThemeSettingsToPrefs());
     } catch (_) {
       // Ignore remote load errors; keep existing local settings.
     }

@@ -89,22 +89,23 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
         return;
       }
 
-      // Get total credits allocated from profiles table
-      final profileResponse = await _supabase
+      // Run both Supabase calls in PARALLEL for faster loading
+      final profileFuture = _supabase
           .from('profiles')
           .select('total_credits_allocated')
           .eq('id', user.id)
           .single();
-
-      final double totalCredits =
-          _parseToDouble(profileResponse['total_credits_allocated']) ?? 0.0;
-
-      // Get remaining credits via RPC function
-      final creditsRemainingResponse = await _supabase.rpc(
+      final creditsFuture = _supabase.rpc(
         'get_credits_remaining',
         params: {'p_user_id': user.id},
       );
 
+      final results = await Future.wait<dynamic>([profileFuture, creditsFuture]);
+      final profileResponse = results[0] as Map<String, dynamic>;
+      final creditsRemainingResponse = results[1];
+
+      final double totalCredits =
+          _parseToDouble(profileResponse['total_credits_allocated']) ?? 0.0;
       final double remainingCredits =
           _parseToDouble(creditsRemainingResponse) ?? 0.0;
 
@@ -474,18 +475,20 @@ class _BalanceBadgeState extends State<BalanceBadge> {
         return;
       }
 
-      // Fetch profile data including credits and free messages
-      final profile = await _supabase
+      // Run both Supabase calls in PARALLEL for faster loading
+      final profileFuture = _supabase
           .from('profiles')
           .select('total_credits_allocated, current_plan, free_messages_total, free_messages_used')
           .eq('id', user.id)
           .single();
-
-      // Get remaining credits via RPC
-      final creditsResponse = await _supabase.rpc(
+      final creditsFuture = _supabase.rpc(
         'get_credits_remaining',
         params: {'p_user_id': user.id},
       );
+
+      final results = await Future.wait<dynamic>([profileFuture, creditsFuture]);
+      final profile = results[0] as Map<String, dynamic>;
+      final creditsResponse = results[1];
 
       final double credits = (creditsResponse is num) ? creditsResponse.toDouble() : 0.0;
       final bool hasSubscription = profile['current_plan'] != null;
@@ -502,8 +505,8 @@ class _BalanceBadgeState extends State<BalanceBadge> {
         _loading = false;
       });
 
-      // Save to cache for offline access
-      await _saveToCache();
+      // Save to cache for offline access (in background)
+      unawaited(_saveToCache());
       debugPrint('✅ [Credits] Loaded from remote: €$_credits, $_freeMessagesRemaining/$_freeMessagesTotal free');
     } catch (e) {
       debugPrint('⚠️ [Credits] Remote load failed (using cache): $e');
