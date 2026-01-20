@@ -70,3 +70,8 @@ combined_code_for_llm.txt
 generate_llm_input.sh
 SECURITY_AND_DUPLICATION_REPORT.md
 android/.kotlin/
+
+# Environment files with secrets
+.env
+.env.local
+.env.*.local

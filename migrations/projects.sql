@@ -91,10 +91,18 @@ CREATE POLICY "Users can view project chats for their own projects"
 CREATE POLICY "Users can add chats to their own projects"
   ON project_chats FOR INSERT
   WITH CHECK (
+    -- User must own the project
     EXISTS (
       SELECT 1 FROM projects
       WHERE projects.id = project_chats.project_id
       AND projects.user_id = auth.uid()
+    )
+    AND
+    -- User must also own the chat being added
+    EXISTS (
+      SELECT 1 FROM encrypted_chats
+      WHERE encrypted_chats.id = project_chats.chat_id
+      AND encrypted_chats.user_id = auth.uid()
     )
   );
 

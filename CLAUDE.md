@@ -5,9 +5,16 @@
 ## Quick Start
 
 ```bash
-# Run
-flutter run -d linux
-flutter run -d android
+# Setup (first time only)
+cp .env.example .env
+# Edit .env with your Supabase credentials
+
+# Run (uses .env automatically)
+./run.sh linux
+./run.sh android
+
+# Or manually with dart-define
+flutter run -d linux --dart-define=SUPABASE_URL=... --dart-define=SUPABASE_ANON_KEY=...
 
 # Build release APK (fast, ~30s)
 flutter build apk --dart-define=PLATFORM_MOBILE=true --tree-shake-icons --target-platform android-arm64
