@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -412,13 +414,13 @@ class _BalanceBadgeState extends State<BalanceBadge> {
     NetworkStatusService.isOnlineListenable.addListener(_networkListener!);
   }
 
-  /// Load cached data first for instant display, then fetch from remote
+  /// Load cached data first for instant display, then fetch from remote in background
   Future<void> _loadFromCacheThenRemote() async {
-    // Step 1: Load from cache immediately
+    // Step 1: Load from cache immediately (fast, no network)
     await _loadFromCache();
 
-    // Step 2: Try to load from remote (will update cache on success)
-    await _loadBalance(silent: true);
+    // Step 2: Sync from remote in BACKGROUND (don't block UI!)
+    unawaited(_loadBalance(silent: true));
   }
 
   /// Load balance from local cache for offline display
