@@ -24,9 +24,14 @@ class SupabaseService {
   static Future<void> initialize() async {
     if (_initialized) return;
 
+    // Load .env file for desktop development (if no --dart-define values)
+    await SupabaseConfig.initialize();
+
     if (SupabaseConfig.isUsingPlaceholderValues) {
       throw StateError(
-        'Supabase credentials are not configured. Provide valid values via --dart-define or update lib/supabase_config.dart.',
+        'Supabase credentials are not configured.\n'
+        'For desktop: Create a .env file with SUPABASE_URL and SUPABASE_ANON_KEY\n'
+        'For mobile: Use --dart-define=SUPABASE_URL=... --dart-define=SUPABASE_ANON_KEY=...',
       );
     }
 

@@ -359,24 +359,34 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       _isLoadingChat = true;
     });
 
-    // Use microtask to allow UI to update with loading indicator first
-    Future.microtask(() {
-      if (!mounted) return;
+    // Use async function to handle lazy loading
+    _loadChatByIdAsync(chatId, sidebarWasExpanded);
+  }
 
-      if (chatId == null) {
-        // New chat - clear everything
-        debugPrint('│ 📂 [LOAD-CHAT-MOBILE] chatId is NULL - clearing for new chat');
-        _messages.clear();
-        _fileHandler.clearAll();
-        _activeChatId = null;
-      } else {
-        // Find chat by ID
-        final storedChat = ChatStorageService.savedChats.cast<StoredChat?>().firstWhere(
-          (chat) => chat?.id == chatId,
-          orElse: () => null,
-        );
+  Future<void> _loadChatByIdAsync(String? chatId, bool sidebarWasExpanded) async {
+    if (!mounted) return;
 
-        if (storedChat != null) {
+    if (chatId == null) {
+      // New chat - clear everything
+      debugPrint('│ 📂 [LOAD-CHAT-MOBILE] chatId is NULL - clearing for new chat');
+      _messages.clear();
+      _fileHandler.clearAll();
+      _activeChatId = null;
+    } else {
+      // Find chat by ID
+      StoredChat? storedChat = ChatStorageService.getChatById(chatId);
+
+      if (storedChat != null) {
+        // LAZY LOADING: Check if chat is fully loaded
+        if (!storedChat.isFullyLoaded) {
+          debugPrint('│ 📂 [LOAD-CHAT-MOBILE] Chat $chatId not fully loaded, fetching...');
+          storedChat = await ChatStorageService.loadFullChat(chatId);
+
+          // Check for stale load after async operation
+          if (!mounted) return;
+        }
+
+        if (storedChat != null && storedChat.isFullyLoaded) {
           debugPrint('│ 📂 [LOAD-CHAT-MOBILE] FOUND chat $chatId with ${storedChat.messages.length} messages');
           debugPrint('│ 📂 [LOAD-CHAT-MOBILE] Setting _activeChatId = ${storedChat.id}');
           _activeChatId = storedChat.id;
@@ -408,55 +418,61 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
               }),
             );
         } else {
-          // Chat not found - treat as new chat
-          debugPrint('│ ⚠️ [LOAD-CHAT-MOBILE] Chat $chatId NOT FOUND!');
-          debugPrint('│ ⚠️ [LOAD-CHAT-MOBILE] Available chats: ${ChatStorageService.savedChats.map((c) => c.id).take(5).toList()}...');
-          debugPrint('│ ⚠️ [LOAD-CHAT-MOBILE] Treating as new chat, setting _activeChatId = null');
+          // Chat load failed - treat as new chat
+          debugPrint('│ ⚠️ [LOAD-CHAT-MOBILE] Chat $chatId load failed!');
           _messages.clear();
           _fileHandler.clearAll();
           _activeChatId = null;
         }
+      } else {
+        // Chat not found - treat as new chat
+        debugPrint('│ ⚠️ [LOAD-CHAT-MOBILE] Chat $chatId NOT FOUND!');
+        debugPrint('│ ⚠️ [LOAD-CHAT-MOBILE] Available chats: ${ChatStorageService.savedChats.map((c) => c.id).take(5).toList()}...');
+        debugPrint('│ ⚠️ [LOAD-CHAT-MOBILE] Treating as new chat, setting _activeChatId = null');
+        _messages.clear();
+        _fileHandler.clearAll();
+        _activeChatId = null;
       }
+    }
 
-      // Check for background streaming
-      final bool chatIsStreaming =
-          _activeChatId != null &&
-          _streamingHandler.isChatStreaming(_activeChatId!);
+    // Check for background streaming
+    final bool chatIsStreaming =
+        _activeChatId != null &&
+        _streamingHandler.isChatStreaming(_activeChatId!);
 
-      if (chatIsStreaming && _activeChatId != null) {
-        final int? streamingMsgIndex = _streamingHandler.getStreamingMessageIndex(
+    if (chatIsStreaming && _activeChatId != null) {
+      final int? streamingMsgIndex = _streamingHandler.getStreamingMessageIndex(
+        _activeChatId!,
+      );
+      if (streamingMsgIndex != null &&
+          streamingMsgIndex >= 0 &&
+          streamingMsgIndex < _messages.length) {
+        final String? bufferedContent = _streamingHandler.getBufferedContent(
           _activeChatId!,
         );
-        if (streamingMsgIndex != null &&
-            streamingMsgIndex >= 0 &&
-            streamingMsgIndex < _messages.length) {
-          final String? bufferedContent = _streamingHandler.getBufferedContent(
-            _activeChatId!,
-          );
-          final String? bufferedReasoning = _streamingHandler
-              .getBufferedReasoning(_activeChatId!);
+        final String? bufferedReasoning = _streamingHandler
+            .getBufferedReasoning(_activeChatId!);
 
-          if (bufferedContent != null) {
-            final Map<String, String> updatedMessage = Map<String, String>.from(
-              _messages[streamingMsgIndex],
-            );
-            updatedMessage['text'] = bufferedContent;
-            updatedMessage['reasoning'] = bufferedReasoning ?? '';
-            _messages[streamingMsgIndex] = updatedMessage;
-          }
+        if (bufferedContent != null) {
+          final Map<String, String> updatedMessage = Map<String, String>.from(
+            _messages[streamingMsgIndex],
+          );
+          updatedMessage['text'] = bufferedContent;
+          updatedMessage['reasoning'] = bufferedReasoning ?? '';
+          _messages[streamingMsgIndex] = updatedMessage;
         }
       }
+    }
 
-      if (!mounted) return;
-      setState(() {
-        _isLoadingChat = false;
-      });
-      _scrollChatToBottom(force: true);
-      // Use captured sidebar state to prevent focus when sidebar was open
-      if (!sidebarWasExpanded && !widget.isSidebarExpanded) {
-        _textFieldFocusNode.requestFocus();
-      }
+    if (!mounted) return;
+    setState(() {
+      _isLoadingChat = false;
     });
+    _scrollChatToBottom(force: true);
+    // Use captured sidebar state to prevent focus when sidebar was open
+    if (!sidebarWasExpanded && !widget.isSidebarExpanded) {
+      _textFieldFocusNode.requestFocus();
+    }
   }
 
   void newChat() {

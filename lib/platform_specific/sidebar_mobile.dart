@@ -201,8 +201,11 @@ class _SidebarMobileState extends State<SidebarMobile> {
   }
 
   String _deriveChatTitle(StoredChat chat) {
-    // Use custom name (AI-generated title) if available, otherwise fall back to first message
-    return chat.customName ?? chat.previewText;
+    // Priority: customName > title (from encrypted_title) > previewText
+    // customName: User-renamed or AI-generated title stored in payload
+    // title: Fast-loaded decrypted title for sidebar
+    // previewText: Fallback derived from first user message
+    return chat.customName ?? chat.title ?? chat.previewText;
   }
 
   Future<void> _toggleStarred(StoredChat chat) async {

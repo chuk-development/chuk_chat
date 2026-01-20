@@ -358,7 +358,8 @@ class _BalanceBadgeState extends State<BalanceBadge> {
   double _credits = 0.0;
   int _freeMessagesRemaining = 0;
   int _freeMessagesTotal = 10;
-  bool _hasSubscription = false;
+  // Default to assuming paid user - server will correct if free user
+  bool _hasSubscription = true;
   RealtimeChannel? _channel;
   VoidCallback? _networkListener;
 
@@ -433,12 +434,13 @@ class _BalanceBadgeState extends State<BalanceBadge> {
         if (!mounted) return;
         setState(() {
           _credits = cachedCredits ?? 0.0;
-          _hasSubscription = cachedHasSub ?? false;
+          // Default to paid user if no cache - server will correct if free
+          _hasSubscription = cachedHasSub ?? true;
           _freeMessagesRemaining = cachedFreeRemaining ?? 0;
           _freeMessagesTotal = cachedFreeTotal ?? 10;
           _loading = false;
         });
-        debugPrint('📦 [Credits] Loaded from cache: €$_credits, $_freeMessagesRemaining/$_freeMessagesTotal free');
+        debugPrint('📦 [Credits] Loaded from cache: €$_credits, sub=$_hasSubscription');
       }
     } catch (e) {
       debugPrint('⚠️ [Credits] Cache load failed: $e');

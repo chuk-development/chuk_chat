@@ -67,7 +67,7 @@ class UserPreferencesService {
     ModelSelectionEventBus().notifyRefresh();
   }
 
-  /// Load the user's selected model from Supabase
+  /// Load the user's selected model - cache first, then sync from network
   static Future<String?> loadSelectedModel() async {
     final DateTime now = DateTime.now();
 
@@ -76,7 +76,7 @@ class UserPreferencesService {
       return await _selectedModelInFlight!;
     }
 
-    // Return cached value if still valid
+    // Return in-memory cache if valid
     if (_cachedSelectedModel != null &&
         _selectedModelFetchedAt != null &&
         now.difference(_selectedModelFetchedAt!) < _kSelectedModelTtl) {
@@ -85,49 +85,27 @@ class UserPreferencesService {
     }
 
     Future<String?> performFetch() async {
-      try {
-        final session = SupabaseService.auth.currentSession;
-        if (session == null) {
-          debugPrint('No authenticated session found');
-          return null;
-        }
-
-        final userId = session.user.id;
-
-        final response = await SupabaseService.client
-            .from('user_preferences')
-            .select('selected_model_id')
-            .eq('user_id', userId)
-            .maybeSingle();
-
-        if (response != null && response['selected_model_id'] != null) {
-          final modelId = response['selected_model_id'] as String;
-          debugPrint('Loaded model preference: $modelId');
-          await ModelCacheService.saveSelectedModel(userId, modelId);
-          _cachedSelectedModel = modelId;
-          _selectedModelFetchedAt = DateTime.now();
-          return modelId;
-        } else {
-          await ModelCacheService.saveSelectedModel(userId, '');
-          _cachedSelectedModel = null;
-          _selectedModelFetchedAt = DateTime.now();
-          debugPrint('No model preference found for user');
-          return null;
-        }
-      } catch (e) {
-        final userId = SupabaseService.auth.currentUser?.id;
-        if (userId != null) {
-          final cached = await ModelCacheService.loadSelectedModel(userId);
-          if (cached != null && cached.isNotEmpty) {
-            debugPrint('Loaded cached model preference: $cached');
-            _cachedSelectedModel = cached;
-            _selectedModelFetchedAt = DateTime.now();
-            return cached;
-          }
-        }
-        debugPrint('Error loading model preference: $e');
+      final userId = SupabaseService.auth.currentUser?.id;
+      if (userId == null) {
+        debugPrint('No authenticated user found');
         return null;
       }
+
+      // STEP 1: Load from local cache FIRST (instant)
+      final cachedModel = await ModelCacheService.loadSelectedModel(userId);
+      if (cachedModel != null && cachedModel.isNotEmpty) {
+        debugPrint('Loaded model preference from cache: $cachedModel');
+        _cachedSelectedModel = cachedModel;
+        _selectedModelFetchedAt = DateTime.now();
+
+        // STEP 2: Sync from network in background (don't block)
+        _syncModelFromNetwork(userId);
+
+        return cachedModel;
+      }
+
+      // No cache - must fetch from network
+      return await _fetchModelFromNetwork(userId);
     }
 
     try {
@@ -135,6 +113,60 @@ class UserPreferencesService {
       return await _selectedModelInFlight!;
     } finally {
       _selectedModelInFlight = null;
+    }
+  }
+
+  /// Fetch model preference from network (blocking)
+  static Future<String?> _fetchModelFromNetwork(String userId) async {
+    try {
+      final response = await SupabaseService.client
+          .from('user_preferences')
+          .select('selected_model_id')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      if (response != null && response['selected_model_id'] != null) {
+        final modelId = response['selected_model_id'] as String;
+        debugPrint('Loaded model preference from network: $modelId');
+        await ModelCacheService.saveSelectedModel(userId, modelId);
+        _cachedSelectedModel = modelId;
+        _selectedModelFetchedAt = DateTime.now();
+        return modelId;
+      } else {
+        await ModelCacheService.saveSelectedModel(userId, '');
+        _cachedSelectedModel = null;
+        _selectedModelFetchedAt = DateTime.now();
+        debugPrint('No model preference found for user');
+        return null;
+      }
+    } catch (e) {
+      debugPrint('Error fetching model preference: $e');
+      return null;
+    }
+  }
+
+  /// Sync model preference from network in background
+  static Future<void> _syncModelFromNetwork(String userId) async {
+    try {
+      final response = await SupabaseService.client
+          .from('user_preferences')
+          .select('selected_model_id')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      if (response != null && response['selected_model_id'] != null) {
+        final modelId = response['selected_model_id'] as String;
+        if (modelId != _cachedSelectedModel) {
+          debugPrint('Model preference updated from network: $modelId');
+          await ModelCacheService.saveSelectedModel(userId, modelId);
+          _cachedSelectedModel = modelId;
+          _selectedModelFetchedAt = DateTime.now();
+          // Notify via event bus
+          ModelSelectionEventBus().notifyModelSelected(modelId);
+        }
+      }
+    } catch (e) {
+      debugPrint('Background model sync failed: $e');
     }
   }
 

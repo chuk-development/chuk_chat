@@ -25,6 +25,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Pre-initialize SharedPreferences BEFORE runApp for instant cache access
+  // This is fast (~10ms) and critical for sidebar performance
+  await initChatStorageCache();
+
   // Initialize Supabase in background - don't block UI
   unawaited(_initializeServicesAsync());
 

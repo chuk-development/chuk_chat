@@ -57,9 +57,10 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
   @override
   void initState() {
     super.initState();
-    _filterRecentChats(); // Just filter - main.dart already loads chats
+    _filterRecentChats(); // Filter cached chats immediately for instant UI
+    unawaited(_loadChatsAndRefresh()); // Load fresh data in background (like mobile)
     _searchController.addListener(_onSearchChanged);
-    _loadProfile();
+    unawaited(_loadProfile()); // Don't block on profile load
     _chatUpdatesSub = ChatStorageService.changes.listen((changedChatId) {
       if (!mounted) return;
       if (changedChatId == null) {
@@ -180,8 +181,11 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
   }
 
   String _deriveChatTitle(StoredChat chat) {
-    // Use custom name (AI-generated title) if available, otherwise fall back to first message
-    return chat.customName ?? chat.previewText;
+    // Priority: customName > title (from encrypted_title) > previewText
+    // customName: User-renamed or AI-generated title stored in payload
+    // title: Fast-loaded decrypted title for sidebar
+    // previewText: Fallback derived from first user message
+    return chat.customName ?? chat.title ?? chat.previewText;
   }
 
   Future<void> _toggleStarred(StoredChat chat) async {

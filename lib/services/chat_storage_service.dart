@@ -9,9 +9,18 @@ import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 const int _kChatPayloadVersion = 2;
+
+/// Pre-cached SharedPreferences instance for fast access
+SharedPreferences? _sharedPrefsInstance;
+
+/// Pre-initialize SharedPreferences at app startup for instant cache access
+Future<void> initChatStorageCache() async {
+  _sharedPrefsInstance ??= await SharedPreferences.getInstance();
+}
 
 /// Result from background JSON deserialization
 /// Using Maps instead of ChatMessage to cross isolate boundary efficiently
@@ -103,28 +112,75 @@ class _ChatPayload {
 }
 
 /// Represents a stored chat with metadata.
+/// Supports lazy loading: initially only title is loaded, messages loaded on demand.
 class StoredChat {
   StoredChat({
     required this.id,
-    required List<ChatMessage> messages,
+    List<ChatMessage>? messages,
     required this.createdAt,
     required this.isStarred,
+    this.title,
     this.customName,
     this.updatedAt,
-  }) : messages = List<ChatMessage>.unmodifiable(messages);
+  }) : _messages = messages != null ? List<ChatMessage>.unmodifiable(messages) : null;
+
+  /// Create a lightweight chat for sidebar (title only, no messages)
+  factory StoredChat.forSidebar({
+    required String id,
+    required DateTime createdAt,
+    required bool isStarred,
+    String? title,
+    String? customName,
+    DateTime? updatedAt,
+  }) {
+    return StoredChat(
+      id: id,
+      messages: null, // No messages - lazy loaded
+      createdAt: createdAt,
+      isStarred: isStarred,
+      title: title,
+      customName: customName,
+      updatedAt: updatedAt,
+    );
+  }
 
   final String id;
-  final List<ChatMessage> messages;
+  final List<ChatMessage>? _messages;
   final DateTime createdAt;
   final DateTime? updatedAt;
   final bool isStarred;
   final String? customName;
 
+  /// Decrypted title for sidebar display (from encrypted_title column)
+  final String? title;
+
+  /// Get messages - throws if not fully loaded
+  List<ChatMessage> get messages {
+    if (_messages == null) {
+      throw StateError('Chat messages not loaded. Call ChatStorageService.loadFullChat first.');
+    }
+    return _messages;
+  }
+
+  /// Check if this chat has its messages loaded
+  bool get isFullyLoaded => _messages != null;
+
+  /// Get messages or null if not loaded (safe access)
+  List<ChatMessage>? get messagesOrNull => _messages;
+
   /// Get a preview of the chat (first user message or first message text)
+  /// Falls back to title if messages not loaded
   String get previewText {
-    if (messages.isEmpty) return '';
+    // If we have a title, use it (faster than iterating messages)
+    if (title != null && title!.isNotEmpty) {
+      return title!.length > 100 ? '${title!.substring(0, 100)}...' : title!;
+    }
+
+    // If messages not loaded, return empty
+    if (_messages == null || _messages.isEmpty) return '';
+
     // Try to find first user message
-    for (final msg in messages) {
+    for (final msg in _messages) {
       if (msg.role == 'user' && msg.text.isNotEmpty) {
         return msg.text.length > 100
             ? '${msg.text.substring(0, 100)}...'
@@ -132,7 +188,7 @@ class StoredChat {
       }
     }
     // Fall back to first message
-    final first = messages.first.text;
+    final first = _messages.first.text;
     return first.length > 100 ? '${first.substring(0, 100)}...' : first;
   }
 
@@ -140,6 +196,7 @@ class StoredChat {
     Map<String, dynamic> row,
     List<ChatMessage> messages, {
     String? customName,
+    String? title,
   }) {
     return StoredChat(
       id: row['id'] as String,
@@ -150,6 +207,23 @@ class StoredChat {
           : null,
       isStarred: (row['is_starred'] as bool?) ?? false,
       customName: customName,
+      title: title,
+    );
+  }
+
+  /// Create from row with title only (for sidebar)
+  factory StoredChat.fromRowTitleOnly(
+    Map<String, dynamic> row, {
+    String? title,
+  }) {
+    return StoredChat.forSidebar(
+      id: row['id'] as String,
+      createdAt: DateTime.parse(row['created_at'] as String),
+      updatedAt: row['updated_at'] != null
+          ? DateTime.parse(row['updated_at'] as String)
+          : null,
+      isStarred: (row['is_starred'] as bool?) ?? false,
+      title: title,
     );
   }
 
@@ -160,14 +234,29 @@ class StoredChat {
     DateTime? updatedAt,
     bool? isStarred,
     String? customName,
+    String? title,
   }) {
     return StoredChat(
       id: id ?? this.id,
-      messages: messages ?? this.messages,
+      messages: messages ?? _messages,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       isStarred: isStarred ?? this.isStarred,
       customName: customName ?? this.customName,
+      title: title ?? this.title,
+    );
+  }
+
+  /// Create a fully loaded version of this chat
+  StoredChat withMessages(List<ChatMessage> messages, {String? customName}) {
+    return StoredChat(
+      id: id,
+      messages: messages,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      isStarred: isStarred,
+      customName: customName ?? this.customName,
+      title: title,
     );
   }
 }
@@ -250,6 +339,136 @@ class ChatStorageService {
     return _chatsById[chatId];
   }
 
+  /// Extract title from messages (first user message, truncated)
+  static String _extractTitleFromMessages(List<ChatMessage> messages) {
+    if (messages.isEmpty) return '';
+    for (final msg in messages) {
+      if (msg.role == 'user' && msg.text.isNotEmpty) {
+        // Truncate to reasonable title length (100 chars)
+        return msg.text.length > 100
+            ? '${msg.text.substring(0, 100)}...'
+            : msg.text;
+      }
+    }
+    // Fall back to first message
+    final first = messages.first.text;
+    return first.length > 100 ? '${first.substring(0, 100)}...' : first;
+  }
+
+  /// Load a single chat's full content (messages) on demand.
+  /// Used for lazy loading when user clicks on a chat in sidebar.
+  /// Returns the fully loaded chat or null if not found/error.
+  static Future<StoredChat?> loadFullChat(String chatId) async {
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) return null;
+
+    debugPrint('📂 [ChatStorage] Loading full chat: $chatId');
+    final stopwatch = Stopwatch()..start();
+
+    try {
+      // Check if already fully loaded
+      final existing = _chatsById[chatId];
+      if (existing != null && existing.isFullyLoaded) {
+        debugPrint('✅ [ChatStorage] Chat already fully loaded (${stopwatch.elapsedMilliseconds}ms)');
+        return existing;
+      }
+
+      // Fetch full payload from Supabase
+      final rows = await SupabaseService.client
+          .from('encrypted_chats')
+          .select('id, encrypted_payload, created_at, is_starred, updated_at, encrypted_title')
+          .eq('id', chatId)
+          .eq('user_id', user.id)
+          .limit(1);
+
+      if (rows.isEmpty) {
+        debugPrint('⚠️ [ChatStorage] Chat not found: $chatId');
+        return null;
+      }
+
+      final row = rows.first;
+      final encryptedPayload = row['encrypted_payload'] as String?;
+      if (encryptedPayload == null || encryptedPayload.isEmpty) {
+        debugPrint('⚠️ [ChatStorage] Chat has no payload: $chatId');
+        return null;
+      }
+
+      // Decrypt payload in background isolate
+      final decrypted = await EncryptionService.decryptInBackground(encryptedPayload);
+      final chatPayload = await _deserializePayloadAsync(decrypted);
+
+      // Create fully loaded chat
+      final chat = StoredChat.fromRow(
+        row,
+        chatPayload.messages,
+        customName: chatPayload.customName,
+        title: existing?.title, // Preserve existing title
+      );
+
+      // Update in memory
+      _chatsById[chatId] = chat;
+      _notifyChanges(chatId);
+
+      stopwatch.stop();
+      debugPrint('✅ [ChatStorage] Full chat loaded in ${stopwatch.elapsedMilliseconds}ms (${chatPayload.messages.length} messages)');
+
+      return chat;
+    } on SecretBoxAuthenticationError {
+      debugPrint('🔐 [ChatStorage] Failed to decrypt chat: $chatId');
+      return null;
+    } catch (e) {
+      debugPrint('❌ [ChatStorage] Error loading full chat: $e');
+      return null;
+    }
+  }
+
+  /// Decrypt title-only batch for sidebar (much faster than full payloads)
+  static Future<List<StoredChat?>> _decryptTitlesBatch(
+    List<Map<String, dynamic>> rows,
+  ) async {
+    if (rows.isEmpty) return [];
+
+    // Extract encrypted titles
+    final encryptedTitles = <String>[];
+    final validIndices = <int>[];
+
+    for (int i = 0; i < rows.length; i++) {
+      final encryptedTitle = rows[i]['encrypted_title'] as String?;
+      if (encryptedTitle != null && encryptedTitle.isNotEmpty) {
+        encryptedTitles.add(encryptedTitle);
+        validIndices.add(i);
+      }
+    }
+
+    // Initialize results with title-only chats (no decryption needed for those without encrypted_title)
+    final results = List<StoredChat?>.filled(rows.length, null);
+
+    // Create title-only chats for ALL rows first (even those without encrypted_title)
+    for (int i = 0; i < rows.length; i++) {
+      results[i] = StoredChat.fromRowTitleOnly(rows[i]);
+    }
+
+    // If we have encrypted titles, batch decrypt them
+    if (encryptedTitles.isNotEmpty) {
+      try {
+        final decryptedTitles = await EncryptionService.decryptBatchInBackground(encryptedTitles);
+
+        for (int j = 0; j < validIndices.length; j++) {
+          final i = validIndices[j];
+          final decryptedTitle = decryptedTitles[j];
+          if (decryptedTitle != null) {
+            results[i] = StoredChat.fromRowTitleOnly(rows[i], title: decryptedTitle);
+          }
+        }
+      } catch (e) {
+        debugPrint('⚠️ [ChatStorage] Title batch decryption failed: $e');
+        // Continue with title-less chats
+      }
+    }
+
+    return results;
+  }
+
   /// Stream of chat changes. Emits the changed chat ID, or null for bulk changes.
   /// Listeners can use this to only rebuild affected items.
   static Stream<String?> get changes => _changesController.stream;
@@ -274,6 +493,8 @@ class ChatStorageService {
   }
 
   /// Decrypt a single chat row. Returns null if decryption fails.
+  /// Note: Use _decryptChatRowsBatch for multiple rows (better performance).
+  // ignore: unused_element
   static Future<StoredChat?> _decryptChatRow(Map<String, dynamic> row) async {
     final encryptedPayload = row['encrypted_payload'] as String?;
     if (encryptedPayload == null || encryptedPayload.isEmpty) return null;
@@ -551,6 +772,7 @@ class ChatStorageService {
     }
   }
 
+  // ignore: unused_element
   static _ChatPayload _deserializePayload(String json) {
     final Map<String, dynamic> map = jsonDecode(json) as Map<String, dynamic>;
     final int version = (map['v'] as int?) ?? 1;
@@ -718,6 +940,12 @@ class ChatStorageService {
 
     final encryptedPayload = await EncryptionService.encrypt(payload);
 
+    // Extract and encrypt title separately for fast sidebar loading
+    final title = _extractTitleFromMessages(messages);
+    final encryptedTitle = title.isNotEmpty
+        ? await EncryptionService.encrypt(title)
+        : null;
+
     // Extract image paths for cleanup on delete
     final imagePaths = _extractImagePaths(messages);
 
@@ -728,17 +956,18 @@ class ChatStorageService {
       'id': effectiveChatId,
       'user_id': user.id,
       'encrypted_payload': encryptedPayload,
+      if (encryptedTitle != null) 'encrypted_title': encryptedTitle,
       if (imagePaths.isNotEmpty) 'image_paths': imagePaths,
     };
 
     final inserted = await SupabaseService.client
         .from('encrypted_chats')
         .insert(insertData)
-        .select('id, encrypted_payload, created_at, is_starred, updated_at')
+        .select('id, encrypted_payload, created_at, is_starred, updated_at, encrypted_title')
         .single();
 
     final String finalId = inserted['id'] as String;
-    final chat = StoredChat.fromRow(inserted, messages);
+    final chat = StoredChat.fromRow(inserted, messages, title: title);
 
     // Add to our map - this is the ONLY place we add new chats
     _chatsById[finalId] = chat;
@@ -747,12 +976,9 @@ class ChatStorageService {
     unawaited(LocalChatCacheService.upsert(user.id, inserted));
 
     // Log with title for debugging
-    final firstUserMsg = messages.where((m) => m.role == 'user').firstOrNull;
-    final title = (firstUserMsg?.text.length ?? 0) > 50
-        ? '${firstUserMsg!.text.substring(0, 50)}...'
-        : (firstUserMsg?.text ?? 'No user message');
+    final displayTitle = title.length > 50 ? '${title.substring(0, 50)}...' : title;
     debugPrint('✅ [ChatStorage] Saved new chat: $finalId');
-    debugPrint('   📝 Title: "$title"');
+    debugPrint('   📝 Title: "$displayTitle"');
     debugPrint('   📊 Messages: ${messages.length} (${messages.where((m) => m.role == "user").length} user, ${messages.where((m) => m.role == "assistant").length} assistant)');
 
     return chat;
@@ -831,6 +1057,12 @@ class ChatStorageService {
       jsonEncode(payloadMap),
     );
 
+    // Extract and encrypt title separately for fast sidebar loading
+    final title = _extractTitleFromMessages(messages);
+    final encryptedTitle = title.isNotEmpty
+        ? await EncryptionService.encrypt(title)
+        : null;
+
     // Extract image paths for cleanup on delete
     final imagePaths = _extractImagePaths(messages);
 
@@ -838,11 +1070,12 @@ class ChatStorageService {
         .from('encrypted_chats')
         .update({
           'encrypted_payload': encryptedPayload,
+          if (encryptedTitle != null) 'encrypted_title': encryptedTitle,
           'image_paths': imagePaths.isNotEmpty ? imagePaths : null,
         })
         .eq('id', chatId)
         .eq('user_id', user.id)
-        .select('id, encrypted_payload, created_at, is_starred, updated_at');
+        .select('id, encrypted_payload, created_at, is_starred, updated_at, encrypted_title');
 
     if (updatedRows.isEmpty) {
       throw StateError('Chat not found or access denied.');
@@ -853,6 +1086,7 @@ class ChatStorageService {
       updatedRow,
       messages,
       customName: existingCustomName,
+      title: title,
     );
 
     // Update in our map - this is the ONLY place we update chats
@@ -862,12 +1096,9 @@ class ChatStorageService {
     unawaited(LocalChatCacheService.upsert(user.id, updatedRow));
 
     // Log with title for debugging
-    final firstUserMsg = messages.where((m) => m.role == 'user').firstOrNull;
-    final title = (firstUserMsg?.text.length ?? 0) > 50
-        ? '${firstUserMsg!.text.substring(0, 50)}...'
-        : (firstUserMsg?.text ?? 'No user message');
+    final displayTitle = title.length > 50 ? '${title.substring(0, 50)}...' : title;
     debugPrint('✅ [ChatStorage] Updated chat: $chatId');
-    debugPrint('   📝 Title: "$title"');
+    debugPrint('   📝 Title: "$displayTitle"');
     debugPrint('   📊 Messages: ${messages.length} (${messages.where((m) => m.role == "user").length} user, ${messages.where((m) => m.role == "assistant").length} assistant)');
 
     return chat;
@@ -944,24 +1175,170 @@ class ChatStorageService {
     debugPrint('🗑️ [ChatStorage] Deleted chat: $chatId');
   }
 
-  /// Load chats for sidebar - cache first, then sync handles remote updates.
+  /// Load chats for sidebar - title-only for instant display.
   /// This is the main entry point for loading chats on startup.
+  /// Strategy: Load from cache FIRST (instant), then sync from network in background.
   static Future<void> loadSavedChatsForSidebar() async {
-    // Step 1: Load from cache immediately (instant UI)
-    if (!_cacheLoaded) {
-      await loadFromCache();
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) {
+      _chatsById.clear();
+      _notifyChanges();
+      return;
     }
 
-    // Step 2: Always load from remote to ensure cache is complete
-    // This updates the cache with ALL chats, not just the ones we had cached
-    // Use unawaited so we don't block the UI - cache already provides instant display
-    if (_chatsById.isEmpty) {
-      // No cache - must wait for remote
-      await loadChats();
-    } else {
-      // Have cache - load remote in background to sync all chats
-      unawaited(loadChats());
+    // Prevent concurrent loads
+    if (_isLoading) {
+      debugPrint('⏳ [ChatStorage] Sidebar load already in progress, waiting...');
+      return _loadingCompleter!.future;
     }
+    _loadingCompleter = Completer<void>();
+
+    final stopwatch = Stopwatch()..start();
+
+    try {
+      // STEP 1: Load from local cache FIRST (instant UI)
+      if (!_cacheLoaded) {
+        await _loadTitlesFromCache(user.id);
+        final cacheTime = stopwatch.elapsedMilliseconds;
+        debugPrint('📦 [ChatStorage] Loaded ${_chatsById.length} chats from cache (${cacheTime}ms)');
+
+        // Notify UI immediately - this is SYNCHRONOUS
+        _notifyChanges();
+        _cacheLoaded = true;
+
+        debugPrint('✅ [ChatStorage] Sidebar ready in ${cacheTime}ms (UI notified)');
+      }
+
+      // STEP 2: Sync from network in background (don't block UI)
+      unawaited(_syncTitlesFromNetwork(user.id));
+
+      stopwatch.stop();
+    } catch (e) {
+      debugPrint('❌ [ChatStorage] Sidebar load failed: $e');
+      rethrow;
+    } finally {
+      _loadingCompleter?.complete();
+      _loadingCompleter = null;
+    }
+  }
+
+  /// Load titles from local SharedPreferences cache (instant, no network, no decryption)
+  static Future<void> _loadTitlesFromCache(String userId) async {
+    final stopwatch = Stopwatch()..start();
+
+    // Use pre-cached instance for speed, fallback to getInstance if not ready
+    final prefs = _sharedPrefsInstance ?? await SharedPreferences.getInstance();
+    final prefsTime = stopwatch.elapsedMilliseconds;
+
+    final cacheKey = 'chat_titles_v1_$userId';
+    final raw = prefs.getString(cacheKey);
+
+    if (raw == null || raw.isEmpty) {
+      debugPrint('📦 [ChatStorage] No title cache found (prefs: ${prefsTime}ms)');
+      return;
+    }
+
+    try {
+      final decoded = jsonDecode(raw) as List<dynamic>;
+      final parseTime = stopwatch.elapsedMilliseconds;
+
+      for (final item in decoded) {
+        if (item is! Map<String, dynamic>) continue;
+        final id = item['id'] as String?;
+        if (id == null) continue;
+
+        // Skip if we already have a fully loaded version
+        final existing = _chatsById[id];
+        if (existing != null && existing.isFullyLoaded) continue;
+
+        _chatsById[id] = StoredChat.forSidebar(
+          id: id,
+          createdAt: DateTime.tryParse(item['created_at'] as String? ?? '') ?? DateTime.now(),
+          isStarred: item['is_starred'] as bool? ?? false,
+          title: item['title'] as String?,
+          updatedAt: item['updated_at'] != null
+              ? DateTime.tryParse(item['updated_at'] as String)
+              : null,
+        );
+      }
+      stopwatch.stop();
+      debugPrint('📦 [ChatStorage] Cache: prefs=${prefsTime}ms, parse=${parseTime - prefsTime}ms, objects=${stopwatch.elapsedMilliseconds - parseTime}ms');
+    } catch (e) {
+      debugPrint('⚠️ [ChatStorage] Failed to parse title cache: $e');
+    }
+  }
+
+  /// Sync titles from network and update cache (runs in background)
+  static Future<void> _syncTitlesFromNetwork(String userId) async {
+    final stopwatch = Stopwatch()..start();
+
+    try {
+      debugPrint('🔄 [ChatStorage] Syncing titles from network...');
+
+      final rows = await SupabaseService.client
+          .from('encrypted_chats')
+          .select('id, encrypted_title, created_at, is_starred, updated_at')
+          .eq('user_id', userId)
+          .order('created_at', ascending: false);
+
+      debugPrint('📦 [ChatStorage] Fetched ${rows.length} chat metadata (${stopwatch.elapsedMilliseconds}ms)');
+
+      if (rows.isEmpty) {
+        _chatsById.clear();
+        _notifyChanges();
+        await _saveTitlesToCache(userId, []);
+        return;
+      }
+
+      // Batch decrypt titles
+      final chats = await _decryptTitlesBatch(rows);
+
+      // Merge with existing fully-loaded chats
+      for (final chat in chats) {
+        if (chat == null) continue;
+        final existing = _chatsById[chat.id];
+        if (existing != null && existing.isFullyLoaded) {
+          _chatsById[chat.id] = existing.copyWith(
+            isStarred: chat.isStarred,
+            title: chat.title,
+          );
+        } else {
+          _chatsById[chat.id] = chat;
+        }
+      }
+
+      // Remove deleted chats
+      final serverIds = rows.map((r) => r['id'] as String).toSet();
+      _chatsById.removeWhere((id, _) => !serverIds.contains(id));
+
+      _notifyChanges();
+
+      // Save decrypted titles to cache for next startup
+      await _saveTitlesToCache(userId, _chatsById.values.toList());
+
+      stopwatch.stop();
+      debugPrint('✅ [ChatStorage] Network sync complete (${stopwatch.elapsedMilliseconds}ms)');
+    } catch (e) {
+      debugPrint('⚠️ [ChatStorage] Network sync failed: $e');
+    }
+  }
+
+  /// Save decrypted titles to local cache for instant loading
+  static Future<void> _saveTitlesToCache(String userId, List<StoredChat> chats) async {
+    // Use pre-cached instance for speed
+    final prefs = _sharedPrefsInstance ?? await SharedPreferences.getInstance();
+    final cacheKey = 'chat_titles_v1_$userId';
+
+    final data = chats.map((chat) => {
+      'id': chat.id,
+      'title': chat.title ?? chat.previewText,
+      'created_at': chat.createdAt.toIso8601String(),
+      'is_starred': chat.isStarred,
+      if (chat.updatedAt != null) 'updated_at': chat.updatedAt!.toIso8601String(),
+    }).toList();
+
+    await prefs.setString(cacheKey, jsonEncode(data));
+    debugPrint('💾 [ChatStorage] Saved ${chats.length} titles to cache');
   }
 
   /// Set chat starred status
@@ -1101,6 +1478,7 @@ class ChatStorageService {
 
   /// Merge a synced chat from cloud into local state.
   /// Called by ChatSyncService when new or updated chats are detected.
+  /// IMPORTANT: Uses background decryption to avoid blocking UI.
   static Future<void> mergeSyncedChat(Map<String, dynamic> row) async {
     final chatId = row['id'] as String;
 
@@ -1120,8 +1498,10 @@ class ChatStorageService {
     if (encryptedPayload == null || encryptedPayload.isEmpty) return;
 
     try {
-      final decrypted = await EncryptionService.decrypt(encryptedPayload);
-      final chatPayload = _deserializePayload(decrypted);
+      // Use background decryption to avoid blocking UI thread
+      final decrypted = await EncryptionService.decryptInBackground(encryptedPayload);
+      // Use async deserialization to avoid blocking UI thread
+      final chatPayload = await _deserializePayloadAsync(decrypted);
       final chat = StoredChat.fromRow(
         row,
         chatPayload.messages,
@@ -1161,6 +1541,100 @@ class ChatStorageService {
       debugPrint('📄 [ChatStorage] Invalid format for synced chat: $chatId - $e');
     } catch (e) {
       debugPrint('❌ [ChatStorage] Error merging synced chat: $chatId - $e');
+    }
+  }
+
+  /// Batch merge multiple synced chats efficiently.
+  /// Uses batch decryption in a single isolate to avoid UI blocking.
+  static Future<void> mergeSyncedChatsBatch(List<Map<String, dynamic>> rows) async {
+    if (rows.isEmpty) return;
+
+    // Filter out chats we're currently saving or have pending saves
+    final validRows = rows.where((row) {
+      final chatId = row['id'] as String;
+      if (_savingChats.contains(chatId)) {
+        debugPrint('⏭️ [ChatStorage] Skipping sync for chat being saved: $chatId');
+        return false;
+      }
+      if (_pendingSaves.containsKey(chatId)) {
+        debugPrint('⏭️ [ChatStorage] Skipping sync for chat with pending save: $chatId');
+        return false;
+      }
+      final payload = row['encrypted_payload'] as String?;
+      return payload != null && payload.isNotEmpty;
+    }).toList();
+
+    if (validRows.isEmpty) return;
+
+    debugPrint('🔄 [ChatStorage] Batch merging ${validRows.length} chats...');
+
+    // Extract payloads for batch decryption
+    final payloads = validRows.map((r) => r['encrypted_payload'] as String).toList();
+
+    try {
+      // Batch decrypt all payloads in a single isolate (much faster!)
+      final decryptedList = await EncryptionService.decryptBatchInBackground(payloads);
+
+      final user = SupabaseService.auth.currentUser;
+      int addedCount = 0;
+      int updatedCount = 0;
+
+      for (int i = 0; i < validRows.length; i++) {
+        final row = validRows[i];
+        final decrypted = decryptedList[i];
+        if (decrypted == null) continue;
+
+        final chatId = row['id'] as String;
+
+        try {
+          final chatPayload = await _deserializePayloadAsync(decrypted);
+          final chat = StoredChat.fromRow(
+            row,
+            chatPayload.messages,
+            customName: chatPayload.customName,
+          );
+
+          final existingChat = _chatsById[chatId];
+
+          if (existingChat != null) {
+            final existingUpdatedAt = existingChat.updatedAt ?? existingChat.createdAt;
+            final syncedUpdatedAt = chat.updatedAt ?? chat.createdAt;
+
+            if (syncedUpdatedAt.isAfter(existingUpdatedAt)) {
+              _chatsById[chatId] = chat;
+              if (user != null) {
+                unawaited(LocalChatCacheService.upsert(user.id, row));
+              }
+              updatedCount++;
+            }
+          } else {
+            _chatsById[chatId] = chat;
+            if (user != null) {
+              unawaited(LocalChatCacheService.upsert(user.id, row));
+            }
+            addedCount++;
+          }
+
+          // Yield to UI thread periodically to prevent jank
+          if (i % 10 == 0) {
+            await Future.delayed(Duration.zero);
+          }
+        } catch (e) {
+          debugPrint('❌ [ChatStorage] Error processing synced chat $chatId: $e');
+        }
+      }
+
+      // Single notification after all chats processed
+      if (addedCount > 0 || updatedCount > 0) {
+        _notifyChanges();
+        debugPrint('✅ [ChatStorage] Batch sync complete: $addedCount added, $updatedCount updated');
+      }
+    } catch (e) {
+      debugPrint('❌ [ChatStorage] Batch merge failed: $e');
+      // Fall back to individual processing
+      for (final row in validRows) {
+        await mergeSyncedChat(row);
+      }
     }
   }
 

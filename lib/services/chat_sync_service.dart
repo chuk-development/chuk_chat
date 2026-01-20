@@ -147,10 +147,9 @@ class ChatSyncService {
 
         if (!_isEnabled) return; // Check if stopped during await
 
-        // Process fetched chats
-        for (final row in fullChats) {
-          await ChatStorageService.mergeSyncedChat(row);
-        }
+        // Process fetched chats using batch method for better performance
+        // This decrypts all chats in a single isolate, avoiding UI blocking
+        await ChatStorageService.mergeSyncedChatsBatch(fullChats.cast<Map<String, dynamic>>());
       }
 
       // Step 3: Remove deleted chats from local state

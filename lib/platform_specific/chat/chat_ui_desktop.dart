@@ -317,36 +317,46 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _isLoadingChat = true;
     });
 
-    // Use microtask to allow UI to update with loading indicator first
-    Future.microtask(() {
-      if (!mounted) return;
+    // Use async function to handle lazy loading
+    _loadChatByIdAsync(chatId);
+  }
 
-      // CRITICAL: Check for stale load - if user switched to another chat
-      // while waiting in the microtask queue, abort this load
-      if (_activeChatId != chatId) {
-        debugPrint('│ ⚠️ [LOAD-CHAT-DESKTOP] Stale load detected, aborting');
-        debugPrint('│ ⚠️ [LOAD-CHAT-DESKTOP] Expected: $chatId, Current: $_activeChatId');
-        // Note: Don't clear isLoadingChat here - the newer load operation owns it
-        return;
-      }
+  Future<void> _loadChatByIdAsync(String? chatId) async {
+    if (!mounted) return;
 
-      if (chatId == null) {
-        // New chat - clear everything
-        debugPrint('│ 📂 [LOAD-CHAT-DESKTOP] chatId is NULL - clearing for new chat');
-        _messages.clear();
-        _animCtrl.reset();
-        _attachedFiles.clear();
-        // _activeChatId already set to null synchronously above
-      } else {
-        // Find chat by ID
-        final storedChat = ChatStorageService.savedChats.cast<StoredChat?>().firstWhere(
-          (chat) => chat?.id == chatId,
-          orElse: () => null,
-        );
+    // CRITICAL: Check for stale load - if user switched to another chat
+    // while waiting, abort this load
+    if (_activeChatId != chatId) {
+      debugPrint('│ ⚠️ [LOAD-CHAT-DESKTOP] Stale load detected, aborting');
+      debugPrint('│ ⚠️ [LOAD-CHAT-DESKTOP] Expected: $chatId, Current: $_activeChatId');
+      return;
+    }
 
-        if (storedChat != null) {
+    if (chatId == null) {
+      // New chat - clear everything
+      debugPrint('│ 📂 [LOAD-CHAT-DESKTOP] chatId is NULL - clearing for new chat');
+      _messages.clear();
+      _animCtrl.reset();
+      _attachedFiles.clear();
+    } else {
+      // Find chat by ID
+      StoredChat? storedChat = ChatStorageService.getChatById(chatId);
+
+      if (storedChat != null) {
+        // LAZY LOADING: Check if chat is fully loaded
+        if (!storedChat.isFullyLoaded) {
+          debugPrint('│ 📂 [LOAD-CHAT-DESKTOP] Chat $chatId not fully loaded, fetching...');
+          storedChat = await ChatStorageService.loadFullChat(chatId);
+
+          // Check for stale load again after async operation
+          if (!mounted || _activeChatId != chatId) {
+            debugPrint('│ ⚠️ [LOAD-CHAT-DESKTOP] Stale after lazy load, aborting');
+            return;
+          }
+        }
+
+        if (storedChat != null && storedChat.isFullyLoaded) {
           debugPrint('│ 📂 [LOAD-CHAT-DESKTOP] FOUND chat $chatId with ${storedChat.messages.length} messages');
-          // _activeChatId already set synchronously above
 
           _messages
             ..clear()
@@ -378,45 +388,51 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           // Instant visibility
           _animCtrl.value = 1.0;
         } else {
-          // Chat not found - treat as new chat
-          debugPrint('│ ⚠️ [LOAD-CHAT-DESKTOP] Chat $chatId NOT FOUND!');
-          debugPrint('│ ⚠️ [LOAD-CHAT-DESKTOP] Available chats: ${ChatStorageService.savedChats.map((c) => c.id).take(5).toList()}...');
-          debugPrint('│ ⚠️ [LOAD-CHAT-DESKTOP] Treating as new chat, setting _activeChatId = null');
+          // Chat load failed - treat as new chat
+          debugPrint('│ ⚠️ [LOAD-CHAT-DESKTOP] Chat $chatId load failed!');
           _messages.clear();
           _animCtrl.reset();
           _attachedFiles.clear();
           _activeChatId = null;
         }
+      } else {
+        // Chat not found - treat as new chat
+        debugPrint('│ ⚠️ [LOAD-CHAT-DESKTOP] Chat $chatId NOT FOUND!');
+        debugPrint('│ ⚠️ [LOAD-CHAT-DESKTOP] Available chats: ${ChatStorageService.savedChats.map((c) => c.id).take(5).toList()}...');
+        debugPrint('│ ⚠️ [LOAD-CHAT-DESKTOP] Treating as new chat, setting _activeChatId = null');
+        _messages.clear();
+        _animCtrl.reset();
+        _attachedFiles.clear();
+        _activeChatId = null;
       }
+    }
 
-      if (!mounted) return;
+    if (!mounted) return;
 
+    // If this chat is streaming, restore buffered content from StreamingManager
+    if (_activeChatId != null && _streamingManager.isStreaming(_activeChatId!)) {
+      final bufferedContent = _streamingManager.getBufferedContent(_activeChatId!);
+      final bufferedReasoning = _streamingManager.getBufferedReasoning(_activeChatId!);
+      final streamingIndex = _streamingManager.getStreamingMessageIndex(_activeChatId!);
 
-      // If this chat is streaming, restore buffered content from StreamingManager
-      if (_activeChatId != null && _streamingManager.isStreaming(_activeChatId!)) {
-        final bufferedContent = _streamingManager.getBufferedContent(_activeChatId!);
-        final bufferedReasoning = _streamingManager.getBufferedReasoning(_activeChatId!);
-        final streamingIndex = _streamingManager.getStreamingMessageIndex(_activeChatId!);
-
-        if (streamingIndex != null && streamingIndex < _messages.length) {
-          _messages[streamingIndex]['text'] = bufferedContent ?? 'Thinking...';
-          _messages[streamingIndex]['reasoning'] = bufferedReasoning ?? '';
-        }
+      if (streamingIndex != null && streamingIndex < _messages.length) {
+        _messages[streamingIndex]['text'] = bufferedContent ?? 'Thinking...';
+        _messages[streamingIndex]['reasoning'] = bufferedReasoning ?? '';
       }
+    }
 
-      // CRITICAL: Clear global loading lock - chat is now fully loaded
-      ChatStorageService.isLoadingChat = false;
+    // CRITICAL: Clear global loading lock - chat is now fully loaded
+    ChatStorageService.isLoadingChat = false;
 
-      setState(() {
-        _isLoadingChat = false;
-        _isImageGenMode = false;
-        _isMicActive = false;
-        _isSending = _isStreaming; // Reset sending state based on current chat
-        _resetAudioLevels();
-      });
-      _scrollChatToBottom(animate: false, force: true);
-      Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+    setState(() {
+      _isLoadingChat = false;
+      _isImageGenMode = false;
+      _isMicActive = false;
+      _isSending = _isStreaming; // Reset sending state based on current chat
+      _resetAudioLevels();
     });
+    _scrollChatToBottom(animate: false, force: true);
+    Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
   }
 
   void newChat() {
