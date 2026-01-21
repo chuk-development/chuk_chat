@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 
@@ -88,7 +91,7 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
       final cachedTotal = prefs.getDouble(_kCachedTotalCreditsAllocated);
       final cachedRemaining = prefs.getDouble(_kCachedRemainingCredits);
 
-      // Only end loading if we have cached data - otherwise wait for remote
+      // Only show cached value if we have one - otherwise wait for server
       if (cachedTotal != null) {
         if (!mounted) return;
         final double total = cachedTotal;
@@ -106,12 +109,12 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
         });
         debugPrint('📦 [CreditMixin] Loaded from cache: €$remaining / €$total');
       } else {
-        // No cache - keep loading, remote will update soon
-        debugPrint('📦 [CreditMixin] No cache - waiting for remote');
+        // No cache - keep loading state, server will provide value
+        debugPrint('📦 [CreditMixin] No cache - waiting for server');
       }
     } catch (e) {
       debugPrint('⚠️ [CreditMixin] Cache load failed: $e');
-      // On error, keep loading - remote will handle it
+      // On error, keep loading - server will handle it
     }
   }
 
@@ -138,8 +141,8 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
     }
 
     try {
-      final user = _supabase.auth.currentUser;
-      if (user == null) {
+      final session = _supabase.auth.currentSession;
+      if (session == null) {
         if (!mounted) return;
         setState(() {
           creditBalances = const CreditBalances.empty();
@@ -149,28 +152,23 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
         return;
       }
 
-      // Run both Supabase calls in PARALLEL for faster loading
-      final profileFuture = _supabase
-          .from('profiles')
-          .select('total_credits_allocated')
-          .eq('id', user.id)
-          .single();
-      final creditsFuture = _supabase.rpc(
-        'get_credits_remaining',
-        params: {'p_user_id': user.id},
+      // Load credits from API server (not Supabase)
+      final response = await http.get(
+        Uri.parse('${ApiConfigService.apiBaseUrl}/user/status'),
+        headers: {'Authorization': 'Bearer ${session.accessToken}'},
       );
 
-      final results = await Future.wait<dynamic>([profileFuture, creditsFuture]);
-      final profileResponse = results[0] as Map<String, dynamic>;
-      final creditsRemainingResponse = results[1];
+      if (response.statusCode != 200) {
+        throw Exception('API returned ${response.statusCode}: ${response.body}');
+      }
 
-      final double totalCredits =
-          _parseToDouble(profileResponse['total_credits_allocated']) ?? 0.0;
-      final double remainingCredits =
-          _parseToDouble(creditsRemainingResponse) ?? 0.0;
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final double remainingCredits = (data['credits_remaining'] as num?)?.toDouble() ?? 0.0;
+      final bool hasSubscription = data['has_subscription'] == true;
 
-      // Calculate used credits
-      final double usedCredits = totalCredits - remainingCredits;
+      // If user has subscription, monthly budget is €16.00
+      final double totalCredits = hasSubscription ? 16.0 : 0.0;
+      final double usedCredits = (totalCredits - remainingCredits).clamp(0.0, totalCredits);
 
       if (!mounted) return;
       setState(() {
@@ -185,14 +183,14 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
 
       // Save to cache in background
       unawaited(_saveCreditsToCache(totalCredits, remainingCredits));
-      debugPrint('✅ [CreditMixin] Loaded from remote: €$remainingCredits / €$totalCredits');
+      debugPrint('✅ [CreditMixin] Loaded from API: €$remainingCredits / €$totalCredits');
     } catch (error) {
       if (!mounted) return;
       setState(() {
         creditLoading = false;
         _hasLoadedOnce = true;
       });
-      debugPrint('⚠️ [CreditMixin] Remote load failed (using cache): $error');
+      debugPrint('⚠️ [CreditMixin] API load failed (using cache): $error');
     }
   }
 
@@ -493,22 +491,28 @@ class _BalanceBadgeState extends State<BalanceBadge> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final cachedCredits = prefs.getDouble(_kCachedCredits);
+      final cachedHasSubscription = prefs.getBool(_kCachedHasSubscription);
+      final cachedFreeRemaining = prefs.getInt(_kCachedFreeMessagesRemaining);
+      final cachedFreeTotal = prefs.getInt(_kCachedFreeMessagesTotal);
 
-      // Only end loading if we have cached credits - otherwise wait for remote
+      // Only show cached value if we have one - otherwise wait for server
       if (cachedCredits != null) {
         if (!mounted) return;
         setState(() {
           _credits = cachedCredits;
+          _hasSubscription = cachedHasSubscription ?? true;
+          _freeMessagesRemaining = cachedFreeRemaining ?? 0;
+          _freeMessagesTotal = cachedFreeTotal ?? 10;
           _loading = false;
         });
         debugPrint('📦 [BalanceBadge] Loaded from cache: €$_credits');
       } else {
-        // No cache - keep loading, remote will update soon
-        debugPrint('📦 [BalanceBadge] No cache - waiting for remote');
+        // No cache - keep loading state, server will provide value
+        debugPrint('📦 [BalanceBadge] No cache - waiting for server');
       }
     } catch (e) {
       debugPrint('⚠️ [BalanceBadge] Cache load failed: $e');
-      // On error, keep loading - remote will handle it
+      // On error, keep loading - server will handle it
     }
   }
 
@@ -531,32 +535,27 @@ class _BalanceBadgeState extends State<BalanceBadge> {
     }
 
     try {
-      final user = _supabase.auth.currentUser;
-      if (user == null) {
+      final session = _supabase.auth.currentSession;
+      if (session == null) {
         if (mounted) setState(() => _loading = false);
         return;
       }
 
-      // Run both Supabase calls in PARALLEL for faster loading
-      final profileFuture = _supabase
-          .from('profiles')
-          .select('total_credits_allocated, current_plan, free_messages_total, free_messages_used')
-          .eq('id', user.id)
-          .single();
-      final creditsFuture = _supabase.rpc(
-        'get_credits_remaining',
-        params: {'p_user_id': user.id},
+      // Load credits from API server (not Supabase)
+      final response = await http.get(
+        Uri.parse('${ApiConfigService.apiBaseUrl}/user/status'),
+        headers: {'Authorization': 'Bearer ${session.accessToken}'},
       );
 
-      final results = await Future.wait<dynamic>([profileFuture, creditsFuture]);
-      final profile = results[0] as Map<String, dynamic>;
-      final creditsResponse = results[1];
+      if (response.statusCode != 200) {
+        throw Exception('API returned ${response.statusCode}: ${response.body}');
+      }
 
-      final double credits = (creditsResponse is num) ? creditsResponse.toDouble() : 0.0;
-      final bool hasSubscription = profile['current_plan'] != null;
-      final int freeTotal = (profile['free_messages_total'] as int?) ?? 10;
-      final int freeUsed = (profile['free_messages_used'] as int?) ?? 0;
-      final int freeRemaining = (freeTotal - freeUsed).clamp(0, freeTotal);
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final double credits = (data['credits_remaining'] as num?)?.toDouble() ?? 0.0;
+      final bool hasSubscription = data['has_subscription'] == true;
+      final int freeTotal = (data['free_messages_total'] as int?) ?? 10;
+      final int freeRemaining = (data['free_messages_remaining'] as int?) ?? 0;
 
       if (!mounted) return;
       setState(() {
@@ -569,9 +568,9 @@ class _BalanceBadgeState extends State<BalanceBadge> {
 
       // Save to cache for offline access (in background)
       unawaited(_saveToCache());
-      debugPrint('✅ [Credits] Loaded from remote: €$_credits, $_freeMessagesRemaining/$_freeMessagesTotal free');
+      debugPrint('✅ [BalanceBadge] Loaded from API: €$_credits, $_freeMessagesRemaining/$_freeMessagesTotal free');
     } catch (e) {
-      debugPrint('⚠️ [Credits] Remote load failed (using cache): $e');
+      debugPrint('⚠️ [BalanceBadge] API load failed (using cache): $e');
       if (mounted) setState(() => _loading = false);
       // Don't clear data on error - keep showing cached values
     }

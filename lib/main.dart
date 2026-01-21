@@ -163,7 +163,7 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
           await ChatStorageService.reset();
             await ProjectStorageService.reset();
           _hasAppliedSupabaseTheme = false;
-          _loadThemeSettingsFromPrefs();
+          await _loadThemeSettingsFromPrefs();
           await PasswordRevisionService.clearCachedRevision();
         } else {
           // We're offline - don't treat this as logout
@@ -180,15 +180,8 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
     // Note: Chats are loaded in onAuthStateChange when user is signed in
     await _loadThemeSettingsFromPrefs();
 
-    // Load theme from Supabase if logged in
-    try {
-      if (SupabaseService.auth.currentSession != null &&
-          !_hasAppliedSupabaseTheme) {
-        _loadThemeSettingsFromSupabase();
-      }
-    } catch (error) {
-      debugPrint('Error checking session for theme: $error');
-    }
+    // Note: Supabase theme loading is handled by _loadThemeSettingsFromSupabaseAsync()
+    // which is called in the auth listener when session is active (line 145)
   }
 
   @override

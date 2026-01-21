@@ -239,6 +239,11 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
   }
 
   void _handleChatSelected(String? chatId) {
+    // Add guard like desktop has - prevent rapid chat switching during load
+    if (ChatStorageService.isLoadingChat) {
+      debugPrint('🚫 [ROOT-MOBILE] BLOCKED - Chat is still loading');
+      return;
+    }
     debugPrint('');
     debugPrint('┌─────────────────────────────────────────────────────────────');
     debugPrint('│ 📥 [ROOT-MOBILE] _handleChatSelected called');

@@ -283,14 +283,16 @@ class ChatStorageService {
   /// ID-BASED SELECTION: The currently selected chat ID.
   /// null = new chat (no chat selected yet)
   /// This is the primary source of truth for which chat is active.
-  static String? _selectedChatId;
-  static String? get selectedChatId => _selectedChatId;
+  /// ValueNotifier for reactive selectedChatId updates
+  static final ValueNotifier<String?> selectedChatIdNotifier = ValueNotifier<String?>(null);
+
+  static String? get selectedChatId => selectedChatIdNotifier.value;
   static set selectedChatId(String? value) {
-    if (_selectedChatId != value) {
+    if (selectedChatIdNotifier.value != value) {
       debugPrint('');
       debugPrint('┌─────────────────────────────────────────────────────────────');
       debugPrint('│ 📍 [SELECTED-CHAT-ID] CHANGED');
-      debugPrint('│ 📍 [SELECTED-CHAT-ID] OLD: $_selectedChatId');
+      debugPrint('│ 📍 [SELECTED-CHAT-ID] OLD: ${selectedChatIdNotifier.value}');
       debugPrint('│ 📍 [SELECTED-CHAT-ID] NEW: $value');
       debugPrint('│ 📍 [SELECTED-CHAT-ID] Stack trace:');
       try {
@@ -300,8 +302,8 @@ class ChatStorageService {
         debugPrint('│    $lines');
       }
       debugPrint('└─────────────────────────────────────────────────────────────');
+      selectedChatIdNotifier.value = value;
     }
-    _selectedChatId = value;
   }
 
   /// GLOBAL LOCK: Prevents chat switching during message operations.
@@ -1314,7 +1316,10 @@ class ChatStorageService {
         );
       }
       stopwatch.stop();
-      debugPrint('📦 [ChatStorage] Cache: prefs=${prefsTime}ms, parse=${parseTime - prefsTime}ms, objects=${stopwatch.elapsedMilliseconds - parseTime}ms');
+      debugPrint('📦 [ChatStorage] Cache: prefs=${prefsTime}ms, parse=${parseTime - prefsTime}ms, objects=${stopwatch.elapsedMilliseconds - parseTime}ms, loaded=${_chatsById.length} chats');
+      // Debug: show sample of cached updatedAt values
+      final sample = _chatsById.values.take(3).map((c) => '${c.id.substring(0, 8)}: updatedAt=${c.updatedAt}').join(', ');
+      debugPrint('📦 [ChatStorage] Sample cache timestamps: $sample');
     } catch (e) {
       debugPrint('⚠️ [ChatStorage] Failed to parse title cache: $e');
     }
@@ -1322,6 +1327,7 @@ class ChatStorageService {
 
   /// Sync titles from network and update cache (runs in background)
   /// Only notifies UI if there are actual changes to prevent unnecessary rebuilds.
+  /// Optimized: Only decrypts titles that are new or changed (based on updated_at).
   static Future<void> _syncTitlesFromNetwork(String userId) async {
     final stopwatch = Stopwatch()..start();
     bool hasChanges = false;
@@ -1347,38 +1353,103 @@ class ChatStorageService {
         return;
       }
 
-      // Batch decrypt titles
-      final chats = await _decryptTitlesBatch(rows);
-
       // Track existing IDs for deletion detection
       final oldIds = _chatsById.keys.toSet();
       final newIds = <String>{};
 
-      // Merge with existing fully-loaded chats
-      for (final chat in chats) {
-        if (chat == null) continue;
-        newIds.add(chat.id);
+      // Split rows into: needs decryption vs can use cached title
+      final rowsNeedingDecryption = <Map<String, dynamic>>[];
+      final rowsWithCachedTitle = <Map<String, dynamic>>[];
 
+      for (final row in rows) {
+        final id = row['id'] as String?;
+        if (id == null) continue;
+        newIds.add(id);
+
+        final existing = _chatsById[id];
+        final rowUpdatedAt = row['updated_at'] != null
+            ? DateTime.tryParse(row['updated_at'] as String)
+            : null;
+
+        // Check if we need to decrypt this title
+        bool needsDecryption = false;
+        String? reason;
+        if (existing == null) {
+          // New chat - needs decryption
+          needsDecryption = true;
+          reason = 'new';
+        } else if (existing.title == null) {
+          // No cached title - needs decryption
+          needsDecryption = true;
+          reason = 'no_title';
+        } else if (rowUpdatedAt != null) {
+          // Server has updated_at - check if newer than cache
+          if (existing.updatedAt == null) {
+            // Cache has no timestamp but server does - use cache (title exists)
+            needsDecryption = false;
+          } else if (rowUpdatedAt.isAfter(existing.updatedAt!)) {
+            // Server is newer - needs decryption
+            needsDecryption = true;
+            reason = 'updated (server: $rowUpdatedAt, cache: ${existing.updatedAt})';
+          }
+        }
+        // If server has no updated_at and we have a cached title, use cache
+
+        if (needsDecryption) {
+          debugPrint('🔓 [ChatStorage] Decrypt needed for $id: $reason');
+          rowsNeedingDecryption.add(row);
+        } else {
+          rowsWithCachedTitle.add(row);
+        }
+      }
+
+      debugPrint('📦 [ChatStorage] ${rowsNeedingDecryption.length} need decryption, ${rowsWithCachedTitle.length} using cache');
+
+      // Only decrypt titles that need it
+      final decryptedChats = await _decryptTitlesBatch(rowsNeedingDecryption);
+
+      // Process decrypted chats
+      for (final chat in decryptedChats) {
+        if (chat == null) continue;
         final existing = _chatsById[chat.id];
 
-        // Check if this is a new chat or has changes
         if (existing == null) {
           _chatsById[chat.id] = chat;
           hasChanges = true;
         } else if (existing.isStarred != chat.isStarred ||
                    existing.title != chat.title) {
-          // Chat exists but has changes
           if (existing.isFullyLoaded) {
             _chatsById[chat.id] = existing.copyWith(
               isStarred: chat.isStarred,
               title: chat.title,
+              updatedAt: chat.updatedAt,
             );
           } else {
             _chatsById[chat.id] = chat;
           }
           hasChanges = true;
+        } else {
+          // Title and isStarred unchanged, but we decrypted because updatedAt was newer
+          // MUST save new updatedAt to cache so we don't re-decrypt next time!
+          if (existing.isFullyLoaded) {
+            _chatsById[chat.id] = existing.copyWith(updatedAt: chat.updatedAt);
+          } else {
+            _chatsById[chat.id] = chat;
+          }
+          debugPrint('📝 [ChatStorage] Updated timestamp only for ${chat.id.substring(0, 8)}');
         }
-        // If no changes, keep existing (preserves fully loaded state)
+      }
+
+      // Process cached chats (just update is_starred if changed)
+      for (final row in rowsWithCachedTitle) {
+        final id = row['id'] as String;
+        final isStarred = row['is_starred'] as bool? ?? false;
+        final existing = _chatsById[id];
+
+        if (existing != null && existing.isStarred != isStarred) {
+          _chatsById[id] = existing.copyWith(isStarred: isStarred);
+          hasChanges = true;
+        }
       }
 
       // Remove deleted chats
@@ -1423,7 +1494,9 @@ class ChatStorageService {
     }).toList();
 
     await prefs.setString(cacheKey, jsonEncode(data));
-    debugPrint('💾 [ChatStorage] Saved ${chats.length} titles to cache');
+    // Debug: check how many have updatedAt
+    final withTimestamp = chats.where((c) => c.updatedAt != null).length;
+    debugPrint('💾 [ChatStorage] Saved ${chats.length} titles to cache ($withTimestamp with updatedAt)');
   }
 
   /// Set chat starred status
@@ -1461,33 +1534,55 @@ class ChatStorageService {
       throw StateError('User must be signed in to rename chats.');
     }
 
-    final chat = _chatsById[chatId];
+    var chat = _chatsById[chatId];
     if (chat == null) {
       throw StateError('Chat not found.');
     }
 
-    final updatedChat = chat.copyWith(customName: newName);
+    // Load full chat if not already loaded (need messages for re-encryption)
+    if (!chat.isFullyLoaded) {
+      await loadFullChat(chatId);
+      chat = _chatsById[chatId];
+      if (chat == null || !chat.isFullyLoaded) {
+        throw StateError('Failed to load chat for renaming.');
+      }
+    }
+
+    final updatedChat = chat.copyWith(customName: newName, title: newName);
     final payload = jsonEncode({
       'v': _kChatPayloadVersion,
       'customName': newName,
       'messages': updatedChat.messages.map((m) => m.toJson()).toList(),
     });
 
+    // Encrypt BOTH payload AND title (title is used for fast sidebar loading)
     final encryptedPayload = await EncryptionService.encrypt(payload);
+    final encryptedTitle = await EncryptionService.encrypt(newName);
+
     final updatedRows = await SupabaseService.client
         .from('encrypted_chats')
-        .update({'encrypted_payload': encryptedPayload})
+        .update({
+          'encrypted_payload': encryptedPayload,
+          'encrypted_title': encryptedTitle,  // CRITICAL: Update title for sidebar!
+        })
         .eq('id', chatId)
         .eq('user_id', user.id)
-        .select('id, encrypted_payload, created_at, is_starred, updated_at');
+        .select('id, encrypted_payload, created_at, is_starred, updated_at, encrypted_title');
 
     if (updatedRows.isEmpty) {
       throw StateError('Chat was not found or access is denied.');
     }
 
+    // Update in-memory state with new title
     _chatsById[chatId] = updatedChat;
     _notifyChanges(chatId);
+
+    // Update local caches
     unawaited(LocalChatCacheService.upsert(user.id, updatedRows.first));
+
+    // Also update the title cache for sidebar persistence
+    await _saveTitlesToCache(user.id, _chatsById.values.toList());
+    debugPrint('✅ [ChatStorage] Renamed chat $chatId to "$newName"');
   }
 
   /// Re-encrypt all chats with stored chat data
@@ -1547,7 +1642,7 @@ class ChatStorageService {
   static Future<void> reset() async {
     _chatsById.clear();
     selectedChatIndex = -1;
-    selectedChatId = null;
+    selectedChatIdNotifier.value = null;
     isMessageOperationInProgress = false;
     activeMessageChatId = null;
     _savingChats.clear();

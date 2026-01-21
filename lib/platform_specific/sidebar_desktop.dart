@@ -58,7 +58,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
   void initState() {
     super.initState();
     _filterRecentChats(); // Filter cached chats immediately for instant UI
-    unawaited(_loadChatsAndRefresh()); // Load fresh data in background (like mobile)
+    // Chat loading handled by main.dart - we only listen to changes stream
     _searchController.addListener(_onSearchChanged);
     unawaited(_loadProfile()); // Don't block on profile load
     _chatUpdatesSub = ChatStorageService.changes.listen((changedChatId) {
@@ -132,7 +132,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
           chat,
         ).toLowerCase().contains(lowerQuery);
         if (titleMatches) return true;
-        return chat.messages.any(
+        return (chat.messagesOrNull ?? const []).any(
           (message) => message.text.toLowerCase().contains(lowerQuery),
         );
       }).toList();

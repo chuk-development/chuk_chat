@@ -65,8 +65,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
   @override
   void initState() {
     super.initState();
-    unawaited(_loadChatsAndRefresh());
-    _startAutoRefresh();
+    // Chat loading handled by main.dart and ChatSyncService
+    // unawaited(_loadChatsAndRefresh());
+    // _startAutoRefresh();
     _searchController.addListener(_onSearchChanged);
     unawaited(_loadProfile());
     _chatUpdatesSub = ChatStorageService.changes.listen((changedChatId) {
@@ -117,17 +118,19 @@ class _SidebarMobileState extends State<SidebarMobile> {
     });
   }
 
-  void _startAutoRefresh() {
-    _refreshTimer?.cancel();
-    _refreshTimer = Timer.periodic(
-      const Duration(seconds: 5),
-      (_) => _refreshChatsPeriodically(),
-    );
-  }
+  // Disabled: Chat sync handled by ChatSyncService instead of 5s polling
+  // void _startAutoRefresh() {
+  //   _refreshTimer?.cancel();
+  //   _refreshTimer = Timer.periodic(
+  //     const Duration(seconds: 5),
+  //     (_) => _refreshChatsPeriodically(),
+  //   );
+  // }
 
-  Future<void> _refreshChatsPeriodically() async {
-    await _refreshChats();
-  }
+  // Disabled: Part of auto-refresh that was removed
+  // Future<void> _refreshChatsPeriodically() async {
+  //   await _refreshChats();
+  // }
 
   Future<void> _loadChatsAndRefresh() async {
     await _refreshChats();
@@ -404,7 +407,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
           (chat) => {
             'id': chat.id,
             'preview': _deriveChatTitle(chat).toLowerCase(),
-            'messages': chat.messages
+            'messages': (chat.messagesOrNull ?? const [])
                 .take(_searchMessageLimit)
                 .map((message) => message.text.toLowerCase())
                 .toList(growable: false),
@@ -452,7 +455,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
             chat,
           ).toLowerCase().contains(lowerQuery);
           if (titleMatches) return true;
-          return chat.messages
+          return (chat.messagesOrNull ?? const [])
               .take(_searchMessageLimit)
               .any(
                 (message) => message.text.toLowerCase().contains(lowerQuery),

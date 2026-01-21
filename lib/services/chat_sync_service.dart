@@ -61,8 +61,9 @@ class ChatSyncService {
     if (!_isEnabled) return;
     debugPrint('▶️ [ChatSync] Resuming sync service');
 
-    // Immediate sync on resume
-    _performSync();
+    // On resume, always sync titles from network to get latest
+    // This ensures we have fresh data after coming back from background
+    _syncTitlesOnResume();
 
     // Restart timer
     _syncTimer?.cancel();
@@ -70,6 +71,27 @@ class ChatSyncService {
       Duration(seconds: _pollIntervalSeconds),
       (_) => _performSync(),
     );
+  }
+
+  /// Sync titles when app resumes - fetches latest from network
+  static Future<void> _syncTitlesOnResume() async {
+    if (_isSyncing) return;
+    if (!ChatStorageService.initialSyncComplete) return;
+    if (!NetworkStatusService.isOnline) return;
+
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) return;
+    if (!EncryptionService.hasKey) return;
+
+    _isSyncing = true;
+    try {
+      debugPrint('🔄 [ChatSync] Resume sync - fetching latest titles...');
+      await ChatStorageService.syncTitlesFromNetwork();
+    } catch (e) {
+      debugPrint('⚠️ [ChatSync] Resume sync failed: $e');
+    } finally {
+      _isSyncing = false;
+    }
   }
 
   /// Force an immediate sync

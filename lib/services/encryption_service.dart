@@ -154,6 +154,35 @@ Future<List<String?>> _decryptBatchInBackground(_BatchDecryptionParams params) a
   return results;
 }
 
+/// Parameters for PBKDF2 key derivation in background isolate
+class _KeyDerivationParams {
+  final String password;
+  final List<int> salt;
+  final int iterations;
+  final int bits;
+
+  _KeyDerivationParams({
+    required this.password,
+    required this.salt,
+    required this.iterations,
+    required this.bits,
+  });
+}
+
+/// Top-level function for background PBKDF2 key derivation
+Future<List<int>> _deriveKeyInBackground(_KeyDerivationParams params) async {
+  final pbkdf2 = Pbkdf2(
+    macAlgorithm: Hmac.sha256(),
+    iterations: params.iterations,
+    bits: params.bits,
+  );
+  final newSecretKey = await pbkdf2.deriveKeyFromPassword(
+    password: params.password,
+    nonce: params.salt,
+  );
+  return newSecretKey.extractBytes();
+}
+
 class EncryptionService {
   const EncryptionService._();
 
@@ -182,8 +211,13 @@ class EncryptionService {
       final saltKey = '$_storageSaltPrefix$userId';
       final keyKey = '$_storagePrefix$userId';
       final versionKey = '$_storageVersionPrefix$userId';
-      final storedSaltBase64 = await _storage.read(key: saltKey);
-      final storedKeyBase64 = await _storage.read(key: keyKey);
+      // Parallelize storage reads for better performance
+      final storageResults = await Future.wait([
+        _storage.read(key: saltKey),
+        _storage.read(key: keyKey),
+      ]);
+      final storedSaltBase64 = storageResults[0];
+      final storedKeyBase64 = storageResults[1];
       if (storedKeyBase64 != null && storedSaltBase64 == null) {
         throw StateError(
           'Stored encryption key is missing its salt; please sign in again.',
@@ -330,8 +364,13 @@ class EncryptionService {
       final keyStorageKey = '$_storagePrefix$userId';
       final versionStorageKey = '$_storageVersionPrefix$userId';
 
-      final storedSaltBase64 = await _storage.read(key: saltStorageKey);
-      final storedKeyBase64 = await _storage.read(key: keyStorageKey);
+      // Parallelize storage reads for better performance
+      final readResults = await Future.wait([
+        _storage.read(key: saltStorageKey),
+        _storage.read(key: keyStorageKey),
+      ]);
+      final storedSaltBase64 = readResults[0];
+      final storedKeyBase64 = readResults[1];
 
       if (storedSaltBase64 == null || storedKeyBase64 == null) {
         throw StateError(
@@ -383,9 +422,12 @@ class EncryptionService {
       }
 
       try {
-        await _storage.write(key: keyStorageKey, value: newKeyBase64);
-        await _storage.write(key: saltStorageKey, value: newSaltBase64);
-        await _storage.write(key: versionStorageKey, value: _payloadVersion);
+        // Parallelize storage writes for better performance
+        await Future.wait([
+          _storage.write(key: keyStorageKey, value: newKeyBase64),
+          _storage.write(key: saltStorageKey, value: newSaltBase64),
+          _storage.write(key: versionStorageKey, value: _payloadVersion),
+        ]);
         final metadataUpdates = <String, dynamic>{
           _metadataSaltKey: newSaltBase64,
           _metadataVersionKey: _payloadVersion,
@@ -402,9 +444,12 @@ class EncryptionService {
         } catch (_) {
           // If rollback fails we cannot do much else; we still rethrow the original error.
         }
-        await _storage.write(key: keyStorageKey, value: storedKeyBase64);
-        await _storage.write(key: saltStorageKey, value: storedSaltBase64);
-        await _storage.write(key: versionStorageKey, value: _payloadVersion);
+        // Parallelize storage writes for better performance
+        await Future.wait([
+          _storage.write(key: keyStorageKey, value: storedKeyBase64),
+          _storage.write(key: saltStorageKey, value: storedSaltBase64),
+          _storage.write(key: versionStorageKey, value: _payloadVersion),
+        ]);
         _cachedKey = previousCachedKey ?? oldKey;
         _cachedUserId = previousCachedUserId ?? userId;
         rethrow;
@@ -553,16 +598,13 @@ class EncryptionService {
   }
 
   static Future<List<int>> _deriveKey(String password, List<int> salt) async {
-    final pbkdf2 = Pbkdf2(
-      macAlgorithm: Hmac.sha256(),
+    final params = _KeyDerivationParams(
+      password: password,
+      salt: salt,
       iterations: _kdfIterations,
       bits: 256,
     );
-    final newSecretKey = await pbkdf2.deriveKeyFromPassword(
-      password: password,
-      nonce: salt,
-    );
-    return newSecretKey.extractBytes();
+    return await compute(_deriveKeyInBackground, params);
   }
 
   static List<int> _randomNonce(int length) {
