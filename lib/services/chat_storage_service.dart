@@ -111,9 +111,18 @@ class ChatStorageService {
   static Future<void> renameChat(String chatId, String newName) async {
     // Ensure chat is fully loaded before renaming
     var chat = ChatStorageState.getChatById(chatId);
-    if (chat != null && !chat.isFullyLoaded) {
+
+    // If chat not in local state or not fully loaded, load it from database
+    if (chat == null || !chat.isFullyLoaded) {
       await ChatStorageCrud.loadFullChat(chatId);
+      chat = ChatStorageState.getChatById(chatId);
     }
+
+    // If still not found after loading, the chat doesn't exist
+    if (chat == null) {
+      throw StateError('Chat not found: $chatId');
+    }
+
     await ChatStorageMutations.renameChat(chatId, newName);
   }
 
