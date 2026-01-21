@@ -1573,16 +1573,22 @@ class ChatStorageService {
       throw StateError('Chat was not found or access is denied.');
     }
 
-    // Update in-memory state with new title
-    _chatsById[chatId] = updatedChat;
+    // Get the new updated_at from Supabase response
+    final updatedRow = updatedRows.first;
+    final newUpdatedAt = updatedRow['updated_at'] != null
+        ? DateTime.parse(updatedRow['updated_at'] as String)
+        : DateTime.now();
+
+    // Update in-memory state with new title AND new timestamp
+    _chatsById[chatId] = updatedChat.copyWith(updatedAt: newUpdatedAt);
     _notifyChanges(chatId);
 
     // Update local caches
-    unawaited(LocalChatCacheService.upsert(user.id, updatedRows.first));
+    unawaited(LocalChatCacheService.upsert(user.id, updatedRow));
 
-    // Also update the title cache for sidebar persistence
+    // Also update the title cache for sidebar persistence (with correct timestamp!)
     await _saveTitlesToCache(user.id, _chatsById.values.toList());
-    debugPrint('✅ [ChatStorage] Renamed chat $chatId to "$newName"');
+    debugPrint('✅ [ChatStorage] Renamed chat $chatId to "$newName" (updatedAt: $newUpdatedAt)');
   }
 
   /// Re-encrypt all chats with stored chat data
