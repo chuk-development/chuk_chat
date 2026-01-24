@@ -2343,12 +2343,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                             maxWidth: expandedInputWidth,
                           ),
                           child: SelectionArea(
-                            child: Scrollbar(
-                              controller: _scrollController,
-                              thumbVisibility: true,
-                              thickness: 8.0,
-                              radius: const Radius.circular(4),
-                              child: ListView.builder(
+                            child: ListView.builder(
                                 controller: _scrollController,
                                 padding: listPadding,
                                 itemCount: _messages.length,
@@ -2464,7 +2459,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                   );
                                 },
                               ),
-                            ),
                           ),
                         ),
                       )
