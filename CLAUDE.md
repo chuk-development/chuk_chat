@@ -13,17 +13,58 @@ cp .env.example .env
 ./run.sh linux
 ./run.sh android
 
-# Or manually with dart-define
-flutter run -d linux --dart-define=SUPABASE_URL=... --dart-define=SUPABASE_ANON_KEY=...
-
-# Build release APK (fast, ~30s)
-flutter build apk --dart-define=PLATFORM_MOBILE=true --tree-shake-icons --target-platform android-arm64
-
-# Build all (Linux + Android)
-./build.sh all
-
 # Analyze
 flutter analyze
+```
+
+## Building APKs
+
+**IMPORTANT:** Always load `.env` before building to include Supabase credentials!
+
+### Debug APK - Minimal (no extra features)
+```bash
+source .env
+flutter build apk --debug \
+  --dart-define=SUPABASE_URL=$SUPABASE_URL \
+  --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+  --dart-define=PLATFORM_MOBILE=true \
+  --target-platform android-arm64
+```
+
+### Debug APK - All Features
+```bash
+source .env
+flutter build apk --debug \
+  --dart-define=SUPABASE_URL=$SUPABASE_URL \
+  --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+  --dart-define=PLATFORM_MOBILE=true \
+  --dart-define=FEATURE_PROJECTS=true \
+  --dart-define=FEATURE_IMAGE_GEN=true \
+  --dart-define=FEATURE_MEDIA_MANAGER=true \
+  --dart-define=FEATURE_VOICE_MODE=true \
+  --target-platform android-arm64
+```
+
+### Release APK (requires keystore)
+```bash
+source .env
+flutter build apk \
+  --dart-define=SUPABASE_URL=$SUPABASE_URL \
+  --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+  --dart-define=PLATFORM_MOBILE=true \
+  --dart-define=FEATURE_PROJECTS=true \
+  --dart-define=FEATURE_IMAGE_GEN=true \
+  --dart-define=FEATURE_MEDIA_MANAGER=true \
+  --dart-define=FEATURE_VOICE_MODE=true \
+  --tree-shake-icons \
+  --target-platform android-arm64
+```
+
+### Install via ADB
+```bash
+# If signature mismatch, uninstall first
+adb uninstall dev.chuk.chat
+adb install build/app/outputs/flutter-apk/app-debug.apk
 ```
 
 ## Read These Docs
@@ -57,18 +98,6 @@ Enable with `--dart-define=FEATURE_X=true`:
 - `FEATURE_IMAGE_GEN` - AI image generation
 - `FEATURE_MEDIA_MANAGER` - Media management
 - `FEATURE_VOICE_MODE` - Voice mode button
-
-## Build with All Features
-
-```bash
-flutter build apk \
-  --dart-define=PLATFORM_MOBILE=true \
-  --dart-define=FEATURE_MEDIA_MANAGER=true \
-  --dart-define=FEATURE_IMAGE_GEN=true \
-  --dart-define=FEATURE_PROJECTS=true \
-  --tree-shake-icons \
-  --target-platform android-arm64
-```
 
 ## IMPORTANT: After Every Task
 
