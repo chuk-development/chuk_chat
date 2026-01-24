@@ -17,22 +17,20 @@ cp .env.example .env
 flutter analyze
 ```
 
-## Building APKs
+## Building Android APKs
 
-**IMPORTANT:**
-- Always load `.env` before building to include Supabase credentials!
-- **NEVER use debug builds for testing** - they are 3-10x slower!
-- Use **Profile** for debugging, **Release** for everything else.
+### CRITICAL: NEVER USE --debug FOR ANDROID!
 
-### Build Modes Explained
+Debug builds are 3-10x slower and will make the app feel broken/laggy.
+**ALWAYS use --release for Android builds.**
 
-| Mode | Speed | Debugging | Use Case |
-|------|-------|-----------|----------|
-| Debug | Very Slow | Full | Only for hot reload development |
-| **Profile** | Fast | Partial | Debugging with DevTools, performance testing |
-| **Release** | Fastest | None | Testing, distribution |
+```
+DEBUG MODE = UNUSABLE PERFORMANCE (JIT, no optimization)
+RELEASE MODE = NORMAL PERFORMANCE (AOT, fully optimized)
+```
 
-### Release APK (Default - Use This!)
+### Build Android APK (ALWAYS Release!)
+
 ```bash
 source .env && flutter build apk --release \
   --dart-define=SUPABASE_URL=$SUPABASE_URL \
@@ -46,26 +44,29 @@ source .env && flutter build apk --release \
   --target-platform android-arm64
 ```
 
-### Profile APK (For Debugging with DevTools)
-```bash
-source .env && flutter build apk --profile \
-  --dart-define=SUPABASE_URL=$SUPABASE_URL \
-  --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
-  --dart-define=PLATFORM_MOBILE=true \
-  --dart-define=FEATURE_PROJECTS=true \
-  --dart-define=FEATURE_IMAGE_GEN=true \
-  --dart-define=FEATURE_MEDIA_MANAGER=true \
-  --dart-define=FEATURE_VOICE_MODE=true \
-  --target-platform android-arm64
-```
+Output: `build/app/outputs/flutter-apk/app-release.apk` (~26MB)
 
 ### Install via ADB
+
 ```bash
 # Update existing app (preserves data, login, icon position)
 adb install -r build/app/outputs/flutter-apk/app-release.apk
 
 # Only if signature mismatch error:
 adb uninstall dev.chuk.chat && adb install build/app/outputs/flutter-apk/app-release.apk
+```
+
+### Profile Mode (Only for DevTools/Performance Analysis)
+
+If you need Flutter DevTools for debugging, use profile mode (still fast, but has debugging support):
+
+```bash
+source .env && flutter build apk --profile \
+  --dart-define=SUPABASE_URL=$SUPABASE_URL \
+  --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+  --dart-define=PLATFORM_MOBILE=true \
+  --dart-define=FEATURE_PROJECTS=true \
+  --target-platform android-arm64
 ```
 
 ### Android Signing Setup
