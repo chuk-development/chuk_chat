@@ -19,36 +19,22 @@ flutter analyze
 
 ## Building APKs
 
-**IMPORTANT:** Always load `.env` before building to include Supabase credentials!
+**IMPORTANT:**
+- Always load `.env` before building to include Supabase credentials!
+- **NEVER use debug builds for testing** - they are 3-10x slower!
+- Use **Profile** for debugging, **Release** for everything else.
 
-### Debug APK - Minimal (no extra features)
-```bash
-source .env
-flutter build apk --debug \
-  --dart-define=SUPABASE_URL=$SUPABASE_URL \
-  --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
-  --dart-define=PLATFORM_MOBILE=true \
-  --target-platform android-arm64
-```
+### Build Modes Explained
 
-### Debug APK - All Features
-```bash
-source .env
-flutter build apk --debug \
-  --dart-define=SUPABASE_URL=$SUPABASE_URL \
-  --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
-  --dart-define=PLATFORM_MOBILE=true \
-  --dart-define=FEATURE_PROJECTS=true \
-  --dart-define=FEATURE_IMAGE_GEN=true \
-  --dart-define=FEATURE_MEDIA_MANAGER=true \
-  --dart-define=FEATURE_VOICE_MODE=true \
-  --target-platform android-arm64
-```
+| Mode | Speed | Debugging | Use Case |
+|------|-------|-----------|----------|
+| Debug | Very Slow | Full | Only for hot reload development |
+| **Profile** | Fast | Partial | Debugging with DevTools, performance testing |
+| **Release** | Fastest | None | Testing, distribution |
 
-### Release APK (requires keystore)
+### Release APK (Default - Use This!)
 ```bash
-source .env
-flutter build apk \
+source .env && flutter build apk --release \
   --dart-define=SUPABASE_URL=$SUPABASE_URL \
   --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
   --dart-define=PLATFORM_MOBILE=true \
@@ -60,12 +46,31 @@ flutter build apk \
   --target-platform android-arm64
 ```
 
+### Profile APK (For Debugging with DevTools)
+```bash
+source .env && flutter build apk --profile \
+  --dart-define=SUPABASE_URL=$SUPABASE_URL \
+  --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+  --dart-define=PLATFORM_MOBILE=true \
+  --dart-define=FEATURE_PROJECTS=true \
+  --dart-define=FEATURE_IMAGE_GEN=true \
+  --dart-define=FEATURE_MEDIA_MANAGER=true \
+  --dart-define=FEATURE_VOICE_MODE=true \
+  --target-platform android-arm64
+```
+
 ### Install via ADB
 ```bash
-# If signature mismatch, uninstall first
-adb uninstall dev.chuk.chat
-adb install build/app/outputs/flutter-apk/app-debug.apk
+# Update existing app (preserves data, login, icon position)
+adb install -r build/app/outputs/flutter-apk/app-release.apk
+
+# Only if signature mismatch error:
+adb uninstall dev.chuk.chat && adb install build/app/outputs/flutter-apk/app-release.apk
 ```
+
+### Keystore Location
+- Keystore: `/home/user/doc/android-keys/chuk_chat_release.keystore`
+- Config: `android/key.properties`
 
 ## Read These Docs
 
