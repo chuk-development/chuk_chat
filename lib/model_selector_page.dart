@@ -367,7 +367,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
       await UserPreferencesService.clearSelectedProvider(modelId);
     }
 
-    UserPreferencesService.refreshModelSelections();
+    await UserPreferencesService.refreshModelSelections();
   }
 
   void _toggleDescription(String modelId) {
