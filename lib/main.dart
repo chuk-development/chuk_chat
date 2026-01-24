@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/services/chat_preload_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_sync_service.dart';
 import 'package:chuk_chat/services/project_storage_service.dart';
@@ -159,6 +160,7 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
           // User actually logged out - stop sync and clear data
           debugPrint('🔐 [Auth] User logged out (online) - clearing data');
           ChatSyncService.stop();
+          ChatPreloadService.reset();
           await EncryptionService.clearKey();
           await ChatStorageService.reset();
             await ProjectStorageService.reset();
@@ -242,6 +244,8 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
           debugPrint('📦 [Init] Chats loaded in ${stopwatch.elapsedMilliseconds}ms');
           // Start background sync AFTER cache is loaded
           ChatSyncService.start();
+          // Start background preload of all chat messages for search/export
+          unawaited(ChatPreloadService.startBackgroundPreload());
         }).catchError((error, stackTrace) {
           debugPrint('Chat loading failed: $error');
           debugPrint('$stackTrace');

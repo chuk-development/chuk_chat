@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:chuk_chat/models/stored_chat.dart';
+import 'package:chuk_chat/services/chat_preload_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
@@ -96,8 +97,8 @@ class ChatStorageMutations {
     ChatStorageState.chatsById[chatId] = updatedChat.copyWith(updatedAt: newUpdatedAt);
     ChatStorageState.notifyChanges(chatId);
 
-    // Update local caches
-    unawaited(LocalChatCacheService.upsert(user.id, updatedRow));
+    // Update local caches (await to ensure consistency before title cache update)
+    await LocalChatCacheService.upsert(user.id, updatedRow);
 
     // Also update the title cache for sidebar persistence
     await saveTitlesToCache(user.id, ChatStorageState.chatsById.values.toList());
@@ -136,14 +137,30 @@ class ChatStorageMutations {
     ChatStorageState.notifyChanges();
   }
 
-  /// Export all chats as JSON string
+  /// Export all chats as JSON string.
+  /// This will wait for all chats to be fully loaded before exporting.
   static Future<String> exportChats() async {
+    debugPrint('📤 [Export] Starting export...');
+
     // Wait for any pending loads
     if (ChatStorageState.loadingCompleter != null) {
+      debugPrint('📤 [Export] Waiting for pending loads...');
       await ChatStorageState.loadingCompleter!.future;
     }
 
-    final exportPayload = ChatStorageState.savedChats
+    // Ensure all chats are fully loaded (messages decrypted)
+    debugPrint('📤 [Export] Ensuring all chats are preloaded...');
+    await ChatPreloadService.awaitPreload();
+
+    // Now all chats should be fully loaded
+    final chats = ChatStorageState.savedChats;
+    final fullyLoadedChats = chats.where((chat) => chat.isFullyLoaded).toList();
+
+    if (fullyLoadedChats.length < chats.length) {
+      debugPrint('⚠️ [Export] Only ${fullyLoadedChats.length}/${chats.length} chats fully loaded');
+    }
+
+    final exportPayload = fullyLoadedChats
         .map(
           (chat) => {
             'id': chat.id,
@@ -153,6 +170,8 @@ class ChatStorageMutations {
           },
         )
         .toList();
+
+    debugPrint('📤 [Export] Exported ${exportPayload.length} chats');
     return jsonEncode(exportPayload);
   }
 
