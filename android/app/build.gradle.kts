@@ -8,10 +8,16 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// Load key.properties if it exists
+// Keystore configuration priority:
+// 1. Environment variables (for CI/CD: GitHub Actions, etc.)
+// 2. key.properties file (for local development)
+// 3. Debug keystore fallback (for development without release keystore)
+
+val useEnvVars = System.getenv("ANDROID_KEYSTORE_PATH") != null
+
 val keystorePropertiesFile = rootProject.file("key.properties")
 val keystoreProperties = Properties()
-if (keystorePropertiesFile.exists()) {
+if (!useEnvVars && keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
@@ -42,11 +48,18 @@ android {
 
     signingConfigs {
         create("release") {
-            if (keystorePropertiesFile.exists()) {
-                keyAlias = keystoreProperties["keyAlias"] as String
-                keyPassword = keystoreProperties["keyPassword"] as String
+            if (useEnvVars) {
+                // CI/CD: Use environment variables
+                storeFile = file(System.getenv("ANDROID_KEYSTORE_PATH")!!)
+                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")!!
+                keyPassword = System.getenv("ANDROID_KEY_PASSWORD")!!
+                keyAlias = System.getenv("ANDROID_KEY_ALIAS")!!
+            } else if (keystorePropertiesFile.exists()) {
+                // Local development: Use key.properties
                 storeFile = file(keystoreProperties["storeFile"] as String)
                 storePassword = keystoreProperties["storePassword"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+                keyAlias = keystoreProperties["keyAlias"] as String
             }
         }
     }
@@ -61,10 +74,10 @@ android {
                 "proguard-rules.pro"
             )
 
-            signingConfig = if (keystorePropertiesFile.exists()) {
+            signingConfig = if (useEnvVars || keystorePropertiesFile.exists()) {
                 signingConfigs.getByName("release")
             } else {
-                // Fallback to debug signing if no key.properties
+                // Fallback to debug signing if no keystore configured
                 signingConfigs.getByName("debug")
             }
         }

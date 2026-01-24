@@ -1,0 +1,27 @@
+# Android Keystore Configuration
+# ==============================
+# Copy this file to key.properties and fill in your values:
+#   cp key.properties.example key.properties
+#
+# IMPORTANT: key.properties is in .gitignore - never commit real passwords!
+
+# Option 1: Absolute path (simplest)
+storeFile=/path/to/your/keystore.keystore
+
+# Option 2: Relative to android/ directory
+# storeFile=../keys/release.keystore
+
+# Option 3: Use $HOME (works on Linux/Mac)
+# storeFile=/home/youruser/doc/android-keys/chuk_chat_release.keystore
+
+# Keystore credentials
+storePassword=your_store_password_here
+keyPassword=your_key_password_here
+keyAlias=chuk_chat
+
+# For CI/CD (GitHub Actions, etc.):
+# Instead of key.properties, set these environment variables:
+#   - ANDROID_KEYSTORE_PATH
+#   - ANDROID_KEYSTORE_PASSWORD
+#   - ANDROID_KEY_PASSWORD
+#   - ANDROID_KEY_ALIAS

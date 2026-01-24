@@ -68,9 +68,33 @@ adb install -r build/app/outputs/flutter-apk/app-release.apk
 adb uninstall dev.chuk.chat && adb install build/app/outputs/flutter-apk/app-release.apk
 ```
 
-### Keystore Location
-- Keystore: `/home/user/doc/android-keys/chuk_chat_release.keystore`
-- Config: `android/key.properties`
+### Android Signing Setup
+
+The build system supports 3 methods (in priority order):
+
+**1. Environment Variables (CI/CD)**
+```bash
+export ANDROID_KEYSTORE_PATH=/path/to/keystore.keystore
+export ANDROID_KEYSTORE_PASSWORD=your_password
+export ANDROID_KEY_PASSWORD=your_password
+export ANDROID_KEY_ALIAS=chuk_chat
+```
+
+**2. key.properties File (Local Development)**
+```bash
+# Copy template and edit with your paths
+cp android/key.properties.example android/key.properties
+# Edit android/key.properties with your keystore path
+```
+
+**3. Debug Keystore (Fallback)**
+If neither is configured, uses debug signing (not for Play Store).
+
+**For new team members:**
+1. Get the keystore file from team lead (never commit it!)
+2. Place it somewhere on your system
+3. Copy `android/key.properties.example` to `android/key.properties`
+4. Edit `storeFile=` to point to your keystore location
 
 ## Read These Docs
 
