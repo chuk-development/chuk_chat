@@ -354,17 +354,17 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
     _apiAvailabilityTimer = null;
   }
 
-  void _onProviderSelect(String modelId, ModelProviderInfo? provider) {
+  Future<void> _onProviderSelect(String modelId, ModelProviderInfo? provider) async {
     setState(() {
       _selectedProviders[modelId] = provider;
     });
 
     if (provider != null) {
       _lastSavedPreferences[modelId] = provider.slug;
-      UserPreferencesService.saveSelectedProvider(modelId, provider.slug);
+      await UserPreferencesService.saveSelectedProvider(modelId, provider.slug);
     } else {
       _lastSavedPreferences.remove(modelId);
-      UserPreferencesService.clearSelectedProvider(modelId);
+      await UserPreferencesService.clearSelectedProvider(modelId);
     }
 
     UserPreferencesService.refreshModelSelections();

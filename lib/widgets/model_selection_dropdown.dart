@@ -240,13 +240,11 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
 
     final Map<String, String> cachedProviders =
         await ModelCacheService.loadProviderPreferences(userId);
-    if (cachedProviders.isEmpty) return;
 
     final _FilteredModelResult result = _filterModels(
       cachedModels,
       cachedProviders,
     );
-    if (result.models.isEmpty) return;
 
     await _applyModels(
       models: result.models,
