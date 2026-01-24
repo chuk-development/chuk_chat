@@ -1,7 +1,9 @@
 // lib/services/streaming_manager.dart
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/models/chat_stream_event.dart';
+import 'package:chuk_chat/services/streaming_foreground_service.dart';
 
 /// Manages multiple concurrent chat streams across different chats
 class StreamingManager {
@@ -11,6 +13,13 @@ class StreamingManager {
 
   // Map of chatId -> ActiveStream
   final Map<String, _ActiveStream> _activeStreams = {};
+
+  // Throttle notification updates to avoid excessive updates
+  DateTime? _lastNotificationUpdate;
+  static const _notificationUpdateInterval = Duration(milliseconds: 500);
+
+  // Track if app is in background - only show notification when backgrounded
+  bool _isAppInBackground = false;
 
   /// Check if a chat is currently streaming
   bool isStreaming(String chatId) {
@@ -29,11 +38,14 @@ class StreamingManager {
     required int messageIndex,
     required Stream<ChatStreamEvent> stream,
     required Function(String content, String reasoning) onUpdate,
-    required Function(String content, String reasoning) onComplete,
+    required Function(String content, String reasoning, double? tps) onComplete,
     required Function(String error) onError,
   }) async {
     // Cancel existing stream for this chat if any
     await cancelStream(chatId);
+
+    // Note: Foreground service is started only when app goes to background
+    // See onAppLifecycleChanged() - this avoids showing notification while user is in app
 
     final streamSub = stream.listen(
       (event) {
@@ -42,16 +54,22 @@ class StreamingManager {
 
         if (event is ContentEvent) {
           activeStream.contentBuffer.write(event.text);
+          final content = activeStream.contentBuffer.toString();
           onUpdate(
-            activeStream.contentBuffer.toString(),
+            content,
             activeStream.reasoningBuffer.toString(),
           );
+          // Update notification with streaming content (throttled)
+          _updateNotificationThrottled(content);
         } else if (event is ReasoningEvent) {
           activeStream.reasoningBuffer.write(event.text);
           onUpdate(
             activeStream.contentBuffer.toString(),
             activeStream.reasoningBuffer.toString(),
           );
+        } else if (event is TpsEvent) {
+          // Store TPS metric for later use in onComplete
+          activeStream.tps = event.tokensPerSecond;
         } else if (event is ErrorEvent) {
           // Handle error events from the stream (e.g., API errors)
           debugPrint('Stream ErrorEvent for chat $chatId: ${event.message}');
@@ -62,7 +80,7 @@ class StreamingManager {
           debugPrint('Stream DoneEvent for chat $chatId');
           final finalContent = activeStream.contentBuffer.toString();
           final finalReasoning = activeStream.reasoningBuffer.toString();
-          onComplete(finalContent, finalReasoning);
+          onComplete(finalContent, finalReasoning, activeStream.tps);
           _cleanupStream(chatId);
         }
         // UsageEvent and MetaEvent are ignored (just logging)
@@ -83,7 +101,7 @@ class StreamingManager {
 
         // Only call onComplete if there's content (avoid duplicate calls if DoneEvent already fired)
         if (finalContent.isNotEmpty) {
-          onComplete(finalContent, finalReasoning);
+          onComplete(finalContent, finalReasoning, activeStream.tps);
         }
 
         _cleanupStream(chatId);
@@ -114,10 +132,65 @@ class StreamingManager {
     for (final chatId in chatIds) {
       await cancelStream(chatId);
     }
+    // Ensure foreground service is stopped
+    if (Platform.isAndroid) {
+      await StreamingForegroundService.stopService();
+    }
   }
 
   void _cleanupStream(String chatId) {
     _activeStreams.remove(chatId);
+    // Stop foreground service if no more active streams
+    if (Platform.isAndroid && !hasActiveStreams) {
+      unawaited(StreamingForegroundService.stopService());
+    }
+  }
+
+  /// Update notification with content (throttled to avoid excessive updates)
+  /// Only updates if app is in background and service is running
+  void _updateNotificationThrottled(String content) {
+    if (!Platform.isAndroid) return;
+    if (!_isAppInBackground) return; // Don't update if user is in app
+    if (!StreamingForegroundService.isRunning) return;
+
+    final now = DateTime.now();
+    if (_lastNotificationUpdate != null &&
+        now.difference(_lastNotificationUpdate!) < _notificationUpdateInterval) {
+      return; // Skip update, too soon
+    }
+
+    _lastNotificationUpdate = now;
+    unawaited(StreamingForegroundService.updateNotification(content: content));
+  }
+
+  /// Called when app lifecycle changes - manages foreground service
+  /// Start service when app goes to background with active streams
+  /// Stop service when app comes to foreground
+  void onAppLifecycleChanged({required bool isInBackground}) {
+    _isAppInBackground = isInBackground;
+
+    if (!Platform.isAndroid) return;
+
+    if (isInBackground && hasActiveStreams) {
+      // App went to background with active streams - start foreground service
+      debugPrint('[StreamingManager] App backgrounded with active streams - starting foreground service');
+      unawaited(StreamingForegroundService.startService().then((_) {
+        // Update notification with current content
+        for (final stream in _activeStreams.values) {
+          if (stream.isActive) {
+            final content = stream.contentBuffer.toString();
+            if (content.isNotEmpty) {
+              unawaited(StreamingForegroundService.updateNotification(content: content));
+            }
+            break; // Just use the first active stream's content
+          }
+        }
+      }));
+    } else if (!isInBackground && StreamingForegroundService.isRunning) {
+      // App came to foreground - stop foreground service (notification no longer needed)
+      debugPrint('[StreamingManager] App resumed - stopping foreground service');
+      unawaited(StreamingForegroundService.stopService());
+    }
   }
 
   /// Get info about active streams (for debugging)
@@ -155,6 +228,14 @@ class StreamingManager {
     final stream = _activeStreams[chatId];
     if (stream == null || !stream.isActive) return null;
     return stream.messageIndex;
+  }
+
+  /// Get the TPS (tokens per second) for a streaming chat
+  /// Returns null if chat is not streaming or TPS not yet received
+  double? getTps(String chatId) {
+    final stream = _activeStreams[chatId];
+    if (stream == null || !stream.isActive) return null;
+    return stream.tps;
   }
 
   /// Store background messages for a streaming chat
@@ -205,6 +286,9 @@ class _ActiveStream {
   final StringBuffer contentBuffer = StringBuffer();
   final StringBuffer reasoningBuffer = StringBuffer();
   bool isActive = true;
+
+  // Tokens per second metric (set when TpsEvent is received)
+  double? tps;
 
   // Background message storage for when user switches away during streaming
   List<Map<String, dynamic>>? backgroundMessages;

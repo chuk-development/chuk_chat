@@ -32,6 +32,8 @@ class RootWrapperMobile extends StatefulWidget {
   final Function(bool) setShowReasoningTokens;
   final bool showModelInfo;
   final Function(bool) setShowModelInfo;
+  final bool showTps;
+  final Function(bool) setShowTps;
   final bool autoSendVoiceTranscription;
   final Function(bool) setAutoSendVoiceTranscription;
   // Image generation settings
@@ -62,6 +64,8 @@ class RootWrapperMobile extends StatefulWidget {
     required this.setShowReasoningTokens,
     required this.showModelInfo,
     required this.setShowModelInfo,
+    required this.showTps,
+    required this.setShowTps,
     required this.autoSendVoiceTranscription,
     required this.setAutoSendVoiceTranscription,
     required this.imageGenEnabled,
@@ -193,6 +197,8 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
           setShowReasoningTokens: widget.setShowReasoningTokens,
           showModelInfo: widget.showModelInfo,
           setShowModelInfo: widget.setShowModelInfo,
+          showTps: widget.showTps,
+          setShowTps: widget.setShowTps,
           autoSendVoiceTranscription: widget.autoSendVoiceTranscription,
           setAutoSendVoiceTranscription: widget.setAutoSendVoiceTranscription,
           imageGenEnabled: widget.imageGenEnabled,
@@ -360,6 +366,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                 isSidebarExpanded: _isSidebarExpanded,
                 showReasoningTokens: widget.showReasoningTokens,
                 showModelInfo: widget.showModelInfo,
+                showTps: widget.showTps,
                 autoSendVoiceTranscription: widget.autoSendVoiceTranscription,
                 // Image generation settings
                 imageGenEnabled: widget.imageGenEnabled,

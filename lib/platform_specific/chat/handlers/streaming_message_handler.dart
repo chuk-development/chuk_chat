@@ -17,7 +17,7 @@ class StreamingMessageHandler {
   Function()? onUpdateUI;
   Function(int index, String content, String reasoning, String chatId)?
   onMessageUpdate;
-  Function(int index, String content, String reasoning, String chatId)?
+  Function(int index, String content, String reasoning, String chatId, double? tps)?
   onMessageFinalize;
   Function(String chatId, int index, String content, String reasoning)?
   onBackgroundUpdate;
@@ -150,7 +150,7 @@ class StreamingMessageHandler {
             );
           }
         },
-        onComplete: (finalContent, finalReasoning) {
+        onComplete: (finalContent, finalReasoning, tps) {
           if (onMessageFinalize != null) {
             final effectiveContent = finalContent.isEmpty
                 ? 'The model returned an empty response.'
@@ -160,6 +160,7 @@ class StreamingMessageHandler {
               effectiveContent,
               finalReasoning,
               activeChatId,
+              tps,
             );
           }
           // Always persist final message to database in background
@@ -186,6 +187,7 @@ class StreamingMessageHandler {
               errorMessage,
               '',
               activeChatId,
+              null,
             );
           }
           onShowSnackBar?.call(errorMessage);
@@ -203,6 +205,7 @@ class StreamingMessageHandler {
           'Failed to start streaming: $error',
           '',
           activeChatId!,
+          null,
         );
       }
       onShowSnackBar?.call('Failed to start streaming: $error');

@@ -7,6 +7,7 @@ class CustomizationPreferences {
     required this.autoSendVoiceTranscription,
     required this.showReasoningTokens,
     required this.showModelInfo,
+    required this.showTps,
     required this.imageGenEnabled,
     required this.imageGenDefaultSize,
     required this.imageGenCustomWidth,
@@ -18,6 +19,7 @@ class CustomizationPreferences {
   final bool autoSendVoiceTranscription;
   final bool showReasoningTokens;
   final bool showModelInfo;
+  final bool showTps;
   // Image generation settings
   final bool imageGenEnabled;
   final String imageGenDefaultSize;
@@ -29,6 +31,7 @@ class CustomizationPreferences {
     bool? autoSendVoiceTranscription,
     bool? showReasoningTokens,
     bool? showModelInfo,
+    bool? showTps,
     bool? imageGenEnabled,
     String? imageGenDefaultSize,
     int? imageGenCustomWidth,
@@ -40,6 +43,7 @@ class CustomizationPreferences {
       autoSendVoiceTranscription: autoSendVoiceTranscription ?? this.autoSendVoiceTranscription,
       showReasoningTokens: showReasoningTokens ?? this.showReasoningTokens,
       showModelInfo: showModelInfo ?? this.showModelInfo,
+      showTps: showTps ?? this.showTps,
       imageGenEnabled: imageGenEnabled ?? this.imageGenEnabled,
       imageGenDefaultSize: imageGenDefaultSize ?? this.imageGenDefaultSize,
       imageGenCustomWidth: imageGenCustomWidth ?? this.imageGenCustomWidth,
@@ -54,6 +58,7 @@ class CustomizationPreferences {
       'auto_send_voice_transcription': autoSendVoiceTranscription,
       'show_reasoning_tokens': showReasoningTokens,
       'show_model_info': showModelInfo,
+      'show_tps': showTps,
       'image_gen_enabled': imageGenEnabled,
       'image_gen_default_size': imageGenDefaultSize,
       'image_gen_custom_width': imageGenCustomWidth,
@@ -68,6 +73,7 @@ class CustomizationPreferences {
       autoSendVoiceTranscription: false, // Default is OFF - user must enable it
       showReasoningTokens: true,
       showModelInfo: true,
+      showTps: false, // Default is OFF - user must enable it
       imageGenEnabled: false, // Default is OFF - user must enable it
       imageGenDefaultSize: 'landscape_4_3',
       imageGenCustomWidth: 1024,
@@ -82,6 +88,7 @@ class CustomizationPreferences {
       autoSendVoiceTranscription: (map['auto_send_voice_transcription'] as bool?) ?? false,
       showReasoningTokens: (map['show_reasoning_tokens'] as bool?) ?? true,
       showModelInfo: (map['show_model_info'] as bool?) ?? true,
+      showTps: (map['show_tps'] as bool?) ?? false,
       imageGenEnabled: (map['image_gen_enabled'] as bool?) ?? false,
       imageGenDefaultSize: (map['image_gen_default_size'] as String?) ?? 'landscape_4_3',
       imageGenCustomWidth: (map['image_gen_custom_width'] as int?) ?? 1024,

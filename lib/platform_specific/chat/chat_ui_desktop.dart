@@ -47,6 +47,7 @@ class _MessageRenderData {
     required this.reasoning,
     required this.isReasoningStreaming,
     this.modelLabel,
+    this.tps,
     this.images,
     this.attachments,
   });
@@ -56,6 +57,7 @@ class _MessageRenderData {
   final String reasoning;
   final bool isReasoningStreaming;
   final String? modelLabel;
+  final double? tps;
   final List<String>? images;
   final List<DocumentAttachment>? attachments;
 
@@ -71,6 +73,7 @@ class ChukChatUIDesktop extends StatefulWidget {
   final bool isCompactMode;
   final bool showReasoningTokens;
   final bool showModelInfo;
+  final bool showTps;
   final String? projectId;
   final VoidCallback? onExitProject;
   // Image generation settings
@@ -90,6 +93,7 @@ class ChukChatUIDesktop extends StatefulWidget {
     required this.isCompactMode,
     required this.showReasoningTokens,
     required this.showModelInfo,
+    required this.showTps,
     this.projectId,
     this.onExitProject,
     this.imageGenEnabled = false,
@@ -1104,7 +1108,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             _scrollChatToBottom();
           }
         },
-        onComplete: (finalContent, finalReasoning) {
+        onComplete: (finalContent, finalReasoning, tps) {
           final effectiveContent = finalContent.isEmpty ? 'No response received.' : finalContent;
 
           // Check if user is still viewing the same chat
@@ -1115,7 +1119,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 _isSending = false;
               });
             }
-            _finalizeAiMessage(placeholderIndex, effectiveContent, reasoning: finalReasoning);
+            _finalizeAiMessage(placeholderIndex, effectiveContent, reasoning: finalReasoning, tps: tps);
             _persistChatWithId(chatIdForStream);
           } else {
             // User switched to different chat - use background messages
@@ -1124,6 +1128,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             if (backgroundMsgs != null && placeholderIndex < backgroundMsgs.length) {
               backgroundMsgs[placeholderIndex]['text'] = effectiveContent;
               backgroundMsgs[placeholderIndex]['reasoning'] = finalReasoning;
+              if (tps != null) backgroundMsgs[placeholderIndex]['tps'] = tps.toString();
               _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
             } else {
               // No background messages - this shouldn't happen if snapshot was made correctly
@@ -1946,7 +1951,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             _scrollChatToBottom();
           }
         },
-        onComplete: (finalContent, finalReasoning) {
+        onComplete: (finalContent, finalReasoning, tps) {
           debugPrint('Stream completed for chat $chatIdForStream');
           _autoSaveTimer?.cancel();
           // RELEASE GLOBAL LOCK when stream completes
@@ -1963,13 +1968,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
               _messages[placeholderIndex]['text'] = effectiveContent;
               _messages[placeholderIndex]['reasoning'] = finalReasoning;
+              if (tps != null) _messages[placeholderIndex]['tps'] = tps.toString();
             }
             if (mounted) {
               setState(() {
                 _isSending = false;
               });
             }
-            _finalizeAiMessage(placeholderIndex, effectiveContent, reasoning: finalReasoning);
+            _finalizeAiMessage(placeholderIndex, effectiveContent, reasoning: finalReasoning, tps: tps);
             _persistChatWithId(chatIdForStream);
           } else {
             // User switched to a DIFFERENT chat - use background messages
@@ -1980,6 +1986,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             if (backgroundMsgs != null && placeholderIndex < backgroundMsgs.length) {
               backgroundMsgs[placeholderIndex]['text'] = effectiveContent;
               backgroundMsgs[placeholderIndex]['reasoning'] = finalReasoning;
+              if (tps != null) backgroundMsgs[placeholderIndex]['tps'] = tps.toString();
               _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
             } else {
               debugPrint('[STREAM] WARNING: No background messages for $chatIdForStream - stream result may be lost');
@@ -2103,7 +2110,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     });
   }
 
-  void _finalizeAiMessage(int index, String content, {String? reasoning}) {
+  void _finalizeAiMessage(int index, String content, {String? reasoning, double? tps}) {
     _autoSaveTimer?.cancel();
     if (index < 0 || index >= _messages.length) {
       _isSending = false;
@@ -2117,6 +2124,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         );
         message['text'] = content;
         message['reasoning'] = reasoning ?? '';
+        if (tps != null) message['tps'] = tps.toString();
         _messages[index] = message;
         _isSending = false;
       });
@@ -2126,6 +2134,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       );
       message['text'] = content;
       message['reasoning'] = reasoning ?? '';
+      if (tps != null) message['tps'] = tps.toString();
       _messages[index] = message;
       _isSending = false;
     }
@@ -2651,6 +2660,13 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         }
       }
 
+      // Parse TPS value from message
+      final tpsStr = raw['tps'];
+      double? tps;
+      if (tpsStr != null && tpsStr.isNotEmpty) {
+        tps = double.tryParse(tpsStr);
+      }
+
       return _MessageRenderData(
         sender: sender,
         displayText: displayText,
@@ -2659,6 +2675,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         isReasoningStreaming:
             isStreamingMessage && (hasReasoning || displayText.isNotEmpty),
         modelLabel: modelLabel,
+        tps: tps,
         images: images,
         attachments: attachments,
       );
@@ -2802,6 +2819,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                       isReasoningStreaming:
                                           data.isReasoningStreaming,
                                       modelLabel: data.modelLabel,
+                                      tps: data.tps,
                                       images: data.images,
                                       attachments: data.attachments,
                                       actions: _buildMessageActionsForIndex(
@@ -2822,6 +2840,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                       showReasoningTokens:
                                           widget.showReasoningTokens,
                                       showModelInfo: widget.showModelInfo,
+                                      showTps: widget.showTps,
                                     ),
                                   );
                                 },

@@ -126,6 +126,8 @@ class StreamingChatService {
               yield ChatStreamEvent.meta(
                 parsed['meta'] as Map<String, dynamic>,
               );
+            } else if (parsed.containsKey('tps')) {
+              yield ChatStreamEvent.tps((parsed['tps'] as num).toDouble());
             } else if (parsed.containsKey('error')) {
               yield ChatStreamEvent.error(parsed['error'].toString());
             }

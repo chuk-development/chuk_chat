@@ -168,6 +168,8 @@ class WebSocketChatService {
               );
             } else if (data.containsKey('meta')) {
               yield ChatStreamEvent.meta(data['meta'] as Map<String, dynamic>);
+            } else if (data.containsKey('tps')) {
+              yield ChatStreamEvent.tps((data['tps'] as num).toDouble());
             }
           } catch (e) {
             if (kDebugMode) {

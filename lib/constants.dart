@@ -17,6 +17,9 @@ const bool kDefaultShowReasoningTokens = true;
 /* ---------- MODEL INFO DEFAULT ---------- */
 const bool kDefaultShowModelInfo = false;
 
+/* ---------- TPS (TOKENS PER SECOND) DEFAULT ---------- */
+const bool kDefaultShowTps = false;
+
 /* ---------- THEME BUILDER ---------- */
 ThemeData buildAppTheme({
   required Color accent,

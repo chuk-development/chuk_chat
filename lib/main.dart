@@ -18,6 +18,8 @@ import 'package:chuk_chat/services/password_revision_service.dart';
 import 'package:chuk_chat/services/model_prefetch_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
+import 'package:chuk_chat/services/streaming_foreground_service.dart';
+import 'package:chuk_chat/services/streaming_manager.dart';
 import 'package:chuk_chat/services/theme_settings_service.dart';
 import 'package:chuk_chat/services/customization_preferences_service.dart';
 import 'package:chuk_chat/widgets/auth_gate.dart';
@@ -40,6 +42,9 @@ Future<void> main() async {
 
 Future<void> _initializeServicesAsync() async {
   try {
+    // Initialize foreground service for Android (non-blocking)
+    unawaited(StreamingForegroundService.initialize());
+
     await SupabaseService.initialize();
 
     // After Supabase is ready, load other stuff
@@ -79,6 +84,7 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
   // Message display preferences
   bool _showReasoningTokens = kDefaultShowReasoningTokens;
   bool _showModelInfo = kDefaultShowModelInfo;
+  bool _showTps = kDefaultShowTps;
 
   // Customization preferences
   bool _autoSendVoiceTranscription = false;
@@ -98,6 +104,7 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
   static const String _kGrainEnabledKey = 'grainEnabled';
   static const String _kShowReasoningTokensKey = 'showReasoningTokens';
   static const String _kShowModelInfoKey = 'showModelInfo';
+  static const String _kShowTpsKey = 'showTps';
   static const String _kAutoSendVoiceTranscriptionKey = 'autoSendVoiceTranscription';
   static const String _kImageGenEnabledKey = 'imageGenEnabled';
   static const String _kImageGenDefaultSizeKey = 'imageGenDefaultSize';
@@ -203,6 +210,8 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
         // App came to foreground - check network status first, then resume sync
         // This prevents false "offline" states when unlocking the phone
         unawaited(_onAppResumed());
+        // Notify streaming manager - stop foreground service if running
+        StreamingManager().onAppLifecycleChanged(isInBackground: false);
         break;
       case AppLifecycleState.paused:
       case AppLifecycleState.inactive:
@@ -211,6 +220,8 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
         // App went to background - pause sync to save battery
         // DON'T change network status - we're not offline, just backgrounded
         ChatSyncService.pause();
+        // Notify streaming manager - start foreground service if streams active
+        StreamingManager().onAppLifecycleChanged(isInBackground: true);
         break;
     }
   }
@@ -352,6 +363,7 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
       _grainEnabled = prefs.getBool(_kGrainEnabledKey) ?? kDefaultGrainEnabled;
       _showReasoningTokens = prefs.getBool(_kShowReasoningTokensKey) ?? kDefaultShowReasoningTokens;
       _showModelInfo = prefs.getBool(_kShowModelInfoKey) ?? kDefaultShowModelInfo;
+      _showTps = prefs.getBool(_kShowTpsKey) ?? kDefaultShowTps;
       _autoSendVoiceTranscription = prefs.getBool(_kAutoSendVoiceTranscriptionKey) ?? false;
       _imageGenEnabled = prefs.getBool(_kImageGenEnabledKey) ?? false;
       _imageGenDefaultSize = prefs.getString(_kImageGenDefaultSizeKey) ?? 'landscape_4_3';
@@ -429,6 +441,15 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
     await prefs.setBool(_kShowModelInfoKey, show);
     setState(() {
       _showModelInfo = show;
+    });
+    _debouncedSyncCustomizationSettings();
+  }
+
+  void _setShowTps(bool show) async {
+    final prefs = await _getPrefs();
+    await prefs.setBool(_kShowTpsKey, show);
+    setState(() {
+      _showTps = show;
     });
     _debouncedSyncCustomizationSettings();
   }
@@ -518,6 +539,7 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
         _grainEnabled = settings.grainEnabled;
         _showReasoningTokens = customizationPrefs.showReasoningTokens;
         _showModelInfo = customizationPrefs.showModelInfo;
+        _showTps = customizationPrefs.showTps;
         _autoSendVoiceTranscription = customizationPrefs.autoSendVoiceTranscription;
         _imageGenEnabled = customizationPrefs.imageGenEnabled;
         _imageGenDefaultSize = customizationPrefs.imageGenDefaultSize;
@@ -592,6 +614,7 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
       autoSendVoiceTranscription: _autoSendVoiceTranscription,
       showReasoningTokens: _showReasoningTokens,
       showModelInfo: _showModelInfo,
+      showTps: _showTps,
       imageGenEnabled: _imageGenEnabled,
       imageGenDefaultSize: _imageGenDefaultSize,
       imageGenCustomWidth: _imageGenCustomWidth,
@@ -666,6 +689,8 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
             setShowReasoningTokens: _setShowReasoningTokens,
             showModelInfo: _showModelInfo,
             setShowModelInfo: _setShowModelInfo,
+            showTps: _showTps,
+            setShowTps: _setShowTps,
             autoSendVoiceTranscription: _autoSendVoiceTranscription,
             setAutoSendVoiceTranscription: _setAutoSendVoiceTranscription,
             imageGenEnabled: _imageGenEnabled,

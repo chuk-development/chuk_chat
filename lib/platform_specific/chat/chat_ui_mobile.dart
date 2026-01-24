@@ -42,6 +42,7 @@ class ChukChatUIMobile extends StatefulWidget {
   final bool isSidebarExpanded;
   final bool showReasoningTokens;
   final bool showModelInfo;
+  final bool showTps;
   final bool autoSendVoiceTranscription;
   // Image generation settings
   final bool imageGenEnabled;
@@ -58,6 +59,7 @@ class ChukChatUIMobile extends StatefulWidget {
     required this.isSidebarExpanded,
     required this.showReasoningTokens,
     required this.showModelInfo,
+    required this.showTps,
     required this.autoSendVoiceTranscription,
     this.imageGenEnabled = false,
     this.imageGenDefaultSize = 'landscape_4_3',
@@ -1234,6 +1236,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     String content,
     String reasoning,
     String chatId,
+    double? tps,
   ) async {
     debugPrint('✅ [FinalizeMessage] chatId: $chatId, index: $index, _activeChatId: $_activeChatId');
 
@@ -1262,6 +1265,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         );
         message['text'] = content;
         message['reasoning'] = reasoning;
+        if (tps != null) message['tps'] = tps.toString();
         _messages[index] = message;
       });
 
@@ -2410,6 +2414,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                     }
                                   }
 
+                                  // Parse TPS value from message
+                                  final tpsStr = raw['tps'];
+                                  double? tps;
+                                  if (tpsStr != null && tpsStr.isNotEmpty) {
+                                    tps = double.tryParse(tpsStr);
+                                  }
+
                                   return RepaintBoundary(
                                     child: MessageBubble(
                                       key: ValueKey('msg_$i'),
@@ -2421,6 +2432,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                           : expandedInputWidth,
                                       isReasoningStreaming: isStreamingMessage,
                                       modelLabel: modelLabel,
+                                      tps: tps,
                                       images: images,
                                       attachments: attachments,
                                       actions: _messageActionsHandler
@@ -2455,6 +2467,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                           : null,
                                       showReasoningTokens: widget.showReasoningTokens,
                                       showModelInfo: widget.showModelInfo,
+                                      showTps: widget.showTps,
                                     ),
                                   );
                                 },

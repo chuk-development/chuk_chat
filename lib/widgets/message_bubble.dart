@@ -61,12 +61,14 @@ class MessageBubble extends StatefulWidget {
     this.reasoning,
     this.isReasoningStreaming = false,
     this.modelLabel,
+    this.tps,
     this.isEditing = false,
     this.initialEditText,
     this.onSubmitEdit,
     this.onCancelEdit,
     this.showReasoningTokens,
     this.showModelInfo,
+    this.showTps,
     this.images,
     this.attachments,
   });
@@ -80,12 +82,14 @@ class MessageBubble extends StatefulWidget {
   final String? reasoning;
   final bool isReasoningStreaming;
   final String? modelLabel;
+  final double? tps; // Tokens per second metric
   final bool isEditing;
   final String? initialEditText;
   final ValueChanged<String>? onSubmitEdit;
   final VoidCallback? onCancelEdit;
   final bool? showReasoningTokens;
   final bool? showModelInfo;
+  final bool? showTps;
   final List<String>? images; // Base64 data URLs of images
   final List<DocumentAttachment>? attachments; // Document attachments
 
@@ -130,6 +134,12 @@ class _MessageBubbleState extends State<MessageBubble>
         _cachedShowModelInfo ??
         kDefaultShowModelInfo;
     return show && widget.modelLabel != null && widget.modelLabel!.isNotEmpty;
+  }
+
+  bool get _shouldShowTps {
+    final show =
+        widget.showTps ?? kDefaultShowTps;
+    return show && widget.tps != null && widget.tps! > 0;
   }
 
   @override
@@ -494,14 +504,42 @@ class _MessageBubbleState extends State<MessageBubble>
             ],
           ),
           const SizedBox(height: 8),
-          Text(
-            widget.modelLabel!,
-            style: TextStyle(
-              color: iconFgColor.withValues(alpha: 0.85),
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ),
-            textAlign: alignRight ? TextAlign.right : TextAlign.left,
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                widget.modelLabel!,
+                style: TextStyle(
+                  color: iconFgColor.withValues(alpha: 0.85),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+                textAlign: alignRight ? TextAlign.right : TextAlign.left,
+              ),
+              if (_shouldShowTps) ...[
+                const SizedBox(width: 8),
+                Builder(
+                  builder: (context) {
+                    final accent = Theme.of(context).colorScheme.primary;
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: accent.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        '${widget.tps!.toStringAsFixed(1)} tok/s',
+                        style: TextStyle(
+                          color: accent,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ],
           ),
         ],
       ),

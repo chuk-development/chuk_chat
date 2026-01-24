@@ -12,6 +12,8 @@ class CustomizationPage extends StatefulWidget {
   final Function(bool) setShowReasoningTokens;
   final bool showModelInfo;
   final Function(bool) setShowModelInfo;
+  final bool showTps;
+  final Function(bool) setShowTps;
   // Image generation settings
   final bool imageGenEnabled;
   final Function(bool) setImageGenEnabled;
@@ -32,6 +34,8 @@ class CustomizationPage extends StatefulWidget {
     required this.setShowReasoningTokens,
     required this.showModelInfo,
     required this.setShowModelInfo,
+    required this.showTps,
+    required this.setShowTps,
     required this.imageGenEnabled,
     required this.setImageGenEnabled,
     required this.imageGenDefaultSize,
@@ -52,6 +56,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
   late bool _selectedAutoSendVoiceTranscription;
   late bool _selectedShowReasoningTokens;
   late bool _selectedShowModelInfo;
+  late bool _selectedShowTps;
   // Image generation state
   late bool _selectedImageGenEnabled;
   late String _selectedImageGenDefaultSize;
@@ -81,6 +86,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
     _selectedAutoSendVoiceTranscription = widget.autoSendVoiceTranscription;
     _selectedShowReasoningTokens = widget.showReasoningTokens;
     _selectedShowModelInfo = widget.showModelInfo;
+    _selectedShowTps = widget.showTps;
     _selectedImageGenEnabled = widget.imageGenEnabled;
     _selectedImageGenDefaultSize = widget.imageGenDefaultSize;
     _selectedImageGenCustomWidth = widget.imageGenCustomWidth;
@@ -225,6 +231,21 @@ class _CustomizationPageState extends State<CustomizationPage> {
                 _selectedShowModelInfo = value;
               });
               widget.setShowModelInfo(value);
+            },
+            scaffoldBg: scaffoldBg,
+            iconFg: iconFg,
+          ),
+          const SizedBox(height: 12),
+          _buildToggleCard(
+            context,
+            title: 'Show tokens per second',
+            subtitle: 'Display AI response generation speed (TPS)',
+            value: _selectedShowTps,
+            onChanged: (bool value) {
+              setState(() {
+                _selectedShowTps = value;
+              });
+              widget.setShowTps(value);
             },
             scaffoldBg: scaffoldBg,
             iconFg: iconFg,

@@ -161,6 +161,7 @@ Rules:
           case ReasoningEvent():
           case UsageEvent():
           case MetaEvent():
+          case TpsEvent():
             // Ignore these for title generation
             break;
         }

@@ -40,6 +40,8 @@ class RootWrapper extends StatelessWidget {
   final Function(bool) setShowReasoningTokens;
   final bool showModelInfo;
   final Function(bool) setShowModelInfo;
+  final bool showTps;
+  final Function(bool) setShowTps;
   final bool autoSendVoiceTranscription;
   final Function(bool) setAutoSendVoiceTranscription;
   // Image generation settings
@@ -70,6 +72,8 @@ class RootWrapper extends StatelessWidget {
     required this.setShowReasoningTokens,
     required this.showModelInfo,
     required this.setShowModelInfo,
+    required this.showTps,
+    required this.setShowTps,
     required this.autoSendVoiceTranscription,
     required this.setAutoSendVoiceTranscription,
     required this.imageGenEnabled,
@@ -105,6 +109,8 @@ class RootWrapper extends StatelessWidget {
         setShowReasoningTokens: setShowReasoningTokens,
         showModelInfo: showModelInfo,
         setShowModelInfo: setShowModelInfo,
+        showTps: showTps,
+        setShowTps: setShowTps,
         autoSendVoiceTranscription: autoSendVoiceTranscription,
         setAutoSendVoiceTranscription: setAutoSendVoiceTranscription,
         imageGenEnabled: imageGenEnabled,
@@ -136,6 +142,8 @@ class RootWrapper extends StatelessWidget {
         setShowReasoningTokens: setShowReasoningTokens,
         showModelInfo: showModelInfo,
         setShowModelInfo: setShowModelInfo,
+        showTps: showTps,
+        setShowTps: setShowTps,
         autoSendVoiceTranscription: autoSendVoiceTranscription,
         setAutoSendVoiceTranscription: setAutoSendVoiceTranscription,
         imageGenEnabled: imageGenEnabled,
@@ -169,6 +177,8 @@ class RootWrapper extends StatelessWidget {
         setShowReasoningTokens: setShowReasoningTokens,
         showModelInfo: showModelInfo,
         setShowModelInfo: setShowModelInfo,
+        showTps: showTps,
+        setShowTps: setShowTps,
         autoSendVoiceTranscription: autoSendVoiceTranscription,
         setAutoSendVoiceTranscription: setAutoSendVoiceTranscription,
         imageGenEnabled: imageGenEnabled,
@@ -199,6 +209,8 @@ class RootWrapper extends StatelessWidget {
       setShowReasoningTokens: setShowReasoningTokens,
       showModelInfo: showModelInfo,
       setShowModelInfo: setShowModelInfo,
+      showTps: showTps,
+      setShowTps: setShowTps,
       autoSendVoiceTranscription: autoSendVoiceTranscription,
       setAutoSendVoiceTranscription: setAutoSendVoiceTranscription,
       imageGenEnabled: imageGenEnabled,

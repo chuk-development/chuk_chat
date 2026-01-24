@@ -31,6 +31,8 @@ class RootWrapperDesktop extends StatefulWidget {
   final Function(bool) setShowReasoningTokens;
   final bool showModelInfo;
   final Function(bool) setShowModelInfo;
+  final bool showTps;
+  final Function(bool) setShowTps;
   final bool autoSendVoiceTranscription;
   final Function(bool) setAutoSendVoiceTranscription;
   // Image generation settings
@@ -61,6 +63,8 @@ class RootWrapperDesktop extends StatefulWidget {
     required this.setShowReasoningTokens,
     required this.showModelInfo,
     required this.setShowModelInfo,
+    required this.showTps,
+    required this.setShowTps,
     required this.autoSendVoiceTranscription,
     required this.setAutoSendVoiceTranscription,
     required this.imageGenEnabled,
@@ -105,6 +109,8 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
           setShowReasoningTokens: widget.setShowReasoningTokens,
           showModelInfo: widget.showModelInfo,
           setShowModelInfo: widget.setShowModelInfo,
+          showTps: widget.showTps,
+          setShowTps: widget.setShowTps,
           autoSendVoiceTranscription: widget.autoSendVoiceTranscription,
           setAutoSendVoiceTranscription: widget.setAutoSendVoiceTranscription,
           imageGenEnabled: widget.imageGenEnabled,
@@ -244,6 +250,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       isCompactMode: isCompactMode,
       showReasoningTokens: widget.showReasoningTokens,
       showModelInfo: widget.showModelInfo,
+      showTps: widget.showTps,
       projectId: _activeProjectId,
       onExitProject: _exitProject,
       // Image generation settings

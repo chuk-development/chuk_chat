@@ -36,6 +36,7 @@ dependencies:
   desktop_drop: ^0.7.0
   image: ^4.3.0
   pdfx: ^2.8.0  # PDF viewing
+  flutter_foreground_task: ^8.11.0  # Keep streaming alive when app backgrounded
 
 dev_dependencies:
   flutter_test:

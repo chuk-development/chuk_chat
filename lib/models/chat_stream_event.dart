@@ -14,6 +14,7 @@ sealed class ChatStreamEvent {
   const factory ChatStreamEvent.reasoning(String text) = ReasoningEvent;
   const factory ChatStreamEvent.usage(Map<String, dynamic> usage) = UsageEvent;
   const factory ChatStreamEvent.meta(Map<String, dynamic> meta) = MetaEvent;
+  const factory ChatStreamEvent.tps(double tokensPerSecond) = TpsEvent;
   const factory ChatStreamEvent.error(String message) = ErrorEvent;
   const factory ChatStreamEvent.done() = DoneEvent;
 }
@@ -40,6 +41,12 @@ class UsageEvent extends ChatStreamEvent {
 class MetaEvent extends ChatStreamEvent {
   final Map<String, dynamic> meta;
   const MetaEvent(this.meta);
+}
+
+/// Event containing tokens per second (TPS) metric.
+class TpsEvent extends ChatStreamEvent {
+  final double tokensPerSecond;
+  const TpsEvent(this.tokensPerSecond);
 }
 
 /// Event indicating an error occurred.
