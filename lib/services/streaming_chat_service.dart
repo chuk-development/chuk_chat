@@ -61,36 +61,32 @@ class StreamingChatService {
         request.fields[key] = value.toString();
       });
 
-      // Detailed request logging
-      debugPrint('═══════════════════════════════════════════════════════════');
-      debugPrint('📤 STREAMING CHAT REQUEST');
-      debugPrint('Provider: $providerSlug');
-      debugPrint('Model: $modelId');
-      debugPrint('Endpoint: ${request.url}');
-      debugPrint('───────────────────────────────────────────────────────────');
-      debugPrint('Request Details:');
-      debugPrint('  - Message Length: ${message.length} chars');
-      debugPrint('  - Max Tokens: $maxTokens');
-      debugPrint('  - Temperature: $temperature');
-      debugPrint('  - History: ${history?.length ?? 0} messages');
-      debugPrint('  - System Prompt: ${systemPrompt != null ? '${systemPrompt.length} chars' : 'none'}');
-      debugPrint('  - Accept: text/event-stream');
-      debugPrint('═══════════════════════════════════════════════════════════');
+      // Privacy: Only log in debug mode
+      if (kDebugMode) {
+        debugPrint('═══════════════════════════════════════════════════════════');
+        debugPrint('📤 STREAMING CHAT REQUEST');
+        debugPrint('Provider: $providerSlug | Model: $modelId');
+        debugPrint('Message: ${message.length} chars | History: ${history?.length ?? 0}');
+        debugPrint('═══════════════════════════════════════════════════════════');
+      }
 
       response = await client.send(request);
-      debugPrint('📥 Response Status: ${response.statusCode}');
+      if (kDebugMode) {
+        debugPrint('📥 Response Status: ${response.statusCode}');
+      }
 
       if (response.statusCode != 200) {
         final errorBody = await response.stream.bytesToString();
-        debugPrint('❌ Request failed with status ${response.statusCode}');
-        debugPrint('Error: $errorBody');
+        if (kDebugMode) {
+          debugPrint('❌ Request failed with status ${response.statusCode}');
+        }
         throw StreamingChatException(
           'Server returned ${response.statusCode}: $errorBody',
           statusCode: response.statusCode,
         );
       }
 
-      debugPrint('✅ Stream connected successfully');
+      if (kDebugMode) debugPrint('✅ Stream connected');
 
       await for (final chunk
           in response.stream
@@ -102,11 +98,7 @@ class StreamingChatService {
           final data = chunk.substring(6).trim();
 
           if (data == '[DONE]') {
-            debugPrint('═══════════════════════════════════════════════════════════');
-            debugPrint('✅ STREAM COMPLETED SUCCESSFULLY');
-            debugPrint('Provider: $providerSlug');
-            debugPrint('Model: $modelId');
-            debugPrint('═══════════════════════════════════════════════════════════');
+            if (kDebugMode) debugPrint('✅ Stream completed');
             yield const ChatStreamEvent.done();
             break;
           }
@@ -132,24 +124,21 @@ class StreamingChatService {
               yield ChatStreamEvent.error(parsed['error'].toString());
             }
           } catch (e) {
-            debugPrint('Failed to parse SSE data: $data');
+            // Privacy: Don't log raw SSE data in release
+            if (kDebugMode) debugPrint('Failed to parse SSE data');
           }
         }
       }
     } on StreamingChatException {
       rethrow;
     } catch (e, stackTrace) {
-      debugPrint('═══════════════════════════════════════════════════════════');
-      debugPrint('❌ STREAMING ERROR');
-      debugPrint('Provider: $providerSlug');
-      debugPrint('Model: $modelId');
-      debugPrint('Error: $e');
-      debugPrint('Stack Trace: $stackTrace');
-      debugPrint('═══════════════════════════════════════════════════════════');
+      if (kDebugMode) {
+        debugPrint('❌ STREAMING ERROR: $e');
+        debugPrint('Stack: $stackTrace');
+      }
       throw StreamingChatException('Streaming failed: $e');
     } finally {
       client?.close();
-      debugPrint('🧹 Stream resources cleaned up');
     }
   }
 }

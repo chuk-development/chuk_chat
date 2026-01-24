@@ -129,6 +129,32 @@ Enable with `--dart-define=FEATURE_X=true`:
 - `FEATURE_MEDIA_MANAGER` - Media management
 - `FEATURE_VOICE_MODE` - Voice mode button
 
+## Privacy: Logging Policy
+
+**This is a privacy-focused app. ALL logs are disabled in release builds.**
+
+### Rules for Logging:
+1. **ALWAYS** wrap `debugPrint()` in `if (kDebugMode)` check
+2. **NEVER** log user message content, chat text, or titles
+3. **NEVER** log tokens, passwords, or email addresses
+4. **OK** to log: lengths, counts, IDs, status codes, timing
+
+```dart
+// WRONG - logs in release!
+debugPrint('User message: $message');
+
+// CORRECT - only logs in debug
+if (kDebugMode) {
+  debugPrint('Message length: ${message.length} chars');
+}
+```
+
+### Alternative: Use PrivacyLogger
+```dart
+import 'package:chuk_chat/utils/privacy_logger.dart';
+pLog('Safe log message');  // Auto-disabled in release
+```
+
 ## IMPORTANT: After Every Task
 
 1. **Commit** your changes with descriptive message

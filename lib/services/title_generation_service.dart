@@ -136,7 +136,10 @@ Rules:
       // User message - just the content, system prompt handles the instruction
       final userMessage = firstMessage;
 
-      debugPrint('📝 [TitleGen] Generating title for: ${firstMessage.substring(0, firstMessage.length.clamp(0, 50))}...');
+      // Privacy: Don't log user message content in release builds
+      if (kDebugMode) {
+        debugPrint('📝 [TitleGen] Generating title for message (${firstMessage.length} chars)');
+      }
 
       // Use WebSocket streaming (same as main chat)
       final StringBuffer titleBuffer = StringBuffer();
@@ -168,7 +171,10 @@ Rules:
       }
 
       String title = titleBuffer.toString().trim();
-      debugPrint('📝 [TitleGen] Raw buffer content: $title');
+      // Privacy: Don't log generated titles in release builds
+      if (kDebugMode) {
+        debugPrint('📝 [TitleGen] Generated title (${title.length} chars)');
+      }
 
       if (title.isEmpty) {
         debugPrint('📝 [TitleGen] Empty response');
@@ -192,10 +198,15 @@ Rules:
         title = '${title.substring(0, 47)}...';
       }
 
-      debugPrint('📝 [TitleGen] Final cleaned title: $title');
+      // Privacy: Don't log titles in release builds
+      if (kDebugMode) {
+        debugPrint('📝 [TitleGen] Final title ready (${title.length} chars)');
+      }
       return title;
     } catch (e) {
-      debugPrint('📝 [TitleGen] Error: $e');
+      if (kDebugMode) {
+        debugPrint('📝 [TitleGen] Error: $e');
+      }
     }
 
     return null;
@@ -204,19 +215,22 @@ Rules:
   /// Generate and apply a title to a chat.
   /// Should be called after the first message is sent.
   static Future<void> generateAndApplyTitle(String chatId, String firstMessage) async {
-    debugPrint('📝 [TitleGen] generateAndApplyTitle called for chat: $chatId');
-    debugPrint('📝 [TitleGen] First message: ${firstMessage.substring(0, firstMessage.length.clamp(0, 50))}...');
+    // Privacy: Only log non-sensitive metadata
+    if (kDebugMode) {
+      debugPrint('📝 [TitleGen] generateAndApplyTitle called (${firstMessage.length} chars)');
+    }
 
     try {
       // Check if chat already has a custom name
       final chat = ChatStorageService.getChatById(chatId);
-      debugPrint('📝 [TitleGen] Chat lookup result: ${chat != null ? "found" : "NOT FOUND"}');
-      if (chat != null) {
-        debugPrint('📝 [TitleGen] Chat customName: ${chat.customName}');
+      if (kDebugMode) {
+        debugPrint('📝 [TitleGen] Chat lookup: ${chat != null ? "found" : "NOT FOUND"}, hasTitle: ${chat?.customName != null}');
       }
 
       if (chat?.customName != null) {
-        debugPrint('📝 [TitleGen] Chat already has a title, skipping');
+        if (kDebugMode) {
+          debugPrint('📝 [TitleGen] Chat already has a title, skipping');
+        }
         return;
       }
 
