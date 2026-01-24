@@ -7,28 +7,20 @@ class ProfileRecord {
     required this.id,
     required this.email,
     required this.displayName,
-    required this.notificationsEnabled,
-    required this.weeklySummaryEnabled,
   });
 
   final String id;
   final String email;
   final String displayName;
-  final bool notificationsEnabled;
-  final bool weeklySummaryEnabled;
 
   ProfileRecord copyWith({
     String? email,
     String? displayName,
-    bool? notificationsEnabled,
-    bool? weeklySummaryEnabled,
   }) {
     return ProfileRecord(
       id: id,
       email: email ?? this.email,
       displayName: displayName ?? this.displayName,
-      notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
-      weeklySummaryEnabled: weeklySummaryEnabled ?? this.weeklySummaryEnabled,
     );
   }
 
@@ -36,8 +28,6 @@ class ProfileRecord {
     return {
       'id': id,
       'display_name': displayName,
-      'notifications_enabled': notificationsEnabled,
-      'weekly_summary_enabled': weeklySummaryEnabled,
     };
   }
 
@@ -50,8 +40,6 @@ class ProfileRecord {
       id: userId,
       email: userEmail,
       displayName: (data['display_name'] as String?) ?? '',
-      notificationsEnabled: (data['notifications_enabled'] as bool?) ?? true,
-      weeklySummaryEnabled: (data['weekly_summary_enabled'] as bool?) ?? false,
     );
   }
 }
@@ -81,8 +69,6 @@ class ProfileService {
       displayName:
           (user.userMetadata?['display_name'] as String?) ??
           email.split('@').first,
-      notificationsEnabled: true,
-      weeklySummaryEnabled: false,
     );
     await _table.upsert(newRecord.toMap());
     return newRecord;

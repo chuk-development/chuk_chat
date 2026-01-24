@@ -23,8 +23,6 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
   final TextEditingController _newPasswordCtrl = TextEditingController();
   final TextEditingController _confirmPasswordCtrl = TextEditingController();
 
-  bool _notificationsEnabled = true;
-  bool _weeklySummaryEnabled = false;
   bool _isSaving = false;
   bool _isLoading = true;
   bool _isChangingPassword = false;
@@ -65,8 +63,6 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         _profile = record;
         _displayNameCtrl.text = record.displayName;
         _emailCtrl.text = record.email;
-        _notificationsEnabled = record.notificationsEnabled;
-        _weeklySummaryEnabled = record.weeklySummaryEnabled;
         _isLoading = false;
       });
     } on ProfileServiceException catch (error) {
@@ -95,8 +91,6 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     try {
       final updatedRecord = _profile!.copyWith(
         displayName: _displayNameCtrl.text.trim(),
-        notificationsEnabled: _notificationsEnabled,
-        weeklySummaryEnabled: _weeklySummaryEnabled,
       );
 
       await _profileService.saveProfile(updatedRecord);
@@ -301,32 +295,6 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
           ),
           const SizedBox(height: 24),
           _AccountSectionCard(
-            title: 'Notifications',
-            description: 'Choose which updates you want to receive.',
-            child: Column(
-              children: [
-                SwitchListTile(
-                  value: _notificationsEnabled,
-                  title: const Text('Enable push notifications'),
-                  subtitle: const Text('Important activity and chat mentions'),
-                  onChanged: (value) {
-                    setState(() => _notificationsEnabled = value);
-                  },
-                ),
-                const Divider(height: 1),
-                SwitchListTile(
-                  value: _weeklySummaryEnabled,
-                  title: const Text('Weekly summary email'),
-                  subtitle: const Text('Sends highlights every Monday morning'),
-                  onChanged: (value) {
-                    setState(() => _weeklySummaryEnabled = value);
-                  },
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-          _AccountSectionCard(
             title: 'Security',
             description: 'Reassure yourself everything is protected.',
             child: Column(
@@ -474,29 +442,30 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                         : const Text('Update password'),
                   ),
                 ),
-                const SizedBox(height: 24),
-                const Divider(height: 1),
-                const SizedBox(height: 24),
-                Text(
-                  'Two-factor authentication',
-                  style: theme.textTheme.titleMedium,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Coming soon. You\'ll be able to secure logins with authenticator apps.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: iconFg.withValues(alpha: 0.7),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text('Connected devices', style: theme.textTheme.titleMedium),
-                const SizedBox(height: 4),
-                Text(
-                  'Manage the sessions where your account is active once we ship device management.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: iconFg.withValues(alpha: 0.7),
-                  ),
-                ),
+                // TODO: Enable when backend supports these features
+                // const SizedBox(height: 24),
+                // const Divider(height: 1),
+                // const SizedBox(height: 24),
+                // Text(
+                //   'Two-factor authentication',
+                //   style: theme.textTheme.titleMedium,
+                // ),
+                // const SizedBox(height: 4),
+                // Text(
+                //   'Coming soon. You\'ll be able to secure logins with authenticator apps.',
+                //   style: theme.textTheme.bodySmall?.copyWith(
+                //     color: iconFg.withValues(alpha: 0.7),
+                //   ),
+                // ),
+                // const SizedBox(height: 16),
+                // Text('Connected devices', style: theme.textTheme.titleMedium),
+                // const SizedBox(height: 4),
+                // Text(
+                //   'Manage the sessions where your account is active once we ship device management.',
+                //   style: theme.textTheme.bodySmall?.copyWith(
+                //     color: iconFg.withValues(alpha: 0.7),
+                //   ),
+                // ),
               ],
             ),
           ),
