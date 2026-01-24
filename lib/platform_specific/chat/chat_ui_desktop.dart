@@ -1339,10 +1339,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _scrollChatToBottom();
   }
 
-  void _cancelStream() {
+  Future<void> _cancelStream() async {
     if (_activeChatId != null && _isStreaming) {
-      debugPrint('Cancelling stream for chat $_activeChatId...');
-      unawaited(_streamingManager.cancelStream(_activeChatId!));
+      if (kDebugMode) {
+        debugPrint('Cancelling stream for chat $_activeChatId...');
+      }
+      await _streamingManager.cancelStream(_activeChatId!);
 
       setState(() {
         _isSending = false;
@@ -1362,6 +1364,23 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
       _persistChat();
       _showSnackBar('Response cancelled');
+    }
+  }
+
+  /// Cancel any ongoing operation (streaming or sending)
+  Future<void> _cancelCurrentOperation() async {
+    if (_isStreaming) {
+      // Stream is active - cancel via existing method
+      await _cancelStream();
+    } else if (_isSending) {
+      // Only sending flag is set (stream not yet started) - reset state
+      setState(() {
+        _isSending = false;
+      });
+      if (ChatStorageService.isMessageOperationInProgress) {
+        ChatStorageService.isMessageOperationInProgress = false;
+      }
+      _showSnackBar('Cancelled');
     }
   }
 
@@ -1570,13 +1589,17 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // SET GLOBAL LOCK IMMEDIATELY - before any async operations
     // This prevents didUpdateWidget from switching chats during the entire operation
     ChatStorageService.isMessageOperationInProgress = true;
-    debugPrint('🔒 [SendMessage] GLOBAL LOCK SET');
+    if (kDebugMode) {
+      debugPrint('🔒 [SendMessage] GLOBAL LOCK SET');
+    }
 
     if (_isStreaming) {
       // Current chat is streaming - cancel it
-      _cancelStream();
+      await _cancelStream();
       ChatStorageService.isMessageOperationInProgress = false;
-      debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (cancelled)');
+      if (kDebugMode) {
+        debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (cancelled)');
+      }
       return;
     }
 
@@ -3018,7 +3041,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 onTap: _isTranscribingAudio || _isGeneratingImage
                     ? null
                     : () {
-                        if (_isImageGenMode && !_isStreaming) {
+                        if (_isStreaming || _isSending) {
+                          _cancelCurrentOperation();
+                        } else if (_isImageGenMode) {
                           _generateImage();
                         } else {
                           _sendMessage();
@@ -3028,7 +3053,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                   width: btnW,
                   height: btnH,
                   decoration: BoxDecoration(
-                    color: _isStreaming
+                    color: (_isStreaming || _isSending)
                         ? Colors.red
                         : _isImageGenMode
                             ? accent.withValues(alpha: 0.9)
@@ -3046,7 +3071,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                           ),
                         )
                       : Icon(
-                          _isStreaming
+                          (_isStreaming || _isSending)
                               ? Icons.stop
                               : _isImageGenMode
                                   ? Icons.auto_awesome

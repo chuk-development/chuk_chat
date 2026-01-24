@@ -1,4 +1,5 @@
 // lib/platform_specific/chat/chat_ui_mobile.dart
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -1904,12 +1905,16 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     // Clear flags since stream was cancelled
     if (_isSendingMessage) {
       _isSendingMessage = false;
-      debugPrint('🚫 [CancelledMessage] Cleared _isSendingMessage flag');
+      if (kDebugMode) {
+        debugPrint('🚫 [CancelledMessage] Cleared _isSendingMessage flag');
+      }
     }
     // RELEASE GLOBAL LOCK when stream is cancelled
     if (ChatStorageService.isMessageOperationInProgress) {
       ChatStorageService.isMessageOperationInProgress = false;
-      debugPrint('🔓 [CancelledMessage] GLOBAL LOCK RELEASED (stream cancelled)');
+      if (kDebugMode) {
+        debugPrint('🔓 [CancelledMessage] GLOBAL LOCK RELEASED (stream cancelled)');
+      }
     }
 
     if (mounted) {
@@ -1928,6 +1933,26 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         }
       });
       _persistChat();
+    }
+  }
+
+  /// Cancel any ongoing operation (streaming or sending)
+  Future<void> _cancelCurrentOperation() async {
+    if (_isCurrentChatStreaming) {
+      // Stream is active - cancel via handler
+      await _streamingHandler.cancelStream(_activeChatId);
+      _updateCancelledMessage();
+    } else if (_isSendingMessage) {
+      // Only sending flag is set (stream not yet started) - reset state
+      _streamingHandler.resetState();
+      _isSendingMessage = false;
+      if (ChatStorageService.isMessageOperationInProgress) {
+        ChatStorageService.isMessageOperationInProgress = false;
+      }
+      if (mounted) {
+        setState(() {});
+        _showSnackBar('Cancelled');
+      }
     }
   }
 
@@ -2713,7 +2738,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           buildTinyActionButton(
             icon: _audioHandler.isMicActive
                 ? Icons.send_rounded
-                : (_isCurrentChatStreaming
+                : ((_isCurrentChatStreaming || _isSendingMessage)
                       ? Icons.stop_rounded
                       : _isImageGenMode
                           ? Icons.auto_awesome
@@ -2722,8 +2747,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                 : Icons.arrow_upward_rounded)),
             onTap: _audioHandler.isMicActive
                 ? _handleAudioSend
-                : (_isCurrentChatStreaming
-                      ? _sendMessage
+                : ((_isCurrentChatStreaming || _isSendingMessage)
+                      ? _cancelCurrentOperation
                       : _isImageGenMode && !_isGeneratingImage
                           ? _generateImage
                           : (_controller.text.trim().isEmpty && !hasAttachments && kFeatureVoiceMode
@@ -2731,7 +2756,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                 : _sendMessage)),
             color: _audioHandler.isMicActive
                 ? accent
-                : (_isCurrentChatStreaming ? Colors.red : accent),
+                : ((_isCurrentChatStreaming || _isSendingMessage) ? Colors.red : accent),
             isLoading: _audioHandler.isTranscribingAudio || _isGeneratingImage,
           ),
           const SizedBox(width: 4),

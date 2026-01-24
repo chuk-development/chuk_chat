@@ -1,5 +1,6 @@
 // lib/platform_specific/chat/handlers/streaming_message_handler.dart
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/services/websocket_chat_service.dart';
 import 'package:chuk_chat/services/streaming_manager.dart';
@@ -47,7 +48,7 @@ class StreamingMessageHandler {
     }
 
     if (_isStreaming) {
-      cancelStream(activeChatId);
+      await cancelStream(activeChatId);
       return;
     }
 
@@ -63,9 +64,11 @@ class StreamingMessageHandler {
     }
 
     // Debug: Log attached files
-    debugPrint('📎 [StreamingHandler] Received ${attachedFiles.length} attached files');
-    for (final f in attachedFiles) {
-      debugPrint('  - ${f.fileName}: isImage=${f.isImage}, encryptedPath=${f.encryptedImagePath}, isUploading=${f.isUploading}');
+    if (kDebugMode) {
+      debugPrint('📎 [StreamingHandler] Received ${attachedFiles.length} attached files');
+      for (final f in attachedFiles) {
+        debugPrint('  - ${f.fileName}: isImage=${f.isImage}, encryptedPath=${f.encryptedImagePath}, isUploading=${f.isUploading}');
+      }
     }
 
     // Build API history
@@ -101,11 +104,13 @@ class StreamingMessageHandler {
     final List<String>? images = result.images;
 
     // Debug: Log what images we're sending
-    debugPrint('🚀 [StreamingHandler] Sending to API:');
-    debugPrint('  - images: ${images?.length ?? 0}');
-    if (images != null && images.isNotEmpty) {
-      for (int i = 0; i < images.length; i++) {
-        debugPrint('  - image[$i]: ${images[i].substring(0, 50)}...');
+    if (kDebugMode) {
+      debugPrint('🚀 [StreamingHandler] Sending to API:');
+      debugPrint('  - images: ${images?.length ?? 0}');
+      if (images != null && images.isNotEmpty) {
+        for (int i = 0; i < images.length; i++) {
+          debugPrint('  - image[$i]: ${images[i].substring(0, 50)}...');
+        }
       }
     }
 
@@ -198,7 +203,9 @@ class StreamingMessageHandler {
         },
       );
     } catch (error) {
-      debugPrint('Failed to start stream: $error');
+      if (kDebugMode) {
+        debugPrint('Failed to start stream: $error');
+      }
       if (onMessageFinalize != null) {
         onMessageFinalize!(
           placeholderIndex,
@@ -217,16 +224,25 @@ class StreamingMessageHandler {
   }
 
   /// Cancel active stream
-  void cancelStream(String? chatId) {
-    if (chatId != null && _isStreaming) {
-      debugPrint('Cancelling stream for chat $chatId...');
-      _streamingManager.cancelStream(chatId);
+  Future<void> cancelStream(String? chatId) async {
+    if (chatId != null && (_isStreaming || _isSending)) {
+      if (kDebugMode) {
+        debugPrint('Cancelling stream for chat $chatId...');
+      }
+      await _streamingManager.cancelStream(chatId);
 
       _isStreaming = false;
       _isSending = false;
       onShowSnackBar?.call('Response cancelled');
       onUpdateUI?.call();
     }
+  }
+
+  /// Reset state (use when stuck in invalid state)
+  void resetState() {
+    _isStreaming = false;
+    _isSending = false;
+    onUpdateUI?.call();
   }
 
   /// Check if a specific chat is streaming
@@ -300,13 +316,17 @@ class StreamingMessageHandler {
     } catch (error) {
       // Check if this is a network error
       if (NetworkStatusService.isNetworkError(error)) {
-        debugPrint('Network error during session refresh: $error');
+        if (kDebugMode) {
+          debugPrint('Network error during session refresh: $error');
+        }
         onShowSnackBar?.call('Network error. Please check your connection.');
         return null;
       }
 
       // Not a network error, likely auth issue
-      debugPrint('Auth error during session refresh: $error');
+      if (kDebugMode) {
+        debugPrint('Auth error during session refresh: $error');
+      }
       onShowSnackBar?.call('Authentication error. Please sign in again.');
       await SupabaseService.signOut();
       return null;

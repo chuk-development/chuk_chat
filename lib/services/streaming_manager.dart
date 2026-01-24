@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/models/chat_stream_event.dart';
 import 'package:chuk_chat/services/streaming_foreground_service.dart';
+import 'package:chuk_chat/services/notification_service.dart';
 
 /// Manages multiple concurrent chat streams across different chats
 class StreamingManager {
@@ -40,6 +41,7 @@ class StreamingManager {
     required Function(String content, String reasoning) onUpdate,
     required Function(String content, String reasoning, double? tps) onComplete,
     required Function(String error) onError,
+    String? chatTitle,
   }) async {
     // Cancel existing stream for this chat if any
     await cancelStream(chatId);
@@ -72,21 +74,37 @@ class StreamingManager {
           activeStream.tps = event.tokensPerSecond;
         } else if (event is ErrorEvent) {
           // Handle error events from the stream (e.g., API errors)
-          debugPrint('Stream ErrorEvent for chat $chatId: ${event.message}');
+          if (kDebugMode) {
+            debugPrint('Stream ErrorEvent for chat $chatId: ${event.message}');
+          }
           onError(event.message);
           _cleanupStream(chatId);
         } else if (event is DoneEvent) {
           // Handle done events from the stream (successful completion)
-          debugPrint('Stream DoneEvent for chat $chatId');
+          if (kDebugMode) {
+            debugPrint('Stream DoneEvent for chat $chatId');
+          }
           final finalContent = activeStream.contentBuffer.toString();
           final finalReasoning = activeStream.reasoningBuffer.toString();
+
+          // Show completion notification if app is in background
+          if (_isAppInBackground && (Platform.isAndroid || Platform.isIOS)) {
+            unawaited(NotificationService.showCompletionNotification(
+              chatId: chatId,
+              chatTitle: activeStream.chatTitle ?? 'AI Chat',
+              contentPreview: finalContent,
+            ));
+          }
+
           onComplete(finalContent, finalReasoning, activeStream.tps);
           _cleanupStream(chatId);
         }
         // UsageEvent and MetaEvent are ignored (just logging)
       },
       onError: (error) {
-        debugPrint('Stream subscription error for chat $chatId: $error');
+        if (kDebugMode) {
+          debugPrint('Stream subscription error for chat $chatId: $error');
+        }
         onError('Error: $error');
         _cleanupStream(chatId);
       },
@@ -95,14 +113,24 @@ class StreamingManager {
         final activeStream = _activeStreams[chatId];
         if (activeStream == null || !activeStream.isActive) return;
 
-        debugPrint('Stream subscription closed for chat $chatId');
+        if (kDebugMode) {
+          debugPrint('Stream subscription closed for chat $chatId');
+        }
         final finalContent = activeStream.contentBuffer.toString();
         final finalReasoning = activeStream.reasoningBuffer.toString();
 
-        // Only call onComplete if there's content (avoid duplicate calls if DoneEvent already fired)
-        if (finalContent.isNotEmpty) {
-          onComplete(finalContent, finalReasoning, activeStream.tps);
+        // Show completion notification if app is in background
+        if (_isAppInBackground && (Platform.isAndroid || Platform.isIOS)) {
+          unawaited(NotificationService.showCompletionNotification(
+            chatId: chatId,
+            chatTitle: activeStream.chatTitle ?? 'AI Chat',
+            contentPreview: finalContent,
+          ));
         }
+
+        // Always call onComplete - handler will show "empty response" message if needed
+        // This ensures UI state is properly reset even for reasoning-only streams
+        onComplete(finalContent, finalReasoning, activeStream.tps);
 
         _cleanupStream(chatId);
       },
@@ -113,6 +141,7 @@ class StreamingManager {
       subscription: streamSub,
       messageIndex: messageIndex,
       chatId: chatId,
+      chatTitle: chatTitle,
     );
   }
 
@@ -122,7 +151,9 @@ class StreamingManager {
     if (activeStream != null) {
       await activeStream.subscription.cancel();
       _activeStreams.remove(chatId);
-      debugPrint('Cancelled stream for chat $chatId');
+      if (kDebugMode) {
+        debugPrint('Cancelled stream for chat $chatId');
+      }
     }
   }
 
@@ -173,7 +204,9 @@ class StreamingManager {
 
     if (isInBackground && hasActiveStreams) {
       // App went to background with active streams - start foreground service
-      debugPrint('[StreamingManager] App backgrounded with active streams - starting foreground service');
+      if (kDebugMode) {
+        debugPrint('[StreamingManager] App backgrounded with active streams - starting foreground service');
+      }
       unawaited(StreamingForegroundService.startService().then((_) {
         // Update notification with current content
         for (final stream in _activeStreams.values) {
@@ -188,7 +221,9 @@ class StreamingManager {
       }));
     } else if (!isInBackground && StreamingForegroundService.isRunning) {
       // App came to foreground - stop foreground service (notification no longer needed)
-      debugPrint('[StreamingManager] App resumed - stopping foreground service');
+      if (kDebugMode) {
+        debugPrint('[StreamingManager] App resumed - stopping foreground service');
+      }
       unawaited(StreamingForegroundService.stopService());
     }
   }
@@ -250,7 +285,9 @@ class StreamingManager {
     stream.backgroundMessages = messages;
     stream.modelId = modelId;
     stream.provider = provider;
-    debugPrint('[StreamingManager] Stored ${messages.length} background messages for chat $chatId');
+    if (kDebugMode) {
+      debugPrint('[StreamingManager] Stored ${messages.length} background messages for chat $chatId');
+    }
   }
 
   /// Get background messages with current buffer content applied
@@ -283,6 +320,7 @@ class _ActiveStream {
   final StreamSubscription<ChatStreamEvent> subscription;
   final int messageIndex;
   final String chatId;
+  final String? chatTitle;
   final StringBuffer contentBuffer = StringBuffer();
   final StringBuffer reasoningBuffer = StringBuffer();
   bool isActive = true;
@@ -299,5 +337,6 @@ class _ActiveStream {
     required this.subscription,
     required this.messageIndex,
     required this.chatId,
+    this.chatTitle,
   });
 }

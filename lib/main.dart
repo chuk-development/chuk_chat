@@ -20,6 +20,7 @@ import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/streaming_foreground_service.dart';
 import 'package:chuk_chat/services/streaming_manager.dart';
+import 'package:chuk_chat/services/notification_service.dart';
 import 'package:chuk_chat/services/theme_settings_service.dart';
 import 'package:chuk_chat/services/customization_preferences_service.dart';
 import 'package:chuk_chat/widgets/auth_gate.dart';
@@ -72,6 +73,9 @@ class ChukChatApp extends StatefulWidget {
 }
 
 class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
+  // Navigator key for deep linking from notifications
+  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
   // Theme state managed by ChukChatApp
   Brightness _currentThemeMode = kDefaultThemeMode;
   Color _currentAccentColor = kDefaultAccentColor;
@@ -136,6 +140,11 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
     await _waitForSupabase();
 
     if (!mounted) return;
+
+    // Initialize notification service for completion notifications
+    await NotificationService.initialize(navigatorKey);
+    // Check if app was launched from a notification
+    await NotificationService.checkLaunchNotification();
 
     // Now we can safely access Supabase
     _authSubscription = SupabaseService.auth.onAuthStateChange.listen((
@@ -641,6 +650,7 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
     );
 
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'chuk.chat',
       debugShowCheckedModeBanner: false,
       theme: _cachedThemeData,
