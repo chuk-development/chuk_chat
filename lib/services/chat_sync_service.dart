@@ -1,7 +1,9 @@
 // lib/services/chat_sync_service.dart
 import 'dart:async';
 
+import 'package:chuk_chat/services/chat_storage_mutations.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -189,6 +191,9 @@ class ChatSyncService {
         // Process fetched chats using batch method for better performance
         // This decrypts all chats in a single isolate, avoiding UI blocking
         await ChatStorageService.mergeSyncedChatsBatch(fullChats.cast<Map<String, dynamic>>());
+
+        // Persist updated titles to cache so they survive app restart
+        await saveTitlesToCache(user.id, ChatStorageState.chatsById.values.toList());
       }
 
       // Step 3: Remove deleted chats from local state
