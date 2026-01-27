@@ -3,102 +3,61 @@
 import 'package:chuk_chat/services/model_cache_service.dart';
 
 /// Service for determining model capabilities like vision support.
-/// Primarily uses API data (supports_vision field), with fallback to heuristics.
+/// Uses ONLY cached API data (supports_vision field from /v1/models_info).
+/// No hardcoded model lists - all capability data comes from the API.
 class ModelCapabilitiesService {
   const ModelCapabilitiesService._();
 
-  // Fallback hardcoded list for when API data is unavailable
-  static final Set<String> _fallbackImageModelIds = <String>{
-    'openai/gpt-4o',
-    'openai/gpt-4o-mini',
-    'openai/gpt-4.1',
-    'openai/gpt-4.1-mini',
-    'openai/gpt-4.1-preview',
-    'openai/gpt-4.1-turbo',
-    'openai/gpt-4-turbo',
-    'openai/gpt-4.1-small',
-    'openai/gpt-4o-realtime-preview',
-    'google/gemini-1.5-pro',
-    'google/gemini-1.5-flash',
-    'google/gemini-2.0-flash-thinking-exp',
-    'google/gemini-2.0-flash',
-    'google/gemini-2.0-flash-lite',
-    'meta-llama/llama-3.2-90b-vision-instruct',
-    'meta-llama/llama-3.2-11b-vision-instruct',
-    'meta-llama/llama-3.2-8b-vision',
-    'meta-llama/llama-3.2-11b-vision',
-    'anthropic/claude-3-opus',
-    'anthropic/claude-3-sonnet',
-    'anthropic/claude-3-haiku',
-    'anthropic/claude-3.5-sonnet',
-    'anthropic/claude-3.5-haiku',
-    'anthropic/claude-3.5-sonnet-thinking',
-    'deepseek/deepseek-vl',
-    'x-ai/grok-2',
-    'qwen/qwen2.5-vl-72b-instruct',
-    'qwen/qwen2.5-vl-7b-instruct',
-    'qwen/qwen2-vl-7b-instruct',
-    'zhipu/glaive-v-1',
-    'ideogram/ideogram-1.0',
-    'moonshotai/kimi-k2.5',
-  }.map((id) => id.toLowerCase()).toSet();
+  // In-memory cache for vision support lookups (modelId -> supportsVision)
+  static final Map<String, bool> _visionSupportCache = {};
+  static bool _isInitialized = false;
 
-  static const Set<String> _fallbackImageKeywords = <String>{
-    'vision',
-    'vl',
-    'multimodal',
-    'vision-instruct',
-    'gpt-4o',
-    'gpt-4.1',
-    'gpt-4-turbo',
-    'gpt4o',
-    'gpt4-vision',
-    'gemini-1.5',
-    'gemini-2.0',
-  };
+  /// Initialize the in-memory cache from disk cache.
+  /// Should be called at app startup after ModelPrefetchService runs.
+  static Future<void> initialize() async {
+    if (_isInitialized) return;
+
+    try {
+      final cachedModels = await ModelCacheService.loadAvailableModels();
+      _visionSupportCache.clear();
+      for (final model in cachedModels) {
+        final modelId = model['id'];
+        final supportsVision = model['supports_vision'];
+        if (modelId is String && supportsVision is bool) {
+          _visionSupportCache[modelId] = supportsVision;
+        }
+      }
+      _isInitialized = true;
+    } catch (_) {
+      // If initialization fails, cache stays empty (all models = no vision)
+      _isInitialized = false;
+    }
+  }
 
   /// Returns `true` if the provided model id supports image input.
-  ///
-  /// Priority:
-  /// 1. Check cached API data for supports_vision field
-  /// 2. Fallback to hardcoded list
-  /// 3. Fallback to keyword matching
+  /// Uses cached API data exclusively - no hardcoded fallbacks.
   static Future<bool> supportsImageInput(String modelId) async {
     if (modelId.isEmpty) return false;
 
-    // Try to get data from API cache first
-    try {
-      final cachedModels = await ModelCacheService.loadAvailableModels();
-      for (final model in cachedModels) {
-        if (model['id'] == modelId) {
-          final supportsVision = model['supports_vision'];
-          if (supportsVision is bool) {
-            return supportsVision;
-          }
-          break;
-        }
-      }
-    } catch (_) {
-      // Continue to fallback if cache read fails
+    // Ensure cache is loaded
+    if (!_isInitialized) {
+      await initialize();
     }
 
-    // Fallback to heuristics
-    return _supportsImageInputFallback(modelId);
+    return _visionSupportCache[modelId] ?? false;
   }
 
-  /// Synchronous fallback method using hardcoded lists
-  static bool _supportsImageInputFallback(String modelId) {
-    final String lowerId = modelId.toLowerCase();
-    if (_fallbackImageModelIds.contains(lowerId)) {
-      return true;
-    }
-    return _fallbackImageKeywords.any(lowerId.contains);
-  }
-
-  /// Synchronous version for cases where async is not possible
-  /// Uses only hardcoded heuristics
+  /// Synchronous version for UI - uses in-memory cache.
+  /// Returns false if model not found or cache not yet initialized.
   static bool supportsImageInputSync(String modelId) {
     if (modelId.isEmpty) return false;
-    return _supportsImageInputFallback(modelId);
+    return _visionSupportCache[modelId] ?? false;
+  }
+
+  /// Refresh the in-memory cache from disk.
+  /// Call this after model data is refreshed from API.
+  static Future<void> refresh() async {
+    _isInitialized = false;
+    await initialize();
   }
 }

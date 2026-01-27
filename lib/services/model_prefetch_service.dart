@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/model_cache_service.dart';
+import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 
@@ -35,6 +36,8 @@ class ModelPrefetchService {
       final cacheValid = await ModelCacheService.isCacheValid();
       if (cacheValid) {
         debugPrint('📦 [ModelPrefetch] Cache valid, skipping network fetch');
+        // Initialize capabilities service with cached data
+        await ModelCapabilitiesService.initialize();
         return;
       }
 
@@ -77,6 +80,8 @@ class ModelPrefetchService {
               .toList(growable: false);
           await ModelCacheService.saveAvailableModels(payload);
           debugPrint('✅ [ModelPrefetch] Cached ${payload.length} models');
+          // Initialize capabilities service with fresh data
+          await ModelCapabilitiesService.refresh();
         }
       }
     } on TimeoutException {
