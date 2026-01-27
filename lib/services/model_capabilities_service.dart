@@ -1,12 +1,14 @@
 // lib/services/model_capabilities_service.dart
 
-/// Lightweight heuristics for determining feature support for a given model id.
-/// The API does not yet expose explicit capability metadata, so we fall back to
-/// a curated allow-list and keyword matching for common multimodal models.
+import 'package:chuk_chat/services/model_cache_service.dart';
+
+/// Service for determining model capabilities like vision support.
+/// Primarily uses API data (supports_vision field), with fallback to heuristics.
 class ModelCapabilitiesService {
   const ModelCapabilitiesService._();
 
-  static final Set<String> _imageModelIds = <String>{
+  // Fallback hardcoded list for when API data is unavailable
+  static final Set<String> _fallbackImageModelIds = <String>{
     'openai/gpt-4o',
     'openai/gpt-4o-mini',
     'openai/gpt-4.1',
@@ -38,9 +40,10 @@ class ModelCapabilitiesService {
     'qwen/qwen2-vl-7b-instruct',
     'zhipu/glaive-v-1',
     'ideogram/ideogram-1.0',
+    'moonshotai/kimi-k2.5',
   }.map((id) => id.toLowerCase()).toSet();
 
-  static const Set<String> _imageKeywords = <String>{
+  static const Set<String> _fallbackImageKeywords = <String>{
     'vision',
     'vl',
     'multimodal',
@@ -54,14 +57,48 @@ class ModelCapabilitiesService {
     'gemini-2.0',
   };
 
-  /// Returns `true` if the provided model id is known (or inferred) to accept
-  /// image uploads as part of the prompt.
-  static bool supportsImageInput(String modelId) {
+  /// Returns `true` if the provided model id supports image input.
+  ///
+  /// Priority:
+  /// 1. Check cached API data for supports_vision field
+  /// 2. Fallback to hardcoded list
+  /// 3. Fallback to keyword matching
+  static Future<bool> supportsImageInput(String modelId) async {
     if (modelId.isEmpty) return false;
+
+    // Try to get data from API cache first
+    try {
+      final cachedModels = await ModelCacheService.loadAvailableModels();
+      for (final model in cachedModels) {
+        if (model['id'] == modelId) {
+          final supportsVision = model['supports_vision'];
+          if (supportsVision is bool) {
+            return supportsVision;
+          }
+          break;
+        }
+      }
+    } catch (_) {
+      // Continue to fallback if cache read fails
+    }
+
+    // Fallback to heuristics
+    return _supportsImageInputFallback(modelId);
+  }
+
+  /// Synchronous fallback method using hardcoded lists
+  static bool _supportsImageInputFallback(String modelId) {
     final String lowerId = modelId.toLowerCase();
-    if (_imageModelIds.contains(lowerId)) {
+    if (_fallbackImageModelIds.contains(lowerId)) {
       return true;
     }
-    return _imageKeywords.any(lowerId.contains);
+    return _fallbackImageKeywords.any(lowerId.contains);
+  }
+
+  /// Synchronous version for cases where async is not possible
+  /// Uses only hardcoded heuristics
+  static bool supportsImageInputSync(String modelId) {
+    if (modelId.isEmpty) return false;
+    return _supportsImageInputFallback(modelId);
   }
 }

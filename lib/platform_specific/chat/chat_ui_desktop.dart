@@ -616,7 +616,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   }
 
   bool get _modelSupportsImageInput =>
-      ModelCapabilitiesService.supportsImageInput(_selectedModelId);
+      ModelCapabilitiesService.supportsImageInputSync(_selectedModelId);
 
   bool _isImageExtension(String extension) {
     return FileConstants.imageExtensions.contains(extension);

@@ -2211,7 +2211,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   }
 
   bool get _modelSupportsImageInput =>
-      ModelCapabilitiesService.supportsImageInput(_selectedModelId);
+      ModelCapabilitiesService.supportsImageInputSync(_selectedModelId);
 
   void _openComingSoonFeature(String featureName) {
     if (!mounted) return;

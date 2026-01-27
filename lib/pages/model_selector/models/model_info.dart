@@ -83,6 +83,7 @@ class CustomModelInfo {
   final String id;
   final String name;
   final String? description;
+  final bool supportsVision;
   final List<ModelProviderInfo> providers;
   final String? iconUrl;
 
@@ -90,6 +91,7 @@ class CustomModelInfo {
     required this.id,
     required this.name,
     this.description,
+    required this.supportsVision,
     required this.providers,
     this.iconUrl,
   });
@@ -104,6 +106,7 @@ class CustomModelInfo {
       id: json['id'] as String,
       name: json['name'] as String,
       description: json['description'] as String?,
+      supportsVision: json['supports_vision'] as bool? ?? false,
       providers: providers,
       iconUrl: json['icon_url'] as String?,
     );
