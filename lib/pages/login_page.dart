@@ -29,6 +29,7 @@ class _LoginPageState extends State<LoginPage> {
   bool _isSignInMode = true;
   bool _obscurePassword = true;
   bool _agreedToTerms = false;
+  bool _confirmedAge = false;
   String? _errorMessage;
   String _currentPassword = '';
 
@@ -60,6 +61,14 @@ class _LoginPageState extends State<LoginPage> {
     if (!_isSignInMode && !_agreedToTerms) {
       setState(() {
         _errorMessage = 'You must agree to the Terms of Service and Privacy Policy to create an account.';
+      });
+      return;
+    }
+
+    // Check if user confirmed minimum age when signing up
+    if (!_isSignInMode && !_confirmedAge) {
+      setState(() {
+        _errorMessage = 'You must be at least 16 years old to use this service.';
       });
       return;
     }
@@ -172,6 +181,7 @@ class _LoginPageState extends State<LoginPage> {
       _isSignInMode = !_isSignInMode;
       _errorMessage = null;
       _agreedToTerms = false; // Reset checkbox when switching modes
+      _confirmedAge = false;
     });
   }
 
@@ -318,26 +328,8 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                       ),
                     ],
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      height: 48,
-                      child: ElevatedButton(
-                        onPressed: _isSubmitting ? null : _handleSubmit,
-                        child: _isSubmitting
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : Text(
-                                _isSignInMode ? 'Sign in' : 'Create account',
-                              ),
-                      ),
-                    ),
                     if (!_isSignInMode) ...[
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -404,7 +396,61 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                         ],
                       ),
+                      const SizedBox(height: 4),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Checkbox(
+                            value: _confirmedAge,
+                            onChanged: (bool? value) {
+                              setState(() {
+                                _confirmedAge = value ?? false;
+                              });
+                            },
+                            activeColor: theme.colorScheme.primary,
+                            fillColor: WidgetStateProperty.resolveWith<Color>((states) {
+                              if (states.contains(WidgetState.selected)) {
+                                return theme.colorScheme.primary;
+                              }
+                              return Colors.transparent;
+                            }),
+                            side: BorderSide(
+                              color: iconFg.withValues(alpha: 0.5),
+                              width: 2,
+                            ),
+                          ),
+                          Expanded(
+                            child: Text(
+                              'I confirm that I am at least 16 years old',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: iconFg.withValues(alpha: 0.7),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: _isSubmitting ||
+                                (!_isSignInMode && (!_agreedToTerms || !_confirmedAge))
+                            ? null
+                            : _handleSubmit,
+                        child: _isSubmitting
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : Text(
+                                _isSignInMode ? 'Sign in' : 'Create account',
+                              ),
+                      ),
+                    ),
                     const SizedBox(height: 16),
                     TextButton(
                       onPressed: _isSubmitting ? null : _toggleMode,
