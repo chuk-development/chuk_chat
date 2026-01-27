@@ -831,7 +831,21 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
                             Text('Best', style: TextStyle(color: iconFgColor)),
                           ],
                         )
-                      else
+                      else ...[
+                        if (model.iconUrl != null && model.iconUrl!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: ClipOval(
+                              child: Image.network(
+                                model.iconUrl!,
+                                width: 20,
+                                height: 20,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    Icon(Icons.grid_3x3, color: iconFgColor, size: 16),
+                              ),
+                            ),
+                          ),
                         Expanded(
                           child: Text(
                             model.name,
@@ -843,6 +857,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
                             softWrap: false,
                           ),
                         ),
+                      ],
                       const SizedBox(width: 12),
                       if (!model.isToggle && selected)
                         Icon(Icons.check, color: iconFgColor, size: 18),

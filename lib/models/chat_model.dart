@@ -5,12 +5,14 @@ class ModelItem {
   final String value; // Model ID (slug for API)
   final bool isToggle; // Not from API, for potential local use
   final String? badge; // Not from API, for potential local use
+  final String? iconUrl; // Icon URL from API
 
   ModelItem({
     required this.name,
     required this.value,
     this.isToggle = false,
     this.badge,
+    this.iconUrl,
   });
 
   // Factory constructor to create ModelItem from API JSON
@@ -22,6 +24,7 @@ class ModelItem {
               as String, // 'id' from API becomes 'value' for internal use
       isToggle: false, // Defaulting as not from API
       badge: null, // Defaulting as not from API
+      iconUrl: json['icon_url'] as String?,
     );
   }
 

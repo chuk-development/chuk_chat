@@ -28,8 +28,10 @@ class ModelCapabilitiesService {
         }
       }
       _isInitialized = true;
-    } catch (_) {
+      debugPrint('✅ [ModelCapabilities] Initialized with ${_visionSupportCache.length} models, ${_visionSupportCache.entries.where((e) => e.value).length} support vision');
+    } catch (error) {
       // If initialization fails, cache stays empty (all models = no vision)
+      debugPrint('⚠️ [ModelCapabilities] Initialization failed: $error');
       _isInitialized = false;
     }
   }
@@ -51,7 +53,11 @@ class ModelCapabilitiesService {
   /// Returns false if model not found or cache not yet initialized.
   static bool supportsImageInputSync(String modelId) {
     if (modelId.isEmpty) return false;
-    return _visionSupportCache[modelId] ?? false;
+    final supports = _visionSupportCache[modelId] ?? false;
+    if (!_isInitialized && modelId.isNotEmpty) {
+      debugPrint('⚠️ [ModelCapabilities] Checked $modelId before initialization');
+    }
+    return supports;
   }
 
   /// Refresh the in-memory cache from disk.
