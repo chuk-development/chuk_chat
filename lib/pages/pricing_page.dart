@@ -50,6 +50,9 @@ Future<void> startCheckout() async {
     },
   );
 
+  if (response.statusCode == 409) {
+    throw Exception('You already have an active subscription.');
+  }
   if (response.statusCode != 200) {
     throw Exception('Failed to create checkout session: ${response.body}');
   }
@@ -131,7 +134,7 @@ class PricingPage extends StatefulWidget {
   State<PricingPage> createState() => _PricingPageState();
 }
 
-class _PricingPageState extends State<PricingPage> {
+class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
   Map<String, dynamic>? _userStatus;
   bool _isLoading = true;
   bool _isProcessing = false;
@@ -140,7 +143,22 @@ class _PricingPageState extends State<PricingPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadUserStatus();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Refresh when user returns from browser (Stripe checkout/portal)
+    if (state == AppLifecycleState.resumed) {
+      _loadUserStatus();
+    }
   }
 
   Future<void> _loadUserStatus() async {

@@ -1,0 +1,102 @@
+# Codemagic CI/CD configuration for iOS builds
+# Free tier: 500 build minutes/month on macOS M-series
+
+workflows:
+  ios-release:
+    name: iOS Release
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+
+    environment:
+      flutter: 3.38.7
+      xcode: latest
+      cocoapods: default
+      vars:
+        SUPABASE_URL: $SUPABASE_URL
+        SUPABASE_ANON_KEY: $SUPABASE_ANON_KEY
+      # iOS signing (add these in Codemagic dashboard)
+      ios_signing:
+        distribution_type: ad_hoc  # or 'app_store' for App Store
+        bundle_identifier: dev.chuk.chat
+
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: 'v*'
+          include: true
+
+    scripts:
+      - name: Get Flutter dependencies
+        script: flutter pub get
+
+      - name: Install CocoaPods
+        script: |
+          cd ios
+          pod install
+
+      - name: Build iOS IPA
+        script: |
+          flutter build ipa --release \
+            --dart-define=SUPABASE_URL=$SUPABASE_URL \
+            --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+            --dart-define=FEATURE_PROJECTS=true \
+            --dart-define=FEATURE_IMAGE_GEN=true \
+            --dart-define=FEATURE_MEDIA_MANAGER=true \
+            --dart-define=FEATURE_VOICE_MODE=true \
+            --export-options-plist=ios/ExportOptions.plist
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+
+    publishing:
+      # Upload to GitHub Release
+      scripts:
+        - name: Upload to GitHub Release
+          script: |
+            VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: //' | cut -d'+' -f1)
+            gh release upload "v$VERSION" build/ios/ipa/*.ipa --clobber
+          env:
+            GITHUB_TOKEN: $GITHUB_TOKEN
+
+  # macOS Release (optional - can also use GitHub Actions)
+  macos-release:
+    name: macOS Release
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+
+    environment:
+      flutter: 3.38.7
+      xcode: latest
+      vars:
+        SUPABASE_URL: $SUPABASE_URL
+        SUPABASE_ANON_KEY: $SUPABASE_ANON_KEY
+
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: 'v*'
+          include: true
+
+    scripts:
+      - name: Get Flutter dependencies
+        script: flutter pub get
+
+      - name: Build macOS app
+        script: |
+          flutter build macos --release \
+            --dart-define=SUPABASE_URL=$SUPABASE_URL \
+            --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+            --dart-define=FEATURE_PROJECTS=true \
+            --dart-define=FEATURE_IMAGE_GEN=true \
+            --dart-define=FEATURE_MEDIA_MANAGER=true \
+            --dart-define=FEATURE_VOICE_MODE=true
+
+      - name: Create ZIP
+        script: |
+          cd build/macos/Build/Products/Release
+          zip -r chuk_chat-macos.zip chuk_chat.app
+
+    artifacts:
+      - build/macos/Build/Products/Release/chuk_chat-macos.zip

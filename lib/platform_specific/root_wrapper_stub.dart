@@ -1,9 +1,9 @@
 // lib/platform_specific/root_wrapper_stub.dart
-// Stub implementation - should never be used in practice
-// This exists only to satisfy the conditional import system
-
+// Web implementation - uses desktop layout
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/platform_specific/root_wrapper_desktop.dart';
 
+/// Web wrapper - renders desktop UI since web is a desktop-like environment
 class RootWrapper extends StatelessWidget {
   final Brightness currentThemeMode;
   final Color currentAccentColor;
@@ -69,10 +69,36 @@ class RootWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(
-        child: Text('Platform not supported'),
-      ),
+    // Web uses desktop layout
+    return RootWrapperDesktop(
+      currentThemeMode: currentThemeMode,
+      currentAccentColor: currentAccentColor,
+      currentIconFgColor: currentIconFgColor,
+      currentBgColor: currentBgColor,
+      setThemeMode: setThemeMode,
+      setAccentColor: setAccentColor,
+      setIconFgColor: setIconFgColor,
+      setBgColor: setBgColor,
+      grainEnabled: grainEnabled,
+      setGrainEnabled: setGrainEnabled,
+      showReasoningTokens: showReasoningTokens,
+      setShowReasoningTokens: setShowReasoningTokens,
+      showModelInfo: showModelInfo,
+      setShowModelInfo: setShowModelInfo,
+      showTps: showTps,
+      setShowTps: setShowTps,
+      autoSendVoiceTranscription: autoSendVoiceTranscription,
+      setAutoSendVoiceTranscription: setAutoSendVoiceTranscription,
+      imageGenEnabled: imageGenEnabled,
+      setImageGenEnabled: setImageGenEnabled,
+      imageGenDefaultSize: imageGenDefaultSize,
+      setImageGenDefaultSize: setImageGenDefaultSize,
+      imageGenCustomWidth: imageGenCustomWidth,
+      setImageGenCustomWidth: setImageGenCustomWidth,
+      imageGenCustomHeight: imageGenCustomHeight,
+      setImageGenCustomHeight: setImageGenCustomHeight,
+      imageGenUseCustomSize: imageGenUseCustomSize,
+      setImageGenUseCustomSize: setImageGenUseCustomSize,
     );
   }
 }

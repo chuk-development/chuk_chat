@@ -190,6 +190,117 @@ import 'package:chuk_chat/utils/privacy_logger.dart';
 pLog('Safe log message');  // Auto-disabled in release
 ```
 
+## Creating a New Release
+
+When the user says "mach ein neues release" or "create a new release":
+
+### Build Strategy
+
+| Platform | Build Location | Reason |
+|----------|---------------|--------|
+| Android | **LOCAL** | Fast (2 min vs 20 min on CI) |
+| Linux | **LOCAL** | Fast, needs local deps |
+| Web | **LOCAL** | Fast, easy |
+| Windows | GitHub Actions | Needs Windows runner |
+| macOS | GitHub Actions | Needs macOS runner |
+| iOS | GitHub Actions | Needs macOS + Xcode |
+
+### Local Builds (Android, Linux, Web)
+
+```bash
+# Android APK (~2 min)
+source .env && flutter build apk --release \
+  --dart-define=SUPABASE_URL=$SUPABASE_URL \
+  --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+  --dart-define=PLATFORM_MOBILE=true \
+  --dart-define=FEATURE_PROJECTS=true \
+  --dart-define=FEATURE_IMAGE_GEN=true \
+  --dart-define=FEATURE_MEDIA_MANAGER=true \
+  --dart-define=FEATURE_VOICE_MODE=true \
+  --tree-shake-icons
+# Output: build/app/outputs/flutter-apk/app-release.apk
+
+# Linux binary (~1 min)
+source .env && flutter build linux --release \
+  --dart-define=SUPABASE_URL=$SUPABASE_URL \
+  --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+  --dart-define=FEATURE_PROJECTS=true \
+  --dart-define=FEATURE_IMAGE_GEN=true \
+  --dart-define=FEATURE_MEDIA_MANAGER=true \
+  --dart-define=FEATURE_VOICE_MODE=true
+# Output: build/linux/x64/release/bundle/
+
+# Web (~3 min)
+source .env && flutter build web --release \
+  --dart-define=SUPABASE_URL=$SUPABASE_URL \
+  --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+  --dart-define=FEATURE_PROJECTS=true \
+  --dart-define=FEATURE_IMAGE_GEN=true \
+  --dart-define=FEATURE_MEDIA_MANAGER=true \
+  --dart-define=FEATURE_VOICE_MODE=true
+# Output: build/web/
+# Run: cd build/web && python3 -m http.server 8080
+```
+
+### Release Steps (When user says "mach ein Release")
+
+1. **Bump version** in pubspec.yaml (e.g., `1.0.18+18`)
+2. **Run local build script**:
+   ```bash
+   ./scripts/build-release.sh all
+   ```
+   This builds Android, Linux, Web automatically.
+
+3. **Commit and tag**:
+   ```bash
+   git add -A
+   git commit -m "chore: bump version to 1.0.18"
+   git tag v1.0.18
+   git push origin master --tags
+   ```
+
+4. **Upload local builds** to GitHub Release:
+   ```bash
+   VERSION=1.0.18
+   gh release create v$VERSION \
+     build/app/outputs/flutter-apk/app-release.apk \
+     chuk_chat-$VERSION-linux-x64.tar.gz \
+     chuk_chat-$VERSION-web.zip \
+     --title "Release $VERSION" \
+     --generate-notes
+   ```
+
+5. **CI builds automatically**:
+   - **Windows**: GitHub Actions (triggers on tag)
+   - **iOS**: Codemagic (triggers on tag)
+
+### CI Platforms
+
+| Platform | CI Service | Trigger | Config File |
+|----------|-----------|---------|-------------|
+| Windows | GitHub Actions | Tag push | `.github/workflows/release-windows.yml` |
+| iOS | Codemagic | Tag push | `codemagic.yaml` |
+| macOS | Codemagic or GitHub | Tag push | `codemagic.yaml` |
+
+### Monitor CI Builds
+
+```bash
+# GitHub Actions (Windows)
+gh run list --workflow=release-windows.yml --limit=3
+
+# Codemagic (iOS) - check dashboard or use API
+# https://codemagic.io/apps
+```
+
+### Codemagic Setup (one-time)
+
+1. Go to https://codemagic.io and connect GitHub repo
+2. Add environment variables in Codemagic dashboard:
+   - `SUPABASE_URL`
+   - `SUPABASE_ANON_KEY`
+   - `GITHUB_TOKEN` (for uploading to releases)
+3. Configure iOS signing (certificates, provisioning profiles)
+
 ## IMPORTANT: After Every Task
 
 1. **Commit** your changes with descriptive message
