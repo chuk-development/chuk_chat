@@ -35,8 +35,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:chuk_chat/utils/io_helper.dart';
 import 'dart:typed_data';
 import 'package:uuid/uuid.dart';
-import 'package:chuk_chat/utils/record_stub.dart'
-    if (dart.library.io) 'package:record/record.dart';
+import 'package:record/record.dart';
+import 'package:http/http.dart' as http_client;
 import 'package:chuk_chat/utils/permission_handler_stub.dart'
     if (dart.library.io) 'package:permission_handler/permission_handler.dart';
 import 'package:chuk_chat/utils/path_provider_stub.dart'
@@ -142,6 +142,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   final AudioRecorder _audioRecorder = AudioRecorder();
   StreamSubscription<Amplitude>? _amplitudeSub;
   String? _lastRecordedFilePath;
+  Uint8List? _lastRecordedBytes;
   String? _activeRecordingPath;
   bool _isSending = false;
   bool _isTranscribingAudio = false;
@@ -661,6 +662,74 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _isMicActive = false;
       _resetAudioLevels();
     });
+    if (kIsWeb) {
+      final Uint8List? bytes = _lastRecordedBytes;
+      if (bytes == null || bytes.isEmpty) {
+        _showSnackBar('No audio recording available.');
+        return;
+      }
+
+      final session =
+          await SupabaseService.refreshSession() ??
+          SupabaseService.auth.currentSession;
+      if (session == null) {
+        _lastRecordedBytes = null;
+        _showSnackBar('Session expired. Please sign in again.');
+        await SupabaseService.signOut();
+        return;
+      }
+      final accessToken = session.accessToken;
+      if (accessToken.isEmpty) {
+        _lastRecordedBytes = null;
+        _showSnackBar('Unable to authenticate your session.');
+        return;
+      }
+
+      if (!mounted) return;
+      setState(() { _isTranscribingAudio = true; });
+
+      try {
+        final transcription = await _chatApiService.transcribeAudioBytes(
+          bytes: bytes,
+          filename: 'recording.webm',
+          accessToken: accessToken,
+        );
+        final String text = transcription.text.trim();
+        if (text.isEmpty) {
+          _showSnackBar('Transcription returned no text.');
+        } else {
+          setState(() {
+            _controller.text = text;
+            _controller.selection = TextSelection.fromPosition(
+              TextPosition(offset: text.length),
+            );
+          });
+          Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+        }
+      } on TranscriptionException catch (error) {
+        switch (error.statusCode) {
+          case 401:
+            _showSnackBar('Session expired. Please sign in again.');
+            await SupabaseService.signOut();
+            break;
+          case 502:
+            _showSnackBar('Transcription service is unavailable. Please try again shortly.');
+            break;
+          default:
+            final String message = error.message.isNotEmpty ? error.message : 'Failed to transcribe audio.';
+            _showSnackBar(message);
+        }
+      } on TimeoutException {
+        _showSnackBar('Transcription timed out. Please try again.');
+      } catch (error) {
+        _showSnackBar('Unexpected transcription error: $error');
+      } finally {
+        _lastRecordedBytes = null;
+        if (mounted) { setState(() { _isTranscribingAudio = false; }); }
+      }
+      return;
+    }
+
     final String? audioPath = _lastRecordedFilePath;
     if (audioPath == null) {
       _showSnackBar('No audio recording available.');
@@ -761,20 +830,31 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         return true;
       }
 
-      final String path = await _createRecordingPath();
-      _activeRecordingPath = path;
-
       _resetAudioLevels();
       _amplitudeSub?.cancel();
 
-      await _audioRecorder.start(
-        const RecordConfig(
-          encoder: AudioEncoder.aacLc,
-          sampleRate: 16000,
-          bitRate: 64000,
-        ),
-        path: path,
-      );
+      if (kIsWeb) {
+        await _audioRecorder.start(
+          const RecordConfig(
+            encoder: AudioEncoder.opus,
+            sampleRate: 16000,
+            bitRate: 64000,
+          ),
+          path: '',
+        );
+      } else {
+        final String path = await _createRecordingPath();
+        _activeRecordingPath = path;
+
+        await _audioRecorder.start(
+          const RecordConfig(
+            encoder: AudioEncoder.aacLc,
+            sampleRate: 16000,
+            bitRate: 64000,
+          ),
+          path: path,
+        );
+      }
 
       _amplitudeSub = _audioRecorder
           .onAmplitudeChanged(const Duration(milliseconds: 80))
@@ -795,21 +875,38 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       if (!await _audioRecorder.isRecording()) {
         if (!keepFile) {
           _lastRecordedFilePath = null;
-          await _deleteRecordingFile(_activeRecordingPath);
+          _lastRecordedBytes = null;
+          if (!kIsWeb) await _deleteRecordingFile(_activeRecordingPath);
         }
         _activeRecordingPath = null;
         return;
       }
 
       final String? path = await _audioRecorder.stop();
-      final String? effectivePath = path ?? _activeRecordingPath;
-      _activeRecordingPath = null;
 
-      if (keepFile) {
-        _lastRecordedFilePath = effectivePath;
-      } else {
+      if (kIsWeb) {
+        if (keepFile && path != null) {
+          try {
+            final response = await http_client.get(Uri.parse(path));
+            _lastRecordedBytes = response.bodyBytes;
+          } catch (e) {
+            debugPrint('Failed to fetch web audio blob: $e');
+            _lastRecordedBytes = null;
+          }
+        } else {
+          _lastRecordedBytes = null;
+        }
         _lastRecordedFilePath = null;
-        await _deleteRecordingFile(effectivePath);
+      } else {
+        final String? effectivePath = path ?? _activeRecordingPath;
+        _activeRecordingPath = null;
+
+        if (keepFile) {
+          _lastRecordedFilePath = effectivePath;
+        } else {
+          _lastRecordedFilePath = null;
+          await _deleteRecordingFile(effectivePath);
+        }
       }
     } catch (error, stackTrace) {
       debugPrint('Failed to stop microphone: $error\n$stackTrace');
