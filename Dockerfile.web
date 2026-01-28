@@ -1,10 +1,23 @@
 # Stage 1: Build Flutter web
-FROM ghcr.io/cirruslabs/flutter:3.32.4 AS build
+FROM ubuntu:24.04 AS build
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl git unzip ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Flutter
+ENV FLUTTER_VERSION=3.38.8
+RUN git clone --depth 1 --branch ${FLUTTER_VERSION} https://github.com/flutter/flutter.git /opt/flutter
+ENV PATH="/opt/flutter/bin:/opt/flutter/bin/cache/dart-sdk/bin:${PATH}"
+
+RUN flutter precache --web
+RUN flutter doctor -v
 
 WORKDIR /app
-COPY . .
-
+COPY pubspec.yaml pubspec.lock ./
 RUN flutter pub get
+
+COPY . .
 
 ARG SUPABASE_URL
 ARG SUPABASE_ANON_KEY
