@@ -36,12 +36,12 @@ modules:
     buildsystem: simple
     build-commands:
       - mkdir -p /app/flutter
-      - tar xf flutter-*.tar.xz -C /app/flutter --strip-components=1
+      - tar xf flutter-linux.tar.xz -C /app/flutter --strip-components=1
       - /app/flutter/bin/flutter precache --linux
     sources:
       - type: archive
-        url: https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.24.5-stable.tar.xz
-        sha256: a7c82f551a9eae018e078f6bb186171e5a77920d35a3d75a61d9a593d0a9e4ae
+        url: https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.38.7-stable.tar.xz
+        sha256: 2d72de31119ccba1421391aa9ab53891a3e4905987a13f8272766ad78e3bbf93
         dest-filename: flutter-linux.tar.xz
     cleanup:
       - /flutter/.pub-cache

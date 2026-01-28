@@ -171,15 +171,49 @@ platform :linux do
     UI.success("✅ Flutter Linux build complete!")
   end
 
-  desc "Full release: Build all Linux packages (Flatpak, AppImage, DEB, RPM)"
+  desc "Release: Build Flatpak and AppImage (primary formats)"
   lane :release do
-    UI.header("🚀 Starting full Linux release build")
+    UI.header("🚀 Starting Linux release build")
 
     # Get version for reporting
     version = sh("cd ../.. && grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1").strip
     UI.message("📌 Version: #{version}")
 
-    # Build Flutter binary first (needed for AppImage, DEB, RPM)
+    # Build Flutter binary first (needed for AppImage)
+    build_flutter_linux
+
+    # Build Flatpak
+    UI.message("\n" + "="*60)
+    UI.message("Building Flatpak...")
+    UI.message("="*60)
+    build_flatpak
+    build_flatpak_bundle
+
+    # Build AppImage
+    UI.message("\n" + "="*60)
+    UI.message("Building AppImage...")
+    UI.message("="*60)
+    build_appimage
+
+    # Summary
+    UI.success("\n" + "="*60)
+    UI.success("✅ Linux release complete!")
+    UI.success("="*60)
+    UI.message("\n📦 Generated packages:")
+    UI.message("  • Flatpak:  chuk_chat-#{version}-linux.flatpak")
+    UI.message("  • AppImage: chuk_chat-#{version}-x86_64.AppImage")
+    UI.message("\n💡 Upload these to GitHub Release")
+  end
+
+  desc "Full release: Build all Linux packages (Flatpak, AppImage, DEB, RPM)"
+  lane :release_all do
+    UI.header("🚀 Starting full Linux release build (all formats)")
+
+    # Get version for reporting
+    version = sh("cd ../.. && grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1").strip
+    UI.message("📌 Version: #{version}")
+
+    # Build Flutter binary first
     build_flutter_linux
 
     # Build all package formats
@@ -206,7 +240,7 @@ platform :linux do
 
     # Summary
     UI.success("\n" + "="*60)
-    UI.success("✅ Linux release complete!")
+    UI.success("✅ Full Linux release complete!")
     UI.success("="*60)
     UI.message("\n📦 Generated packages:")
     UI.message("  • Flatpak:  chuk_chat-#{version}-linux.flatpak")
