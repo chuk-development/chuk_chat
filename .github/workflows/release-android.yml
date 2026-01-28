@@ -40,13 +40,20 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Setup Android signing (env vars)
+      - name: Setup Android signing
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > $HOME/keystore.keystore
-          echo "ANDROID_KEYSTORE_PATH=$HOME/keystore.keystore" >> $GITHUB_ENV
-          echo "ANDROID_KEYSTORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
-          echo "ANDROID_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}" >> $GITHUB_ENV
-          echo "ANDROID_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}" >> $GITHUB_ENV
+          # Decode keystore to android/app directory
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/release.keystore
+
+          # Create key.properties file (safer than env vars for passwords with special chars)
+          echo "storeFile=release.keystore" > android/key.properties
+          echo "storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" >> android/key.properties
+          echo "keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}" >> android/key.properties
+          echo "keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}" >> android/key.properties
+
+          # Verify keystore
+          echo "Keystore size: $(stat -c%s android/app/release.keystore) bytes"
+          echo "key.properties created"
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
