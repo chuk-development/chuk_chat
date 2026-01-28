@@ -17,6 +17,7 @@
 // Or use the run.sh helper script which handles everything.
 
 import 'package:chuk_chat/env_loader.dart';
+import 'package:chuk_chat/web_env.dart' as web_env;
 
 class SupabaseConfig {
   // Compile-time values (from --dart-define)
@@ -44,6 +45,13 @@ class SupabaseConfig {
       return;
     }
 
+    // Try web-generated constants (from Dockerfile.web)
+    if (web_env.webSupabaseUrl.isNotEmpty && web_env.webSupabaseAnonKey.isNotEmpty) {
+      _runtimeUrl = web_env.webSupabaseUrl;
+      _runtimeAnonKey = web_env.webSupabaseAnonKey;
+      return;
+    }
+
     // Try to load from .env file (desktop only)
     await EnvLoader.load();
 
@@ -59,6 +67,12 @@ class SupabaseConfig {
     if (_envUrl.isNotEmpty && _envAnonKey.isNotEmpty) {
       _runtimeUrl = _envUrl;
       _runtimeAnonKey = _envAnonKey;
+      return;
+    }
+
+    if (web_env.webSupabaseUrl.isNotEmpty && web_env.webSupabaseAnonKey.isNotEmpty) {
+      _runtimeUrl = web_env.webSupabaseUrl;
+      _runtimeAnonKey = web_env.webSupabaseAnonKey;
       return;
     }
 

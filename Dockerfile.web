@@ -22,11 +22,13 @@ COPY . .
 ARG SUPABASE_URL
 ARG SUPABASE_ANON_KEY
 
-RUN echo "SUPABASE_URL=${SUPABASE_URL}" && \
-    echo "SUPABASE_ANON_KEY length=$(echo -n "${SUPABASE_ANON_KEY}" | wc -c)" && \
-    flutter build web --release \
-    --dart-define="SUPABASE_URL=${SUPABASE_URL}" \
-    --dart-define="SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}" \
+# Generate web environment config (dart-define can be unreliable with dart2js)
+RUN echo "// GENERATED - DO NOT EDIT" > lib/web_env.dart && \
+    echo "const String webSupabaseUrl = '${SUPABASE_URL}';" >> lib/web_env.dart && \
+    echo "const String webSupabaseAnonKey = '${SUPABASE_ANON_KEY}';" >> lib/web_env.dart && \
+    cat lib/web_env.dart
+
+RUN flutter build web --release \
     --dart-define=FEATURE_PROJECTS=false \
     --dart-define=FEATURE_IMAGE_GEN=false \
     --dart-define=FEATURE_MEDIA_MANAGER=true \
