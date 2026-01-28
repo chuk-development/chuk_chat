@@ -1,14 +1,14 @@
 // lib/platform_specific/chat/handlers/audio_recording_handler.dart
 import 'dart:async';
 import 'package:chuk_chat/utils/io_helper.dart';
-import 'package:flutter/material.dart';
-import 'package:chuk_chat/utils/record_stub.dart'
-    if (dart.library.io) 'package:record/record.dart';
+import 'package:flutter/foundation.dart';
+import 'package:record/record.dart';
 import 'package:chuk_chat/utils/permission_handler_stub.dart'
     if (dart.library.io) 'package:permission_handler/permission_handler.dart';
 import 'package:chuk_chat/utils/path_provider_stub.dart'
     if (dart.library.io) 'package:path_provider/path_provider.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart';
+import 'package:http/http.dart' as http;
 
 /// Handles audio recording functionality including permissions, recording, and transcription
 class AudioRecordingHandler {
@@ -17,6 +17,7 @@ class AudioRecordingHandler {
 
   StreamSubscription<Amplitude>? _amplitudeSub;
   String? _lastRecordedFilePath;
+  Uint8List? _lastRecordedBytes;
   String? _activeRecordingPath;
   bool _isMicActive = false;
   bool _isTranscribingAudio = false;
@@ -42,20 +43,32 @@ class AudioRecordingHandler {
         return true;
       }
 
-      final String path = await _createRecordingPath();
-      _activeRecordingPath = path;
-
       _resetAudioLevels();
       _amplitudeSub?.cancel();
 
-      await _audioRecorder.start(
-        const RecordConfig(
-          encoder: AudioEncoder.aacLc,
-          sampleRate: 16000,
-          bitRate: 64000,
-        ),
-        path: path,
-      );
+      if (kIsWeb) {
+        // On web, record to a blob (no file path needed)
+        await _audioRecorder.start(
+          const RecordConfig(
+            encoder: AudioEncoder.opus,
+            sampleRate: 16000,
+            bitRate: 64000,
+          ),
+          path: '',
+        );
+      } else {
+        final String path = await _createRecordingPath();
+        _activeRecordingPath = path;
+
+        await _audioRecorder.start(
+          const RecordConfig(
+            encoder: AudioEncoder.aacLc,
+            sampleRate: 16000,
+            bitRate: 64000,
+          ),
+          path: path,
+        );
+      }
 
       // More responsive audio visualization (30ms instead of 80ms)
       _amplitudeSub = _audioRecorder
@@ -78,21 +91,39 @@ class AudioRecordingHandler {
       if (!await _audioRecorder.isRecording()) {
         if (!keepFile) {
           _lastRecordedFilePath = null;
-          await _deleteRecordingFile(_activeRecordingPath);
+          _lastRecordedBytes = null;
+          if (!kIsWeb) await _deleteRecordingFile(_activeRecordingPath);
         }
         _activeRecordingPath = null;
         return;
       }
 
       final String? path = await _audioRecorder.stop();
-      final String? effectivePath = path ?? _activeRecordingPath;
-      _activeRecordingPath = null;
 
-      if (keepFile) {
-        _lastRecordedFilePath = effectivePath;
-      } else {
+      if (kIsWeb) {
+        // On web, path is a blob URL - fetch the bytes
+        if (keepFile && path != null) {
+          try {
+            final response = await http.get(Uri.parse(path));
+            _lastRecordedBytes = response.bodyBytes;
+          } catch (e) {
+            debugPrint('Failed to fetch web audio blob: $e');
+            _lastRecordedBytes = null;
+          }
+        } else {
+          _lastRecordedBytes = null;
+        }
         _lastRecordedFilePath = null;
-        await _deleteRecordingFile(effectivePath);
+      } else {
+        final String? effectivePath = path ?? _activeRecordingPath;
+        _activeRecordingPath = null;
+
+        if (keepFile) {
+          _lastRecordedFilePath = effectivePath;
+        } else {
+          _lastRecordedFilePath = null;
+          await _deleteRecordingFile(effectivePath);
+        }
       }
     } catch (error, stackTrace) {
       debugPrint('Failed to stop microphone: $error\n$stackTrace');
@@ -106,6 +137,10 @@ class AudioRecordingHandler {
     required String accessToken,
   }) async {
     _isTranscribingAudio = true;
+
+    if (kIsWeb) {
+      return _transcribeWebRecording(apiService: apiService, accessToken: accessToken);
+    }
 
     final String? audioPath = _lastRecordedFilePath;
     if (audioPath == null) {
@@ -164,6 +199,54 @@ class AudioRecordingHandler {
     }
   }
 
+  Future<TranscriptionResult> _transcribeWebRecording({
+    required ChatApiService apiService,
+    required String accessToken,
+  }) async {
+    final Uint8List? bytes = _lastRecordedBytes;
+    if (bytes == null || bytes.isEmpty) {
+      _isTranscribingAudio = false;
+      _lastRecordedBytes = null;
+      return TranscriptionResult(success: false, error: 'No audio');
+    }
+
+    try {
+      final transcription = await apiService.transcribeAudioBytes(
+        bytes: bytes,
+        filename: 'recording.webm',
+        accessToken: accessToken,
+      );
+      final String text = transcription.text.trim();
+      _lastRecordedBytes = null;
+      _isTranscribingAudio = false;
+
+      if (text.isEmpty) {
+        return TranscriptionResult(success: false, error: 'No text found');
+      }
+      return TranscriptionResult(success: true, text: text);
+    } on TranscriptionException catch (error) {
+      _lastRecordedBytes = null;
+      _isTranscribingAudio = false;
+      switch (error.statusCode) {
+        case 401:
+          return TranscriptionResult(success: false, error: 'Session expired', requiresLogout: true);
+        case 502:
+          return TranscriptionResult(success: false, error: 'Service unavailable');
+        default:
+          final String message = error.message.isNotEmpty ? error.message : 'Transcription failed';
+          return TranscriptionResult(success: false, error: message);
+      }
+    } on TimeoutException {
+      _lastRecordedBytes = null;
+      _isTranscribingAudio = false;
+      return TranscriptionResult(success: false, error: 'Timed out');
+    } catch (error) {
+      _lastRecordedBytes = null;
+      _isTranscribingAudio = false;
+      return TranscriptionResult(success: false, error: 'Error: $error');
+    }
+  }
+
   /// Reset audio levels to zero
   void resetAudioLevels() {
     _resetAudioLevels();
@@ -188,6 +271,7 @@ class AudioRecordingHandler {
   }
 
   Future<bool> _ensureMicPermission() async {
+    if (kIsWeb) return true; // Browser handles permission via record package
     final PermissionStatus status = await Permission.microphone.request();
     if (status.isGranted) {
       return true;

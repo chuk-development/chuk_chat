@@ -251,6 +251,67 @@ class ChatApiService {
     }
   }
 
+  /// Transcribe audio from raw bytes (used on web where file paths are unavailable)
+  Future<TranscriptionResult> transcribeAudioBytes({
+    required Uint8List bytes,
+    required String filename,
+    required String accessToken,
+  }) async {
+    final Uri endpoint = Uri.parse('$_apiBaseUrl/protected/transcribe-audio');
+    final http.MultipartRequest request =
+        http.MultipartRequest('POST', endpoint)
+          ..headers['Authorization'] = 'Bearer $accessToken'
+          ..files.add(
+            http.MultipartFile.fromBytes('audio_file', bytes, filename: filename),
+          );
+
+    try {
+      final streamedResponse = await request.send().timeout(
+        const Duration(seconds: 60),
+      );
+      final http.Response response = await http.Response.fromStream(
+        streamedResponse,
+      );
+
+      Map<String, dynamic>? decoded;
+      if (response.body.isNotEmpty) {
+        try {
+          final dynamic parsed = jsonDecode(response.body);
+          if (parsed is Map<String, dynamic>) {
+            decoded = parsed.cast<String, dynamic>();
+          }
+        } catch (error) {
+          debugPrint('Failed to decode transcription response: $error');
+        }
+      }
+
+      if (response.statusCode == 200) {
+        final String text = (decoded?['text'] as String?) ?? '';
+        final dynamic metadataRaw = decoded?['x_groq'];
+        final Map<String, dynamic>? metadata = metadataRaw is Map
+            ? Map<String, dynamic>.from(metadataRaw)
+            : null;
+        return TranscriptionResult(text: text, metadata: metadata);
+      }
+
+      final String fallback =
+          'Transcription failed with status ${response.statusCode}.';
+      final String message = _messageFromErrorPayload(decoded) ?? fallback;
+      throw TranscriptionException(message, statusCode: response.statusCode);
+    } on TimeoutException {
+      throw const TranscriptionException(
+        'Transcription request timed out. Please try again.',
+      );
+    } on SocketException catch (error) {
+      throw TranscriptionException('Network error: $error');
+    } on http.ClientException catch (error) {
+      throw TranscriptionException('Network error: $error');
+    } catch (error) {
+      if (error is TranscriptionException) rethrow;
+      throw TranscriptionException('Unexpected error: $error');
+    }
+  }
+
   String? _messageFromErrorPayload(Map<String, dynamic>? payload) {
     if (payload == null || payload.isEmpty) return null;
     final dynamic detail = payload['detail'];

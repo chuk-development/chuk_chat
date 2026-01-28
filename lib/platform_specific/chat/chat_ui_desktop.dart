@@ -817,8 +817,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   }
 
   Future<bool> _ensureMicPermission() async {
-    if (!(kIsWeb ||
-        Platform.isAndroid ||
+    if (kIsWeb) return true; // Browser handles permission via record package
+
+    if (!(Platform.isAndroid ||
         Platform.isIOS ||
         Platform.isMacOS ||
         Platform.isWindows)) {
