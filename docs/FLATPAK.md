@@ -42,7 +42,43 @@ flatpak install flathub org.freedesktop.Sdk//23.08
 
 ## Building
 
-### Option 1: Using Build Script (Recommended)
+### Option 1: Using Fastlane (Recommended for Development)
+
+Fastlane provides a unified interface for building all Linux packages including Flatpak:
+
+```bash
+# Install dependencies (first time only)
+cd linux
+bundle install
+
+# Build Flatpak only
+bundle exec fastlane build_flatpak
+
+# Build Flatpak bundle (.flatpak file)
+bundle exec fastlane build_flatpak_bundle
+
+# Install locally for testing
+bundle exec fastlane install_flatpak
+
+# Build all Linux packages (Flatpak, AppImage, DEB, RPM)
+bundle exec fastlane release
+
+# Clean all build artifacts
+bundle exec fastlane clean
+```
+
+**Available Fastlane Lanes:**
+- `build_flatpak` - Build Flatpak repository
+- `build_flatpak_bundle` - Create single-file .flatpak bundle
+- `install_flatpak` - Install Flatpak locally for testing
+- `build_appimage` - Build AppImage package
+- `build_deb` - Build DEB package
+- `build_rpm` - Build RPM package
+- `build_flutter_linux` - Build Flutter Linux binary
+- `release` - Build all Linux packages at once
+- `clean` - Remove all build artifacts
+
+### Option 2: Using Build Script (Quick Method)
 
 ```bash
 # Just build
@@ -55,7 +91,7 @@ flatpak install flathub org.freedesktop.Sdk//23.08
 ./build_flatpak.sh --bundle
 ```
 
-### Option 2: Manual Build
+### Option 3: Manual Build
 
 ```bash
 # Build the Flatpak

@@ -97,7 +97,25 @@ If neither is configured, uses debug signing (not for Play Store).
 3. Copy `android/key.properties.example` to `android/key.properties`
 4. Edit `storeFile=` to point to your keystore location
 
-## Building Linux Flatpak
+## Building Linux Packages
+
+### Quick: Using Fastlane (All Formats)
+
+```bash
+# Install dependencies (first time)
+cd linux && bundle install
+
+# Build all formats (Flatpak, AppImage, DEB, RPM)
+bundle exec fastlane release
+
+# Or build specific format
+bundle exec fastlane build_flatpak
+bundle exec fastlane build_appimage
+bundle exec fastlane build_deb
+bundle exec fastlane build_rpm
+```
+
+### Quick: Flatpak Only
 
 ```bash
 # Build and install locally
@@ -110,7 +128,7 @@ If neither is configured, uses debug signing (not for Play Store).
 flatpak run dev.chuk.chat
 ```
 
-See `docs/FLATPAK.md` for full documentation.
+See `docs/LINUX_BUILDS.md` for Fastlane lanes and `docs/FLATPAK.md` for Flatpak details.
 
 ## Read These Docs
 
@@ -124,7 +142,8 @@ Before working on the codebase, read the relevant docs:
 | `docs/DATABASE.md` | Working with Supabase tables, schema |
 | `docs/COMMON_TASKS.md` | Adding services, pages, features, building |
 | `docs/GOTCHAS.md` | **CRITICAL** - Bugs to avoid, important fixes |
-| `docs/FLATPAK.md` | Building and distributing Linux Flatpak packages |
+| `docs/LINUX_BUILDS.md` | Building all Linux packages with Fastlane |
+| `docs/FLATPAK.md` | Flatpak-specific packaging details |
 
 ## Key Entry Points
 

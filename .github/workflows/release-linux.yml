@@ -10,9 +10,9 @@ env:
 
 jobs:
   build-linux:
-    name: Build Linux AppImage, DEB, RPM
+    name: Build Linux Flatpak, AppImage, DEB, RPM
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - name: Checkout code
@@ -23,7 +23,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev \
-            libstdc++-12-dev rpm fuse libfuse2 wget file
+            libstdc++-12-dev rpm fuse libfuse2 wget file \
+            flatpak flatpak-builder
+
+      - name: Setup Flatpak runtimes
+        run: |
+          sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          sudo flatpak install -y flathub org.freedesktop.Platform//23.08 org.freedesktop.Sdk//23.08
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -35,53 +41,41 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Build Linux release
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+          working-directory: linux
+
+      - name: Install Fastlane
         run: |
-          flutter build linux --release \
-            --dart-define=SUPABASE_URL=$SUPABASE_URL \
-            --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
-            --dart-define=FEATURE_PROJECTS=true \
-            --dart-define=FEATURE_IMAGE_GEN=true \
-            --dart-define=FEATURE_MEDIA_MANAGER=true \
-            --dart-define=FEATURE_VOICE_MODE=true \
-            --tree-shake-icons
+          cd linux
+          bundle install
 
       - name: Get version from tag
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Build all Linux packages with Fastlane
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          cd linux
+          bundle exec fastlane release
 
       - name: Create portable tarball
         run: |
           cd build/linux/x64/release/bundle
           tar -czf ../../../../../chuk_chat-${{ steps.version.outputs.VERSION }}-linux-x64.tar.gz *
 
-      - name: Install appimagetool
-        run: |
-          wget -O appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
-          chmod +x appimagetool
-          sudo mv appimagetool /usr/local/bin/
-
-      - name: Build AppImage
-        run: |
-          chmod +x scripts/package-linux.sh
-          ./scripts/package-linux.sh appimage ${{ steps.version.outputs.VERSION }}
-
-      - name: Build DEB package
-        run: |
-          ./scripts/package-linux.sh deb ${{ steps.version.outputs.VERSION }}
-
-      - name: Build RPM package
-        run: |
-          ./scripts/package-linux.sh rpm ${{ steps.version.outputs.VERSION }}
-
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
             chuk_chat-${{ steps.version.outputs.VERSION }}-linux-x64.tar.gz
+            chuk_chat-${{ steps.version.outputs.VERSION }}-linux.flatpak
             chuk_chat-${{ steps.version.outputs.VERSION }}-x86_64.AppImage
             chuk_chat_${{ steps.version.outputs.VERSION }}_amd64.deb
             chuk_chat-${{ steps.version.outputs.VERSION }}-1.x86_64.rpm
@@ -90,6 +84,13 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Flatpak artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-flatpak
+          path: chuk_chat-${{ steps.version.outputs.VERSION }}-linux.flatpak
+          retention-days: 7
 
   # Optional: Deploy to Snap Store
   # Uncomment when ready to publish

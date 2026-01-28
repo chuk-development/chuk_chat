@@ -87,6 +87,7 @@ android/.kotlin/
 **/fastlane/google-play-key.json
 android/Gemfile.lock
 macos/Gemfile.lock
+linux/Gemfile.lock
 
 # Android signing
 android/key.properties

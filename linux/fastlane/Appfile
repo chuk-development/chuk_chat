@@ -1,0 +1,4 @@
+# Fastlane Appfile for Linux
+# chuk_chat Linux distribution configuration
+
+app_identifier("dev.chuk.chat")

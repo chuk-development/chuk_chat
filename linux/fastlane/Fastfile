@@ -1,0 +1,227 @@
+# Fastlane configuration for chuk_chat Linux
+# Handles building Flatpak, AppImage, DEB, and RPM packages
+
+default_platform(:linux)
+
+platform :linux do
+  desc "Build Flatpak package"
+  lane :build_flatpak do
+    # Ensure environment variables are set
+    supabase_url = ENV['SUPABASE_URL']
+    supabase_key = ENV['SUPABASE_ANON_KEY']
+
+    if supabase_url.nil? || supabase_url.empty?
+      UI.important("⚠️  SUPABASE_URL not set - building without credentials")
+      UI.important("    App will require runtime configuration")
+    end
+
+    if supabase_key.nil? || supabase_key.empty?
+      UI.important("⚠️  SUPABASE_ANON_KEY not set - building without credentials")
+      UI.important("    App will require runtime configuration")
+    end
+
+    # Check if flatpak-builder is installed
+    begin
+      sh("which flatpak-builder > /dev/null 2>&1")
+    rescue
+      UI.user_error!("❌ flatpak-builder not found. Install with: sudo apt install flatpak-builder")
+    end
+
+    # Check if required runtimes are installed
+    begin
+      sh("flatpak list --runtime | grep -q 'org.freedesktop.Platform.*23.08'")
+    rescue
+      UI.important("⚠️  Freedesktop Platform 23.08 not found, installing...")
+      sh("flatpak install -y flathub org.freedesktop.Platform//23.08 org.freedesktop.Sdk//23.08")
+    end
+
+    UI.message("🔨 Building Flatpak package...")
+
+    # Build Flatpak
+    sh("cd ../.. && flatpak-builder --force-clean --ccache --repo=repo build-dir dev.chuk.chat.yml")
+
+    UI.success("✅ Flatpak package built successfully!")
+    UI.message("📦 Repository: repo/")
+    UI.message("💡 Test with: flatpak-builder --run build-dir dev.chuk.chat.yml chuk_chat_launcher.sh")
+  end
+
+  desc "Build Flatpak bundle (single-file .flatpak)"
+  lane :build_flatpak_bundle do
+    # Build the Flatpak first if not already built
+    unless File.exist?("../../repo/config")
+      build_flatpak
+    end
+
+    UI.message("📦 Creating single-file Flatpak bundle...")
+
+    # Get version from pubspec.yaml
+    version = sh("cd ../.. && grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1").strip
+
+    output_file = "chuk_chat-#{version}-linux.flatpak"
+
+    # Create bundle
+    sh("cd ../.. && flatpak build-bundle repo #{output_file} dev.chuk.chat")
+
+    UI.success("✅ Flatpak bundle created!")
+    UI.message("📦 Bundle: #{output_file}")
+    UI.message("💾 Size: #{File.size("../../#{output_file}") / (1024 * 1024)} MB")
+    UI.message("💡 Install with: flatpak install #{output_file}")
+  end
+
+  desc "Install Flatpak locally for testing"
+  lane :install_flatpak do
+    # Build if not already built
+    unless File.exist?("../../repo/config")
+      build_flatpak
+    end
+
+    UI.message("📥 Installing Flatpak locally...")
+
+    # Add local repo if not exists
+    sh("flatpak --user remote-add --if-not-exists --no-gpg-verify chuk-chat-repo ../../repo")
+
+    # Install
+    sh("flatpak --user install -y chuk-chat-repo dev.chuk.chat")
+
+    UI.success("✅ Flatpak installed locally!")
+    UI.message("🚀 Run with: flatpak run dev.chuk.chat")
+  end
+
+  desc "Build AppImage package"
+  lane :build_appimage do
+    # Ensure Flutter build exists
+    unless File.exist?("../../build/linux/x64/release/bundle/chuk_chat")
+      UI.important("⚠️  Flutter build not found, building now...")
+      build_flutter_linux
+    end
+
+    # Get version from pubspec.yaml
+    version = sh("cd ../.. && grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1").strip
+
+    UI.message("🔨 Building AppImage...")
+
+    # Use existing packaging script
+    sh("cd ../.. && chmod +x scripts/package-linux.sh && ./scripts/package-linux.sh appimage #{version}")
+
+    UI.success("✅ AppImage built successfully!")
+    UI.message("📦 AppImage: chuk_chat-#{version}-x86_64.AppImage")
+  end
+
+  desc "Build DEB package"
+  lane :build_deb do
+    # Ensure Flutter build exists
+    unless File.exist?("../../build/linux/x64/release/bundle/chuk_chat")
+      UI.important("⚠️  Flutter build not found, building now...")
+      build_flutter_linux
+    end
+
+    # Get version from pubspec.yaml
+    version = sh("cd ../.. && grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1").strip
+
+    UI.message("🔨 Building DEB package...")
+
+    # Use existing packaging script
+    sh("cd ../.. && chmod +x scripts/package-linux.sh && ./scripts/package-linux.sh deb #{version}")
+
+    UI.success("✅ DEB package built successfully!")
+    UI.message("📦 DEB: chuk_chat_#{version}_amd64.deb")
+  end
+
+  desc "Build RPM package"
+  lane :build_rpm do
+    # Ensure Flutter build exists
+    unless File.exist?("../../build/linux/x64/release/bundle/chuk_chat")
+      UI.important("⚠️  Flutter build not found, building now...")
+      build_flutter_linux
+    end
+
+    # Get version from pubspec.yaml
+    version = sh("cd ../.. && grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1").strip
+
+    UI.message("🔨 Building RPM package...")
+
+    # Use existing packaging script
+    sh("cd ../.. && chmod +x scripts/package-linux.sh && ./scripts/package-linux.sh rpm #{version}")
+
+    UI.success("✅ RPM package built successfully!")
+    UI.message("📦 RPM: chuk_chat-#{version}-1.x86_64.rpm")
+  end
+
+  desc "Build Flutter Linux binary"
+  lane :build_flutter_linux do
+    # Ensure environment variables are set
+    supabase_url = ENV['SUPABASE_URL']
+    supabase_key = ENV['SUPABASE_ANON_KEY']
+
+    raise "SUPABASE_URL not set" unless supabase_url
+    raise "SUPABASE_ANON_KEY not set" unless supabase_key
+
+    UI.message("🔨 Building Flutter Linux release...")
+
+    # Build release with Flutter
+    sh("cd ../.. && flutter build linux --release " \
+       "--dart-define=SUPABASE_URL=#{supabase_url} " \
+       "--dart-define=SUPABASE_ANON_KEY=#{supabase_key} " \
+       "--dart-define=FEATURE_PROJECTS=true " \
+       "--dart-define=FEATURE_IMAGE_GEN=true " \
+       "--dart-define=FEATURE_MEDIA_MANAGER=true " \
+       "--dart-define=FEATURE_VOICE_MODE=true " \
+       "--tree-shake-icons")
+
+    UI.success("✅ Flutter Linux build complete!")
+  end
+
+  desc "Full release: Build all Linux packages (Flatpak, AppImage, DEB, RPM)"
+  lane :release do
+    UI.header("🚀 Starting full Linux release build")
+
+    # Get version for reporting
+    version = sh("cd ../.. && grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1").strip
+    UI.message("📌 Version: #{version}")
+
+    # Build Flutter binary first (needed for AppImage, DEB, RPM)
+    build_flutter_linux
+
+    # Build all package formats
+    UI.message("\n" + "="*60)
+    UI.message("Building Flatpak...")
+    UI.message("="*60)
+    build_flatpak
+    build_flatpak_bundle
+
+    UI.message("\n" + "="*60)
+    UI.message("Building AppImage...")
+    UI.message("="*60)
+    build_appimage
+
+    UI.message("\n" + "="*60)
+    UI.message("Building DEB...")
+    UI.message("="*60)
+    build_deb
+
+    UI.message("\n" + "="*60)
+    UI.message("Building RPM...")
+    UI.message("="*60)
+    build_rpm
+
+    # Summary
+    UI.success("\n" + "="*60)
+    UI.success("✅ Linux release complete!")
+    UI.success("="*60)
+    UI.message("\n📦 Generated packages:")
+    UI.message("  • Flatpak:  chuk_chat-#{version}-linux.flatpak")
+    UI.message("  • AppImage: chuk_chat-#{version}-x86_64.AppImage")
+    UI.message("  • DEB:      chuk_chat_#{version}_amd64.deb")
+    UI.message("  • RPM:      chuk_chat-#{version}-1.x86_64.rpm")
+    UI.message("\n💡 Upload these to GitHub Release")
+  end
+
+  desc "Clean all build artifacts"
+  lane :clean do
+    UI.message("🧹 Cleaning build artifacts...")
+
+    sh("cd ../.. && rm -rf build-dir .flatpak-builder repo *.flatpak *.AppImage *.deb *.rpm AppDir/ debian/ rpm/")
+
+    UI.success("✅ Clean complete!")
+  end
+end
