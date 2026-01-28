@@ -15,6 +15,7 @@ import 'package:chuk_chat/utils/grain_overlay.dart'; // Film grain overlay
 import 'package:chuk_chat/pages/login_page.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/password_revision_service.dart';
+import 'package:chuk_chat/services/session_tracking_service.dart';
 import 'package:chuk_chat/services/model_prefetch_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
@@ -161,7 +162,8 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
         // STEP 2: Load theme from Supabase in background
         unawaited(_loadThemeSettingsFromSupabaseAsync());
 
-        // STEP 3: Other background tasks
+        // STEP 3: Register device session + other background tasks
+        unawaited(SessionTrackingService.registerSession());
         unawaited(_checkPasswordRevision(user));
         unawaited(ModelPrefetchService.prefetch());
 
@@ -246,6 +248,10 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
     debugPrint('📱 [Lifecycle] App resumed, network status: ${isOnline ? "ONLINE" : "OFFLINE"}');
     // Resume sync after network status is updated
     ChatSyncService.resume();
+    // Update session last-seen timestamp
+    if (isOnline) {
+      unawaited(SessionTrackingService.updateLastSeen());
+    }
   }
 
   /// Initialize user session - encryption key, chats, projects
@@ -301,6 +307,7 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
           await PasswordRevisionService.hasRevisionMismatch(user);
       if (shouldForceLogout) {
         debugPrint('🔐 [Auth] Password revision mismatch - forcing logout');
+        await SessionTrackingService.setRemotelySignedOut();
         await PasswordRevisionService.clearCachedRevision(userId: user.id);
         await SupabaseService.auth.signOut();
         await EncryptionService.clearKey();
@@ -651,7 +658,7 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
 
     return MaterialApp(
       navigatorKey: navigatorKey,
-      title: 'chuk.chat',
+      title: 'Chuk Chat',
       debugShowCheckedModeBanner: false,
       theme: _cachedThemeData,
       // 👇 Apply film grain to EVERY route/page

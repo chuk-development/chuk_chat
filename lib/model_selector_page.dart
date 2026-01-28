@@ -1,7 +1,7 @@
 // lib/model_selector_page.dart
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_svg/flutter_svg.dart'; // Import for SVG support

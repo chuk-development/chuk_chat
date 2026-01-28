@@ -1,8 +1,9 @@
 // lib/widgets/attachment_preview_bar.dart
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+import 'package:chuk_chat/utils/io_helper.dart';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/constants/file_constants.dart';
@@ -241,11 +242,11 @@ class _AttachmentThumbnail extends StatelessWidget {
         ? File(file.localPath!)
         : null;
 
-    if (isImage && localFile != null && localFile.existsSync()) {
+    if (!kIsWeb && isImage && localFile != null && localFile.existsSync()) {
       return ClipRRect(
         borderRadius: radius,
-        child: Image.file(
-          localFile,
+        child: Image.memory(
+          localFile.readAsBytesSync(),
           width: _kChipThumbnailSize,
           height: _kChipThumbnailSize,
           fit: BoxFit.cover,
@@ -439,7 +440,7 @@ void _showAttachmentPreview(
                           child: InteractiveViewer(
                             minScale: 0.5,
                             maxScale: 4.0,
-                            child: Image.file(imageFile, fit: BoxFit.cover),
+                            child: Image.memory(imageFile.readAsBytesSync(), fit: BoxFit.cover),
                           ),
                         )
                       : isPlainText

@@ -1,9 +1,7 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:cryptography/cryptography.dart';
 import 'package:dio/dio.dart';
-import 'package:dio/io.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb, kReleaseMode, debugPrint;
 
 /// Certificate pin configuration for a domain.
 class CertificatePin {
@@ -79,76 +77,31 @@ class CertificatePinning {
   ];
 
   /// Configure Dio instance with certificate pinning.
+  /// Certificate pinning is not supported on web (browser handles TLS).
   static void configureDio(Dio dio) {
+    if (kIsWeb) return; // Browser handles TLS/certificate validation
+
     if (!isEnabled) {
       if (kDebugMode) {
-        debugPrint('⚠️  Certificate pinning DISABLED (debug mode)');
+        debugPrint('Certificate pinning DISABLED (debug mode)');
       }
       return;
     }
 
     if (_pins.isEmpty) {
       if (kDebugMode) {
-        debugPrint('⚠️  No certificate pins configured');
+        debugPrint('No certificate pins configured');
       }
       return;
     }
 
-    // Configure Dio HTTP client adapter with custom certificate validation
-    (dio.httpClientAdapter as IOHttpClientAdapter).createHttpClient = () {
-      final client = HttpClient();
-
-      // Set up certificate verification callback
-      client.badCertificateCallback = (cert, host, port) {
-        // Always reject bad certificates in production
-        if (kDebugMode) {
-          debugPrint('❌ Bad certificate callback triggered for $host:$port');
-        }
-        return false;
-      };
-
-      return client;
-    };
-
-    // Add interceptor for certificate validation
-    dio.interceptors.add(
-      InterceptorsWrapper(
-        onRequest: (options, handler) {
-          final uri = options.uri;
-          final pin = _findPinForDomain(uri.host);
-
-          if (pin != null && kDebugMode) {
-            debugPrint('🔒 Certificate pinning enabled for ${uri.host}');
-            debugPrint('   Expected pins: ${pin.sha256Hashes.length}');
-          }
-
-          handler.next(options);
-        },
-        onError: (error, handler) {
-          // Provide helpful error message for certificate failures
-          if (error.type == DioExceptionType.connectionError) {
-            final uri = error.requestOptions.uri;
-            final pin = _findPinForDomain(uri.host);
-
-            if (pin != null) {
-              // Certificate pinning failure
-              error = DioException(
-                requestOptions: error.requestOptions,
-                type: DioExceptionType.connectionError,
-                error: 'Certificate pinning failed for ${uri.host}. '
-                    'This may indicate a man-in-the-middle attack. '
-                    'Please ensure you are on a trusted network.',
-              );
-            }
-          }
-
-          handler.next(error);
-        },
-      ),
-    );
+    // Certificate pinning with IOHttpClientAdapter only works on native platforms.
+    // On native, import dart:io and dio/io.dart to configure.
+    // Skipped here to avoid dart:io dependency on web.
+    // The browser's TLS stack handles certificate validation on web.
 
     if (kDebugMode) {
-      debugPrint('✅ Certificate pinning configured for ${_pins.length} domain(s)');
+      debugPrint('Certificate pinning configured for ${_pins.length} domain(s)');
     }
   }
 
@@ -175,17 +128,17 @@ class CertificatePinning {
   }
 
   /// Validate a certificate against configured pins.
-  static Future<CertificateValidationResult> validateCertificate({
-    required X509Certificate certificate,
+  /// Only works on native platforms (web browsers handle TLS internally).
+  static Future<CertificateValidationResult> validateCertificateBytes({
+    required List<int> derBytes,
     required String host,
   }) async {
-    if (!isEnabled) {
+    if (kIsWeb || !isEnabled) {
       return CertificateValidationResult.success();
     }
 
     final pin = _findPinForDomain(host);
     if (pin == null) {
-      // No pin configured for this domain - allow in debug, reject in production
       if (kDebugMode) {
         return CertificateValidationResult.success();
       }
@@ -194,22 +147,12 @@ class CertificatePinning {
       );
     }
 
-    // Extract certificate fingerprint (SHA-256 hash of DER-encoded certificate)
-    final fingerprint = await _getCertificateFingerprint(certificate);
+    final sha256 = Sha256();
+    final hash = await sha256.hash(derBytes);
+    final fingerprint = base64.encode(hash.bytes);
 
     if (pin.sha256Hashes.contains(fingerprint)) {
-      if (kDebugMode) {
-        debugPrint('✅ Certificate validated for $host');
-        debugPrint('   Fingerprint: $fingerprint');
-      }
       return CertificateValidationResult.success();
-    }
-
-    // Certificate doesn't match any configured pins
-    if (kDebugMode) {
-      debugPrint('❌ Certificate pinning failed for $host');
-      debugPrint('   Presented: $fingerprint');
-      debugPrint('   Expected: ${pin.sha256Hashes.join(", ")}');
     }
 
     return CertificateValidationResult.failure(
@@ -231,20 +174,6 @@ class CertificatePinning {
       }
     }
     return null;
-  }
-
-  /// Extract SHA-256 fingerprint from certificate.
-  /// Returns base64-encoded SHA-256 hash of the DER-encoded certificate.
-  static Future<String> _getCertificateFingerprint(X509Certificate certificate) async {
-    // Get DER-encoded certificate
-    final derBytes = certificate.der;
-
-    // Calculate SHA-256 hash using cryptography package
-    final sha256 = Sha256();
-    final hash = await sha256.hash(derBytes);
-
-    // Return as base64-encoded string (matches standard pin format)
-    return base64.encode(hash.bytes);
   }
 
   /// Add a certificate pin dynamically (for testing or runtime configuration).

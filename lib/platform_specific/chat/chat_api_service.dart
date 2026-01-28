@@ -1,7 +1,8 @@
 // lib/platform_specific/chat/chat_api_service.dart
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+import 'dart:typed_data';
+import 'package:chuk_chat/utils/io_helper.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -112,6 +113,63 @@ class ChatApiService {
         false,
         'Error processing "$fileName": ${e.toString()}',
       );
+    }
+  }
+
+  /// Uploads a file from bytes (web platform).
+  /// Plain text files are read directly, binary files use the convert API.
+  Future<void> performFileUploadFromBytes(
+    Uint8List bytes,
+    String fileName,
+    String fileId,
+  ) async {
+    onUploadStatusUpdate?.call(fileId, null, true, null);
+
+    try {
+      final extension = fileName.contains('.')
+          ? fileName.split('.').last.toLowerCase()
+          : '';
+
+      // Plain text files: decode directly
+      if (FileConstants.isPlainText(extension)) {
+        final content = String.fromCharCodes(bytes);
+        final markdown = '**File: $fileName**\n\n```$extension\n$content\n```';
+        onUploadStatusUpdate?.call(fileId, markdown, false, null);
+        debugPrint('Plain text file "$fileName" read directly from bytes.');
+        return;
+      }
+
+      // Binary files: use convert-file API
+      final session =
+          await SupabaseService.refreshSession() ??
+          SupabaseService.auth.currentSession;
+      if (session == null || session.accessToken.isEmpty) {
+        onUploadStatusUpdate?.call(
+          fileId, null, false,
+          'Session expired. Please sign in again before uploading.',
+        );
+        await SupabaseService.signOut();
+        return;
+      }
+
+      final result = await FileConversionService.convertFileFromBytes(
+        bytes: bytes,
+        fileName: fileName,
+        accessToken: session.accessToken,
+      );
+
+      if (result['success'] == true) {
+        onUploadStatusUpdate?.call(fileId, result['markdown'], false, null);
+        debugPrint('File "$fileName" conversion successful.');
+      } else {
+        final errorMessage = result['error'] ?? 'Unknown conversion error';
+        onUploadStatusUpdate?.call(fileId, null, false,
+          'Failed to convert "$fileName": $errorMessage');
+      }
+    } catch (e) {
+      debugPrint('Unexpected error processing "$fileName": $e');
+      onUploadStatusUpdate?.call(fileId, null, false,
+        'Error processing "$fileName": ${e.toString()}');
     }
   }
 

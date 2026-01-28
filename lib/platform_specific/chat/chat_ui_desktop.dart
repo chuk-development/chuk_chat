@@ -32,13 +32,18 @@ import 'package:chuk_chat/services/project_message_service.dart';
 import 'package:chuk_chat/services/title_generation_service.dart';
 
 import 'package:file_picker/file_picker.dart';
-import 'dart:io';
+import 'package:chuk_chat/utils/io_helper.dart';
+import 'dart:typed_data';
 import 'package:uuid/uuid.dart';
-import 'package:record/record.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:chuk_chat/utils/record_stub.dart'
+    if (dart.library.io) 'package:record/record.dart';
+import 'package:chuk_chat/utils/permission_handler_stub.dart'
+    if (dart.library.io) 'package:permission_handler/permission_handler.dart';
+import 'package:chuk_chat/utils/path_provider_stub.dart'
+    if (dart.library.io) 'package:path_provider/path_provider.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
-import 'package:desktop_drop/desktop_drop.dart';
+import 'package:chuk_chat/utils/desktop_drop_stub.dart'
+    if (dart.library.io) 'package:desktop_drop/desktop_drop.dart';
 
 class _MessageRenderData {
   const _MessageRenderData({
@@ -2428,16 +2433,189 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       type: FileType.custom,
       allowedExtensions: FileConstants.allowedExtensions,
       allowMultiple: true,
+      withData: kIsWeb, // On web, we need bytes since paths aren't available
     );
 
     if (result != null && result.files.isNotEmpty) {
-      List<String> filePaths = result.files
-          .where((f) => f.path != null)
-          .map((f) => f.path!)
-          .toList();
-      await _processFilePaths(filePaths);
+      if (kIsWeb) {
+        await _processWebFiles(result.files);
+      } else {
+        List<String> filePaths = result.files
+            .where((f) => f.path != null)
+            .map((f) => f.path!)
+            .toList();
+        await _processFilePaths(filePaths);
+      }
     } else {
       debugPrint('File picking canceled.');
+    }
+  }
+
+  /// Process files on web where we only have bytes, not file paths
+  Future<void> _processWebFiles(List<PlatformFile> platformFiles) async {
+    const int maxFileSize = 10 * 1024 * 1024; // 10MB
+    const int maxConcurrentUploads = 5;
+
+    if (_attachedFiles.where((f) => f.isUploading).length >=
+        maxConcurrentUploads) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              'Please wait for current uploads to complete',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            duration: const Duration(seconds: 2),
+            dismissDirection: DismissDirection.horizontal,
+          ),
+        );
+      }
+      return;
+    }
+
+    for (final platformFile in platformFiles) {
+      final Uint8List? bytes = platformFile.bytes;
+      if (bytes == null) continue;
+
+      final String fileName = platformFile.name;
+      final int fileSize = platformFile.size;
+      final String fileExtension = fileName.contains('.')
+          ? fileName.split('.').last.toLowerCase()
+          : '';
+
+      final isImage = FileConstants.imageExtensions.contains(fileExtension);
+
+      // Check file size (skip for images)
+      if (!isImage && fileSize > maxFileSize) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('File "$fileName" exceeds 10MB limit',
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              duration: const Duration(seconds: 2),
+              dismissDirection: DismissDirection.horizontal,
+            ),
+          );
+        }
+        continue;
+      }
+
+      if (!FileConstants.allowedExtensions.contains(fileExtension)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Unsupported file type for "$fileName": .$fileExtension',
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              duration: const Duration(seconds: 2),
+              dismissDirection: DismissDirection.horizontal,
+            ),
+          );
+        }
+        continue;
+      }
+
+      if (isImage && !_modelSupportsImageInput) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Image uploads are not supported by the selected model.',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              duration: const Duration(seconds: 2),
+              dismissDirection: DismissDirection.horizontal,
+            ),
+          );
+        }
+        continue;
+      }
+
+      if (_attachedFiles.where((f) => f.isUploading).length >=
+          maxConcurrentUploads) {
+        continue;
+      }
+
+      String fileId = _uuid.v4();
+
+      setState(() {
+        _attachedFiles.add(
+          AttachedFile(
+            id: fileId,
+            fileName: fileName,
+            isUploading: true,
+            localPath: '',
+            fileSizeBytes: fileSize,
+            isImage: isImage,
+          ),
+        );
+      });
+      _scrollChatToBottom(force: true);
+
+      if (isImage) {
+        _uploadEncryptedImageFromBytes(bytes, fileName, fileId);
+      } else {
+        _chatApiService.performFileUploadFromBytes(bytes, fileName, fileId);
+      }
+    }
+  }
+
+  /// Upload image from bytes (web)
+  Future<void> _uploadEncryptedImageFromBytes(
+    Uint8List imageBytes,
+    String fileName,
+    String fileId,
+  ) async {
+    try {
+      final String storagePath = await ImageStorageService.uploadEncryptedImage(
+        imageBytes,
+      );
+
+      setState(() {
+        final int index = _attachedFiles.indexWhere((f) => f.id == fileId);
+        if (index != -1) {
+          _attachedFiles[index] = _attachedFiles[index].copyWith(
+            encryptedImagePath: storagePath,
+            isUploading: false,
+          );
+        }
+      });
+
+      debugPrint('Image "$fileName" uploaded and encrypted successfully: $storagePath');
+    } catch (error) {
+      debugPrint('Failed to upload encrypted image "$fileName": $error');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to upload image "$fileName": $error',
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            duration: const Duration(seconds: 3),
+            dismissDirection: DismissDirection.horizontal,
+          ),
+        );
+      }
+
+      setState(() {
+        _attachedFiles.removeWhere((f) => f.id == fileId);
+      });
     }
   }
 
@@ -3166,9 +3344,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 isActive: _isMicActive,
                 debugLabel: 'Mic button',
               ),
-              const SizedBox(width: 8),
               // Voice Mode button (only when feature enabled) or Audio Send button
-              if (_isMicActive || kFeatureVoiceMode)
+              if (_isMicActive || kFeatureVoiceMode) ...[
+                const SizedBox(width: 8),
                 AnimatedSwitcher(
                   duration: const Duration(milliseconds: 200),
                   switchInCurve: Curves.easeOutCubic,
@@ -3214,6 +3392,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                           ),
                         ),
                 ),
+              ],
             ],
           ),
         ],

@@ -1,6 +1,6 @@
 // lib/pages/settings_page.dart
 import 'dart:convert';
-import 'dart:io' show Directory, File, Platform;
+import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';

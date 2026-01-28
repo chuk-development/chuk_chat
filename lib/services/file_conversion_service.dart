@@ -1,4 +1,5 @@
-import 'dart:io';
+import 'dart:typed_data';
+import 'package:chuk_chat/utils/io_helper.dart';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -271,6 +272,82 @@ class FileConversionService {
         debugPrint('═══════════════════════════════════════════════════════════');
       }
 
+      return {
+        'success': false,
+        'error': 'Unexpected error: ${e.toString()}',
+        'markdown': null,
+      };
+    }
+  }
+
+  /// Convert a file from bytes (web platform) using the /v1/ai/convert-file endpoint.
+  static Future<Map<String, dynamic>> convertFileFromBytes({
+    required Uint8List bytes,
+    required String fileName,
+    required String accessToken,
+  }) async {
+    try {
+      final fileExtension = fileName.split('.').last.toLowerCase();
+
+      if (!FileConstants.allowedExtensions.contains(fileExtension)) {
+        return {
+          'success': false,
+          'error': 'Unsupported file type: .$fileExtension',
+          'markdown': null,
+        };
+      }
+
+      final tokenError = SecureTokenHandler.validateTokenForRequest(
+          accessToken, context: 'File conversion');
+      if (tokenError != null) {
+        return {'success': false, 'error': tokenError, 'markdown': null};
+      }
+
+      final dio = CertificatePinning.createSecureDio(
+        baseUrl: _apiBaseUrl,
+        headers: {'Authorization': 'Bearer $accessToken'},
+        connectTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(minutes: 5),
+        sendTimeout: const Duration(minutes: 5),
+      );
+
+      final formData = FormData.fromMap({
+        'file': MultipartFile.fromBytes(bytes, filename: fileName),
+      });
+
+      final response = await dio.post('/v1/ai/convert-file', data: formData);
+
+      final markdown = response.data['markdown'] as String?;
+
+      if (markdown == null || markdown.isEmpty) {
+        return {
+          'success': false,
+          'error': 'No markdown content returned from API',
+          'markdown': null,
+        };
+      }
+
+      if (markdown.length > maxCharsPerFile) {
+        final estimatedTokens = (markdown.length / 4).round();
+        return {
+          'success': false,
+          'error': 'File is too large (~$estimatedTokens tokens). Maximum allowed is $maxTokensPerFile tokens.',
+          'markdown': null,
+        };
+      }
+
+      return {'success': true, 'error': null, 'markdown': markdown};
+    } on DioException catch (e) {
+      String errorMessage = 'File conversion failed';
+      if (e.response?.statusCode == 413) {
+        errorMessage = 'File is too large (max 10MB)';
+      } else if (e.response?.statusCode == 401) {
+        errorMessage = 'Authentication failed. Please sign in again.';
+      } else if (e.response != null) {
+        errorMessage = 'Server error: ${e.response!.statusCode}';
+      }
+      return {'success': false, 'error': errorMessage, 'markdown': null};
+    } catch (e) {
       return {
         'success': false,
         'error': 'Unexpected error: ${e.toString()}',

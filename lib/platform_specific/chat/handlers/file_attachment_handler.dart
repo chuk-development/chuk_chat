@@ -1,7 +1,8 @@
 // lib/platform_specific/chat/handlers/file_attachment_handler.dart
-import 'dart:io';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
@@ -113,6 +114,7 @@ class FileAttachmentHandler {
       type: FileType.custom,
       allowedExtensions: FileConstants.allowedExtensions,
       allowMultiple: true,
+      withData: kIsWeb,
     );
 
     if (result == null || result.files.isEmpty) {
@@ -121,15 +123,25 @@ class FileAttachmentHandler {
     }
 
     for (final platformFile in result.files) {
-      final String? path = platformFile.path;
-      if (path == null) continue;
-
-      await _handleFileAttachment(
-        file: File(path),
-        fileName: platformFile.name,
-        fileSizeBytes: platformFile.size,
-        supportsImages: supportsImages,
-      );
+      if (kIsWeb) {
+        final Uint8List? bytes = platformFile.bytes;
+        if (bytes == null) continue;
+        await _handleWebFileAttachment(
+          bytes: bytes,
+          fileName: platformFile.name,
+          fileSizeBytes: platformFile.size,
+          supportsImages: supportsImages,
+        );
+      } else {
+        final String? path = platformFile.path;
+        if (path == null) continue;
+        await _handleFileAttachment(
+          file: File(path),
+          fileName: platformFile.name,
+          fileSizeBytes: platformFile.size,
+          supportsImages: supportsImages,
+        );
+      }
     }
   }
 
@@ -190,6 +202,85 @@ class FileAttachmentHandler {
       _uploadEncryptedImage(file, fileName, fileId);
     } else {
       _chatApiService.performFileUpload(file, fileName, fileId);
+    }
+  }
+
+  /// Handle file attachment from bytes (web)
+  Future<void> _handleWebFileAttachment({
+    required Uint8List bytes,
+    required String fileName,
+    required int fileSizeBytes,
+    required bool supportsImages,
+  }) async {
+    final String extension = fileName.contains('.')
+        ? fileName.split('.').last.toLowerCase()
+        : '';
+
+    if (!_isImageExtension(extension) &&
+        fileSizeBytes > FileConstants.maxFileSizeBytes) {
+      onError?.call('File "$fileName" exceeds 10MB limit');
+      return;
+    }
+
+    if (extension.isEmpty ||
+        !FileConstants.allowedExtensions.contains(extension)) {
+      onError?.call('Unsupported file type for "$fileName"');
+      return;
+    }
+
+    if (_isImageExtension(extension) && !supportsImages) {
+      onError?.call('Image uploads are not supported by the selected model.');
+      return;
+    }
+
+    final String fileId = _uuid.v4();
+    final bool isImage = _isImageExtension(extension);
+
+    _attachedFiles.add(
+      AttachedFile(
+        id: fileId,
+        fileName: fileName,
+        isUploading: true,
+        localPath: '',
+        fileSizeBytes: fileSizeBytes,
+        isImage: isImage,
+      ),
+    );
+    onUpdate?.call();
+
+    if (isImage) {
+      _uploadEncryptedImageFromBytes(bytes, fileName, fileId);
+    } else {
+      _chatApiService.performFileUploadFromBytes(bytes, fileName, fileId);
+    }
+  }
+
+  /// Upload image from bytes (web)
+  Future<void> _uploadEncryptedImageFromBytes(
+    Uint8List imageBytes,
+    String fileName,
+    String fileId,
+  ) async {
+    try {
+      final String storagePath = await ImageStorageService.uploadEncryptedImage(
+        imageBytes,
+      );
+
+      int index = _attachedFiles.indexWhere((f) => f.id == fileId);
+      if (index != -1) {
+        _attachedFiles[index] = _attachedFiles[index].copyWith(
+          encryptedImagePath: storagePath,
+          isUploading: false,
+        );
+        onUpdate?.call();
+      }
+    } catch (error) {
+      onError?.call('Failed to upload image "$fileName": $error');
+      int index = _attachedFiles.indexWhere((f) => f.id == fileId);
+      if (index != -1) {
+        _attachedFiles.removeAt(index);
+        onUpdate?.call();
+      }
     }
   }
 

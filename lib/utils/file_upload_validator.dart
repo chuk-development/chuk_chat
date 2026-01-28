@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:archive/archive.dart';
 
 /// File upload validation result.

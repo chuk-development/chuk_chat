@@ -1,10 +1,13 @@
 // lib/platform_specific/chat/handlers/audio_recording_handler.dart
 import 'dart:async';
-import 'dart:io';
+import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:flutter/material.dart';
-import 'package:record/record.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:chuk_chat/utils/record_stub.dart'
+    if (dart.library.io) 'package:record/record.dart';
+import 'package:chuk_chat/utils/permission_handler_stub.dart'
+    if (dart.library.io) 'package:permission_handler/permission_handler.dart';
+import 'package:chuk_chat/utils/path_provider_stub.dart'
+    if (dart.library.io) 'package:path_provider/path_provider.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart';
 
 /// Handles audio recording functionality including permissions, recording, and transcription

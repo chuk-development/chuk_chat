@@ -1,11 +1,11 @@
 {
-    "name": "chuk_chat",
-    "short_name": "chuk_chat",
+    "name": "Chuk Chat",
+    "short_name": "Chuk Chat",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Chuk Chat",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
