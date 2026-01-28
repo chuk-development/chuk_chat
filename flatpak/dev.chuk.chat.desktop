@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=chuk_chat
+GenericName=AI Chat Client
+Comment=Cross-platform chat app with E2E encryption and AI chat
+Exec=chuk_chat_launcher.sh
+Icon=dev.chuk.chat
+Type=Application
+Categories=Network;Chat;InstantMessaging;
+Keywords=chat;ai;encryption;messaging;supabase;
+StartupNotify=true
+StartupWMClass=chuk_chat
+Terminal=false

@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>dev.chuk.chat</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>proprietary</project_license>
+  <name>chuk_chat</name>
+  <summary>AI-powered chat with end-to-end encryption</summary>
+
+  <description>
+    <p>
+      chuk_chat is a cross-platform chat application featuring end-to-end encryption,
+      AI chat capabilities, and seamless integration with modern AI models.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>End-to-end encryption for all chats using AES-256-GCM</li>
+      <li>AI chat with multiple model support (OpenRouter)</li>
+      <li>Project workspaces for organizing conversations</li>
+      <li>Image generation support</li>
+      <li>Media manager for attachments</li>
+      <li>Voice mode for audio interactions</li>
+      <li>Cross-platform: Linux, Android, Windows (via Flutter)</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">dev.chuk.chat.desktop</launchable>
+
+  <screenshots>
+    <screenshot type="default">
+      <caption>Main chat interface</caption>
+    </screenshot>
+  </screenshots>
+
+  <url type="homepage">https://github.com/chuk-chat/chuk_chat</url>
+  <url type="bugtracker">https://github.com/chuk-chat/chuk_chat/issues</url>
+
+  <provides>
+    <binary>chuk_chat</binary>
+  </provides>
+
+  <releases>
+    <release version="1.0.14" date="2026-01-28">
+      <description>
+        <p>Latest stable release with Flatpak packaging support</p>
+      </description>
+    </release>
+  </releases>
+
+  <content_rating type="oars-1.1">
+    <content_attribute id="social-chat">intense</content_attribute>
+    <content_attribute id="social-info">moderate</content_attribute>
+  </content_rating>
+
+  <requires>
+    <internet>always</internet>
+  </requires>
+
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+</component>

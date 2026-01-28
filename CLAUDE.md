@@ -97,6 +97,21 @@ If neither is configured, uses debug signing (not for Play Store).
 3. Copy `android/key.properties.example` to `android/key.properties`
 4. Edit `storeFile=` to point to your keystore location
 
+## Building Linux Flatpak
+
+```bash
+# Build and install locally
+./build_flatpak.sh --install
+
+# Create distributable bundle
+./build_flatpak.sh --bundle
+
+# Run
+flatpak run dev.chuk.chat
+```
+
+See `docs/FLATPAK.md` for full documentation.
+
 ## Read These Docs
 
 Before working on the codebase, read the relevant docs:
@@ -109,6 +124,7 @@ Before working on the codebase, read the relevant docs:
 | `docs/DATABASE.md` | Working with Supabase tables, schema |
 | `docs/COMMON_TASKS.md` | Adding services, pages, features, building |
 | `docs/GOTCHAS.md` | **CRITICAL** - Bugs to avoid, important fixes |
+| `docs/FLATPAK.md` | Building and distributing Linux Flatpak packages |
 
 ## Key Entry Points
 

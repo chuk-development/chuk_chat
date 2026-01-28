@@ -103,3 +103,9 @@ android/key.properties
 # Package outputs
 *.msix
 *.pkg
+*.flatpak
+
+# Flatpak build artifacts
+build-dir/
+.flatpak-builder/
+repo/

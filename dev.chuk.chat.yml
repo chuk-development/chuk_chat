@@ -1,0 +1,104 @@
+app-id: dev.chuk.chat
+runtime: org.freedesktop.Platform
+runtime-version: '23.08'
+sdk: org.freedesktop.Sdk
+command: chuk_chat
+
+finish-args:
+  # Network access for Supabase and AI chat
+  - --share=network
+
+  # Display access
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+
+  # OpenGL for Flutter rendering
+  - --device=dri
+
+  # Audio for voice mode
+  - --socket=pulseaudio
+
+  # File picker access (portals)
+  - --filesystem=xdg-download:rw
+  - --filesystem=xdg-documents:rw
+  - --filesystem=xdg-pictures:rw
+
+  # Secure storage
+  - --filesystem=xdg-data/chuk_chat:create
+
+  # Notifications
+  - --talk-name=org.freedesktop.Notifications
+
+modules:
+  # Flutter SDK module
+  - name: flutter-sdk
+    buildsystem: simple
+    build-commands:
+      - mkdir -p /app/flutter
+      - tar xf flutter-*.tar.xz -C /app/flutter --strip-components=1
+      - /app/flutter/bin/flutter precache --linux
+    sources:
+      - type: archive
+        url: https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.24.5-stable.tar.xz
+        sha256: a7c82f551a9eae018e078f6bb186171e5a77920d35a3d75a61d9a593d0a9e4ae
+        dest-filename: flutter-linux.tar.xz
+    cleanup:
+      - /flutter/.pub-cache
+      - /flutter/bin/cache/artifacts/engine/linux-x64/shader_lib
+
+  # chuk_chat application
+  - name: chuk_chat
+    buildsystem: simple
+    build-options:
+      env:
+        # Use Flatpak's Flutter SDK
+        PATH: /app/flutter/bin:/usr/bin
+        # Set pub cache to avoid permission issues
+        PUB_CACHE: /run/build/chuk_chat/.pub-cache
+    build-commands:
+      # Get dependencies
+      - flutter pub get
+
+      # Build release bundle
+      - |
+        flutter build linux --release \
+          --dart-define=SUPABASE_URL=${SUPABASE_URL:-} \
+          --dart-define=SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-} \
+          --dart-define=PLATFORM_MOBILE=false \
+          --dart-define=FEATURE_PROJECTS=true \
+          --dart-define=FEATURE_IMAGE_GEN=true \
+          --dart-define=FEATURE_MEDIA_MANAGER=true \
+          --dart-define=FEATURE_VOICE_MODE=true \
+          --tree-shake-icons
+
+      # Install application files
+      - mkdir -p /app/bin
+      - cp -r build/linux/x64/release/bundle/* /app/bin/
+
+      # Create launcher script
+      - |
+        cat > /app/bin/chuk_chat_launcher.sh << 'EOF'
+        #!/bin/sh
+        exec /app/bin/chuk_chat "$@"
+        EOF
+      - chmod +x /app/bin/chuk_chat_launcher.sh
+
+      # Install desktop file
+      - install -Dm644 flatpak/dev.chuk.chat.desktop /app/share/applications/dev.chuk.chat.desktop
+
+      # Install AppStream metadata
+      - install -Dm644 flatpak/dev.chuk.chat.metainfo.xml /app/share/metainfo/dev.chuk.chat.metainfo.xml
+
+      # Install icons
+      - install -Dm644 web/icons/Icon-192.png /app/share/icons/hicolor/192x192/apps/dev.chuk.chat.png
+      - install -Dm644 web/icons/Icon-512.png /app/share/icons/hicolor/512x512/apps/dev.chuk.chat.png
+
+    sources:
+      - type: dir
+        path: .
+        skip:
+          - .dart_tool
+          - build
+          - .git
+          - .env
