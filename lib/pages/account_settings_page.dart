@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:chuk_chat/pages/session_management_page.dart';
 import 'package:chuk_chat/services/password_change_service.dart';
 import 'package:chuk_chat/services/profile_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -270,7 +271,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
           _AccountSectionCard(
             title: 'Profile',
             description:
-                'Update how your name and email appear inside chuk.chat.',
+                'Update how your name and email appear inside Chuk Chat.',
             child: Column(
               children: [
                 TextFormField(
@@ -442,30 +443,39 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                         : const Text('Update password'),
                   ),
                 ),
-                // TODO: Enable when backend supports these features
-                // const SizedBox(height: 24),
-                // const Divider(height: 1),
-                // const SizedBox(height: 24),
-                // Text(
-                //   'Two-factor authentication',
-                //   style: theme.textTheme.titleMedium,
-                // ),
-                // const SizedBox(height: 4),
-                // Text(
-                //   'Coming soon. You\'ll be able to secure logins with authenticator apps.',
-                //   style: theme.textTheme.bodySmall?.copyWith(
-                //     color: iconFg.withValues(alpha: 0.7),
-                //   ),
-                // ),
-                // const SizedBox(height: 16),
-                // Text('Connected devices', style: theme.textTheme.titleMedium),
-                // const SizedBox(height: 4),
-                // Text(
-                //   'Manage the sessions where your account is active once we ship device management.',
-                //   style: theme.textTheme.bodySmall?.copyWith(
-                //     color: iconFg.withValues(alpha: 0.7),
-                //   ),
-                // ),
+                const SizedBox(height: 24),
+                const Divider(height: 1),
+                const SizedBox(height: 24),
+                Text('Connected devices', style: theme.textTheme.titleMedium),
+                const SizedBox(height: 4),
+                Text(
+                  'See where your account is signed in and sign out other devices remotely.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: iconFg.withValues(alpha: 0.7),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  height: 44,
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.devices, size: 18),
+                    label: const Text('Manage devices'),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const SessionManagementPage(),
+                        ),
+                      );
+                    },
+                    style: OutlinedButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),

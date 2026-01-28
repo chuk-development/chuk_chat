@@ -456,8 +456,8 @@ class SettingsPage extends StatelessWidget {
         await SharePlus.instance.share(
           ShareParams(
             files: [xFile],
-            subject: 'chuk.chat chat export',
-            text: 'Backup of your chuk.chat conversations.',
+            subject: 'Chuk Chat chat export',
+            text: 'Backup of your Chuk Chat conversations.',
           ),
         );
         messenger.showSnackBar(

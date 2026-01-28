@@ -1627,7 +1627,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              'Visit chuk.chat on desktop to subscribe and get unlimited messages.',
+                              'Visit Chuk Chat on desktop to subscribe and get unlimited messages.',
                               style: TextStyle(
                                 fontSize: 14,
                                 color: theme.textTheme.bodyMedium?.color,

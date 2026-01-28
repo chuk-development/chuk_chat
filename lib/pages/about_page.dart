@@ -52,7 +52,7 @@ class AboutPage extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      info?.appName ?? 'chuk.chat',
+                      info?.appName ?? 'Chuk Chat',
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
@@ -158,7 +158,7 @@ class AboutPage extends StatelessWidget {
                 icon: Icons.balance,
                 iconColor: accent,
                 child: Text(
-                  '© ${DateTime.now().year} chuk.chat\nAll rights reserved.',
+                  '© ${DateTime.now().year} Chuk Chat\nAll rights reserved.',
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: iconColor.withValues(alpha: 0.75),
                   ),
@@ -179,9 +179,9 @@ class AboutPage extends StatelessWidget {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => _ThemedLicensePage(
-          applicationName: info?.appName ?? 'chuk.chat',
+          applicationName: info?.appName ?? 'Chuk Chat',
           applicationVersion: version,
-          applicationLegalese: '© ${DateTime.now().year} chuk.chat',
+          applicationLegalese: '© ${DateTime.now().year} Chuk Chat',
         ),
       ),
     );
