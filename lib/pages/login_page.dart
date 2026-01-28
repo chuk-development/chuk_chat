@@ -328,6 +328,7 @@ class _LoginPageState extends State<LoginPage> {
                         hintText: 'you@example.com',
                       ),
                       keyboardType: TextInputType.emailAddress,
+                      textInputAction: TextInputAction.next,
                       validator: (value) {
                         return InputValidator.validateEmail(value);
                       },
@@ -351,6 +352,8 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                       ),
                       obscureText: _obscurePassword,
+                      textInputAction: TextInputAction.done,
+                      onFieldSubmitted: (_) => _handleSubmit(),
                       validator: _validatePassword,
                     ),
                     // Show password strength meter only in sign-up mode
