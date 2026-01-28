@@ -110,3 +110,6 @@ android/key.properties
 build-dir/
 .flatpak-builder/
 repo/
+
+# Playwright MCP
+.playwright-mcp/
