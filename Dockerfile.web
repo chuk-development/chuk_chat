@@ -30,7 +30,7 @@ RUN echo "SUPABASE_URL=${SUPABASE_URL}" && \
     --dart-define=FEATURE_PROJECTS=false \
     --dart-define=FEATURE_IMAGE_GEN=false \
     --dart-define=FEATURE_MEDIA_MANAGER=false \
-    --dart-define=FEATURE_VOICE_MODE=true
+    --dart-define=FEATURE_VOICE_MODE=false
 
 # Stage 2: Serve with nginx
 FROM nginx:alpine
