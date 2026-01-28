@@ -1,0 +1,111 @@
+# Fastlane configuration for chuk_chat Android
+# Handles building, signing, and uploading to Google Play Store
+
+default_platform(:android)
+
+platform :android do
+  desc "Build and sign release APK"
+  lane :build_apk do
+    # Ensure environment variables are set
+    supabase_url = ENV['SUPABASE_URL']
+    supabase_key = ENV['SUPABASE_ANON_KEY']
+
+    raise "SUPABASE_URL not set" unless supabase_url
+    raise "SUPABASE_ANON_KEY not set" unless supabase_key
+
+    # Build release APK with Flutter
+    sh("cd ../.. && flutter build apk --release " \
+       "--dart-define=SUPABASE_URL=#{supabase_url} " \
+       "--dart-define=SUPABASE_ANON_KEY=#{supabase_key} " \
+       "--dart-define=PLATFORM_MOBILE=true " \
+       "--dart-define=FEATURE_PROJECTS=true " \
+       "--dart-define=FEATURE_IMAGE_GEN=true " \
+       "--dart-define=FEATURE_MEDIA_MANAGER=true " \
+       "--dart-define=FEATURE_VOICE_MODE=true " \
+       "--tree-shake-icons " \
+       "--target-platform android-arm64")
+  end
+
+  desc "Build and sign release AAB (Android App Bundle)"
+  lane :build_aab do
+    # Ensure environment variables are set
+    supabase_url = ENV['SUPABASE_URL']
+    supabase_key = ENV['SUPABASE_ANON_KEY']
+
+    raise "SUPABASE_URL not set" unless supabase_url
+    raise "SUPABASE_ANON_KEY not set" unless supabase_key
+
+    # Build release AAB with Flutter
+    sh("cd ../.. && flutter build appbundle --release " \
+       "--dart-define=SUPABASE_URL=#{supabase_url} " \
+       "--dart-define=SUPABASE_ANON_KEY=#{supabase_key} " \
+       "--dart-define=PLATFORM_MOBILE=true " \
+       "--dart-define=FEATURE_PROJECTS=true " \
+       "--dart-define=FEATURE_IMAGE_GEN=true " \
+       "--dart-define=FEATURE_MEDIA_MANAGER=true " \
+       "--dart-define=FEATURE_VOICE_MODE=true " \
+       "--tree-shake-icons")
+  end
+
+  desc "Upload AAB to Google Play Store (internal track)"
+  lane :deploy_internal do
+    build_aab
+
+    upload_to_play_store(
+      track: 'internal',
+      aab: '../build/app/outputs/bundle/release/app-release.aab',
+      skip_upload_screenshots: true,
+      skip_upload_images: true,
+      skip_upload_metadata: true
+    )
+  end
+
+  desc "Upload AAB to Google Play Store (beta track)"
+  lane :deploy_beta do
+    build_aab
+
+    upload_to_play_store(
+      track: 'beta',
+      aab: '../build/app/outputs/bundle/release/app-release.aab',
+      skip_upload_screenshots: true,
+      skip_upload_images: true,
+      skip_upload_metadata: true
+    )
+  end
+
+  desc "Upload AAB to Google Play Store (production)"
+  lane :deploy_production do
+    build_aab
+
+    upload_to_play_store(
+      track: 'production',
+      aab: '../build/app/outputs/bundle/release/app-release.aab',
+      skip_upload_screenshots: true,
+      skip_upload_images: true,
+      skip_upload_metadata: true
+    )
+  end
+
+  desc "Full release: Build APK and AAB, upload to Play Store"
+  lane :release do |options|
+    track = options[:track] || 'internal'
+
+    # Build both APK (for GitHub release) and AAB (for Play Store)
+    build_apk
+    build_aab
+
+    # Upload to Play Store
+    upload_to_play_store(
+      track: track,
+      aab: '../build/app/outputs/bundle/release/app-release.aab',
+      skip_upload_screenshots: true,
+      skip_upload_images: true,
+      skip_upload_metadata: true
+    )
+
+    UI.success("✅ Android release complete!")
+    UI.message("📦 APK: build/app/outputs/flutter-apk/app-release.apk")
+    UI.message("📦 AAB: build/app/outputs/bundle/release/app-release.aab")
+    UI.message("🚀 Uploaded to Play Store (#{track} track)")
+  end
+end

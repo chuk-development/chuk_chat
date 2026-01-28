@@ -1,0 +1,133 @@
+# Fastlane configuration for chuk_chat macOS
+# Handles building, signing, and uploading to Mac App Store
+
+default_platform(:mac)
+
+platform :mac do
+  desc "Build and sign macOS release"
+  lane :build do
+    # Ensure environment variables are set
+    supabase_url = ENV['SUPABASE_URL']
+    supabase_key = ENV['SUPABASE_ANON_KEY']
+
+    raise "SUPABASE_URL not set" unless supabase_url
+    raise "SUPABASE_ANON_KEY not set" unless supabase_key
+
+    # Build macOS release with Flutter
+    sh("cd ../.. && flutter build macos --release " \
+       "--dart-define=SUPABASE_URL=#{supabase_url} " \
+       "--dart-define=SUPABASE_ANON_KEY=#{supabase_key} " \
+       "--dart-define=FEATURE_PROJECTS=true " \
+       "--dart-define=FEATURE_IMAGE_GEN=true " \
+       "--dart-define=FEATURE_MEDIA_MANAGER=true " \
+       "--dart-define=FEATURE_VOICE_MODE=true " \
+       "--tree-shake-icons")
+  end
+
+  desc "Build and sign macOS app for distribution"
+  lane :build_signed do
+    build
+
+    # Sign the app bundle
+    sh("codesign --force --deep --sign \"Developer ID Application: YOUR_TEAM_NAME\" " \
+       "../../build/macos/Build/Products/Release/chuk_chat.app")
+
+    UI.success("✅ macOS app built and signed!")
+  end
+
+  desc "Build and package macOS DMG"
+  lane :build_dmg do
+    build_signed
+
+    # Create DMG using create-dmg (install with: brew install create-dmg)
+    sh("create-dmg " \
+       "--volname 'chuk_chat' " \
+       "--window-pos 200 120 " \
+       "--window-size 800 400 " \
+       "--icon-size 100 " \
+       "--app-drop-link 600 185 " \
+       "../../build/macos/chuk_chat.dmg " \
+       "../../build/macos/Build/Products/Release/chuk_chat.app")
+
+    UI.success("✅ DMG created: build/macos/chuk_chat.dmg")
+  end
+
+  desc "Build PKG installer for macOS"
+  lane :build_pkg do
+    build_signed
+
+    # Create PKG installer
+    sh("productbuild " \
+       "--component ../../build/macos/Build/Products/Release/chuk_chat.app /Applications " \
+       "../../build/macos/chuk_chat.pkg")
+
+    # Sign the PKG
+    sh("productsign " \
+       "--sign \"Developer ID Installer: YOUR_TEAM_NAME\" " \
+       "../../build/macos/chuk_chat.pkg " \
+       "../../build/macos/chuk_chat-signed.pkg")
+
+    sh("mv ../../build/macos/chuk_chat-signed.pkg ../../build/macos/chuk_chat.pkg")
+
+    UI.success("✅ PKG installer created: build/macos/chuk_chat.pkg")
+  end
+
+  desc "Notarize macOS app with Apple"
+  lane :notarize do
+    # Notarization requires:
+    # - Apple ID
+    # - App-specific password
+    # - Team ID
+
+    apple_id = ENV['APPLE_ID']
+    team_id = ENV['APPLE_TEAM_ID']
+    app_password = ENV['APPLE_APP_PASSWORD']
+
+    raise "APPLE_ID not set" unless apple_id
+    raise "APPLE_TEAM_ID not set" unless team_id
+    raise "APPLE_APP_PASSWORD not set" unless app_password
+
+    notarize(
+      package: "../../build/macos/chuk_chat.dmg",
+      bundle_id: "dev.chuk.chat",
+      username: apple_id,
+      password: app_password,
+      asc_provider: team_id
+    )
+
+    UI.success("✅ macOS app notarized!")
+  end
+
+  desc "Upload to Mac App Store"
+  lane :deploy do
+    # Build for App Store (different signing)
+    sh("cd ../.. && flutter build macos --release " \
+       "--dart-define=SUPABASE_URL=#{ENV['SUPABASE_URL']} " \
+       "--dart-define=SUPABASE_ANON_KEY=#{ENV['SUPABASE_ANON_KEY']} " \
+       "--dart-define=FEATURE_PROJECTS=true " \
+       "--dart-define=FEATURE_IMAGE_GEN=true " \
+       "--dart-define=FEATURE_MEDIA_MANAGER=true " \
+       "--dart-define=FEATURE_VOICE_MODE=true " \
+       "--tree-shake-icons")
+
+    # Upload to App Store Connect
+    upload_to_app_store(
+      skip_screenshots: true,
+      skip_metadata: true,
+      app: "../../build/macos/Build/Products/Release/chuk_chat.app"
+    )
+
+    UI.success("✅ Uploaded to Mac App Store!")
+  end
+
+  desc "Full release: Build DMG, PKG, notarize"
+  lane :release do
+    build_dmg
+    build_pkg
+    # notarize # Uncomment when certificates are configured
+
+    UI.success("✅ macOS release complete!")
+    UI.message("📦 DMG: build/macos/chuk_chat.dmg")
+    UI.message("📦 PKG: build/macos/chuk_chat.pkg")
+  end
+end

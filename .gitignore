@@ -75,3 +75,31 @@ android/.kotlin/
 .env
 .env.local
 .env.*.local
+
+# Fastlane
+**/fastlane/report.xml
+**/fastlane/Preview.html
+**/fastlane/screenshots
+**/fastlane/test_output
+**/fastlane/*.cer
+**/fastlane/*.p12
+**/fastlane/*.mobileprovision
+**/fastlane/google-play-key.json
+android/Gemfile.lock
+macos/Gemfile.lock
+
+# Android signing
+android/key.properties
+*.keystore
+*.jks
+
+# macOS certificates
+*.cer
+*.certSigningRequest
+*.p12
+*.mobileprovision
+*.provisionprofile
+
+# Package outputs
+*.msix
+*.pkg

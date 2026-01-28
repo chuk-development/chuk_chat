@@ -1,0 +1,116 @@
+name: Release - Windows
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  FLUTTER_VERSION: '3.27.3'
+
+jobs:
+  build-windows:
+    name: Build Windows MSIX & Portable
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build Windows release
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          flutter build windows --release `
+            --dart-define=SUPABASE_URL=$env:SUPABASE_URL `
+            --dart-define=SUPABASE_ANON_KEY=$env:SUPABASE_ANON_KEY `
+            --dart-define=FEATURE_PROJECTS=true `
+            --dart-define=FEATURE_IMAGE_GEN=true `
+            --dart-define=FEATURE_MEDIA_MANAGER=true `
+            --dart-define=FEATURE_VOICE_MODE=true `
+            --tree-shake-icons
+
+      - name: Install MSIX packaging tool
+        run: flutter pub add msix --dev
+
+      - name: Build MSIX package
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          # Update version in pubspec.yaml for MSIX
+          flutter pub run msix:create --build-windows false
+
+      - name: Create portable ZIP
+        run: |
+          cd build/windows/x64/runner/Release
+          Compress-Archive -Path * -DestinationPath ../../../../../chuk_chat-windows-portable.zip
+
+      - name: Get version from tag
+        id: version
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Find MSIX file
+        id: msix
+        shell: bash
+        run: |
+          MSIX_FILE=$(find build/windows/x64/runner/Release -name "*.msix" | head -n 1)
+          echo "MSIX_PATH=$MSIX_FILE" >> $GITHUB_OUTPUT
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ${{ steps.msix.outputs.MSIX_PATH }}
+            chuk_chat-windows-portable.zip
+          name: Release ${{ steps.version.outputs.VERSION }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Optional: Deploy to Microsoft Store
+  # Uncomment when ready to publish
+  # deploy-msstore:
+  #   name: Deploy to Microsoft Store
+  #   runs-on: windows-latest
+  #   needs: build-windows
+  #   if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, 'beta')
+  #
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
+  #
+  #     - name: Download MSIX artifact
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         name: windows-msix
+  #
+  #     - name: Upload to Microsoft Store
+  #       run: |
+  #         # Install StoreBroker PowerShell module
+  #         Install-Module -Name StoreBroker -Force
+  #
+  #         # Configure credentials
+  #         $cred = @{
+  #           TenantId = "${{ secrets.MS_STORE_TENANT_ID }}"
+  #           ClientId = "${{ secrets.MS_STORE_CLIENT_ID }}"
+  #           ClientSecret = "${{ secrets.MS_STORE_CLIENT_SECRET }}"
+  #         }
+  #         Set-StoreBrokerAuthentication @cred
+  #
+  #         # Submit to store
+  #         New-ApplicationSubmission -AppId "${{ secrets.MS_STORE_APP_ID }}" -PackagePath "*.msix"
