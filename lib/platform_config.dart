@@ -41,3 +41,6 @@ const bool kFeatureImageGen = bool.fromEnvironment('FEATURE_IMAGE_GEN', defaultV
 
 /// Media Manager - View and manage stored media (images) in Supabase
 const bool kFeatureMediaManager = true;
+
+/// Session Management - View and manage connected devices, revoke sessions
+const bool kFeatureSessionManagement = bool.fromEnvironment('FEATURE_SESSION_MANAGEMENT', defaultValue: false);
