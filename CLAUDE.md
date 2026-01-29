@@ -19,29 +19,40 @@ flutter analyze
 
 ## Building Android APKs
 
-### CRITICAL: NEVER USE --debug FOR ANDROID!
+### CRITICAL RULES — READ EVERY TIME BEFORE BUILDING!
 
-Debug builds are 3-10x slower and will make the app feel broken/laggy.
-**ALWAYS use --release for Android builds.**
+1. **NEVER use --debug for Android** — debug builds are 3-10x slower and unusable.
+2. **ALWAYS include Supabase credentials** — EVERY build MUST have `--dart-define=SUPABASE_URL` and `--dart-define=SUPABASE_ANON_KEY`. There is NO local-only mode. Supabase is ALWAYS required.
+3. **ALWAYS use `source .env`** before building to load credentials.
+4. **If the app shows "Supabase credentials are not configured"**, the build was wrong. Rebuild with credentials.
 
 ```
 DEBUG MODE = UNUSABLE PERFORMANCE (JIT, no optimization)
 RELEASE MODE = NORMAL PERFORMANCE (AOT, fully optimized)
+NO SUPABASE = BROKEN APP (will show error on launch)
 ```
 
-### Build Android APK (ALWAYS Release!)
+### Build Android APK (ALWAYS Release + ALWAYS Supabase!)
 
 ```bash
 source .env && flutter build apk --release \
-  --dart-define=SUPABASE_URL=$SUPABASE_URL \
-  --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+  --dart-define="SUPABASE_URL=$SUPABASE_URL" \
+  --dart-define="SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY" \
   --dart-define=PLATFORM_MOBILE=true \
-  --dart-define=FEATURE_PROJECTS=true \
+  --dart-define=FEATURE_PROJECTS=false \
   --dart-define=FEATURE_IMAGE_GEN=true \
-  --dart-define=FEATURE_VOICE_MODE=true \
+  --dart-define=FEATURE_VOICE_MODE=false \
   --tree-shake-icons \
   --target-platform android-arm64
 ```
+
+### Current Production Feature Flags (Android)
+
+| Flag | Value | Reason |
+|------|-------|--------|
+| `FEATURE_PROJECTS` | `false` | Not ready for production |
+| `FEATURE_IMAGE_GEN` | `true` | Media Manager is live |
+| `FEATURE_VOICE_MODE` | `false` | Not ready for production |
 
 Output: `build/app/outputs/flutter-apk/app-release.apk` (~26MB)
 
@@ -275,14 +286,14 @@ When the user says "mach ein neues release" or "create a new release":
 ### Local Builds (Android, Linux, Web)
 
 ```bash
-# Android APK (~2 min)
+# Android APK (~2 min) — ALWAYS include Supabase!
 source .env && flutter build apk --release \
-  --dart-define=SUPABASE_URL=$SUPABASE_URL \
-  --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+  --dart-define="SUPABASE_URL=$SUPABASE_URL" \
+  --dart-define="SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY" \
   --dart-define=PLATFORM_MOBILE=true \
-  --dart-define=FEATURE_PROJECTS=true \
+  --dart-define=FEATURE_PROJECTS=false \
   --dart-define=FEATURE_IMAGE_GEN=true \
-  --dart-define=FEATURE_VOICE_MODE=true \
+  --dart-define=FEATURE_VOICE_MODE=false \
   --tree-shake-icons
 # Output: build/app/outputs/flutter-apk/app-release.apk
 
