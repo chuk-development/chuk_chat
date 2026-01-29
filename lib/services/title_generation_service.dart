@@ -40,7 +40,7 @@ Rules:
     }
     try {
       final prefs = await SharedPreferences.getInstance();
-      _autoGenerateTitlesEnabled = prefs.getBool(_settingsKey) ?? true;
+      _autoGenerateTitlesEnabled = prefs.getBool(_settingsKey) ?? false;
       return _autoGenerateTitlesEnabled!;
     } catch (e) {
       debugPrint('Error loading auto title setting: $e');
