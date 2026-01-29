@@ -162,7 +162,10 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
         // STEP 2: Load theme from Supabase in background
         unawaited(_loadThemeSettingsFromSupabaseAsync());
 
-        // STEP 3: Register device session + other background tasks
+        // STEP 3: Verify session is still valid (catches revoked tokens on web refresh)
+        unawaited(_verifySessionStillValid());
+
+        // STEP 4: Register device session + other background tasks
         unawaited(SessionTrackingService.registerSession());
         unawaited(_checkPasswordRevision(user));
         unawaited(ModelPrefetchService.prefetch());
@@ -248,9 +251,29 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
     debugPrint('📱 [Lifecycle] App resumed, network status: ${isOnline ? "ONLINE" : "OFFLINE"}');
     // Resume sync after network status is updated
     ChatSyncService.resume();
-    // Update session last-seen timestamp
-    if (isOnline) {
+    // Update session last-seen timestamp and verify session is still valid
+    if (isOnline && SupabaseService.auth.currentSession != null) {
+      unawaited(_verifySessionStillValid());
       unawaited(SessionTrackingService.updateLastSeen());
+    }
+  }
+
+  /// Verify the current session hasn't been revoked remotely.
+  /// Forces a token refresh - if the refresh token was revoked, sign out.
+  Future<void> _verifySessionStillValid() async {
+    try {
+      final session = await SupabaseService.forceRefreshSession();
+      if (session == null && SupabaseService.auth.currentSession != null) {
+        // Refresh returned null but we had a session → token was revoked
+        debugPrint('🔐 [Auth] Session revoked remotely - forcing logout');
+        await SessionTrackingService.setRemotelySignedOut();
+        await SupabaseService.auth.signOut();
+        await EncryptionService.clearKey();
+        await ChatStorageService.reset();
+        await ProjectStorageService.reset();
+      }
+    } catch (_) {
+      // Network error - don't force logout, keep cached session
     }
   }
 
