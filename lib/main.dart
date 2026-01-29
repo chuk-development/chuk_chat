@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/services/chat_preload_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_sync_service.dart';
@@ -163,10 +164,14 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
         unawaited(_loadThemeSettingsFromSupabaseAsync());
 
         // STEP 3: Verify session is still valid (catches revoked tokens on web refresh)
-        unawaited(_verifySessionStillValid());
+        if (kFeatureSessionManagement) {
+          unawaited(_verifySessionStillValid());
+        }
 
         // STEP 4: Register device session + other background tasks
-        unawaited(SessionTrackingService.registerSession());
+        if (kFeatureSessionManagement) {
+          unawaited(SessionTrackingService.registerSession());
+        }
         unawaited(_checkPasswordRevision(user));
         unawaited(ModelPrefetchService.prefetch());
 
@@ -252,7 +257,7 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
     // Resume sync after network status is updated
     ChatSyncService.resume();
     // Update session last-seen timestamp and verify session is still valid
-    if (isOnline && SupabaseService.auth.currentSession != null) {
+    if (kFeatureSessionManagement && isOnline && SupabaseService.auth.currentSession != null) {
       unawaited(_verifySessionStillValid());
       unawaited(SessionTrackingService.updateLastSeen());
     }
@@ -266,7 +271,9 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
       if (session == null && SupabaseService.auth.currentSession != null) {
         // Refresh returned null but we had a session → token was revoked
         debugPrint('🔐 [Auth] Session revoked remotely - forcing logout');
-        await SessionTrackingService.setRemotelySignedOut();
+        if (kFeatureSessionManagement) {
+          await SessionTrackingService.setRemotelySignedOut();
+        }
         await SupabaseService.auth.signOut();
         await EncryptionService.clearKey();
         await ChatStorageService.reset();
@@ -330,7 +337,9 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
           await PasswordRevisionService.hasRevisionMismatch(user);
       if (shouldForceLogout) {
         debugPrint('🔐 [Auth] Password revision mismatch - forcing logout');
-        await SessionTrackingService.setRemotelySignedOut();
+        if (kFeatureSessionManagement) {
+          await SessionTrackingService.setRemotelySignedOut();
+        }
         await PasswordRevisionService.clearCachedRevision(userId: user.id);
         await SupabaseService.auth.signOut();
         await EncryptionService.clearKey();
