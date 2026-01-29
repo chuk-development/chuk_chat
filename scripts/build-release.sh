@@ -32,7 +32,6 @@ DART_DEFINES="--dart-define=SUPABASE_URL=$SUPABASE_URL \
     --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
     --dart-define=FEATURE_PROJECTS=true \
     --dart-define=FEATURE_IMAGE_GEN=true \
-    --dart-define=FEATURE_MEDIA_MANAGER=true \
     --dart-define=FEATURE_VOICE_MODE=true"
 
 build_android() {

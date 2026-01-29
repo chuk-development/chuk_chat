@@ -81,7 +81,6 @@ View and manage stored images in Supabase Storage.
 4. Shows warning with chat names if used
 5. After deletion: widgets show "Image deleted" placeholder
 
-**Flag:** `--dart-define=FEATURE_MEDIA_MANAGER=true`
 
 ## Voice Transcription
 Audio recording with transcription.

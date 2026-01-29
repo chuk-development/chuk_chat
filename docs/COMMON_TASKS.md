@@ -52,7 +52,6 @@ flutter build apk --dart-define=PLATFORM_MOBILE=true --tree-shake-icons --target
 # All features:
 flutter build apk \
   --dart-define=PLATFORM_MOBILE=true \
-  --dart-define=FEATURE_MEDIA_MANAGER=true \
   --dart-define=FEATURE_IMAGE_GEN=true \
   --dart-define=FEATURE_PROJECTS=true \
   --tree-shake-icons \

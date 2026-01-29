@@ -27,7 +27,7 @@ In `lib/platform_config.dart`, enabled via `--dart-define=FEATURE_X=true`:
 - `kFeatureProjects` - Project workspaces
 - `kFeatureAssistants` - Custom AI assistants
 - `kFeatureImageGen` - AI Image Generation
-- `kFeatureMediaManager` - Media Manager for stored images
+- Media Manager - always enabled (no feature flag needed)
 
 ## Services Architecture
 

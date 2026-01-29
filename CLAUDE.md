@@ -38,7 +38,6 @@ source .env && flutter build apk --release \
   --dart-define=PLATFORM_MOBILE=true \
   --dart-define=FEATURE_PROJECTS=true \
   --dart-define=FEATURE_IMAGE_GEN=true \
-  --dart-define=FEATURE_MEDIA_MANAGER=true \
   --dart-define=FEATURE_VOICE_MODE=true \
   --tree-shake-icons \
   --target-platform android-arm64
@@ -135,7 +134,6 @@ Configured in `Dockerfile.web` (separate from native builds):
 ```
 FEATURE_PROJECTS=false
 FEATURE_IMAGE_GEN=false
-FEATURE_MEDIA_MANAGER=true
 FEATURE_VOICE_MODE=false
 ```
 
@@ -231,7 +229,6 @@ Before working on the codebase, read the relevant docs:
 Enable with `--dart-define=FEATURE_X=true`:
 - `FEATURE_PROJECTS` - Project workspaces
 - `FEATURE_IMAGE_GEN` - AI image generation
-- `FEATURE_MEDIA_MANAGER` - Media management
 - `FEATURE_VOICE_MODE` - Voice mode button
 
 ## Privacy: Logging Policy
@@ -285,7 +282,6 @@ source .env && flutter build apk --release \
   --dart-define=PLATFORM_MOBILE=true \
   --dart-define=FEATURE_PROJECTS=true \
   --dart-define=FEATURE_IMAGE_GEN=true \
-  --dart-define=FEATURE_MEDIA_MANAGER=true \
   --dart-define=FEATURE_VOICE_MODE=true \
   --tree-shake-icons
 # Output: build/app/outputs/flutter-apk/app-release.apk
@@ -296,7 +292,6 @@ source .env && flutter build linux --release \
   --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
   --dart-define=FEATURE_PROJECTS=true \
   --dart-define=FEATURE_IMAGE_GEN=true \
-  --dart-define=FEATURE_MEDIA_MANAGER=true \
   --dart-define=FEATURE_VOICE_MODE=true
 # Output: build/linux/x64/release/bundle/
 
@@ -306,7 +301,6 @@ source .env && flutter build web --release \
   --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
   --dart-define=FEATURE_PROJECTS=true \
   --dart-define=FEATURE_IMAGE_GEN=true \
-  --dart-define=FEATURE_MEDIA_MANAGER=true \
   --dart-define=FEATURE_VOICE_MODE=true
 # Output: build/web/
 # Run: cd build/web && python3 -m http.server 8080

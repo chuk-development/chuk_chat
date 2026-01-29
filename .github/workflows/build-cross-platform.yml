@@ -159,7 +159,6 @@ jobs:
         run: |
           flutter build apk \
             --dart-define=PLATFORM_MOBILE=true \
-            --dart-define=FEATURE_MEDIA_MANAGER=true \
             --dart-define=FEATURE_IMAGE_GEN=true \
             --dart-define=FEATURE_PROJECTS=true \
             --dart-define=FEATURE_VOICE_MODE=true \
@@ -181,7 +180,6 @@ jobs:
         run: |
           flutter build apk \
             --dart-define=PLATFORM_MOBILE=true \
-            --dart-define=FEATURE_MEDIA_MANAGER=true \
             --dart-define=FEATURE_IMAGE_GEN=true \
             --dart-define=FEATURE_PROJECTS=true \
             --dart-define=FEATURE_VOICE_MODE=true \
@@ -244,7 +242,6 @@ jobs:
         if: ${{ inputs.enable_all_features }}
         run: |
           flutter build linux \
-            --dart-define=FEATURE_MEDIA_MANAGER=true \
             --dart-define=FEATURE_IMAGE_GEN=true \
             --dart-define=FEATURE_PROJECTS=true \
             --dart-define=FEATURE_VOICE_MODE=true \
@@ -447,7 +444,6 @@ jobs:
         if: ${{ inputs.enable_all_features }}
         run: |
           flutter build windows `
-            --dart-define=FEATURE_MEDIA_MANAGER=true `
             --dart-define=FEATURE_IMAGE_GEN=true `
             --dart-define=FEATURE_PROJECTS=true `
             --dart-define=FEATURE_VOICE_MODE=true `
@@ -531,7 +527,6 @@ jobs:
         if: ${{ inputs.enable_all_features }}
         run: |
           flutter build macos \
-            --dart-define=FEATURE_MEDIA_MANAGER=true \
             --dart-define=FEATURE_IMAGE_GEN=true \
             --dart-define=FEATURE_PROJECTS=true \
             --dart-define=FEATURE_VOICE_MODE=true \
@@ -591,7 +586,6 @@ jobs:
         run: |
           flutter build ios \
             --dart-define=PLATFORM_MOBILE=true \
-            --dart-define=FEATURE_MEDIA_MANAGER=true \
             --dart-define=FEATURE_IMAGE_GEN=true \
             --dart-define=FEATURE_PROJECTS=true \
             --dart-define=FEATURE_VOICE_MODE=true \

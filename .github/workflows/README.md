@@ -132,7 +132,6 @@ chuk_chat-v1.0.7-macos.dmg              # Disk image
 
 **Mit allen Features** (Standard):
 ```yaml
-✅ FEATURE_MEDIA_MANAGER
 ✅ FEATURE_IMAGE_GEN
 ✅ FEATURE_PROJECTS
 ✅ FEATURE_VOICE_MODE

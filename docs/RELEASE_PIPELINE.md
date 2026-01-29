@@ -250,7 +250,6 @@ flutter build web --release \
   --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
   --dart-define=FEATURE_PROJECTS=true \
   --dart-define=FEATURE_IMAGE_GEN=true \
-  --dart-define=FEATURE_MEDIA_MANAGER=true \
   --dart-define=FEATURE_VOICE_MODE=true \
   --tree-shake-icons \
   --web-renderer canvaskit

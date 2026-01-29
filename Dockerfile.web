@@ -31,7 +31,6 @@ RUN echo "// GENERATED - DO NOT EDIT" > lib/web_env.dart && \
 RUN flutter build web --release \
     --dart-define=FEATURE_PROJECTS=false \
     --dart-define=FEATURE_IMAGE_GEN=false \
-    --dart-define=FEATURE_MEDIA_MANAGER=true \
     --dart-define=FEATURE_VOICE_MODE=false
 
 # Stage 2: Serve with nginx
