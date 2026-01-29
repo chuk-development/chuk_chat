@@ -56,6 +56,13 @@ class SettingsPage extends StatelessWidget {
   final Function(int) setImageGenCustomHeight;
   final bool imageGenUseCustomSize;
   final Function(bool) setImageGenUseCustomSize;
+  // AI context settings
+  final bool includeRecentImagesInHistory;
+  final Function(bool) setIncludeRecentImagesInHistory;
+  final bool includeAllImagesInHistory;
+  final Function(bool) setIncludeAllImagesInHistory;
+  final bool includeReasoningInHistory;
+  final Function(bool) setIncludeReasoningInHistory;
 
   const SettingsPage({
     super.key,
@@ -87,6 +94,12 @@ class SettingsPage extends StatelessWidget {
     required this.setImageGenCustomHeight,
     required this.imageGenUseCustomSize,
     required this.setImageGenUseCustomSize,
+    required this.includeRecentImagesInHistory,
+    required this.setIncludeRecentImagesInHistory,
+    required this.includeAllImagesInHistory,
+    required this.setIncludeAllImagesInHistory,
+    required this.includeReasoningInHistory,
+    required this.setIncludeReasoningInHistory,
   });
 
   @override
@@ -168,6 +181,12 @@ class SettingsPage extends StatelessWidget {
                     setImageGenCustomHeight: setImageGenCustomHeight,
                     imageGenUseCustomSize: imageGenUseCustomSize,
                     setImageGenUseCustomSize: setImageGenUseCustomSize,
+                    includeRecentImagesInHistory: includeRecentImagesInHistory,
+                    setIncludeRecentImagesInHistory: setIncludeRecentImagesInHistory,
+                    includeAllImagesInHistory: includeAllImagesInHistory,
+                    setIncludeAllImagesInHistory: setIncludeAllImagesInHistory,
+                    includeReasoningInHistory: includeReasoningInHistory,
+                    setIncludeReasoningInHistory: setIncludeReasoningInHistory,
                   ),
                 ),
               );

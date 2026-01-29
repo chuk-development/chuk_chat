@@ -16,7 +16,7 @@ class TokenEstimator {
   }
 
   static int estimatePromptTokens({
-    required List<Map<String, String>> history,
+    required List<Map<String, dynamic>> history,
     required String currentMessage,
     String? systemPrompt,
   }) {
@@ -26,10 +26,24 @@ class TokenEstimator {
       total += estimateTokens(systemPrompt) + _systemPromptOverhead;
     }
 
-    for (final Map<String, String> entry in history) {
-      final String? content = entry['content'];
-      if (content == null || content.trim().isEmpty) continue;
-      total += estimateTokens(content) + _perMessageOverhead;
+    for (final Map<String, dynamic> entry in history) {
+      final content = entry['content'];
+      if (content == null) continue;
+      if (content is String) {
+        if (content.trim().isEmpty) continue;
+        total += estimateTokens(content) + _perMessageOverhead;
+      } else if (content is List) {
+        // Multimodal content blocks — estimate text portions, add ~1000 per image
+        for (final block in content) {
+          if (block is Map) {
+            if (block['type'] == 'text') {
+              total += estimateTokens(block['text'] as String? ?? '') + _perMessageOverhead;
+            } else if (block['type'] == 'image_url') {
+              total += 1000; // Rough estimate for image tokens
+            }
+          }
+        }
+      }
     }
 
     if (currentMessage.trim().isNotEmpty) {

@@ -1,5 +1,6 @@
 // lib/platform_specific/chat/handlers/streaming_message_handler.dart
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/services/websocket_chat_service.dart';
@@ -7,6 +8,7 @@ import 'package:chuk_chat/services/streaming_manager.dart';
 import 'package:chuk_chat/services/message_composition_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
+import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/models/chat_model.dart';
 
 /// Handles message streaming and sending
@@ -29,6 +31,10 @@ class StreamingMessageHandler {
   bool get isStreaming => _isStreaming;
   bool get isSending => _isSending;
 
+  // In-memory cache for resolved Base64 images (storage path -> data URL)
+  static final Map<String, String> _imageBase64Cache = {};
+  static const int _maxCacheSize = 10;
+
   /// Send a message with streaming response
   Future<void> sendMessage({
     required String userInput,
@@ -41,6 +47,9 @@ class StreamingMessageHandler {
     required int placeholderIndex,
     required Future<String?> Function() getProviderSlug,
     required bool isOffline,
+    bool includeRecentImagesInHistory = true,
+    bool includeAllImagesInHistory = false,
+    bool includeReasoningInHistory = false,
   }) async {
     if (_isSending && !_isStreaming) {
       onShowSnackBar?.call('Please wait');
@@ -71,10 +80,13 @@ class StreamingMessageHandler {
       }
     }
 
-    // Build API history
-    final List<Map<String, String>> apiHistory = _buildApiHistory(
+    // Build API history (with optional images and reasoning)
+    final List<Map<String, dynamic>> apiHistory = await _buildApiHistory(
       messages,
       userInput,
+      includeRecentImages: includeRecentImagesInHistory,
+      includeAllImages: includeAllImagesInHistory,
+      includeReasoning: includeReasoningInHistory,
     );
 
     // Prepare message using MessageCompositionService
@@ -265,21 +277,73 @@ class StreamingMessageHandler {
     return _streamingManager.getStreamingMessageIndex(chatId);
   }
 
-  /// Build API history from messages
-  List<Map<String, String>> _buildApiHistory(
+  /// Build API history from messages, optionally including images and reasoning
+  Future<List<Map<String, dynamic>>> _buildApiHistory(
     List<Map<String, String>> messages,
-    String pendingUserText,
-  ) {
-    final List<Map<String, String>> history = <Map<String, String>>[];
-    for (final Map<String, String> message in messages) {
+    String pendingUserText, {
+    bool includeRecentImages = true,
+    bool includeAllImages = false,
+    bool includeReasoning = false,
+  }) async {
+    final List<Map<String, dynamic>> history = <Map<String, dynamic>>[];
+
+    // Determine image window: count user messages with images from end
+    final bool shouldIncludeImages = includeRecentImages || includeAllImages;
+    final int imageWindow = includeAllImages ? messages.length : 6;
+
+    // Find which user messages (by index) are within the image window
+    final Set<int> imageEligibleIndices = {};
+    if (shouldIncludeImages) {
+      int userMsgCount = 0;
+      for (int i = messages.length - 1; i >= 0; i--) {
+        if (messages[i]['sender'] == 'user') {
+          userMsgCount++;
+          if (userMsgCount <= imageWindow) {
+            imageEligibleIndices.add(i);
+          }
+        }
+      }
+    }
+
+    for (int i = 0; i < messages.length; i++) {
+      final message = messages[i];
       final String? sender = message['sender'];
       final String? text = message['text'];
-      if (text == null || text.trim().isEmpty) continue;
 
       if (sender == 'user') {
-        history.add({'role': 'user', 'content': text});
+        final bool hasImages = message['images'] != null && message['images']!.isNotEmpty;
+        final bool shouldAddImages = shouldIncludeImages && hasImages && imageEligibleIndices.contains(i);
+
+        if (shouldAddImages) {
+          // Build multimodal content with text + images
+          final content = <Map<String, dynamic>>[];
+          if (text != null && text.trim().isNotEmpty) {
+            content.add({'type': 'text', 'text': text});
+          }
+          // Resolve image storage paths to Base64
+          final imageDataUrls = await _resolveHistoryImages(message['images']!);
+          for (final dataUrl in imageDataUrls) {
+            content.add({
+              'type': 'image_url',
+              'image_url': {'url': dataUrl},
+            });
+          }
+          if (content.isNotEmpty) {
+            history.add({'role': 'user', 'content': content});
+          }
+        } else if (text != null && text.trim().isNotEmpty) {
+          history.add({'role': 'user', 'content': text});
+        }
       } else if (sender == 'ai' || sender == 'assistant') {
-        history.add({'role': 'assistant', 'content': text});
+        if (text == null || text.trim().isEmpty) continue;
+        String assistantContent = text;
+        if (includeReasoning) {
+          final reasoning = message['reasoning'] ?? '';
+          if (reasoning.isNotEmpty) {
+            assistantContent = '<thinking>\n$reasoning\n</thinking>\n\n$assistantContent';
+          }
+        }
+        history.add({'role': 'assistant', 'content': assistantContent});
       }
     }
 
@@ -288,6 +352,55 @@ class StreamingMessageHandler {
     }
 
     return history;
+  }
+
+  /// Resolve image storage paths from a JSON-encoded list to Base64 data URLs
+  Future<List<String>> _resolveHistoryImages(String imagesJson) async {
+    final List<String> dataUrls = [];
+    try {
+      final decoded = jsonDecode(imagesJson);
+      if (decoded is! List) return dataUrls;
+
+      for (final img in decoded) {
+        final path = img.toString();
+        if (path.isEmpty) continue;
+
+        // Check if already a data URL
+        if (path.startsWith('data:image/')) {
+          dataUrls.add(path);
+          continue;
+        }
+
+        // Check cache
+        if (_imageBase64Cache.containsKey(path)) {
+          dataUrls.add(_imageBase64Cache[path]!);
+          continue;
+        }
+
+        // Download, decrypt, convert to Base64
+        try {
+          final bytes = await ImageStorageService.downloadAndDecryptImage(path);
+          final base64 = base64Encode(bytes);
+          final dataUrl = 'data:image/jpeg;base64,$base64';
+
+          // Cache with eviction
+          if (_imageBase64Cache.length >= _maxCacheSize) {
+            _imageBase64Cache.remove(_imageBase64Cache.keys.first);
+          }
+          _imageBase64Cache[path] = dataUrl;
+          dataUrls.add(dataUrl);
+        } catch (e) {
+          if (kDebugMode) {
+            debugPrint('⚠️ [StreamingHandler] Failed to resolve history image: $e');
+          }
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [StreamingHandler] Failed to parse images JSON: $e');
+      }
+    }
+    return dataUrls;
   }
 
   /// Get session safely with network error handling

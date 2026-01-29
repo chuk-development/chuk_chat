@@ -8,6 +8,7 @@ class ChatMessage {
     this.reasoning,
     this.images,
     this.attachments,
+    this.attachedFilesJson,
     this.modelId,
     this.provider,
   });
@@ -19,6 +20,7 @@ class ChatMessage {
       reasoning: json['reasoning'] as String?,
       images: json['images'] as String?,
       attachments: json['attachments'] as String?,
+      attachedFilesJson: json['attachedFilesJson'] as String?,
       modelId: json['modelId'] as String?,
       provider: json['provider'] as String?,
     );
@@ -29,6 +31,7 @@ class ChatMessage {
   final String? reasoning;
   final String? images;
   final String? attachments;
+  final String? attachedFilesJson;
   final String? modelId;
   final String? provider;
 
@@ -42,6 +45,8 @@ class ChatMessage {
     if (images != null && images!.isNotEmpty) 'images': images,
     if (attachments != null && attachments!.isNotEmpty)
       'attachments': attachments,
+    if (attachedFilesJson != null && attachedFilesJson!.isNotEmpty)
+      'attachedFilesJson': attachedFilesJson,
     if (modelId != null && modelId!.isNotEmpty) 'modelId': modelId,
     if (provider != null && provider!.isNotEmpty) 'provider': provider,
   };

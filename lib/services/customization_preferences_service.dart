@@ -13,6 +13,9 @@ class CustomizationPreferences {
     required this.imageGenCustomWidth,
     required this.imageGenCustomHeight,
     required this.imageGenUseCustomSize,
+    required this.includeRecentImagesInHistory,
+    required this.includeAllImagesInHistory,
+    required this.includeReasoningInHistory,
   });
 
   final String userId;
@@ -26,6 +29,10 @@ class CustomizationPreferences {
   final int imageGenCustomWidth;
   final int imageGenCustomHeight;
   final bool imageGenUseCustomSize;
+  // AI context settings
+  final bool includeRecentImagesInHistory;
+  final bool includeAllImagesInHistory;
+  final bool includeReasoningInHistory;
 
   CustomizationPreferences copyWith({
     bool? autoSendVoiceTranscription,
@@ -37,6 +44,9 @@ class CustomizationPreferences {
     int? imageGenCustomWidth,
     int? imageGenCustomHeight,
     bool? imageGenUseCustomSize,
+    bool? includeRecentImagesInHistory,
+    bool? includeAllImagesInHistory,
+    bool? includeReasoningInHistory,
   }) {
     return CustomizationPreferences(
       userId: userId,
@@ -49,6 +59,9 @@ class CustomizationPreferences {
       imageGenCustomWidth: imageGenCustomWidth ?? this.imageGenCustomWidth,
       imageGenCustomHeight: imageGenCustomHeight ?? this.imageGenCustomHeight,
       imageGenUseCustomSize: imageGenUseCustomSize ?? this.imageGenUseCustomSize,
+      includeRecentImagesInHistory: includeRecentImagesInHistory ?? this.includeRecentImagesInHistory,
+      includeAllImagesInHistory: includeAllImagesInHistory ?? this.includeAllImagesInHistory,
+      includeReasoningInHistory: includeReasoningInHistory ?? this.includeReasoningInHistory,
     );
   }
 
@@ -64,6 +77,9 @@ class CustomizationPreferences {
       'image_gen_custom_width': imageGenCustomWidth,
       'image_gen_custom_height': imageGenCustomHeight,
       'image_gen_use_custom_size': imageGenUseCustomSize,
+      'include_recent_images_in_history': includeRecentImagesInHistory,
+      'include_all_images_in_history': includeAllImagesInHistory,
+      'include_reasoning_in_history': includeReasoningInHistory,
     };
   }
 
@@ -79,6 +95,9 @@ class CustomizationPreferences {
       imageGenCustomWidth: 1024,
       imageGenCustomHeight: 768,
       imageGenUseCustomSize: false,
+      includeRecentImagesInHistory: true, // Default ON
+      includeAllImagesInHistory: false,
+      includeReasoningInHistory: false,
     );
   }
 
@@ -94,6 +113,9 @@ class CustomizationPreferences {
       imageGenCustomWidth: (map['image_gen_custom_width'] as int?) ?? 1024,
       imageGenCustomHeight: (map['image_gen_custom_height'] as int?) ?? 768,
       imageGenUseCustomSize: (map['image_gen_use_custom_size'] as bool?) ?? false,
+      includeRecentImagesInHistory: (map['include_recent_images_in_history'] as bool?) ?? true,
+      includeAllImagesInHistory: (map['include_all_images_in_history'] as bool?) ?? false,
+      includeReasoningInHistory: (map['include_reasoning_in_history'] as bool?) ?? false,
     );
   }
 }

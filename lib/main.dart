@@ -102,6 +102,11 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
   int _imageGenCustomHeight = 768;
   bool _imageGenUseCustomSize = false;
 
+  // AI context preferences
+  bool _includeRecentImagesInHistory = true;
+  bool _includeAllImagesInHistory = false;
+  bool _includeReasoningInHistory = false;
+
   // Keys for SharedPreferences
   static const String _kThemeModeKey = 'themeMode';
   static const String _kAccentColorKey = 'accentColor';
@@ -117,6 +122,9 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
   static const String _kImageGenCustomWidthKey = 'imageGenCustomWidth';
   static const String _kImageGenCustomHeightKey = 'imageGenCustomHeight';
   static const String _kImageGenUseCustomSizeKey = 'imageGenUseCustomSize';
+  static const String _kIncludeRecentImagesInHistoryKey = 'includeRecentImagesInHistory';
+  static const String _kIncludeAllImagesInHistoryKey = 'includeAllImagesInHistory';
+  static const String _kIncludeReasoningInHistoryKey = 'includeReasoningInHistory';
 
   StreamSubscription<AuthState>? _authSubscription;
   bool _hasAppliedSupabaseTheme = false;
@@ -418,6 +426,9 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
       _imageGenCustomWidth = prefs.getInt(_kImageGenCustomWidthKey) ?? 1024;
       _imageGenCustomHeight = prefs.getInt(_kImageGenCustomHeightKey) ?? 768;
       _imageGenUseCustomSize = prefs.getBool(_kImageGenUseCustomSizeKey) ?? false;
+      _includeRecentImagesInHistory = prefs.getBool(_kIncludeRecentImagesInHistoryKey) ?? true;
+      _includeAllImagesInHistory = prefs.getBool(_kIncludeAllImagesInHistoryKey) ?? false;
+      _includeReasoningInHistory = prefs.getBool(_kIncludeReasoningInHistoryKey) ?? false;
       _cachedThemeData = null; // Invalidate theme cache
     });
   }
@@ -511,6 +522,33 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
     _debouncedSyncCustomizationSettings();
   }
 
+  void _setIncludeRecentImagesInHistory(bool value) async {
+    final prefs = await _getPrefs();
+    await prefs.setBool(_kIncludeRecentImagesInHistoryKey, value);
+    setState(() {
+      _includeRecentImagesInHistory = value;
+    });
+    _debouncedSyncCustomizationSettings();
+  }
+
+  void _setIncludeAllImagesInHistory(bool value) async {
+    final prefs = await _getPrefs();
+    await prefs.setBool(_kIncludeAllImagesInHistoryKey, value);
+    setState(() {
+      _includeAllImagesInHistory = value;
+    });
+    _debouncedSyncCustomizationSettings();
+  }
+
+  void _setIncludeReasoningInHistory(bool value) async {
+    final prefs = await _getPrefs();
+    await prefs.setBool(_kIncludeReasoningInHistoryKey, value);
+    setState(() {
+      _includeReasoningInHistory = value;
+    });
+    _debouncedSyncCustomizationSettings();
+  }
+
   void _setImageGenEnabled(bool enabled) async {
     final prefs = await _getPrefs();
     await prefs.setBool(_kImageGenEnabledKey, enabled);
@@ -594,6 +632,9 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
         _imageGenCustomWidth = customizationPrefs.imageGenCustomWidth;
         _imageGenCustomHeight = customizationPrefs.imageGenCustomHeight;
         _imageGenUseCustomSize = customizationPrefs.imageGenUseCustomSize;
+        _includeRecentImagesInHistory = customizationPrefs.includeRecentImagesInHistory;
+        _includeAllImagesInHistory = customizationPrefs.includeAllImagesInHistory;
+        _includeReasoningInHistory = customizationPrefs.includeReasoningInHistory;
         _hasAppliedSupabaseTheme = true;
         _cachedThemeData = null; // Invalidate cache
       });
@@ -622,6 +663,9 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
     await prefs.setInt(_kImageGenCustomWidthKey, _imageGenCustomWidth);
     await prefs.setInt(_kImageGenCustomHeightKey, _imageGenCustomHeight);
     await prefs.setBool(_kImageGenUseCustomSizeKey, _imageGenUseCustomSize);
+    await prefs.setBool(_kIncludeRecentImagesInHistoryKey, _includeRecentImagesInHistory);
+    await prefs.setBool(_kIncludeAllImagesInHistoryKey, _includeAllImagesInHistory);
+    await prefs.setBool(_kIncludeReasoningInHistoryKey, _includeReasoningInHistory);
   }
 
   Future<void> _syncThemeSettings() async {
@@ -668,6 +712,9 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
       imageGenCustomWidth: _imageGenCustomWidth,
       imageGenCustomHeight: _imageGenCustomHeight,
       imageGenUseCustomSize: _imageGenUseCustomSize,
+      includeRecentImagesInHistory: _includeRecentImagesInHistory,
+      includeAllImagesInHistory: _includeAllImagesInHistory,
+      includeReasoningInHistory: _includeReasoningInHistory,
     );
 
     try {
@@ -752,6 +799,12 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
             setImageGenCustomHeight: _setImageGenCustomHeight,
             imageGenUseCustomSize: _imageGenUseCustomSize,
             setImageGenUseCustomSize: _setImageGenUseCustomSize,
+            includeRecentImagesInHistory: _includeRecentImagesInHistory,
+            setIncludeRecentImagesInHistory: _setIncludeRecentImagesInHistory,
+            includeAllImagesInHistory: _includeAllImagesInHistory,
+            setIncludeAllImagesInHistory: _setIncludeAllImagesInHistory,
+            includeReasoningInHistory: _includeReasoningInHistory,
+            setIncludeReasoningInHistory: _setIncludeReasoningInHistory,
           );
         },
       ),

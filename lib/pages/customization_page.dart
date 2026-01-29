@@ -25,6 +25,13 @@ class CustomizationPage extends StatefulWidget {
   final Function(int) setImageGenCustomHeight;
   final bool imageGenUseCustomSize;
   final Function(bool) setImageGenUseCustomSize;
+  // AI context settings
+  final bool includeRecentImagesInHistory;
+  final Function(bool) setIncludeRecentImagesInHistory;
+  final bool includeAllImagesInHistory;
+  final Function(bool) setIncludeAllImagesInHistory;
+  final bool includeReasoningInHistory;
+  final Function(bool) setIncludeReasoningInHistory;
 
   const CustomizationPage({
     super.key,
@@ -46,6 +53,12 @@ class CustomizationPage extends StatefulWidget {
     required this.setImageGenCustomHeight,
     required this.imageGenUseCustomSize,
     required this.setImageGenUseCustomSize,
+    required this.includeRecentImagesInHistory,
+    required this.setIncludeRecentImagesInHistory,
+    required this.includeAllImagesInHistory,
+    required this.setIncludeAllImagesInHistory,
+    required this.includeReasoningInHistory,
+    required this.setIncludeReasoningInHistory,
   });
 
   @override
@@ -63,6 +76,10 @@ class _CustomizationPageState extends State<CustomizationPage> {
   late int _selectedImageGenCustomWidth;
   late int _selectedImageGenCustomHeight;
   late bool _selectedImageGenUseCustomSize;
+  // AI context state
+  late bool _selectedIncludeRecentImagesInHistory;
+  late bool _selectedIncludeAllImagesInHistory;
+  late bool _selectedIncludeReasoningInHistory;
   // Auto title generation state
   bool _autoGenerateTitles = false;
   bool _isLoadingTitleSetting = true;
@@ -92,6 +109,9 @@ class _CustomizationPageState extends State<CustomizationPage> {
     _selectedImageGenCustomWidth = widget.imageGenCustomWidth;
     _selectedImageGenCustomHeight = widget.imageGenCustomHeight;
     _selectedImageGenUseCustomSize = widget.imageGenUseCustomSize;
+    _selectedIncludeRecentImagesInHistory = widget.includeRecentImagesInHistory;
+    _selectedIncludeAllImagesInHistory = widget.includeAllImagesInHistory;
+    _selectedIncludeReasoningInHistory = widget.includeReasoningInHistory;
     _loadAutoTitleSetting();
   }
 
@@ -249,6 +269,67 @@ class _CustomizationPageState extends State<CustomizationPage> {
             },
             scaffoldBg: scaffoldBg,
             iconFg: iconFg,
+          ),
+          const SizedBox(height: 24),
+
+          // AI Context Section
+          _buildSectionHeader(
+            context,
+            'AI Context',
+            Icons.psychology,
+            iconFg,
+          ),
+          const SizedBox(height: 12),
+          _buildToggleCard(
+            context,
+            title: 'Recent images in context',
+            subtitle: 'Send images from recent messages to the AI model',
+            value: _selectedIncludeRecentImagesInHistory,
+            onChanged: (bool value) {
+              setState(() {
+                _selectedIncludeRecentImagesInHistory = value;
+              });
+              widget.setIncludeRecentImagesInHistory(value);
+            },
+            scaffoldBg: scaffoldBg,
+            iconFg: iconFg,
+          ),
+          const SizedBox(height: 12),
+          _buildToggleCard(
+            context,
+            title: 'All images in context',
+            subtitle: 'Send all conversation images to the AI (uses more tokens)',
+            value: _selectedIncludeAllImagesInHistory,
+            onChanged: (bool value) {
+              setState(() {
+                _selectedIncludeAllImagesInHistory = value;
+              });
+              widget.setIncludeAllImagesInHistory(value);
+            },
+            scaffoldBg: scaffoldBg,
+            iconFg: iconFg,
+          ),
+          const SizedBox(height: 12),
+          _buildToggleCard(
+            context,
+            title: 'Reasoning in context',
+            subtitle: 'Include AI thinking process in conversation history',
+            value: _selectedIncludeReasoningInHistory,
+            onChanged: (bool value) {
+              setState(() {
+                _selectedIncludeReasoningInHistory = value;
+              });
+              widget.setIncludeReasoningInHistory(value);
+            },
+            scaffoldBg: scaffoldBg,
+            iconFg: iconFg,
+          ),
+          const SizedBox(height: 8),
+          _buildInfoCard(
+            context,
+            'Recent images sends the last 6 messages\' images. All images sends every image in the conversation. Reasoning includes the AI\'s thinking process as context for follow-up messages.',
+            scaffoldBg,
+            iconFg,
           ),
           const SizedBox(height: 24),
 

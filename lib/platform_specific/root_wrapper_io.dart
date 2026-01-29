@@ -55,6 +55,13 @@ class RootWrapper extends StatelessWidget {
   final Function(int) setImageGenCustomHeight;
   final bool imageGenUseCustomSize;
   final Function(bool) setImageGenUseCustomSize;
+  // AI context settings
+  final bool includeRecentImagesInHistory;
+  final Function(bool) setIncludeRecentImagesInHistory;
+  final bool includeAllImagesInHistory;
+  final Function(bool) setIncludeAllImagesInHistory;
+  final bool includeReasoningInHistory;
+  final Function(bool) setIncludeReasoningInHistory;
 
   const RootWrapper({
     super.key,
@@ -86,6 +93,12 @@ class RootWrapper extends StatelessWidget {
     required this.setImageGenCustomHeight,
     required this.imageGenUseCustomSize,
     required this.setImageGenUseCustomSize,
+    required this.includeRecentImagesInHistory,
+    required this.setIncludeRecentImagesInHistory,
+    required this.includeAllImagesInHistory,
+    required this.setIncludeAllImagesInHistory,
+    required this.includeReasoningInHistory,
+    required this.setIncludeReasoningInHistory,
   });
 
   @override
@@ -123,6 +136,12 @@ class RootWrapper extends StatelessWidget {
         setImageGenCustomHeight: setImageGenCustomHeight,
         imageGenUseCustomSize: imageGenUseCustomSize,
         setImageGenUseCustomSize: setImageGenUseCustomSize,
+        includeRecentImagesInHistory: includeRecentImagesInHistory,
+        setIncludeRecentImagesInHistory: setIncludeRecentImagesInHistory,
+        includeAllImagesInHistory: includeAllImagesInHistory,
+        setIncludeAllImagesInHistory: setIncludeAllImagesInHistory,
+        includeReasoningInHistory: includeReasoningInHistory,
+        setIncludeReasoningInHistory: setIncludeReasoningInHistory,
       );
     } else if (kPlatformDesktop) {
       // When PLATFORM_DESKTOP=true is set at build time,
@@ -156,6 +175,12 @@ class RootWrapper extends StatelessWidget {
         setImageGenCustomHeight: setImageGenCustomHeight,
         imageGenUseCustomSize: imageGenUseCustomSize,
         setImageGenUseCustomSize: setImageGenUseCustomSize,
+        includeRecentImagesInHistory: includeRecentImagesInHistory,
+        setIncludeRecentImagesInHistory: setIncludeRecentImagesInHistory,
+        includeAllImagesInHistory: includeAllImagesInHistory,
+        setIncludeAllImagesInHistory: setIncludeAllImagesInHistory,
+        includeReasoningInHistory: includeReasoningInHistory,
+        setIncludeReasoningInHistory: setIncludeReasoningInHistory,
       );
     }
 
@@ -191,6 +216,12 @@ class RootWrapper extends StatelessWidget {
         setImageGenCustomHeight: setImageGenCustomHeight,
         imageGenUseCustomSize: imageGenUseCustomSize,
         setImageGenUseCustomSize: setImageGenUseCustomSize,
+        includeRecentImagesInHistory: includeRecentImagesInHistory,
+        setIncludeRecentImagesInHistory: setIncludeRecentImagesInHistory,
+        includeAllImagesInHistory: includeAllImagesInHistory,
+        setIncludeAllImagesInHistory: setIncludeAllImagesInHistory,
+        includeReasoningInHistory: includeReasoningInHistory,
+        setIncludeReasoningInHistory: setIncludeReasoningInHistory,
       );
     }
 
@@ -223,6 +254,12 @@ class RootWrapper extends StatelessWidget {
       setImageGenCustomHeight: setImageGenCustomHeight,
       imageGenUseCustomSize: imageGenUseCustomSize,
       setImageGenUseCustomSize: setImageGenUseCustomSize,
+      includeRecentImagesInHistory: includeRecentImagesInHistory,
+      setIncludeRecentImagesInHistory: setIncludeRecentImagesInHistory,
+      includeAllImagesInHistory: includeAllImagesInHistory,
+      setIncludeAllImagesInHistory: setIncludeAllImagesInHistory,
+      includeReasoningInHistory: includeReasoningInHistory,
+      setIncludeReasoningInHistory: setIncludeReasoningInHistory,
     );
   }
 

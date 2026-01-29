@@ -47,6 +47,13 @@ class RootWrapperMobile extends StatefulWidget {
   final Function(int) setImageGenCustomHeight;
   final bool imageGenUseCustomSize;
   final Function(bool) setImageGenUseCustomSize;
+  // AI context settings
+  final bool includeRecentImagesInHistory;
+  final Function(bool) setIncludeRecentImagesInHistory;
+  final bool includeAllImagesInHistory;
+  final Function(bool) setIncludeAllImagesInHistory;
+  final bool includeReasoningInHistory;
+  final Function(bool) setIncludeReasoningInHistory;
 
   const RootWrapperMobile({
     super.key,
@@ -78,6 +85,12 @@ class RootWrapperMobile extends StatefulWidget {
     required this.setImageGenCustomHeight,
     required this.imageGenUseCustomSize,
     required this.setImageGenUseCustomSize,
+    required this.includeRecentImagesInHistory,
+    required this.setIncludeRecentImagesInHistory,
+    required this.includeAllImagesInHistory,
+    required this.setIncludeAllImagesInHistory,
+    required this.includeReasoningInHistory,
+    required this.setIncludeReasoningInHistory,
   });
 
   @override
@@ -211,6 +224,12 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
           setImageGenCustomHeight: widget.setImageGenCustomHeight,
           imageGenUseCustomSize: widget.imageGenUseCustomSize,
           setImageGenUseCustomSize: widget.setImageGenUseCustomSize,
+          includeRecentImagesInHistory: widget.includeRecentImagesInHistory,
+          setIncludeRecentImagesInHistory: widget.setIncludeRecentImagesInHistory,
+          includeAllImagesInHistory: widget.includeAllImagesInHistory,
+          setIncludeAllImagesInHistory: widget.setIncludeAllImagesInHistory,
+          includeReasoningInHistory: widget.includeReasoningInHistory,
+          setIncludeReasoningInHistory: widget.setIncludeReasoningInHistory,
         ),
       ),
     );
@@ -374,6 +393,9 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                 imageGenCustomWidth: widget.imageGenCustomWidth,
                 imageGenCustomHeight: widget.imageGenCustomHeight,
                 imageGenUseCustomSize: widget.imageGenUseCustomSize,
+                includeRecentImagesInHistory: widget.includeRecentImagesInHistory,
+                includeAllImagesInHistory: widget.includeAllImagesInHistory,
+                includeReasoningInHistory: widget.includeReasoningInHistory,
               ),
             ),
           ],

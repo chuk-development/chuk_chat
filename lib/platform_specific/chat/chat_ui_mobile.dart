@@ -51,6 +51,10 @@ class ChukChatUIMobile extends StatefulWidget {
   final int imageGenCustomWidth;
   final int imageGenCustomHeight;
   final bool imageGenUseCustomSize;
+  // AI context settings
+  final bool includeRecentImagesInHistory;
+  final bool includeAllImagesInHistory;
+  final bool includeReasoningInHistory;
 
   const ChukChatUIMobile({
     super.key,
@@ -67,6 +71,9 @@ class ChukChatUIMobile extends StatefulWidget {
     this.imageGenCustomWidth = 1024,
     this.imageGenCustomHeight = 768,
     this.imageGenUseCustomSize = false,
+    this.includeRecentImagesInHistory = true,
+    this.includeAllImagesInHistory = false,
+    this.includeReasoningInHistory = false,
   });
 
   @override
@@ -416,6 +423,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                 if (message.attachments != null && message.attachments!.isNotEmpty) {
                   map['attachments'] = message.attachments!;
                   debugPrint('📄 [AttachmentDebug] Loading message with attachments field');
+                }
+                // Include attachedFilesJson for retry/resend support
+                if (message.attachedFilesJson != null && message.attachedFilesJson!.isNotEmpty) {
+                  map['attachedFilesJson'] = message.attachedFilesJson!;
                 }
                 return map;
               }),
@@ -1672,7 +1683,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     }
 
     // Validate message using MessageCompositionService
-    final List<Map<String, String>> apiHistory = _buildApiHistory();
+    final List<Map<String, dynamic>> apiHistory = _buildApiHistory();
     final MessageCompositionResult validationResult =
         await MessageCompositionService.prepareMessage(
       userInput: originalUserInput,
@@ -1845,11 +1856,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       placeholderIndex: placeholderIndex,
       getProviderSlug: _ensureProviderSlugForCurrentModel,
       isOffline: _isOffline,
+      includeRecentImagesInHistory: widget.includeRecentImagesInHistory,
+      includeAllImagesInHistory: widget.includeAllImagesInHistory,
+      includeReasoningInHistory: widget.includeReasoningInHistory,
     );
   }
 
-  List<Map<String, String>> _buildApiHistory() {
-    final List<Map<String, String>> history = <Map<String, String>>[];
+  List<Map<String, dynamic>> _buildApiHistory() {
+    final List<Map<String, dynamic>> history = <Map<String, dynamic>>[];
     for (final Map<String, String> message in _messages) {
       final String? sender = message['sender'];
       final String? text = message['text'];
@@ -2038,6 +2052,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       placeholderIndex: placeholderIndex,
       getProviderSlug: () async => providerToUse,
       isOffline: _isOffline,
+      includeRecentImagesInHistory: widget.includeRecentImagesInHistory,
+      includeAllImagesInHistory: widget.includeAllImagesInHistory,
+      includeReasoningInHistory: widget.includeReasoningInHistory,
     );
   }
 

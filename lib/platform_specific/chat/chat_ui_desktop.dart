@@ -87,6 +87,10 @@ class ChukChatUIDesktop extends StatefulWidget {
   final int imageGenCustomWidth;
   final int imageGenCustomHeight;
   final bool imageGenUseCustomSize;
+  // AI context settings
+  final bool includeRecentImagesInHistory;
+  final bool includeAllImagesInHistory;
+  final bool includeReasoningInHistory;
 
   const ChukChatUIDesktop({
     // RENAMED CONSTRUCTOR
@@ -106,6 +110,9 @@ class ChukChatUIDesktop extends StatefulWidget {
     this.imageGenCustomWidth = 1024,
     this.imageGenCustomHeight = 768,
     this.imageGenUseCustomSize = false,
+    this.includeRecentImagesInHistory = true,
+    this.includeAllImagesInHistory = false,
+    this.includeReasoningInHistory = false,
   });
 
   @override
@@ -391,6 +398,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 if (message.attachments != null && message.attachments!.isNotEmpty) {
                   map['attachments'] = message.attachments!;
                   debugPrint('📄 [AttachmentDebug] Loading message with attachments field');
+                }
+                // Include attachedFilesJson for retry/resend support
+                if (message.attachedFilesJson != null && message.attachedFilesJson!.isNotEmpty) {
+                  map['attachedFilesJson'] = message.attachedFilesJson!;
                 }
                 return map;
               }),
@@ -1165,16 +1176,47 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       return;
     }
 
-    // Build conversation history up to the edited message
-    final List<Map<String, String>> conversationHistory = [];
+    // Build conversation history up to the edited message (with images/reasoning support)
+    final List<Map<String, dynamic>> conversationHistory = [];
+    final bool shouldIncludeImages = widget.includeRecentImagesInHistory || widget.includeAllImagesInHistory;
+    final int imgWindow = widget.includeAllImagesInHistory ? index : 6;
+    final Set<int> imgEligible = {};
+    if (shouldIncludeImages) {
+      int uCount = 0;
+      for (int j = index - 1; j >= 0; j--) {
+        if (_messages[j]['sender'] == 'user') {
+          uCount++;
+          if (uCount <= imgWindow) imgEligible.add(j);
+        }
+      }
+    }
     for (int i = 0; i < index; i++) {
       final msg = _messages[i];
       final sender = msg['sender'];
       final text = msg['text'] ?? '';
       if (sender == 'user') {
-        conversationHistory.add({'role': 'user', 'content': text});
+        final bool hasImages = msg['images'] != null && msg['images']!.isNotEmpty;
+        if (shouldIncludeImages && hasImages && imgEligible.contains(i)) {
+          final content = <Map<String, dynamic>>[];
+          if (text.isNotEmpty) content.add({'type': 'text', 'text': text});
+          final urls = await _resolveHistoryImages(msg['images']!);
+          for (final u in urls) {
+            content.add({'type': 'image_url', 'image_url': {'url': u}});
+          }
+          if (content.isNotEmpty) conversationHistory.add({'role': 'user', 'content': content});
+        } else if (text.isNotEmpty) {
+          conversationHistory.add({'role': 'user', 'content': text});
+        }
       } else if (sender == 'ai') {
-        conversationHistory.add({'role': 'assistant', 'content': text});
+        if (text.isEmpty) continue;
+        String assistantContent = text;
+        if (widget.includeReasoningInHistory) {
+          final reasoning = msg['reasoning'] ?? '';
+          if (reasoning.isNotEmpty) {
+            assistantContent = '<thinking>\n$reasoning\n</thinking>\n\n$assistantContent';
+          }
+        }
+        conversationHistory.add({'role': 'assistant', 'content': assistantContent});
       }
     }
 
@@ -1869,8 +1911,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     final String originalUserInput = _controller.text.trim();
 
     // Use MessageCompositionService to prepare the message
-    final List<Map<String, String>> apiHistory =
-        _buildApiHistoryWithPendingMessage(originalUserInput);
+    final List<Map<String, dynamic>> apiHistory =
+        await _buildApiHistoryWithPendingMessage(originalUserInput);
     final String? resolvedSystemPrompt = await _resolveSystemPromptForSend();
 
     final result = await MessageCompositionService.prepareMessage(
@@ -2200,19 +2242,68 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     }
   }
 
-  List<Map<String, String>> _buildApiHistoryWithPendingMessage(
+  // In-memory cache for resolved Base64 images (storage path -> data URL)
+  static final Map<String, String> _imageBase64Cache = {};
+  static const int _maxImageCacheSize = 10;
+
+  Future<List<Map<String, dynamic>>> _buildApiHistoryWithPendingMessage(
     String pendingUserText,
-  ) {
-    final List<Map<String, String>> history = <Map<String, String>>[];
-    for (final Map<String, String> message in _messages) {
+  ) async {
+    final List<Map<String, dynamic>> history = <Map<String, dynamic>>[];
+    final bool shouldIncludeImages = widget.includeRecentImagesInHistory || widget.includeAllImagesInHistory;
+    final int imageWindow = widget.includeAllImagesInHistory ? _messages.length : 6;
+
+    // Determine which user messages are within the image window
+    final Set<int> imageEligibleIndices = {};
+    if (shouldIncludeImages) {
+      int userMsgCount = 0;
+      for (int i = _messages.length - 1; i >= 0; i--) {
+        if (_messages[i]['sender'] == 'user') {
+          userMsgCount++;
+          if (userMsgCount <= imageWindow) {
+            imageEligibleIndices.add(i);
+          }
+        }
+      }
+    }
+
+    for (int i = 0; i < _messages.length; i++) {
+      final message = _messages[i];
       final String? sender = message['sender'];
       final String? text = message['text'];
-      if (text == null || text.trim().isEmpty) continue;
 
       if (sender == 'user') {
-        history.add({'role': 'user', 'content': text});
+        final bool hasImages = message['images'] != null && message['images']!.isNotEmpty;
+        final bool shouldAddImages = shouldIncludeImages && hasImages && imageEligibleIndices.contains(i);
+
+        if (shouldAddImages) {
+          final content = <Map<String, dynamic>>[];
+          if (text != null && text.trim().isNotEmpty) {
+            content.add({'type': 'text', 'text': text});
+          }
+          final imageDataUrls = await _resolveHistoryImages(message['images']!);
+          for (final dataUrl in imageDataUrls) {
+            content.add({
+              'type': 'image_url',
+              'image_url': {'url': dataUrl},
+            });
+          }
+          if (content.isNotEmpty) {
+            history.add({'role': 'user', 'content': content});
+          }
+        } else if (text != null && text.trim().isNotEmpty) {
+          history.add({'role': 'user', 'content': text});
+        }
       } else if (sender == 'ai' || sender == 'assistant') {
-        history.add({'role': 'assistant', 'content': text});
+        if (text == null || text.trim().isEmpty) continue;
+        String assistantContent = text;
+        if (widget.includeReasoningInHistory) {
+          final reasoning = message['reasoning'] ?? '';
+          if (reasoning.isNotEmpty) {
+            assistantContent = '<thinking>\n$reasoning\n</thinking>\n\n$assistantContent';
+          }
+        }
+        history.add({'role': 'assistant', 'content': assistantContent});
       }
     }
 
@@ -2221,6 +2312,51 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     }
 
     return history;
+  }
+
+  /// Resolve image storage paths from a JSON-encoded list to Base64 data URLs
+  Future<List<String>> _resolveHistoryImages(String imagesJson) async {
+    final List<String> dataUrls = [];
+    try {
+      final decoded = jsonDecode(imagesJson);
+      if (decoded is! List) return dataUrls;
+
+      for (final img in decoded) {
+        final path = img.toString();
+        if (path.isEmpty) continue;
+
+        if (path.startsWith('data:image/')) {
+          dataUrls.add(path);
+          continue;
+        }
+
+        if (_imageBase64Cache.containsKey(path)) {
+          dataUrls.add(_imageBase64Cache[path]!);
+          continue;
+        }
+
+        try {
+          final bytes = await ImageStorageService.downloadAndDecryptImage(path);
+          final base64 = base64Encode(bytes);
+          final dataUrl = 'data:image/jpeg;base64,$base64';
+
+          if (_imageBase64Cache.length >= _maxImageCacheSize) {
+            _imageBase64Cache.remove(_imageBase64Cache.keys.first);
+          }
+          _imageBase64Cache[path] = dataUrl;
+          dataUrls.add(dataUrl);
+        } catch (e) {
+          if (kDebugMode) {
+            debugPrint('⚠️ [Desktop] Failed to resolve history image: $e');
+          }
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [Desktop] Failed to parse images JSON: $e');
+      }
+    }
+    return dataUrls;
   }
 
   void _updateAiMessage(int index, String content, String reasoning) {

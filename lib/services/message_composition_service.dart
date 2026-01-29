@@ -66,7 +66,7 @@ class MessageCompositionService {
     required String userInput,
     required List<AttachedFile> attachedFiles,
     required String selectedModelId,
-    required List<Map<String, String>> apiHistory,
+    required List<Map<String, dynamic>> apiHistory,
     String? systemPrompt,
     required Future<String?> Function() getProviderSlug,
   }) async {
@@ -282,7 +282,7 @@ class MessageCompositionService {
   /// Calculate token limits and validate context length
   static _TokenLimits _calculateTokenLimits({
     required String selectedModelId,
-    required List<Map<String, String>> apiHistory,
+    required List<Map<String, dynamic>> apiHistory,
     required String aiPromptContent,
     String? systemPrompt,
   }) {

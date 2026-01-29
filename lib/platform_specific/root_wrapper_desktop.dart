@@ -46,6 +46,13 @@ class RootWrapperDesktop extends StatefulWidget {
   final Function(int) setImageGenCustomHeight;
   final bool imageGenUseCustomSize;
   final Function(bool) setImageGenUseCustomSize;
+  // AI context settings
+  final bool includeRecentImagesInHistory;
+  final Function(bool) setIncludeRecentImagesInHistory;
+  final bool includeAllImagesInHistory;
+  final Function(bool) setIncludeAllImagesInHistory;
+  final bool includeReasoningInHistory;
+  final Function(bool) setIncludeReasoningInHistory;
 
   const RootWrapperDesktop({
     super.key,
@@ -77,6 +84,12 @@ class RootWrapperDesktop extends StatefulWidget {
     required this.setImageGenCustomHeight,
     required this.imageGenUseCustomSize,
     required this.setImageGenUseCustomSize,
+    required this.includeRecentImagesInHistory,
+    required this.setIncludeRecentImagesInHistory,
+    required this.includeAllImagesInHistory,
+    required this.setIncludeAllImagesInHistory,
+    required this.includeReasoningInHistory,
+    required this.setIncludeReasoningInHistory,
   });
 
   @override
@@ -123,6 +136,12 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
           setImageGenCustomHeight: widget.setImageGenCustomHeight,
           imageGenUseCustomSize: widget.imageGenUseCustomSize,
           setImageGenUseCustomSize: widget.setImageGenUseCustomSize,
+          includeRecentImagesInHistory: widget.includeRecentImagesInHistory,
+          setIncludeRecentImagesInHistory: widget.setIncludeRecentImagesInHistory,
+          includeAllImagesInHistory: widget.includeAllImagesInHistory,
+          setIncludeAllImagesInHistory: widget.setIncludeAllImagesInHistory,
+          includeReasoningInHistory: widget.includeReasoningInHistory,
+          setIncludeReasoningInHistory: widget.setIncludeReasoningInHistory,
         ),
       ),
     );
@@ -259,6 +278,9 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       imageGenCustomWidth: widget.imageGenCustomWidth,
       imageGenCustomHeight: widget.imageGenCustomHeight,
       imageGenUseCustomSize: widget.imageGenUseCustomSize,
+      includeRecentImagesInHistory: widget.includeRecentImagesInHistory,
+      includeAllImagesInHistory: widget.includeAllImagesInHistory,
+      includeReasoningInHistory: widget.includeReasoningInHistory,
     );
 
     // Panel width for Projects/Media - responsive based on screen width

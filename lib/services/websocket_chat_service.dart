@@ -38,7 +38,7 @@ class WebSocketChatService {
     required String message,
     required String modelId,
     required String providerSlug,
-    List<Map<String, String>>? history,
+    List<Map<String, dynamic>>? history,
     String? systemPrompt,
     int maxTokens = 512,
     double temperature = 0.7,
