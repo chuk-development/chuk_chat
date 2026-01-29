@@ -602,10 +602,17 @@ class _BalanceBadgeState extends State<BalanceBadge> {
       );
     }
 
-    // ALWAYS show credits - never show free messages
-    final String formatted = '€${_credits.toStringAsFixed(2)}';
+    // Show test messages for non-subscribed users with no credits
+    final bool showTestMessages =
+        !_hasSubscription && _credits < 0.01 && _freeMessagesTotal > 0;
+    final String formatted = showTestMessages
+        ? '$_freeMessagesRemaining / $_freeMessagesTotal'
+        : '€${_credits.toStringAsFixed(2)}';
+    final String tooltip = showTestMessages
+        ? 'Test messages: $_freeMessagesRemaining of $_freeMessagesTotal remaining'
+        : 'Remaining credits: $formatted';
     return Tooltip(
-      message: 'Remaining credits: $formatted',
+      message: tooltip,
       waitDuration: const Duration(milliseconds: 500),
       child: Container(
         padding: resolvedPadding,
