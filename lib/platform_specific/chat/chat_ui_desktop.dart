@@ -44,6 +44,7 @@ import 'package:chuk_chat/utils/path_provider_stub.dart'
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/utils/desktop_drop_stub.dart'
     if (dart.library.io) 'package:desktop_drop/desktop_drop.dart';
+import 'package:pasteboard/pasteboard.dart';
 
 class _MessageRenderData {
   const _MessageRenderData({
@@ -2858,6 +2859,27 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     await _processFilePaths(filePaths);
   }
 
+  /// Handles Ctrl+V paste of clipboard images
+  Future<bool> _handleClipboardPaste() async {
+    try {
+      final Uint8List? imageBytes = await Pasteboard.image;
+      if (imageBytes == null || imageBytes.isEmpty) return false;
+
+      final tempDir = await getTemporaryDirectory();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final tempFile = File('${tempDir.path}/paste_$timestamp.png');
+      await tempFile.writeAsBytes(imageBytes);
+
+      await _processFilePaths([tempFile.path]);
+      return true;
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('Clipboard paste error: $e');
+      }
+      return false;
+    }
+  }
+
   void _removeAttachedFile(String fileId) {
     setState(() {
       _attachedFiles.removeWhere((f) => f.id == fileId);
@@ -3378,6 +3400,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                   focusNode: _rawKeyboardListenerFocusNode,
                   onKeyEvent: (event) {
                     if (event is! KeyDownEvent) return;
+
+                    // Handle Ctrl+V / Cmd+V for clipboard image paste
+                    if (event.logicalKey == LogicalKeyboardKey.keyV &&
+                        (HardwareKeyboard.instance.isControlPressed ||
+                            HardwareKeyboard.instance.isMetaPressed)) {
+                      unawaited(_handleClipboardPaste());
+                    }
+
                     if (event.logicalKey != LogicalKeyboardKey.enter) return;
 
                     final isShiftPressed =

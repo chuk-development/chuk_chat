@@ -39,6 +39,7 @@ dependencies:
   pdfx: ^2.8.0  # PDF viewing
   flutter_foreground_task: ^8.11.0  # Keep streaming alive when app backgrounded
   flutter_local_notifications: ^18.0.1  # Completion notifications with deep linking
+  pasteboard: ^0.4.0
 
 dev_dependencies:
   flutter_test:
