@@ -206,8 +206,8 @@ jobs:
         run: |
           cd build/app/outputs/flutter-apk
           # Rename split APKs
-          mv app-arm64-v8a-release.apk chuk_chat-${{ needs.version-bump.outputs.tag }}-android-arm64.apk || true
-          mv app-armeabi-v7a-release.apk chuk_chat-${{ needs.version-bump.outputs.tag }}-android-arm32.apk || true
+          mv app-arm64-v8a-release.apk chuk_chat-${{ needs.version-bump.outputs.tag }}-android-armv8.apk || true
+          mv app-armeabi-v7a-release.apk chuk_chat-${{ needs.version-bump.outputs.tag }}-android-armv7.apk || true
           mv app-x86_64-release.apk chuk_chat-${{ needs.version-bump.outputs.tag }}-android-x64.apk || true
           # Rename universal APK
           mv app-release.apk chuk_chat-${{ needs.version-bump.outputs.tag }}-android-universal.apk || true
@@ -660,8 +660,8 @@ jobs:
 
             **Android APKs** (choose one):
             - **Universal APK**: Works on all Android devices (larger size)
-            - **ARM64 APK**: For modern Android devices (recommended, smaller)
-            - **ARM32 APK**: For older Android devices
+            - **ARMv8 APK**: For modern Android devices (recommended, smaller)
+            - **ARMv7 APK**: For older Android devices
             - **x64 APK**: For Android emulators and x86 devices
 
             **Desktop**:
@@ -759,7 +759,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Platform | Status | Output |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|--------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| 📱 Android  | ${{ needs.build-android.result }} | Split APKs (arm64, arm32, x64) + Universal APK |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📱 Android  | ${{ needs.build-android.result }} | Split APKs (ARMv8, ARMv7, x64) + Universal APK |" >> $GITHUB_STEP_SUMMARY
           echo "| 🐧 Linux    | ${{ needs.build-linux.result }} | .deb, AppImage, .rpm |" >> $GITHUB_STEP_SUMMARY
           echo "| 🪟 Windows  | ${{ needs.build-windows.result }} | MSIX installer |" >> $GITHUB_STEP_SUMMARY
           echo "| 🍎 macOS    | ${{ needs.build-macos.result }} | .dmg disk image |" >> $GITHUB_STEP_SUMMARY
