@@ -5,13 +5,19 @@
 <h1 align="center">Chuk Chat</h1>
 
 <p align="center">
-  Secure, cross-platform chat with AI — encrypted by default.
+  Private AI That Actually Belongs to You
 </p>
 
 <p align="center">
+  A simple monthly subscription, full control, no data mining.<br>
+  Chat, write, code, research — powered entirely by transparent open-weight models.
+</p>
+
+<p align="center">
+  <a href="https://chuk.chat">Website</a> &middot;
   <a href="https://chat.chuk.chat">Web App</a> &middot;
-  <a href="https://github.com/chuk-development/chuk_chat/releases">Downloads</a> &middot;
-  <a href="SECURITY.md">Security</a>
+  <a href="https://docs.chuk.chat">Docs</a> &middot;
+  <a href="https://github.com/chuk-development/chuk_chat/releases">Downloads</a>
 </p>
 
 <p align="center">
@@ -22,15 +28,19 @@
 
 ---
 
-A privacy-focused chat application built with Flutter. Chat with open-weight AI models while keeping your conversations encrypted and under your control.
+## Why Chuk Chat?
 
-**Our philosophy**: We exclusively support open-weight models. We believe in transparency, accessibility, and the freedom to run AI models independently.
+We use only open-weight models — no black boxes and no silent data collection. You know exactly what runs your AI.
+
+- **Clear monthly pricing** — One straightforward fee. No pay-as-you-go, no token stress, no hidden costs.
+- **Open-weight only** — DeepSeek, Llama, Mistral, Qwen, and more via [OpenRouter](https://openrouter.ai). No closed-source models.
+- **Privacy first** — Encrypted chats, no tracking, no profiling. Built like a tool, not a marketing funnel.
+- **Your data, your control** — We store nothing you don't want. Fully deletable. Fully controllable. Fully yours.
 
 ## Features
 
-- **End-to-End Encryption** — All chats are encrypted client-side with AES-256-GCM before being stored or synced
-- **Cross-Platform** — Works on Android, iOS, Linux, macOS, Windows, and Web
-- **Open-Weight AI Models** — DeepSeek, Llama, Mistral, Qwen, and more via [OpenRouter](https://openrouter.ai)
+- **End-to-End Encryption** — All chats encrypted client-side with AES-256-GCM before being stored or synced
+- **Cross-Platform** — Android, iOS, Linux, macOS, Windows, and Web
 - **Real-Time Streaming** — Watch AI responses as they're generated
 - **File Attachments** — Share images, PDFs, and documents with AI
 - **AI Image Generation** — Generate images directly in chat
@@ -46,8 +56,6 @@ A privacy-focused chat application built with Flutter. Chat with open-weight AI 
 
 > **If you lose your password, all your chats are permanently lost.** There is no recovery mechanism by design — this ensures maximum privacy. Choose a strong password and store it safely.
 
-For detailed security information, see [SECURITY.md](SECURITY.md).
-
 ### What is encrypted
 
 | Data | Storage |
@@ -57,11 +65,19 @@ For detailed security information, see [SECURITY.md](SECURITY.md).
 | Starred chat status | Encrypted |
 | Your encryption key | Stored in device keychain/keystore — never leaves your device |
 
+For detailed security information, see [SECURITY.md](SECURITY.md).
+
+## Pricing
+
+**€20/month** — all models, all platforms, no limits.
+
+See [chuk.chat/en/pricing](https://chuk.chat/en/pricing) for details.
+
 ## Development
 
 ### Prerequisites
 
-- **Flutter SDK** 3.24+ (includes Dart)
+- **Flutter SDK** 3.24+ (includes Dart 3.9.2+)
 - **Supabase** project ([supabase.com](https://supabase.com))
 
 Platform-specific: Android Studio (Android), Xcode (iOS/macOS), Visual Studio 2022 (Windows).
@@ -91,7 +107,11 @@ source .env && flutter build apk --release \
 ./scripts/build-release.sh all
 ```
 
-See [docs/](docs/) for detailed build instructions, architecture, and more.
+### Documentation
+
+Full developer and architecture documentation is available at [docs.chuk.chat](https://docs.chuk.chat).
+
+See also the [docs/](docs/) folder for build instructions, architecture, database schema, and more.
 
 ### Contributing
 
@@ -102,10 +122,25 @@ See [docs/](docs/) for detailed build instructions, architecture, and more.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
+## Tech Stack
+
+| Component | Technology |
+|-----------|-----------|
+| Framework | [Flutter](https://flutter.dev) (Dart) |
+| Backend | [Supabase](https://supabase.com) |
+| Encryption | AES-256-GCM with PBKDF2 key derivation |
+| AI Models | [OpenRouter](https://openrouter.ai) |
+| Hosting | Dokploy + Cloudflare |
+
 ## License
 
 [Business Source License 1.1](LICENSE) — free for non-production use. Converts to GPL v3 after 3 years per release.
 
-## Acknowledgments
+## Links
 
-Built with [Flutter](https://flutter.dev) · Backend by [Supabase](https://supabase.com) · AI via [OpenRouter](https://openrouter.ai)
+- [Website](https://chuk.chat) — Product page & pricing
+- [Web App](https://chat.chuk.chat) — Use Chuk Chat in the browser
+- [Documentation](https://docs.chuk.chat) — Full docs
+- [Privacy Policy](https://chuk.chat/en/privacy)
+- [Status](https://status.chuk.chat)
+- [Blog](https://chuk.dev/en/blog)
