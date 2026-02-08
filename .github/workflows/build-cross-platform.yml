@@ -102,7 +102,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: version-bump
     if: inputs.build_android
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - uses: actions/checkout@v4
@@ -142,6 +142,7 @@ jobs:
             --tree-shake-icons
 
       - name: Build Universal APK
+        timeout-minutes: 20
         run: |
           flutter build apk --release \
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
@@ -411,7 +412,7 @@ jobs:
           sudo apt-get install -y \
             clang cmake ninja-build pkg-config \
             libgtk-3-dev liblzma-dev libstdc++-14-dev libsecret-1-dev \
-            dpkg-dev rpm file wget curl unzip git
+            dpkg-dev rpm file wget curl unzip git libfuse2
 
       - name: Install Flutter (manual ARM64)
         run: |
@@ -612,10 +613,8 @@ jobs:
           $TAG = "${{ needs.version-bump.outputs.tag }}"
           $VER = "${{ needs.version-bump.outputs.version_short }}"
 
-          # Download Inno Setup
-          $innoUrl = "https://files.jrsoftware.org/is/6/innosetup-6.4.3.exe"
-          Invoke-WebRequest -Uri $innoUrl -OutFile innosetup.exe
-          Start-Process -FilePath innosetup.exe -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=C:\InnoSetup" -Wait
+          # Install Inno Setup via Chocolatey (pre-installed on GitHub runners)
+          choco install innosetup -y --no-progress
 
           # Create Inno Setup script
           @"
@@ -659,8 +658,8 @@ jobs:
           Filename: "{app}\chuk_chat.exe"; Description: "{cm:LaunchProgram,Chuk Chat}"; Flags: nowait postinstall skipifsilent
           "@ | Out-File -Encoding UTF8 chuk_chat.iss
 
-          # Build installer
-          & "C:\InnoSetup\ISCC.exe" chuk_chat.iss
+          # Build installer (choco installs to Program Files)
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" chuk_chat.iss
 
       - uses: actions/upload-artifact@v4
         with:
