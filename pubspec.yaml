@@ -1,7 +1,7 @@
 name: chuk_chat
 description: "A new Flutter project."
 
-version: 1.0.18+6016
+version: 1.0.19+6017
 
 environment:
   sdk: ^3.9.2
