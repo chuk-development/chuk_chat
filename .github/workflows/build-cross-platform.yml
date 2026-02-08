@@ -771,7 +771,7 @@ jobs:
       needs.version-bump.result == 'success' &&
       (needs.build-android.result == 'success' || needs.build-android.result == 'skipped') &&
       (needs.build-linux-x64.result == 'success' || needs.build-linux-x64.result == 'skipped') &&
-      (needs.build-linux-arm64.result == 'success' || needs.build-linux-arm64.result == 'skipped') &&
+      (needs.build-linux-arm64.result != 'cancelled') &&
       (needs.build-windows.result == 'success' || needs.build-windows.result == 'skipped') &&
       (needs.build-macos.result == 'success' || needs.build-macos.result == 'skipped') &&
       (needs.build-ios.result == 'success' || needs.build-ios.result == 'skipped')
