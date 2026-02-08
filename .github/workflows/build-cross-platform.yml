@@ -581,7 +581,7 @@ jobs:
     runs-on: windows-latest
     needs: version-bump
     if: inputs.build_windows
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - uses: actions/checkout@v4
@@ -605,12 +605,69 @@ jobs:
       - name: Create portable ZIP
         run: |
           cd build/windows/x64/runner/Release
-          Compress-Archive -Path * -DestinationPath ../../../../../chuk_chat-${{ needs.version-bump.outputs.tag }}-windows-x64.zip
+          Compress-Archive -Path * -DestinationPath ../../../../../chuk_chat-${{ needs.version-bump.outputs.tag }}-windows-x64-portable.zip
+
+      - name: Create Inno Setup installer
+        run: |
+          $TAG = "${{ needs.version-bump.outputs.tag }}"
+          $VER = "${{ needs.version-bump.outputs.version_short }}"
+
+          # Download Inno Setup
+          $innoUrl = "https://files.jrsoftware.org/is/6/innosetup-6.4.3.exe"
+          Invoke-WebRequest -Uri $innoUrl -OutFile innosetup.exe
+          Start-Process -FilePath innosetup.exe -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=C:\InnoSetup" -Wait
+
+          # Create Inno Setup script
+          @"
+          [Setup]
+          AppId={{B8F3C2A1-7D4E-4F5B-9A1C-3E8D2F6A7B9C}
+          AppName=Chuk Chat
+          AppVersion=$VER
+          AppPublisher=Chuk Development
+          AppPublisherURL=https://chuk.chat
+          AppSupportURL=https://chuk.chat
+          DefaultDirName={autopf}\Chuk Chat
+          DefaultGroupName=Chuk Chat
+          DisableProgramGroupPage=yes
+          OutputDir=.
+          OutputBaseFilename=chuk_chat-$TAG-windows-x64-setup
+          Compression=lzma2/ultra64
+          SolidCompression=yes
+          WizardStyle=modern
+          ArchitecturesAllowed=x64compatible
+          ArchitecturesInstallIn64BitMode=x64compatible
+          UninstallDisplayIcon={app}\chuk_chat.exe
+          SetupIconFile=windows\runner\resources\app_icon.ico
+          PrivilegesRequired=lowest
+
+          [Languages]
+          Name: "english"; MessagesFile: "compiler:Default.isl"
+          Name: "german"; MessagesFile: "compiler:Languages\German.isl"
+
+          [Tasks]
+          Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+
+          [Files]
+          Source: "build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+          [Icons]
+          Name: "{group}\Chuk Chat"; Filename: "{app}\chuk_chat.exe"
+          Name: "{group}\{cm:UninstallProgram,Chuk Chat}"; Filename: "{uninstallexe}"
+          Name: "{autodesktop}\Chuk Chat"; Filename: "{app}\chuk_chat.exe"; Tasks: desktopicon
+
+          [Run]
+          Filename: "{app}\chuk_chat.exe"; Description: "{cm:LaunchProgram,Chuk Chat}"; Flags: nowait postinstall skipifsilent
+          "@ | Out-File -Encoding UTF8 chuk_chat.iss
+
+          # Build installer
+          & "C:\InnoSetup\ISCC.exe" chuk_chat.iss
 
       - uses: actions/upload-artifact@v4
         with:
           name: windows-build
-          path: chuk_chat-${{ needs.version-bump.outputs.tag }}-windows-x64.zip
+          path: |
+            chuk_chat-*-windows-x64-portable.zip
+            chuk_chat-*-windows-x64-setup.exe
           retention-days: 30
 
   # ──────────────────────────────────────────────
@@ -751,7 +808,8 @@ jobs:
             - **.AppImage** — Universal (if available)
 
             **Windows:**
-            - Portable ZIP — extract and run
+            - **Setup.exe** — Installer with Start Menu shortcut (recommended)
+            - **Portable ZIP** — extract and run, no installation needed
 
             **macOS:**
             - DMG or ZIP — drag to Applications
