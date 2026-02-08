@@ -1,25 +1,16 @@
 #!/bin/bash
 
-# Unified build script for chuk_chat
+# Unified build script for Chuk Chat
 # Usage: ./build.sh [target]
 # Targets: linux, deb, rpm, apk, apk-desktop, appimage, all
 #
-# TREE-SHAKING OPTIMIZATION:
-# This build script uses Flutter's tree-shaking to automatically remove unused code:
-# - When building for Linux/Desktop: Mobile-specific code (root_wrapper_mobile.dart,
-#   chat_ui_mobile.dart, etc.) is automatically excluded from the final binary
-# - When building for Android/Mobile: Desktop-specific code (root_wrapper_desktop.dart,
-#   chat_ui_desktop.dart, etc.) is automatically excluded from the final APK
+# IMPORTANT: Requires .env file with SUPABASE_URL and SUPABASE_ANON_KEY.
 #
-# This is achieved through conditional imports in lib/platform_specific/root_wrapper.dart
-# and deferred loading, which allows Dart's tree-shaker to detect and remove unused code paths.
-#
-# Additional optimizations enabled:
-# - --tree-shake-icons: Removes unused Material/Cupertino icons
-# - --split-debug-info: Separates debug symbols for smaller binaries
-# - --obfuscate: Obfuscates Dart code for better security
-#
-# Result: Smaller binary sizes and faster load times for each platform!
+# Tree-shaking optimization:
+# - Desktop builds exclude mobile code, mobile builds exclude desktop code
+# - --tree-shake-icons removes unused Material/Cupertino icons
+# - --split-debug-info separates debug symbols for smaller binaries
+# - --obfuscate obfuscates Dart code
 
 set -e
 
@@ -32,11 +23,49 @@ PURPLE='\033[0;35m'
 NC='\033[0m'
 
 # Print functions
-print_header() { echo -e "${PURPLE}🚀 $1${NC}"; }
-print_info() { echo -e "${BLUE}ℹ️  $1${NC}"; }
-print_success() { echo -e "${GREEN}✅ $1${NC}"; }
-print_warning() { echo -e "${YELLOW}⚠️  $1${NC}"; }
-print_error() { echo -e "${RED}❌ $1${NC}"; }
+print_header() { echo -e "${PURPLE}$1${NC}"; }
+print_info() { echo -e "${BLUE}$1${NC}"; }
+print_success() { echo -e "${GREEN}$1${NC}"; }
+print_warning() { echo -e "${YELLOW}$1${NC}"; }
+print_error() { echo -e "${RED}$1${NC}"; }
+
+# Display name (shown in desktop launchers, etc.)
+DISPLAY_NAME="Chuk Chat"
+
+# Load environment variables
+load_env() {
+    if [ -f ".env" ]; then
+        # shellcheck disable=SC2046
+        export $(grep -v '^#' .env | xargs)
+    fi
+
+    if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+        print_error "SUPABASE_URL and SUPABASE_ANON_KEY must be set."
+        print_error "Create .env file from .env.example or set environment variables."
+        exit 1
+    fi
+
+    print_success "Supabase credentials loaded"
+}
+
+# Common dart-define flags for all builds
+dart_defines_desktop() {
+    echo "--dart-define=SUPABASE_URL=$SUPABASE_URL \
+        --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+        --dart-define=PLATFORM_DESKTOP=true \
+        --dart-define=FEATURE_PROJECTS=true \
+        --dart-define=FEATURE_IMAGE_GEN=true \
+        --dart-define=FEATURE_VOICE_MODE=true"
+}
+
+dart_defines_mobile() {
+    echo "--dart-define=SUPABASE_URL=$SUPABASE_URL \
+        --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+        --dart-define=PLATFORM_MOBILE=true \
+        --dart-define=FEATURE_PROJECTS=false \
+        --dart-define=FEATURE_IMAGE_GEN=true \
+        --dart-define=FEATURE_VOICE_MODE=false"
+}
 
 # Extract app information
 extract_app_info() {
@@ -50,42 +79,35 @@ extract_app_info() {
         exit 1
     fi
 
-    # Convert app name to package name (replace underscores with hyphens)
+    # Package name uses hyphens (chuk-chat), binary name uses underscores (chuk_chat)
     PACKAGE_NAME=$(echo "$APP_NAME" | sed 's/_/-/g')
 
-    print_success "App: $APP_NAME, Version: $VERSION, Package: $PACKAGE_NAME"
+    print_success "App: $APP_NAME v$VERSION (package: $PACKAGE_NAME)"
 }
 
 # Find the best app icon
 find_app_icon() {
     print_info "Finding app icon..."
 
-    # Look for the highest resolution icon
     ICON_PATH=""
-    ICON_SIZES=("xxxhdpi" "xxhdpi" "xhdpi" "hdpi" "mdpi")
 
-    for size in "${ICON_SIZES[@]}"; do
-        if [ -f "android/app/src/main/res/mipmap-${size}/ic_launcher.png" ]; then
-            ICON_PATH="android/app/src/main/res/mipmap-${size}/ic_launcher.png"
-            print_success "Found icon: $ICON_PATH"
-            break
-        fi
-    done
-
-    # Fallback to web icons
-    if [ -z "$ICON_PATH" ]; then
-        if [ -f "web/icons/Icon-512.png" ]; then
-            ICON_PATH="web/icons/Icon-512.png"
-            print_success "Using web icon: $ICON_PATH"
-        elif [ -f "web/favicon.png" ]; then
-            ICON_PATH="web/favicon.png"
-            print_success "Using favicon: $ICON_PATH"
-        fi
+    # Prefer web 512px icon (best quality for desktop)
+    if [ -f "web/icons/Icon-512.png" ]; then
+        ICON_PATH="web/icons/Icon-512.png"
+    else
+        # Fall back to Android mipmap icons
+        for size in xxxhdpi xxhdpi xhdpi hdpi mdpi; do
+            if [ -f "android/app/src/main/res/mipmap-${size}/ic_launcher.png" ]; then
+                ICON_PATH="android/app/src/main/res/mipmap-${size}/ic_launcher.png"
+                break
+            fi
+        done
     fi
 
-    if [ -z "$ICON_PATH" ]; then
-        print_warning "No app icon found, using default"
-        ICON_PATH=""
+    if [ -n "$ICON_PATH" ]; then
+        print_success "Found icon: $ICON_PATH"
+    else
+        print_warning "No app icon found"
     fi
 }
 
@@ -100,19 +122,22 @@ cleanup() {
 # Build Linux app
 build_linux() {
     local arch=$1
-    print_info "Building Linux app for $arch (with tree-shaking - mobile code excluded)..."
+    print_info "Building Linux app for $arch..."
+
+    local defines
+    defines=$(dart_defines_desktop)
 
     case $arch in
         "amd64")
-            flutter build linux --release --target-platform linux-x64 \
-                --dart-define=PLATFORM_DESKTOP=true \
+            eval flutter build linux --release --target-platform linux-x64 \
+                $defines \
                 --tree-shake-icons \
                 --split-debug-info=build/debug-info \
                 --obfuscate
             ;;
         "arm64")
-            if ! flutter build linux --release --target-platform linux-arm64 \
-                --dart-define=PLATFORM_DESKTOP=true \
+            if ! eval flutter build linux --release --target-platform linux-arm64 \
+                $defines \
                 --tree-shake-icons \
                 --split-debug-info=build/debug-info \
                 --obfuscate 2>/dev/null; then
@@ -126,186 +151,210 @@ build_linux() {
             ;;
     esac
 
-    print_success "Linux build completed for $arch (mobile code tree-shaken)"
+    print_success "Linux build completed for $arch"
     return 0
+}
+
+# Get the bundle directory for a given arch
+bundle_dir() {
+    local arch=$1
+    if [ "$arch" = "amd64" ]; then
+        echo "build/linux/x64/release/bundle"
+    else
+        echo "build/linux/arm64/release/bundle"
+    fi
 }
 
 # Create deb package
 create_deb() {
     local arch=$1
+    local bundle
+    bundle=$(bundle_dir "$arch")
     print_info "Creating .deb package for $arch..."
 
-    # Create directory structure
-    mkdir -p debian/DEBIAN
-    mkdir -p "debian/usr/local/bin/$APP_NAME"
+    # Create directory structure — install to /opt/chuk-chat/
+    mkdir -p "debian/DEBIAN"
+    mkdir -p "debian/opt/$PACKAGE_NAME"
+    mkdir -p "debian/usr/bin"
     mkdir -p "debian/usr/share/applications"
-    mkdir -p "debian/usr/share/icons/hicolor/256x256/apps"
+    mkdir -p "debian/usr/share/icons/hicolor/512x512/apps"
 
-    # Copy Flutter build
-    if [ "$arch" = "amd64" ]; then
-        cp -r build/linux/x64/release/bundle/* "debian/usr/local/bin/$APP_NAME/"
-    else
-        cp -r build/linux/arm64/release/bundle/* "debian/usr/local/bin/$APP_NAME/"
-    fi
+    # Copy Flutter bundle
+    cp -r "$bundle"/* "debian/opt/$PACKAGE_NAME/"
+    chmod +x "debian/opt/$PACKAGE_NAME/$APP_NAME"
 
-    # Fix permissions on the executable
-    chmod +x "debian/usr/local/bin/$APP_NAME/${APP_NAME//-/_}"
+    # Create symlink so 'chuk-chat' works from command line
+    ln -s "/opt/$PACKAGE_NAME/$APP_NAME" "debian/usr/bin/$PACKAGE_NAME"
 
-    # Copy app icon if available
+    # Copy icon
     if [ -n "$ICON_PATH" ] && [ -f "$ICON_PATH" ]; then
-        cp "$ICON_PATH" "debian/usr/share/icons/hicolor/256x256/apps/$PACKAGE_NAME.png"
+        cp "$ICON_PATH" "debian/usr/share/icons/hicolor/512x512/apps/$PACKAGE_NAME.png"
     fi
 
-    # Create desktop file
+    # Desktop entry
     cat > "debian/usr/share/applications/$PACKAGE_NAME.desktop" <<EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=Chuk Chat
-Comment=Modern chat application
-Exec=/usr/local/bin/$APP_NAME/${APP_NAME//-/_}
+Name=$DISPLAY_NAME
+GenericName=Chat Application
+Comment=Privacy-focused AI chat with end-to-end encryption
+Exec=/opt/$PACKAGE_NAME/$APP_NAME
 Icon=$PACKAGE_NAME
 Terminal=false
-Categories=Network;Chat;
-StartupWMClass=${APP_NAME//-/_}
+Categories=Network;InstantMessaging;Chat;
+StartupWMClass=$APP_NAME
+Keywords=chat;ai;encrypted;privacy;
 EOF
 
-    # Create control file
-    cat > debian/DEBIAN/control <<EOF
+    # Control file
+    cat > "debian/DEBIAN/control" <<EOF
 Package: $PACKAGE_NAME
 Version: $VERSION
-Section: utils
+Section: net
 Priority: optional
 Architecture: $arch
-Maintainer: Chuk <you@example.com>
-Description: Flutter chat application
- A modern chat application built with Flutter.
+Maintainer: Chuk Development <support@chuk.dev>
+Homepage: https://chuk.chat
+Description: Privacy-focused AI chat with end-to-end encryption
+ $DISPLAY_NAME is a cross-platform chat application that uses
+ open-weight AI models with AES-256-GCM end-to-end encryption.
+ Your messages are encrypted on your device before leaving it.
+Depends: libgtk-3-0, libblkid1, liblzma5
 EOF
 
-    # Create postinst script for desktop integration
-    cat > debian/DEBIAN/postinst <<'EOF'
+    # Post-install script
+    cat > "debian/DEBIAN/postinst" <<'EOF'
 #!/bin/bash
-# Update desktop database
-update-desktop-database /usr/share/applications
-# Update icon cache
-gtk-update-icon-cache -f -t /usr/share/icons/hicolor
+update-desktop-database /usr/share/applications 2>/dev/null || true
+gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
 EOF
 
-    # Create prerm script
-    cat > debian/DEBIAN/prerm <<'EOF'
+    # Pre-remove script
+    cat > "debian/DEBIAN/prerm" <<'EOF'
 #!/bin/bash
-# Update desktop database
-update-desktop-database /usr/share/applications
-# Update icon cache
-gtk-update-icon-cache -f -t /usr/share/icons/hicolor
+update-desktop-database /usr/share/applications 2>/dev/null || true
+gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
 EOF
 
-    # Make scripts executable
-    chmod +x debian/DEBIAN/postinst
-    chmod +x debian/DEBIAN/prerm
+    chmod +x "debian/DEBIAN/postinst"
+    chmod +x "debian/DEBIAN/prerm"
 
-    # Build deb package
+    # Build
     dpkg-deb --build debian "releases/linux/${PACKAGE_NAME}_${VERSION}_${arch}.deb"
-
     print_success "Created ${PACKAGE_NAME}_${VERSION}_${arch}.deb"
 }
 
 # Create rpm package
 create_rpm() {
     local arch=$1
+    local bundle
+    bundle=$(bundle_dir "$arch")
     print_info "Creating .rpm package for $arch..."
 
-    # Check if rpmbuild is available
     if ! command -v rpmbuild &> /dev/null; then
-        print_warning "rpmbuild not found. Skipping RPM package creation."
-        print_info "Install rpm-build package to create RPM packages: sudo apt install rpm (Ubuntu/Debian) or sudo yum install rpm-build (RHEL/CentOS)"
+        print_warning "rpmbuild not found. Install with: sudo apt install rpm"
         return 0
     fi
 
-    # Create directory structure
-    mkdir -p rpm/BUILD rpm/RPMS rpm/SOURCES rpm/SPECS rpm/SRPMS
+    # Map Debian arch to RPM arch
+    local rpm_arch="x86_64"
+    [ "$arch" = "arm64" ] && rpm_arch="aarch64"
 
-    # Copy Flutter build to sources
+    # Create directory structure
+    mkdir -p rpm/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
     mkdir -p "rpm/SOURCES/$PACKAGE_NAME-$VERSION"
-    if [ "$arch" = "amd64" ]; then
-        cp -r build/linux/x64/release/bundle/* "rpm/SOURCES/$PACKAGE_NAME-$VERSION/"
-    else
-        cp -r build/linux/arm64/release/bundle/* "rpm/SOURCES/$PACKAGE_NAME-$VERSION/"
-    fi
+    cp -r "$bundle"/* "rpm/SOURCES/$PACKAGE_NAME-$VERSION/"
 
     # Create tarball
-    cd rpm/SOURCES
-    tar -czf "$PACKAGE_NAME-$VERSION.tar.gz" "$PACKAGE_NAME-$VERSION"
-    cd ../..
+    (cd rpm/SOURCES && tar -czf "$PACKAGE_NAME-$VERSION.tar.gz" "$PACKAGE_NAME-$VERSION")
 
-    # Create spec file
+    # Spec file
     cat > "rpm/SPECS/$PACKAGE_NAME.spec" <<EOF
-Name: $PACKAGE_NAME
-Version: $VERSION
-Release: 1%{?dist}
-Summary: Flutter chat application
-License: MIT
-URL: https://github.com/yourusername/$PACKAGE_NAME
-Source0: %{name}-%{version}.tar.gz
-BuildArch: $arch
-Requires: glibc
+Name:           $PACKAGE_NAME
+Version:        $VERSION
+Release:        1%{?dist}
+Summary:        Privacy-focused AI chat with end-to-end encryption
+License:        BSL-1.1
+URL:            https://chuk.chat
+Source0:        %{name}-%{version}.tar.gz
+BuildArch:      $rpm_arch
+Requires:       gtk3, libblkid, xz-libs
 
 %description
-A modern chat application built with Flutter.
+$DISPLAY_NAME is a cross-platform chat application that uses
+open-weight AI models with AES-256-GCM end-to-end encryption.
+Your messages are encrypted on your device before leaving it.
 
 %prep
 %setup -q
 
 %build
-# No build step needed for pre-built binary
 
 %install
 rm -rf %{buildroot}
-mkdir -p %{buildroot}/usr/local/bin/%{name}
-cp -r * %{buildroot}/usr/local/bin/%{name}/
+mkdir -p %{buildroot}/opt/%{name}
+mkdir -p %{buildroot}/usr/bin
+mkdir -p %{buildroot}/usr/share/applications
+mkdir -p %{buildroot}/usr/share/icons/hicolor/512x512/apps
+cp -r * %{buildroot}/opt/%{name}/
+chmod +x %{buildroot}/opt/%{name}/$APP_NAME
+ln -s /opt/%{name}/$APP_NAME %{buildroot}/usr/bin/%{name}
+EOF
 
-%files
-/usr/local/bin/%{name}/
+    # Copy icon into rpm build
+    if [ -n "$ICON_PATH" ] && [ -f "$ICON_PATH" ]; then
+        cp "$ICON_PATH" "rpm/BUILD/$PACKAGE_NAME.png"
+        echo "cp $PWD/rpm/BUILD/$PACKAGE_NAME.png %{buildroot}/usr/share/icons/hicolor/512x512/apps/%{name}.png" >> "rpm/SPECS/$PACKAGE_NAME.spec"
+    fi
 
-%post
-# Create desktop entry
-mkdir -p /usr/share/applications
-cat > /usr/share/applications/chuk-chat.desktop <<'DESKTOP'
+    # Desktop entry and file list
+    cat >> "rpm/SPECS/$PACKAGE_NAME.spec" <<EOF
+
+cat > %{buildroot}/usr/share/applications/%{name}.desktop <<'DESKTOP'
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=Chuk Chat
-Comment=Modern chat application
-Exec=/usr/local/bin/chuk-chat/chuk_chat
-Icon=/usr/local/bin/chuk-chat/data/flutter_assets/assets/icons/icon.png
+Name=$DISPLAY_NAME
+GenericName=Chat Application
+Comment=Privacy-focused AI chat with end-to-end encryption
+Exec=/opt/$PACKAGE_NAME/$APP_NAME
+Icon=$PACKAGE_NAME
 Terminal=false
-Categories=Network;Chat;
+Categories=Network;InstantMessaging;Chat;
+StartupWMClass=$APP_NAME
+Keywords=chat;ai;encrypted;privacy;
 DESKTOP
-chmod +x /usr/local/bin/chuk-chat/chuk_chat
-update-desktop-database /usr/share/applications
+
+%files
+/opt/%{name}/
+/usr/bin/%{name}
+/usr/share/applications/%{name}.desktop
+/usr/share/icons/hicolor/512x512/apps/%{name}.png
+
+%post
+update-desktop-database /usr/share/applications 2>/dev/null || true
+gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
 
 %preun
-# Remove desktop entry
-rm -f /usr/share/applications/chuk-chat.desktop
-update-desktop-database /usr/share/applications
+rm -f /usr/share/applications/%{name}.desktop
+update-desktop-database /usr/share/applications 2>/dev/null || true
 
 %changelog
-* $(date '+%a %b %d %Y') Chuk <you@example.com> - $VERSION-1
-- Initial package
+* $(date '+%a %b %d %Y') Chuk Development <support@chuk.dev> - $VERSION-1
+- Release $VERSION
 EOF
 
-    # Build RPM
-    rpmbuild --define "_topdir $(pwd)/rpm" -ba "rpm/SPECS/$PACKAGE_NAME.spec"
+    rpmbuild --define "_topdir $(pwd)/rpm" -bb "rpm/SPECS/$PACKAGE_NAME.spec"
+    find rpm/RPMS -name "*.rpm" -exec cp {} "releases/linux/${PACKAGE_NAME}_${VERSION}_${rpm_arch}.rpm" \;
 
-    # Move the built RPM to releases directory
-    find rpm/RPMS -name "*.rpm" -exec cp {} "releases/linux/${PACKAGE_NAME}_${VERSION}_${arch}.rpm" \;
-
-    print_success "Created ${PACKAGE_NAME}_${VERSION}_${arch}.rpm"
+    print_success "Created ${PACKAGE_NAME}_${VERSION}_${rpm_arch}.rpm"
 }
 
 # Download appimagetool if not present
 download_appimagetool() {
-    local SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local SCRIPT_DIR
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     local TOOLS_DIR="$SCRIPT_DIR/tools"
     local APPIMAGETOOL_PATH="$TOOLS_DIR/appimagetool"
 
@@ -314,11 +363,8 @@ download_appimagetool() {
     fi
 
     print_info "appimagetool not found, downloading..."
-
-    # Create tools directory if it doesn't exist
     mkdir -p "$TOOLS_DIR"
 
-    # Download appimagetool for x86_64 (works on most build systems)
     local DOWNLOAD_URL="https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
 
     if command -v curl &> /dev/null; then
@@ -332,7 +378,7 @@ download_appimagetool() {
 
     if [ -f "$APPIMAGETOOL_PATH" ]; then
         chmod +x "$APPIMAGETOOL_PATH"
-        print_success "Downloaded appimagetool to $APPIMAGETOOL_PATH"
+        print_success "Downloaded appimagetool"
         return 0
     else
         print_error "Failed to download appimagetool"
@@ -343,136 +389,136 @@ download_appimagetool() {
 # Create AppImage
 create_appimage() {
     local arch=$1
+    local bundle
+    bundle=$(bundle_dir "$arch")
     print_info "Creating AppImage for $arch..."
 
-    # Use local appimagetool from tools/ directory, or fall back to system-installed
-    local APPIMAGETOOL=""
-    local SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    # Map to AppImage arch naming
+    local appimage_arch="x86_64"
+    [ "$arch" = "arm64" ] && appimage_arch="aarch64"
 
-    # Try to download if not present
+    # Find appimagetool
+    local APPIMAGETOOL=""
+    local SCRIPT_DIR
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
     if [ ! -x "$SCRIPT_DIR/tools/appimagetool" ]; then
         download_appimagetool
     fi
 
     if [ -x "$SCRIPT_DIR/tools/appimagetool" ]; then
         APPIMAGETOOL="$SCRIPT_DIR/tools/appimagetool"
-        print_info "Using local appimagetool from tools/"
     elif command -v appimagetool &> /dev/null; then
         APPIMAGETOOL="appimagetool"
     else
-        print_warning "appimagetool not found and download failed. Skipping AppImage creation."
+        print_warning "appimagetool not found. Skipping AppImage creation."
         return 0
     fi
 
     # Create AppDir structure
     mkdir -p "AppDir/usr/bin"
     mkdir -p "AppDir/usr/share/applications"
-    mkdir -p "AppDir/usr/share/icons/hicolor/256x256/apps"
+    mkdir -p "AppDir/usr/share/icons/hicolor/512x512/apps"
 
-    # Copy Flutter build
-    if [ "$arch" = "amd64" ]; then
-        cp -r build/linux/x64/release/bundle/* "AppDir/usr/bin/"
-    else
-        cp -r build/linux/arm64/release/bundle/* "AppDir/usr/bin/"
-    fi
+    # Copy Flutter bundle
+    cp -r "$bundle"/* "AppDir/usr/bin/"
+    chmod +x "AppDir/usr/bin/$APP_NAME"
 
-    # Fix permissions
-    chmod +x AppDir/usr/bin/chuk_chat
-
-    # Copy app icon if available
+    # Copy icon
     if [ -n "$ICON_PATH" ] && [ -f "$ICON_PATH" ]; then
-        cp "$ICON_PATH" "AppDir/usr/share/icons/hicolor/256x256/apps/chuk-chat.png"
+        cp "$ICON_PATH" "AppDir/usr/share/icons/hicolor/512x512/apps/$PACKAGE_NAME.png"
+        # AppImage needs icon in root
+        cp "$ICON_PATH" "AppDir/$PACKAGE_NAME.png"
     fi
 
-    # Create desktop file in usr/share/applications
-    cat > AppDir/usr/share/applications/chuk-chat.desktop <<EOF
+    # Desktop entry
+    cat > "AppDir/$PACKAGE_NAME.desktop" <<EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=Chuk Chat
-Comment=Modern chat application
-Exec=chuk_chat
-Icon=chuk-chat
+Name=$DISPLAY_NAME
+GenericName=Chat Application
+Comment=Privacy-focused AI chat with end-to-end encryption
+Exec=$APP_NAME
+Icon=$PACKAGE_NAME
 Terminal=false
-Categories=Network;Chat;
-StartupWMClass=chuk_chat
+Categories=Network;InstantMessaging;Chat;
+StartupWMClass=$APP_NAME
+Keywords=chat;ai;encrypted;privacy;
 EOF
 
-    # AppImage requires .desktop file and icon symlinked in AppDir root
-    ln -sf usr/share/applications/chuk-chat.desktop AppDir/chuk-chat.desktop
-    if [ -n "$ICON_PATH" ] && [ -f "$ICON_PATH" ]; then
-        ln -sf usr/share/icons/hicolor/256x256/apps/chuk-chat.png AppDir/chuk-chat.png
-    fi
+    # Copy desktop file into standard location too
+    cp "AppDir/$PACKAGE_NAME.desktop" "AppDir/usr/share/applications/"
 
-    # Create AppRun
-    cat > AppDir/AppRun <<'EOF'
+    # AppRun
+    cat > "AppDir/AppRun" <<'APPRUN'
 #!/bin/bash
 HERE="$(dirname "$(readlink -f "$0")")"
-exec "$HERE/usr/bin/chuk_chat" "$@"
-EOF
-    chmod +x AppDir/AppRun
+export LD_LIBRARY_PATH="${HERE}/usr/bin/lib:${LD_LIBRARY_PATH}"
+exec "${HERE}/usr/bin/chuk_chat" "$@"
+APPRUN
+    chmod +x "AppDir/AppRun"
 
-    # Create AppImage
-    ARCH=$arch $APPIMAGETOOL AppDir "releases/linux/${PACKAGE_NAME}_${VERSION}_${arch}.AppImage"
-
-    print_success "Created ${PACKAGE_NAME}_${VERSION}_${arch}.AppImage"
+    # Build AppImage with correct architecture
+    ARCH=$appimage_arch $APPIMAGETOOL AppDir "releases/linux/${PACKAGE_NAME}_${VERSION}_${appimage_arch}.AppImage"
+    print_success "Created ${PACKAGE_NAME}_${VERSION}_${appimage_arch}.AppImage"
 }
 
-# Build Android APKs with split-per-abi (mobile UI)
+# Build Android APKs (mobile UI)
 build_android() {
-    print_info "Building Android APKs with split-per-abi (with tree-shaking - desktop code excluded)..."
+    print_info "Building Android APKs..."
 
-    # Build with split-per-abi and optimizations
-    if flutter build apk --release --split-per-abi \
-        --dart-define=PLATFORM_MOBILE=true \
+    local defines
+    defines=$(dart_defines_mobile)
+
+    if eval flutter build apk --release --split-per-abi \
+        $defines \
         --tree-shake-icons \
         --split-debug-info=build/android-debug-info \
         --obfuscate; then
-        # Copy APKs to releases directory
+
         mkdir -p releases/android
 
-        # Copy all generated APKs
         for apk in build/app/outputs/flutter-apk/app-*-release.apk; do
             if [ -f "$apk" ]; then
-                # Extract architecture from filename
                 filename=$(basename "$apk")
                 arch=$(echo "$filename" | sed 's/app-\(.*\)-release.apk/\1/')
                 cp "$apk" "releases/android/${PACKAGE_NAME}_${VERSION}_${arch}.apk"
-                print_success "Created ${PACKAGE_NAME}_${VERSION}_${arch}.apk (mobile UI, desktop code tree-shaken)"
+                print_success "Created ${PACKAGE_NAME}_${VERSION}_${arch}.apk"
             fi
         done
     else
-        print_warning "Android build failed"
+        print_error "Android build failed"
+        return 1
     fi
 }
 
-# Build Android APKs with desktop UI mode (for tablets)
+# Build Android APKs with desktop UI (for tablets)
 build_android_desktop() {
-    print_info "Building Android APKs with desktop UI mode for tablets (with tree-shaking - mobile code excluded)..."
+    print_info "Building Android APKs with desktop UI for tablets..."
 
-    # Build with split-per-abi and desktop UI mode
-    # Using PLATFORM_DESKTOP=true forces desktop UI on all screen sizes
-    # Or omit both flags to auto-detect (tablets > 800px will use desktop UI)
-    if flutter build apk --release --split-per-abi \
-        --dart-define=PLATFORM_DESKTOP=true \
+    local defines
+    defines=$(dart_defines_desktop)
+
+    if eval flutter build apk --release --split-per-abi \
+        $defines \
         --tree-shake-icons \
         --split-debug-info=build/android-debug-info \
         --obfuscate; then
-        # Copy APKs to releases directory
+
         mkdir -p releases/android
 
-        # Copy all generated APKs
         for apk in build/app/outputs/flutter-apk/app-*-release.apk; do
             if [ -f "$apk" ]; then
-                # Extract architecture from filename
                 filename=$(basename "$apk")
                 arch=$(echo "$filename" | sed 's/app-\(.*\)-release.apk/\1/')
                 cp "$apk" "releases/android/${PACKAGE_NAME}_${VERSION}_${arch}_desktop.apk"
-                print_success "Created ${PACKAGE_NAME}_${VERSION}_${arch}_desktop.apk (desktop UI for tablets, mobile code tree-shaken)"
+                print_success "Created ${PACKAGE_NAME}_${VERSION}_${arch}_desktop.apk"
             fi
         done
     else
-        print_warning "Android build with desktop UI failed"
+        print_error "Android tablet build failed"
+        return 1
     fi
 }
 
@@ -480,17 +526,15 @@ build_android_desktop() {
 build_linux_packages() {
     print_header "Building Linux packages..."
     for arch in amd64 arm64; do
-        print_header "Building Linux for architecture: $arch"
+        print_header "Building for $arch..."
 
         if build_linux $arch; then
             create_deb $arch
             create_rpm $arch
             create_appimage $arch
-
-            # Clean up for next architecture
             rm -rf debian rpm AppDir
         else
-            print_warning "Skipping Linux packages for $arch due to build failure"
+            print_warning "Skipping $arch packages (build failed)"
         fi
     done
 }
@@ -498,13 +542,11 @@ build_linux_packages() {
 build_deb_packages() {
     print_header "Building DEB packages..."
     for arch in amd64 arm64; do
-        print_header "Building DEB for architecture: $arch"
-
         if build_linux $arch; then
             create_deb $arch
             rm -rf debian
         else
-            print_warning "Skipping DEB package for $arch due to build failure"
+            print_warning "Skipping DEB for $arch"
         fi
     done
 }
@@ -512,13 +554,11 @@ build_deb_packages() {
 build_rpm_packages() {
     print_header "Building RPM packages..."
     for arch in amd64 arm64; do
-        print_header "Building RPM for architecture: $arch"
-
         if build_linux $arch; then
             create_rpm $arch
             rm -rf rpm
         else
-            print_warning "Skipping RPM package for $arch due to build failure"
+            print_warning "Skipping RPM for $arch"
         fi
     done
 }
@@ -526,88 +566,37 @@ build_rpm_packages() {
 build_appimage_packages() {
     print_header "Building AppImage packages..."
     for arch in amd64 arm64; do
-        print_header "Building AppImage for architecture: $arch"
-
         if build_linux $arch; then
             create_appimage $arch
             rm -rf AppDir
         else
-            print_warning "Skipping AppImage for $arch due to build failure"
+            print_warning "Skipping AppImage for $arch"
         fi
     done
 }
 
-# Show usage and help menu
+# Show usage
 show_usage() {
     echo ""
     print_header "Chuk Chat Build System"
     echo ""
     echo "Usage: $0 [target]"
     echo ""
-    echo "Available Build Targets:"
+    echo "Targets:"
+    echo "  linux       All Linux packages (DEB, RPM, AppImage)"
+    echo "  deb         DEB packages only (Debian/Ubuntu)"
+    echo "  rpm         RPM packages only (Fedora/RHEL)"
+    echo "  appimage    AppImage packages only"
+    echo "  apk         Android APKs (mobile UI)"
+    echo "  apk-desktop Android APKs (desktop UI for tablets)"
+    echo "  all         Linux + Android"
     echo ""
-    echo "  linux"
-    echo "    Build all Linux packages for multiple architectures"
-    echo "    Creates: DEB, RPM, and AppImage packages (amd64, arm64)"
-    echo "    Output: releases/linux/"
-    echo ""
-    echo "  deb"
-    echo "    Build DEB packages only (Debian/Ubuntu)"
-    echo "    Creates: .deb files for amd64 and arm64"
-    echo "    Output: releases/linux/*.deb"
-    echo ""
-    echo "  rpm"
-    echo "    Build RPM packages only (RHEL/CentOS/Fedora)"
-    echo "    Creates: .rpm files for amd64 and arm64"
-    echo "    Output: releases/linux/*.rpm"
-    echo "    Note: Requires rpmbuild (install with: sudo apt install rpm)"
-    echo ""
-    echo "  appimage"
-    echo "    Build AppImage packages only (portable Linux apps)"
-    echo "    Creates: .AppImage files for amd64 and arm64"
-    echo "    Output: releases/linux/*.AppImage"
-    echo "    Note: Requires appimagetool"
-    echo ""
-    echo "  apk"
-    echo "    Build Android APKs with mobile UI (optimized for phones)"
-    echo "    Creates: Split APKs per architecture (arm64-v8a, armeabi-v7a, x86_64)"
-    echo "    Output: releases/android/*.apk"
-    echo "    Features: Mobile UI, tree-shaking removes desktop code"
-    echo ""
-    echo "  apk-desktop"
-    echo "    Build Android APKs with desktop UI mode (optimized for tablets)"
-    echo "    Creates: Split APKs per architecture with desktop layout"
-    echo "    Output: releases/android/*_desktop.apk"
-    echo "    Features: Desktop UI layout, tree-shaking removes mobile code"
-    echo "    Best for: Tablets and larger Android devices"
-    echo ""
-    echo "  all"
-    echo "    Build everything (Linux packages + Android APKs)"
-    echo "    Creates: All Linux packages + Android mobile UI APKs"
-    echo "    Output: releases/linux/ and releases/android/"
-    echo ""
-    echo "Examples:"
-    echo "  $0              # Show this help menu"
-    echo "  $0 --help       # Show this help menu (alternative)"
-    echo "  $0 -h           # Show this help menu (alternative)"
-    echo "  $0 linux        # Build all Linux packages"
-    echo "  $0 deb          # Build DEB packages only"
-    echo "  $0 apk          # Build Android APKs (mobile UI)"
-    echo "  $0 apk-desktop  # Build Android APKs (desktop UI for tablets)"
-    echo "  $0 all          # Build everything"
-    echo ""
-    echo "Build Features:"
-    echo "  • Tree-shaking: Automatically removes unused platform-specific code"
-    echo "  • Split APKs: Smaller Android packages per architecture"
-    echo "  • Optimizations: Icon tree-shaking, code obfuscation, debug info splitting"
-    echo ""
-    echo "For more information, see BUILD.md"
+    echo "Output: releases/linux/ and releases/android/"
     echo ""
 }
 
 # Main execution
 main() {
-    # If no arguments provided or help flags, show help menu
     if [ $# -eq 0 ] || [ "$1" = "--help" ] || [ "$1" = "-h" ] || [ "$1" = "help" ]; then
         show_usage
         exit 0
@@ -615,31 +604,20 @@ main() {
 
     local target=$1
 
-    print_header "Starting build process for $APP_NAME..."
-
     extract_app_info
+    load_env
     find_app_icon
     cleanup
 
+    print_header "Building $DISPLAY_NAME v$VERSION..."
+
     case $target in
-        "linux")
-            build_linux_packages
-            ;;
-        "deb")
-            build_deb_packages
-            ;;
-        "rpm")
-            build_rpm_packages
-            ;;
-        "appimage")
-            build_appimage_packages
-            ;;
-        "apk")
-            build_android
-            ;;
-        "apk-desktop")
-            build_android_desktop
-            ;;
+        "linux")    build_linux_packages ;;
+        "deb")      build_deb_packages ;;
+        "rpm")      build_rpm_packages ;;
+        "appimage") build_appimage_packages ;;
+        "apk")      build_android ;;
+        "apk-desktop") build_android_desktop ;;
         "all")
             build_linux_packages
             build_android
@@ -651,44 +629,27 @@ main() {
             ;;
     esac
 
-    print_success "Build completed! All packages are in the releases/ directory:"
+    echo ""
+    print_success "Build completed!"
     echo ""
     print_info "Linux packages:"
-    ls -la releases/linux/ 2>/dev/null || echo "  No Linux packages found"
+    ls -lh releases/linux/ 2>/dev/null || echo "  (none)"
     echo ""
     print_info "Android packages:"
-    ls -la releases/android/ 2>/dev/null || echo "  No Android packages found"
-
-    print_info "Package summary:"
-    echo "  📦 Linux DEB packages: $(ls releases/linux/*.deb 2>/dev/null | wc -l) files"
-    echo "  📦 Linux RPM packages: $(ls releases/linux/*.rpm 2>/dev/null | wc -l) files"
-    echo "  📦 Linux AppImages: $(ls releases/linux/*.AppImage 2>/dev/null | wc -l) files"
-    echo "  📱 Android APKs: $(ls releases/android/*.apk 2>/dev/null | wc -l) files"
+    ls -lh releases/android/ 2>/dev/null || echo "  (none)"
 }
 
 # Check dependencies
 check_dependencies() {
-    print_info "Checking dependencies..."
-
     local missing_deps=()
-
-    if ! command -v flutter &> /dev/null; then
-        missing_deps+=("flutter")
-    fi
-
-    if ! command -v dpkg-deb &> /dev/null; then
-        missing_deps+=("dpkg-deb")
-    fi
+    command -v flutter &> /dev/null || missing_deps+=("flutter")
+    command -v dpkg-deb &> /dev/null || missing_deps+=("dpkg-deb")
 
     if [ ${#missing_deps[@]} -ne 0 ]; then
         print_error "Missing dependencies: ${missing_deps[*]}"
-        print_error "Please install the missing dependencies and try again."
         exit 1
     fi
-
-    print_success "All required dependencies found"
 }
 
-# Run the script
 check_dependencies
 main "$@"

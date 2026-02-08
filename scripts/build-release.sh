@@ -27,12 +27,19 @@ fi
 VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: //' | cut -d'+' -f1)
 echo "Building version: $VERSION"
 
-# Common dart-defines
-DART_DEFINES="--dart-define=SUPABASE_URL=$SUPABASE_URL \
+# Common dart-defines (desktop/web)
+DART_DEFINES_DESKTOP="--dart-define=SUPABASE_URL=$SUPABASE_URL \
     --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
     --dart-define=FEATURE_PROJECTS=true \
     --dart-define=FEATURE_IMAGE_GEN=true \
     --dart-define=FEATURE_VOICE_MODE=true"
+
+# Android dart-defines (different feature flags)
+DART_DEFINES_MOBILE="--dart-define=SUPABASE_URL=$SUPABASE_URL \
+    --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+    --dart-define=FEATURE_PROJECTS=false \
+    --dart-define=FEATURE_IMAGE_GEN=true \
+    --dart-define=FEATURE_VOICE_MODE=false"
 
 build_android() {
     echo ""
@@ -41,7 +48,7 @@ build_android() {
     echo "=========================================="
 
     flutter build apk --release \
-        $DART_DEFINES \
+        $DART_DEFINES_MOBILE \
         --dart-define=PLATFORM_MOBILE=true \
         --tree-shake-icons
 
@@ -57,7 +64,7 @@ build_linux() {
     echo "Building Linux..."
     echo "=========================================="
 
-    flutter build linux --release $DART_DEFINES --tree-shake-icons
+    flutter build linux --release $DART_DEFINES_DESKTOP --tree-shake-icons
 
     # Create tarball
     cd build/linux/x64/release/bundle
@@ -76,7 +83,7 @@ build_web() {
     echo "Building Web..."
     echo "=========================================="
 
-    flutter build web --release $DART_DEFINES
+    flutter build web --release $DART_DEFINES_DESKTOP
 
     # Create ZIP
     cd build/web
