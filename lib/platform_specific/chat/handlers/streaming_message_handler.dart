@@ -347,9 +347,9 @@ class StreamingMessageHandler {
       }
     }
 
-    if (pendingUserText.trim().isNotEmpty) {
-      history.add({'role': 'user', 'content': pendingUserText});
-    }
+    // Don't add pendingUserText here - the server adds the current message
+    // from the 'message' parameter. Adding it here causes duplicate user
+    // messages which makes AI models think the user sent the message twice.
 
     return history;
   }
