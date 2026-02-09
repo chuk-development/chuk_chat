@@ -733,9 +733,8 @@ class _CachedImageThumbnailState extends State<_CachedImageThumbnail>
   Future<void> _loadImage() async {
     try {
       if (widget.imageDataUrl.startsWith('data:image/')) {
-        // Base64 data URL (legacy format)
-        final base64String = widget.imageDataUrl.split(',').last;
-        _cachedBytes = base64Decode(base64String);
+        // Legacy Base64 format - no longer supported, skip loading
+        debugPrint('⏭️ Skipping legacy Base64 image');
       } else {
         // Storage path - download and decrypt
         _cachedBytes = await ImageStorageService.downloadAndDecryptImage(

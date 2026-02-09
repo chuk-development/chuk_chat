@@ -77,9 +77,8 @@ class _ImageViewerState extends State<ImageViewer> {
 
     Uint8List bytes;
     if (imageSource.startsWith('data:image/')) {
-      // Base64 data URL (legacy format)
-      final base64String = imageSource.split(',').last;
-      bytes = base64Decode(base64String);
+      // Legacy Base64 format - no longer supported
+      throw Exception('Legacy Base64 images are no longer supported');
     } else {
       // Storage path - download and decrypt
       bytes = await ImageStorageService.downloadAndDecryptImage(imageSource);
