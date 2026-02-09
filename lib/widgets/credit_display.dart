@@ -62,10 +62,10 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
       ..onPostgresChanges(
         event: PostgresChangeEvent.update,
         schema: 'public',
-        table: 'profiles',
+        table: 'user_billing',
         filter: PostgresChangeFilter(
           type: PostgresChangeFilterType.eq,
-          column: 'id',
+          column: 'user_id',
           value: _supabase.auth.currentUser?.id,
         ),
         callback: (_) {
@@ -154,7 +154,7 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
 
       // Load credits from API server (not Supabase)
       final response = await http.get(
-        Uri.parse('${ApiConfigService.apiBaseUrl}/user/status'),
+        Uri.parse('${ApiConfigService.apiBaseUrl}/v1/user/status'),
         headers: {'Authorization': 'Bearer ${session.accessToken}'},
       );
 
@@ -457,10 +457,10 @@ class _BalanceBadgeState extends State<BalanceBadge> {
       ..onPostgresChanges(
         event: PostgresChangeEvent.update,
         schema: 'public',
-        table: 'profiles',
+        table: 'user_billing',
         filter: PostgresChangeFilter(
           type: PostgresChangeFilterType.eq,
-          column: 'id',
+          column: 'user_id',
           value: user.id,
         ),
         callback: (_) => _loadBalance(silent: true),
@@ -543,7 +543,7 @@ class _BalanceBadgeState extends State<BalanceBadge> {
 
       // Load credits from API server (not Supabase)
       final response = await http.get(
-        Uri.parse('${ApiConfigService.apiBaseUrl}/user/status'),
+        Uri.parse('${ApiConfigService.apiBaseUrl}/v1/user/status'),
         headers: {'Authorization': 'Bearer ${session.accessToken}'},
       );
 

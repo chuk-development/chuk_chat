@@ -186,7 +186,7 @@ class ChatApiService {
       );
     }
 
-    final Uri endpoint = Uri.parse('$_apiBaseUrl/protected/transcribe-audio');
+    final Uri endpoint = Uri.parse('$_apiBaseUrl/v1/ai/transcribe-audio');
     final http.MultipartRequest request =
         http.MultipartRequest('POST', endpoint)
           ..headers['Authorization'] = 'Bearer $accessToken'
@@ -257,7 +257,7 @@ class ChatApiService {
     required String filename,
     required String accessToken,
   }) async {
-    final Uri endpoint = Uri.parse('$_apiBaseUrl/protected/transcribe-audio');
+    final Uri endpoint = Uri.parse('$_apiBaseUrl/v1/ai/transcribe-audio');
     final http.MultipartRequest request =
         http.MultipartRequest('POST', endpoint)
           ..headers['Authorization'] = 'Bearer $accessToken'

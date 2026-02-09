@@ -54,10 +54,10 @@ mixin _FreeMessageListenerMixin<T extends StatefulWidget> on State<T> {
       ..onPostgresChanges(
         event: PostgresChangeEvent.update,
         schema: 'public',
-        table: 'profiles',
+        table: 'user_billing',
         filter: PostgresChangeFilter(
           type: PostgresChangeFilterType.eq,
-          column: 'id',
+          column: 'user_id',
           value: _supabase.auth.currentUser?.id,
         ),
         callback: (_) {
@@ -146,9 +146,9 @@ mixin _FreeMessageListenerMixin<T extends StatefulWidget> on State<T> {
 
       // Get free message info from profiles table
       final profileResponse = await _supabase
-          .from('profiles')
+          .from('user_billing')
           .select('free_messages_total, free_messages_used')
-          .eq('id', user.id)
+          .eq('user_id', user.id)
           .single();
 
       final int total = _parseToInt(profileResponse['free_messages_total']) ?? 10;
@@ -453,9 +453,9 @@ class FreeMessageService {
       if (user == null) return null;
 
       final response = await _supabase
-          .from('profiles')
+          .from('user_billing')
           .select('free_messages_total, free_messages_used')
-          .eq('id', user.id)
+          .eq('user_id', user.id)
           .single();
 
       final int total = (response['free_messages_total'] as int?) ?? 10;

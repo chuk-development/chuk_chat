@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       build_android:
-        description: 'Build Android (Split APKs + Universal)'
+        description: 'Build Android (ARM64, ARM32, x64)'
         required: false
         default: true
         type: boolean
@@ -102,7 +102,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: version-bump
     if: inputs.build_android
-    timeout-minutes: 45
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
@@ -113,6 +113,15 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with: { channel: stable, cache: true }
+
+      - name: Gradle cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('android/build.gradle', 'android/app/build.gradle') }}
+          restore-keys: gradle-
 
       - run: flutter pub get
 
@@ -141,18 +150,6 @@ jobs:
             --dart-define=FEATURE_VOICE_MODE=false \
             --tree-shake-icons
 
-      - name: Build Universal APK
-        timeout-minutes: 20
-        run: |
-          flutter build apk --release \
-            --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
-            --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} \
-            --dart-define=PLATFORM_MOBILE=true \
-            --dart-define=FEATURE_PROJECTS=false \
-            --dart-define=FEATURE_IMAGE_GEN=true \
-            --dart-define=FEATURE_VOICE_MODE=false \
-            --tree-shake-icons
-
       - name: Rename APKs
         run: |
           TAG=${{ needs.version-bump.outputs.tag }}
@@ -160,7 +157,6 @@ jobs:
           mv app-arm64-v8a-release.apk    chuk_chat-${TAG}-android-arm64.apk   || true
           mv app-armeabi-v7a-release.apk  chuk_chat-${TAG}-android-arm32.apk   || true
           mv app-x86_64-release.apk       chuk_chat-${TAG}-android-x64.apk     || true
-          mv app-release.apk              chuk_chat-${TAG}-android-universal.apk || true
 
       - uses: actions/upload-artifact@v4
         with:
@@ -795,7 +791,6 @@ jobs:
             - **ARM64** — for modern phones (recommended)
             - **ARM32** — for older phones
             - **x64** — for emulators / x86 devices
-            - **Universal** — works everywhere (larger)
 
             **Linux x86_64:**
             - **.deb** — Debian/Ubuntu: `sudo dpkg -i chuk_chat-*-linux-amd64.deb`

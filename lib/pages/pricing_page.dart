@@ -43,7 +43,7 @@ Future<void> startCheckout() async {
   final token = await _getAccessToken();
 
   final response = await http.post(
-    Uri.parse('$_apiBaseUrl/stripe/create-checkout-session'),
+    Uri.parse('$_apiBaseUrl/v1/stripe/create-checkout-session'),
     headers: {
       'Authorization': 'Bearer $token',
       'Content-Type': 'application/json',
@@ -71,7 +71,7 @@ Future<void> openBillingPortal() async {
   final token = await _getAccessToken();
 
   final response = await http.post(
-    Uri.parse('$_apiBaseUrl/stripe/create-portal-session'),
+    Uri.parse('$_apiBaseUrl/v1/stripe/create-portal-session'),
     headers: {
       'Authorization': 'Bearer $token',
       'Content-Type': 'application/json',
@@ -100,7 +100,7 @@ Future<void> syncSubscription() async {
   final token = await _getAccessToken();
 
   final response = await http.post(
-    Uri.parse('$_apiBaseUrl/stripe/sync-subscription'),
+    Uri.parse('$_apiBaseUrl/v1/stripe/sync-subscription'),
     headers: {
       'Authorization': 'Bearer $token',
       'Content-Type': 'application/json',
@@ -116,7 +116,7 @@ Future<Map<String, dynamic>> getUserStatus() async {
   final token = await _getAccessToken();
 
   final response = await http.get(
-    Uri.parse('$_apiBaseUrl/user/status'),
+    Uri.parse('$_apiBaseUrl/v1/user/status'),
     headers: {'Authorization': 'Bearer $token'},
   );
 
