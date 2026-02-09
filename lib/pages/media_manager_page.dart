@@ -758,6 +758,7 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
   late int _currentIndex;
   final Map<String, Uint8List> _loadedImages = {};
   final FocusNode _focusNode = FocusNode();
+  bool _disposed = false;
 
   @override
   void initState() {
@@ -771,7 +772,22 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
   }
 
   @override
+  void didUpdateWidget(covariant _FullScreenImageViewer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.images.length != oldWidget.images.length) {
+      if (widget.images.isEmpty && mounted) {
+        Navigator.pop(context);
+        return;
+      }
+      if (_currentIndex >= widget.images.length) {
+        _currentIndex = widget.images.length - 1;
+      }
+    }
+  }
+
+  @override
   void dispose() {
+    _disposed = true;
     _pageController.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -808,7 +824,7 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
       final path = widget.images[i].path;
       if (!_loadedImages.containsKey(path)) {
         final bytes = await widget.onLoadImage(path);
-        if (bytes != null && mounted) {
+        if (bytes != null && !_disposed && mounted) {
           setState(() {
             _loadedImages[path] = bytes;
           });
@@ -831,6 +847,7 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
 
   @override
   Widget build(BuildContext context) {
+    if (_currentIndex >= widget.images.length) return const SizedBox.shrink();
     final currentImage = widget.images[_currentIndex];
 
     return KeyboardListener(

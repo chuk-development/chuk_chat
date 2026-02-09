@@ -855,6 +855,7 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
     );
 
     if (confirmed == true && mounted) {
+      _projectSub?.cancel(); // Stop listener before delete to prevent race
       await ProjectStorageService.deleteProject(widget.projectId);
       if (mounted) Navigator.pop(context);
     }
