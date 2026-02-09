@@ -824,8 +824,10 @@ jobs:
   mirror-to-public:
     name: Mirror to Public Repo
     runs-on: ubuntu-latest
-    needs: [version-bump, build-android, build-linux-x64, build-linux-arm64, build-windows, build-macos, build-ios, create-release]
-    if: needs.create-release.result == 'success'
+    needs: [version-bump, create-release]
+    if: |
+      always() &&
+      needs.create-release.result == 'success'
 
     steps:
       - uses: actions/download-artifact@v4
