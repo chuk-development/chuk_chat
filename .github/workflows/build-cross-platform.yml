@@ -817,3 +817,130 @@ jobs:
             artifacts/windows-build/*
             artifacts/macos-build/*
             artifacts/ios-build/*
+
+  # ──────────────────────────────────────────────
+  # Mirror to Public Releases Repo
+  # ──────────────────────────────────────────────
+  mirror-to-public:
+    name: Mirror to Public Repo
+    runs-on: ubuntu-latest
+    needs: [version-bump, build-android, build-linux-x64, build-linux-arm64, build-windows, build-macos, build-ios, create-release]
+    if: needs.create-release.result == 'success'
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare stable-named assets
+        run: |
+          TAG=${{ needs.version-bump.outputs.tag }}
+          mkdir -p release-assets
+
+          # Android (rename arm64→armv8, arm32→armv7 for public naming)
+          for f in artifacts/android-apks/chuk_chat-*-android-arm64.apk; do
+            [ -f "$f" ] && cp "$f" release-assets/chuk_chat-android-armv8.apk
+          done
+          for f in artifacts/android-apks/chuk_chat-*-android-arm32.apk; do
+            [ -f "$f" ] && cp "$f" release-assets/chuk_chat-android-armv7.apk
+          done
+          for f in artifacts/android-apks/chuk_chat-*-android-x64.apk; do
+            [ -f "$f" ] && cp "$f" release-assets/chuk_chat-android-x64.apk
+          done
+
+          # Linux x64
+          for f in artifacts/linux-x64-packages/chuk_chat-*-linux-amd64.deb; do
+            [ -f "$f" ] && cp "$f" release-assets/chuk_chat-linux-amd64.deb
+          done
+          for f in artifacts/linux-x64-packages/chuk_chat-*-linux-x86_64.AppImage; do
+            [ -f "$f" ] && cp "$f" release-assets/chuk_chat-linux-x86_64.AppImage
+          done
+          for f in artifacts/linux-x64-packages/chuk_chat-*-linux-x86_64.rpm; do
+            [ -f "$f" ] && cp "$f" release-assets/chuk_chat-linux-x86_64.rpm
+          done
+
+          # Linux ARM64
+          for f in artifacts/linux-arm64-packages/chuk_chat-*-linux-arm64.deb; do
+            [ -f "$f" ] && cp "$f" release-assets/chuk_chat-linux-arm64.deb
+          done
+          for f in artifacts/linux-arm64-packages/chuk_chat-*-linux-aarch64.AppImage; do
+            [ -f "$f" ] && cp "$f" release-assets/chuk_chat-linux-aarch64.AppImage
+          done
+
+          # Windows
+          for f in artifacts/windows-build/chuk_chat-*-windows-x64-setup.exe; do
+            [ -f "$f" ] && cp "$f" release-assets/chuk_chat-windows-x64-setup.exe
+          done
+          for f in artifacts/windows-build/chuk_chat-*-windows-x64-portable.zip; do
+            [ -f "$f" ] && cp "$f" release-assets/chuk_chat-windows-x64-portable.zip
+          done
+
+          # macOS
+          for f in artifacts/macos-build/chuk_chat-*-macos.dmg; do
+            [ -f "$f" ] && cp "$f" release-assets/chuk_chat-macos.dmg
+          done
+          for f in artifacts/macos-build/chuk_chat-*-macos.zip; do
+            [ -f "$f" ] && cp "$f" release-assets/chuk_chat-macos.zip
+          done
+
+          # iOS
+          for f in artifacts/ios-build/chuk_chat-*-ios.zip; do
+            [ -f "$f" ] && cp "$f" release-assets/chuk_chat-ios.zip
+          done
+
+          echo "=== Stable-named assets for public repo ==="
+          ls -lh release-assets/
+
+      - name: Delete old release on public repo
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_PAT }}
+        run: |
+          # Delete ALL existing releases on public repo
+          TAGS=$(gh release list --repo chuk-development/chuk_chat_releases --json tagName -q '.[].tagName' 2>/dev/null || true)
+          for OLD_TAG in $TAGS; do
+            echo "Deleting old release: $OLD_TAG"
+            gh release delete "$OLD_TAG" --repo chuk-development/chuk_chat_releases --yes 2>/dev/null || true
+            gh api -X DELETE "repos/chuk-development/chuk_chat_releases/git/refs/tags/$OLD_TAG" 2>/dev/null || true
+          done
+
+      - name: Create release on public repo
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_PAT }}
+        run: |
+          TAG=${{ needs.version-bump.outputs.tag }}
+
+          # Build asset list (only include files that exist)
+          ASSETS=""
+          for f in release-assets/*; do
+            [ -f "$f" ] && ASSETS="$ASSETS $f"
+          done
+
+          if [ -z "$ASSETS" ]; then
+            echo "No assets to upload!"
+            exit 1
+          fi
+
+          gh release create "${TAG}" $ASSETS \
+            --repo chuk-development/chuk_chat_releases \
+            --title "Chuk Chat ${TAG}" \
+            --notes "$(cat <<'NOTES'
+          ## Downloads
+
+          **Android** (choose your architecture):
+          - **ARMv8** — for modern phones (recommended)
+          - **ARMv7** — for older phones
+          - **x64** — for emulators / x86 devices
+
+          **Linux x86_64:**
+          - **.deb** — Debian/Ubuntu: `sudo dpkg -i chuk_chat-linux-amd64.deb`
+          - **.AppImage** — Universal: `chmod +x chuk_chat-linux-x86_64.AppImage && ./chuk_chat-linux-x86_64.AppImage`
+          - **.rpm** — Fedora/RHEL: `sudo rpm -i chuk_chat-linux-x86_64.rpm`
+
+          **Windows:**
+          - **Setup.exe** — Installer with Start Menu shortcut (recommended)
+          - **Portable ZIP** — Extract and run, no installation needed
+
+          **macOS:**
+          - DMG or ZIP — drag to Applications
+          NOTES
+          )"
