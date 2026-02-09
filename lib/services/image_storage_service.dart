@@ -34,6 +34,9 @@ class ChatUsingImage {
   });
 }
 
+/// Top-level function for UTF-8 decoding in background isolate
+String _utf8DecodeInBackground(Uint8List bytes) => utf8.decode(bytes);
+
 /// Service for storing and retrieving encrypted images in Supabase Storage
 class ImageStorageService {
   const ImageStorageService._();
@@ -50,6 +53,9 @@ class ImageStorageService {
 
   /// In-memory cache for decrypted images
   static final Map<String, Uint8List> _imageCache = {};
+
+  /// In-flight request deduplication - prevents duplicate downloads for the same image
+  static final Map<String, Future<Uint8List>> _pendingRequests = {};
 
   /// Clear a specific image from cache
   static void clearFromCache(String storagePath) {
@@ -121,7 +127,7 @@ class ImageStorageService {
 
   /// Downloads and decrypts an image from Supabase Storage
   /// Returns the decrypted image bytes
-  /// Uses in-memory cache to avoid re-downloading
+  /// Uses in-memory cache and request deduplication to avoid redundant work
   static Future<Uint8List> downloadAndDecryptImage(String storagePath, {bool bypassCache = false}) async {
     // Check cache first (unless bypassing)
     if (!bypassCache) {
@@ -131,6 +137,24 @@ class ImageStorageService {
       }
     }
 
+    // Deduplicate: if this image is already being downloaded, share the future
+    final pending = _pendingRequests[storagePath];
+    if (pending != null && !bypassCache) {
+      return pending;
+    }
+
+    final future = _downloadAndDecryptImageInternal(storagePath);
+    _pendingRequests[storagePath] = future;
+
+    try {
+      final result = await future;
+      return result;
+    } finally {
+      _pendingRequests.remove(storagePath);
+    }
+  }
+
+  static Future<Uint8List> _downloadAndDecryptImageInternal(String storagePath) async {
     // Ensure user is authenticated
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
@@ -148,10 +172,10 @@ class ImageStorageService {
           .from(bucketName)
           .download(storagePath);
 
-      // Convert bytes to string (JSON format) - use UTF-8 decoding
-      final encryptedJson = utf8.decode(encryptedBytes);
+      // UTF-8 decode in background isolate to avoid blocking UI on large images
+      final encryptedJson = await compute(_utf8DecodeInBackground, encryptedBytes);
 
-      // Decrypt the image
+      // Decrypt the image (already runs in isolate via EncryptionService)
       final decryptedBytes = await EncryptionService.decryptBytes(
         encryptedJson,
       );

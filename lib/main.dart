@@ -256,19 +256,24 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
   Future<void> _onAppResumed() async {
     // Reset failure count to give network a fresh chance
     NetworkStatusService.resetFailureCount();
-    // Check network status immediately (don't use cache - it may be stale)
-    final isOnline = await NetworkStatusService.hasInternetConnection(
+
+    // Check network status in the background (don't block UI on resume)
+    unawaited(NetworkStatusService.hasInternetConnection(
       useCache: false,
       timeout: const Duration(seconds: 3),
-    );
-    debugPrint('📱 [Lifecycle] App resumed, network status: ${isOnline ? "ONLINE" : "OFFLINE"}');
-    // Resume sync after network status is updated
-    ChatSyncService.resume();
-    // Update session last-seen timestamp and verify session is still valid
-    if (kFeatureSessionManagement && isOnline && SupabaseService.auth.currentSession != null) {
-      unawaited(_verifySessionStillValid());
-      unawaited(SessionTrackingService.updateLastSeen());
-    }
+    ).then((isOnline) {
+      debugPrint('📱 [Lifecycle] App resumed, network status: ${isOnline ? "ONLINE" : "OFFLINE"}');
+      // Update session last-seen timestamp and verify session is still valid
+      if (kFeatureSessionManagement && isOnline && SupabaseService.auth.currentSession != null) {
+        unawaited(_verifySessionStillValid());
+        unawaited(SessionTrackingService.updateLastSeen());
+      }
+    }));
+
+    // Defer sync resume to next frame so the UI can render first
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ChatSyncService.resume();
+    });
   }
 
   /// Verify the current session hasn't been revoked remotely.

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/widgets/credit_display.dart';
 import 'package:flutter/gestures.dart';
@@ -247,7 +248,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
     final Color accent = theme.colorScheme.primary;
     final Color iconFg = theme.resolvedIconColor;
     final TextStyle? titleTextStyle = theme.appBarTheme.titleTextStyle;
-    final bool isMobile = MediaQuery.of(context).size.width < 720;
+    final bool isMobile = kPlatformMobile || MediaQuery.of(context).size.width < 720;
 
     if (_isLoading) {
       return Scaffold(

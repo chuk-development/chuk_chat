@@ -63,16 +63,17 @@ class ChatSyncService {
     if (!_isEnabled) return;
     debugPrint('▶️ [ChatSync] Resuming sync service');
 
-    // On resume, always sync titles from network to get latest
-    // This ensures we have fresh data after coming back from background
-    _syncTitlesOnResume();
-
-    // Restart timer
+    // Restart timer first (lightweight)
     _syncTimer?.cancel();
     _syncTimer = Timer.periodic(
       Duration(seconds: _pollIntervalSeconds),
       (_) => _performSync(),
     );
+
+    // Defer title sync to avoid blocking the UI on resume
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (_isEnabled) _syncTitlesOnResume();
+    });
   }
 
   /// Sync titles when app resumes - fetches latest from network
