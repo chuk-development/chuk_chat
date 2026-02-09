@@ -893,18 +893,6 @@ jobs:
           echo "=== Stable-named assets for public repo ==="
           ls -lh release-assets/
 
-      - name: Delete old release on public repo
-        env:
-          GH_TOKEN: ${{ secrets.RELEASES_PAT }}
-        run: |
-          # Delete ALL existing releases on public repo
-          TAGS=$(gh release list --repo chuk-development/chuk_chat_releases --json tagName -q '.[].tagName' 2>/dev/null || true)
-          for OLD_TAG in $TAGS; do
-            echo "Deleting old release: $OLD_TAG"
-            gh release delete "$OLD_TAG" --repo chuk-development/chuk_chat_releases --yes 2>/dev/null || true
-            gh api -X DELETE "repos/chuk-development/chuk_chat_releases/git/refs/tags/$OLD_TAG" 2>/dev/null || true
-          done
-
       - name: Create release on public repo
         env:
           GH_TOKEN: ${{ secrets.RELEASES_PAT }}
