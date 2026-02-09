@@ -234,7 +234,11 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     });
   }
 
-  Future<void> _handleChatDeleted(String _) async {
+  Future<void> _handleChatDeleted(String deletedChatId) async {
+    // If the deleted chat is the one currently displayed, start a new chat
+    if (ChatStorageService.selectedChatId == deletedChatId) {
+      _chatUIKey.currentState?.newChat();
+    }
     setState(() {});
   }
 

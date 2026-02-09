@@ -291,10 +291,14 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     });
   }
 
-  Future<void> _handleChatDeleted(String _) async {
+  Future<void> _handleChatDeleted(String deletedChatId) async {
     // Prevent keyboard from opening when sidebar is visible
     if (_isSidebarExpanded) {
       FocusScope.of(context).unfocus();
+    }
+    // If the deleted chat is the one currently displayed, start a new chat
+    if (ChatStorageService.selectedChatId == deletedChatId) {
+      _chatUIMobileKey.currentState?.newChat();
     }
     setState(() {});
   }
