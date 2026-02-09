@@ -1,9 +1,14 @@
 // lib/pages/account_settings_page.dart
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:chuk_chat/pages/session_management_page.dart';
 import 'package:chuk_chat/platform_config.dart';
+import 'package:chuk_chat/services/api_config_service.dart';
+import 'package:chuk_chat/services/auth_service.dart';
 import 'package:chuk_chat/services/password_change_service.dart';
 import 'package:chuk_chat/services/profile_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -27,6 +32,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
 
   bool _isSaving = false;
   bool _isLoading = true;
+  bool _isDeletingAccount = false;
   bool _isChangingPassword = false;
   bool _obscureCurrentPassword = true;
   bool _obscureNewPassword = true;
@@ -214,6 +220,73 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         _isChangingPassword = false;
         _passwordChangeError = 'Failed to change password: $error';
       });
+    }
+  }
+
+  Future<void> _deleteAccount() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Account'),
+        content: const Text(
+          'This will permanently delete your account, cancel any active '
+          'subscriptions, and erase all your data. This action cannot be '
+          'undone.\n\nAre you sure you want to continue?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete My Account'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _isDeletingAccount = true);
+
+    try {
+      final session = Supabase.instance.client.auth.currentSession;
+      if (session == null) throw Exception('Not authenticated');
+
+      final response = await http.delete(
+        Uri.parse('${ApiConfigService.apiBaseUrl}/v1/user/delete-account'),
+        headers: {'Authorization': 'Bearer ${session.accessToken}'},
+      );
+
+      if (response.statusCode != 200) {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        throw Exception(body['detail'] ?? 'Failed to delete account');
+      }
+
+      await const AuthService().signOut();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _isDeletingAccount = false);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Failed to delete account: $error',
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          duration: const Duration(seconds: 3),
+          dismissDirection: DismissDirection.horizontal,
+        ),
+      );
     }
   }
 
@@ -512,6 +585,61 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
               ),
             ),
           ),
+          const SizedBox(height: 32),
+          const Divider(),
+          const SizedBox(height: 16),
+          _AccountSectionCard(
+            title: 'Danger Zone',
+            description:
+                'Irreversible actions that affect your entire account.',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Deleting your account will cancel all subscriptions, '
+                  'remove your data, and cannot be undone.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: iconFg.withValues(alpha: 0.7),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red.shade600,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    onPressed:
+                        _isDeletingAccount ? null : _deleteAccount,
+                    child: _isDeletingAccount
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text(
+                            'Delete Account',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16,
+                            ),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 32),
         ],
       );
     }
