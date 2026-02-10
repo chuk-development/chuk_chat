@@ -4,7 +4,7 @@
 
 **Do not open a public issue for security vulnerabilities.**
 
-Please report security issues directly to: support@chuk.dev
+Please report security issues directly to: **security@chuk.dev**
 
 Include:
 - Description of the vulnerability

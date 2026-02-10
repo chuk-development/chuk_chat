@@ -1,0 +1,90 @@
+name: Crash Report
+description: The app crashes or freezes
+title: "[Crash]: "
+labels: ["bug", "crash"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Sorry about the crash! Please provide as much detail as you can so we can fix it.
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Android
+        - Linux
+        - Web (chat.chuk.chat)
+        - Windows
+        - macOS
+        - iOS
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: App Version
+      description: "Settings > About"
+      placeholder: "e.g. 1.0.23"
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Device / OS Version
+      placeholder: "e.g. Pixel 8 / Android 15, Ubuntu 24.04"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: crash-type
+    attributes:
+      label: What happens?
+      options:
+        - App closes unexpectedly
+        - App freezes (unresponsive)
+        - Black or white screen
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What were you doing when it crashed?
+      placeholder: |
+        e.g. I was sending a message in an encrypted chat and the app suddenly closed.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: How often does this happen?
+      options:
+        - Every time
+        - Often
+        - Sometimes
+        - Happened once
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Crash log / error message
+      description: If you have any error output or logs, paste them here.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Screenshots or anything else that might help.
+    validations:
+      required: false

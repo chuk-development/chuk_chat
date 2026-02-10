@@ -1,0 +1,40 @@
+name: Question
+description: Ask a question about using Chuk Chat
+title: "[Question]: "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have a question about Chuk Chat? Ask away!
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+      description: What would you like to know?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform (if relevant)
+      options:
+        - Not applicable
+        - Android
+        - Linux
+        - Web (chat.chuk.chat)
+        - Windows
+        - macOS
+        - iOS
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Screenshots or other details that help clarify your question.
+    validations:
+      required: false
