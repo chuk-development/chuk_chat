@@ -1,1 +1,113 @@
-// placeholder
+// lib/models/chat_model.dart
+
+class ModelItem {
+  final String name; // Display name
+  final String value; // Model ID (slug for API)
+  final bool isToggle; // Not from API, for potential local use
+  final String? badge; // Not from API, for potential local use
+  final String? iconUrl; // Icon URL from API
+
+  ModelItem({
+    required this.name,
+    required this.value,
+    this.isToggle = false,
+    this.badge,
+    this.iconUrl,
+  });
+
+  // Factory constructor to create ModelItem from API JSON
+  factory ModelItem.fromJson(Map<String, dynamic> json) {
+    return ModelItem(
+      name: json['name'] as String,
+      value:
+          json['id']
+              as String, // 'id' from API becomes 'value' for internal use
+      isToggle: false, // Defaulting as not from API
+      badge: null, // Defaulting as not from API
+      iconUrl: json['icon_url'] as String?,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ModelItem &&
+          runtimeType == other.runtimeType &&
+          value == other.value;
+
+  @override
+  int get hashCode => value.hashCode;
+}
+
+// Class to represent an attached file's state
+class AttachedFile {
+  final String id; // Unique ID for managing state
+  final String fileName;
+  final String? markdownContent; // Null if still uploading or failed
+  final bool isUploading;
+  final String? localPath; // Local file system path when available
+  final int? fileSizeBytes; // File size in bytes, used for UI display
+  final String?
+  encryptedImagePath; // Storage path for encrypted images (e.g., "userId/fileId.enc")
+  final bool
+  isImage; // Whether this is an image file (stored in encrypted storage)
+
+  AttachedFile({
+    required this.id,
+    required this.fileName,
+    this.markdownContent,
+    this.isUploading = false,
+    this.localPath,
+    this.fileSizeBytes,
+    this.encryptedImagePath,
+    this.isImage = false,
+  });
+
+  AttachedFile copyWith({
+    String? markdownContent,
+    bool? isUploading,
+    String? localPath,
+    int? fileSizeBytes,
+    String? encryptedImagePath,
+    bool? isImage,
+  }) {
+    return AttachedFile(
+      id: id,
+      fileName: fileName,
+      markdownContent: markdownContent ?? this.markdownContent,
+      isUploading: isUploading ?? this.isUploading,
+      localPath: localPath ?? this.localPath,
+      fileSizeBytes: fileSizeBytes ?? this.fileSizeBytes,
+      encryptedImagePath: encryptedImagePath ?? this.encryptedImagePath,
+      isImage: isImage ?? this.isImage,
+    );
+  }
+
+  /// Converts AttachedFile to JSON for storage
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'fileName': fileName,
+      'markdownContent': markdownContent,
+      'isUploading': isUploading,
+      'localPath': localPath,
+      'fileSizeBytes': fileSizeBytes,
+      'encryptedImagePath': encryptedImagePath,
+      'isImage': isImage,
+    };
+  }
+
+  /// Creates AttachedFile from JSON
+  factory AttachedFile.fromJson(Map<String, dynamic> json) {
+    return AttachedFile(
+      id: json['id'] as String,
+      fileName: json['fileName'] as String,
+      markdownContent: json['markdownContent'] as String?,
+      isUploading: json['isUploading'] as bool? ?? false,
+      localPath: json['localPath'] as String?,
+      fileSizeBytes: json['fileSizeBytes'] as int?,
+      encryptedImagePath: json['encryptedImagePath'] as String?,
+      isImage: json['isImage'] as bool? ?? false,
+    );
+  }
+}
