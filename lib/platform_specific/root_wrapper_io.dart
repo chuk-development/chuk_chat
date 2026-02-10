@@ -1,1 +1,281 @@
-// placeholder
+// lib/platform_specific/root_wrapper_io.dart
+// Platform detection for dart:io platforms (mobile and desktop)
+//
+// This file uses compile-time constants (--dart-define) to enable aggressive tree-shaking:
+//
+// BUILD COMMANDS FOR OPTIMAL TREE-SHAKING:
+// =========================================
+// Desktop (excludes mobile code):
+//   flutter build linux --dart-define=PLATFORM_DESKTOP=true --tree-shake-icons
+//
+// Mobile (excludes desktop code):
+//   flutter build apk --dart-define=PLATFORM_MOBILE=true --tree-shake-icons
+//
+// Auto-detect (includes both, larger binary):
+//   flutter build linux --tree-shake-icons
+//   flutter build apk --tree-shake-icons
+//
+// When PLATFORM_DESKTOP=true or PLATFORM_MOBILE=true is set, the Dart compiler
+// can completely remove the unused branch at compile time, resulting in smaller binaries.
+
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
+import 'package:flutter/material.dart';
+import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/platform_config.dart';
+import 'root_wrapper_desktop.dart';
+import 'root_wrapper_mobile.dart';
+
+class RootWrapper extends StatelessWidget {
+  final Brightness currentThemeMode;
+  final Color currentAccentColor;
+  final Color currentIconFgColor;
+  final Color currentBgColor;
+  final Function(Brightness) setThemeMode;
+  final Function(Color) setAccentColor;
+  final Function(Color) setIconFgColor;
+  final Function(Color) setBgColor;
+  final bool grainEnabled;
+  final Function(bool) setGrainEnabled;
+  final bool showReasoningTokens;
+  final Function(bool) setShowReasoningTokens;
+  final bool showModelInfo;
+  final Function(bool) setShowModelInfo;
+  final bool showTps;
+  final Function(bool) setShowTps;
+  final bool autoSendVoiceTranscription;
+  final Function(bool) setAutoSendVoiceTranscription;
+  // Image generation settings
+  final bool imageGenEnabled;
+  final Function(bool) setImageGenEnabled;
+  final String imageGenDefaultSize;
+  final Function(String) setImageGenDefaultSize;
+  final int imageGenCustomWidth;
+  final Function(int) setImageGenCustomWidth;
+  final int imageGenCustomHeight;
+  final Function(int) setImageGenCustomHeight;
+  final bool imageGenUseCustomSize;
+  final Function(bool) setImageGenUseCustomSize;
+  // AI context settings
+  final bool includeRecentImagesInHistory;
+  final Function(bool) setIncludeRecentImagesInHistory;
+  final bool includeAllImagesInHistory;
+  final Function(bool) setIncludeAllImagesInHistory;
+  final bool includeReasoningInHistory;
+  final Function(bool) setIncludeReasoningInHistory;
+
+  const RootWrapper({
+    super.key,
+    required this.currentThemeMode,
+    required this.currentAccentColor,
+    required this.currentIconFgColor,
+    required this.currentBgColor,
+    required this.setThemeMode,
+    required this.setAccentColor,
+    required this.setIconFgColor,
+    required this.setBgColor,
+    required this.grainEnabled,
+    required this.setGrainEnabled,
+    required this.showReasoningTokens,
+    required this.setShowReasoningTokens,
+    required this.showModelInfo,
+    required this.setShowModelInfo,
+    required this.showTps,
+    required this.setShowTps,
+    required this.autoSendVoiceTranscription,
+    required this.setAutoSendVoiceTranscription,
+    required this.imageGenEnabled,
+    required this.setImageGenEnabled,
+    required this.imageGenDefaultSize,
+    required this.setImageGenDefaultSize,
+    required this.imageGenCustomWidth,
+    required this.setImageGenCustomWidth,
+    required this.imageGenCustomHeight,
+    required this.setImageGenCustomHeight,
+    required this.imageGenUseCustomSize,
+    required this.setImageGenUseCustomSize,
+    required this.includeRecentImagesInHistory,
+    required this.setIncludeRecentImagesInHistory,
+    required this.includeAllImagesInHistory,
+    required this.setIncludeAllImagesInHistory,
+    required this.includeReasoningInHistory,
+    required this.setIncludeReasoningInHistory,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Compile-time platform detection for aggressive tree-shaking
+    if (kPlatformMobile) {
+      // When PLATFORM_MOBILE=true is set at build time,
+      // desktop code is completely removed by tree-shaker
+      return RootWrapperMobile(
+        currentThemeMode: currentThemeMode,
+        currentAccentColor: currentAccentColor,
+        currentIconFgColor: currentIconFgColor,
+        currentBgColor: currentBgColor,
+        setThemeMode: setThemeMode,
+        setAccentColor: setAccentColor,
+        setIconFgColor: setIconFgColor,
+        setBgColor: setBgColor,
+        grainEnabled: grainEnabled,
+        setGrainEnabled: setGrainEnabled,
+        showReasoningTokens: showReasoningTokens,
+        setShowReasoningTokens: setShowReasoningTokens,
+        showModelInfo: showModelInfo,
+        setShowModelInfo: setShowModelInfo,
+        showTps: showTps,
+        setShowTps: setShowTps,
+        autoSendVoiceTranscription: autoSendVoiceTranscription,
+        setAutoSendVoiceTranscription: setAutoSendVoiceTranscription,
+        imageGenEnabled: imageGenEnabled,
+        setImageGenEnabled: setImageGenEnabled,
+        imageGenDefaultSize: imageGenDefaultSize,
+        setImageGenDefaultSize: setImageGenDefaultSize,
+        imageGenCustomWidth: imageGenCustomWidth,
+        setImageGenCustomWidth: setImageGenCustomWidth,
+        imageGenCustomHeight: imageGenCustomHeight,
+        setImageGenCustomHeight: setImageGenCustomHeight,
+        imageGenUseCustomSize: imageGenUseCustomSize,
+        setImageGenUseCustomSize: setImageGenUseCustomSize,
+        includeRecentImagesInHistory: includeRecentImagesInHistory,
+        setIncludeRecentImagesInHistory: setIncludeRecentImagesInHistory,
+        includeAllImagesInHistory: includeAllImagesInHistory,
+        setIncludeAllImagesInHistory: setIncludeAllImagesInHistory,
+        includeReasoningInHistory: includeReasoningInHistory,
+        setIncludeReasoningInHistory: setIncludeReasoningInHistory,
+      );
+    } else if (kPlatformDesktop) {
+      // When PLATFORM_DESKTOP=true is set at build time,
+      // mobile code is completely removed by tree-shaker
+      return RootWrapperDesktop(
+        currentThemeMode: currentThemeMode,
+        currentAccentColor: currentAccentColor,
+        currentIconFgColor: currentIconFgColor,
+        currentBgColor: currentBgColor,
+        setThemeMode: setThemeMode,
+        setAccentColor: setAccentColor,
+        setIconFgColor: setIconFgColor,
+        setBgColor: setBgColor,
+        grainEnabled: grainEnabled,
+        setGrainEnabled: setGrainEnabled,
+        showReasoningTokens: showReasoningTokens,
+        setShowReasoningTokens: setShowReasoningTokens,
+        showModelInfo: showModelInfo,
+        setShowModelInfo: setShowModelInfo,
+        showTps: showTps,
+        setShowTps: setShowTps,
+        autoSendVoiceTranscription: autoSendVoiceTranscription,
+        setAutoSendVoiceTranscription: setAutoSendVoiceTranscription,
+        imageGenEnabled: imageGenEnabled,
+        setImageGenEnabled: setImageGenEnabled,
+        imageGenDefaultSize: imageGenDefaultSize,
+        setImageGenDefaultSize: setImageGenDefaultSize,
+        imageGenCustomWidth: imageGenCustomWidth,
+        setImageGenCustomWidth: setImageGenCustomWidth,
+        imageGenCustomHeight: imageGenCustomHeight,
+        setImageGenCustomHeight: setImageGenCustomHeight,
+        imageGenUseCustomSize: imageGenUseCustomSize,
+        setImageGenUseCustomSize: setImageGenUseCustomSize,
+        includeRecentImagesInHistory: includeRecentImagesInHistory,
+        setIncludeRecentImagesInHistory: setIncludeRecentImagesInHistory,
+        includeAllImagesInHistory: includeAllImagesInHistory,
+        setIncludeAllImagesInHistory: setIncludeAllImagesInHistory,
+        includeReasoningInHistory: includeReasoningInHistory,
+        setIncludeReasoningInHistory: setIncludeReasoningInHistory,
+      );
+    }
+
+    // Auto-detect mode (both branches included - larger binary)
+    final bool isMobilePhone = _isMobilePhone(context);
+    if (isMobilePhone) {
+      return RootWrapperMobile(
+        currentThemeMode: currentThemeMode,
+        currentAccentColor: currentAccentColor,
+        currentIconFgColor: currentIconFgColor,
+        currentBgColor: currentBgColor,
+        setThemeMode: setThemeMode,
+        setAccentColor: setAccentColor,
+        setIconFgColor: setIconFgColor,
+        setBgColor: setBgColor,
+        grainEnabled: grainEnabled,
+        setGrainEnabled: setGrainEnabled,
+        showReasoningTokens: showReasoningTokens,
+        setShowReasoningTokens: setShowReasoningTokens,
+        showModelInfo: showModelInfo,
+        setShowModelInfo: setShowModelInfo,
+        showTps: showTps,
+        setShowTps: setShowTps,
+        autoSendVoiceTranscription: autoSendVoiceTranscription,
+        setAutoSendVoiceTranscription: setAutoSendVoiceTranscription,
+        imageGenEnabled: imageGenEnabled,
+        setImageGenEnabled: setImageGenEnabled,
+        imageGenDefaultSize: imageGenDefaultSize,
+        setImageGenDefaultSize: setImageGenDefaultSize,
+        imageGenCustomWidth: imageGenCustomWidth,
+        setImageGenCustomWidth: setImageGenCustomWidth,
+        imageGenCustomHeight: imageGenCustomHeight,
+        setImageGenCustomHeight: setImageGenCustomHeight,
+        imageGenUseCustomSize: imageGenUseCustomSize,
+        setImageGenUseCustomSize: setImageGenUseCustomSize,
+        includeRecentImagesInHistory: includeRecentImagesInHistory,
+        setIncludeRecentImagesInHistory: setIncludeRecentImagesInHistory,
+        includeAllImagesInHistory: includeAllImagesInHistory,
+        setIncludeAllImagesInHistory: setIncludeAllImagesInHistory,
+        includeReasoningInHistory: includeReasoningInHistory,
+        setIncludeReasoningInHistory: setIncludeReasoningInHistory,
+      );
+    }
+
+    return RootWrapperDesktop(
+      currentThemeMode: currentThemeMode,
+      currentAccentColor: currentAccentColor,
+      currentIconFgColor: currentIconFgColor,
+      currentBgColor: currentBgColor,
+      setThemeMode: setThemeMode,
+      setAccentColor: setAccentColor,
+      setIconFgColor: setIconFgColor,
+      setBgColor: setBgColor,
+      grainEnabled: grainEnabled,
+      setGrainEnabled: setGrainEnabled,
+      showReasoningTokens: showReasoningTokens,
+      setShowReasoningTokens: setShowReasoningTokens,
+      showModelInfo: showModelInfo,
+      setShowModelInfo: setShowModelInfo,
+      showTps: showTps,
+      setShowTps: setShowTps,
+      autoSendVoiceTranscription: autoSendVoiceTranscription,
+      setAutoSendVoiceTranscription: setAutoSendVoiceTranscription,
+      imageGenEnabled: imageGenEnabled,
+      setImageGenEnabled: setImageGenEnabled,
+      imageGenDefaultSize: imageGenDefaultSize,
+      setImageGenDefaultSize: setImageGenDefaultSize,
+      imageGenCustomWidth: imageGenCustomWidth,
+      setImageGenCustomWidth: setImageGenCustomWidth,
+      imageGenCustomHeight: imageGenCustomHeight,
+      setImageGenCustomHeight: setImageGenCustomHeight,
+      imageGenUseCustomSize: imageGenUseCustomSize,
+      setImageGenUseCustomSize: setImageGenUseCustomSize,
+      includeRecentImagesInHistory: includeRecentImagesInHistory,
+      setIncludeRecentImagesInHistory: setIncludeRecentImagesInHistory,
+      includeAllImagesInHistory: includeAllImagesInHistory,
+      setIncludeAllImagesInHistory: setIncludeAllImagesInHistory,
+      includeReasoningInHistory: includeReasoningInHistory,
+      setIncludeReasoningInHistory: setIncludeReasoningInHistory,
+    );
+  }
+
+  bool _isMobilePhone(BuildContext context) {
+    // Web always uses desktop UI
+    if (kIsWeb) return false;
+
+    // Check platform type - these constants allow tree-shaking
+    final TargetPlatform platform = defaultTargetPlatform;
+    final bool isMobilePlatform =
+        (platform == TargetPlatform.android || platform == TargetPlatform.iOS);
+
+    if (!isMobilePlatform) return false;
+
+    // For mobile platforms, check screen size
+    final double screenWidth = MediaQuery.of(context).size.width;
+    return screenWidth < kTabletBreakpoint;
+  }
+}
