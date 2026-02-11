@@ -48,8 +48,8 @@ class InputValidator {
   /// Maximum file name length (reasonable limit for file names).
   static const int maxFileNameLength = 255;
 
-  /// Minimum password length for secure passwords.
-  static const int minPasswordLength = 12;
+  /// Minimum password length (matches Supabase auth setting).
+  static const int minPasswordLength = 6;
 
   /// RFC 5322 compliant email validation regex (simplified).
   /// Validates: local-part@domain with proper character restrictions.
@@ -198,7 +198,7 @@ class InputValidator {
   /// Validates password strength and returns detailed feedback.
   ///
   /// Requirements:
-  /// - Minimum 12 characters
+  /// - Minimum 6 characters
   /// - At least one uppercase letter
   /// - At least one lowercase letter
   /// - At least one digit
