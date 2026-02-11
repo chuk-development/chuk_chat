@@ -1,239 +1,34 @@
 # CLAUDE.md
 
-**chuk_chat** - Cross-platform Flutter chat app with E2E encryption, Supabase backend, AI chat.
+**chuk_chat** — Cross-platform Flutter chat app with E2E encryption, Supabase backend, AI chat.
+
+## Workflow Rules
+
+**After completing any task, ALWAYS do this in order:**
+
+1. `flutter test` — all must pass
+2. `coderabbit review --plain` — fix any findings
+3. Commit with descriptive message
+4. `git push`
+
+**Do NOT push if tests fail or CodeRabbit finds issues. Fix first.**
+
+## Build Rules
+
+- **ALWAYS** `--release` for Android (debug = unusable performance)
+- **ALWAYS** `--dart-define-from-file=.env` for Supabase credentials
+- **NEVER** `source .env` or manual `--dart-define=SUPABASE_*`
+- If app shows "Supabase credentials are not configured" → `flutter clean` and rebuild
 
 ## Quick Start
 
 ```bash
-# Setup (first time only)
-cp .env.example .env
-# Edit .env with your Supabase credentials
-
-# Run (uses .env automatically)
-./run.sh linux
-./run.sh android
-
-# Analyze
-flutter analyze
+cp .env.example .env       # First time: add Supabase credentials
+./run.sh linux             # Run desktop
+./run.sh android           # Run mobile
+flutter test               # Run tests
+flutter analyze            # Static analysis
 ```
-
-## Building Android APKs
-
-### CRITICAL RULES — READ EVERY TIME BEFORE BUILDING!
-
-1. **NEVER use --debug for Android** — debug builds are 3-10x slower and unusable.
-2. **ALWAYS use `--dart-define-from-file=.env`** — This automatically reads Supabase credentials from the `.env` file. No `source .env` or manual `--dart-define=SUPABASE_*` needed.
-3. **If the app shows "Supabase credentials are not configured"**, the build was wrong. Run `flutter clean` and rebuild.
-
-```
-DEBUG MODE = UNUSABLE PERFORMANCE (JIT, no optimization)
-RELEASE MODE = NORMAL PERFORMANCE (AOT, fully optimized)
-NO SUPABASE = BROKEN APP (will show error on launch)
-```
-
-### Build Android APK (ALWAYS Release + ALWAYS Supabase!)
-
-```bash
-flutter build apk --release \
-  --dart-define-from-file=.env \
-  --dart-define=PLATFORM_MOBILE=true \
-  --dart-define=FEATURE_PROJECTS=false \
-  --dart-define=FEATURE_VOICE_MODE=false \
-  --tree-shake-icons \
-  --target-platform android-arm64
-```
-
-Output: `build/app/outputs/flutter-apk/app-release.apk` (~26MB)
-
-Split APK (separate per architecture):
-```bash
-flutter build apk --release --split-per-abi \
-  --dart-define-from-file=.env \
-  --dart-define=PLATFORM_MOBILE=true \
-  --dart-define=FEATURE_PROJECTS=false \
-  --dart-define=FEATURE_VOICE_MODE=false \
-  --tree-shake-icons
-```
-
-Split APK outputs:
-- `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk` (~26MB, most devices)
-- `build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk` (~24MB)
-- `build/app/outputs/flutter-apk/app-x86_64-release.apk` (~28MB)
-
-### Current Production Feature Flags (Android)
-
-| Flag | Value | Reason |
-|------|-------|--------|
-| `FEATURE_PROJECTS` | `false` | Not ready for production |
-| `FEATURE_IMAGE_GEN` | **always on** | Hardcoded in `platform_config.dart` — no flag needed |
-| `FEATURE_VOICE_MODE` | `false` | Not ready for production |
-
-### Install via ADB
-
-```bash
-# Update existing app (preserves data, login, icon position)
-adb install -r build/app/outputs/flutter-apk/app-release.apk
-
-# Only if signature mismatch error:
-adb uninstall dev.chuk.chat && adb install build/app/outputs/flutter-apk/app-release.apk
-```
-
-### Profile Mode (Only for DevTools/Performance Analysis)
-
-If you need Flutter DevTools for debugging, use profile mode (still fast, but has debugging support):
-
-```bash
-flutter build apk --profile \
-  --dart-define-from-file=.env \
-  --dart-define=PLATFORM_MOBILE=true \
-  --dart-define=FEATURE_PROJECTS=true \
-  --target-platform android-arm64
-```
-
-### Android Signing Setup
-
-The build system supports 3 methods (in priority order):
-
-**1. Environment Variables (CI/CD)**
-```bash
-export ANDROID_KEYSTORE_PATH=/path/to/keystore.keystore
-export ANDROID_KEYSTORE_PASSWORD=your_password
-export ANDROID_KEY_PASSWORD=your_password
-export ANDROID_KEY_ALIAS=chuk_chat
-```
-
-**2. key.properties File (Local Development)**
-```bash
-# Copy template and edit with your paths
-cp android/key.properties.example android/key.properties
-# Edit android/key.properties with your keystore path
-```
-
-**3. Debug Keystore (Fallback)**
-If neither is configured, uses debug signing (not for Play Store).
-
-**For new team members:**
-1. Get the keystore file from team lead (never commit it!)
-2. Place it somewhere on your system
-3. Copy `android/key.properties.example` to `android/key.properties`
-4. Edit `storeFile=` to point to your keystore location
-
-## Building & Deploying Web (Docker / Dokploy)
-
-### Architecture
-
-Web is deployed as a Docker container on Dokploy at `chat.chuk.chat`:
-- **Dockerfile.web** - Multi-stage build: Flutter build → nginx serving
-- **nginx.web.conf** - SPA routing, gzip, caching, dotfile blocking
-- **Cloudflare** - Proxy/CDN in front of Dokploy
-
-### How Supabase Credentials Work on Web
-
-`--dart-define` is **unreliable** with dart2js. Instead, `Dockerfile.web` generates `lib/web_env.dart` with credentials as Dart constants before building. The credential loading priority in `lib/supabase_config.dart`:
-
-1. `--dart-define` (compile-time, works on native)
-2. `lib/web_env.dart` (generated by Docker, works on web)
-3. `.env` file (runtime, desktop only)
-
-**IMPORTANT:** `lib/web_env.dart` in git has empty values (safe). Docker overwrites it during build.
-
-### Dokploy Configuration
-
-- **Project:** Chuk.chat → Chat service
-- **Source:** GitHub `chuk-development/chuk_chat`, branch `master`
-- **Dockerfile:** `Dockerfile.web`
-- **Build type:** Dockerfile
-- **Autodeploy:** On push to master
-- **Build-time Arguments** (in Environment tab):
-  ```
-  SUPABASE_URL=https://xooposctxswumvgtyqlg.supabase.co
-  SUPABASE_ANON_KEY=<the anon key>
-  ```
-
-### Web Feature Flags
-
-Configured in `Dockerfile.web` (separate from native builds):
-```
-FEATURE_PROJECTS=false
-FEATURE_IMAGE_GEN=false
-FEATURE_VOICE_MODE=false
-```
-
-### Cloudflare Cache
-
-After deploying changes to `main.dart.js`, Cloudflare may serve stale cached versions.
-
-**Prevention:** `nginx.web.conf` sets `no-cache` on `index.html`, `flutter_service_worker.js`, and `version.json` so Cloudflare always revalidates these entry points. Static assets (JS/CSS/fonts) use content hashes in filenames so they get new URLs on each build.
-
-**If users see stale content:** Purge Cloudflare cache:
-1. Cloudflare Dashboard → `chuk.chat` → Caching → Configuration → **Purge Everything**
-2. Or via API: `curl -X POST "https://api.cloudflare.com/client/v4/zones/ZONE_ID/purge_cache" -H "Authorization: Bearer TOKEN" -d '{"purge_everything":true}'`
-
-### Web Platform Stubs
-
-Web cannot use `dart:io`. The app uses conditional imports:
-- `lib/utils/io_helper.dart` → exports `io_helper_stub.dart` on web, `io_helper_io.dart` on native
-- Stub files: `record_stub.dart`, `permission_handler_stub.dart`, `path_provider_stub.dart`, `desktop_drop_stub.dart`
-
-**When adding new `dart:io` imports:** Use `import 'package:chuk_chat/utils/io_helper.dart'` instead.
-
-### Key Web Files
-
-| File | Purpose |
-|------|---------|
-| `Dockerfile.web` | Docker build for web deployment |
-| `nginx.web.conf` | nginx config (SPA routing, caching, security) |
-| `lib/web_env.dart` | Generated Supabase credentials (empty in git) |
-| `lib/utils/io_helper.dart` | Conditional dart:io import hub |
-| `lib/utils/io_helper_stub.dart` | Web stubs for File, Directory, Platform |
-
-## Building Linux Packages
-
-### Quick: Using Fastlane (All Formats)
-
-```bash
-# Install dependencies (first time)
-cd linux && bundle install
-
-# Build all formats (Flatpak, AppImage, DEB, RPM)
-bundle exec fastlane release
-
-# Or build specific format
-bundle exec fastlane build_flatpak
-bundle exec fastlane build_appimage
-bundle exec fastlane build_deb
-bundle exec fastlane build_rpm
-```
-
-### Quick: Flatpak Only
-
-```bash
-# Build and install locally
-./build_flatpak.sh --install
-
-# Create distributable bundle
-./build_flatpak.sh --bundle
-
-# Run
-flatpak run dev.chuk.chat
-```
-
-See `docs/LINUX_BUILDS.md` for Fastlane lanes and `docs/FLATPAK.md` for Flatpak details.
-
-## Read These Docs
-
-Before working on the codebase, read the relevant docs:
-
-| Doc | When to Read |
-|-----|--------------|
-| `docs/ARCHITECTURE.md` | Understanding services, state, platform abstraction |
-| `docs/FILE_MAP.md` | Finding files, understanding structure |
-| `docs/FEATURES.md` | Working on Projects, Image Gen, Media Manager, etc. |
-| `docs/DATABASE.md` | Working with Supabase tables, schema |
-| `docs/COMMON_TASKS.md` | Adding services, pages, features, building |
-| `docs/GOTCHAS.md` | **CRITICAL** - Bugs to avoid, important fixes |
-| `docs/LINUX_BUILDS.md` | Building all Linux packages with Fastlane |
-| `docs/FLATPAK.md` | Flatpak-specific packaging details |
 
 ## Key Entry Points
 
@@ -248,159 +43,111 @@ Before working on the codebase, read the relevant docs:
 
 ## Feature Flags
 
-Enable with `--dart-define=FEATURE_X=true`:
-- `FEATURE_PROJECTS` - Project workspaces
-- `FEATURE_IMAGE_GEN` - **Always on** (hardcoded in `platform_config.dart`)
-- `FEATURE_VOICE_MODE` - Voice mode button
+Pass via `--dart-define=FLAG=value`. Defined in `lib/platform_config.dart`.
 
-## Privacy: Logging Policy
+| Flag | Android | Linux/Web | Notes |
+|------|---------|-----------|-------|
+| `FEATURE_PROJECTS` | `false` | `true` | Project workspaces |
+| `FEATURE_IMAGE_GEN` | **always on** | **always on** | Hardcoded, no flag needed |
+| `FEATURE_VOICE_MODE` | `false` | `true` | Voice mode button |
+| `PLATFORM_MOBILE` | `true` | omit | Mobile UI layout |
 
-**This is a privacy-focused app. ALL logs are disabled in release builds.**
-
-### Rules for Logging:
-1. **ALWAYS** wrap `debugPrint()` in `if (kDebugMode)` check
-2. **NEVER** log user message content, chat text, or titles
-3. **NEVER** log tokens, passwords, or email addresses
-4. **OK** to log: lengths, counts, IDs, status codes, timing
-
-```dart
-// WRONG - logs in release!
-debugPrint('User message: $message');
-
-// CORRECT - only logs in debug
-if (kDebugMode) {
-  debugPrint('Message length: ${message.length} chars');
-}
-```
-
-### Alternative: Use PrivacyLogger
-```dart
-import 'package:chuk_chat/utils/privacy_logger.dart';
-pLog('Safe log message');  // Auto-disabled in release
-```
-
-## Creating a New Release
-
-When the user says "mach ein neues release" or "create a new release":
-
-### Build Strategy
-
-| Platform | Build Location | Reason |
-|----------|---------------|--------|
-| Android | **LOCAL** | Fast (2 min vs 20 min on CI) |
-| Linux | **LOCAL** | Fast, needs local deps |
-| Web | **LOCAL** | Fast, easy |
-| Windows | GitHub Actions | Needs Windows runner |
-| macOS | GitHub Actions | Needs macOS runner |
-| iOS | GitHub Actions | Needs macOS + Xcode |
-
-### Local Builds (Android, Linux, Web)
+## Building Android
 
 ```bash
-# Android APK (~2 min) — .env is read automatically via --dart-define-from-file
-# Note: Without --target-platform, produces a fat APK with all ABIs (~50MB)
-# Add --target-platform android-arm64 for smaller single-arch build (~26MB)
+# Single-arch APK (~26MB)
 flutter build apk --release \
   --dart-define-from-file=.env \
   --dart-define=PLATFORM_MOBILE=true \
   --dart-define=FEATURE_PROJECTS=false \
   --dart-define=FEATURE_VOICE_MODE=false \
-  --tree-shake-icons
+  --tree-shake-icons \
+  --target-platform android-arm64
 # Output: build/app/outputs/flutter-apk/app-release.apk
 
-# Linux binary (~1 min)
+# Split APK (per architecture)
+flutter build apk --release --split-per-abi \
+  --dart-define-from-file=.env \
+  --dart-define=PLATFORM_MOBILE=true \
+  --dart-define=FEATURE_PROJECTS=false \
+  --dart-define=FEATURE_VOICE_MODE=false \
+  --tree-shake-icons
+# Outputs: app-arm64-v8a-release.apk (~26MB), app-armeabi-v7a-release.apk (~24MB), app-x86_64-release.apk (~28MB)
+```
+
+Install: `adb install -r build/app/outputs/flutter-apk/app-release.apk`
+Signature mismatch: `adb uninstall dev.chuk.chat && adb install ...`
+
+**Signing:** Env vars > `android/key.properties` > debug keystore. See `android/key.properties.example`.
+
+## Building Linux
+
+```bash
 flutter build linux --release \
   --dart-define-from-file=.env \
   --dart-define=FEATURE_PROJECTS=true \
   --dart-define=FEATURE_VOICE_MODE=true
 # Output: build/linux/x64/release/bundle/
+```
 
-# Web (~3 min)
+Packaging (DEB, RPM, AppImage, Flatpak): see `docs/LINUX_BUILDS.md`
+
+## Building Web
+
+Deployed via Docker on Dokploy at `chat.chuk.chat` (auto-deploys on push to master).
+
+**Web credentials:** `--dart-define` is unreliable with dart2js. `Dockerfile.web` generates `lib/web_env.dart` at build time. Credential priority in `lib/supabase_config.dart`: `--dart-define` > `web_env.dart` > `.env` file.
+
+**Web can't use `dart:io`:** Use `import 'package:chuk_chat/utils/io_helper.dart'` instead.
+
+```bash
 flutter build web --release \
   --dart-define-from-file=.env \
   --dart-define=FEATURE_PROJECTS=true \
   --dart-define=FEATURE_VOICE_MODE=true
 # Output: build/web/
-# Run: cd build/web && python3 -m http.server 8080
 ```
 
-### Release Steps (When user says "mach ein Release")
+Stale cache? Purge Cloudflare: Dashboard > chuk.chat > Caching > Purge Everything.
 
-1. **Bump version** in pubspec.yaml (e.g., `1.0.18+18`)
-2. **Run local build script**:
-   ```bash
-   ./scripts/build-release.sh all
-   ```
-   This builds Android, Linux, Web automatically.
+## Creating a Release
 
-3. **Commit and tag**:
+1. Bump version in `pubspec.yaml`
+2. Build: `./scripts/build-release.sh all` (Android + Linux + Web)
+3. Commit, tag, push: `git tag vX.Y.Z && git push origin master --tags`
+4. Upload to GitHub Release:
    ```bash
-   git add -A
-   git commit -m "chore: bump version to 1.0.18"
-   git tag v1.0.18
-   git push origin master --tags
-   ```
-
-4. **Upload local builds** to GitHub Release:
-   ```bash
-   VERSION=1.0.18
+   VERSION=X.Y.Z  # e.g., 1.0.24
    gh release create v$VERSION \
      build/app/outputs/flutter-apk/app-release.apk \
      chuk_chat-$VERSION-linux-x64.tar.gz \
-     chuk_chat-$VERSION-web.zip \
-     --title "Release $VERSION" \
-     --generate-notes
+     --title "Release $VERSION" --generate-notes
    ```
+5. CI auto-builds: Windows (GitHub Actions), iOS (Codemagic) — triggered by tag push
 
-5. **CI builds automatically**:
-   - **Windows**: GitHub Actions (triggers on tag)
-   - **iOS**: Codemagic (triggers on tag)
+## Privacy: Logging
 
-### CI Platforms
+**All logs disabled in release builds.** Rules:
+- **ALWAYS** wrap `debugPrint()` in `if (kDebugMode)`
+- **NEVER** log message content, tokens, passwords, emails
+- OK to log: lengths, counts, IDs, status codes
 
-| Platform | CI Service | Trigger | Config File |
-|----------|-----------|---------|-------------|
-| Windows | GitHub Actions | Tag push | `.github/workflows/release-windows.yml` |
-| iOS | Codemagic | Tag push | `codemagic.yaml` |
-| macOS | Codemagic or GitHub | Tag push | `codemagic.yaml` |
-
-### Monitor CI Builds
-
-```bash
-# GitHub Actions (Windows)
-gh run list --workflow=release-windows.yml --limit=3
-
-# Codemagic (iOS) - check dashboard or use API
-# https://codemagic.io/apps
+```dart
+if (kDebugMode) {
+  debugPrint('Message length: ${message.length} chars');
+}
 ```
 
-### Codemagic Setup (one-time)
+Alternative: `pLog('message')` from `lib/utils/privacy_logger.dart`
 
-1. Go to https://codemagic.io and connect GitHub repo
-2. Add environment variables in Codemagic dashboard:
-   - `SUPABASE_URL`
-   - `SUPABASE_ANON_KEY`
-   - `GITHUB_TOKEN` (for uploading to releases)
-3. Configure iOS signing (certificates, provisioning profiles)
+## Docs Index
 
-## IMPORTANT: After Every Task
-
-1. **Run tests**: `flutter test` — all must pass
-2. **Run CodeRabbit review**: `/coderabbit:review` — fix any findings
-3. **Commit** your changes with descriptive message
-4. **Push** to remote
-5. **Update docs** if you changed architecture/features
-
-```bash
-flutter test
-# If all pass:
-coderabbit review --plain
-# If no findings:
-git add -A
-git commit -m "feat/fix: description"
-git push
-```
-
-**Do NOT push if tests fail or CodeRabbit finds issues. Fix first, then push.**
-
-If you added a new feature or fixed a significant bug, update the relevant doc in `docs/`.
+| Doc | Topic |
+|-----|-------|
+| `docs/ARCHITECTURE.md` | Services, state, platform abstraction |
+| `docs/FILE_MAP.md` | File locations, project structure |
+| `docs/FEATURES.md` | Projects, Image Gen, Media Manager |
+| `docs/DATABASE.md` | Supabase tables, schema |
+| `docs/COMMON_TASKS.md` | Adding services, pages, features |
+| `docs/GOTCHAS.md` | **CRITICAL** — bugs to avoid |
+| `docs/LINUX_BUILDS.md` | Fastlane packaging (DEB, RPM, AppImage, Flatpak) |
