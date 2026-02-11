@@ -43,6 +43,8 @@ flutter build apk --release \
   --target-platform android-arm64
 ```
 
+Output: `build/app/outputs/flutter-apk/app-release.apk` (~26MB)
+
 Split APK (separate per architecture):
 ```bash
 flutter build apk --release --split-per-abi \
@@ -53,6 +55,11 @@ flutter build apk --release --split-per-abi \
   --tree-shake-icons
 ```
 
+Split APK outputs:
+- `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk` (~26MB, most devices)
+- `build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk` (~24MB)
+- `build/app/outputs/flutter-apk/app-x86_64-release.apk` (~28MB)
+
 ### Current Production Feature Flags (Android)
 
 | Flag | Value | Reason |
@@ -60,8 +67,6 @@ flutter build apk --release --split-per-abi \
 | `FEATURE_PROJECTS` | `false` | Not ready for production |
 | `FEATURE_IMAGE_GEN` | **always on** | Hardcoded in `platform_config.dart` — no flag needed |
 | `FEATURE_VOICE_MODE` | `false` | Not ready for production |
-
-Output: `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk` (~26MB)
 
 ### Install via ADB
 
@@ -293,6 +298,8 @@ When the user says "mach ein neues release" or "create a new release":
 
 ```bash
 # Android APK (~2 min) — .env is read automatically via --dart-define-from-file
+# Note: Without --target-platform, produces a fat APK with all ABIs (~50MB)
+# Add --target-platform android-arm64 for smaller single-arch build (~26MB)
 flutter build apk --release \
   --dart-define-from-file=.env \
   --dart-define=PLATFORM_MOBILE=true \

@@ -58,6 +58,17 @@ Zuletzt geprüft: **2026-02-11**
   `markdown_message.dart` — Widget-Caching mit Change-Detection. Code-Highlighting läuft async in Background-Isolate mit 50ms Debounce und 2s Timeout.
   *Quelle: Audit*
 
+- [x] **Image Validation Bypass** — KRITISCH
+  `lib/services/image_compression_service.dart` — Dreifach-Validierung eingebaut:
+  1. Max Raw Input Size (50 MB Sanity-Check) vor dem Decoden
+  2. Magic-Byte-Prüfung (JPEG, PNG, GIF, BMP, WebP, TIFF) — Dateien ohne gültige Signatur werden abgelehnt
+  3. Post-Decode Dimensions-Check (max 10.000×10.000 Pixel) gegen Decompression Bombs
+  *Quelle: Greptile #3*
+
+- [x] **Password-Mindestlänge inkonsistent** — HOCH
+  `input_validator.dart` auf 6 Zeichen angepasst (Supabase-Setting). `password_change_service.dart` nutzt jetzt `InputValidator.validatePassword()` statt eigenem Length-Check. Beide Pfade (Registration + Passwort-Änderung) erzwingen identisch: 6 Zeichen + Uppercase + Lowercase + Digit + Symbol. Supabase prüft zusätzlich HaveIBeenPwned.
+  *Quelle: Greptile #5*
+
 ---
 
 ## Kein echtes Problem (aus der Liste gestrichen)
@@ -82,13 +93,6 @@ Zuletzt geprüft: **2026-02-11**
   Nur `test/verify_languages.dart` (20 Zeilen, kein echtes Test-Framework). Null `test()`, null `expect()`.
   Mindestens testen: `encryption_service.dart`, `chat_storage_service.dart`, `streaming_chat_service.dart`.
   *Quelle: Audit*
-
-- [x] **Image Validation Bypass** — KRITISCH
-  `lib/services/image_compression_service.dart` — Dreifach-Validierung eingebaut:
-  1. Max Raw Input Size (50 MB Sanity-Check) vor dem Decoden
-  2. Magic-Byte-Prüfung (JPEG, PNG, GIF, BMP, WebP, TIFF) — Dateien ohne gültige Signatur werden abgelehnt
-  3. Post-Decode Dimensions-Check (max 10.000×10.000 Pixel) gegen Decompression Bombs
-  *Quelle: Greptile #3*
 
 ---
 
@@ -115,10 +119,6 @@ Zuletzt geprüft: **2026-02-11**
 - [ ] **WebSocket ohne Timeout** — HOCH
   `lib/services/websocket_chat_service.dart` — Keine Connection-Timeout oder Idle-Timeout. Hängende Verbindungen können endlos bestehen.
   *Quelle: Greptile #8*
-
-- [x] **Password-Mindestlänge inkonsistent** — HOCH
-  `input_validator.dart` auf 6 Zeichen angepasst (Supabase-Setting). `password_change_service.dart` nutzt jetzt `InputValidator.validatePassword()` statt eigenem Length-Check. Beide Pfade (Registration + Passwort-Änderung) erzwingen identisch: 6 Zeichen + Uppercase + Lowercase + Digit + Symbol. Supabase prüft zusätzlich HaveIBeenPwned.
-  *Quelle: Greptile #5*
 
 ---
 
@@ -166,8 +166,8 @@ Zuletzt geprüft: **2026-02-11**
 | Behoben | 14 |
 | Kein echtes Problem | 4 |
 | Offen — Kritisch | 1 |
-| Offen — Hoch | 5 |
+| Offen — Hoch | 4 |
 | Offen — Mittel | 6 |
 | Offen — Niedrig | 1 |
 | **Gesamt geprüft** | **31** |
-| **Wirklich offen** | **13** |
+| **Wirklich offen** | **12** |
