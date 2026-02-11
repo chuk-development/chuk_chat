@@ -1,6 +1,7 @@
 // lib/widgets/project_selection_dropdown.dart
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/models/project_model.dart';
 import 'package:chuk_chat/services/project_storage_service.dart';
@@ -148,7 +149,9 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
       ),
       onCanceled: () => widget.textFieldFocusNode.requestFocus(),
       onSelected: (value) {
-        debugPrint('📁 Project dropdown selected: $value');
+        if (kDebugMode) {
+          debugPrint('📁 Project dropdown selected: $value');
+        }
         widget.textFieldFocusNode.requestFocus();
         // Convert empty string back to null for "No Project"
         final projectId = (value == null || value.isEmpty) ? null : value;

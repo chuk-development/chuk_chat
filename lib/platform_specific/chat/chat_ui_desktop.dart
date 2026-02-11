@@ -153,6 +153,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   Uint8List? _lastRecordedBytes;
   String? _activeRecordingPath;
   bool _isSending = false;
+  bool _showScrollToBottom = false;
   bool _isTranscribingAudio = false;
   bool _isLoadingChat = false; // Loading indicator for chat switching
   StreamSubscription<void>? _providerRefreshSubscription;
@@ -183,6 +184,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _chatApiService = ChatApiService(
       onUploadStatusUpdate: _handleFileUploadUpdate,
     );
+    _scrollController.addListener(_onScrollChanged);
     _selectedProjectId = widget.projectId;
     _loadChatById(widget.selectedChatId);
 
@@ -451,6 +453,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _isImageGenMode = false;
       _isMicActive = false;
       _isSending = _isStreaming; // Reset sending state based on current chat
+      _showScrollToBottom = false;
       _resetAudioLevels();
     });
     _scrollChatToBottom(animate: false, force: true);
@@ -2888,6 +2891,17 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
   }
 
+  void _onScrollChanged() {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    final isNearBottom = position.maxScrollExtent - position.pixels < 200;
+    if (_showScrollToBottom == isNearBottom) {
+      setState(() {
+        _showScrollToBottom = !isNearBottom;
+      });
+    }
+  }
+
   void _scrollChatToBottom({bool animate = true, bool force = false}) {
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -3307,6 +3321,35 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                       ),
                     ),
                   ),
+                // Scroll-to-bottom button (centered above input)
+                if (_showScrollToBottom && !isChatEmpty)
+                  Positioned(
+                    bottom: inputAreaTotalHeight + 12,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: Builder(builder: (context) {
+                        final t = Theme.of(context);
+                        return Material(
+                          elevation: 4,
+                          shape: const CircleBorder(),
+                          color: t.colorScheme.surfaceContainerHighest,
+                          child: InkWell(
+                            customBorder: const CircleBorder(),
+                            onTap: () => _scrollChatToBottom(force: true),
+                            child: Padding(
+                              padding: const EdgeInsets.all(8),
+                              child: Icon(
+                                Icons.keyboard_arrow_down,
+                                size: 24,
+                                color: t.colorScheme.onSurface,
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                  ),
                 Positioned(
                   left: 0,
                   right: 0,
@@ -3543,8 +3586,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                               isActive: hasAttachments,
                               debugLabel: 'Add button',
                             ),
-                            // Image Generation Button - only when image gen enabled
-                            if (kFeatureImageGen && widget.imageGenEnabled) ...[
+                            // Image Generation Button
+                            if (widget.imageGenEnabled) ...[
                               const SizedBox(width: 8),
                               _buildIconBtn(
                                 icon: Icons.image,
