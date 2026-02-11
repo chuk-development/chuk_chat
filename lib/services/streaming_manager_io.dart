@@ -124,10 +124,15 @@ class StreamingManager {
   void _completeStream(String chatId) {
     final stream = _activeStreams[chatId];
     if (stream != null) {
+      final contentLen = stream.contentBuffer.length;
+      final reasoningLen = stream.reasoningBuffer.length;
       stream.isActive = false;
       stream.completedAt = DateTime.now();
       // Cancel the subscription but keep the entry in the map
       unawaited(stream.subscription.cancel());
+      if (kDebugMode) {
+        debugPrint('[StreamingManager] Completed stream $chatId: content=$contentLen chars, reasoning=$reasoningLen chars');
+      }
     }
     // Evict stale completed streams to prevent memory accumulation
     _evictStaleCompletedStreams();

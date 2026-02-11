@@ -495,9 +495,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           updatedMessage['text'] = bufferedContent;
           updatedMessage['reasoning'] = bufferedReasoning ?? '';
           _messages[streamingMsgIndex] = updatedMessage;
-          if (kDebugMode) {
-            debugPrint('│ 📥 [LOAD-CHAT-MOBILE] Applied ${chatIsStreaming ? "active" : "completed"} stream buffer to message $streamingMsgIndex');
-          }
           // Clean up completed stream data only after successful application
           if (chatHasCompletedStream) {
             _streamingHandler.consumeCompletedStream(_activeChatId!);
