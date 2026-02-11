@@ -1,0 +1,29 @@
+# smoke_send_message.yaml — Send a message in a new chat
+appId: dev.chuk.chat
+
+---
+
+- runFlow: login.yaml
+
+- tapOn:
+    id: "new_chat_button"
+
+- waitForAnimationToEnd
+
+- tapOn:
+    id: "message_input"
+- inputText: "Hello, this is a Maestro smoke test"
+
+- tapOn:
+    id: "send_button"
+
+- waitForAnimationToEnd
+
+- assertVisible: "Hello, this is a Maestro smoke test"
+
+# Wait for AI response (up to 30s)
+- extendedWaitUntil:
+    visible: "Copy"
+    timeout: 30000
+
+- takeScreenshot: smoke_send_message

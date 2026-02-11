@@ -1,0 +1,31 @@
+# login.yaml — Login subflow (reused by other flows)
+# Requires TEST_EMAIL and TEST_PASSWORD env vars
+appId: dev.chuk.chat
+
+---
+
+- launchApp:
+    clearState: true
+
+- waitForAnimationToEnd
+
+- assertVisible: "Welcome to Chuk Chat"
+
+- tapOn:
+    id: "login_email_field"
+- inputText: ${TEST_EMAIL}
+
+- tapOn:
+    id: "login_password_field"
+- inputText: ${TEST_PASSWORD}
+
+- hideKeyboard
+
+- tapOn:
+    id: "login_submit_button"
+
+- waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible: "Chuk Chat"
+    timeout: 15000
