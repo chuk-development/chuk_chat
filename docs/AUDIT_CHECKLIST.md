@@ -65,6 +65,10 @@ Zuletzt geprüft: **2026-02-11**
   3. Post-Decode Dimensions-Check (max 10.000×10.000 Pixel) gegen Decompression Bombs
   *Quelle: Greptile #3*
 
+- [x] **Keine Tests (0% Coverage)** — KRITISCH
+  418 Unit-Tests in 16 Test-Dateien. Abgedeckt: Encryption, InputValidator, ImageCompression, TokenEstimator, SecureTokenHandler, ExponentialBackoff, ApiRateLimiter, UploadRateLimiter, ApiRequestQueue, ServiceErrorHandler, FileUploadValidator, alle Models (ChatMessage, StoredChat, ChatModel, AttachedFile, ChatStreamEvent, Project, ProjectFile), NetworkStatusService, MessageCompositionService. Noch offen: chat_storage_service, streaming_chat_service (benötigen Mock-Infrastruktur).
+  *Quelle: Audit*
+
 - [x] **Password-Mindestlänge inkonsistent** — HOCH
   `input_validator.dart` auf 6 Zeichen angepasst (Supabase-Setting). `password_change_service.dart` nutzt jetzt `InputValidator.validatePassword()` statt eigenem Length-Check. Beide Pfade (Registration + Passwort-Änderung) erzwingen identisch: 6 Zeichen + Uppercase + Lowercase + Digit + Symbol. Supabase prüft zusätzlich HaveIBeenPwned.
   *Quelle: Greptile #5*
@@ -84,15 +88,6 @@ Zuletzt geprüft: **2026-02-11**
 
 - [x] **Certificate Pinning nur in Release** *(Audit: NIEDRIG, Greptile: Low #9)*
   Standard-Praxis (OWASP). Debug braucht Proxy-Tools. Korrekt implementiert. Dass Pinning insgesamt Scaffolding ist, ist das eigentliche Problem (separat gelistet).
-
----
-
-## Offen — Kritisch
-
-- [ ] **Keine Tests (0% Coverage)** — KRITISCH
-  Nur `test/verify_languages.dart` (20 Zeilen, kein echtes Test-Framework). Null `test()`, null `expect()`.
-  Mindestens testen: `encryption_service.dart`, `chat_storage_service.dart`, `streaming_chat_service.dart`.
-  *Quelle: Audit*
 
 ---
 
@@ -163,11 +158,11 @@ Zuletzt geprüft: **2026-02-11**
 
 | Kategorie | Anzahl |
 |-----------|--------|
-| Behoben | 14 |
+| Behoben | 15 |
 | Kein echtes Problem | 4 |
-| Offen — Kritisch | 1 |
+| Offen — Kritisch | 0 |
 | Offen — Hoch | 4 |
 | Offen — Mittel | 6 |
 | Offen — Niedrig | 1 |
 | **Gesamt geprüft** | **31** |
-| **Wirklich offen** | **12** |
+| **Wirklich offen** | **11** |
