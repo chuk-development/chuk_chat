@@ -22,9 +22,8 @@ flutter analyze
 ### CRITICAL RULES — READ EVERY TIME BEFORE BUILDING!
 
 1. **NEVER use --debug for Android** — debug builds are 3-10x slower and unusable.
-2. **ALWAYS include Supabase credentials** — EVERY build MUST have `--dart-define=SUPABASE_URL` and `--dart-define=SUPABASE_ANON_KEY`. There is NO local-only mode. Supabase is ALWAYS required.
-3. **ALWAYS use `source .env`** before building to load credentials.
-4. **If the app shows "Supabase credentials are not configured"**, the build was wrong. Rebuild with credentials.
+2. **ALWAYS use `--dart-define-from-file=.env`** — This automatically reads Supabase credentials from the `.env` file. No `source .env` or manual `--dart-define=SUPABASE_*` needed.
+3. **If the app shows "Supabase credentials are not configured"**, the build was wrong. Run `flutter clean` and rebuild.
 
 ```
 DEBUG MODE = UNUSABLE PERFORMANCE (JIT, no optimization)
@@ -35,26 +34,39 @@ NO SUPABASE = BROKEN APP (will show error on launch)
 ### Build Android APK (ALWAYS Release + ALWAYS Supabase!)
 
 ```bash
-source .env && flutter build apk --release \
-  --dart-define="SUPABASE_URL=$SUPABASE_URL" \
-  --dart-define="SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY" \
+flutter build apk --release \
+  --dart-define-from-file=.env \
   --dart-define=PLATFORM_MOBILE=true \
   --dart-define=FEATURE_PROJECTS=false \
-  --dart-define=FEATURE_IMAGE_GEN=true \
   --dart-define=FEATURE_VOICE_MODE=false \
   --tree-shake-icons \
   --target-platform android-arm64
 ```
+
+Output: `build/app/outputs/flutter-apk/app-release.apk` (~26MB)
+
+Split APK (separate per architecture):
+```bash
+flutter build apk --release --split-per-abi \
+  --dart-define-from-file=.env \
+  --dart-define=PLATFORM_MOBILE=true \
+  --dart-define=FEATURE_PROJECTS=false \
+  --dart-define=FEATURE_VOICE_MODE=false \
+  --tree-shake-icons
+```
+
+Split APK outputs:
+- `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk` (~26MB, most devices)
+- `build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk` (~24MB)
+- `build/app/outputs/flutter-apk/app-x86_64-release.apk` (~28MB)
 
 ### Current Production Feature Flags (Android)
 
 | Flag | Value | Reason |
 |------|-------|--------|
 | `FEATURE_PROJECTS` | `false` | Not ready for production |
-| `FEATURE_IMAGE_GEN` | `true` | Media Manager is live |
+| `FEATURE_IMAGE_GEN` | **always on** | Hardcoded in `platform_config.dart` — no flag needed |
 | `FEATURE_VOICE_MODE` | `false` | Not ready for production |
-
-Output: `build/app/outputs/flutter-apk/app-release.apk` (~26MB)
 
 ### Install via ADB
 
@@ -71,9 +83,8 @@ adb uninstall dev.chuk.chat && adb install build/app/outputs/flutter-apk/app-rel
 If you need Flutter DevTools for debugging, use profile mode (still fast, but has debugging support):
 
 ```bash
-source .env && flutter build apk --profile \
-  --dart-define=SUPABASE_URL=$SUPABASE_URL \
-  --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+flutter build apk --profile \
+  --dart-define-from-file=.env \
   --dart-define=PLATFORM_MOBILE=true \
   --dart-define=FEATURE_PROJECTS=true \
   --target-platform android-arm64
@@ -239,7 +250,7 @@ Before working on the codebase, read the relevant docs:
 
 Enable with `--dart-define=FEATURE_X=true`:
 - `FEATURE_PROJECTS` - Project workspaces
-- `FEATURE_IMAGE_GEN` - AI image generation
+- `FEATURE_IMAGE_GEN` - **Always on** (hardcoded in `platform_config.dart`)
 - `FEATURE_VOICE_MODE` - Voice mode button
 
 ## Privacy: Logging Policy
@@ -286,32 +297,28 @@ When the user says "mach ein neues release" or "create a new release":
 ### Local Builds (Android, Linux, Web)
 
 ```bash
-# Android APK (~2 min) — ALWAYS include Supabase!
-source .env && flutter build apk --release \
-  --dart-define="SUPABASE_URL=$SUPABASE_URL" \
-  --dart-define="SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY" \
+# Android APK (~2 min) — .env is read automatically via --dart-define-from-file
+# Note: Without --target-platform, produces a fat APK with all ABIs (~50MB)
+# Add --target-platform android-arm64 for smaller single-arch build (~26MB)
+flutter build apk --release \
+  --dart-define-from-file=.env \
   --dart-define=PLATFORM_MOBILE=true \
   --dart-define=FEATURE_PROJECTS=false \
-  --dart-define=FEATURE_IMAGE_GEN=true \
   --dart-define=FEATURE_VOICE_MODE=false \
   --tree-shake-icons
 # Output: build/app/outputs/flutter-apk/app-release.apk
 
 # Linux binary (~1 min)
-source .env && flutter build linux --release \
-  --dart-define=SUPABASE_URL=$SUPABASE_URL \
-  --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+flutter build linux --release \
+  --dart-define-from-file=.env \
   --dart-define=FEATURE_PROJECTS=true \
-  --dart-define=FEATURE_IMAGE_GEN=true \
   --dart-define=FEATURE_VOICE_MODE=true
 # Output: build/linux/x64/release/bundle/
 
 # Web (~3 min)
-source .env && flutter build web --release \
-  --dart-define=SUPABASE_URL=$SUPABASE_URL \
-  --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+flutter build web --release \
+  --dart-define-from-file=.env \
   --dart-define=FEATURE_PROJECTS=true \
-  --dart-define=FEATURE_IMAGE_GEN=true \
   --dart-define=FEATURE_VOICE_MODE=true
 # Output: build/web/
 # Run: cd build/web && python3 -m http.server 8080

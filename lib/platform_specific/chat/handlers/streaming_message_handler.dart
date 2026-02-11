@@ -277,6 +277,11 @@ class StreamingMessageHandler {
     return _streamingManager.getStreamingMessageIndex(chatId);
   }
 
+  /// Store background messages for a streaming chat when user switches away
+  void setBackgroundMessages(String chatId, List<Map<String, dynamic>> messages) {
+    _streamingManager.setBackgroundMessages(chatId, messages);
+  }
+
   /// Build API history from messages, optionally including images and reasoning
   Future<List<Map<String, dynamic>>> _buildApiHistory(
     List<Map<String, String>> messages,

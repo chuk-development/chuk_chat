@@ -1,6 +1,5 @@
 // lib/pages/customization_page.dart
 import 'package:flutter/material.dart';
-import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/services/title_generation_service.dart';
@@ -370,8 +369,8 @@ class _CustomizationPageState extends State<CustomizationPage> {
             iconFg,
           ),
 
-          // Image Generation Section (only if feature flag enabled)
-          if (kFeatureImageGen) ...[
+          // Image Generation Section
+          ...[
             const SizedBox(height: 24),
             _buildSectionHeader(
               context,

@@ -92,6 +92,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   final Uuid _uuid = const Uuid();
   bool _lastTextWasEmpty = true;
   bool _showFullscreenButton = false;
+  bool _showScrollToBottom = false;
 
   // Services and handlers
   late ChatApiService _chatApiService;
@@ -185,6 +186,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   }
 
   void _initializeListeners() {
+    // Scroll listener for scroll-to-bottom button
+    _scrollController.addListener(_onScrollChanged);
+
     // Text controller listener
     _controller.addListener(() {
       final bool currentTextIsEmpty = _controller.text.trim().isEmpty;
@@ -306,6 +310,20 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       // 2. Persist in newChat() before clearing
       // 3. Chats are already saved to Supabase during message operations
       debugPrint('│ 📝 [CHAT-UI-MOBILE] Chat switch - NOT persisting (already saved on message ops)');
+
+      // BACKGROUND STREAMING: If current chat is streaming, snapshot messages
+      // to StreamingManager before clearing. This ensures the stream can
+      // continue in background and persist correctly when complete.
+      if (_activeChatId != null && _streamingHandler.isChatStreaming(_activeChatId!)) {
+        final messagesCopy = _messages
+            .map((m) => Map<String, dynamic>.from(m))
+            .toList();
+        _streamingHandler.setBackgroundMessages(
+          _activeChatId!,
+          messagesCopy,
+        );
+        debugPrint('│ 📦 [CHAT-UI-MOBILE] Snapshotted ${messagesCopy.length} messages for background stream: $_activeChatId');
+      }
 
       setState(() {
         _messages.clear();
@@ -481,6 +499,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     if (!mounted) return;
     setState(() {
       _isLoadingChat = false;
+      _showScrollToBottom = false;
     });
     _scrollChatToBottom(force: true);
     // Use captured sidebar state to prevent focus when sidebar was open
@@ -1264,12 +1283,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       debugPrint('🔓 [FinalizeMessage] GLOBAL LOCK RELEASED (stream complete)');
     }
 
-    if (index < 0 || index >= _messages.length) return;
-
     // Check if this is the active chat (for UI updates)
     final bool isActiveChat = _activeChatId == chatId;
 
     if (mounted && isActiveChat) {
+      // Only check bounds for active chat (where _messages belongs to this chat)
+      if (index < 0 || index >= _messages.length) return;
+
       // Update UI only for active chat
       setState(() {
         final Map<String, String> message = Map<String, String>.from(
@@ -1282,19 +1302,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       });
 
       _scrollChatToBottom();
-      // Don't refocus text field during streaming - let user control keyboard
-
-      // Chat is already saved to Supabase when user sent message
-      // AI responses are streamed and saved via background updates
-    }
-
-    // CRITICAL: Always persist, even for background chats
-    // This ensures chats are saved to Supabase regardless of whether
-    // the user has switched to a different chat
-    if (mounted && isActiveChat) {
       _persistChat();
     } else if (!isActiveChat) {
-      // For background chats, persist using the background update handler
+      // User switched to a different chat - _messages belongs to the OTHER chat!
+      // DO NOT check _messages.length - it's the wrong chat's message list.
+      // Persist using the background update handler which reads from storage.
       _persistenceHandler.updateBackgroundChatMessage(
         chatId: chatId,
         messageIndex: index,
@@ -2260,6 +2272,17 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     );
   }
 
+  void _onScrollChanged() {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    final isNearBottom = position.maxScrollExtent - position.pixels < 200;
+    if (_showScrollToBottom == isNearBottom) {
+      setState(() {
+        _showScrollToBottom = !isNearBottom;
+      });
+    }
+  }
+
   void _scrollChatToBottom({bool force = false}) {
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -2270,8 +2293,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       final isNearBottom = position.maxScrollExtent - position.pixels < 100;
 
       if (force || isNearBottom) {
-        // Use jumpTo during streaming to avoid animation conflicts with keyboard
-        _scrollController.jumpTo(position.maxScrollExtent);
+        _scrollController.animateTo(
+          position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
       }
     });
   }
@@ -2381,7 +2407,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
               child: Column(
                 children: [
                   Expanded(
-                    child: hasMessages
+                    child: Stack(
+                      children: [
+                        hasMessages
                         ? Align(
                         alignment: Alignment.center,
                         child: Container(
@@ -2518,6 +2546,34 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                         ),
                       )
                     : const SizedBox.expand(),
+                        // Scroll-to-bottom button (centered above input)
+                        if (_showScrollToBottom && hasMessages)
+                          Positioned(
+                            bottom: 12,
+                            left: 0,
+                            right: 0,
+                            child: Center(
+                              child: Material(
+                                elevation: 4,
+                                shape: const CircleBorder(),
+                                color: theme.colorScheme.surfaceContainerHighest,
+                                child: InkWell(
+                                  customBorder: const CircleBorder(),
+                                  onTap: () => _scrollChatToBottom(force: true),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(8),
+                                    child: Icon(
+                                      Icons.keyboard_arrow_down,
+                                      size: 24,
+                                      color: theme.colorScheme.onSurface,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
               ),
               Padding(
                 padding: EdgeInsets.only(
@@ -2628,8 +2684,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
             isActive: hasAttachments,
             color: iconFg,
           ),
-          // Image Generation Button (when feature enabled)
-          if (kFeatureImageGen && widget.imageGenEnabled) ...[
+          // Image Generation Button
+          if (widget.imageGenEnabled) ...[
             const SizedBox(width: 2),
             buildTinyIconButton(
               icon: Icons.auto_awesome,

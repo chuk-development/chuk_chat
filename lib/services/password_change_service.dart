@@ -5,6 +5,7 @@ import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/password_revision_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
+import 'package:chuk_chat/utils/input_validator.dart';
 
 class PasswordChangeService {
   const PasswordChangeService();
@@ -24,10 +25,9 @@ class PasswordChangeService {
     if (trimmedNew.isEmpty) {
       throw const PasswordChangeException('Enter a new password.');
     }
-    if (trimmedNew.length < 8) {
-      throw const PasswordChangeException(
-        'Choose a password with at least 8 characters.',
-      );
+    final passwordError = InputValidator.validatePassword(trimmedNew);
+    if (passwordError != null) {
+      throw PasswordChangeException(passwordError);
     }
     if (trimmedCurrent == trimmedNew) {
       throw const PasswordChangeException(

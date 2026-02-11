@@ -37,7 +37,8 @@ const bool kFeatureProjects = bool.fromEnvironment('FEATURE_PROJECTS', defaultVa
 const bool kFeatureAssistants = bool.fromEnvironment('FEATURE_ASSISTANTS', defaultValue: false);
 
 /// Image Generation - AI image creation via Z-Image Turbo
-const bool kFeatureImageGen = bool.fromEnvironment('FEATURE_IMAGE_GEN', defaultValue: false);
+/// Always enabled - no feature flag needed (Image Generation is production-ready)
+const bool kFeatureImageGen = true;
 
 /// Media Manager - View and manage stored media (images) in Supabase
 const bool kFeatureMediaManager = true;
