@@ -385,14 +385,22 @@ gh run list --workflow=release-windows.yml --limit=3
 
 ## IMPORTANT: After Every Task
 
-1. **Commit** your changes with descriptive message
-2. **Push** to remote
-3. **Update docs** if you changed architecture/features
+1. **Run tests**: `flutter test` — all must pass
+2. **Run CodeRabbit review**: `/coderabbit:review` — fix any findings
+3. **Commit** your changes with descriptive message
+4. **Push** to remote
+5. **Update docs** if you changed architecture/features
 
 ```bash
+flutter test
+# If all pass:
+coderabbit review --plain
+# If no findings:
 git add -A
 git commit -m "feat/fix: description"
 git push
 ```
+
+**Do NOT push if tests fail or CodeRabbit finds issues. Fix first, then push.**
 
 If you added a new feature or fixed a significant bug, update the relevant doc in `docs/`.
