@@ -101,6 +101,56 @@ class StreamingManager {
     // No foreground service on web
   }
 
+  /// Mark a stream as completed but keep its buffered content available.
+  void _completeStream(String chatId) {
+    final stream = _activeStreams[chatId];
+    if (stream != null) {
+      stream.isActive = false;
+      stream.completedAt = DateTime.now();
+      unawaited(stream.subscription.cancel());
+    }
+    _evictStaleCompletedStreams();
+  }
+
+  /// Remove completed streams older than the TTL to prevent memory leaks.
+  static const _completedStreamTtl = Duration(minutes: 5);
+  static const _maxCompletedStreams = 5;
+
+  void _evictStaleCompletedStreams() {
+    final now = DateTime.now();
+    final staleIds = <String>[];
+    int completedCount = 0;
+
+    for (final entry in _activeStreams.entries) {
+      final stream = entry.value;
+      if (!stream.isActive && stream.completedAt != null) {
+        completedCount++;
+        if (now.difference(stream.completedAt!) > _completedStreamTtl) {
+          staleIds.add(entry.key);
+        }
+      }
+    }
+
+    for (final id in staleIds) {
+      _activeStreams.remove(id);
+      if (kDebugMode) {
+        debugPrint('[StreamingManager] Evicted stale completed stream: $id');
+      }
+    }
+
+    if (completedCount - staleIds.length > _maxCompletedStreams) {
+      final completedEntries = _activeStreams.entries
+          .where((e) => !e.value.isActive && e.value.completedAt != null)
+          .toList()
+        ..sort((a, b) => a.value.completedAt!.compareTo(b.value.completedAt!));
+
+      final toRemove = completedEntries.length - _maxCompletedStreams;
+      for (int i = 0; i < toRemove; i++) {
+        _activeStreams.remove(completedEntries[i].key);
+      }
+    }
+  }
+
   /// Handle stream events asynchronously
   Future<void> _handleStreamEvent({
     required String chatId,
@@ -143,7 +193,7 @@ class StreamingManager {
 
       // No notification on web
       onComplete(finalContent, finalReasoning, tps);
-      _cleanupStream(chatId);
+      _completeStream(chatId);
     }
   }
 
@@ -164,7 +214,7 @@ class StreamingManager {
 
     // No notification on web
     onComplete(finalContent, finalReasoning, tps);
-    _cleanupStream(chatId);
+    _completeStream(chatId);
   }
 
   /// Called when app lifecycle changes - no-op on web
@@ -182,28 +232,28 @@ class StreamingManager {
     );
   }
 
-  /// Get the current buffered content for a streaming chat
+  /// Get the current buffered content for a chat (active or completed).
   String? getBufferedContent(String chatId) {
     final stream = _activeStreams[chatId];
-    if (stream == null || !stream.isActive) return null;
+    if (stream == null) return null;
 
     final content = stream.contentBuffer.toString();
     return content.isEmpty ? null : content;
   }
 
-  /// Get the current buffered reasoning for a streaming chat
+  /// Get the current buffered reasoning for a chat (active or completed).
   String? getBufferedReasoning(String chatId) {
     final stream = _activeStreams[chatId];
-    if (stream == null || !stream.isActive) return null;
+    if (stream == null) return null;
 
     final reasoning = stream.reasoningBuffer.toString();
     return reasoning.isEmpty ? null : reasoning;
   }
 
-  /// Get the message index being streamed for a chat
+  /// Get the message index being streamed for a chat (active or completed).
   int? getStreamingMessageIndex(String chatId) {
     final stream = _activeStreams[chatId];
-    if (stream == null || !stream.isActive) return null;
+    if (stream == null) return null;
     return stream.messageIndex;
   }
 
@@ -212,6 +262,23 @@ class StreamingManager {
     final stream = _activeStreams[chatId];
     if (stream == null || !stream.isActive) return null;
     return stream.tps;
+  }
+
+  /// Check if a chat has a completed stream with buffered content.
+  bool hasCompletedStream(String chatId) {
+    final stream = _activeStreams[chatId];
+    return stream != null && !stream.isActive;
+  }
+
+  /// Remove a completed stream entry after its content has been consumed.
+  void consumeCompletedStream(String chatId) {
+    final stream = _activeStreams[chatId];
+    if (stream != null && !stream.isActive) {
+      _activeStreams.remove(chatId);
+      if (kDebugMode) {
+        debugPrint('[StreamingManager] Consumed completed stream for chat $chatId');
+      }
+    }
   }
 
   /// Store background messages for a streaming chat
@@ -264,6 +331,7 @@ class _ActiveStream {
   bool isActive = true;
 
   double? tps;
+  DateTime? completedAt;
   List<Map<String, dynamic>>? backgroundMessages;
   String? modelId;
   String? provider;

@@ -467,12 +467,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       }
     }
 
-    // Check for background streaming
+    // Check for background streaming (still active) or completed stream
     final bool chatIsStreaming =
         _activeChatId != null &&
         _streamingHandler.isChatStreaming(_activeChatId!);
+    final bool chatHasCompletedStream =
+        _activeChatId != null &&
+        _streamingHandler.hasCompletedStream(_activeChatId!);
 
-    if (chatIsStreaming && _activeChatId != null) {
+    if (_activeChatId != null && (chatIsStreaming || chatHasCompletedStream)) {
       final int? streamingMsgIndex = _streamingHandler.getStreamingMessageIndex(
         _activeChatId!,
       );
@@ -492,6 +495,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           updatedMessage['text'] = bufferedContent;
           updatedMessage['reasoning'] = bufferedReasoning ?? '';
           _messages[streamingMsgIndex] = updatedMessage;
+          if (kDebugMode) {
+            debugPrint('│ 📥 [LOAD-CHAT-MOBILE] Applied ${chatIsStreaming ? "active" : "completed"} stream buffer to message $streamingMsgIndex');
+          }
+          // Clean up completed stream data only after successful application
+          if (chatHasCompletedStream) {
+            _streamingHandler.consumeCompletedStream(_activeChatId!);
+          }
         }
       }
     }
