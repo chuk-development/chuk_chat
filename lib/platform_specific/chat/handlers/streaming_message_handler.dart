@@ -51,13 +51,17 @@ class StreamingMessageHandler {
     bool includeAllImagesInHistory = false,
     bool includeReasoningInHistory = false,
   }) async {
-    if (_isSending && !_isStreaming) {
-      onShowSnackBar?.call('Please wait');
+    // Check if THIS specific chat is currently streaming (not some other chat)
+    final bool thisChatIsStreaming = activeChatId != null &&
+        _streamingManager.isStreaming(activeChatId);
+
+    if (thisChatIsStreaming) {
+      await cancelStream(activeChatId);
       return;
     }
 
-    if (_isStreaming) {
-      await cancelStream(activeChatId);
+    if (_isSending) {
+      onShowSnackBar?.call('Please wait');
       return;
     }
 
@@ -275,6 +279,16 @@ class StreamingMessageHandler {
   /// Get the streaming message index for a chat
   int? getStreamingMessageIndex(String chatId) {
     return _streamingManager.getStreamingMessageIndex(chatId);
+  }
+
+  /// Check if a chat has a completed stream with buffered content
+  bool hasCompletedStream(String chatId) {
+    return _streamingManager.hasCompletedStream(chatId);
+  }
+
+  /// Remove a completed stream entry after its content has been consumed
+  void consumeCompletedStream(String chatId) {
+    _streamingManager.consumeCompletedStream(chatId);
   }
 
   /// Store background messages for a streaming chat when user switches away

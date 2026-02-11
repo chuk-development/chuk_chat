@@ -433,8 +433,13 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     if (!mounted) return;
 
-    // If this chat is streaming, restore buffered content from StreamingManager
-    if (_activeChatId != null && _streamingManager.isStreaming(_activeChatId!)) {
+    // If this chat is streaming or has completed stream data, restore buffered content
+    final bool desktopChatIsStreaming =
+        _activeChatId != null && _streamingManager.isStreaming(_activeChatId!);
+    final bool desktopChatHasCompleted =
+        _activeChatId != null && _streamingManager.hasCompletedStream(_activeChatId!);
+
+    if (_activeChatId != null && (desktopChatIsStreaming || desktopChatHasCompleted)) {
       final bufferedContent = _streamingManager.getBufferedContent(_activeChatId!);
       final bufferedReasoning = _streamingManager.getBufferedReasoning(_activeChatId!);
       final streamingIndex = _streamingManager.getStreamingMessageIndex(_activeChatId!);
@@ -442,6 +447,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       if (streamingIndex != null && streamingIndex < _messages.length) {
         _messages[streamingIndex]['text'] = bufferedContent ?? 'Thinking...';
         _messages[streamingIndex]['reasoning'] = bufferedReasoning ?? '';
+        // Clean up completed stream data only after successful application
+        if (desktopChatHasCompleted) {
+          _streamingManager.consumeCompletedStream(_activeChatId!);
+        }
       }
     }
 
