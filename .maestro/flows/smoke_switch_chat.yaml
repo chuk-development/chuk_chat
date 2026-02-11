@@ -1,0 +1,50 @@
+# smoke_switch_chat.yaml — Switch between chats (regression test)
+appId: dev.chuk.chat
+
+---
+
+- runFlow: login.yaml
+
+# Create first chat and send message
+- tapOn:
+    id: "new_chat_button"
+- waitForAnimationToEnd
+- tapOn:
+    id: "message_input"
+- inputText: "First chat maestro test"
+- tapOn:
+    id: "send_button"
+- extendedWaitUntil:
+    visible: "Copy"
+    timeout: 30000
+
+# Create second chat and send message
+- tapOn:
+    id: "new_chat_button"
+- waitForAnimationToEnd
+- tapOn:
+    id: "message_input"
+- inputText: "Second chat maestro test"
+- tapOn:
+    id: "send_button"
+- extendedWaitUntil:
+    visible: "Copy"
+    timeout: 30000
+
+# Open sidebar and switch to first chat
+- tapOn:
+    id: "menu_button"
+- waitForAnimationToEnd
+- tapOn: "First chat.*"
+- waitForAnimationToEnd
+- assertVisible: "First chat maestro test"
+
+# Switch back to second chat
+- tapOn:
+    id: "menu_button"
+- waitForAnimationToEnd
+- tapOn: "Second chat.*"
+- waitForAnimationToEnd
+- assertVisible: "Second chat maestro test"
+
+- takeScreenshot: smoke_switch_chat

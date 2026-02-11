@@ -111,5 +111,9 @@ build-dir/
 .flatpak-builder/
 repo/
 
+# Maestro E2E testing
+.maestro/screenshots/
+.env.maestro
+
 # Playwright MCP
 .playwright-mcp/

@@ -2756,41 +2756,44 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                         : _sendMessage,
                     child: Scrollbar(
                       controller: _composerScrollController,
-                      child: TextField(
-                        controller: _controller,
-                        focusNode: _textFieldFocusNode,
-                        autofocus: false,
-                        keyboardType: TextInputType.multiline,
-                        textInputAction: TextInputAction.newline,
-                        scrollController: _composerScrollController,
-                        style: TextStyle(
-                          color: theme.colorScheme.onSurface,
-                          fontSize: 14,
-                          height: 1.2,
-                        ),
-                        minLines: 1,
-                        maxLines: 5,
-                        decoration: InputDecoration(
-                          hintText: 'Ask me anything',
-                          hintStyle: TextStyle(
-                            color: theme.colorScheme.onSurface.withValues(
-                              alpha: 0.5,
-                            ),
+                      child: Semantics(
+                        identifier: 'message_input',
+                        child: TextField(
+                          controller: _controller,
+                          focusNode: _textFieldFocusNode,
+                          autofocus: false,
+                          keyboardType: TextInputType.multiline,
+                          textInputAction: TextInputAction.newline,
+                          scrollController: _composerScrollController,
+                          style: TextStyle(
+                            color: theme.colorScheme.onSurface,
                             fontSize: 14,
+                            height: 1.2,
                           ),
-                          filled: true,
-                          fillColor: bg.withValues(alpha: 0.98),
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
+                          minLines: 1,
+                          maxLines: 5,
+                          decoration: InputDecoration(
+                            hintText: 'Ask me anything',
+                            hintStyle: TextStyle(
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.5,
+                              ),
+                              fontSize: 14,
+                            ),
+                            filled: true,
+                            fillColor: bg.withValues(alpha: 0.98),
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            isDense: true,
                           ),
-                          isDense: true,
+                          cursorColor: accent,
+                          cursorWidth: 1.5,
                         ),
-                        cursorColor: accent,
-                        cursorWidth: 1.5,
                       ),
                     ),
                   ),
@@ -2813,6 +2816,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
             onTap: _handleMicTap,
             isActive: _audioHandler.isMicActive,
             color: _audioHandler.isMicActive ? Colors.red : iconFg,
+            semanticsId: 'mic_button',
           ),
           const SizedBox(width: 2),
           buildTinyActionButton(
@@ -2838,6 +2842,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                 ? accent
                 : ((_isCurrentChatStreaming || _isSendingMessage) ? Colors.red : accent),
             isLoading: _audioHandler.isTranscribingAudio || _isGeneratingImage,
+            semanticsId: 'send_button',
           ),
           const SizedBox(width: 4),
         ],

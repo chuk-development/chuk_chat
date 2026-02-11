@@ -8,8 +8,9 @@ Widget buildTinyIconButton({
   required VoidCallback? onTap,
   required bool isActive,
   required Color color,
+  String? semanticsId,
 }) {
-  return Material(
+  final result = Material(
     color: Colors.transparent,
     child: InkWell(
       onTap: onTap,
@@ -31,6 +32,10 @@ Widget buildTinyIconButton({
       ),
     ),
   );
+  if (semanticsId != null) {
+    return Semantics(identifier: semanticsId, child: result);
+  }
+  return result;
 }
 
 /// Build a tiny action button widget (for send, etc.)
@@ -39,8 +44,9 @@ Widget buildTinyActionButton({
   required VoidCallback onTap,
   required Color color,
   bool isLoading = false,
+  String? semanticsId,
 }) {
-  return Material(
+  final result = Material(
     color: Colors.transparent,
     child: InkWell(
       onTap: isLoading ? null : onTap,
@@ -75,6 +81,10 @@ Widget buildTinyActionButton({
       ),
     ),
   );
+  if (semanticsId != null) {
+    return Semantics(identifier: semanticsId, child: result);
+  }
+  return result;
 }
 
 /// Build attachment sheet option (for bottom sheet)

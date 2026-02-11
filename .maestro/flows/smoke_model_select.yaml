@@ -1,0 +1,21 @@
+# smoke_model_select.yaml — Open model selector
+appId: dev.chuk.chat
+
+---
+
+- runFlow: login.yaml
+
+# Tap the model selector (shows "#" or model name)
+- tapOn: "#"
+
+- waitForAnimationToEnd
+
+- takeScreenshot: smoke_model_select
+
+# Dismiss the popup
+- back
+
+- waitForAnimationToEnd
+
+- assertVisible:
+    id: "message_input"

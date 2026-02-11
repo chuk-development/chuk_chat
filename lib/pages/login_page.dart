@@ -321,40 +321,50 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(height: 16),
                     ],
-                    TextFormField(
-                      controller: _emailCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Email',
-                        hintText: 'you@example.com',
+                    Semantics(
+                      identifier: 'login_email_field',
+                      child: TextFormField(
+                        controller: _emailCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Email',
+                          hintText: 'you@example.com',
+                        ),
+                        keyboardType: TextInputType.emailAddress,
+                        textInputAction: TextInputAction.next,
+                        validator: (value) {
+                          return InputValidator.validateEmail(value);
+                        },
                       ),
-                      keyboardType: TextInputType.emailAddress,
-                      textInputAction: TextInputAction.next,
-                      validator: (value) {
-                        return InputValidator.validateEmail(value);
-                      },
                     ),
                     const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _passwordCtrl,
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscurePassword
-                                ? Icons.visibility_off
-                                : Icons.visibility,
+                    Semantics(
+                      identifier: 'login_password_field',
+                      child: TextFormField(
+                        controller: _passwordCtrl,
+                        decoration: InputDecoration(
+                          labelText: 'Password',
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                            ),
+                            onPressed: () {
+                              setState(
+                                () => _obscurePassword = !_obscurePassword,
+                              );
+                            },
                           ),
-                          onPressed: () {
-                            setState(
-                              () => _obscurePassword = !_obscurePassword,
-                            );
-                          },
                         ),
+                        obscureText: _obscurePassword,
+                        textInputAction: TextInputAction.done,
+                        onFieldSubmitted: (_) {
+                          if (!_isSubmitting) {
+                            _handleSubmit();
+                          }
+                        },
+                        validator: _validatePassword,
                       ),
-                      obscureText: _obscurePassword,
-                      textInputAction: TextInputAction.done,
-                      onFieldSubmitted: (_) => _handleSubmit(),
-                      validator: _validatePassword,
                     ),
                     // Show password strength meter only in sign-up mode
                     if (!_isSignInMode && _currentPassword.isNotEmpty) ...[
@@ -473,24 +483,27 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                     ],
                     const SizedBox(height: 24),
-                    SizedBox(
-                      height: 48,
-                      child: ElevatedButton(
-                        onPressed: _isSubmitting ||
-                                (!_isSignInMode && (!_agreedToTerms || !_confirmedAge))
-                            ? null
-                            : _handleSubmit,
-                        child: _isSubmitting
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
+                    Semantics(
+                      identifier: 'login_submit_button',
+                      child: SizedBox(
+                        height: 48,
+                        child: ElevatedButton(
+                          onPressed: _isSubmitting ||
+                                  (!_isSignInMode && (!_agreedToTerms || !_confirmedAge))
+                              ? null
+                              : _handleSubmit,
+                          child: _isSubmitting
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : Text(
+                                  _isSignInMode ? 'Sign in' : 'Create account',
                                 ),
-                              )
-                            : Text(
-                                _isSignInMode ? 'Sign in' : 'Create account',
-                              ),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 16),

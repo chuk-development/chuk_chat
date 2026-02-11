@@ -344,10 +344,13 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
             AppBar(
               backgroundColor: Theme.of(context).scaffoldBackgroundColor,
               elevation: 0,
-              leading: IconButton(
-                icon: Icon(Icons.menu, color: iconFg, size: 24),
-                onPressed: _toggleSidebar,
-                tooltip: 'Open menu',
+              leading: Semantics(
+                identifier: 'menu_button',
+                child: IconButton(
+                  icon: Icon(Icons.menu, color: iconFg, size: 24),
+                  onPressed: _toggleSidebar,
+                  tooltip: 'Open menu',
+                ),
               ),
               title: SizedBox(
                 width: _isSidebarExpanded ? 0 : titleAvailableWidth,
@@ -366,10 +369,13 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
               actions: [
                 Padding(
                   padding: const EdgeInsets.only(right: 12),
-                  child: IconButton(
-                    icon: Icon(Icons.edit_square, color: iconFg),
-                    onPressed: _newChatFromAppBar,
-                    tooltip: 'New Chat',
+                  child: Semantics(
+                    identifier: 'new_chat_button',
+                    child: IconButton(
+                      icon: Icon(Icons.edit_square, color: iconFg),
+                      onPressed: _newChatFromAppBar,
+                      tooltip: 'New Chat',
+                    ),
                   ),
                 ),
               ],
