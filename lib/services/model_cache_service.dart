@@ -74,10 +74,10 @@ class ModelCacheService {
   ) async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_providerPrefsKey(userId));
-    if (raw == null) return const <String, String>{};
+    if (raw == null) return <String, String>{};
     try {
       final decoded = jsonDecode(raw);
-      if (decoded is! Map) return const <String, String>{};
+      if (decoded is! Map) return <String, String>{};
       final Map<String, String> result = {};
       decoded.forEach((key, value) {
         if (key is String && value is String) {
@@ -86,7 +86,7 @@ class ModelCacheService {
       });
       return result;
     } catch (_) {
-      return const <String, String>{};
+      return <String, String>{};
     }
   }
 

@@ -98,7 +98,7 @@ class ChatPreloadService {
         _isPreloadComplete = true;
         _progress = 1.0;
         _progressController.add(1.0);
-        _preloadCompleter?.complete();
+        // Don't complete here — finally block handles it
         return;
       }
 
