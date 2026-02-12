@@ -1,7 +1,6 @@
 // lib/platform_specific/chat/chat_api_service.dart
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:chuk_chat/utils/io_helper.dart';
 
 import 'package:flutter/foundation.dart';

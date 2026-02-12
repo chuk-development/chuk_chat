@@ -4,7 +4,7 @@
 /// Service to keep AI streaming alive when app is backgrounded or screen locked.
 /// Web stub - no-op implementation (web doesn't have foreground services)
 class StreamingForegroundService {
-  static bool _isRunning = false;
+  static final bool _isRunning = false;
 
   /// Whether the foreground service is currently running
   static bool get isRunning => _isRunning;

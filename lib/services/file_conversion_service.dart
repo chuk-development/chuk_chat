@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:chuk_chat/utils/io_helper.dart';
 
 import 'package:dio/dio.dart';

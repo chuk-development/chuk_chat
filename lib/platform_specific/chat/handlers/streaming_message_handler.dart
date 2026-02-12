@@ -2,7 +2,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:chuk_chat/services/websocket_chat_service.dart';
 import 'package:chuk_chat/services/streaming_manager.dart';
 import 'package:chuk_chat/services/message_composition_service.dart';

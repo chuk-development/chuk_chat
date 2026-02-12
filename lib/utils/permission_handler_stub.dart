@@ -2,10 +2,9 @@
 // Web stub for package:permission_handler
 
 class Permission {
-  static final Permission microphone = Permission._('microphone');
+  static final Permission microphone = Permission._();
 
-  final String _name;
-  const Permission._(this._name);
+  const Permission._();
 
   Future<PermissionStatus> request() async => PermissionStatus.denied;
   Future<PermissionStatus> get status async => PermissionStatus.denied;

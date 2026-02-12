@@ -29,9 +29,9 @@ class CreditBalances {
   });
 
   const CreditBalances.empty()
-      : totalCredits = 0,
-        usedCredits = 0,
-        remainingCredits = 0;
+    : totalCredits = 0,
+      usedCredits = 0,
+      remainingCredits = 0;
 
   final double totalCredits;
   final double usedCredits;
@@ -153,22 +153,30 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
       }
 
       // Load credits from API server (not Supabase)
-      final response = await http.get(
-        Uri.parse('${ApiConfigService.apiBaseUrl}/v1/user/status'),
-        headers: {'Authorization': 'Bearer ${session.accessToken}'},
-      );
+      final response = await http
+          .get(
+            Uri.parse('${ApiConfigService.apiBaseUrl}/v1/user/status'),
+            headers: {'Authorization': 'Bearer ${session.accessToken}'},
+          )
+          .timeout(const Duration(seconds: 10));
 
       if (response.statusCode != 200) {
-        throw Exception('API returned ${response.statusCode}: ${response.body}');
+        throw Exception(
+          'API returned ${response.statusCode}: ${response.body}',
+        );
       }
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final double remainingCredits = (data['credits_remaining'] as num?)?.toDouble() ?? 0.0;
+      final double remainingCredits =
+          (data['credits_remaining'] as num?)?.toDouble() ?? 0.0;
       final bool hasSubscription = data['has_subscription'] == true;
 
       // If user has subscription, monthly budget is €16.00
       final double totalCredits = hasSubscription ? 16.0 : 0.0;
-      final double usedCredits = (totalCredits - remainingCredits).clamp(0.0, totalCredits);
+      final double usedCredits = (totalCredits - remainingCredits).clamp(
+        0.0,
+        totalCredits,
+      );
 
       if (!mounted) return;
       setState(() {
@@ -183,7 +191,9 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
 
       // Save to cache in background
       unawaited(_saveCreditsToCache(totalCredits, remainingCredits));
-      debugPrint('✅ [CreditMixin] Loaded from API: €$remainingCredits / €$totalCredits');
+      debugPrint(
+        '✅ [CreditMixin] Loaded from API: €$remainingCredits / €$totalCredits',
+      );
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -200,12 +210,6 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
       _supabase.removeChannel(_creditChannel!);
       _creditChannel = null;
     }
-  }
-
-  double? _parseToDouble(dynamic value) {
-    if (value is num) return value.toDouble();
-    if (value is String) return double.tryParse(value);
-    return null;
   }
 }
 
@@ -240,9 +244,7 @@ class _CreditDisplayState extends State<CreditDisplay>
       return Card(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
-          child: Center(
-            child: CircularProgressIndicator(color: accent),
-          ),
+          child: Center(child: CircularProgressIndicator(color: accent)),
         ),
       );
     }
@@ -294,8 +296,8 @@ class _CreditDisplayState extends State<CreditDisplay>
                   percentage > 0.5
                       ? Colors.green
                       : percentage > 0.2
-                          ? Colors.orange
-                          : Colors.red,
+                      ? Colors.orange
+                      : Colors.red,
                 ),
               ),
             ),
@@ -360,21 +362,23 @@ class _CreditBadgeState extends State<CreditBadge>
   Widget build(BuildContext context) {
     final TextStyle resolvedTextStyle =
         widget.textStyle ??
-        Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ) ??
+        Theme.of(
+          context,
+        ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600) ??
         const TextStyle(fontSize: 14, fontWeight: FontWeight.w600);
 
     final EdgeInsetsGeometry resolvedPadding =
-        widget.padding ?? const EdgeInsets.symmetric(horizontal: 8, vertical: 4);
+        widget.padding ??
+        const EdgeInsets.symmetric(horizontal: 8, vertical: 4);
 
     if (creditLoading) {
       final TextStyle placeholderStyle =
           widget.placeholderStyle ??
-              resolvedTextStyle.copyWith(
-                color: resolvedTextStyle.color?.withValues(alpha: 0.6) ??
-                    Theme.of(context).hintColor,
-              );
+          resolvedTextStyle.copyWith(
+            color:
+                resolvedTextStyle.color?.withValues(alpha: 0.6) ??
+                Theme.of(context).hintColor,
+          );
 
       return Padding(
         padding: resolvedPadding,
@@ -542,17 +546,22 @@ class _BalanceBadgeState extends State<BalanceBadge> {
       }
 
       // Load credits from API server (not Supabase)
-      final response = await http.get(
-        Uri.parse('${ApiConfigService.apiBaseUrl}/v1/user/status'),
-        headers: {'Authorization': 'Bearer ${session.accessToken}'},
-      );
+      final response = await http
+          .get(
+            Uri.parse('${ApiConfigService.apiBaseUrl}/v1/user/status'),
+            headers: {'Authorization': 'Bearer ${session.accessToken}'},
+          )
+          .timeout(const Duration(seconds: 10));
 
       if (response.statusCode != 200) {
-        throw Exception('API returned ${response.statusCode}: ${response.body}');
+        throw Exception(
+          'API returned ${response.statusCode}: ${response.body}',
+        );
       }
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final double credits = (data['credits_remaining'] as num?)?.toDouble() ?? 0.0;
+      final double credits =
+          (data['credits_remaining'] as num?)?.toDouble() ?? 0.0;
       final bool hasSubscription = data['has_subscription'] == true;
       final int freeTotal = (data['free_messages_total'] as int?) ?? 10;
       final int freeRemaining = (data['free_messages_remaining'] as int?) ?? 0;
@@ -568,7 +577,9 @@ class _BalanceBadgeState extends State<BalanceBadge> {
 
       // Save to cache for offline access (in background)
       unawaited(_saveToCache());
-      debugPrint('✅ [BalanceBadge] Loaded from API: €$_credits, $_freeMessagesRemaining/$_freeMessagesTotal free');
+      debugPrint(
+        '✅ [BalanceBadge] Loaded from API: €$_credits, $_freeMessagesRemaining/$_freeMessagesTotal free',
+      );
     } catch (e) {
       debugPrint('⚠️ [BalanceBadge] API load failed (using cache): $e');
       if (mounted) setState(() => _loading = false);
@@ -580,21 +591,23 @@ class _BalanceBadgeState extends State<BalanceBadge> {
   Widget build(BuildContext context) {
     final TextStyle resolvedTextStyle =
         widget.textStyle ??
-        Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ) ??
+        Theme.of(
+          context,
+        ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600) ??
         const TextStyle(fontSize: 14, fontWeight: FontWeight.w600);
 
     final EdgeInsetsGeometry resolvedPadding =
-        widget.padding ?? const EdgeInsets.symmetric(horizontal: 8, vertical: 4);
+        widget.padding ??
+        const EdgeInsets.symmetric(horizontal: 8, vertical: 4);
 
     if (_loading) {
       final TextStyle placeholderStyle =
           widget.placeholderStyle ??
-              resolvedTextStyle.copyWith(
-                color: resolvedTextStyle.color?.withValues(alpha: 0.6) ??
-                    Theme.of(context).hintColor,
-              );
+          resolvedTextStyle.copyWith(
+            color:
+                resolvedTextStyle.color?.withValues(alpha: 0.6) ??
+                Theme.of(context).hintColor,
+          );
 
       return Padding(
         padding: resolvedPadding,

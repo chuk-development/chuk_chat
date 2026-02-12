@@ -18,10 +18,13 @@ class StreamingManager {
   // Track if app is in background
   bool _isAppInBackground = false;
 
+  /// Whether the app is currently in the background
+  bool get isAppInBackground => _isAppInBackground;
+
   /// Check if a chat is currently streaming
   bool isStreaming(String chatId) {
     return _activeStreams.containsKey(chatId) &&
-           _activeStreams[chatId]!.isActive;
+        _activeStreams[chatId]!.isActive;
   }
 
   /// Check if ANY chat is currently streaming
@@ -44,13 +47,15 @@ class StreamingManager {
 
     final streamSub = stream.listen(
       (event) {
-        unawaited(_handleStreamEvent(
-          chatId: chatId,
-          event: event,
-          onUpdate: onUpdate,
-          onComplete: onComplete,
-          onError: onError,
-        ));
+        unawaited(
+          _handleStreamEvent(
+            chatId: chatId,
+            event: event,
+            onUpdate: onUpdate,
+            onComplete: onComplete,
+            onError: onError,
+          ),
+        );
       },
       onError: (error) {
         if (kDebugMode) {
@@ -65,10 +70,7 @@ class StreamingManager {
         _cleanupStream(chatId);
       },
       onDone: () {
-        unawaited(_handleStreamClose(
-          chatId: chatId,
-          onComplete: onComplete,
-        ));
+        unawaited(_handleStreamClose(chatId: chatId, onComplete: onComplete));
       },
       cancelOnError: false,
     );
@@ -145,10 +147,13 @@ class StreamingManager {
     }
 
     if (completedCount - staleIds.length > _maxCompletedStreams) {
-      final completedEntries = _activeStreams.entries
-          .where((e) => !e.value.isActive && e.value.completedAt != null)
-          .toList()
-        ..sort((a, b) => a.value.completedAt!.compareTo(b.value.completedAt!));
+      final completedEntries =
+          _activeStreams.entries
+              .where((e) => !e.value.isActive && e.value.completedAt != null)
+              .toList()
+            ..sort(
+              (a, b) => a.value.completedAt!.compareTo(b.value.completedAt!),
+            );
 
       final toRemove = completedEntries.length - _maxCompletedStreams;
       for (int i = 0; i < toRemove; i++) {
@@ -171,10 +176,7 @@ class StreamingManager {
     if (event is ContentEvent) {
       activeStream.contentBuffer.write(event.text);
       final content = activeStream.contentBuffer.toString();
-      onUpdate(
-        content,
-        activeStream.reasoningBuffer.toString(),
-      );
+      onUpdate(content, activeStream.reasoningBuffer.toString());
     } else if (event is ReasoningEvent) {
       activeStream.reasoningBuffer.write(event.text);
       onUpdate(
@@ -232,9 +234,7 @@ class StreamingManager {
   /// Get info about active streams (for debugging)
   Map<String, bool> getActiveStreamsInfo() {
     return Map.fromEntries(
-      _activeStreams.entries.map(
-        (e) => MapEntry(e.key, e.value.isActive),
-      ),
+      _activeStreams.entries.map((e) => MapEntry(e.key, e.value.isActive)),
     );
   }
 
@@ -282,13 +282,17 @@ class StreamingManager {
     if (stream != null && !stream.isActive) {
       _activeStreams.remove(chatId);
       if (kDebugMode) {
-        debugPrint('[StreamingManager] Consumed completed stream for chat $chatId');
+        debugPrint(
+          '[StreamingManager] Consumed completed stream for chat $chatId',
+        );
       }
     }
   }
 
   /// Store background messages for a streaming chat
-  void setBackgroundMessages(String chatId, List<Map<String, dynamic>> messages, {
+  void setBackgroundMessages(
+    String chatId,
+    List<Map<String, dynamic>> messages, {
     String? modelId,
     String? provider,
   }) {
@@ -299,14 +303,18 @@ class StreamingManager {
     stream.modelId = modelId;
     stream.provider = provider;
     if (kDebugMode) {
-      debugPrint('[StreamingManager] Stored ${messages.length} background messages for chat $chatId');
+      debugPrint(
+        '[StreamingManager] Stored ${messages.length} background messages for chat $chatId',
+      );
     }
   }
 
   /// Get background messages with current buffer content applied
   List<Map<String, dynamic>>? getBackgroundMessages(String chatId) {
     final stream = _activeStreams[chatId];
-    if (stream == null || !stream.isActive || stream.backgroundMessages == null) {
+    if (stream == null ||
+        !stream.isActive ||
+        stream.backgroundMessages == null) {
       return null;
     }
 
@@ -315,7 +323,8 @@ class StreamingManager {
         .toList();
     if (stream.messageIndex < messages.length) {
       messages[stream.messageIndex]['text'] = stream.contentBuffer.toString();
-      messages[stream.messageIndex]['reasoning'] = stream.reasoningBuffer.toString();
+      messages[stream.messageIndex]['reasoning'] = stream.reasoningBuffer
+          .toString();
     }
     return messages;
   }
@@ -323,7 +332,9 @@ class StreamingManager {
   /// Check if a chat has background messages stored
   bool hasBackgroundMessages(String chatId) {
     final stream = _activeStreams[chatId];
-    return stream != null && stream.isActive && stream.backgroundMessages != null;
+    return stream != null &&
+        stream.isActive &&
+        stream.backgroundMessages != null;
   }
 }
 
