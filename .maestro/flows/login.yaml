@@ -7,9 +7,9 @@ appId: dev.chuk.chat
 - launchApp:
     clearState: true
 
-- waitForAnimationToEnd
-
-- assertVisible: "Welcome to Chuk Chat"
+- extendedWaitUntil:
+    visible: "Welcome to Chuk Chat"
+    timeout: 15000
 
 - tapOn:
     id: "login_email_field"

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/models/chat_stream_event.dart';
+import 'package:chuk_chat/services/streaming_chat_service.dart';
 import 'package:chuk_chat/services/streaming_foreground_service.dart';
 import 'package:chuk_chat/services/notification_service.dart';
 
@@ -64,7 +65,12 @@ class StreamingManager {
         if (kDebugMode) {
           debugPrint('Stream subscription error for chat $chatId: $error');
         }
-        onError('Error: $error');
+        // Preserve HTTP status code for 402 (Payment Required) so UI can show upgrade dialog
+        if (error is StreamingChatException && error.statusCode == 402) {
+          onError('__PAYMENT_REQUIRED__');
+        } else {
+          onError('Error: $error');
+        }
         _cleanupStream(chatId);
       },
       onDone: () {

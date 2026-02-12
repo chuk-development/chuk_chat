@@ -114,6 +114,7 @@ repo/
 # Maestro E2E testing
 .maestro/screenshots/
 .env.maestro
+report.xml
 
 # Playwright MCP
 .playwright-mcp/
