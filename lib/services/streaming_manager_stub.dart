@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/models/chat_stream_event.dart';
+import 'package:chuk_chat/services/streaming_chat_service.dart';
 
 /// Manages multiple concurrent chat streams across different chats
 /// Web stub - no notification/foreground service integration
@@ -55,7 +56,12 @@ class StreamingManager {
         if (kDebugMode) {
           debugPrint('Stream subscription error for chat $chatId: $error');
         }
-        onError('Error: $error');
+        // Preserve HTTP status code for 402 (Payment Required) so UI can show upgrade dialog
+        if (error is StreamingChatException && error.statusCode == 402) {
+          onError('__PAYMENT_REQUIRED__');
+        } else {
+          onError('Error: $error');
+        }
         _cleanupStream(chatId);
       },
       onDone: () {

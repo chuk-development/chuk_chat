@@ -30,7 +30,7 @@ class AuthService {
     String? displayName,
   }) async {
     try {
-      await SupabaseService.auth.signUp(
+      final response = await SupabaseService.auth.signUp(
         email: email,
         password: password,
         data: {
@@ -38,6 +38,19 @@ class AuthService {
             'display_name': displayName,
         },
       );
+      // Supabase returns a fake user with empty identities when the email
+      // already exists (email enumeration protection). Detect and surface it.
+      if (response.user != null &&
+          (response.user!.identities == null ||
+              response.user!.identities!.isEmpty)) {
+        throw const AuthServiceException(
+          message:
+              'An account with this email already exists. Try signing in instead.',
+          code: AuthServiceException.codeEmailAlreadyRegistered,
+        );
+      }
+    } on AuthServiceException {
+      rethrow;
     } on AuthException catch (error) {
       final message = error.message;
       final normalized = message.toLowerCase();

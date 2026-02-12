@@ -48,7 +48,7 @@ SUITE="${1:-all}"
 run_flow() {
   local flow="$1"
   echo "=== Running: $flow ==="
-  maestro test "$FLOWS_DIR/$flow"
+  maestro test -e TEST_EMAIL="$TEST_EMAIL" -e TEST_PASSWORD="$TEST_PASSWORD" "$FLOWS_DIR/$flow"
 }
 
 case "$SUITE" in

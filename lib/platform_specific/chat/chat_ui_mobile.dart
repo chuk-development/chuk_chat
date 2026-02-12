@@ -182,7 +182,84 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           content: content,
           reasoning: reasoning,
         );
-      };
+      }
+      ..onPaymentRequired = _showPaymentRequiredDialog;
+  }
+
+  void _showPaymentRequiredDialog() {
+    if (!mounted) return;
+    final theme = Theme.of(context);
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Row(
+          children: [
+            Icon(
+              Icons.chat_bubble_outline,
+              color: theme.colorScheme.primary,
+              size: 28,
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text('Free Messages Used'),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'You\'ve used all your free messages.',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: theme.textTheme.bodyLarge?.color,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.computer,
+                    color: theme.colorScheme.primary,
+                    size: 24,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Visit Chuk Chat on desktop to subscribe and get unlimited messages.',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: theme.textTheme.bodyMedium?.color,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _initializeListeners() {
@@ -1572,124 +1649,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       debugPrint('⚠️ [SendMessage] SYNCED _activeChatId with widget.selectedChatId: $_activeChatId');
     }
 
-    // Check if user has sufficient credits OR free messages
-    final user = SupabaseService.auth.currentUser;
-    if (user != null) {
-      try {
-        // Check credits first (subscribed users)
-        final creditsRemainingResponse = await SupabaseService.client.rpc(
-          'get_credits_remaining',
-          params: {'p_user_id': user.id},
-        );
-
-        final double remainingCredits = (creditsRemainingResponse is num)
-            ? creditsRemainingResponse.toDouble()
-            : 0.0;
-
-        if (remainingCredits < 0.01) {
-          // No credits - check free messages (non-subscribed users)
-          final freeMessagesResponse = await SupabaseService.client.rpc(
-            'get_free_messages_remaining',
-            params: {'p_user_id': user.id},
-          );
-
-          final int freeMessagesRemaining = (freeMessagesResponse is num)
-              ? freeMessagesResponse.toInt()
-              : 0;
-
-          if (freeMessagesRemaining <= 0) {
-            // No credits AND no free messages - show upgrade dialog
-            if (!mounted) {
-              _isSendingMessage = false;
-              ChatStorageService.isMessageOperationInProgress = false;
-              debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (not mounted)');
-              return;
-            }
-            final theme = Theme.of(context);
-            await showDialog(
-              context: context,
-              builder: (dialogContext) => AlertDialog(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                title: Row(
-                  children: [
-                    Icon(
-                      Icons.chat_bubble_outline,
-                      color: theme.colorScheme.primary,
-                      size: 28,
-                    ),
-                    const SizedBox(width: 12),
-                    const Expanded(
-                      child: Text('Free Messages Used'),
-                    ),
-                  ],
-                ),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'You\'ve used all 10 free messages.',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: theme.textTheme.bodyLarge?.color,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.primary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: theme.colorScheme.primary.withValues(alpha: 0.3),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.computer,
-                            color: theme.colorScheme.primary,
-                            size: 24,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              'Visit Chuk Chat on desktop to subscribe and get unlimited messages.',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: theme.textTheme.bodyMedium?.color,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(dialogContext),
-                    child: const Text('OK'),
-                  ),
-                ],
-              ),
-            );
-            _isSendingMessage = false;
-            ChatStorageService.isMessageOperationInProgress = false;
-            debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (no credits and no free messages)');
-            return;
-          }
-          // User has free messages - proceed
-          debugPrint('User has $freeMessagesRemaining free messages remaining');
-        }
-      } catch (error) {
-        debugPrint('Error checking credits/free messages: $error');
-        // Continue with sending - API will handle the check as well
-      }
-    }
+    // Credit/free message checks are handled server-side (API returns 402)
 
     final String originalUserInput = _controller.text.trim();
     final bool hasAttachments = _fileHandler.getUploadedFiles().isNotEmpty;

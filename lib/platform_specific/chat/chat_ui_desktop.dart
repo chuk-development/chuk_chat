@@ -1296,6 +1296,30 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           }
         },
         onError: (errorMessage) {
+          // Handle 402 Payment Required from API server
+          if (errorMessage == '__PAYMENT_REQUIRED__') {
+            final paymentMessage = 'You have used all free messages. Please subscribe to continue chatting.';
+            if (_activeChatId == chatIdForStream) {
+              _finalizeAiMessage(placeholderIndex, paymentMessage);
+              if (mounted) {
+                setState(() {
+                  _isSending = false;
+                });
+              }
+              _persistChatWithId(chatIdForStream);
+            } else {
+              // User switched chats - use background messages
+              final backgroundMsgs = _streamingManager.getBackgroundMessages(chatIdForStream);
+              if (backgroundMsgs != null && placeholderIndex < backgroundMsgs.length) {
+                backgroundMsgs[placeholderIndex]['text'] = paymentMessage;
+                backgroundMsgs[placeholderIndex]['reasoning'] = '';
+                _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
+              }
+            }
+            _showPaymentRequiredDialog();
+            return;
+          }
+
           // Check if user is still viewing the same chat
           if (_activeChatId == chatIdForStream) {
             // User is still here - normal processing with UI update
@@ -1672,6 +1696,77 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     }
   }
 
+  /// Show dialog when API returns 402 (free messages exhausted)
+  void _showPaymentRequiredDialog() {
+    if (!mounted) return;
+    final theme = Theme.of(context);
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Row(
+          children: [
+            Icon(
+              Icons.chat_bubble_outline,
+              color: theme.colorScheme.primary,
+              size: 28,
+            ),
+            const SizedBox(width: 12),
+            const Text('Free Messages Used'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'You\'ve used all your free messages.',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: theme.textTheme.bodyLarge?.color,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Subscribe to get unlimited AI chat messages and image generation credits.',
+              style: TextStyle(
+                fontSize: 14,
+                color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.8),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Maybe Later'),
+          ),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.rocket_launch, size: 18),
+            label: const Text('Subscribe Now'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: theme.colorScheme.primary,
+              foregroundColor: theme.colorScheme.onPrimary,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PricingPage()),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Show dialog when user has insufficient credits for image generation
   void _showInsufficientCreditsDialog() {
     if (!mounted) return;
@@ -1810,116 +1905,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       return;
     }
 
-    // Check if user has sufficient credits OR free messages
-    final user = SupabaseService.auth.currentUser;
-    if (user != null) {
-      try {
-        // Check credits first (subscribed users)
-        final creditsRemainingResponse = await SupabaseService.client.rpc(
-          'get_credits_remaining',
-          params: {'p_user_id': user.id},
-        );
-
-        final double remainingCredits = (creditsRemainingResponse is num)
-            ? creditsRemainingResponse.toDouble()
-            : 0.0;
-
-        if (remainingCredits < 0.01) {
-          // No credits - check free messages (non-subscribed users)
-          final freeMessagesResponse = await SupabaseService.client.rpc(
-            'get_free_messages_remaining',
-            params: {'p_user_id': user.id},
-          );
-
-          final int freeMessagesRemaining = (freeMessagesResponse is num)
-              ? freeMessagesResponse.toInt()
-              : 0;
-
-          if (freeMessagesRemaining <= 0) {
-            // No credits AND no free messages - show upgrade dialog
-            if (!mounted) {
-              ChatStorageService.isMessageOperationInProgress = false;
-              debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (not mounted)');
-              return;
-            }
-            final theme = Theme.of(context);
-            await showDialog(
-              context: context,
-              builder: (dialogContext) => AlertDialog(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                title: Row(
-                  children: [
-                    Icon(
-                      Icons.chat_bubble_outline,
-                      color: theme.colorScheme.primary,
-                      size: 28,
-                    ),
-                    const SizedBox(width: 12),
-                    const Text('Free Messages Used'),
-                  ],
-                ),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'You\'ve used all 10 free messages.',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: theme.textTheme.bodyLarge?.color,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Subscribe to get unlimited messages and access to all AI models.',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.8),
-                      ),
-                    ),
-                  ],
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(dialogContext),
-                    child: const Text('Maybe Later'),
-                  ),
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.rocket_launch, size: 18),
-                    label: const Text('Subscribe Now'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: theme.colorScheme.primary,
-                      foregroundColor: theme.colorScheme.onPrimary,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    onPressed: () {
-                      Navigator.pop(dialogContext);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const PricingPage()),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            );
-            ChatStorageService.isMessageOperationInProgress = false;
-            debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (no credits and no free messages)');
-            return;
-          }
-          // User has free messages - proceed
-          debugPrint('User has $freeMessagesRemaining free messages remaining');
-        }
-      } catch (error) {
-        debugPrint('Error checking credits/free messages: $error');
-        // Continue with sending - API will handle the check as well
-      }
-    }
+    // Credit/free message checks are handled server-side (API returns 402)
 
     final String originalUserInput = _controller.text.trim();
 
@@ -2180,6 +2166,30 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           // RELEASE GLOBAL LOCK on error
           ChatStorageService.isMessageOperationInProgress = false;
           debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (stream error)');
+
+          // Handle 402 Payment Required from API server
+          if (errorMessage == '__PAYMENT_REQUIRED__') {
+            final paymentMessage = 'You have used all free messages. Please subscribe to continue chatting.';
+            if (_activeChatId == chatIdForStream) {
+              _finalizeAiMessage(placeholderIndex, paymentMessage);
+              if (mounted) {
+                setState(() {
+                  _isSending = false;
+                });
+              }
+              _persistChatWithId(chatIdForStream);
+            } else {
+              // User switched chats - use background messages
+              final backgroundMsgs = _streamingManager.getBackgroundMessages(chatIdForStream);
+              if (backgroundMsgs != null && placeholderIndex < backgroundMsgs.length) {
+                backgroundMsgs[placeholderIndex]['text'] = paymentMessage;
+                backgroundMsgs[placeholderIndex]['reasoning'] = '';
+                _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
+              }
+            }
+            _showPaymentRequiredDialog();
+            return;
+          }
 
           final errorText = 'Error: $errorMessage';
 

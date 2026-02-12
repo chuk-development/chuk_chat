@@ -14,16 +14,21 @@ appId: dev.chuk.chat
     id: "message_input"
 - inputText: "Hello, this is a Maestro smoke test"
 
+- hideKeyboard
+
 - tapOn:
     id: "send_button"
 
 - waitForAnimationToEnd
 
-- assertVisible: "Hello, this is a Maestro smoke test"
-
-# Wait for AI response (up to 30s)
+# The sent message should appear as a bubble (not in the input field)
 - extendedWaitUntil:
-    visible: "Copy"
-    timeout: 30000
+    visible: "Hello, this is a Maestro smoke test"
+    timeout: 5000
+
+# Wait for AI response (up to 45s) — look for disclaimer text that appears below AI messages
+- extendedWaitUntil:
+    visible: "AI/LLMs can make mistakes"
+    timeout: 45000
 
 - takeScreenshot: smoke_send_message

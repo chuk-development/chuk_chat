@@ -12,11 +12,15 @@ appId: dev.chuk.chat
 - tapOn:
     id: "message_input"
 - inputText: "First chat maestro test"
+- hideKeyboard
 - tapOn:
     id: "send_button"
 - extendedWaitUntil:
-    visible: "Copy"
-    timeout: 30000
+    visible: "First chat maestro test"
+    timeout: 5000
+- extendedWaitUntil:
+    visible: "AI/LLMs can make mistakes"
+    timeout: 45000
 
 # Create second chat and send message
 - tapOn:
@@ -25,11 +29,15 @@ appId: dev.chuk.chat
 - tapOn:
     id: "message_input"
 - inputText: "Second chat maestro test"
+- hideKeyboard
 - tapOn:
     id: "send_button"
 - extendedWaitUntil:
-    visible: "Copy"
-    timeout: 30000
+    visible: "Second chat maestro test"
+    timeout: 5000
+- extendedWaitUntil:
+    visible: "AI/LLMs can make mistakes"
+    timeout: 45000
 
 # Open sidebar and switch to first chat
 - tapOn:

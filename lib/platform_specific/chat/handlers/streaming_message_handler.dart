@@ -24,6 +24,7 @@ class StreamingMessageHandler {
   onMessageFinalize;
   Function(String chatId, int index, String content, String reasoning)?
   onBackgroundUpdate;
+  Function()? onPaymentRequired;
 
   bool _isStreaming = false;
   bool _isSending = false;
@@ -202,6 +203,34 @@ class StreamingMessageHandler {
           onUpdateUI?.call();
         },
         onError: (errorMessage) {
+          // Handle 402 Payment Required from API server
+          if (errorMessage == '__PAYMENT_REQUIRED__') {
+            final paymentMessage = 'You have used all free messages. Please subscribe to continue chatting.';
+            if (onMessageFinalize != null) {
+              onMessageFinalize!(
+                placeholderIndex,
+                paymentMessage,
+                '',
+                activeChatId,
+                null,
+              );
+            }
+            // Persist to database for consistency
+            if (onBackgroundUpdate != null) {
+              onBackgroundUpdate!(
+                activeChatId,
+                placeholderIndex,
+                paymentMessage,
+                '',
+              );
+            }
+            _isStreaming = false;
+            _isSending = false;
+            onUpdateUI?.call();
+            onPaymentRequired?.call();
+            return;
+          }
+
           if (onMessageFinalize != null) {
             onMessageFinalize!(
               placeholderIndex,
