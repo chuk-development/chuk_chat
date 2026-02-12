@@ -33,7 +33,6 @@ import 'package:chuk_chat/services/title_generation_service.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:chuk_chat/utils/io_helper.dart';
-import 'dart:typed_data';
 import 'package:uuid/uuid.dart';
 import 'package:record/record.dart';
 import 'package:http/http.dart' as http_client;

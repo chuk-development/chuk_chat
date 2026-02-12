@@ -26,7 +26,9 @@ class ChatSyncService {
   static void start() {
     if (_isEnabled) return;
     _isEnabled = true;
-    debugPrint('🔄 [ChatSync] Starting sync service (${_pollIntervalSeconds}s interval)');
+    debugPrint(
+      '🔄 [ChatSync] Starting sync service (${_pollIntervalSeconds}s interval)',
+    );
 
     // Initial sync after short delay
     Future.delayed(const Duration(seconds: 1), () {
@@ -140,7 +142,8 @@ class ChatSyncService {
       final cloudChats = await SupabaseService.client
           .from('encrypted_chats')
           .select('id, updated_at')
-          .eq('user_id', user.id);
+          .eq('user_id', user.id)
+          .timeout(const Duration(seconds: 15));
 
       if (!_isEnabled) return; // Check if stopped during await
 
@@ -179,27 +182,37 @@ class ChatSyncService {
       final idsToFetch = {...newChatIds, ...updatedChatIds};
 
       if (idsToFetch.isNotEmpty) {
-        debugPrint('🔄 [ChatSync] Fetching ${idsToFetch.length} chats (${newChatIds.length} new, ${updatedChatIds.length} updated)');
+        debugPrint(
+          '🔄 [ChatSync] Fetching ${idsToFetch.length} chats (${newChatIds.length} new, ${updatedChatIds.length} updated)',
+        );
 
         final fullChats = await SupabaseService.client
             .from('encrypted_chats')
             .select('id, encrypted_payload, created_at, is_starred, updated_at')
             .eq('user_id', user.id)
-            .inFilter('id', idsToFetch.toList());
+            .inFilter('id', idsToFetch.toList())
+            .timeout(const Duration(seconds: 30));
 
         if (!_isEnabled) return; // Check if stopped during await
 
         // Process fetched chats using batch method for better performance
         // This decrypts all chats in a single isolate, avoiding UI blocking
-        await ChatStorageService.mergeSyncedChatsBatch(fullChats.cast<Map<String, dynamic>>());
+        await ChatStorageService.mergeSyncedChatsBatch(
+          fullChats.cast<Map<String, dynamic>>(),
+        );
 
         // Persist updated titles to cache so they survive app restart
-        await saveTitlesToCache(user.id, ChatStorageState.chatsById.values.toList());
+        await saveTitlesToCache(
+          user.id,
+          ChatStorageState.chatsById.values.toList(),
+        );
       }
 
       // Step 3: Remove deleted chats from local state
       if (deletedChatIds.isNotEmpty) {
-        debugPrint('🗑️ [ChatSync] Removing ${deletedChatIds.length} deleted chats');
+        debugPrint(
+          '🗑️ [ChatSync] Removing ${deletedChatIds.length} deleted chats',
+        );
         for (final id in deletedChatIds) {
           ChatStorageService.removeChatLocally(id);
         }
@@ -213,7 +226,9 @@ class ChatSyncService {
       // If this looks like a network error, trigger a network check
       // This updates the offline indicator if we actually lost connectivity
       if (NetworkStatusService.isNetworkError(e)) {
-        debugPrint('🌐 [ChatSync] Network error detected, checking connectivity...');
+        debugPrint(
+          '🌐 [ChatSync] Network error detected, checking connectivity...',
+        );
         unawaited(NetworkStatusService.hasInternetConnection(useCache: false));
       }
     } finally {

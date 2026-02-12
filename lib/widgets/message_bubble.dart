@@ -1,5 +1,4 @@
 // lib/widgets/message_bubble.dart
-import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';

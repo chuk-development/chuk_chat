@@ -49,17 +49,22 @@ class ChatStorageCrud {
       // Check if already fully loaded
       final existing = ChatStorageState.chatsById[chatId];
       if (existing != null && existing.isFullyLoaded) {
-        debugPrint('✅ [ChatStorage] Chat already fully loaded (${stopwatch.elapsedMilliseconds}ms)');
+        debugPrint(
+          '✅ [ChatStorage] Chat already fully loaded (${stopwatch.elapsedMilliseconds}ms)',
+        );
         return existing;
       }
 
       // Fetch full payload from Supabase
       final rows = await SupabaseService.client
           .from('encrypted_chats')
-          .select('id, encrypted_payload, created_at, is_starred, updated_at, encrypted_title')
+          .select(
+            'id, encrypted_payload, created_at, is_starred, updated_at, encrypted_title',
+          )
           .eq('id', chatId)
           .eq('user_id', user.id)
-          .limit(1);
+          .limit(1)
+          .timeout(const Duration(seconds: 10));
 
       if (rows.isEmpty) {
         debugPrint('⚠️ [ChatStorage] Chat not found: $chatId');
@@ -74,7 +79,9 @@ class ChatStorageCrud {
       }
 
       // Decrypt payload in background isolate
-      final decrypted = await EncryptionService.decryptInBackground(encryptedPayload);
+      final decrypted = await EncryptionService.decryptInBackground(
+        encryptedPayload,
+      );
       final chatPayload = await deserializePayloadAsync(decrypted);
 
       // Create fully loaded chat
@@ -90,7 +97,9 @@ class ChatStorageCrud {
       ChatStorageState.notifyChanges(chatId);
 
       stopwatch.stop();
-      debugPrint('✅ [ChatStorage] Full chat loaded in ${stopwatch.elapsedMilliseconds}ms (${chatPayload.messages.length} messages)');
+      debugPrint(
+        '✅ [ChatStorage] Full chat loaded in ${stopwatch.elapsedMilliseconds}ms (${chatPayload.messages.length} messages)',
+      );
 
       return chat;
     } on SecretBoxAuthenticationError {
@@ -105,7 +114,9 @@ class ChatStorageCrud {
   /// Load chats from local cache only (instant, no network).
   /// Call this for immediate UI population, then sync in background.
   static Future<void> loadFromCache() async {
-    if (ChatStorageState.cacheLoaded && ChatStorageState.chatsById.isNotEmpty) return;
+    if (ChatStorageState.cacheLoaded && ChatStorageState.chatsById.isNotEmpty) {
+      return;
+    }
 
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
@@ -159,7 +170,9 @@ class ChatStorageCrud {
         ChatStorageState.notifyChanges();
       }
 
-      debugPrint('✅ [ChatStorage] Loaded ${ChatStorageState.chatsById.length} chats from cache');
+      debugPrint(
+        '✅ [ChatStorage] Loaded ${ChatStorageState.chatsById.length} chats from cache',
+      );
     } catch (e) {
       debugPrint('❌ [ChatStorage] Cache load failed: $e');
     }
@@ -244,9 +257,12 @@ class ChatStorageCrud {
           debugPrint('🌐 [ChatStorage] Network status: ONLINE');
           rows = await SupabaseService.client
               .from('encrypted_chats')
-              .select('id, encrypted_payload, created_at, is_starred, updated_at')
+              .select(
+                'id, encrypted_payload, created_at, is_starred, updated_at',
+              )
               .eq('user_id', user.id)
-              .order('created_at', ascending: false);
+              .order('created_at', ascending: false)
+              .timeout(const Duration(seconds: 30));
           debugPrint('✅ [ChatStorage] Loaded ${rows.length} chats from remote');
 
           // Update cache with remote data (use replaceAll to avoid race conditions)
@@ -264,7 +280,9 @@ class ChatStorageCrud {
               '📦 [ChatStorage] Loaded ${rows.length} chats from cache (fallback)',
             );
           } catch (cacheError) {
-            debugPrint('❌ [ChatStorage] Failed to load from cache: $cacheError');
+            debugPrint(
+              '❌ [ChatStorage] Failed to load from cache: $cacheError',
+            );
             rows = [];
           }
         }
@@ -330,16 +348,19 @@ class ChatStorageCrud {
       // Log all loaded chats for debugging
       if (ChatStorageState.chatsById.isNotEmpty) {
         debugPrint(
-            '📋 [ChatStorage] Current chats in memory (${ChatStorageState.chatsById.length}):');
+          '📋 [ChatStorage] Current chats in memory (${ChatStorageState.chatsById.length}):',
+        );
         for (final entry in ChatStorageState.chatsById.entries) {
           final chat = entry.value;
-          final firstUserMsg =
-              chat.messages.where((m) => m.role == 'user').firstOrNull;
+          final firstUserMsg = chat.messages
+              .where((m) => m.role == 'user')
+              .firstOrNull;
           final title = (firstUserMsg?.text.length ?? 0) > 40
               ? '${firstUserMsg!.text.substring(0, 40)}...'
               : (firstUserMsg?.text ?? 'No user message');
           debugPrint(
-              '   - ${entry.key.substring(0, 8)}... : "$title" (${chat.messages.length} msgs)');
+            '   - ${entry.key.substring(0, 8)}... : "$title" (${chat.messages.length} msgs)',
+          );
         }
       }
 
@@ -511,8 +532,11 @@ class ChatStorageCrud {
     final inserted = await SupabaseService.client
         .from('encrypted_chats')
         .insert(insertData)
-        .select('id, encrypted_payload, created_at, is_starred, updated_at, encrypted_title')
-        .single();
+        .select(
+          'id, encrypted_payload, created_at, is_starred, updated_at, encrypted_title',
+        )
+        .single()
+        .timeout(const Duration(seconds: 15));
 
     final String finalId = inserted['id'] as String;
     final chat = StoredChat.fromRow(inserted, messages, title: title);
@@ -524,10 +548,14 @@ class ChatStorageCrud {
     unawaited(LocalChatCacheService.upsert(user.id, inserted));
 
     // Log with title for debugging
-    final displayTitle = title.length > 50 ? '${title.substring(0, 50)}...' : title;
+    final displayTitle = title.length > 50
+        ? '${title.substring(0, 50)}...'
+        : title;
     debugPrint('✅ [ChatStorage] Saved new chat: $finalId');
     debugPrint('   📝 Title: "$displayTitle"');
-    debugPrint('   📊 Messages: ${messages.length} (${messages.where((m) => m.role == "user").length} user, ${messages.where((m) => m.role == "assistant").length} assistant)');
+    debugPrint(
+      '   📊 Messages: ${messages.length} (${messages.where((m) => m.role == "user").length} user, ${messages.where((m) => m.role == "assistant").length} assistant)',
+    );
 
     return chat;
   }
@@ -623,7 +651,10 @@ class ChatStorageCrud {
         })
         .eq('id', chatId)
         .eq('user_id', user.id)
-        .select('id, encrypted_payload, created_at, is_starred, updated_at, encrypted_title');
+        .select(
+          'id, encrypted_payload, created_at, is_starred, updated_at, encrypted_title',
+        )
+        .timeout(const Duration(seconds: 15));
 
     if (updatedRows.isEmpty) {
       throw StateError('Chat not found or access denied.');
@@ -644,10 +675,14 @@ class ChatStorageCrud {
     unawaited(LocalChatCacheService.upsert(user.id, updatedRow));
 
     // Log with title for debugging
-    final displayTitle = title.length > 50 ? '${title.substring(0, 50)}...' : title;
+    final displayTitle = title.length > 50
+        ? '${title.substring(0, 50)}...'
+        : title;
     debugPrint('✅ [ChatStorage] Updated chat: $chatId');
     debugPrint('   📝 Title: "$displayTitle"');
-    debugPrint('   📊 Messages: ${messages.length} (${messages.where((m) => m.role == "user").length} user, ${messages.where((m) => m.role == "assistant").length} assistant)');
+    debugPrint(
+      '   📊 Messages: ${messages.length} (${messages.where((m) => m.role == "user").length} user, ${messages.where((m) => m.role == "assistant").length} assistant)',
+    );
 
     return chat;
   }
@@ -666,7 +701,8 @@ class ChatStorageCrud {
           .from('encrypted_chats')
           .select('image_paths')
           .eq('id', chatId)
-          .eq('user_id', user.id);
+          .eq('user_id', user.id)
+          .timeout(const Duration(seconds: 10));
 
       if (rows.isNotEmpty && rows.first['image_paths'] != null) {
         final pathsData = rows.first['image_paths'];
@@ -681,7 +717,9 @@ class ChatStorageCrud {
 
     // Delete associated images from storage (best effort, don't block on failures)
     if (imagePaths.isNotEmpty) {
-      debugPrint('🖼️ [ChatStorage] Deleting ${imagePaths.length} images for chat: $chatId');
+      debugPrint(
+        '🖼️ [ChatStorage] Deleting ${imagePaths.length} images for chat: $chatId',
+      );
       for (final path in imagePaths) {
         try {
           await ImageStorageService.deleteEncryptedImage(path);
@@ -698,24 +736,31 @@ class ChatStorageCrud {
         .from('encrypted_chats')
         .delete()
         .eq('id', chatId)
-        .eq('user_id', user.id);
+        .eq('user_id', user.id)
+        .timeout(const Duration(seconds: 10));
 
     // Find the index of the chat being deleted BEFORE removal
-    final deletedIndex = ChatStorageState.savedChats.indexWhere((c) => c.id == chatId);
+    final deletedIndex = ChatStorageState.savedChats.indexWhere(
+      (c) => c.id == chatId,
+    );
 
     ChatStorageState.chatsById.remove(chatId);
     ChatStorageState.savingChats.remove(chatId);
     ChatStorageState.pendingSaves.remove(chatId);
 
     // Adjust selectedChatIndex to account for index shifts
-    if (deletedIndex != -1 && deletedIndex < ChatStorageState.selectedChatIndex) {
+    if (deletedIndex != -1 &&
+        deletedIndex < ChatStorageState.selectedChatIndex) {
       // Chat was deleted before the selected one, shift index down
       ChatStorageState.selectedChatIndex -= 1;
     }
 
     // Always ensure selectedChatIndex is in bounds (handles concurrent deletions too)
-    if (ChatStorageState.selectedChatIndex >= ChatStorageState.savedChats.length) {
-      ChatStorageState.selectedChatIndex = ChatStorageState.savedChats.isEmpty ? -1 : ChatStorageState.savedChats.length - 1;
+    if (ChatStorageState.selectedChatIndex >=
+        ChatStorageState.savedChats.length) {
+      ChatStorageState.selectedChatIndex = ChatStorageState.savedChats.isEmpty
+          ? -1
+          : ChatStorageState.savedChats.length - 1;
     }
 
     ChatStorageState.notifyChanges(chatId);

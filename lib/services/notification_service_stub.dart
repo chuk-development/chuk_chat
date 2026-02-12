@@ -7,6 +7,9 @@ import 'package:flutter/material.dart';
 class NotificationService {
   static bool _isInitialized = false;
 
+  /// Whether the notification service has been initialized
+  static bool get isInitialized => _isInitialized;
+
   /// Initialize the notification service (no-op on web)
   static Future<void> initialize(GlobalKey<NavigatorState> navigatorKey) async {
     _isInitialized = true;
