@@ -87,10 +87,7 @@ Future<Uint8List> _decryptBytesInBackground(_DecryptionParams params) async {
   final mac = Mac(base64Decode(payload['mac'] as String));
   final secretBox = SecretBox(cipherText, nonce: nonce, mac: mac);
 
-  final cleartextBytes = await cipher.decrypt(
-    secretBox,
-    secretKey: secretKey,
-  );
+  final cleartextBytes = await cipher.decrypt(secretBox, secretKey: secretKey);
 
   return Uint8List.fromList(cleartextBytes);
 }
@@ -111,17 +108,16 @@ Future<String> _decryptStringInBackground(_DecryptionParams params) async {
   final mac = Mac(base64Decode(payload['mac'] as String));
   final secretBox = SecretBox(cipherText, nonce: nonce, mac: mac);
 
-  final cleartextBytes = await cipher.decrypt(
-    secretBox,
-    secretKey: secretKey,
-  );
+  final cleartextBytes = await cipher.decrypt(secretBox, secretKey: secretKey);
 
   return utf8.decode(cleartextBytes);
 }
 
 /// Top-level function for batch background decryption
 /// Decrypts multiple strings in a single isolate for better performance
-Future<List<String?>> _decryptBatchInBackground(_BatchDecryptionParams params) async {
+Future<List<String?>> _decryptBatchInBackground(
+  _BatchDecryptionParams params,
+) async {
   final cipher = AesGcm.with256bits();
   final secretKey = SecretKey(params.keyBytes);
   final results = <String?>[];
@@ -319,7 +315,14 @@ class EncryptionService {
     String versionKey,
   ) async {
     try {
-      final saltBase64 = await _storage.read(key: saltKey);
+      // Parallelize storage reads to reduce blocking time
+      final readResults = await Future.wait([
+        _storage.read(key: saltKey),
+        _storage.read(key: versionKey),
+      ]);
+      final saltBase64 = readResults[0];
+      final version = readResults[1];
+
       final remoteSaltBase64 = user.userMetadata?[_metadataSaltKey] as String?;
       final remoteVersion = user.userMetadata?[_metadataVersionKey] as String?;
 
@@ -341,7 +344,6 @@ class EncryptionService {
         await _updateUserMetadata(user, metadataUpdates);
       }
 
-      final version = await _storage.read(key: versionKey);
       if (version == null) {
         await _storage.write(key: versionKey, value: _payloadVersion);
       }
@@ -466,9 +468,12 @@ class EncryptionService {
     return _runExclusive(() async {
       final userId = SupabaseService.auth.currentUser?.id ?? _cachedUserId;
       if (userId != null) {
-        await _storage.delete(key: '$_storagePrefix$userId');
-        await _storage.delete(key: '$_storageSaltPrefix$userId');
-        await _storage.delete(key: '$_storageVersionPrefix$userId');
+        // Parallelize storage deletes to avoid sequential blocking
+        await Future.wait([
+          _storage.delete(key: '$_storagePrefix$userId'),
+          _storage.delete(key: '$_storageSaltPrefix$userId'),
+          _storage.delete(key: '$_storageVersionPrefix$userId'),
+        ]);
       }
       _cachedKey = null;
       _cachedUserId = null;
@@ -560,7 +565,9 @@ class EncryptionService {
   /// Decrypt multiple strings in a single background isolate
   /// Much faster than calling decryptInBackground multiple times
   /// Returns list with null for items that failed to decrypt
-  static Future<List<String?>> decryptBatchInBackground(List<String> encryptedList) async {
+  static Future<List<String?>> decryptBatchInBackground(
+    List<String> encryptedList,
+  ) async {
     if (encryptedList.isEmpty) return [];
 
     final secretKey = await _ensureKey();
