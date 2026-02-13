@@ -534,15 +534,6 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '§19 UStG — no VAT charged',
-                      style: TextStyle(
-                        color: iconFg.withValues(alpha: 0.6),
-                        fontSize: 12,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
                     const SizedBox(height: 16),
                     _buildFeature(
                       accent,
