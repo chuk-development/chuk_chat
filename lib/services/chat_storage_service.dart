@@ -8,7 +8,8 @@ export 'package:chuk_chat/models/chat_message.dart';
 export 'package:chuk_chat/models/stored_chat.dart';
 
 // Re-export state for shared preferences init
-export 'package:chuk_chat/services/chat_storage_state.dart' show initChatStorageCache;
+export 'package:chuk_chat/services/chat_storage_state.dart'
+    show initChatStorageCache;
 
 import 'package:chuk_chat/models/stored_chat.dart';
 import 'package:chuk_chat/services/chat_storage_crud.dart';
@@ -28,45 +29,52 @@ class ChatStorageService {
   /// Track if initial sync has completed (for ChatSyncService coordination)
   static bool get initialSyncComplete => ChatStorageState.initialSyncComplete;
 
-  static int get selectedChatIndex => ChatStorageState.selectedChatIndex;
-  static set selectedChatIndex(int value) => ChatStorageState.selectedChatIndex = value;
-
   /// ValueNotifier for reactive selectedChatId updates
-  static ValueNotifier<String?> get selectedChatIdNotifier => ChatStorageState.selectedChatIdNotifier;
+  static ValueNotifier<String?> get selectedChatIdNotifier =>
+      ChatStorageState.selectedChatIdNotifier;
 
   static String? get selectedChatId => ChatStorageState.selectedChatId;
-  static set selectedChatId(String? value) => ChatStorageState.selectedChatId = value;
+  static set selectedChatId(String? value) =>
+      ChatStorageState.selectedChatId = value;
 
   /// GLOBAL LOCK: Prevents chat switching during message operations.
-  static bool get isMessageOperationInProgress => ChatStorageState.isMessageOperationInProgress;
-  static set isMessageOperationInProgress(bool value) => ChatStorageState.isMessageOperationInProgress = value;
+  static bool get isMessageOperationInProgress =>
+      ChatStorageState.isMessageOperationInProgress;
+  static set isMessageOperationInProgress(bool value) =>
+      ChatStorageState.isMessageOperationInProgress = value;
 
   /// The chat ID currently being worked on during a message operation.
-  static String? get activeMessageChatId => ChatStorageState.activeMessageChatId;
-  static set activeMessageChatId(String? value) => ChatStorageState.activeMessageChatId = value;
+  static String? get activeMessageChatId =>
+      ChatStorageState.activeMessageChatId;
+  static set activeMessageChatId(String? value) =>
+      ChatStorageState.activeMessageChatId = value;
 
   /// LOADING LOCK: Prevents rapid chat switching while a chat is loading.
   static bool get isLoadingChat => ChatStorageState.isLoadingChat;
-  static set isLoadingChat(bool value) => ChatStorageState.isLoadingChat = value;
+  static set isLoadingChat(bool value) =>
+      ChatStorageState.isLoadingChat = value;
 
   /// Get chats as a sorted list (most recent first)
   static List<StoredChat> get savedChats => ChatStorageState.savedChats;
 
   /// Get a chat by its ID (returns null if not found)
-  static StoredChat? getChatById(String chatId) => ChatStorageState.getChatById(chatId);
+  static StoredChat? getChatById(String chatId) =>
+      ChatStorageState.getChatById(chatId);
 
   /// Stream of chat changes. Emits the changed chat ID, or null for bulk changes.
   static Stream<String?> get changes => ChatStorageState.changes;
 
   /// Get a map of chat IDs to their updated_at timestamps for sync comparison.
-  static Map<String, DateTime> getChatTimestamps() => ChatStorageState.getChatTimestamps();
+  static Map<String, DateTime> getChatTimestamps() =>
+      ChatStorageState.getChatTimestamps();
 
   // ============================================================================
   // CRUD OPERATIONS (delegated to ChatStorageCrud)
   // ============================================================================
 
   /// Load a single chat's full content (messages) on demand.
-  static Future<StoredChat?> loadFullChat(String chatId) => ChatStorageCrud.loadFullChat(chatId);
+  static Future<StoredChat?> loadFullChat(String chatId) =>
+      ChatStorageCrud.loadFullChat(chatId);
 
   /// Load chats from local cache only (instant, no network).
   static Future<void> loadFromCache() => ChatStorageCrud.loadFromCache();
@@ -87,17 +95,20 @@ class ChatStorageService {
   ) => ChatStorageCrud.updateChat(chatId, messagesMaps);
 
   /// Delete a chat and its associated images from storage
-  static Future<void> deleteChat(String chatId) => ChatStorageCrud.deleteChat(chatId);
+  static Future<void> deleteChat(String chatId) =>
+      ChatStorageCrud.deleteChat(chatId);
 
   // ============================================================================
   // SIDEBAR OPERATIONS (delegated to ChatStorageSidebar)
   // ============================================================================
 
   /// Load chats for sidebar - title-only for instant display.
-  static Future<void> loadSavedChatsForSidebar() => ChatStorageSidebar.loadSavedChatsForSidebar();
+  static Future<void> loadSavedChatsForSidebar() =>
+      ChatStorageSidebar.loadSavedChatsForSidebar();
 
   /// Sync titles from network (public API for ChatSyncService)
-  static Future<void> syncTitlesFromNetwork() => ChatStorageSidebar.syncTitlesFromNetwork();
+  static Future<void> syncTitlesFromNetwork() =>
+      ChatStorageSidebar.syncTitlesFromNetwork();
 
   // ============================================================================
   // MUTATIONS (delegated to ChatStorageMutations)
@@ -134,7 +145,8 @@ class ChatStorageService {
   static Future<String> exportChats() => ChatStorageMutations.exportChats();
 
   /// Export chats as JSON (alias for exportChats)
-  static Future<String> exportChatsAsJson() => ChatStorageMutations.exportChatsAsJson();
+  static Future<String> exportChatsAsJson() =>
+      ChatStorageMutations.exportChatsAsJson();
 
   // ============================================================================
   // SYNC SUPPORT METHODS (delegated to ChatStorageSync)

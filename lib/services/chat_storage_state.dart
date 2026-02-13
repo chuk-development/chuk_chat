@@ -39,8 +39,6 @@ class ChatStorageState {
   /// Track if initial sync has completed (for ChatSyncService coordination)
   static bool initialSyncComplete = false;
 
-  static int selectedChatIndex = -1;
-
   /// ID-BASED SELECTION: The currently selected chat ID.
   /// null = new chat (no chat selected yet)
   /// This is the primary source of truth for which chat is active.
@@ -52,24 +50,8 @@ class ChatStorageState {
   static set selectedChatId(String? value) {
     if (selectedChatIdNotifier.value != value) {
       if (kDebugMode) {
-        debugPrint('');
         debugPrint(
-          '┌─────────────────────────────────────────────────────────────',
-        );
-        debugPrint('│ 📍 [SELECTED-CHAT-ID] CHANGED');
-        debugPrint(
-          '│ 📍 [SELECTED-CHAT-ID] OLD: ${selectedChatIdNotifier.value}',
-        );
-        debugPrint('│ 📍 [SELECTED-CHAT-ID] NEW: $value');
-        debugPrint('│ 📍 [SELECTED-CHAT-ID] Stack trace:');
-        try {
-          throw Exception('Stack trace');
-        } catch (e, st) {
-          final lines = st.toString().split('\n').take(8).join('\n│    ');
-          debugPrint('│    $lines');
-        }
-        debugPrint(
-          '└─────────────────────────────────────────────────────────────',
+          '📍 [SELECTED-CHAT-ID] ${selectedChatIdNotifier.value} → $value',
         );
       }
       selectedChatIdNotifier.value = value;
@@ -183,7 +165,6 @@ class ChatStorageState {
   /// Reset all state
   static Future<void> reset() async {
     chatsById.clear();
-    selectedChatIndex = -1;
     selectedChatIdNotifier.value = null;
     isMessageOperationInProgress = false;
     activeMessageChatId = null;

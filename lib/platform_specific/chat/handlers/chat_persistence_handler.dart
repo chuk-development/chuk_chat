@@ -111,8 +111,6 @@ class ChatPersistenceHandler {
         }
       }
 
-      // Note: We don't set selectedChatIndex here - that's managed by the UI layer
-      // when the user explicitly selects a chat
       return stored;
     } catch (error, stackTrace) {
       final String errorStr = error.toString().toLowerCase();

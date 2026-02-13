@@ -28,9 +28,7 @@ DeserializeResult deserializePayloadIsolate(String json) {
 
   if (version == 2) {
     final List<dynamic> rawMessages = map['messages'] as List<dynamic>;
-    final messages = rawMessages
-        .map((m) => m as Map<String, dynamic>)
-        .toList();
+    final messages = rawMessages.map((m) => m as Map<String, dynamic>).toList();
     return DeserializeResult(messages, customName: customName);
   }
 
@@ -58,9 +56,7 @@ class ChatPayload {
 Future<ChatPayload> deserializePayloadAsync(String json) async {
   final result = await compute(deserializePayloadIsolate, json);
   // Convert maps to ChatMessage objects (fast, just object instantiation)
-  final messages = result.messages
-      .map((m) => ChatMessage.fromJson(m))
-      .toList();
+  final messages = result.messages.map((m) => ChatMessage.fromJson(m)).toList();
   return ChatPayload(messages, customName: result.customName);
 }
 
@@ -77,7 +73,9 @@ class ChatStorageSync {
     // Skip if we're currently saving this chat (to avoid conflicts)
     if (ChatStorageState.savingChats.contains(chatId)) {
       if (kDebugMode) {
-        debugPrint('⏭️ [ChatStorage] Skipping sync for chat being saved: $chatId');
+        debugPrint(
+          '⏭️ [ChatStorage] Skipping sync for chat being saved: $chatId',
+        );
       }
       return;
     }
@@ -85,7 +83,9 @@ class ChatStorageSync {
     // Skip if there's a pending save operation
     if (ChatStorageState.pendingSaves.containsKey(chatId)) {
       if (kDebugMode) {
-        debugPrint('⏭️ [ChatStorage] Skipping sync for chat with pending save: $chatId');
+        debugPrint(
+          '⏭️ [ChatStorage] Skipping sync for chat with pending save: $chatId',
+        );
       }
       return;
     }
@@ -95,7 +95,9 @@ class ChatStorageSync {
 
     try {
       // Use background decryption to avoid blocking UI thread
-      final decrypted = await EncryptionService.decryptInBackground(encryptedPayload);
+      final decrypted = await EncryptionService.decryptInBackground(
+        encryptedPayload,
+      );
       // Use async deserialization to avoid blocking UI thread
       final chatPayload = await deserializePayloadAsync(decrypted);
       final chat = StoredChat.fromRow(
@@ -109,7 +111,8 @@ class ChatStorageSync {
 
       if (existingChat != null) {
         // Only update if the synced version is actually newer
-        final existingUpdatedAt = existingChat.updatedAt ?? existingChat.createdAt;
+        final existingUpdatedAt =
+            existingChat.updatedAt ?? existingChat.createdAt;
         final syncedUpdatedAt = chat.updatedAt ?? chat.createdAt;
 
         if (syncedUpdatedAt.isAfter(existingUpdatedAt)) {
@@ -141,7 +144,9 @@ class ChatStorageSync {
       }
     } on FormatException catch (e) {
       if (kDebugMode) {
-        debugPrint('📄 [ChatStorage] Invalid format for synced chat: $chatId - $e');
+        debugPrint(
+          '📄 [ChatStorage] Invalid format for synced chat: $chatId - $e',
+        );
       }
     } catch (e) {
       if (kDebugMode) {
@@ -152,7 +157,9 @@ class ChatStorageSync {
 
   /// Batch merge multiple synced chats efficiently.
   /// Uses batch decryption in a single isolate to avoid UI blocking.
-  static Future<void> mergeSyncedChatsBatch(List<Map<String, dynamic>> rows) async {
+  static Future<void> mergeSyncedChatsBatch(
+    List<Map<String, dynamic>> rows,
+  ) async {
     if (rows.isEmpty) return;
 
     // Filter out chats we're currently saving or have pending saves
@@ -160,13 +167,17 @@ class ChatStorageSync {
       final chatId = row['id'] as String;
       if (ChatStorageState.savingChats.contains(chatId)) {
         if (kDebugMode) {
-          debugPrint('⏭️ [ChatStorage] Skipping sync for chat being saved: $chatId');
+          debugPrint(
+            '⏭️ [ChatStorage] Skipping sync for chat being saved: $chatId',
+          );
         }
         return false;
       }
       if (ChatStorageState.pendingSaves.containsKey(chatId)) {
         if (kDebugMode) {
-          debugPrint('⏭️ [ChatStorage] Skipping sync for chat with pending save: $chatId');
+          debugPrint(
+            '⏭️ [ChatStorage] Skipping sync for chat with pending save: $chatId',
+          );
         }
         return false;
       }
@@ -181,11 +192,15 @@ class ChatStorageSync {
     }
 
     // Extract payloads for batch decryption
-    final payloads = validRows.map((r) => r['encrypted_payload'] as String).toList();
+    final payloads = validRows
+        .map((r) => r['encrypted_payload'] as String)
+        .toList();
 
     try {
       // Batch decrypt all payloads in a single isolate (much faster!)
-      final decryptedList = await EncryptionService.decryptBatchInBackground(payloads);
+      final decryptedList = await EncryptionService.decryptBatchInBackground(
+        payloads,
+      );
 
       final user = SupabaseService.auth.currentUser;
       int addedCount = 0;
@@ -209,7 +224,8 @@ class ChatStorageSync {
           final existingChat = ChatStorageState.chatsById[chatId];
 
           if (existingChat != null) {
-            final existingUpdatedAt = existingChat.updatedAt ?? existingChat.createdAt;
+            final existingUpdatedAt =
+                existingChat.updatedAt ?? existingChat.createdAt;
             final syncedUpdatedAt = chat.updatedAt ?? chat.createdAt;
 
             if (syncedUpdatedAt.isAfter(existingUpdatedAt)) {
@@ -233,7 +249,9 @@ class ChatStorageSync {
           }
         } catch (e) {
           if (kDebugMode) {
-            debugPrint('❌ [ChatStorage] Error processing synced chat $chatId: $e');
+            debugPrint(
+              '❌ [ChatStorage] Error processing synced chat $chatId: $e',
+            );
           }
         }
       }
@@ -242,7 +260,9 @@ class ChatStorageSync {
       if (addedCount > 0 || updatedCount > 0) {
         ChatStorageState.notifyChanges();
         if (kDebugMode) {
-          debugPrint('✅ [ChatStorage] Batch sync complete: $addedCount added, $updatedCount updated');
+          debugPrint(
+            '✅ [ChatStorage] Batch sync complete: $addedCount added, $updatedCount updated',
+          );
         }
       }
     } catch (e) {
@@ -265,20 +285,9 @@ class ChatStorageSync {
       debugPrint('🗑️ [ChatStorage] Removing locally deleted chat: $chatId');
     }
 
-    // Find the index before removal
-    final deletedIndex = ChatStorageState.savedChats.indexWhere((c) => c.id == chatId);
-
     ChatStorageState.chatsById.remove(chatId);
     ChatStorageState.savingChats.remove(chatId);
     ChatStorageState.pendingSaves.remove(chatId);
-
-    // Adjust selectedChatIndex
-    if (deletedIndex != -1 && deletedIndex < ChatStorageState.selectedChatIndex) {
-      ChatStorageState.selectedChatIndex -= 1;
-    }
-    if (ChatStorageState.selectedChatIndex >= ChatStorageState.savedChats.length) {
-      ChatStorageState.selectedChatIndex = ChatStorageState.savedChats.isEmpty ? -1 : ChatStorageState.savedChats.length - 1;
-    }
 
     // Clear selection if the deleted chat was selected
     if (ChatStorageState.selectedChatId == chatId) {

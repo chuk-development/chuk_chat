@@ -196,11 +196,10 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     // Hide keyboard when switching chats
     FocusScope.of(context).unfocus();
 
-    // Update chat ID immediately
-    ChatStorageService.selectedChatId = chatId;
-
-    // Close the sidebar and trigger rebuild
+    // Update chat ID and close sidebar in a single setState to guarantee
+    // the widget tree rebuilds with the new selectedChatId.
     setState(() {
+      ChatStorageService.selectedChatId = chatId;
       if (_isSidebarExpanded) {
         _isSidebarExpanded = false;
         _sidebarAnimController.reverse();
