@@ -250,6 +250,8 @@ class _AttachmentThumbnail extends StatelessWidget {
           width: _kChipThumbnailSize,
           height: _kChipThumbnailSize,
           fit: BoxFit.cover,
+          cacheWidth: (_kChipThumbnailSize * 2).toInt(),
+          cacheHeight: (_kChipThumbnailSize * 2).toInt(),
         ),
       );
     }
@@ -440,7 +442,10 @@ void _showAttachmentPreview(
                           child: InteractiveViewer(
                             minScale: 0.5,
                             maxScale: 4.0,
-                            child: Image.memory(imageFile.readAsBytesSync(), fit: BoxFit.cover),
+                            child: Image.memory(
+                              imageFile.readAsBytesSync(),
+                              fit: BoxFit.cover,
+                            ),
                           ),
                         )
                       : isPlainText

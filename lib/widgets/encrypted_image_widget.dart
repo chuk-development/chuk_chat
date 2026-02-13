@@ -44,7 +44,9 @@ class _EncryptedImageWidgetState extends State<EncryptedImageWidget> {
   }
 
   void _listenForDeletion() {
-    _deletionSubscription = ImageStorageService.onImageDeleted.listen((deletedPath) {
+    _deletionSubscription = ImageStorageService.onImageDeleted.listen((
+      deletedPath,
+    ) {
       if (deletedPath == widget.storagePath && mounted) {
         setState(() {
           _imageBytes = null;
@@ -87,7 +89,8 @@ class _EncryptedImageWidgetState extends State<EncryptedImageWidget> {
       if (mounted) {
         final errorStr = e.toString().toLowerCase();
         // Check if the error indicates the image was deleted/not found
-        final isNotFound = errorStr.contains('not found') ||
+        final isNotFound =
+            errorStr.contains('not found') ||
             errorStr.contains('404') ||
             errorStr.contains('does not exist') ||
             errorStr.contains('object not found');
@@ -185,11 +188,18 @@ class _EncryptedImageWidgetState extends State<EncryptedImageWidget> {
       return SizedBox(width: widget.width, height: widget.height);
     }
 
+    // Decode at 2x display size for retina sharpness while saving RAM.
+    // If no explicit size is given, skip cache hints (caller wants full res).
+    final int? cw = widget.width != null ? (widget.width! * 2).toInt() : null;
+    final int? ch = widget.height != null ? (widget.height! * 2).toInt() : null;
+
     return Image.memory(
       _imageBytes!,
       fit: widget.fit,
       width: widget.width,
       height: widget.height,
+      cacheWidth: cw,
+      cacheHeight: ch,
     );
   }
 }

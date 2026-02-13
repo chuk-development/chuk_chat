@@ -53,7 +53,6 @@ class _SidebarMobileState extends State<SidebarMobile> {
   String _searchQuery = '';
   List<StoredChat> _filteredRecentChats = [];
   ProfileRecord? _profile;
-  Timer? _refreshTimer;
   Future<void>? _refreshInFlight;
   bool _refreshPending = false;
   StreamSubscription<String?>? _chatUpdatesSub;
@@ -91,7 +90,6 @@ class _SidebarMobileState extends State<SidebarMobile> {
   @override
   void dispose() {
     _chatUpdatesSub?.cancel();
-    _refreshTimer?.cancel();
     _searchDebounce?.cancel();
     _deleteNotificationTimer?.cancel();
     NetworkStatusService.isOnlineListenable.removeListener(
@@ -122,20 +120,6 @@ class _SidebarMobileState extends State<SidebarMobile> {
       );
     });
   }
-
-  // Disabled: Chat sync handled by ChatSyncService instead of 5s polling
-  // void _startAutoRefresh() {
-  //   _refreshTimer?.cancel();
-  //   _refreshTimer = Timer.periodic(
-  //     const Duration(seconds: 5),
-  //     (_) => _refreshChatsPeriodically(),
-  //   );
-  // }
-
-  // Disabled: Part of auto-refresh that was removed
-  // Future<void> _refreshChatsPeriodically() async {
-  //   await _refreshChats();
-  // }
 
   Future<void> _loadChatsAndRefresh() async {
     await _refreshChats();

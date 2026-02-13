@@ -207,11 +207,28 @@ class WebSocketChatService {
             } else if (data.containsKey('tps')) {
               yield ChatStreamEvent.tps((data['tps'] as num).toDouble());
             }
-          } catch (e) {
+          } on FormatException catch (e) {
+            // JSON parse error — likely a proxy error page or garbled data.
+            // Surface to the user so they know data was lost.
             if (kDebugMode) {
               debugPrint('Failed to parse WebSocket message: $message');
               debugPrint('Error: $e');
             }
+            yield ChatStreamEvent.error(
+              'Received invalid response from server. '
+              'This may indicate a network issue — please try again.',
+            );
+            break;
+          } catch (e) {
+            // Unexpected error (e.g. type cast failure on malformed payload)
+            if (kDebugMode) {
+              debugPrint('Unexpected error processing WebSocket message: $e');
+            }
+            yield ChatStreamEvent.error(
+              'Unexpected error processing server response. '
+              'Please try again.',
+            );
+            break;
           }
         }
       }

@@ -14,7 +14,7 @@
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" 
         android:usesPermissionFlags="neverForLocation" />
-    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Foreground service for keeping AI streaming alive -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />

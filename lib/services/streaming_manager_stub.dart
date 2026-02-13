@@ -72,7 +72,7 @@ class StreamingManager {
       onDone: () {
         unawaited(_handleStreamClose(chatId: chatId, onComplete: onComplete));
       },
-      cancelOnError: false,
+      cancelOnError: true, // Auto-cancel subscription on error to prevent leaks
     );
 
     _activeStreams[chatId] = _ActiveStream(

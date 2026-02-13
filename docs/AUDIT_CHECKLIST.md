@@ -127,28 +127,28 @@ Zuletzt konsolidiert: **2026-02-13**
   Handler-Extraktion erfolgt (~1.865 Zeilen ausgelagert). Restliche Dateien trotzdem groß: Desktop 3.725 / Mobile 2.784 LOC, aber primär UI-Layout.
   *Quelle: Audit 2025-12*
 
-- [ ] **WebSocket Parse-Errors werden verschluckt** — MITTEL
-  `lib/services/websocket_chat_service.dart:174` — Ungeparste Nachrichten werden still verworfen. User bekommt keine Fehlermeldung.
+- [x] **WebSocket Parse-Errors werden verschluckt** — MITTEL
+  `websocket_chat_service.dart` — `catch`-Block aufgeteilt: `FormatException` (JSON-Parse-Error) und generischer `catch` yielden jetzt `ChatStreamEvent.error()` mit user-facing Fehlermeldung und breaken den Stream ab, statt still weiterzulaufen.
   *Quelle: Greptile #4*
 
-- [ ] **Stream cancelOnError: false** — MITTEL
-  `lib/services/streaming_manager_io.dart:77` — Kann bei Fehlern zu mehrfachen Error-Callbacks führen.
+- [x] **Stream cancelOnError: false** — MITTEL
+  `streaming_manager_io.dart` + `streaming_manager_stub.dart` — `cancelOnError` auf `true` gesetzt. Subscription wird vom Framework automatisch gecancelt bevor `onError` läuft, was Subscription-Leaks verhindert (`_cleanupStream` cancelled die Subscription nicht explizit).
   *Quelle: Greptile #6*
 
-- [ ] **Image cacheWidth/cacheHeight fehlt** — MITTEL
-  `lib/widgets/encrypted_image_widget.dart` — Volles Bild im RAM dekodiert statt skaliert. Bilder sind auf 1920x1920 begrenzt, was den schlimmsten Fall limitiert.
+- [x] **Image cacheWidth/cacheHeight fehlt** — MITTEL
+  `cacheWidth`/`cacheHeight` zu Thumbnail-Contexts hinzugefügt: `encrypted_image_widget.dart` (2× display size), `attachment_preview_bar.dart` (60px für 30px Chips), `media_manager_page.dart` (400px für 200px Grid), `model_selector_page.dart` (2× icon size für Image.network). Fullscreen-Viewer (InteractiveViewer) bleiben ohne Limit (User will volle Auflösung).
   *Quelle: Audit 2025-12*
 
 - [ ] **Keine Root/Jailbreak Detection** — MITTEL
-  Kein Plugin vorhanden. Auf kompromittierten Geräten könnten Encryption-Keys ausgelesen werden.
+  Kein Plugin vorhanden. Auf kompromittierten Geräten könnten Encryption-Keys ausgelesen werden. *Bewusste Entscheidung: Root-Detection ist leicht zu umgehen (Speed Bump). Für eine v1 akzeptabel.*
   *Quelle: Audit 2025-12*
 
 - [ ] **Encryption Key im Secure Storage** — MITTEL
-  `lib/services/encryption_service.dart:266` — Abgeleiteter Key wird gespeichert statt bei Login neu abzuleiten. Device-Kompromittierung exponiert alle Daten ohne Passwort-Brute-Force.
+  `lib/services/encryption_service.dart:266` — Abgeleiteter Key wird gespeichert statt bei Login neu abzuleiten. *Bewusster UX-Tradeoff: Re-Derivation würde bei jedem App-Start Passwort-Eingabe erfordern.*
   *Quelle: Security Audit M1*
 
-- [ ] **Breite Android-Permissions** — MITTEL
-  `AndroidManifest.xml` — `BLUETOOTH_ADVERTISE` deklariert, aber möglicherweise nicht benötigt.
+- [x] **Breite Android-Permissions** — MITTEL
+  `AndroidManifest.xml` — `BLUETOOTH_ADVERTISE` entfernt. Permission wurde nicht benötigt (Chat-App bewirbt sich nicht als BLE Peripheral). Verbleibende Bluetooth-Permissions (`CONNECT`, `SCAN`) bleiben für Audio-Geräte (Voice-Mode).
   *Quelle: Security Audit L2*
 
 ### Niedrig
@@ -191,15 +191,14 @@ Zuletzt konsolidiert: **2026-02-13**
   Guard existiert bereits (`root_wrapper_mobile.dart:163`). `selectedChatId` außerhalb von `setState` wurde im Rahmen des Global-State-Fixes behoben.
   *Quelle: Refactoring Plan #6*
 
-- [ ] **Mobile 5-Sekunden Auto-Refresh Timer** — MITTEL
-  `lib/platform_specific/sidebar_mobile.dart:122-125` — Timer läuft parallel zu ChatSyncService. Redundant und verursacht UI Jank.
+- [x] **Mobile 5-Sekunden Auto-Refresh Timer** — MITTEL
+  Dead Code entfernt: `_refreshTimer` Feld, Timer-Cancel in `dispose()`, auskommentierte `_startAutoRefresh()`/`_refreshChatsPeriodically()` Methoden. Pull-to-Refresh via `_loadChatsAndRefresh()` bleibt (nutzt `ChatSyncService.syncNow()`).
   *Quelle: Refactoring Plan #8*
 
 ### Niedrig
 
-- [ ] **Theme Loading Race Condition** — NIEDRIG
-  `lib/main.dart:145, 181, 187` — Theme wird von 3 Stellen gleichzeitig geladen. Potentielles Flackern bei App-Start.
-  Fix: Definierte Sequenz: erst Prefs, dann einmal Supabase.
+- [x] **Theme Loading Race Condition** — NIEDRIG
+  `main.dart` — `loadFromPrefs()` wird jetzt VOR `SessionManager.initialize()` abgeschlossen. Da Supabase `onAuthStateChange` synchron beim Subscribe feuert, racete `loadFromPrefs()` vorher mit `loadFromSupabaseAsync()`. Neue Sequenz: (1) Supabase ready → (2) `loadFromPrefs()` + Notifications parallel → (3) `SessionManager.initialize()` → (4) Auth-Event → `loadFromSupabaseAsync()` sequentiell.
   *Quelle: Refactoring Plan #7, #9*
 
 ---
@@ -277,10 +276,10 @@ Zuletzt konsolidiert: **2026-02-13**
 
 | Kategorie | Anzahl |
 |-----------|--------|
-| Behoben | 28 |
+| Behoben | 34 |
 | Kein echtes Problem | 5 |
-| **Offen — Flutter Client** | **7** |
-| **Offen — Architektur/Performance** | **2** |
+| **Offen — Flutter Client** | **3** |
+| **Offen — Architektur/Performance** | **0** |
 | **Offen — API Server** | **8** |
 | **Offen — Supabase/Infra** | **5** |
-| **Gesamt offen** | **22** |
+| **Gesamt offen** | **16** |

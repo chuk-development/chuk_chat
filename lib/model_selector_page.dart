@@ -165,7 +165,8 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
     }
     return _models.where((model) {
       final nameMatch = model.name.toLowerCase().contains(_searchQuery);
-      final descMatch = model.description?.toLowerCase().contains(_searchQuery) ?? false;
+      final descMatch =
+          model.description?.toLowerCase().contains(_searchQuery) ?? false;
       return nameMatch || descMatch;
     }).toList();
   }
@@ -338,9 +339,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
 
   void _showSnackBar(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(
+    ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
           message,
@@ -377,7 +376,10 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
     _apiAvailabilityTimer = null;
   }
 
-  Future<void> _onProviderSelect(String modelId, ModelProviderInfo? provider) async {
+  Future<void> _onProviderSelect(
+    String modelId,
+    ModelProviderInfo? provider,
+  ) async {
     setState(() {
       _selectedProviders[modelId] = provider;
     });
@@ -443,6 +445,8 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
           width: size,
           height: size,
           fit: BoxFit.contain,
+          cacheWidth: (size * 2).toInt(),
+          cacheHeight: (size * 2).toInt(),
           errorBuilder: (context, error, stackTrace) {
             if (kDebugMode) {
               debugPrint('Error loading image from $imageUrl: $error');
@@ -581,10 +585,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: accent,
-                            width: 1.5,
-                          ),
+                          borderSide: BorderSide(color: accent, width: 1.5),
                         ),
                       ),
                     ),

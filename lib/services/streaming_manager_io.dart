@@ -84,7 +84,7 @@ class StreamingManager {
         // Handle stream close in async function
         unawaited(_handleStreamClose(chatId: chatId, onComplete: onComplete));
       },
-      cancelOnError: false, // Don't cancel on error, let ErrorEvent handle it
+      cancelOnError: true, // Auto-cancel subscription on error to prevent leaks
     );
 
     final activeStream = _ActiveStream(
