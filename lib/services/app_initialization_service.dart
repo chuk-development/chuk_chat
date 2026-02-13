@@ -10,7 +10,6 @@ import 'package:chuk_chat/services/chat_preload_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_sync_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
-import 'package:chuk_chat/services/model_prefetch_service.dart';
 import 'package:chuk_chat/services/project_storage_service.dart';
 import 'package:chuk_chat/services/streaming_foreground_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -45,10 +44,11 @@ class AppInitializationService {
       await SupabaseService.initialize();
       _isSupabaseReady = true;
 
-      // If already logged in, pre-load encryption key
+      // If already logged in, pre-load encryption key.
+      // Full session init (chat loading, sync, model prefetch) is handled
+      // by SessionManagerService once it receives the auth state event.
       if (SupabaseService.auth.currentSession != null) {
         unawaited(_preloadEncryptionKey());
-        unawaited(ModelPrefetchService.prefetch());
       }
     } catch (error) {
       if (kDebugMode) {

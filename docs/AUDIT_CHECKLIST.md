@@ -177,9 +177,8 @@ Zuletzt konsolidiert: **2026-02-13**
   `loadSavedChatsForSidebar()` wurde von 5+ Stellen aufgerufen, die beim Startup/Login raceten. Fix: (1) Login-Page-Call entfernt — AuthGate triggert `initializeUserSession()` automatisch. (2) Post-Delete-Calls in beiden Sidebars entfernt — `deleteChat()` aktualisiert lokalen State + feuert `notifyChanges()`. (3) Post-NewChat-Call in Mobile entfernt — `persistChat()` feuert ebenfalls `notifyChanges()`. (4) Pull-to-Refresh in beiden Sidebars auf `ChatSyncService.syncNow()` umgestellt statt redundantem Cache-Reload. Einzige Startup-Load-Stelle: `AppInitializationService._loadUserData()`.
   *Quelle: Refactoring Plan #3*
 
-- [ ] **Doppelte Auth Subscription** — HOCH
-  `main.dart:133` + `auth_gate.dart:45` — Zwei separate Listener auf `onAuthStateChange`. Potentielle Race Conditions.
-  Fix: AuthGate vereinfachen, nur einmaligen Session-Check statt Subscription.
+- [x] **Doppelte Auth Subscription** — HOCH
+  Zwei Listener bleiben bestehen, haben aber klar getrennte Verantwortung: (1) `AuthGate` — rein UI, switcht zwischen Login/RootWrapper. (2) `SessionManagerService` — Business-Logik, handhabt Session-Validierung, Password-Revision, User-Session-Init. Fix: AuthGate von 20-Iteration Retry-Loop auf einfachen Session-Check + Stream vereinfacht. Manuellen `initializeUserSession()`-Call aus `main.dart` entfernt — wird jetzt ausschließlich von `SessionManagerService._handleSessionActive()` getriggert (mit Guard gegen Duplikate bei Token-Refresh). `SessionManager.initialize()` nach `waitForSupabase()` verschoben.
   *Quelle: Refactoring Plan #4*
 
 - [ ] **Global Mutable State ohne Reaktivität** — HOCH
@@ -279,10 +278,10 @@ Zuletzt konsolidiert: **2026-02-13**
 
 | Kategorie | Anzahl |
 |-----------|--------|
-| Behoben | 24 |
+| Behoben | 25 |
 | Kein echtes Problem | 5 |
 | **Offen — Flutter Client** | **8** |
-| **Offen — Architektur/Performance** | **5** |
+| **Offen — Architektur/Performance** | **4** |
 | **Offen — API Server** | **8** |
 | **Offen — Supabase/Infra** | **5** |
-| **Gesamt offen** | **26** |
+| **Gesamt offen** | **25** |

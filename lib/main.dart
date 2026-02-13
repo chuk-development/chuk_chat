@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 
 import 'package:chuk_chat/models/app_shell_config.dart';
-import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/utils/certificate_pinning_register.dart'
     as cert_register;
 import 'package:chuk_chat/services/app_initialization_service.dart';
@@ -14,9 +13,7 @@ import 'package:chuk_chat/services/app_theme_service.dart';
 import 'package:chuk_chat/services/session_manager_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart'
     show initChatStorageCache;
-import 'package:chuk_chat/services/model_prefetch_service.dart';
 import 'package:chuk_chat/services/notification_service.dart';
-import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/platform_specific/root_wrapper.dart';
 import 'package:chuk_chat/utils/grain_overlay.dart';
 import 'package:chuk_chat/pages/login_page.dart';
@@ -66,13 +63,7 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
     // Listen to theme changes
     _themeService.addListener(_onThemeChanged);
 
-    // Initialize session management
-    _sessionManager.initialize(
-      onSessionRevoked: _onSessionRevoked,
-      onPasswordMismatch: _onPasswordMismatch,
-    );
-
-    // Initialize after first frame
+    // Initialize after first frame (session manager needs Supabase ready)
     WidgetsBinding.instance.addPostFrameCallback((_) => _initializeApp());
   }
 
@@ -103,6 +94,14 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
     await _initService.waitForSupabase();
     if (!mounted) return;
 
+    // Initialize session manager now that Supabase is ready.
+    // This subscribes to onAuthStateChange and handles user session
+    // initialization (chat loading, sync, theme from Supabase).
+    _sessionManager.initialize(
+      onSessionRevoked: _onSessionRevoked,
+      onPasswordMismatch: _onPasswordMismatch,
+    );
+
     // Initialize notifications and load theme in PARALLEL to reduce startup freeze
     await Future.wait([
       NotificationService.initialize(navigatorKey),
@@ -112,22 +111,6 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
 
     // Check launch notification (depends on notification init above)
     await NotificationService.checkLaunchNotification();
-
-    // Handle auth state for existing sessions
-    final currentUser = SupabaseService.auth.currentUser;
-    if (currentUser != null) {
-      if (kDebugMode) {
-        debugPrint(
-          '✨ [Main] Existing session found - initializing user session',
-        );
-      }
-      unawaited(_initService.initializeUserSession(currentUser));
-      unawaited(_themeService.loadFromSupabaseAsync());
-
-      if (kFeatureSessionManagement) {
-        unawaited(ModelPrefetchService.prefetch());
-      }
-    }
   }
 
   @override
