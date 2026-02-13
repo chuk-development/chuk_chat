@@ -47,9 +47,11 @@ void configureDioWithPinning(Dio dio, List<CertificatePin> pins) {
 void _installBadCertCallback(HttpClient client, List<CertificatePin> pins) {
   client
       .badCertificateCallback = (X509Certificate cert, String host, int port) {
-    // Find pin for this host from the passed list (not the static registry)
+    // Find pin for this host from the passed list (not the static registry).
+    // Use exact match or dot-prefixed subdomain match to prevent bypass
+    // (e.g. "evil-api.example.com" must not match "api.example.com").
     final pin = pins.cast<CertificatePin?>().firstWhere(
-      (p) => host.endsWith(p!.domain),
+      (p) => host == p!.domain || host.endsWith('.${p.domain}'),
       orElse: () => null,
     );
     if (pin == null) {
