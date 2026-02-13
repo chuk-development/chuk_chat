@@ -733,27 +733,22 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       _textFieldFocusNode.requestFocus();
     }
 
-    // Persist old chat and refresh sidebar in background (don't await)
+    // Persist old chat in background (don't await).
     // CRITICAL: Use silent=true to prevent onChatIdAssigned from changing
     // the selected chat - we're now on a NEW chat!
+    // No need to call loadSavedChatsForSidebar() — persistChat() updates
+    // local state and fires notifyChanges(), which the sidebar picks up
+    // via its changes stream listener.
     if (messagesToSave != null && chatIdToSave != null) {
       unawaited(
-        _persistenceHandler
-            .persistChat(
-              messages: messagesToSave,
-              chatId: chatIdToSave,
-              waitForCompletion: false,
-              isOffline: _isOffline,
-              silent: true,
-            )
-            .then((_) {
-              // Refresh sidebar after persist completes
-              unawaited(ChatStorageService.loadSavedChatsForSidebar());
-            }),
+        _persistenceHandler.persistChat(
+          messages: messagesToSave,
+          chatId: chatIdToSave,
+          waitForCompletion: false,
+          isOffline: _isOffline,
+          silent: true,
+        ),
       );
-    } else {
-      // No chat to save, just refresh sidebar
-      unawaited(ChatStorageService.loadSavedChatsForSidebar());
     }
     if (kDebugMode) {
       debugPrint('🆕 [NewChat] Background operations started');
