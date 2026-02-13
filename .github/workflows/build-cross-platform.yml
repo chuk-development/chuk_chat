@@ -64,35 +64,17 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Bump version
+      - name: Read version
         id: bump
         run: |
-          CURRENT=$(grep '^version:' pubspec.yaml | sed 's/version: //')
-          VER=$(echo $CURRENT | cut -d'+' -f1)
-          BUILD=$(echo $CURRENT | cut -d'+' -f2)
-          MAJOR=$(echo $VER | cut -d'.' -f1)
-          MINOR=$(echo $VER | cut -d'.' -f2)
-          PATCH=$(echo $VER | cut -d'.' -f3)
+          CURRENT=$(grep '^version:' pubspec.yaml | sed 's/version: //' | tr -d '[:space:]')
+          # Strip +buildnumber suffix if present
+          VER=$(echo "$CURRENT" | cut -d'+' -f1)
 
-          NEW_PATCH=$((PATCH + 1))
-          NEW_BUILD=$((BUILD + 1))
-          NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH+$NEW_BUILD"
-          NEW_SHORT="$MAJOR.$MINOR.$NEW_PATCH"
-
-          sed -i "s/^version: .*/version: $NEW_VERSION/" pubspec.yaml
-
-          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "version_short=$NEW_SHORT" >> $GITHUB_OUTPUT
-          echo "tag=v$NEW_SHORT" >> $GITHUB_OUTPUT
-          echo "Bumped: $CURRENT -> $NEW_VERSION"
-
-      - name: Commit version bump
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add pubspec.yaml
-          git commit -m "chore: bump version to ${{ steps.bump.outputs.version }}"
-          git push
+          echo "version=$VER" >> $GITHUB_OUTPUT
+          echo "version_short=$VER" >> $GITHUB_OUTPUT
+          echo "tag=v$VER" >> $GITHUB_OUTPUT
+          echo "Using version: $VER"
 
   # ──────────────────────────────────────────────
   # Android
