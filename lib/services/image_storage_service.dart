@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/image_compression_service.dart';
+import 'package:chuk_chat/utils/lru_byte_cache.dart';
 import 'package:uuid/uuid.dart';
 
 /// Represents a stored image with metadata
@@ -28,10 +29,7 @@ class ChatUsingImage {
   final String chatId;
   final String chatName;
 
-  const ChatUsingImage({
-    required this.chatId,
-    required this.chatName,
-  });
+  const ChatUsingImage({required this.chatId, required this.chatName});
 }
 
 /// Top-level function for UTF-8 decoding in background isolate
@@ -51,8 +49,12 @@ class ImageStorageService {
   /// Stream of deleted image paths - widgets can listen to this to update
   static Stream<String> get onImageDeleted => _deletedImagesController.stream;
 
-  /// In-memory cache for decrypted images
-  static final Map<String, Uint8List> _imageCache = {};
+  /// In-memory LRU cache for decrypted images (max 50 MB).
+  /// When the limit is reached, the least recently used images are evicted.
+  static const int _maxCacheSizeBytes = 50 * 1024 * 1024; // 50 MB
+  static final LruByteCache _imageCache = LruByteCache(
+    maxSizeBytes: _maxCacheSizeBytes,
+  );
 
   /// In-flight request deduplication - prevents duplicate downloads for the same image
   static final Map<String, Future<Uint8List>> _pendingRequests = {};
@@ -69,7 +71,7 @@ class ImageStorageService {
 
   /// Get cached image if available
   static Uint8List? getCached(String storagePath) {
-    return _imageCache[storagePath];
+    return _imageCache.get(storagePath);
   }
 
   /// Uploads an encrypted image to Supabase Storage
@@ -128,10 +130,13 @@ class ImageStorageService {
   /// Downloads and decrypts an image from Supabase Storage
   /// Returns the decrypted image bytes
   /// Uses in-memory cache and request deduplication to avoid redundant work
-  static Future<Uint8List> downloadAndDecryptImage(String storagePath, {bool bypassCache = false}) async {
+  static Future<Uint8List> downloadAndDecryptImage(
+    String storagePath, {
+    bool bypassCache = false,
+  }) async {
     // Check cache first (unless bypassing)
     if (!bypassCache) {
-      final cached = _imageCache[storagePath];
+      final cached = _imageCache.get(storagePath);
       if (cached != null) {
         return cached;
       }
@@ -154,7 +159,9 @@ class ImageStorageService {
     }
   }
 
-  static Future<Uint8List> _downloadAndDecryptImageInternal(String storagePath) async {
+  static Future<Uint8List> _downloadAndDecryptImageInternal(
+    String storagePath,
+  ) async {
     // Ensure user is authenticated
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
@@ -173,15 +180,18 @@ class ImageStorageService {
           .download(storagePath);
 
       // UTF-8 decode in background isolate to avoid blocking UI on large images
-      final encryptedJson = await compute(_utf8DecodeInBackground, encryptedBytes);
+      final encryptedJson = await compute(
+        _utf8DecodeInBackground,
+        encryptedBytes,
+      );
 
       // Decrypt the image (already runs in isolate via EncryptionService)
       final decryptedBytes = await EncryptionService.decryptBytes(
         encryptedJson,
       );
 
-      // Cache the result
-      _imageCache[storagePath] = decryptedBytes;
+      // Cache the result (LRU evicts oldest if over 50 MB)
+      _imageCache.put(storagePath, decryptedBytes);
 
       return decryptedBytes;
     } catch (e) {
@@ -238,14 +248,16 @@ class ImageStorageService {
 
       return files
           .where((file) => file.name.endsWith('.enc'))
-          .map((file) => StoredImage(
-                path: '${user.id}/${file.name}',
-                name: file.name,
-                createdAt: file.createdAt != null
-                    ? DateTime.tryParse(file.createdAt!)
-                    : null,
-                size: file.metadata?['size'] as int?,
-              ))
+          .map(
+            (file) => StoredImage(
+              path: '${user.id}/${file.name}',
+              name: file.name,
+              createdAt: file.createdAt != null
+                  ? DateTime.tryParse(file.createdAt!)
+                  : null,
+              size: file.metadata?['size'] as int?,
+            ),
+          )
           .toList();
     } catch (e) {
       debugPrint('Failed to list user images: $e');
@@ -256,7 +268,8 @@ class ImageStorageService {
   /// Finds all chats that use a specific image
   /// Returns a list of ChatUsingImage with chat ID and name
   static Future<List<ChatUsingImage>> findChatsUsingImage(
-      String storagePath) async {
+    String storagePath,
+  ) async {
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
       throw Exception('User must be authenticated');
@@ -281,8 +294,7 @@ class ImageStorageService {
         final encryptedPayload = row['encrypted_payload'] as String?;
         if (encryptedPayload != null && EncryptionService.hasKey) {
           try {
-            final decrypted =
-                await EncryptionService.decrypt(encryptedPayload);
+            final decrypted = await EncryptionService.decrypt(encryptedPayload);
             final payload = jsonDecode(decrypted) as Map<String, dynamic>;
             chatName = payload['customName'] as String? ?? 'Unnamed Chat';
 
@@ -320,7 +332,9 @@ class ImageStorageService {
   /// Checks if an image exists in storage
   static Future<bool> imageExists(String storagePath) async {
     try {
-      await SupabaseService.client.storage.from(bucketName).download(storagePath);
+      await SupabaseService.client.storage
+          .from(bucketName)
+          .download(storagePath);
       return true;
     } catch (e) {
       return false;

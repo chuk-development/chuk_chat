@@ -1,10 +1,12 @@
 # Audit Checklist
 
-Zusammengeführte Findings aus:
+Konsolidierte Findings aus:
 - `AUDIT_REPORT_2025-12-31.md` (Multi-Agent Security & Quality Audit)
+- `SECURITY_AUDIT_2026-01-29.md` (Security Audit, Flutter + API Server + Supabase)
+- `REFACTORING_PLAN.md` (Architecture Analysis, 2026-01-21)
 - `GREPTILE_REVIEW_FINDINGS.md` (Greptile Code Review, 2026-02-10)
 
-Zuletzt geprüft: **2026-02-11**
+Zuletzt konsolidiert: **2026-02-13**
 
 ---
 
@@ -12,65 +14,62 @@ Zuletzt geprüft: **2026-02-11**
 
 - [x] **Hardcoded Supabase Credentials** — KRITISCH
   `supabase_config.dart` — Keine hardcoded URLs/Keys mehr. Verwendet `--dart-define`, `web_env.dart` oder `.env` mit Placeholdern.
-  *Quelle: Audit*
+  *Quelle: Audit 2025-12*
 
 - [x] **Android Release Signing** — HOCH
   `android/app/build.gradle.kts` — 3-stufig: Env-Vars > `key.properties` > Debug-Fallback.
-  *Quelle: Audit*
+  *Quelle: Audit 2025-12*
 
 - [x] **withOpacity() deprecated** — MITTEL
   0 Instanzen im gesamten Codebase. Alle migriert.
-  *Quelle: Audit*
+  *Quelle: Audit 2025-12*
 
 - [x] **Network Security Config fehlt** — MITTEL
   `AndroidManifest.xml` referenziert `@xml/network_security_config`.
-  *Quelle: Audit*
+  *Quelle: Audit 2025-12*
 
 - [x] **BuildContext across async gaps** — HOCH
   251 `mounted`-Checks in 28 Dateien. `flutter analyze` zeigt keine async-gap-Warnungen mehr.
-  *Quelle: Audit*
+  *Quelle: Audit 2025-12*
 
 - [x] **flutter analyze Issues** — MITTEL
   Von 22 auf 11 Issues reduziert (nur info/warnings, keine deprecated-Warnungen).
-  *Quelle: Audit*
+  *Quelle: Audit 2025-12*
 
 - [x] **SharedPreferences Magic Strings** — MITTEL
   Alle 18 Keys als `static const String` in `main.dart:111-127` zentralisiert.
-  *Quelle: Audit*
+  *Quelle: Audit 2025-12*
 
 - [x] **Strukturierte Fehlerbehandlung** — HOCH
   `lib/utils/service_error_handler.dart` mit Dio-Handling, HTTP-Codes, Retry-Logik, Error-Predicates.
-  *Quelle: Audit*
+  *Quelle: Audit 2025-12*
 
 - [x] **Session Timeout / Session Management** — MITTEL
   `lib/services/session_tracking_service.dart` mit `registerSession()`, `updateLastSeen()`, `revokeSession()`. Dazu UI in `session_management_page.dart`.
-  *Quelle: Audit*
+  *Quelle: Audit 2025-12*
 
 - [x] **Web Credentials sicher** — MITTEL
   `web_env.dart` hat leere Werte in Git, wird nur via `Dockerfile.web` zur Buildzeit befüllt.
-  *Quelle: Audit*
+  *Quelle: Audit 2025-12*
 
 - [x] **Chat-Pagination / Lazy Loading** — MITTEL
   Sidebar lädt nur Titel (`id, encrypted_title, created_at, is_starred`). Volle Nachrichten werden erst bei Klick geladen. `ChatPreloadService` lädt im Hintergrund nach. Erste 15 Chats werden batch-entschlüsselt, Rest lazy.
-  *Quelle: Audit*
+  *Quelle: Audit 2025-12*
 
 - [x] **Markdown Streaming-Optimierung** — MITTEL
   `markdown_message.dart` — Widget-Caching mit Change-Detection. Code-Highlighting läuft async in Background-Isolate mit 50ms Debounce und 2s Timeout.
-  *Quelle: Audit*
+  *Quelle: Audit 2025-12*
 
 - [x] **Image Validation Bypass** — KRITISCH
-  `lib/services/image_compression_service.dart` — Dreifach-Validierung eingebaut:
-  1. Max Raw Input Size (50 MB Sanity-Check) vor dem Decoden
-  2. Magic-Byte-Prüfung (JPEG, PNG, GIF, BMP, WebP, TIFF) — Dateien ohne gültige Signatur werden abgelehnt
-  3. Post-Decode Dimensions-Check (max 10.000×10.000 Pixel) gegen Decompression Bombs
+  `lib/services/image_compression_service.dart` — Dreifach-Validierung: Max Raw Input Size (50 MB), Magic-Byte-Prüfung, Post-Decode Dimensions-Check (max 10.000×10.000).
   *Quelle: Greptile #3*
 
 - [x] **Keine Tests (0% Coverage)** — KRITISCH
-  418 Unit-Tests in 16 Test-Dateien. Abgedeckt: Encryption, InputValidator, ImageCompression, TokenEstimator, SecureTokenHandler, ExponentialBackoff, ApiRateLimiter, UploadRateLimiter, ApiRequestQueue, ServiceErrorHandler, FileUploadValidator, alle Models (ChatMessage, StoredChat, ChatModel, AttachedFile, ChatStreamEvent, Project, ProjectFile), NetworkStatusService, MessageCompositionService. Noch offen: chat_storage_service, streaming_chat_service (benötigen Mock-Infrastruktur).
-  *Quelle: Audit*
+  418 Unit-Tests in 16 Test-Dateien. Noch offen: chat_storage_service, streaming_chat_service (benötigen Mock-Infrastruktur).
+  *Quelle: Audit 2025-12*
 
 - [x] **Password-Mindestlänge inkonsistent** — HOCH
-  `input_validator.dart` auf 6 Zeichen angepasst (Supabase-Setting). `password_change_service.dart` nutzt jetzt `InputValidator.validatePassword()` statt eigenem Length-Check. Beide Pfade (Registration + Passwort-Änderung) erzwingen identisch: 6 Zeichen + Uppercase + Lowercase + Digit + Symbol. Supabase prüft zusätzlich HaveIBeenPwned.
+  `input_validator.dart` auf 6 Zeichen angepasst (Supabase-Setting). Beide Pfade erzwingen identisch: 6 Zeichen + Uppercase + Lowercase + Digit + Symbol. Supabase prüft zusätzlich HaveIBeenPwned.
   *Quelle: Greptile #5*
 
 ---
@@ -78,79 +77,205 @@ Zuletzt geprüft: **2026-02-11**
 ## Kein echtes Problem (aus der Liste gestrichen)
 
 - [x] **Token im WebSocket Body** *(Audit: HOCH, Greptile: Critical)*
-  Standard-Pattern für WebSocket-Auth. Verbindung über `wss://` (TLS). Token wird validiert (`SecureTokenHandler`) und in Logs maskiert. HTTP hat Header-Auth, WebSockets nicht — Token in erster Nachricht ist die übliche Lösung.
+  Standard-Pattern für WebSocket-Auth. Verbindung über `wss://` (TLS). Token wird validiert (`SecureTokenHandler`) und in Logs maskiert.
 
 - [x] **PrivacyLogger nicht adoptiert** *(Audit: MITTEL)*
-  Das eigentliche Problem sind die ungeschützten `debugPrint`-Aufrufe. `pLog()` ist nur ein Wrapper. Wenn alle Logs geschützt wären, bräuchte man `pLog` nicht. Gelistet unter "Debug-Logs in Release".
+  Das eigentliche Problem sind die ungeschützten `debugPrint`-Aufrufe. Gelistet unter "Debug-Logs in Release".
 
 - [x] **Kein State Management Framework** *(Audit: MITTEL)*
-  `ValueNotifier` + `StreamController` + `StatefulWidget` ist pragmatisch für die App-Größe. Prop-Drilling bleibt als separates Issue gelistet.
+  `ValueNotifier` + `StreamController` + `StatefulWidget` ist pragmatisch für die App-Größe. Prop-Drilling bleibt als separates Issue.
 
-- [x] **Certificate Pinning nur in Release** *(Audit: NIEDRIG, Greptile: Low #9)*
-  Standard-Praxis (OWASP). Debug braucht Proxy-Tools. Korrekt implementiert. Dass Pinning insgesamt Scaffolding ist, ist das eigentliche Problem (separat gelistet).
+- [x] **Certificate Pinning nur in Release** *(Audit: NIEDRIG, Greptile: Low)*
+  Standard-Praxis (OWASP). Debug braucht Proxy-Tools. Dass Pinning insgesamt Scaffolding ist, ist separat gelistet.
+
+- [x] **Network Security Config erlaubt User-Certs in Debug** *(Security Audit L1)*
+  Standard-Praxis, nur Debug-Builds betroffen. Minimal risk.
 
 ---
 
-## Offen — Hoch
+## Offen — Flutter Client
 
-- [ ] **Image-Cache ohne Memory-Limit** — HOCH
-  `lib/services/image_storage_service.dart:55` — Einfaches `Map<String, Uint8List>` ohne LRU, Max-Size oder Eviction. Bilder werden bei Delete entfernt, aber nie proaktiv. ~14MB RAM pro entschlüsseltes 1920x1920-Bild. Zusätzlich: Entschlüsselte Bilder liegen unverschlüsselt im RAM — auf gerooteten Geräten auslesbar.
-  *Quelle: Audit + Greptile #7*
+### Hoch
+
+- [x] **Image-Cache ohne Memory-Limit** — HOCH
+  `lib/utils/lru_byte_cache.dart` + `lib/services/image_storage_service.dart` — LRU-Cache mit 50 MB Byte-Limit implementiert. Nutzt `dart:collection.LinkedHashMap` für O(1) Operationen. Älteste Einträge werden automatisch evicted. 12 Unit-Tests.
+  *Quelle: Audit 2025-12 + Greptile #7*
 
 - [ ] **allowBackup nicht deaktiviert** — HOCH
   `android/app/src/main/AndroidManifest.xml` — `android:allowBackup` nicht gesetzt (Default = `true`). Encryption-Keys und Nachrichten könnten in Google-Cloud-Backups landen.
   Fix: `android:allowBackup="false"` in `<application>` setzen.
-  *Quelle: Audit*
+  *Quelle: Audit 2025-12*
 
 - [ ] **Debug-Logs in Release** — HOCH
-  `debugPrint()` ist in Flutter **kein No-Op in Release** — es ruft `print()` in allen Build-Modi auf. ~616 von 714 `debugPrint`-Aufrufen sind nicht in `kDebugMode` gewrappt. String-Interpolation wird in Release ausgeführt. Betrifft u.a. Credit-Balances (`credit_display.dart:86`), Markdown-Parsing-Errors mit User-Content (`markdown_message.dart:270`), Chat-State (`chat_ui_desktop.dart`, `chat_ui_mobile.dart`).
-  Positives Beispiel: `websocket_chat_service.dart` — alle 34 Calls korrekt geschützt.
-  *Quelle: Audit + Greptile #11-16*
+  `debugPrint()` ist in Flutter kein No-Op in Release. ~616 von 714 Aufrufen nicht in `kDebugMode` gewrappt. Betrifft u.a. Credit-Balances, Markdown-Errors, Chat-State.
+  *Quelle: Audit 2025-12 + Security Audit H1 + Greptile #11-16*
 
 - [ ] **Prop Drilling in RootWrapper** — HOCH
   `root_wrapper_desktop.dart` und `root_wrapper_mobile.dart` nehmen je **34 required Parameter**. Kein Config-Objekt, kein InheritedWidget.
-  *Quelle: Audit*
+  *Quelle: Audit 2025-12 + Refactoring Plan #7*
 
 - [ ] **WebSocket ohne Timeout** — HOCH
-  `lib/services/websocket_chat_service.dart` — Keine Connection-Timeout oder Idle-Timeout. Hängende Verbindungen können endlos bestehen.
+  `lib/services/websocket_chat_service.dart` — Keine Connection- oder Idle-Timeout. Hängende Verbindungen können endlos bestehen.
   *Quelle: Greptile #8*
 
----
-
-## Offen — Mittel
+### Mittel
 
 - [ ] **Certificate Pinning ist Scaffolding** — MITTEL
-  `lib/utils/certificate_pinning.dart` — Infrastruktur existiert, aber `configureDio()` erzwingt Pinning auf **keiner** Plattform (Kommentar Zeile 98-101: "Skipped here"). `validateCertificateBytes()` wird nie aufgerufen. Die identischen Hashes (Zeile 72-73) sind das kleinere Problem. Außerdem: WebSocket-Verbindungen haben gar kein Pinning.
-  *Quelle: Audit + Greptile #2, #9*
+  `lib/utils/certificate_pinning.dart` — Infrastruktur existiert, aber `configureDio()` erzwingt Pinning auf keiner Plattform. `validateCertificateBytes()` wird nie aufgerufen. WebSocket-Verbindungen haben gar kein Pinning.
+  *Quelle: Audit 2025-12 + Security Audit M3 + Greptile #2, #9*
 
 - [ ] **God Classes (teilweise entschärft)** — MITTEL
-  Logik wurde in Handler-Dateien extrahiert (~1.865 Zeilen): `streaming_message_handler.dart` (453), `file_attachment_handler.dart` (373), `audio_recording_handler.dart` (330), `chat_persistence_handler.dart` (190), `message_actions_handler.dart` (106), `desktop_chat_widgets.dart` (123), `mobile_chat_widgets.dart` (290).
-  Restliche Dateien sind trotzdem noch groß (Desktop 3.725 / Mobile 2.784), aber primär UI-Layout.
-  *Quelle: Audit*
+  Handler-Extraktion erfolgt (~1.865 Zeilen ausgelagert). Restliche Dateien trotzdem groß: Desktop 3.725 / Mobile 2.784 LOC, aber primär UI-Layout.
+  *Quelle: Audit 2025-12*
 
 - [ ] **WebSocket Parse-Errors werden verschluckt** — MITTEL
-  `lib/services/websocket_chat_service.dart:174` — Wenn eine WebSocket-Nachricht nicht geparst werden kann, wird sie still verworfen. User bekommt keine Fehlermeldung. Debug-Logging ist korrekt in `kDebugMode` gewrappt, aber der User-seitige Feedback fehlt.
+  `lib/services/websocket_chat_service.dart:174` — Ungeparste Nachrichten werden still verworfen. User bekommt keine Fehlermeldung.
   *Quelle: Greptile #4*
 
 - [ ] **Stream cancelOnError: false** — MITTEL
-  `lib/services/streaming_manager_io.dart:77` — `cancelOnError: false` kann bei Fehlern zu mehrfachen Error-Callbacks und unerwartetem Verhalten führen.
+  `lib/services/streaming_manager_io.dart:77` — Kann bei Fehlern zu mehrfachen Error-Callbacks führen.
   *Quelle: Greptile #6*
 
-- [ ] **Image cacheWidth/cacheHeight fehlt** — MITTEL (teilweise entschärft)
-  `lib/widgets/encrypted_image_widget.dart` nutzt kein `cacheWidth`/`cacheHeight` bei `Image.memory()`. Bilder werden aber vor Upload auf max 1920x1920 komprimiert, was den schlimmsten Fall begrenzt. Für Chat-Bubbles wird trotzdem das volle Bild im RAM dekodiert.
-  *Quelle: Audit*
+- [ ] **Image cacheWidth/cacheHeight fehlt** — MITTEL
+  `lib/widgets/encrypted_image_widget.dart` — Volles Bild im RAM dekodiert statt skaliert. Bilder sind auf 1920x1920 begrenzt, was den schlimmsten Fall limitiert.
+  *Quelle: Audit 2025-12*
 
 - [ ] **Keine Root/Jailbreak Detection** — MITTEL
-  Kein Plugin (`freerasp`, `flutter_jailbreak_detection` etc.) vorhanden. Auf kompromittierten Geräten könnten Encryption-Keys von anderen Apps ausgelesen werden.
-  *Quelle: Audit*
+  Kein Plugin vorhanden. Auf kompromittierten Geräten könnten Encryption-Keys ausgelesen werden.
+  *Quelle: Audit 2025-12*
+
+- [ ] **Encryption Key im Secure Storage** — MITTEL
+  `lib/services/encryption_service.dart:266` — Abgeleiteter Key wird gespeichert statt bei Login neu abzuleiten. Device-Kompromittierung exponiert alle Daten ohne Passwort-Brute-Force.
+  *Quelle: Security Audit M1*
+
+- [ ] **Breite Android-Permissions** — MITTEL
+  `AndroidManifest.xml` — `BLUETOOTH_ADVERTISE` deklariert, aber möglicherweise nicht benötigt.
+  *Quelle: Security Audit L2*
+
+### Niedrig
+
+- [ ] **Encryption-Key-Fehler werden still gehandelt** — NIEDRIG
+  `lib/main.dart:56-59` — Key-Load-Fehler: `clearKey()` + `debugPrint` ohne `kDebugMode`-Guard.
+  *Quelle: Greptile #10*
 
 ---
 
-## Offen — Niedrig
+## Offen — Architektur / Performance (Refactoring Plan)
 
-- [ ] **Encryption-Key-Fehler werden still gehandelt** — NIEDRIG
-  `lib/main.dart:56-59` — Wenn der Encryption-Key nicht geladen werden kann, wird er gelöscht (`clearKey()`) und ein `debugPrint` ausgegeben, aber nicht in `kDebugMode` gewrappt. Debugging von Key-Problemen ist schwierig.
-  *Quelle: Greptile #10*
+### Kritisch
+
+- [ ] **UI Freeze: PBKDF2 auf Main Thread** — KRITISCH
+  `lib/services/encryption_service.dart:555-565` — PBKDF2 mit 600.000 Iterationen läuft auf Main Thread. UI freezt 600-2000ms bei Login.
+  Fix: In `compute()` Isolate verschieben.
+  *Quelle: Refactoring Plan #1*
+
+- [ ] **UI Freeze: flutter_secure_storage blockiert (Linux)** — KRITISCH
+  `lib/services/encryption_service.dart` — Sequentielle `_storage.read()`/`write()` Aufrufe blockieren 1-2s pro Call auf Linux (synchrone DBus-Aufrufe).
+  Fix: Calls mit `Future.wait()` parallelisieren.
+  *Quelle: Refactoring Plan #2*
+
+### Hoch
+
+- [ ] **Dreifaches Chat-Loading (Race Condition)** — HOCH
+  `main.dart:248`, `sidebar_desktop.dart:61`, `sidebar_mobile.dart:68,122` — Chats werden von 3+ Stellen geladen. Load-Guard existiert, aber Timer läuft parallel zu ChatSyncService.
+  Fix: Sidebar-Loads entfernen, nur main.dart als einzige Load-Stelle.
+  *Quelle: Refactoring Plan #3*
+
+- [ ] **Doppelte Auth Subscription** — HOCH
+  `main.dart:133` + `auth_gate.dart:45` — Zwei separate Listener auf `onAuthStateChange`. Potentielle Race Conditions.
+  Fix: AuthGate vereinfachen, nur einmaligen Session-Check statt Subscription.
+  *Quelle: Refactoring Plan #4*
+
+- [ ] **Global Mutable State ohne Reaktivität** — HOCH
+  `lib/services/chat_storage_service.dart:286-319` — `selectedChatId` ist static ohne Notifier. UI-Updates nicht garantiert. Mobile setzt es außerhalb von `setState`.
+  Fix: `ValueNotifier<String?>` verwenden.
+  *Quelle: Refactoring Plan #5*
+
+### Mittel
+
+- [ ] **Mobile fehlt isLoadingChat Guard** — MITTEL
+  `lib/platform_specific/root_wrapper_mobile.dart:241` — Desktop hat Guard gegen rapid Chat-Switching, Mobile nicht. Außerdem: `selectedChatId` wird außerhalb von `setState` gesetzt.
+  *Quelle: Refactoring Plan #6*
+
+- [ ] **Mobile 5-Sekunden Auto-Refresh Timer** — MITTEL
+  `lib/platform_specific/sidebar_mobile.dart:122-125` — Timer läuft parallel zu ChatSyncService. Redundant und verursacht UI Jank.
+  *Quelle: Refactoring Plan #8*
+
+### Niedrig
+
+- [ ] **Theme Loading Race Condition** — NIEDRIG
+  `lib/main.dart:145, 181, 187` — Theme wird von 3 Stellen gleichzeitig geladen. Potentielles Flackern bei App-Start.
+  Fix: Definierte Sequenz: erst Prefs, dann einmal Supabase.
+  *Quelle: Refactoring Plan #7, #9*
+
+---
+
+## Offen — API Server (FastAPI)
+
+### Hoch
+
+- [ ] **Service Role Key als Default Client** — HOCH
+  `api_server/main.py:104` — API Server nutzt `SUPABASE_SERVICE_KEY` für alle Operationen. Bypassed alle RLS-Policies.
+  Fix: Per-Request Supabase Clients mit User-JWT für user-scoped Operationen.
+  *Quelle: Security Audit H2*
+
+- [ ] **CORS erlaubt Wildcard Methods/Headers** — HOCH
+  `api_server/main.py:430-442` — `allow_methods=["*"]` und `allow_headers=["*"]` mit `allow_credentials=True`.
+  Fix: Auf spezifische Methods/Headers einschränken.
+  *Quelle: Security Audit H3*
+
+### Mittel
+
+- [ ] **In-Memory Rate Limiting (nicht verteilt)** — MITTEL
+  `api_server/main.py:186-191` — Rate Limiting mit `defaultdict` statt Redis. Bei mehreren Replicas: Limits = N × Limit.
+  *Quelle: Security Audit M4*
+
+- [ ] **JWT ohne Signatur-Verifikation im Rate Limiter** — MITTEL
+  `api_server/main.py:250` — `jwt.decode(token, options={"verify_signature": False})`. Angreifer kann fake `sub`-Claims nutzen.
+  *Quelle: Security Audit M5*
+
+- [ ] **Webhook Idempotency Race Condition** — MITTEL
+  `api_server/main.py:2516-2531` — Bei non-unique DB-Errors wird Processing fortgesetzt statt übersprungen. Mögliche doppelte Credit-Zuweisung.
+  *Quelle: Security Audit M6*
+
+### Niedrig
+
+- [ ] **File Upload Filename direkt verwendet** — NIEDRIG
+  `api_server/main.py:778` — Dateiendung aus Upload-Filename ohne Whitelist-Validierung.
+  *Quelle: Security Audit L3*
+
+- [ ] **Kein globales Request-Size-Limit** — NIEDRIG
+  `api_server/main.py` — Einzelne Endpoints haben Limits, aber kein globales. `await request.body()` liest alles in den Speicher.
+  *Quelle: Security Audit L4*
+
+- [ ] **Health Endpoint zeigt Connection Count** — NIEDRIG
+  `api_server/main.py:486` — Unauthentifizierter Endpoint gibt `active_connections` zurück.
+  *Quelle: Security Audit L5*
+
+---
+
+## Offen — Supabase / Infrastruktur
+
+- [ ] **Widersprüchliche Migrations (get_credits_remaining)** — MITTEL
+  `api_server/supabase/migrations/20260124_get_credits_remaining.sql` vs. `20260120210546_fix_free_messages_security.sql` — API-Server-Version hat keinen `auth.uid()` Check. Welche zuletzt deployed wurde, ist unklar.
+  *Quelle: Security Audit M7*
+
+- [ ] **Passwort-Minimum auf 6 Zeichen (Supabase)** — NIEDRIG
+  `supabase/config.toml:142` — Client erzwingt strengere Regeln, aber API akzeptiert 6 Zeichen ohne Requirements.
+  Fix: `minimum_password_length = 8`, `password_requirements = "lower_upper_letters_digits"`.
+  *Quelle: Security Audit L6*
+
+- [ ] **CAPTCHA deaktiviert** — NIEDRIG
+  `supabase/config.toml:164-167` — Kein Captcha für Signup. Rate Limits existieren (30/5min), aber automatisierte Account-Erstellung möglich.
+  *Quelle: Security Audit I3*
+
+- [ ] **MFA deaktiviert** — NIEDRIG
+  `supabase/config.toml:241-254` — Alle MFA-Methoden (TOTP, Phone, WebAuthn) deaktiviert.
+  *Quelle: Security Audit I4*
+
+- [ ] **Edge Function CORS Wildcard** — NIEDRIG
+  `supabase/functions/revoke-session/index.ts:14` — `Access-Control-Allow-Origin: *` statt eingeschränkter Origins.
+  *Quelle: Security Audit*
 
 ---
 
@@ -158,11 +283,10 @@ Zuletzt geprüft: **2026-02-11**
 
 | Kategorie | Anzahl |
 |-----------|--------|
-| Behoben | 15 |
-| Kein echtes Problem | 4 |
-| Offen — Kritisch | 0 |
-| Offen — Hoch | 4 |
-| Offen — Mittel | 6 |
-| Offen — Niedrig | 1 |
-| **Gesamt geprüft** | **31** |
-| **Wirklich offen** | **11** |
+| Behoben | 16 |
+| Kein echtes Problem | 5 |
+| **Offen — Flutter Client** | **13** |
+| **Offen — Architektur/Performance** | **8** |
+| **Offen — API Server** | **8** |
+| **Offen — Supabase/Infra** | **5** |
+| **Gesamt offen** | **34** |
