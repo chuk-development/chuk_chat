@@ -153,8 +153,8 @@ Zuletzt konsolidiert: **2026-02-13**
 
 ### Niedrig
 
-- [ ] **Encryption-Key-Fehler werden still gehandelt** — NIEDRIG
-  `lib/main.dart:56-59` — Key-Load-Fehler: `clearKey()` + `debugPrint` ohne `kDebugMode`-Guard.
+- [x] **Encryption-Key-Fehler werden still gehandelt** — NIEDRIG
+  Alle `debugPrint`-Aufrufe in `app_initialization_service.dart` (ehemals `main.dart`) sind mit `kDebugMode`-Guard versehen. `_preloadEncryptionKey` loggt Fehler korrekt und ruft `clearKey()` im Fehlerfall auf.
   *Quelle: Greptile #10*
 
 ---
@@ -277,10 +277,10 @@ Zuletzt konsolidiert: **2026-02-13**
 
 | Kategorie | Anzahl |
 |-----------|--------|
-| Behoben | 27 |
+| Behoben | 28 |
 | Kein echtes Problem | 5 |
-| **Offen — Flutter Client** | **8** |
+| **Offen — Flutter Client** | **7** |
 | **Offen — Architektur/Performance** | **2** |
 | **Offen — API Server** | **8** |
 | **Offen — Supabase/Infra** | **5** |
-| **Gesamt offen** | **23** |
+| **Gesamt offen** | **22** |

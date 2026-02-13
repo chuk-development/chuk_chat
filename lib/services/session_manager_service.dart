@@ -93,20 +93,37 @@ class SessionManagerService extends ChangeNotifier {
 
     // Initialize user session (chat loading, sync, theme) — but only once
     // per user. Token refreshes re-trigger onAuthStateChange, so we guard
-    // against redundant initialization.
+    // against redundant initialization. On failure, the guard is reset so
+    // the next auth event retries.
     if (_sessionInitializedForUser != user.id) {
       _sessionInitializedForUser = user.id;
-      unawaited(AppInitializationService.instance.initializeUserSession(user));
-      unawaited(AppThemeService.instance.loadFromSupabaseAsync());
-      if (kFeatureSessionManagement) {
-        unawaited(ModelPrefetchService.prefetch());
-      }
+      unawaited(_initializeUserSessionAsync(user));
     }
 
     // Verify session is still valid (catches revoked tokens)
     if (kFeatureSessionManagement) {
       unawaited(verifySession());
       unawaited(SessionTrackingService.registerSession());
+    }
+  }
+
+  /// Runs user session initialization with error handling.
+  /// Resets the guard on failure so the next auth event retries.
+  Future<void> _initializeUserSessionAsync(User user) async {
+    try {
+      await Future.wait([
+        AppInitializationService.instance.initializeUserSession(user),
+        AppThemeService.instance.loadFromSupabaseAsync(),
+        if (kFeatureSessionManagement) ModelPrefetchService.prefetch(),
+      ]);
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [SessionManager] User session init failed: $e');
+      }
+      // Reset guard so next auth event retries initialization
+      if (_sessionInitializedForUser == user.id) {
+        _sessionInitializedForUser = null;
+      }
     }
   }
 
