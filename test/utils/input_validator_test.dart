@@ -111,7 +111,10 @@ void main() {
     test('very long filename truncated preserving extension', () {
       final longName = '${'a' * 300}.pdf';
       final result = InputValidator.sanitizeFileName(longName);
-      expect(result.length, lessThanOrEqualTo(InputValidator.maxFileNameLength));
+      expect(
+        result.length,
+        lessThanOrEqualTo(InputValidator.maxFileNameLength),
+      );
       expect(result, endsWith('.pdf'));
     });
 
@@ -123,10 +126,7 @@ void main() {
 
   group('escapeFileNameForDisplay', () {
     test('normal filename unchanged', () {
-      expect(
-        InputValidator.escapeFileNameForDisplay('photo'),
-        equals('photo'),
-      );
+      expect(InputValidator.escapeFileNameForDisplay('photo'), equals('photo'));
     });
 
     test('markdown special chars escaped', () {
@@ -203,8 +203,12 @@ void main() {
     });
 
     test('exactly min length with all requirements passes', () {
-      // 6 chars: uppercase + lowercase + digit + special
-      expect(InputValidator.validatePassword('Ab1!cd'), isNull);
+      // 8 chars: uppercase + lowercase + digit + special
+      expect(InputValidator.validatePassword('Ab1!cdef'), isNull);
+    });
+
+    test('7 chars with all requirements still too short', () {
+      expect(InputValidator.validatePassword('Ab1!cde'), isNotNull);
     });
   });
 
@@ -222,7 +226,7 @@ void main() {
     });
 
     test('meeting all requirements is at least fair', () {
-      final result = InputValidator.validatePasswordStrength('Ab1!cd');
+      final result = InputValidator.validatePasswordStrength('Ab1!cdef');
       expect(result.isValid, isTrue);
       expect(
         result.strength.index,
@@ -239,7 +243,7 @@ void main() {
     });
 
     test('suggestions list is empty for valid password', () {
-      final result = InputValidator.validatePasswordStrength('Ab1!cd');
+      final result = InputValidator.validatePasswordStrength('Ab1!cdef');
       expect(result.suggestions, isEmpty);
     });
 
