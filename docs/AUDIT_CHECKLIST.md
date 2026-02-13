@@ -181,15 +181,14 @@ Zuletzt konsolidiert: **2026-02-13**
   Zwei Listener bleiben bestehen, haben aber klar getrennte Verantwortung: (1) `AuthGate` — rein UI, switcht zwischen Login/RootWrapper. (2) `SessionManagerService` — Business-Logik, handhabt Session-Validierung, Password-Revision, User-Session-Init. Fix: AuthGate von 20-Iteration Retry-Loop auf einfachen Session-Check + Stream vereinfacht. Manuellen `initializeUserSession()`-Call aus `main.dart` entfernt — wird jetzt ausschließlich von `SessionManagerService._handleSessionActive()` getriggert (mit Guard gegen Duplikate bei Token-Refresh). `SessionManager.initialize()` nach `waitForSupabase()` verschoben.
   *Quelle: Refactoring Plan #4*
 
-- [ ] **Global Mutable State ohne Reaktivität** — HOCH
-  `lib/services/chat_storage_service.dart:286-319` — `selectedChatId` ist static ohne Notifier. UI-Updates nicht garantiert. Mobile setzt es außerhalb von `setState`.
-  Fix: `ValueNotifier<String?>` verwenden.
+- [x] **Global Mutable State ohne Reaktivität** — HOCH
+  `selectedChatId` hatte bereits einen `ValueNotifier` (war teilweise gefixt). Verbleibende Fixes: (1) Mobile `root_wrapper_mobile.dart` — `selectedChatId`-Zuweisung in `setState` verschoben. (2) Legacy `selectedChatIndex` (plain static int ohne Notifier) komplett entfernt — wird von keinem UI-Code mehr gelesen. Index-Adjustierung in crud/sync durch `selectedChatId`-basierte Null-Clear ersetzt. (3) `selectedChatId`-Null-Clear bei Chat-Delete in CRUD hinzugefügt (sync hatte es schon). (4) Verbose Stack-Trace-Logging im Setter durch einzeilige Ausgabe ersetzt.
   *Quelle: Refactoring Plan #5*
 
 ### Mittel
 
-- [ ] **Mobile fehlt isLoadingChat Guard** — MITTEL
-  `lib/platform_specific/root_wrapper_mobile.dart:241` — Desktop hat Guard gegen rapid Chat-Switching, Mobile nicht. Außerdem: `selectedChatId` wird außerhalb von `setState` gesetzt.
+- [x] **Mobile fehlt isLoadingChat Guard** — MITTEL
+  Guard existiert bereits (`root_wrapper_mobile.dart:163`). `selectedChatId` außerhalb von `setState` wurde im Rahmen des Global-State-Fixes behoben.
   *Quelle: Refactoring Plan #6*
 
 - [ ] **Mobile 5-Sekunden Auto-Refresh Timer** — MITTEL
@@ -278,10 +277,10 @@ Zuletzt konsolidiert: **2026-02-13**
 
 | Kategorie | Anzahl |
 |-----------|--------|
-| Behoben | 25 |
+| Behoben | 27 |
 | Kein echtes Problem | 5 |
 | **Offen — Flutter Client** | **8** |
-| **Offen — Architektur/Performance** | **4** |
+| **Offen — Architektur/Performance** | **2** |
 | **Offen — API Server** | **8** |
 | **Offen — Supabase/Infra** | **5** |
-| **Gesamt offen** | **25** |
+| **Gesamt offen** | **23** |

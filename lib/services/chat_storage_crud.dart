@@ -53,7 +53,7 @@ class ChatStorageCrud {
       if (existing != null && existing.isFullyLoaded) {
         if (kDebugMode) {
           debugPrint(
-          '✅ [ChatStorage] Chat already fully loaded (${stopwatch.elapsedMilliseconds}ms)',
+            '✅ [ChatStorage] Chat already fully loaded (${stopwatch.elapsedMilliseconds}ms)',
           );
         }
         return existing;
@@ -107,7 +107,7 @@ class ChatStorageCrud {
       stopwatch.stop();
       if (kDebugMode) {
         debugPrint(
-        '✅ [ChatStorage] Full chat loaded in ${stopwatch.elapsedMilliseconds}ms (${chatPayload.messages.length} messages)',
+          '✅ [ChatStorage] Full chat loaded in ${stopwatch.elapsedMilliseconds}ms (${chatPayload.messages.length} messages)',
         );
       }
 
@@ -149,7 +149,9 @@ class ChatStorageCrud {
       }
 
       if (kDebugMode) {
-        debugPrint('📦 [ChatStorage] Loading ${rows.length} chats from cache...');
+        debugPrint(
+          '📦 [ChatStorage] Loading ${rows.length} chats from cache...',
+        );
       }
 
       // Progressive loading: first batch for fast UI, then rest in background
@@ -174,7 +176,7 @@ class ChatStorageCrud {
         ChatStorageState.notifyChanges();
         if (kDebugMode) {
           debugPrint(
-          '⚡ [ChatStorage] First ${ChatStorageState.chatsById.length} chats from cache (fast)',
+            '⚡ [ChatStorage] First ${ChatStorageState.chatsById.length} chats from cache (fast)',
           );
         }
       }
@@ -192,7 +194,7 @@ class ChatStorageCrud {
 
       if (kDebugMode) {
         debugPrint(
-        '✅ [ChatStorage] Loaded ${ChatStorageState.chatsById.length} chats from cache',
+          '✅ [ChatStorage] Loaded ${ChatStorageState.chatsById.length} chats from cache',
         );
       }
     } catch (e) {
@@ -294,7 +296,9 @@ class ChatStorageCrud {
               .order('created_at', ascending: false)
               .timeout(const Duration(seconds: 30));
           if (kDebugMode) {
-            debugPrint('✅ [ChatStorage] Loaded ${rows.length} chats from remote');
+            debugPrint(
+              '✅ [ChatStorage] Loaded ${rows.length} chats from remote',
+            );
           }
 
           // Update cache with remote data (use replaceAll to avoid race conditions)
@@ -312,13 +316,13 @@ class ChatStorageCrud {
             loadedFromCache = true;
             if (kDebugMode) {
               debugPrint(
-              '📦 [ChatStorage] Loaded ${rows.length} chats from cache (fallback)',
+                '📦 [ChatStorage] Loaded ${rows.length} chats from cache (fallback)',
               );
             }
           } catch (cacheError) {
             if (kDebugMode) {
               debugPrint(
-              '❌ [ChatStorage] Failed to load from cache: $cacheError',
+                '❌ [ChatStorage] Failed to load from cache: $cacheError',
               );
             }
             rows = [];
@@ -333,7 +337,7 @@ class ChatStorageCrud {
           loadedFromCache = true;
           if (kDebugMode) {
             debugPrint(
-            '📦 [ChatStorage] Loaded ${rows.length} chats from cache (offline)',
+              '📦 [ChatStorage] Loaded ${rows.length} chats from cache (offline)',
             );
           }
         } catch (error) {
@@ -366,7 +370,7 @@ class ChatStorageCrud {
         ChatStorageState.notifyChanges();
         if (kDebugMode) {
           debugPrint(
-          '⚡ [ChatStorage] First ${ChatStorageState.chatsById.length} chats ready (fast path)',
+            '⚡ [ChatStorage] First ${ChatStorageState.chatsById.length} chats ready (fast path)',
           );
         }
       }
@@ -375,7 +379,7 @@ class ChatStorageCrud {
       if (remainingBatch.isNotEmpty) {
         if (kDebugMode) {
           debugPrint(
-          '🔄 [ChatStorage] Decrypting ${remainingBatch.length} more chats in background...',
+            '🔄 [ChatStorage] Decrypting ${remainingBatch.length} more chats in background...',
           );
         }
         final remainingChats = await _decryptChatRowsBatch(remainingBatch);
@@ -387,7 +391,7 @@ class ChatStorageCrud {
         ChatStorageState.notifyChanges();
         if (kDebugMode) {
           debugPrint(
-          '✅ [ChatStorage] All ${ChatStorageState.chatsById.length} chats loaded',
+            '✅ [ChatStorage] All ${ChatStorageState.chatsById.length} chats loaded',
           );
         }
       } else if (ChatStorageState.chatsById.isEmpty) {
@@ -399,7 +403,7 @@ class ChatStorageCrud {
       if (ChatStorageState.chatsById.isNotEmpty) {
         if (kDebugMode) {
           debugPrint(
-          '📋 [ChatStorage] Current chats in memory (${ChatStorageState.chatsById.length}):',
+            '📋 [ChatStorage] Current chats in memory (${ChatStorageState.chatsById.length}):',
           );
         }
         for (final entry in ChatStorageState.chatsById.entries) {
@@ -412,7 +416,7 @@ class ChatStorageCrud {
               : (firstUserMsg?.text ?? 'No user message');
           if (kDebugMode) {
             debugPrint(
-            '   - ${entry.key.substring(0, 8)}... : "$title" (${chat.messages.length} msgs)',
+              '   - ${entry.key.substring(0, 8)}... : "$title" (${chat.messages.length} msgs)',
             );
           }
         }
@@ -421,7 +425,7 @@ class ChatStorageCrud {
       if (loadedFromCache && remoteError != null) {
         if (kDebugMode) {
           debugPrint(
-          'ChatStorageService loaded chats from offline cache: $remoteError',
+            'ChatStorageService loaded chats from offline cache: $remoteError',
           );
         }
         if (remoteStack != null) {
@@ -504,14 +508,16 @@ class ChatStorageCrud {
     final effectiveChatId = chatId ?? ChatStorageState.uuid.v4();
     if (kDebugMode) {
       debugPrint(
-      '💾 [ChatStorage] saveChat: $effectiveChatId (${messagesMaps.length} messages)',
+        '💾 [ChatStorage] saveChat: $effectiveChatId (${messagesMaps.length} messages)',
       );
     }
 
     // If there's already a pending save for this chat, wait for it
     if (ChatStorageState.pendingSaves.containsKey(effectiveChatId)) {
       if (kDebugMode) {
-        debugPrint('⏳ [ChatStorage] Waiting for pending save: $effectiveChatId');
+        debugPrint(
+          '⏳ [ChatStorage] Waiting for pending save: $effectiveChatId',
+        );
       }
       return await ChatStorageState.pendingSaves[effectiveChatId]!.future;
     }
@@ -625,7 +631,7 @@ class ChatStorageCrud {
     }
     if (kDebugMode) {
       debugPrint(
-      '   📊 Messages: ${messages.length} (${messages.where((m) => m.role == "user").length} user, ${messages.where((m) => m.role == "assistant").length} assistant)',
+        '   📊 Messages: ${messages.length} (${messages.where((m) => m.role == "user").length} user, ${messages.where((m) => m.role == "assistant").length} assistant)',
       );
     }
 
@@ -639,7 +645,7 @@ class ChatStorageCrud {
   ) async {
     if (kDebugMode) {
       debugPrint(
-      '🔄 [ChatStorage] updateChat: $chatId (${messagesMaps.length} messages)',
+        '🔄 [ChatStorage] updateChat: $chatId (${messagesMaps.length} messages)',
       );
     }
 
@@ -764,7 +770,7 @@ class ChatStorageCrud {
     }
     if (kDebugMode) {
       debugPrint(
-      '   📊 Messages: ${messages.length} (${messages.where((m) => m.role == "user").length} user, ${messages.where((m) => m.role == "assistant").length} assistant)',
+        '   📊 Messages: ${messages.length} (${messages.where((m) => m.role == "user").length} user, ${messages.where((m) => m.role == "assistant").length} assistant)',
       );
     }
 
@@ -805,7 +811,7 @@ class ChatStorageCrud {
     if (imagePaths.isNotEmpty) {
       if (kDebugMode) {
         debugPrint(
-        '🖼️ [ChatStorage] Deleting ${imagePaths.length} images for chat: $chatId',
+          '🖼️ [ChatStorage] Deleting ${imagePaths.length} images for chat: $chatId',
         );
       }
       for (final path in imagePaths) {
@@ -831,28 +837,13 @@ class ChatStorageCrud {
         .eq('user_id', user.id)
         .timeout(const Duration(seconds: 10));
 
-    // Find the index of the chat being deleted BEFORE removal
-    final deletedIndex = ChatStorageState.savedChats.indexWhere(
-      (c) => c.id == chatId,
-    );
-
     ChatStorageState.chatsById.remove(chatId);
     ChatStorageState.savingChats.remove(chatId);
     ChatStorageState.pendingSaves.remove(chatId);
 
-    // Adjust selectedChatIndex to account for index shifts
-    if (deletedIndex != -1 &&
-        deletedIndex < ChatStorageState.selectedChatIndex) {
-      // Chat was deleted before the selected one, shift index down
-      ChatStorageState.selectedChatIndex -= 1;
-    }
-
-    // Always ensure selectedChatIndex is in bounds (handles concurrent deletions too)
-    if (ChatStorageState.selectedChatIndex >=
-        ChatStorageState.savedChats.length) {
-      ChatStorageState.selectedChatIndex = ChatStorageState.savedChats.isEmpty
-          ? -1
-          : ChatStorageState.savedChats.length - 1;
+    // Clear selection if the deleted chat was selected
+    if (ChatStorageState.selectedChatId == chatId) {
+      ChatStorageState.selectedChatId = null;
     }
 
     ChatStorageState.notifyChanges(chatId);
