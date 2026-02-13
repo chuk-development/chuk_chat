@@ -202,37 +202,35 @@ class AppThemeService extends ChangeNotifier {
 
   Future<void> _persistToPrefs() async {
     final prefs = await _getPrefs();
-    await prefs.setString(
-      _kThemeModeKey,
-      _themeMode == Brightness.light ? 'light' : 'dark',
-    );
-    await prefs.setString(_kAccentColorKey, _accentColor.toHexString());
-    await prefs.setString(_kIconFgColorKey, _iconFgColor.toHexString());
-    await prefs.setString(_kBgColorKey, _bgColor.toHexString());
-    await prefs.setBool(_kGrainEnabledKey, _grainEnabled);
-    await prefs.setBool(_kShowReasoningTokensKey, _showReasoningTokens);
-    await prefs.setBool(_kShowModelInfoKey, _showModelInfo);
-    await prefs.setBool(
-      _kAutoSendVoiceTranscriptionKey,
-      _autoSendVoiceTranscription,
-    );
-    await prefs.setBool(_kImageGenEnabledKey, _imageGenEnabled);
-    await prefs.setString(_kImageGenDefaultSizeKey, _imageGenDefaultSize);
-    await prefs.setInt(_kImageGenCustomWidthKey, _imageGenCustomWidth);
-    await prefs.setInt(_kImageGenCustomHeightKey, _imageGenCustomHeight);
-    await prefs.setBool(_kImageGenUseCustomSizeKey, _imageGenUseCustomSize);
-    await prefs.setBool(
-      _kIncludeRecentImagesInHistoryKey,
-      _includeRecentImagesInHistory,
-    );
-    await prefs.setBool(
-      _kIncludeAllImagesInHistoryKey,
-      _includeAllImagesInHistory,
-    );
-    await prefs.setBool(
-      _kIncludeReasoningInHistoryKey,
-      _includeReasoningInHistory,
-    );
+    // Parallelize all SharedPreferences writes to reduce blocking time
+    await Future.wait([
+      prefs.setString(
+        _kThemeModeKey,
+        _themeMode == Brightness.light ? 'light' : 'dark',
+      ),
+      prefs.setString(_kAccentColorKey, _accentColor.toHexString()),
+      prefs.setString(_kIconFgColorKey, _iconFgColor.toHexString()),
+      prefs.setString(_kBgColorKey, _bgColor.toHexString()),
+      prefs.setBool(_kGrainEnabledKey, _grainEnabled),
+      prefs.setBool(_kShowReasoningTokensKey, _showReasoningTokens),
+      prefs.setBool(_kShowModelInfoKey, _showModelInfo),
+      prefs.setBool(_kShowTpsKey, _showTps),
+      prefs.setBool(
+        _kAutoSendVoiceTranscriptionKey,
+        _autoSendVoiceTranscription,
+      ),
+      prefs.setBool(_kImageGenEnabledKey, _imageGenEnabled),
+      prefs.setString(_kImageGenDefaultSizeKey, _imageGenDefaultSize),
+      prefs.setInt(_kImageGenCustomWidthKey, _imageGenCustomWidth),
+      prefs.setInt(_kImageGenCustomHeightKey, _imageGenCustomHeight),
+      prefs.setBool(_kImageGenUseCustomSizeKey, _imageGenUseCustomSize),
+      prefs.setBool(
+        _kIncludeRecentImagesInHistoryKey,
+        _includeRecentImagesInHistory,
+      ),
+      prefs.setBool(_kIncludeAllImagesInHistoryKey, _includeAllImagesInHistory),
+      prefs.setBool(_kIncludeReasoningInHistoryKey, _includeReasoningInHistory),
+    ]);
   }
 
   // Debounced sync to avoid excessive Supabase calls

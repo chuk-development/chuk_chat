@@ -163,14 +163,12 @@ Zuletzt konsolidiert: **2026-02-13**
 
 ### Kritisch
 
-- [ ] **UI Freeze: PBKDF2 auf Main Thread** — KRITISCH
-  `lib/services/encryption_service.dart:555-565` — PBKDF2 mit 600.000 Iterationen läuft auf Main Thread. UI freezt 600-2000ms bei Login.
-  Fix: In `compute()` Isolate verschieben.
+- [x] **UI Freeze: PBKDF2 auf Main Thread** — KRITISCH
+  War bereits gefixt: `_deriveKey()` nutzt `compute()` mit top-level `_deriveKeyInBackground()` Funktion (Zeile 602-610). PBKDF2 läuft in Isolate, nicht auf Main Thread.
   *Quelle: Refactoring Plan #1*
 
-- [ ] **UI Freeze: flutter_secure_storage blockiert (Linux)** — KRITISCH
-  `lib/services/encryption_service.dart` — Sequentielle `_storage.read()`/`write()` Aufrufe blockieren 1-2s pro Call auf Linux (synchrone DBus-Aufrufe).
-  Fix: Calls mit `Future.wait()` parallelisieren.
+- [x] **UI Freeze: flutter_secure_storage blockiert (Linux)** — KRITISCH
+  Alle sequentiellen `_storage` Calls parallelisiert: `clearKey()` 3 deletes → `Future.wait()`, `_syncMetadataInBackground()` 2 reads → `Future.wait()`. `initializeForPassword()` und `rotateKeyForPasswordChange()` waren bereits parallelisiert. Zusätzlich: `_initializeApp()` in main.dart parallelisiert (NotificationService + Theme laden gleichzeitig), `_persistToPrefs()` 14 writes → `Future.wait()`, `resetServices()` 2 resets → `Future.wait()`.
   *Quelle: Refactoring Plan #2*
 
 ### Hoch
@@ -282,10 +280,10 @@ Zuletzt konsolidiert: **2026-02-13**
 
 | Kategorie | Anzahl |
 |-----------|--------|
-| Behoben | 21 |
+| Behoben | 23 |
 | Kein echtes Problem | 5 |
 | **Offen — Flutter Client** | **8** |
-| **Offen — Architektur/Performance** | **8** |
+| **Offen — Architektur/Performance** | **6** |
 | **Offen — API Server** | **8** |
 | **Offen — Supabase/Infra** | **5** |
-| **Gesamt offen** | **29** |
+| **Gesamt offen** | **27** |

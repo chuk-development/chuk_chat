@@ -103,12 +103,15 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
     await _initService.waitForSupabase();
     if (!mounted) return;
 
-    // Initialize notifications
-    await NotificationService.initialize(navigatorKey);
-    await NotificationService.checkLaunchNotification();
+    // Initialize notifications and load theme in PARALLEL to reduce startup freeze
+    await Future.wait([
+      NotificationService.initialize(navigatorKey),
+      _themeService.loadFromPrefs(),
+    ]);
+    if (!mounted) return;
 
-    // Load theme preferences
-    await _themeService.loadFromPrefs();
+    // Check launch notification (depends on notification init above)
+    await NotificationService.checkLaunchNotification();
 
     // Handle auth state for existing sessions
     final currentUser = SupabaseService.auth.currentUser;

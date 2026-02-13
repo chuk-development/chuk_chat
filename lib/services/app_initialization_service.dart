@@ -171,8 +171,11 @@ class AppInitializationService {
   Future<void> resetServices() async {
     ChatSyncService.stop();
     ChatPreloadService.reset();
+    // Clear encryption key first, then reset storage services in parallel
     await EncryptionService.clearKey();
-    await ChatStorageService.reset();
-    await ProjectStorageService.reset();
+    await Future.wait([
+      ChatStorageService.reset(),
+      ProjectStorageService.reset(),
+    ]);
   }
 }
