@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -44,8 +45,11 @@ class _AuthGateState extends State<AuthGate> {
     // waitForSupabase() before the first frame that renders this widget.
     try {
       _session = SupabaseService.auth.currentSession;
-    } catch (_) {
-      // Supabase not yet ready — stay in loading state briefly.
+    } catch (e) {
+      // Supabase not yet ready — will rely on onAuthStateChange stream below.
+      if (kDebugMode) {
+        debugPrint('AuthGate: Could not read initial session: $e');
+      }
     }
 
     // Listen for future auth changes (sign-in, sign-out, token refresh).

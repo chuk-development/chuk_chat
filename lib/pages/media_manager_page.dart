@@ -890,13 +890,8 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
         backgroundColor: Colors.transparent,
         body: Stack(
           children: [
-            // Dismiss on tap background
-            GestureDetector(
-              onTap: () => Navigator.pop(context),
-              child: Container(color: Colors.transparent),
-            ),
-
-            // PageView for swiping
+            // PageView for swiping — outer GestureDetector dismisses on tap
+            // outside image, inner GestureDetector absorbs taps on the image.
             PageView.builder(
               controller: _pageController,
               onPageChanged: _onPageChanged,
@@ -906,15 +901,21 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
                 final bytes = _loadedImages[image.path];
 
                 return GestureDetector(
-                  onTap: () {}, // Prevent dismissing when tapping image
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => Navigator.pop(context),
                   child: Center(
-                    child: bytes != null
-                        ? InteractiveViewer(
-                            minScale: 0.5,
-                            maxScale: 4.0,
-                            child: Image.memory(bytes, fit: BoxFit.contain),
-                          )
-                        : const CircularProgressIndicator(color: Colors.white),
+                    child: GestureDetector(
+                      onTap: () {}, // Absorb taps on the image itself
+                      child: bytes != null
+                          ? InteractiveViewer(
+                              minScale: 0.5,
+                              maxScale: 4.0,
+                              child: Image.memory(bytes, fit: BoxFit.contain),
+                            )
+                          : const CircularProgressIndicator(
+                              color: Colors.white,
+                            ),
+                    ),
                   ),
                 );
               },

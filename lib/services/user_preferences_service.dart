@@ -623,7 +623,7 @@ class UserPreferencesService {
 
         if (kDebugMode) {
           debugPrint(
-            'Loaded encrypted system prompt: ${decryptedPrompt.length} characters',
+            'Loaded and decrypted system prompt: ${decryptedPrompt.length} characters',
           );
         }
         return decryptedPrompt;

@@ -21,20 +21,8 @@ import 'package:chuk_chat/utils/certificate_pinning.dart';
 /// Called by [CertificatePinning.configureDio] on native platforms
 /// when pinning is enabled (release mode).
 void configureDioWithPinning(Dio dio, List<CertificatePin> pins) {
-  final adapter = dio.httpClientAdapter;
-  if (adapter is! IOHttpClientAdapter) {
-    // Replace with IOHttpClientAdapter if needed
-    dio.httpClientAdapter = IOHttpClientAdapter(
-      createHttpClient: () {
-        final client = HttpClient();
-        _installBadCertCallback(client, pins);
-        return client;
-      },
-    );
-    return;
-  }
-
-  // Wrap existing adapter's createHttpClient
+  // Replace adapter with IOHttpClientAdapter that enforces certificate pinning.
+  // Any existing adapter configuration (proxy, custom client) is discarded.
   dio.httpClientAdapter = IOHttpClientAdapter(
     createHttpClient: () {
       final client = HttpClient();
