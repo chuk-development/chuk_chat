@@ -504,9 +504,10 @@ class UserPreferencesService {
 
       final int deletedCount = response.length;
 
-      // Clear in-memory cache to prevent stale data
+      // Clear in-memory and persistent cache to prevent stale data
       _cachedProviderPreferences = null;
       _providerPrefsFetchedAt = null;
+      await ModelCacheService.saveProviderPreferences(userId, {});
 
       if (deletedCount > 0) {
         if (kDebugMode) {

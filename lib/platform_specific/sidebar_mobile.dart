@@ -326,12 +326,11 @@ class _SidebarMobileState extends State<SidebarMobile> {
 
   Future<void> _confirmAndDeleteChat(StoredChat chat) async {
     final messenger = ScaffoldMessenger.of(context);
-    // Get chat title for display
-    final chatTitle =
-        chat.customName ??
-        (chat.previewText.length > 40
-            ? '${chat.previewText.substring(0, 40)}...'
-            : chat.previewText);
+    // Get chat title for display (use helper for consistent derivation)
+    final derivedTitle = _deriveChatTitle(chat);
+    final chatTitle = derivedTitle.length > 40
+        ? '${derivedTitle.substring(0, 40)}...'
+        : derivedTitle;
 
     final shouldDelete = await showDialog<bool>(
       context: context,

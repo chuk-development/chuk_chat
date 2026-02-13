@@ -119,11 +119,8 @@ class CertificatePinning {
 
     if (_nativeConfigurator != null) {
       _nativeConfigurator!(dio, _pins);
-      if (kDebugMode) {
-        debugPrint(
-          'Certificate pinning ENFORCED for ${_pins.length} domain(s)',
-        );
-      }
+      // Note: this code path only runs in release mode (isEnabled == true),
+      // so kDebugMode is always false here. No debug logging possible.
     } else {
       // On native platforms in release mode, a missing configurator means
       // pinning was expected but won't be applied. Throw to avoid silent

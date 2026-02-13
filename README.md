@@ -32,7 +32,7 @@
 
 We use only open-weight models — no black boxes and no silent data collection. You know exactly what runs your AI.
 
-- **Clear monthly pricing** — One straightforward fee. No pay-as-you-go, no hidden costs.
+- **Clear monthly pricing** — One fee covers platform access and AI credits. No hidden costs.
 - **Open-weight only** — DeepSeek, Llama, Mistral, Qwen, and more via [OpenRouter](https://openrouter.ai). No closed-source models.
 - **Privacy first** — Encrypted chats, no tracking, no profiling. Built like a tool, not a marketing funnel.
 - **Your data, your control** — We store nothing you don't want. Fully deletable. Fully controllable. Fully yours.
@@ -69,7 +69,7 @@ For detailed security information, see [SECURITY.md](SECURITY.md).
 
 ## Pricing
 
-**€20/month** — all models, all platforms, €16 in AI credits included.
+**€20/month** — all models, all platforms. Includes €16 in monthly AI credits; €4 covers infrastructure and platform access.
 
 See [chuk.chat/en/pricing](https://chuk.chat/en/pricing) for details.
 

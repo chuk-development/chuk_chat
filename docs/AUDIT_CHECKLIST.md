@@ -168,7 +168,7 @@ Zuletzt konsolidiert: **2026-02-13**
   *Quelle: Refactoring Plan #1*
 
 - [x] **UI Freeze: flutter_secure_storage blockiert (Linux)** — KRITISCH
-  Alle sequentiellen `_storage` Calls parallelisiert: `clearKey()` 3 deletes → `Future.wait()`, `_syncMetadataInBackground()` 2 reads → `Future.wait()`. `initializeForPassword()` und `rotateKeyForPasswordChange()` waren bereits parallelisiert. Zusätzlich: `_initializeApp()` in main.dart parallelisiert (NotificationService + Theme laden gleichzeitig), `_persistToPrefs()` 14 writes → `Future.wait()`, `resetServices()` 2 resets → `Future.wait()`.
+  Alle sequentiellen `_storage` Calls parallelisiert: `clearKey()` 3 deletes → `Future.wait()`, `_syncMetadataInBackground()` 2 reads → `Future.wait()`. `initializeForPassword()` und `rotateKeyForPasswordChange()` waren bereits parallelisiert. Zusätzlich: `_initializeApp()` in main.dart parallelisiert (NotificationService + Theme laden gleichzeitig), `_persistToPrefs()` 14 writes → `Future.wait()`, `resetServices()` 2 resets → `Future.wait()`. *Hinweis:* `Future.wait()` parallelisiert die async Calls, löst aber nicht das fundamentale Problem, dass libsecret auf Linux synchron über DBus blockt. Vollständige Lösung wäre `compute()` Isolate für Storage-Operationen, was aber API-Änderungen an flutter_secure_storage erfordern würde.
   *Quelle: Refactoring Plan #2*
 
 ### Hoch

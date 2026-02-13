@@ -26,6 +26,10 @@ class ChatPreloadService {
   static bool _isPreloadComplete = false;
   static bool get isPreloadComplete => _isPreloadComplete;
 
+  /// Count of failed chat loads (for diagnostics)
+  static int _failureCount = 0;
+  static int get failureCount => _failureCount;
+
   /// Completer for awaiting preload completion
   static Completer<void>? _preloadCompleter;
 
@@ -58,7 +62,9 @@ class ChatPreloadService {
     // Already complete or in progress
     if (_isPreloadComplete || _isPreloading) {
       if (kDebugMode) {
-        debugPrint('⏭️ [Preload] Already ${_isPreloadComplete ? "complete" : "in progress"}');
+        debugPrint(
+          '⏭️ [Preload] Already ${_isPreloadComplete ? "complete" : "in progress"}',
+        );
       }
       return;
     }
@@ -103,7 +109,9 @@ class ChatPreloadService {
 
       if (chatsToLoad.isEmpty) {
         if (kDebugMode) {
-          debugPrint('✅ [Preload] All ${ChatStorageState.chatsById.length} chats already loaded');
+          debugPrint(
+            '✅ [Preload] All ${ChatStorageState.chatsById.length} chats already loaded',
+          );
         }
         _isPreloadComplete = true;
         _progress = 1.0;
@@ -113,7 +121,9 @@ class ChatPreloadService {
       }
 
       if (kDebugMode) {
-        debugPrint('📦 [Preload] Loading $_totalCount chats in batches of $_batchSize...');
+        debugPrint(
+          '📦 [Preload] Loading $_totalCount chats in batches of $_batchSize...',
+        );
       }
 
       // Process in batches to avoid blocking UI
@@ -137,7 +147,10 @@ class ChatPreloadService {
 
       stopwatch.stop();
       if (kDebugMode) {
-        debugPrint('✅ [Preload] Complete: $_totalCount chats in ${stopwatch.elapsedMilliseconds}ms');
+        debugPrint(
+          '✅ [Preload] Complete: $_totalCount chats in ${stopwatch.elapsedMilliseconds}ms'
+          '${_failureCount > 0 ? ' ($_failureCount failed)' : ''}',
+        );
       }
 
       _isPreloadComplete = true;
@@ -163,7 +176,9 @@ class ChatPreloadService {
       // Fetch full payloads from Supabase
       final rows = await SupabaseService.client
           .from('encrypted_chats')
-          .select('id, encrypted_payload, created_at, is_starred, updated_at, encrypted_title')
+          .select(
+            'id, encrypted_payload, created_at, is_starred, updated_at, encrypted_title',
+          )
           .eq('user_id', userId)
           .inFilter('id', chatIds);
 
@@ -210,12 +225,14 @@ class ChatPreloadService {
 
           ChatStorageState.chatsById[chatId] = chat;
         } catch (e) {
+          _failureCount++;
           if (kDebugMode) {
             debugPrint('⚠️ [Preload] Failed to deserialize chat: $e');
           }
         }
       }
     } catch (e) {
+      _failureCount++;
       if (kDebugMode) {
         debugPrint('⚠️ [Preload] Batch load failed: $e');
       }
@@ -251,6 +268,7 @@ class ChatPreloadService {
     _progress = 0.0;
     _loadedCount = 0;
     _totalCount = 0;
+    _failureCount = 0;
     _preloadCompleter?.complete();
     _preloadCompleter = null;
   }

@@ -49,10 +49,7 @@ class RateLimitResult {
   });
 
   factory RateLimitResult.allowed(int requestsRemaining) {
-    return RateLimitResult(
-      allowed: true,
-      requestsRemaining: requestsRemaining,
-    );
+    return RateLimitResult(allowed: true, requestsRemaining: requestsRemaining);
   }
 
   factory RateLimitResult.denied({
@@ -98,7 +95,8 @@ class ApiRateLimiter {
       if (timeSinceLastRequest < config.minRequestInterval) {
         final retryAfter = config.minRequestInterval - timeSinceLastRequest;
         return RateLimitResult.denied(
-          message: 'Too many requests. Please wait ${retryAfter.inSeconds} second(s).',
+          message:
+              'Too many requests. Please wait ${retryAfter.inSeconds} second(s).',
           retryAfter: retryAfter,
           requestsRemaining: 0,
         );
@@ -120,7 +118,8 @@ class ApiRateLimiter {
       final retryAfter = resetTime.difference(now);
 
       return RateLimitResult.denied(
-        message: 'Rate limit exceeded. Try again in ${_formatDuration(retryAfter)}.',
+        message:
+            'Rate limit exceeded. Try again in ${_formatDuration(retryAfter)}.',
         retryAfter: retryAfter,
         requestsRemaining: 0,
       );
@@ -133,10 +132,7 @@ class ApiRateLimiter {
   }
 
   /// Record a successful request.
-  void recordRequest({
-    required String endpoint,
-    required String userId,
-  }) {
+  void recordRequest({required String endpoint, required String userId}) {
     final now = DateTime.now();
     final key = '$endpoint:$userId';
 
@@ -159,7 +155,9 @@ class ApiRateLimiter {
     final windowStart = now.subtract(config.timeWindow);
 
     final userHistory = _requestHistory[endpoint]?[userId] ?? [];
-    final recentRequests = userHistory.where((t) => t.isAfter(windowStart)).length;
+    final recentRequests = userHistory
+        .where((t) => t.isAfter(windowStart))
+        .length;
 
     return config.maxRequests - recentRequests;
   }
@@ -174,7 +172,9 @@ class ApiRateLimiter {
     final windowStart = now.subtract(config.timeWindow);
 
     final userHistory = _requestHistory[endpoint]?[userId] ?? [];
-    final recentRequests = userHistory.where((t) => t.isAfter(windowStart)).toList();
+    final recentRequests = userHistory
+        .where((t) => t.isAfter(windowStart))
+        .toList();
 
     if (recentRequests.isEmpty || recentRequests.length < config.maxRequests) {
       return null; // No rate limit active
@@ -233,15 +233,15 @@ class ApiRateLimiter {
       config: config,
     );
 
-      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      debugPrint('📊 RATE LIMIT STATUS');
-      debugPrint('Endpoint: $endpoint');
-      debugPrint('Requests remaining: $remaining/${config.maxRequests}');
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    debugPrint('📊 RATE LIMIT STATUS');
+    debugPrint('Endpoint: $endpoint');
+    debugPrint('Requests remaining: $remaining/${config.maxRequests}');
     if (resetTime != null) {
-        debugPrint('Resets in: ${_formatDuration(resetTime)}');
+      debugPrint('Resets in: ${_formatDuration(resetTime)}');
     } else {
-        debugPrint('No active limit');
+      debugPrint('No active limit');
     }
-      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   }
 }

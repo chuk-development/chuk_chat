@@ -46,7 +46,7 @@ class WebSocketChatService {
   /// Timeouts:
   /// - Connection: [_connectionTimeout] (15s)
   /// - First chunk: [_firstChunkTimeout] (120s) — covers model "thinking" time
-  /// - Between chunks: [_interChunkTimeout] (60s) — detects dead connections
+  /// - Between chunks: 60s via StreamingManager idle timer — detects dead connections
   static Stream<ChatStreamEvent> sendStreamingChat({
     required String accessToken,
     required String message,
@@ -223,12 +223,6 @@ class WebSocketChatService {
           'The server may be overloaded — please try again.',
         );
       }
-    } on TimeoutException {
-      // Inter-chunk timeout (from StreamingManager idle timer)
-      yield ChatStreamEvent.error(
-        'Response timed out — the server stopped responding. '
-        'Please try again.',
-      );
     } on WebSocketChannelException catch (e) {
       if (kDebugMode) {
         debugPrint(

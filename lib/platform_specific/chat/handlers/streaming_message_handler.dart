@@ -19,7 +19,13 @@ class StreamingMessageHandler {
   Function()? onUpdateUI;
   Function(int index, String content, String reasoning, String chatId)?
   onMessageUpdate;
-  Function(int index, String content, String reasoning, String chatId, double? tps)?
+  Function(
+    int index,
+    String content,
+    String reasoning,
+    String chatId,
+    double? tps,
+  )?
   onMessageFinalize;
   Function(String chatId, int index, String content, String reasoning)?
   onBackgroundUpdate;
@@ -52,8 +58,8 @@ class StreamingMessageHandler {
     bool includeReasoningInHistory = false,
   }) async {
     // Check if THIS specific chat is currently streaming (not some other chat)
-    final bool thisChatIsStreaming = activeChatId != null &&
-        _streamingManager.isStreaming(activeChatId);
+    final bool thisChatIsStreaming =
+        activeChatId != null && _streamingManager.isStreaming(activeChatId);
 
     if (thisChatIsStreaming) {
       await cancelStream(activeChatId);
@@ -78,9 +84,13 @@ class StreamingMessageHandler {
 
     // Debug: Log attached files
     if (kDebugMode) {
-      debugPrint('📎 [StreamingHandler] Received ${attachedFiles.length} attached files');
+      debugPrint(
+        '📎 [StreamingHandler] Received ${attachedFiles.length} attached files',
+      );
       for (final f in attachedFiles) {
-        debugPrint('  - ${f.fileName}: isImage=${f.isImage}, encryptedPath=${f.encryptedImagePath}, isUploading=${f.isUploading}');
+        debugPrint(
+          '  - ${f.fileName}: isImage=${f.isImage}, encryptedPath=${f.encryptedImagePath}, isUploading=${f.isUploading}',
+        );
       }
     }
 
@@ -125,7 +135,10 @@ class StreamingMessageHandler {
       debugPrint('  - images: ${images?.length ?? 0}');
       if (images != null && images.isNotEmpty) {
         for (int i = 0; i < images.length; i++) {
-            debugPrint('  - image[$i]: ${images[i].substring(0, 50)}...');
+          final preview = images[i].length > 50
+              ? images[i].substring(0, 50)
+              : images[i];
+          debugPrint('  - image[$i]: $preview...');
         }
       }
     }
@@ -204,7 +217,8 @@ class StreamingMessageHandler {
         onError: (errorMessage) {
           // Handle 402 Payment Required from API server
           if (errorMessage == '__PAYMENT_REQUIRED__') {
-            final paymentMessage = 'You have used all free messages. Please subscribe to continue chatting.';
+            final paymentMessage =
+                'You have used all free messages. Please subscribe to continue chatting.';
             if (onMessageFinalize != null) {
               onMessageFinalize!(
                 placeholderIndex,
@@ -247,7 +261,7 @@ class StreamingMessageHandler {
         },
       );
     } catch (error) {
-        debugPrint('Failed to start stream: $error');
+      debugPrint('Failed to start stream: $error');
       if (onMessageFinalize != null) {
         onMessageFinalize!(
           placeholderIndex,
@@ -268,7 +282,7 @@ class StreamingMessageHandler {
   /// Cancel active stream
   Future<void> cancelStream(String? chatId) async {
     if (chatId != null && (_isStreaming || _isSending)) {
-        debugPrint('Cancelling stream for chat $chatId...');
+      debugPrint('Cancelling stream for chat $chatId...');
       await _streamingManager.cancelStream(chatId);
 
       _isStreaming = false;
@@ -316,7 +330,10 @@ class StreamingMessageHandler {
   }
 
   /// Store background messages for a streaming chat when user switches away
-  void setBackgroundMessages(String chatId, List<Map<String, dynamic>> messages) {
+  void setBackgroundMessages(
+    String chatId,
+    List<Map<String, dynamic>> messages,
+  ) {
     _streamingManager.setBackgroundMessages(chatId, messages);
   }
 
@@ -354,8 +371,12 @@ class StreamingMessageHandler {
       final String? text = message['text'];
 
       if (sender == 'user') {
-        final bool hasImages = message['images'] != null && message['images']!.isNotEmpty;
-        final bool shouldAddImages = shouldIncludeImages && hasImages && imageEligibleIndices.contains(i);
+        final bool hasImages =
+            message['images'] != null && message['images']!.isNotEmpty;
+        final bool shouldAddImages =
+            shouldIncludeImages &&
+            hasImages &&
+            imageEligibleIndices.contains(i);
 
         if (shouldAddImages) {
           // Build multimodal content with text + images
@@ -383,7 +404,8 @@ class StreamingMessageHandler {
         if (includeReasoning) {
           final reasoning = message['reasoning'] ?? '';
           if (reasoning.isNotEmpty) {
-            assistantContent = '<thinking>\n$reasoning\n</thinking>\n\n$assistantContent';
+            assistantContent =
+                '<thinking>\n$reasoning\n</thinking>\n\n$assistantContent';
           }
         }
         history.add({'role': 'assistant', 'content': assistantContent});
@@ -433,11 +455,13 @@ class StreamingMessageHandler {
           _imageBase64Cache[path] = dataUrl;
           dataUrls.add(dataUrl);
         } catch (e) {
-            debugPrint('⚠️ [StreamingHandler] Failed to resolve history image: $e');
+          debugPrint(
+            '⚠️ [StreamingHandler] Failed to resolve history image: $e',
+          );
         }
       }
     } catch (e) {
-        debugPrint('⚠️ [StreamingHandler] Failed to parse images JSON: $e');
+      debugPrint('⚠️ [StreamingHandler] Failed to parse images JSON: $e');
     }
     return dataUrls;
   }
@@ -468,13 +492,13 @@ class StreamingMessageHandler {
     } catch (error) {
       // Check if this is a network error
       if (NetworkStatusService.isNetworkError(error)) {
-          debugPrint('Network error during session refresh: $error');
+        debugPrint('Network error during session refresh: $error');
         onShowSnackBar?.call('Network error. Please check your connection.');
         return null;
       }
 
       // Not a network error, likely auth issue
-        debugPrint('Auth error during session refresh: $error');
+      debugPrint('Auth error during session refresh: $error');
       onShowSnackBar?.call('Authentication error. Please sign in again.');
       await SupabaseService.signOut();
       return null;
