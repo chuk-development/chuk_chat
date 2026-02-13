@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/chat_sync_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/streaming_manager.dart';
 import 'package:chuk_chat/services/profile_service.dart';
@@ -76,14 +77,18 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
       }
     });
     // Monitor network status for offline indicators
-    NetworkStatusService.isOnlineListenable.addListener(_onNetworkStatusChanged);
+    NetworkStatusService.isOnlineListenable.addListener(
+      _onNetworkStatusChanged,
+    );
   }
 
   @override
   void dispose() {
     _chatUpdatesSub?.cancel();
     _deleteNotificationTimer?.cancel();
-    NetworkStatusService.isOnlineListenable.removeListener(_onNetworkStatusChanged);
+    NetworkStatusService.isOnlineListenable.removeListener(
+      _onNetworkStatusChanged,
+    );
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     super.dispose();
@@ -108,13 +113,15 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
     _searchController.clear();
   }
 
-  // Refreshes chats from storage and re-filters
+  // Refreshes chats from network via ChatSyncService and re-filters.
+  // Uses syncNow() instead of loadSavedChatsForSidebar() to avoid
+  // redundant local-cache reloads — the sync service fetches from the
+  // server and updates local state, which triggers the changes stream.
   Future<void> _loadChatsAndRefresh() async {
-    await ChatStorageService.loadSavedChatsForSidebar();
+    await ChatSyncService.syncNow();
     if (mounted) {
       setState(() {
-        _filterRecentChats(); // Filter after loading/refreshing chats
-        // Update offline mode based on current network status
+        _filterRecentChats();
         _isOfflineMode = !NetworkStatusService.isOnline;
       });
     }
@@ -242,16 +249,22 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
         debugPrint('');
       }
       if (kDebugMode) {
-        debugPrint('═══════════════════════════════════════════════════════════');
+        debugPrint(
+          '═══════════════════════════════════════════════════════════',
+        );
       }
       if (kDebugMode) {
         debugPrint('🚫 [SIDEBAR] BLOCKED - Chat is still loading');
       }
       if (kDebugMode) {
-        debugPrint('🚫 [SIDEBAR] User tried to click: "${chat.previewText.substring(0, chat.previewText.length > 30 ? 30 : chat.previewText.length)}..."');
+        debugPrint(
+          '🚫 [SIDEBAR] User tried to click: "${chat.previewText.substring(0, chat.previewText.length > 30 ? 30 : chat.previewText.length)}..."',
+        );
       }
       if (kDebugMode) {
-        debugPrint('═══════════════════════════════════════════════════════════');
+        debugPrint(
+          '═══════════════════════════════════════════════════════════',
+        );
       }
       return;
     }
@@ -262,7 +275,9 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
       debugPrint('═══════════════════════════════════════════════════════════');
     }
     if (kDebugMode) {
-      debugPrint('👆 [SIDEBAR] User clicked chat: "${chat.previewText.substring(0, chat.previewText.length > 30 ? 30 : chat.previewText.length)}..."');
+      debugPrint(
+        '👆 [SIDEBAR] User clicked chat: "${chat.previewText.substring(0, chat.previewText.length > 30 ? 30 : chat.previewText.length)}..."',
+      );
     }
     if (kDebugMode) {
       debugPrint('👆 [SIDEBAR] Chat ID: ${chat.id}');
@@ -390,11 +405,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      Icons.cloud_off,
-                      size: 14,
-                      color: Colors.orange,
-                    ),
+                    Icon(Icons.cloud_off, size: 14, color: Colors.orange),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
@@ -408,17 +419,17 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
                     ),
                     const SizedBox(width: 6),
                     IconButton(
-                      icon: Icon(
-                        Icons.refresh,
-                        size: 14,
-                        color: Colors.orange,
-                      ),
+                      icon: Icon(Icons.refresh, size: 14, color: Colors.orange),
                       tooltip: 'Check for updates',
                       padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints.tightFor(width: 20, height: 20),
+                      constraints: const BoxConstraints.tightFor(
+                        width: 20,
+                        height: 20,
+                      ),
                       onPressed: () async {
                         // Quick network check and refresh if online
-                        final isOnline = await NetworkStatusService.quickCheck();
+                        final isOnline =
+                            await NetworkStatusService.quickCheck();
                         if (isOnline && mounted) {
                           await _loadChatsAndRefresh();
                         }
@@ -429,7 +440,9 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
               ),
             ),
 
-          const SizedBox(height: 8), // Spacing after search bar or offline indicator
+          const SizedBox(
+            height: 8,
+          ), // Spacing after search bar or offline indicator
           // Starred Section - Fixed
           _buildSectionHeader('Starred', iconFg: iconFg),
           if (starredChats.isEmpty)
@@ -505,13 +518,19 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
                         debugPrint('');
                       }
                       if (kDebugMode) {
-                        debugPrint('═══════════════════════════════════════════════════════════');
+                        debugPrint(
+                          '═══════════════════════════════════════════════════════════',
+                        );
                       }
                       if (kDebugMode) {
-                        debugPrint('🚫 [SIDEBAR-DESKTOP] BLOCKED - Chat is still loading');
+                        debugPrint(
+                          '🚫 [SIDEBAR-DESKTOP] BLOCKED - Chat is still loading',
+                        );
                       }
                       if (kDebugMode) {
-                        debugPrint('═══════════════════════════════════════════════════════════');
+                        debugPrint(
+                          '═══════════════════════════════════════════════════════════',
+                        );
                       }
                       return;
                     }
@@ -519,19 +538,29 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
                       debugPrint('');
                     }
                     if (kDebugMode) {
-                      debugPrint('═══════════════════════════════════════════════════════════');
+                      debugPrint(
+                        '═══════════════════════════════════════════════════════════',
+                      );
                     }
                     if (kDebugMode) {
-                      debugPrint('👆 [SIDEBAR-DESKTOP] User tapped recent chat');
+                      debugPrint(
+                        '👆 [SIDEBAR-DESKTOP] User tapped recent chat',
+                      );
                     }
                     if (kDebugMode) {
-                      debugPrint('👆 [SIDEBAR-DESKTOP] Chat ID: ${storedChat.id}');
+                      debugPrint(
+                        '👆 [SIDEBAR-DESKTOP] Chat ID: ${storedChat.id}',
+                      );
                     }
                     if (kDebugMode) {
-                      debugPrint('👆 [SIDEBAR-DESKTOP] Preview: "${storedChat.previewText.substring(0, storedChat.previewText.length > 40 ? 40 : storedChat.previewText.length)}..."');
+                      debugPrint(
+                        '👆 [SIDEBAR-DESKTOP] Preview: "${storedChat.previewText.substring(0, storedChat.previewText.length > 40 ? 40 : storedChat.previewText.length)}..."',
+                      );
                     }
                     if (kDebugMode) {
-                      debugPrint('═══════════════════════════════════════════════════════════');
+                      debugPrint(
+                        '═══════════════════════════════════════════════════════════',
+                      );
                     }
                     widget.onChatSelected(storedChat.id);
                   },
@@ -764,7 +793,11 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
   }
 
   // Handle menu item selection
-  void _handleMenuSelection(String value, StoredChat chat, VoidCallback? onDelete) {
+  void _handleMenuSelection(
+    String value,
+    StoredChat chat,
+    VoidCallback? onDelete,
+  ) {
     switch (value) {
       case 'star':
         _toggleStarred(chat);
@@ -822,9 +855,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
             const SizedBox(width: 12),
             Text(
               'Delete',
-              style: TextStyle(
-                color: Colors.redAccent.withValues(alpha: 0.8),
-              ),
+              style: TextStyle(color: Colors.redAccent.withValues(alpha: 0.8)),
             ),
           ],
         ),
@@ -982,7 +1013,8 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
   Future<void> _confirmAndDeleteChat(StoredChat chat) async {
     final messenger = ScaffoldMessenger.of(context);
     // Get chat title for display
-    final chatTitle = chat.customName ??
+    final chatTitle =
+        chat.customName ??
         (chat.previewText.length > 40
             ? '${chat.previewText.substring(0, 40)}...'
             : chat.previewText);
@@ -1014,11 +1046,9 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
 
     try {
       await ChatStorageService.deleteChat(chat.id);
-      await ChatStorageService.loadSavedChatsForSidebar();
+      // No need to reload — deleteChat() updates local state and fires notifyChanges().
+      // The changes stream listener in initState handles the UI rebuild.
       if (!mounted) return;
-      setState(() {
-        _filterRecentChats();
-      });
       if (widget.onChatDeleted != null) {
         await widget.onChatDeleted!(chat.id);
       }

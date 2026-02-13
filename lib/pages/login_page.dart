@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 
 import 'package:chuk_chat/services/auth_service.dart';
-import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/session_tracking_service.dart';
 import 'package:chuk_chat/supabase_config.dart';
@@ -71,7 +70,8 @@ class _LoginPageState extends State<LoginPage> {
     // Check if user agreed to terms when signing up
     if (!_isSignInMode && !_agreedToTerms) {
       setState(() {
-        _errorMessage = 'You must agree to the Terms of Service and Privacy Policy to create an account.';
+        _errorMessage =
+            'You must agree to the Terms of Service and Privacy Policy to create an account.';
       });
       return;
     }
@@ -79,7 +79,8 @@ class _LoginPageState extends State<LoginPage> {
     // Check if user confirmed minimum age when signing up
     if (!_isSignInMode && !_confirmedAge) {
       setState(() {
-        _errorMessage = 'You must be at least 16 years old to use this service.';
+        _errorMessage =
+            'You must be at least 16 years old to use this service.';
       });
       return;
     }
@@ -96,26 +97,9 @@ class _LoginPageState extends State<LoginPage> {
       if (_isSignInMode) {
         await _authService.signInWithPassword(email: email, password: password);
         await EncryptionService.initializeForPassword(password);
-        try {
-          await ChatStorageService.loadSavedChatsForSidebar();
-          ChatStorageService.selectedChatIndex = -1;
-        } catch (error) {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Could not sync chats: $error',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-              ),
-              behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              duration: const Duration(seconds: 2),
-              dismissDirection: DismissDirection.horizontal,
-            ),
-          );
-        }
+        // Chat loading is handled by AppInitializationService via AuthGate.
+        // No need to call loadSavedChatsForSidebar() here — it would race
+        // with the automatic initialization triggered by the auth state change.
       } else {
         final displayName = _displayNameCtrl.text.trim();
         await _authService.signUpWithPassword(
@@ -133,7 +117,9 @@ class _LoginPageState extends State<LoginPage> {
             ),
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             duration: const Duration(seconds: 2),
             dismissDirection: DismissDirection.horizontal,
@@ -157,7 +143,9 @@ class _LoginPageState extends State<LoginPage> {
             ),
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             duration: const Duration(seconds: 2),
             dismissDirection: DismissDirection.horizontal,
@@ -276,9 +264,11 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.info_outline,
-                                size: 18,
-                                color: Colors.orange.shade200),
+                            Icon(
+                              Icons.info_outline,
+                              size: 18,
+                              color: Colors.orange.shade200,
+                            ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
@@ -396,7 +386,9 @@ class _LoginPageState extends State<LoginPage> {
                               });
                             },
                             activeColor: theme.colorScheme.primary,
-                            fillColor: WidgetStateProperty.resolveWith<Color>((states) {
+                            fillColor: WidgetStateProperty.resolveWith<Color>((
+                              states,
+                            ) {
                               if (states.contains(WidgetState.selected)) {
                                 return theme.colorScheme.primary;
                               }
@@ -416,9 +408,7 @@ class _LoginPageState extends State<LoginPage> {
                                     color: iconFg.withValues(alpha: 0.7),
                                   ),
                                   children: [
-                                    const TextSpan(
-                                      text: 'I agree to the ',
-                                    ),
+                                    const TextSpan(text: 'I agree to the '),
                                     TextSpan(
                                       text: 'Terms of Service',
                                       style: TextStyle(
@@ -427,12 +417,12 @@ class _LoginPageState extends State<LoginPage> {
                                       ),
                                       recognizer: TapGestureRecognizer()
                                         ..onTap = () {
-                                          _launchUrl('https://chuk.chat/en/terms/');
+                                          _launchUrl(
+                                            'https://chuk.chat/en/terms/',
+                                          );
                                         },
                                     ),
-                                    const TextSpan(
-                                      text: ' and ',
-                                    ),
+                                    const TextSpan(text: ' and '),
                                     TextSpan(
                                       text: 'Privacy Policy',
                                       style: TextStyle(
@@ -441,7 +431,9 @@ class _LoginPageState extends State<LoginPage> {
                                       ),
                                       recognizer: TapGestureRecognizer()
                                         ..onTap = () {
-                                          _launchUrl('https://chuk.chat/en/privacy/');
+                                          _launchUrl(
+                                            'https://chuk.chat/en/privacy/',
+                                          );
                                         },
                                     ),
                                   ],
@@ -463,7 +455,9 @@ class _LoginPageState extends State<LoginPage> {
                               });
                             },
                             activeColor: theme.colorScheme.primary,
-                            fillColor: WidgetStateProperty.resolveWith<Color>((states) {
+                            fillColor: WidgetStateProperty.resolveWith<Color>((
+                              states,
+                            ) {
                               if (states.contains(WidgetState.selected)) {
                                 return theme.colorScheme.primary;
                               }
@@ -491,8 +485,10 @@ class _LoginPageState extends State<LoginPage> {
                       child: SizedBox(
                         height: 48,
                         child: ElevatedButton(
-                          onPressed: _isSubmitting ||
-                                  (!_isSignInMode && (!_agreedToTerms || !_confirmedAge))
+                          onPressed:
+                              _isSubmitting ||
+                                  (!_isSignInMode &&
+                                      (!_agreedToTerms || !_confirmedAge))
                               ? null
                               : _handleSubmit,
                           child: _isSubmitting

@@ -4,7 +4,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/platform_config.dart';
-import 'package:chuk_chat/services/chat_storage_service.dart'; // Assuming this exists
+import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/chat_sync_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/profile_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -81,7 +82,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
       }
     });
     // Monitor network status for offline indicators
-    NetworkStatusService.isOnlineListenable.addListener(_onNetworkStatusChanged);
+    NetworkStatusService.isOnlineListenable.addListener(
+      _onNetworkStatusChanged,
+    );
     unawaited(_filterRecentChats());
   }
 
@@ -91,7 +94,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
     _refreshTimer?.cancel();
     _searchDebounce?.cancel();
     _deleteNotificationTimer?.cancel();
-    NetworkStatusService.isOnlineListenable.removeListener(_onNetworkStatusChanged);
+    NetworkStatusService.isOnlineListenable.removeListener(
+      _onNetworkStatusChanged,
+    );
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     super.dispose();
@@ -176,10 +181,12 @@ class _SidebarMobileState extends State<SidebarMobile> {
 
   Future<void> _performRefresh() async {
     try {
-      await ChatStorageService.loadSavedChatsForSidebar();
+      // Use syncNow() instead of loadSavedChatsForSidebar() to fetch
+      // from the server rather than redundantly reloading the local cache.
+      // The sync service updates local state and fires notifyChanges().
+      await ChatSyncService.syncNow();
       if (!mounted) return;
       await _filterRecentChats();
-      // Update offline mode based on current network status
       setState(() {
         _isOfflineMode = !NetworkStatusService.isOnline;
       });
@@ -234,7 +241,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
           ),
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           duration: const Duration(seconds: 2),
           dismissDirection: DismissDirection.horizontal,
@@ -249,7 +258,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
           ),
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           duration: const Duration(seconds: 2),
           dismissDirection: DismissDirection.horizontal,
@@ -272,7 +283,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
       debugPrint('👆 [SIDEBAR-MOBILE] Chat ID: ${chat.id}');
     }
     if (kDebugMode) {
-      debugPrint('👆 [SIDEBAR-MOBILE] Preview: "${chat.previewText.substring(0, chat.previewText.length > 40 ? 40 : chat.previewText.length)}..."');
+      debugPrint(
+        '👆 [SIDEBAR-MOBILE] Preview: "${chat.previewText.substring(0, chat.previewText.length > 40 ? 40 : chat.previewText.length)}..."',
+      );
     }
     if (kDebugMode) {
       debugPrint('═══════════════════════════════════════════════════════════');
@@ -300,7 +313,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
           ),
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           duration: const Duration(seconds: 2),
           dismissDirection: DismissDirection.horizontal,
@@ -312,7 +327,8 @@ class _SidebarMobileState extends State<SidebarMobile> {
   Future<void> _confirmAndDeleteChat(StoredChat chat) async {
     final messenger = ScaffoldMessenger.of(context);
     // Get chat title for display
-    final chatTitle = chat.customName ??
+    final chatTitle =
+        chat.customName ??
         (chat.previewText.length > 40
             ? '${chat.previewText.substring(0, 40)}...'
             : chat.previewText);
@@ -344,9 +360,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
 
     try {
       await ChatStorageService.deleteChat(chat.id);
-      await ChatStorageService.loadSavedChatsForSidebar();
+      // No need to reload — deleteChat() updates local state and fires notifyChanges().
+      // The changes stream listener in initState handles the UI rebuild.
       if (!mounted) return;
-      await _filterRecentChats();
       if (widget.onChatDeleted != null) {
         await widget.onChatDeleted!(chat.id);
       }
@@ -360,7 +376,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
           ),
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           duration: const Duration(seconds: 2),
           dismissDirection: DismissDirection.horizontal,
@@ -375,7 +393,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
           ),
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           duration: const Duration(seconds: 2),
           dismissDirection: DismissDirection.horizontal,
@@ -585,11 +605,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      Icons.cloud_off,
-                      size: 14,
-                      color: Colors.orange,
-                    ),
+                    Icon(Icons.cloud_off, size: 14, color: Colors.orange),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
@@ -603,17 +619,17 @@ class _SidebarMobileState extends State<SidebarMobile> {
                     ),
                     const SizedBox(width: 6),
                     IconButton(
-                      icon: Icon(
-                        Icons.refresh,
-                        size: 14,
-                        color: Colors.orange,
-                      ),
+                      icon: Icon(Icons.refresh, size: 14, color: Colors.orange),
                       tooltip: 'Check for updates',
                       padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints.tightFor(width: 20, height: 20),
+                      constraints: const BoxConstraints.tightFor(
+                        width: 20,
+                        height: 20,
+                      ),
                       onPressed: () async {
                         // Quick network check and refresh if online
-                        final isOnline = await NetworkStatusService.quickCheck();
+                        final isOnline =
+                            await NetworkStatusService.quickCheck();
                         if (isOnline && mounted) {
                           await _loadChatsAndRefresh();
                         }
@@ -738,19 +754,29 @@ class _SidebarMobileState extends State<SidebarMobile> {
                         debugPrint('');
                       }
                       if (kDebugMode) {
-                        debugPrint('═══════════════════════════════════════════════════════════');
+                        debugPrint(
+                          '═══════════════════════════════════════════════════════════',
+                        );
                       }
                       if (kDebugMode) {
-                        debugPrint('👆 [SIDEBAR-MOBILE] User tapped recent chat');
+                        debugPrint(
+                          '👆 [SIDEBAR-MOBILE] User tapped recent chat',
+                        );
                       }
                       if (kDebugMode) {
-                        debugPrint('👆 [SIDEBAR-MOBILE] Chat ID: ${storedChat.id}');
+                        debugPrint(
+                          '👆 [SIDEBAR-MOBILE] Chat ID: ${storedChat.id}',
+                        );
                       }
                       if (kDebugMode) {
-                        debugPrint('👆 [SIDEBAR-MOBILE] Preview: "${storedChat.previewText.substring(0, storedChat.previewText.length > 40 ? 40 : storedChat.previewText.length)}..."');
+                        debugPrint(
+                          '👆 [SIDEBAR-MOBILE] Preview: "${storedChat.previewText.substring(0, storedChat.previewText.length > 40 ? 40 : storedChat.previewText.length)}..."',
+                        );
                       }
                       if (kDebugMode) {
-                        debugPrint('═══════════════════════════════════════════════════════════');
+                        debugPrint(
+                          '═══════════════════════════════════════════════════════════',
+                        );
                       }
                       widget.onChatSelected(storedChat.id);
                     },
@@ -854,10 +880,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
           child: Text(
             label,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: textColor,
-              fontWeight: FontWeight.w600,
-            ),
+            style: TextStyle(color: textColor, fontWeight: FontWeight.w600),
           ),
         ),
       ],
@@ -1006,7 +1029,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
                   isStarred ? Icons.star : Icons.star_border,
                   color: isStarred ? accentColor : iconColor,
                 ),
-                title: Text(isStarred ? 'Remove from starred' : 'Add to starred'),
+                title: Text(
+                  isStarred ? 'Remove from starred' : 'Add to starred',
+                ),
                 onTap: () {
                   Navigator.pop(sheetContext);
                   _toggleStarred(chat);
@@ -1081,7 +1106,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
 
     controller.dispose();
 
-    if (newName == null || newName.isEmpty || newName == _deriveChatTitle(chat)) {
+    if (newName == null ||
+        newName.isEmpty ||
+        newName == _deriveChatTitle(chat)) {
       return;
     }
 
@@ -1098,7 +1125,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
           ),
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           duration: const Duration(seconds: 2),
           dismissDirection: DismissDirection.horizontal,
@@ -1113,7 +1142,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
           ),
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           duration: const Duration(seconds: 2),
           dismissDirection: DismissDirection.horizontal,

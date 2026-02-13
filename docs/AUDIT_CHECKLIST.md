@@ -173,9 +173,8 @@ Zuletzt konsolidiert: **2026-02-13**
 
 ### Hoch
 
-- [ ] **Dreifaches Chat-Loading (Race Condition)** — HOCH
-  `main.dart:248`, `sidebar_desktop.dart:61`, `sidebar_mobile.dart:68,122` — Chats werden von 3+ Stellen geladen. Load-Guard existiert, aber Timer läuft parallel zu ChatSyncService.
-  Fix: Sidebar-Loads entfernen, nur main.dart als einzige Load-Stelle.
+- [x] **Dreifaches Chat-Loading (Race Condition)** — HOCH
+  `loadSavedChatsForSidebar()` wurde von 5+ Stellen aufgerufen, die beim Startup/Login raceten. Fix: (1) Login-Page-Call entfernt — AuthGate triggert `initializeUserSession()` automatisch. (2) Post-Delete-Calls in beiden Sidebars entfernt — `deleteChat()` aktualisiert lokalen State + feuert `notifyChanges()`. (3) Post-NewChat-Call in Mobile entfernt — `persistChat()` feuert ebenfalls `notifyChanges()`. (4) Pull-to-Refresh in beiden Sidebars auf `ChatSyncService.syncNow()` umgestellt statt redundantem Cache-Reload. Einzige Startup-Load-Stelle: `AppInitializationService._loadUserData()`.
   *Quelle: Refactoring Plan #3*
 
 - [ ] **Doppelte Auth Subscription** — HOCH
@@ -280,10 +279,10 @@ Zuletzt konsolidiert: **2026-02-13**
 
 | Kategorie | Anzahl |
 |-----------|--------|
-| Behoben | 23 |
+| Behoben | 24 |
 | Kein echtes Problem | 5 |
 | **Offen — Flutter Client** | **8** |
-| **Offen — Architektur/Performance** | **6** |
+| **Offen — Architektur/Performance** | **5** |
 | **Offen — API Server** | **8** |
 | **Offen — Supabase/Infra** | **5** |
-| **Gesamt offen** | **27** |
+| **Gesamt offen** | **26** |
