@@ -247,25 +247,24 @@ Zuletzt konsolidiert: **2026-02-13**
 
 ## Offen — Supabase / Infrastruktur
 
-- [ ] **Widersprüchliche Migrations (get_credits_remaining)** — MITTEL
-  `api_server/supabase/migrations/20260124_get_credits_remaining.sql` vs. `20260120210546_fix_free_messages_security.sql` — API-Server-Version hat keinen `auth.uid()` Check. Welche zuletzt deployed wurde, ist unklar.
+- [x] **Widersprüchliche Migrations (get_credits_remaining)** — MITTEL
+  Diskrepanz aufgelöst: API-Server-Version (`20260124`) ist kanonisch (berechnet `allocated - SUM(usage)`, korrektere Logik). `auth.uid()` Check hinzugefügt: Authentifizierte User können nur eigene Credits abfragen, Service Role (webhooks/sync) darf beliebige User abfragen. `SECURITY DEFINER` hinzugefügt. chuk_chat-Version (`20260120`) als Stub markiert mit Verweis auf kanonische Version.
   *Quelle: Security Audit M7*
 
-- [ ] **Passwort-Minimum auf 6 Zeichen (Supabase)** — NIEDRIG
-  `supabase/config.toml:142` — Client erzwingt strengere Regeln, aber API akzeptiert 6 Zeichen ohne Requirements.
-  Fix: `minimum_password_length = 8`, `password_requirements = "lower_upper_letters_digits"`.
+- [x] **Passwort-Minimum auf 6 Zeichen (Supabase)** — NIEDRIG
+  `supabase/config.toml` — `minimum_password_length` auf 8 erhöht, `password_requirements` auf `"lower_upper_letters_digits"` gesetzt. Client-seitig `InputValidator.minPasswordLength` ebenfalls auf 8 angehoben. Test-Suite angepasst (7-Zeichen-Test, min-length-Test). *Hinweis: Produktions-Supabase muss separat über Dashboard aktualisiert werden.*
   *Quelle: Security Audit L6*
 
 - [ ] **CAPTCHA deaktiviert** — NIEDRIG
-  `supabase/config.toml:164-167` — Kein Captcha für Signup. Rate Limits existieren (30/5min), aber automatisierte Account-Erstellung möglich.
+  `supabase/config.toml:164-167` — Kein Captcha für Signup. Rate Limits existieren (30/5min), aber automatisierte Account-Erstellung möglich. *Erfordert Captcha-Provider (hCaptcha/Turnstile) API-Keys und Client-seitige Integration.*
   *Quelle: Security Audit I3*
 
 - [ ] **MFA deaktiviert** — NIEDRIG
-  `supabase/config.toml:241-254` — Alle MFA-Methoden (TOTP, Phone, WebAuthn) deaktiviert.
+  `supabase/config.toml:241-254` — Alle MFA-Methoden (TOTP, Phone, WebAuthn) deaktiviert. *Erfordert Client-seitige MFA-Flows (Enrollment, Verification) bevor Server-seitig aktiviert werden kann. Feature Request, kein Quick Fix.*
   *Quelle: Security Audit I4*
 
-- [ ] **Edge Function CORS Wildcard** — NIEDRIG
-  `supabase/functions/revoke-session/index.ts:14` — `Access-Control-Allow-Origin: *` statt eingeschränkter Origins.
+- [x] **Edge Function CORS Wildcard** — NIEDRIG
+  `supabase/functions/revoke-session/index.ts` — `Access-Control-Allow-Origin: *` durch Origin-Allowlist ersetzt (`chat.chuk.chat`, `localhost:8080/8081`). Dynamische Origin-Prüfung mit `Vary: Origin` Header. Nicht-gelistete Origins erhalten leeren CORS-Header.
   *Quelle: Security Audit*
 
 ---
@@ -274,10 +273,10 @@ Zuletzt konsolidiert: **2026-02-13**
 
 | Kategorie | Anzahl |
 |-----------|--------|
-| Behoben | 42 |
+| Behoben | 45 |
 | Kein echtes Problem | 5 |
 | **Offen — Flutter Client** | **3** |
 | **Offen — Architektur/Performance** | **0** |
 | **Offen — API Server** | **0** |
-| **Offen — Supabase/Infra** | **5** |
-| **Gesamt offen** | **8** |
+| **Offen — Supabase/Infra** | **2** |
+| **Gesamt offen** | **5** |

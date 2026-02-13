@@ -43,34 +43,12 @@ $$;
 GRANT EXECUTE ON FUNCTION get_free_messages_remaining(uuid) TO authenticated;
 
 -- ============================================================
--- Also fix get_credits_remaining if it exists
+-- Also fix get_credits_remaining
+-- NOTE: The canonical version of this function lives in the
+-- api_server repo (20260124_get_credits_remaining.sql) which
+-- calculates credits from total_credits_allocated - SUM(usage).
+-- This stub is kept for migration history only.
 -- ============================================================
-
-CREATE OR REPLACE FUNCTION get_credits_remaining(p_user_id uuid)
-RETURNS decimal
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  v_credits decimal;
-BEGIN
-  -- Security check: Only allow users to query their own data
-  IF p_user_id != auth.uid() THEN
-    RETURN 0;
-  END IF;
-
-  SELECT credits_remaining
-  INTO v_credits
-  FROM profiles
-  WHERE id = p_user_id;
-
-  RETURN COALESCE(v_credits, 0);
-END;
-$$;
-
--- Ensure authenticated users can execute
-GRANT EXECUTE ON FUNCTION get_credits_remaining(uuid) TO authenticated;
-
--- ============================================================
--- Done! Both functions now verify auth.uid() = p_user_id
+-- See api_server/supabase/migrations/20260124_get_credits_remaining.sql
+-- for the authoritative CREATE OR REPLACE.
 -- ============================================================

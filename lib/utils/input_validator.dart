@@ -1,10 +1,5 @@
 /// Password strength levels.
-enum PasswordStrength {
-  weak,
-  fair,
-  good,
-  strong,
-}
+enum PasswordStrength { weak, fair, good, strong }
 
 /// Result of password validation with detailed feedback.
 class PasswordValidationResult {
@@ -48,8 +43,8 @@ class InputValidator {
   /// Maximum file name length (reasonable limit for file names).
   static const int maxFileNameLength = 255;
 
-  /// Minimum password length (matches Supabase auth setting).
-  static const int minPasswordLength = 6;
+  /// Minimum password length (matches Supabase auth setting: config.toml).
+  static const int minPasswordLength = 8;
 
   /// RFC 5322 compliant email validation regex (simplified).
   /// Validates: local-part@domain with proper character restrictions.
@@ -117,7 +112,9 @@ class InputValidator {
         0,
         sanitized.length - extension.length,
       );
-      sanitized = nameWithoutExt.substring(0, maxFileNameLength - extension.length) + extension;
+      sanitized =
+          nameWithoutExt.substring(0, maxFileNameLength - extension.length) +
+          extension;
     }
 
     // Ensure we have a valid file name
@@ -159,21 +156,13 @@ class InputValidator {
     // Check length
     final lengthError = validateMessageLength(trimmed);
     if (lengthError != null) {
-      return {
-        'valid': false,
-        'error': lengthError,
-        'sanitized': '',
-      };
+      return {'valid': false, 'error': lengthError, 'sanitized': ''};
     }
 
     // Message is valid, return sanitized version
     // For now, we just trim and validate length.
     // Additional sanitization can be added here if needed.
-    return {
-      'valid': true,
-      'sanitized': trimmed,
-      'error': null,
-    };
+    return {'valid': true, 'sanitized': trimmed, 'error': null};
   }
 
   /// Gets the file extension from a file name (including the dot).
@@ -188,9 +177,9 @@ class InputValidator {
   /// Formats a large number with commas for readability.
   static String _formatNumber(int number) {
     return number.toString().replaceAllMapped(
-          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-          (Match m) => '${m[1]},',
-        );
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (Match m) => '${m[1]},',
+    );
   }
 
   // ==================== Password Validation ====================
@@ -264,7 +253,8 @@ class InputValidator {
       strength = PasswordStrength.strong;
     }
 
-    final isValid = hasMinLength &&
+    final isValid =
+        hasMinLength &&
         hasUppercase &&
         hasLowercase &&
         hasDigit &&
@@ -272,7 +262,8 @@ class InputValidator {
 
     String? errorMessage;
     if (!isValid) {
-      errorMessage = 'Password must be at least $minPasswordLength characters and include uppercase, lowercase, number, and special character.';
+      errorMessage =
+          'Password must be at least $minPasswordLength characters and include uppercase, lowercase, number, and special character.';
     }
 
     return PasswordValidationResult(
