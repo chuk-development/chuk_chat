@@ -7,7 +7,7 @@
 **After completing any task, ALWAYS do this in order:**
 
 1. `flutter test` — all must pass
-2. `coderabbit review --plain` — fix any findings
+2. `coderabbit review --plain` (timeout 300s) — fix any findings
 3. Commit with descriptive message
 4. `git push`
 
