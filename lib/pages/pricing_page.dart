@@ -251,7 +251,8 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
     final Color accent = theme.colorScheme.primary;
     final Color iconFg = theme.resolvedIconColor;
     final TextStyle? titleTextStyle = theme.appBarTheme.titleTextStyle;
-    final bool isMobile = kPlatformMobile || MediaQuery.of(context).size.width < 720;
+    final bool isMobile =
+        kPlatformMobile || MediaQuery.of(context).size.width < 720;
 
     if (_isLoading) {
       return Scaffold(
@@ -324,7 +325,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '€20/month plus tax',
+                      '€20/month',
                       style: TextStyle(
                         color: iconFg.withValues(alpha: 0.7),
                         fontSize: 18,
@@ -340,7 +341,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                       ),
                     ),
                     Text(
-                      '80% of your subscription goes to AI credits',
+                      'Unused credits expire at the end of each month.',
                       style: TextStyle(
                         color: iconFg.withValues(alpha: 0.6),
                         fontSize: 12,
@@ -535,7 +536,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'plus tax',
+                      '§19 UStG — no VAT charged',
                       style: TextStyle(
                         color: iconFg.withValues(alpha: 0.6),
                         fontSize: 12,
@@ -560,7 +561,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        '80% of your subscription is converted to spendable AI credits. Credits are used per token based on the model you choose.',
+                        'Your €16 in AI credits are used per token based on the model you choose. Unused credits expire at the end of each month.',
                         style: TextStyle(
                           color: iconFg.withValues(alpha: 0.8),
                           fontSize: 12,

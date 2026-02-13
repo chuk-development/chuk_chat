@@ -159,7 +159,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   final StreamingManager _streamingManager = StreamingManager();
 
   // Computed property - checks if CURRENT chat is streaming
-  bool get _isStreaming => _activeChatId != null && _streamingManager.isStreaming(_activeChatId!);
+  bool get _isStreaming =>
+      _activeChatId != null && _streamingManager.isStreaming(_activeChatId!);
   Timer? _autoSaveTimer;
   int? _editingMessageIndex;
 
@@ -235,22 +236,30 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         debugPrint('');
       }
       if (kDebugMode) {
-        debugPrint('┌─────────────────────────────────────────────────────────────');
+        debugPrint(
+          '┌─────────────────────────────────────────────────────────────',
+        );
       }
       if (kDebugMode) {
         debugPrint('│ 🔄 [CHAT-UI-DESKTOP] didUpdateWidget triggered');
       }
       if (kDebugMode) {
-        debugPrint('│ 🔄 [CHAT-UI-DESKTOP] OLD widget.selectedChatId: ${oldWidget.selectedChatId}');
+        debugPrint(
+          '│ 🔄 [CHAT-UI-DESKTOP] OLD widget.selectedChatId: ${oldWidget.selectedChatId}',
+        );
       }
       if (kDebugMode) {
-        debugPrint('│ 🔄 [CHAT-UI-DESKTOP] NEW widget.selectedChatId: ${widget.selectedChatId}');
+        debugPrint(
+          '│ 🔄 [CHAT-UI-DESKTOP] NEW widget.selectedChatId: ${widget.selectedChatId}',
+        );
       }
       if (kDebugMode) {
         debugPrint('│ 🔄 [CHAT-UI-DESKTOP] _activeChatId: $_activeChatId');
       }
       if (kDebugMode) {
-        debugPrint('└─────────────────────────────────────────────────────────────');
+        debugPrint(
+          '└─────────────────────────────────────────────────────────────',
+        );
       }
 
       // Skip if we're already on this chat
@@ -264,9 +273,13 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       // CRITICAL FIX: Don't clear an active chat just because parent sent null
       // This can happen due to stale parent rebuilds. If we have an active chat
       // with messages, keep it instead of switching to a blank "new" chat.
-      if (widget.selectedChatId == null && _activeChatId != null && _messages.isNotEmpty) {
+      if (widget.selectedChatId == null &&
+          _activeChatId != null &&
+          _messages.isNotEmpty) {
         if (kDebugMode) {
-          debugPrint('⚠️ [CHAT-UI-DESKTOP] IGNORING null from parent - we have active chat: $_activeChatId');
+          debugPrint(
+            '⚠️ [CHAT-UI-DESKTOP] IGNORING null from parent - we have active chat: $_activeChatId',
+          );
         }
         // Sync the parent back to our active chat
         widget.onChatIdChanged(_activeChatId);
@@ -282,7 +295,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       // 3. Persist in newChat() before clearing
       // 4. Chats are already saved to Supabase during message operations
       if (kDebugMode) {
-        debugPrint('│ 📝 [CHAT-UI-DESKTOP] Chat switch - NOT persisting (already saved on message ops)');
+        debugPrint(
+          '│ 📝 [CHAT-UI-DESKTOP] Chat switch - NOT persisting (already saved on message ops)',
+        );
       }
 
       _loadChatById(widget.selectedChatId);
@@ -323,7 +338,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       debugPrint('');
     }
     if (kDebugMode) {
-      debugPrint('┌─────────────────────────────────────────────────────────────');
+      debugPrint(
+        '┌─────────────────────────────────────────────────────────────',
+      );
     }
     if (kDebugMode) {
       debugPrint('│ 📂 [LOAD-CHAT-DESKTOP] _loadChatById called');
@@ -332,16 +349,21 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       debugPrint('│ 📂 [LOAD-CHAT-DESKTOP] chatId param: $chatId');
     }
     if (kDebugMode) {
-      debugPrint('│ 📂 [LOAD-CHAT-DESKTOP] Current _activeChatId: $_activeChatId');
+      debugPrint(
+        '│ 📂 [LOAD-CHAT-DESKTOP] Current _activeChatId: $_activeChatId',
+      );
     }
     if (kDebugMode) {
-      debugPrint('└─────────────────────────────────────────────────────────────');
+      debugPrint(
+        '└─────────────────────────────────────────────────────────────',
+      );
     }
 
     // BACKGROUND STREAMING: If current chat is streaming, snapshot messages
     // to StreamingManager before switching away. This allows the stream to
     // continue in background and persist correctly when complete.
-    if (_activeChatId != null && _streamingManager.isStreaming(_activeChatId!)) {
+    if (_activeChatId != null &&
+        _streamingManager.isStreaming(_activeChatId!)) {
       final messagesCopy = _messages
           .map((m) => Map<String, dynamic>.from(m))
           .toList();
@@ -352,7 +374,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         provider: _selectedProviderSlug,
       );
       if (kDebugMode) {
-        debugPrint('│ 📦 [LOAD-CHAT-DESKTOP] Snapshotted ${messagesCopy.length} messages for background stream: $_activeChatId');
+        debugPrint(
+          '│ 📦 [LOAD-CHAT-DESKTOP] Snapshotted ${messagesCopy.length} messages for background stream: $_activeChatId',
+        );
       }
     }
 
@@ -384,7 +408,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         debugPrint('│ ⚠️ [LOAD-CHAT-DESKTOP] Stale load detected, aborting');
       }
       if (kDebugMode) {
-        debugPrint('│ ⚠️ [LOAD-CHAT-DESKTOP] Expected: $chatId, Current: $_activeChatId');
+        debugPrint(
+          '│ ⚠️ [LOAD-CHAT-DESKTOP] Expected: $chatId, Current: $_activeChatId',
+        );
       }
       return;
     }
@@ -392,7 +418,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     if (chatId == null) {
       // New chat - clear everything
       if (kDebugMode) {
-        debugPrint('│ 📂 [LOAD-CHAT-DESKTOP] chatId is NULL - clearing for new chat');
+        debugPrint(
+          '│ 📂 [LOAD-CHAT-DESKTOP] chatId is NULL - clearing for new chat',
+        );
       }
       _messages.clear();
       _animCtrl.reset();
@@ -405,14 +433,18 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         // LAZY LOADING: Check if chat is fully loaded
         if (!storedChat.isFullyLoaded) {
           if (kDebugMode) {
-            debugPrint('│ 📂 [LOAD-CHAT-DESKTOP] Chat $chatId not fully loaded, fetching...');
+            debugPrint(
+              '│ 📂 [LOAD-CHAT-DESKTOP] Chat $chatId not fully loaded, fetching...',
+            );
           }
           storedChat = await ChatStorageService.loadFullChat(chatId);
 
           // Check for stale load again after async operation
           if (!mounted || _activeChatId != chatId) {
             if (kDebugMode) {
-              debugPrint('│ ⚠️ [LOAD-CHAT-DESKTOP] Stale after lazy load, aborting');
+              debugPrint(
+                '│ ⚠️ [LOAD-CHAT-DESKTOP] Stale after lazy load, aborting',
+              );
             }
             return;
           }
@@ -420,7 +452,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
         if (storedChat != null && storedChat.isFullyLoaded) {
           if (kDebugMode) {
-            debugPrint('│ 📂 [LOAD-CHAT-DESKTOP] FOUND chat $chatId with ${storedChat.messages.length} messages');
+            debugPrint(
+              '│ 📂 [LOAD-CHAT-DESKTOP] FOUND chat $chatId with ${storedChat.messages.length} messages',
+            );
           }
 
           _messages
@@ -443,14 +477,18 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                   map['images'] = message.images!;
                 }
                 // Include attachments if present
-                if (message.attachments != null && message.attachments!.isNotEmpty) {
+                if (message.attachments != null &&
+                    message.attachments!.isNotEmpty) {
                   map['attachments'] = message.attachments!;
                   if (kDebugMode) {
-                    debugPrint('📄 [AttachmentDebug] Loading message with attachments field');
+                    debugPrint(
+                      '📄 [AttachmentDebug] Loading message with attachments field',
+                    );
                   }
                 }
                 // Include attachedFilesJson for retry/resend support
-                if (message.attachedFilesJson != null && message.attachedFilesJson!.isNotEmpty) {
+                if (message.attachedFilesJson != null &&
+                    message.attachedFilesJson!.isNotEmpty) {
                   map['attachedFilesJson'] = message.attachedFilesJson!;
                 }
                 return map;
@@ -474,10 +512,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           debugPrint('│ ⚠️ [LOAD-CHAT-DESKTOP] Chat $chatId NOT FOUND!');
         }
         if (kDebugMode) {
-          debugPrint('│ ⚠️ [LOAD-CHAT-DESKTOP] Available chats: ${ChatStorageService.savedChats.map((c) => c.id).take(5).toList()}...');
+          debugPrint(
+            '│ ⚠️ [LOAD-CHAT-DESKTOP] Available chats: ${ChatStorageService.savedChats.map((c) => c.id).take(5).toList()}...',
+          );
         }
         if (kDebugMode) {
-          debugPrint('│ ⚠️ [LOAD-CHAT-DESKTOP] Treating as new chat, setting _activeChatId = null');
+          debugPrint(
+            '│ ⚠️ [LOAD-CHAT-DESKTOP] Treating as new chat, setting _activeChatId = null',
+          );
         }
         _messages.clear();
         _animCtrl.reset();
@@ -492,12 +534,20 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     final bool desktopChatIsStreaming =
         _activeChatId != null && _streamingManager.isStreaming(_activeChatId!);
     final bool desktopChatHasCompleted =
-        _activeChatId != null && _streamingManager.hasCompletedStream(_activeChatId!);
+        _activeChatId != null &&
+        _streamingManager.hasCompletedStream(_activeChatId!);
 
-    if (_activeChatId != null && (desktopChatIsStreaming || desktopChatHasCompleted)) {
-      final bufferedContent = _streamingManager.getBufferedContent(_activeChatId!);
-      final bufferedReasoning = _streamingManager.getBufferedReasoning(_activeChatId!);
-      final streamingIndex = _streamingManager.getStreamingMessageIndex(_activeChatId!);
+    if (_activeChatId != null &&
+        (desktopChatIsStreaming || desktopChatHasCompleted)) {
+      final bufferedContent = _streamingManager.getBufferedContent(
+        _activeChatId!,
+      );
+      final bufferedReasoning = _streamingManager.getBufferedReasoning(
+        _activeChatId!,
+      );
+      final streamingIndex = _streamingManager.getStreamingMessageIndex(
+        _activeChatId!,
+      );
 
       if (streamingIndex != null && streamingIndex < _messages.length) {
         _messages[streamingIndex]['text'] = bufferedContent ?? 'Thinking...';
@@ -542,7 +592,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           provider: _selectedProviderSlug,
         );
         if (kDebugMode) {
-          debugPrint('[NEW-CHAT] Snapshotted ${messagesToSave.length} messages for background stream: $chatIdToSave');
+          debugPrint(
+            '[NEW-CHAT] Snapshotted ${messagesToSave.length} messages for background stream: $chatIdToSave',
+          );
         }
       }
     }
@@ -569,7 +621,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // _activeChatId or calling widget.onChatIdChanged - we're now on a NEW chat!
     // Sidebar auto-updates via ChatStorageService.changes stream
     if (messagesToSave != null && chatIdToSave != null) {
-      unawaited(_persistChatInternal(messagesToSave, chatIdToSave, silent: true));
+      unawaited(
+        _persistChatInternal(messagesToSave, chatIdToSave, silent: true),
+      );
     }
   }
 
@@ -699,7 +753,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // If a project is active, prepend project context
     if (_selectedProjectId != null) {
       try {
-        final projectContext = await ProjectMessageService.buildProjectSystemMessage(_selectedProjectId!);
+        final projectContext =
+            await ProjectMessageService.buildProjectSystemMessage(
+              _selectedProjectId!,
+            );
         // Combine project context with user's system prompt
         if (basePrompt != null && basePrompt.isNotEmpty) {
           return '$projectContext\n\n---\n\nAdditional User Instructions:\n$basePrompt';
@@ -783,7 +840,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       }
 
       if (!mounted) return;
-      setState(() { _isTranscribingAudio = true; });
+      setState(() {
+        _isTranscribingAudio = true;
+      });
 
       try {
         final transcription = await _chatApiService.transcribeAudioBytes(
@@ -801,7 +860,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               TextPosition(offset: text.length),
             );
           });
-          Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+          Future.delayed(
+            Duration.zero,
+            () => _textFieldFocusNode.requestFocus(),
+          );
         }
       } on TranscriptionException catch (error) {
         switch (error.statusCode) {
@@ -810,10 +872,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             await SupabaseService.signOut();
             break;
           case 502:
-            _showSnackBar('Transcription service is unavailable. Please try again shortly.');
+            _showSnackBar(
+              'Transcription service is unavailable. Please try again shortly.',
+            );
             break;
           default:
-            final String message = error.message.isNotEmpty ? error.message : 'Failed to transcribe audio.';
+            final String message = error.message.isNotEmpty
+                ? error.message
+                : 'Failed to transcribe audio.';
             _showSnackBar(message);
         }
       } on TimeoutException {
@@ -822,7 +888,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         _showSnackBar('Unexpected transcription error: $error');
       } finally {
         _lastRecordedBytes = null;
-        if (mounted) { setState(() { _isTranscribingAudio = false; }); }
+        if (mounted) {
+          setState(() {
+            _isTranscribingAudio = false;
+          });
+        }
       }
       return;
     }
@@ -1193,7 +1263,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         if (decoded is List) {
           final storedImages = decoded.cast<String>();
           if (kDebugMode) {
-            debugPrint('🔄 [ResendDebug] Found ${storedImages.length} images for resend');
+            debugPrint(
+              '🔄 [ResendDebug] Found ${storedImages.length} images for resend',
+            );
           }
 
           // Convert encrypted storage paths to base64 data URLs
@@ -1203,14 +1275,19 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               // This is a storage path - download, decrypt, and convert to base64
               try {
                 if (kDebugMode) {
-                  debugPrint('🔄 [ResendDebug] Converting storage path to base64: $img');
+                  debugPrint(
+                    '🔄 [ResendDebug] Converting storage path to base64: $img',
+                  );
                 }
-                final imageBytes = await ImageStorageService.downloadAndDecryptImage(img);
+                final imageBytes =
+                    await ImageStorageService.downloadAndDecryptImage(img);
                 final base64Image = base64Encode(imageBytes);
                 final dataUrl = 'data:image/jpeg;base64,$base64Image';
                 imagesForResend.add(dataUrl);
                 if (kDebugMode) {
-                  debugPrint('🔄 [ResendDebug] Successfully converted image to base64');
+                  debugPrint(
+                    '🔄 [ResendDebug] Successfully converted image to base64',
+                  );
                 }
               } catch (e) {
                 if (kDebugMode) {
@@ -1223,7 +1300,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             }
           }
           if (kDebugMode) {
-            debugPrint('🔄 [ResendDebug] Converted ${imagesForResend.length} images for AI');
+            debugPrint(
+              '🔄 [ResendDebug] Converted ${imagesForResend.length} images for AI',
+            );
           }
         }
       } catch (e) {
@@ -1286,7 +1365,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     // Build conversation history up to the edited message (with images/reasoning support)
     final List<Map<String, dynamic>> conversationHistory = [];
-    final bool shouldIncludeImages = widget.includeRecentImagesInHistory || widget.includeAllImagesInHistory;
+    final bool shouldIncludeImages =
+        widget.includeRecentImagesInHistory || widget.includeAllImagesInHistory;
     final int imgWindow = widget.includeAllImagesInHistory ? index : 6;
     final Set<int> imgEligible = {};
     if (shouldIncludeImages) {
@@ -1303,15 +1383,20 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       final sender = msg['sender'];
       final text = msg['text'] ?? '';
       if (sender == 'user') {
-        final bool hasImages = msg['images'] != null && msg['images']!.isNotEmpty;
+        final bool hasImages =
+            msg['images'] != null && msg['images']!.isNotEmpty;
         if (shouldIncludeImages && hasImages && imgEligible.contains(i)) {
           final content = <Map<String, dynamic>>[];
           if (text.isNotEmpty) content.add({'type': 'text', 'text': text});
           final urls = await _resolveHistoryImages(msg['images']!);
           for (final u in urls) {
-            content.add({'type': 'image_url', 'image_url': {'url': u}});
+            content.add({
+              'type': 'image_url',
+              'image_url': {'url': u},
+            });
           }
-          if (content.isNotEmpty) conversationHistory.add({'role': 'user', 'content': content});
+          if (content.isNotEmpty)
+            conversationHistory.add({'role': 'user', 'content': content});
         } else if (text.isNotEmpty) {
           conversationHistory.add({'role': 'user', 'content': text});
         }
@@ -1321,10 +1406,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         if (widget.includeReasoningInHistory) {
           final reasoning = msg['reasoning'] ?? '';
           if (reasoning.isNotEmpty) {
-            assistantContent = '<thinking>\n$reasoning\n</thinking>\n\n$assistantContent';
+            assistantContent =
+                '<thinking>\n$reasoning\n</thinking>\n\n$assistantContent';
           }
         }
-        conversationHistory.add({'role': 'assistant', 'content': assistantContent});
+        conversationHistory.add({
+          'role': 'assistant',
+          'content': assistantContent,
+        });
       }
     }
 
@@ -1353,7 +1442,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         messageIndex: placeholderIndex,
         stream: eventStream,
         onUpdate: (content, reasoning) {
-          if (mounted && _isValidMessageIndex(placeholderIndex) && _activeChatId == chatIdForStream) {
+          if (mounted &&
+              _isValidMessageIndex(placeholderIndex) &&
+              _activeChatId == chatIdForStream) {
             setState(() {
               _messages[placeholderIndex]['text'] = content;
               _messages[placeholderIndex]['reasoning'] = reasoning;
@@ -1362,7 +1453,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           }
         },
         onComplete: (finalContent, finalReasoning, tps) {
-          final effectiveContent = finalContent.isEmpty ? 'No response received.' : finalContent;
+          final effectiveContent = finalContent.isEmpty
+              ? 'No response received.'
+              : finalContent;
 
           // Check if user is still viewing the same chat
           if (_activeChatId == chatIdForStream) {
@@ -1372,24 +1465,37 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 _isSending = false;
               });
             }
-            _finalizeAiMessage(placeholderIndex, effectiveContent, reasoning: finalReasoning, tps: tps);
+            _finalizeAiMessage(
+              placeholderIndex,
+              effectiveContent,
+              reasoning: finalReasoning,
+              tps: tps,
+            );
             _persistChatWithId(chatIdForStream);
           } else {
             // User switched to different chat - use background messages
             if (kDebugMode) {
-              debugPrint('[STREAM] User switched away, using background messages for $chatIdForStream');
+              debugPrint(
+                '[STREAM] User switched away, using background messages for $chatIdForStream',
+              );
             }
-            final backgroundMsgs = _streamingManager.getBackgroundMessages(chatIdForStream);
-            if (backgroundMsgs != null && placeholderIndex < backgroundMsgs.length) {
+            final backgroundMsgs = _streamingManager.getBackgroundMessages(
+              chatIdForStream,
+            );
+            if (backgroundMsgs != null &&
+                placeholderIndex < backgroundMsgs.length) {
               backgroundMsgs[placeholderIndex]['text'] = effectiveContent;
               backgroundMsgs[placeholderIndex]['reasoning'] = finalReasoning;
-              if (tps != null) backgroundMsgs[placeholderIndex]['tps'] = tps.toString();
+              if (tps != null)
+                backgroundMsgs[placeholderIndex]['tps'] = tps.toString();
               _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
             } else {
               // No background messages - this shouldn't happen if snapshot was made correctly
               // DO NOT use _persistChatWithId here as _messages belongs to a DIFFERENT chat!
               if (kDebugMode) {
-                debugPrint('[STREAM] WARNING: No background messages for $chatIdForStream - stream result may be lost');
+                debugPrint(
+                  '[STREAM] WARNING: No background messages for $chatIdForStream - stream result may be lost',
+                );
               }
             }
           }
@@ -1397,7 +1503,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         onError: (errorMessage) {
           // Handle 402 Payment Required from API server
           if (errorMessage == '__PAYMENT_REQUIRED__') {
-            final paymentMessage = 'You have used all free messages. Please subscribe to continue chatting.';
+            final paymentMessage =
+                'You have used all free messages. Please subscribe to continue chatting.';
             if (_activeChatId == chatIdForStream) {
               _finalizeAiMessage(placeholderIndex, paymentMessage);
               if (mounted) {
@@ -1408,8 +1515,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               _persistChatWithId(chatIdForStream);
             } else {
               // User switched chats - use background messages
-              final backgroundMsgs = _streamingManager.getBackgroundMessages(chatIdForStream);
-              if (backgroundMsgs != null && placeholderIndex < backgroundMsgs.length) {
+              final backgroundMsgs = _streamingManager.getBackgroundMessages(
+                chatIdForStream,
+              );
+              if (backgroundMsgs != null &&
+                  placeholderIndex < backgroundMsgs.length) {
                 backgroundMsgs[placeholderIndex]['text'] = paymentMessage;
                 backgroundMsgs[placeholderIndex]['reasoning'] = '';
                 _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
@@ -1432,17 +1542,24 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           } else {
             // User switched to different chat - use background messages
             if (kDebugMode) {
-              debugPrint('[STREAM] Error occurred, user switched away, using background messages for $chatIdForStream');
+              debugPrint(
+                '[STREAM] Error occurred, user switched away, using background messages for $chatIdForStream',
+              );
             }
-            final backgroundMsgs = _streamingManager.getBackgroundMessages(chatIdForStream);
-            if (backgroundMsgs != null && placeholderIndex < backgroundMsgs.length) {
+            final backgroundMsgs = _streamingManager.getBackgroundMessages(
+              chatIdForStream,
+            );
+            if (backgroundMsgs != null &&
+                placeholderIndex < backgroundMsgs.length) {
               backgroundMsgs[placeholderIndex]['text'] = 'Error: $errorMessage';
               backgroundMsgs[placeholderIndex]['reasoning'] = '';
               _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
             } else {
               // No background messages - DO NOT persist wrong messages
               if (kDebugMode) {
-                debugPrint('[STREAM] WARNING: No background messages for error in $chatIdForStream');
+                debugPrint(
+                  '[STREAM] WARNING: No background messages for error in $chatIdForStream',
+                );
               }
             }
           }
@@ -1698,11 +1815,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     setState(() {
       _isGeneratingImage = true;
       // Add user message with the prompt
-      _messages.add({
-        'sender': 'user',
-        'text': prompt,
-        'reasoning': '',
-      });
+      _messages.add({'sender': 'user', 'text': prompt, 'reasoning': ''});
       _controller.clear();
       // Add AI placeholder message
       _messages.add({
@@ -1755,7 +1868,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
           // Add cost info if available
           if (result.costEur != null) {
-            aiMessage['text'] = 'Image generated (${result.costEur!.toStringAsFixed(2)} EUR)';
+            aiMessage['text'] =
+                'Image generated (${result.costEur!.toStringAsFixed(2)} EUR)';
           }
 
           if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
@@ -1772,7 +1886,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         // Handle error
         setState(() {
           if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
-            _messages[placeholderIndex]['text'] = 'Error: ${result.errorMessage ?? "Image generation failed"}';
+            _messages[placeholderIndex]['text'] =
+                'Error: ${result.errorMessage ?? "Image generation failed"}';
           }
           _isGeneratingImage = false;
         });
@@ -1812,9 +1927,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
             Icon(
@@ -1840,10 +1953,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             ),
             const SizedBox(height: 12),
             Text(
-              'Subscribe to get unlimited AI chat messages and image generation credits.',
+              'Subscribe to get €16 in monthly AI credits for chat messages and image generation.',
               style: TextStyle(
                 fontSize: 14,
-                color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.8),
+                color: theme.textTheme.bodyMedium?.color?.withValues(
+                  alpha: 0.8,
+                ),
               ),
             ),
           ],
@@ -1883,9 +1998,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
             Icon(
@@ -1914,7 +2027,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               'Subscribe to get credits for AI image generation and chat messages.',
               style: TextStyle(
                 fontSize: 14,
-                color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.8),
+                color: theme.textTheme.bodyMedium?.color?.withValues(
+                  alpha: 0.8,
+                ),
               ),
             ),
           ],
@@ -2069,7 +2184,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     if (!mounted) {
       ChatStorageService.isMessageOperationInProgress = false;
       if (kDebugMode) {
-        debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (widget disposed during prepareMessage)');
+        debugPrint(
+          '🔓 [SendMessage] GLOBAL LOCK RELEASED (widget disposed during prepareMessage)',
+        );
       }
       return;
     }
@@ -2097,16 +2214,24 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         debugPrint('');
       }
       if (kDebugMode) {
-        debugPrint('┌─────────────────────────────────────────────────────────────');
+        debugPrint(
+          '┌─────────────────────────────────────────────────────────────',
+        );
       }
       if (kDebugMode) {
-        debugPrint('│ ⚠️ [SEND-DESKTOP] SYNCED _activeChatId with widget.selectedChatId');
+        debugPrint(
+          '│ ⚠️ [SEND-DESKTOP] SYNCED _activeChatId with widget.selectedChatId',
+        );
       }
       if (kDebugMode) {
-        debugPrint('│ ⚠️ [SEND-DESKTOP] _activeChatId was null, now: $_activeChatId');
+        debugPrint(
+          '│ ⚠️ [SEND-DESKTOP] _activeChatId was null, now: $_activeChatId',
+        );
       }
       if (kDebugMode) {
-        debugPrint('└─────────────────────────────────────────────────────────────');
+        debugPrint(
+          '└─────────────────────────────────────────────────────────────',
+        );
       }
     }
 
@@ -2119,16 +2244,22 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         debugPrint('');
       }
       if (kDebugMode) {
-        debugPrint('┌─────────────────────────────────────────────────────────────');
+        debugPrint(
+          '┌─────────────────────────────────────────────────────────────',
+        );
       }
       if (kDebugMode) {
         debugPrint('│ 🆔 [SEND-DESKTOP] PRE-GENERATED Chat ID: $_activeChatId');
       }
       if (kDebugMode) {
-        debugPrint('│ 🆔 [SEND-DESKTOP] This ID will be used for all persist calls');
+        debugPrint(
+          '│ 🆔 [SEND-DESKTOP] This ID will be used for all persist calls',
+        );
       }
       if (kDebugMode) {
-        debugPrint('└─────────────────────────────────────────────────────────────');
+        debugPrint(
+          '└─────────────────────────────────────────────────────────────',
+        );
       }
     }
 
@@ -2151,16 +2282,20 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       // Store document attachments as JSON-encoded string if present
       final documentAttachments = _attachedFiles
           .where((f) => !f.isImage && f.markdownContent != null)
-          .map((f) => {
-                'fileName': f.fileName,
-                'markdownContent': f.markdownContent!,
-              })
+          .map(
+            (f) => {
+              'fileName': f.fileName,
+              'markdownContent': f.markdownContent!,
+            },
+          )
           .toList();
 
       if (documentAttachments.isNotEmpty) {
         userMessage['attachments'] = jsonEncode(documentAttachments);
         if (kDebugMode) {
-          debugPrint('📄 [AttachmentDebug] Storing ${documentAttachments.length} attachments');
+          debugPrint(
+            '📄 [AttachmentDebug] Storing ${documentAttachments.length} attachments',
+          );
         }
       }
 
@@ -2170,13 +2305,17 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           _attachedFiles.map((f) => f.toJson()).toList(),
         );
         if (kDebugMode) {
-          debugPrint('💾 [AttachmentDebug] Storing ${_attachedFiles.length} attached files for resend');
+          debugPrint(
+            '💾 [AttachmentDebug] Storing ${_attachedFiles.length} attached files for resend',
+          );
         }
       }
 
       _messages.add(userMessage);
       if (kDebugMode) {
-        debugPrint('💾 [MessageDebug] Message added to _messages list. Total messages: ${_messages.length}');
+        debugPrint(
+          '💾 [MessageDebug] Message added to _messages list. Total messages: ${_messages.length}',
+        );
       }
 
       _controller.clear();
@@ -2206,30 +2345,31 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     // Auto-generate title for new chats (fire and forget)
     if (firstMessageInChat) {
-      unawaited(TitleGenerationService.generateAndApplyTitle(
-        chatIdForStream,
-        displayMessageText,
-      ));
+      unawaited(
+        TitleGenerationService.generateAndApplyTitle(
+          chatIdForStream,
+          displayMessageText,
+        ),
+      );
     }
 
     // Start auto-save timer during streaming (uses captured chatId)
     _autoSaveTimer?.cancel();
-    _autoSaveTimer = Timer.periodic(
-      const Duration(seconds: 2),
-      (_) {
-        // Only persist if still viewing the same chat
-        // If user switched, _messages belongs to a different chat!
-        if (_activeChatId == chatIdForStream) {
-          _persistChatWithId(chatIdForStream);
-        } else {
-          // Get background messages and persist those instead
-          final backgroundMsgs = _streamingManager.getBackgroundMessages(chatIdForStream);
-          if (backgroundMsgs != null) {
-            _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
-          }
+    _autoSaveTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      // Only persist if still viewing the same chat
+      // If user switched, _messages belongs to a different chat!
+      if (_activeChatId == chatIdForStream) {
+        _persistChatWithId(chatIdForStream);
+      } else {
+        // Get background messages and persist those instead
+        final backgroundMsgs = _streamingManager.getBackgroundMessages(
+          chatIdForStream,
+        );
+        if (backgroundMsgs != null) {
+          _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
         }
-      },
-    );
+      }
+    });
 
     try {
       final stream = WebSocketChatService.sendStreamingChat(
@@ -2244,158 +2384,203 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       );
 
       // Use StreamingManager for proper multi-chat streaming support
-      unawaited(_streamingManager.startStream(
-        chatId: chatIdForStream,
-        messageIndex: placeholderIndex,
-        stream: stream,
-        onUpdate: (content, reasoning) {
-          // ONLY update _messages if user is still viewing the SAME chat
-          // If user switched chats, _messages now belongs to a DIFFERENT chat!
-          // The streaming content is already buffered in StreamingManager.
-          if (mounted && _activeChatId == chatIdForStream) {
-            if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
-              _messages[placeholderIndex]['text'] = content;
-              _messages[placeholderIndex]['reasoning'] = reasoning;
-            }
-            _updateAiMessage(placeholderIndex, content, reasoning);
-            _scrollChatToBottom();
-          }
-        },
-        onComplete: (finalContent, finalReasoning, tps) {
-          if (kDebugMode) {
-            debugPrint('Stream completed for chat $chatIdForStream');
-          }
-          _autoSaveTimer?.cancel();
-          // RELEASE GLOBAL LOCK when stream completes
-          ChatStorageService.isMessageOperationInProgress = false;
-          if (kDebugMode) {
-            debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (stream done)');
-          }
-
-          final effectiveContent = finalContent.isEmpty
-              ? 'The model returned an empty response.'
-              : finalContent;
-
-          // Check if user is still viewing the SAME chat
-          if (_activeChatId == chatIdForStream) {
-            // User is still here - update _messages and UI
-            if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
-              _messages[placeholderIndex]['text'] = effectiveContent;
-              _messages[placeholderIndex]['reasoning'] = finalReasoning;
-              if (tps != null) _messages[placeholderIndex]['tps'] = tps.toString();
-            }
-            if (mounted) {
-              setState(() {
-                _isSending = false;
-              });
-            }
-            _finalizeAiMessage(placeholderIndex, effectiveContent, reasoning: finalReasoning, tps: tps);
-            _persistChatWithId(chatIdForStream);
-          } else {
-            // User switched to a DIFFERENT chat - use background messages
-            // DO NOT touch _messages as it belongs to the other chat!
-            // DO NOT touch _isSending as it's the other chat's state!
-            if (kDebugMode) {
-              debugPrint('[STREAM] User switched away, using background messages for $chatIdForStream');
-            }
-            final backgroundMsgs = _streamingManager.getBackgroundMessages(chatIdForStream);
-            if (backgroundMsgs != null && placeholderIndex < backgroundMsgs.length) {
-              backgroundMsgs[placeholderIndex]['text'] = effectiveContent;
-              backgroundMsgs[placeholderIndex]['reasoning'] = finalReasoning;
-              if (tps != null) backgroundMsgs[placeholderIndex]['tps'] = tps.toString();
-              _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
-            } else {
-              if (kDebugMode) {
-                debugPrint('[STREAM] WARNING: No background messages for $chatIdForStream - stream result may be lost');
+      unawaited(
+        _streamingManager.startStream(
+          chatId: chatIdForStream,
+          messageIndex: placeholderIndex,
+          stream: stream,
+          onUpdate: (content, reasoning) {
+            // ONLY update _messages if user is still viewing the SAME chat
+            // If user switched chats, _messages now belongs to a DIFFERENT chat!
+            // The streaming content is already buffered in StreamingManager.
+            if (mounted && _activeChatId == chatIdForStream) {
+              if (placeholderIndex >= 0 &&
+                  placeholderIndex < _messages.length) {
+                _messages[placeholderIndex]['text'] = content;
+                _messages[placeholderIndex]['reasoning'] = reasoning;
               }
+              _updateAiMessage(placeholderIndex, content, reasoning);
+              _scrollChatToBottom();
             }
-          }
-        },
-        onError: (errorMessage) {
-          if (kDebugMode) {
-            debugPrint('Stream error for chat $chatIdForStream: $errorMessage');
-          }
-          _autoSaveTimer?.cancel();
-          // RELEASE GLOBAL LOCK on error
-          ChatStorageService.isMessageOperationInProgress = false;
-          if (kDebugMode) {
-            debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (stream error)');
-          }
+          },
+          onComplete: (finalContent, finalReasoning, tps) {
+            if (kDebugMode) {
+              debugPrint('Stream completed for chat $chatIdForStream');
+            }
+            _autoSaveTimer?.cancel();
+            // RELEASE GLOBAL LOCK when stream completes
+            ChatStorageService.isMessageOperationInProgress = false;
+            if (kDebugMode) {
+              debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (stream done)');
+            }
 
-          // Handle 402 Payment Required from API server
-          if (errorMessage == '__PAYMENT_REQUIRED__') {
-            final paymentMessage = 'You have used all free messages. Please subscribe to continue chatting.';
+            final effectiveContent = finalContent.isEmpty
+                ? 'The model returned an empty response.'
+                : finalContent;
+
+            // Check if user is still viewing the SAME chat
             if (_activeChatId == chatIdForStream) {
-              _finalizeAiMessage(placeholderIndex, paymentMessage);
+              // User is still here - update _messages and UI
+              if (placeholderIndex >= 0 &&
+                  placeholderIndex < _messages.length) {
+                _messages[placeholderIndex]['text'] = effectiveContent;
+                _messages[placeholderIndex]['reasoning'] = finalReasoning;
+                if (tps != null)
+                  _messages[placeholderIndex]['tps'] = tps.toString();
+              }
               if (mounted) {
                 setState(() {
                   _isSending = false;
                 });
               }
+              _finalizeAiMessage(
+                placeholderIndex,
+                effectiveContent,
+                reasoning: finalReasoning,
+                tps: tps,
+              );
               _persistChatWithId(chatIdForStream);
             } else {
-              // User switched chats - use background messages
-              final backgroundMsgs = _streamingManager.getBackgroundMessages(chatIdForStream);
-              if (backgroundMsgs != null && placeholderIndex < backgroundMsgs.length) {
-                backgroundMsgs[placeholderIndex]['text'] = paymentMessage;
-                backgroundMsgs[placeholderIndex]['reasoning'] = '';
+              // User switched to a DIFFERENT chat - use background messages
+              // DO NOT touch _messages as it belongs to the other chat!
+              // DO NOT touch _isSending as it's the other chat's state!
+              if (kDebugMode) {
+                debugPrint(
+                  '[STREAM] User switched away, using background messages for $chatIdForStream',
+                );
+              }
+              final backgroundMsgs = _streamingManager.getBackgroundMessages(
+                chatIdForStream,
+              );
+              if (backgroundMsgs != null &&
+                  placeholderIndex < backgroundMsgs.length) {
+                backgroundMsgs[placeholderIndex]['text'] = effectiveContent;
+                backgroundMsgs[placeholderIndex]['reasoning'] = finalReasoning;
+                if (tps != null)
+                  backgroundMsgs[placeholderIndex]['tps'] = tps.toString();
                 _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
+              } else {
+                if (kDebugMode) {
+                  debugPrint(
+                    '[STREAM] WARNING: No background messages for $chatIdForStream - stream result may be lost',
+                  );
+                }
               }
             }
-            _showPaymentRequiredDialog();
-            return;
-          }
-
-          final errorText = 'Error: $errorMessage';
-
-          // Check if user is still viewing the SAME chat
-          if (_activeChatId == chatIdForStream) {
-            // User is still here - update _messages and UI
-            if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
-              _messages[placeholderIndex]['text'] = errorText;
-            }
-            if (mounted) {
-              setState(() {
-                _isSending = false;
-              });
-            }
-            _finalizeAiMessage(placeholderIndex, errorText);
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    errorMessage,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                  ),
-                  behavior: SnackBarBehavior.floating,
-                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  duration: const Duration(seconds: 2),
-                  dismissDirection: DismissDirection.horizontal,
-                ),
+          },
+          onError: (errorMessage) {
+            if (kDebugMode) {
+              debugPrint(
+                'Stream error for chat $chatIdForStream: $errorMessage',
               );
             }
-            _persistChatWithId(chatIdForStream);
-          } else {
-            // User switched to a DIFFERENT chat - use background messages
-            // DO NOT touch _messages as it belongs to the other chat!
-            // DO NOT touch _isSending as it's the other chat's state!
+            _autoSaveTimer?.cancel();
+            // RELEASE GLOBAL LOCK on error
+            ChatStorageService.isMessageOperationInProgress = false;
             if (kDebugMode) {
-              debugPrint('[STREAM] User switched away during error, using background messages for $chatIdForStream');
+              debugPrint(
+                '🔓 [SendMessage] GLOBAL LOCK RELEASED (stream error)',
+              );
             }
-            final backgroundMsgs = _streamingManager.getBackgroundMessages(chatIdForStream);
-            if (backgroundMsgs != null && placeholderIndex < backgroundMsgs.length) {
-              backgroundMsgs[placeholderIndex]['text'] = errorText;
-              _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
+
+            // Handle 402 Payment Required from API server
+            if (errorMessage == '__PAYMENT_REQUIRED__') {
+              final paymentMessage =
+                  'You have used all free messages. Please subscribe to continue chatting.';
+              if (_activeChatId == chatIdForStream) {
+                _finalizeAiMessage(placeholderIndex, paymentMessage);
+                if (mounted) {
+                  setState(() {
+                    _isSending = false;
+                  });
+                }
+                _persistChatWithId(chatIdForStream);
+              } else {
+                // User switched chats - use background messages
+                final backgroundMsgs = _streamingManager.getBackgroundMessages(
+                  chatIdForStream,
+                );
+                if (backgroundMsgs != null &&
+                    placeholderIndex < backgroundMsgs.length) {
+                  backgroundMsgs[placeholderIndex]['text'] = paymentMessage;
+                  backgroundMsgs[placeholderIndex]['reasoning'] = '';
+                  _persistChatWithIdAndMessages(
+                    chatIdForStream,
+                    backgroundMsgs,
+                  );
+                }
+              }
+              _showPaymentRequiredDialog();
+              return;
+            }
+
+            final errorText = 'Error: $errorMessage';
+
+            // Check if user is still viewing the SAME chat
+            if (_activeChatId == chatIdForStream) {
+              // User is still here - update _messages and UI
+              if (placeholderIndex >= 0 &&
+                  placeholderIndex < _messages.length) {
+                _messages[placeholderIndex]['text'] = errorText;
+              }
+              if (mounted) {
+                setState(() {
+                  _isSending = false;
+                });
+              }
+              _finalizeAiMessage(placeholderIndex, errorText);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      errorMessage,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    behavior: SnackBarBehavior.floating,
+                    margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    duration: const Duration(seconds: 2),
+                    dismissDirection: DismissDirection.horizontal,
+                  ),
+                );
+              }
+              _persistChatWithId(chatIdForStream);
             } else {
+              // User switched to a DIFFERENT chat - use background messages
+              // DO NOT touch _messages as it belongs to the other chat!
+              // DO NOT touch _isSending as it's the other chat's state!
               if (kDebugMode) {
-                debugPrint('[STREAM] WARNING: No background messages for $chatIdForStream - error result may be lost');
+                debugPrint(
+                  '[STREAM] User switched away during error, using background messages for $chatIdForStream',
+                );
+              }
+              final backgroundMsgs = _streamingManager.getBackgroundMessages(
+                chatIdForStream,
+              );
+              if (backgroundMsgs != null &&
+                  placeholderIndex < backgroundMsgs.length) {
+                backgroundMsgs[placeholderIndex]['text'] = errorText;
+                _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
+              } else {
+                if (kDebugMode) {
+                  debugPrint(
+                    '[STREAM] WARNING: No background messages for $chatIdForStream - error result may be lost',
+                  );
+                }
               }
             }
-          }
-        },
-      ));
+          },
+        ),
+      );
     } catch (error) {
       if (kDebugMode) {
         debugPrint('Failed to start stream: $error');
@@ -2415,7 +2600,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             ),
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             duration: const Duration(seconds: 2),
             dismissDirection: DismissDirection.horizontal,
@@ -2434,8 +2621,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     String pendingUserText,
   ) async {
     final List<Map<String, dynamic>> history = <Map<String, dynamic>>[];
-    final bool shouldIncludeImages = widget.includeRecentImagesInHistory || widget.includeAllImagesInHistory;
-    final int imageWindow = widget.includeAllImagesInHistory ? _messages.length : 6;
+    final bool shouldIncludeImages =
+        widget.includeRecentImagesInHistory || widget.includeAllImagesInHistory;
+    final int imageWindow = widget.includeAllImagesInHistory
+        ? _messages.length
+        : 6;
 
     // Determine which user messages are within the image window
     final Set<int> imageEligibleIndices = {};
@@ -2457,8 +2647,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       final String? text = message['text'];
 
       if (sender == 'user') {
-        final bool hasImages = message['images'] != null && message['images']!.isNotEmpty;
-        final bool shouldAddImages = shouldIncludeImages && hasImages && imageEligibleIndices.contains(i);
+        final bool hasImages =
+            message['images'] != null && message['images']!.isNotEmpty;
+        final bool shouldAddImages =
+            shouldIncludeImages &&
+            hasImages &&
+            imageEligibleIndices.contains(i);
 
         if (shouldAddImages) {
           final content = <Map<String, dynamic>>[];
@@ -2484,7 +2678,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         if (widget.includeReasoningInHistory) {
           final reasoning = message['reasoning'] ?? '';
           if (reasoning.isNotEmpty) {
-            assistantContent = '<thinking>\n$reasoning\n</thinking>\n\n$assistantContent';
+            assistantContent =
+                '<thinking>\n$reasoning\n</thinking>\n\n$assistantContent';
           }
         }
         history.add({'role': 'assistant', 'content': assistantContent});
@@ -2556,7 +2751,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     });
   }
 
-  void _finalizeAiMessage(int index, String content, {String? reasoning, double? tps}) {
+  void _finalizeAiMessage(
+    int index,
+    String content, {
+    String? reasoning,
+    double? tps,
+  }) {
     _autoSaveTimer?.cancel();
     if (index < 0 || index >= _messages.length) {
       _isSending = false;
@@ -2775,7 +2975,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           ),
         );
       });
-      _scrollChatToBottom(force: true); // Scroll to ensure attachment bar is visible
+      _scrollChatToBottom(
+        force: true,
+      ); // Scroll to ensure attachment bar is visible
 
       // Handle images differently - compress, encrypt, and upload to storage
       if (isImage) {
@@ -2815,7 +3017,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
       if (kDebugMode) {
         debugPrint(
-        'Image "$fileName" uploaded and encrypted successfully: $storagePath',
+          'Image "$fileName" uploaded and encrypted successfully: $storagePath',
         );
       }
     } catch (error) {
@@ -2891,7 +3093,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             ),
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             duration: const Duration(seconds: 2),
             dismissDirection: DismissDirection.horizontal,
@@ -2918,11 +3122,18 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('File "$fileName" exceeds 10MB limit',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+              content: Text(
+                'File "$fileName" exceeds 10MB limit',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
               behavior: SnackBarBehavior.floating,
               margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               duration: const Duration(seconds: 2),
               dismissDirection: DismissDirection.horizontal,
@@ -2936,11 +3147,18 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Unsupported file type for "$fileName": .$fileExtension',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+              content: Text(
+                'Unsupported file type for "$fileName": .$fileExtension',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
               behavior: SnackBarBehavior.floating,
               margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               duration: const Duration(seconds: 2),
               dismissDirection: DismissDirection.horizontal,
@@ -2954,11 +3172,15 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: const Text('Image uploads are not supported by the selected model.',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+              content: const Text(
+                'Image uploads are not supported by the selected model.',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              ),
               behavior: SnackBarBehavior.floating,
               margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               duration: const Duration(seconds: 2),
               dismissDirection: DismissDirection.horizontal,
@@ -3019,7 +3241,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       });
 
       if (kDebugMode) {
-        debugPrint('Image "$fileName" uploaded and encrypted successfully: $storagePath');
+        debugPrint(
+          'Image "$fileName" uploaded and encrypted successfully: $storagePath',
+        );
       }
     } catch (error) {
       if (kDebugMode) {
@@ -3029,11 +3253,15 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to upload image "$fileName": $error',
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+            content: Text(
+              'Failed to upload image "$fileName": $error',
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             duration: const Duration(seconds: 3),
             dismissDirection: DismissDirection.horizontal,
@@ -3141,7 +3369,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   /// Persist specific messages to a specific chat (for background streaming)
   /// Used when user has switched away from a streaming chat
-  void _persistChatWithIdAndMessages(String chatId, List<Map<String, dynamic>> messages) {
+  void _persistChatWithIdAndMessages(
+    String chatId,
+    List<Map<String, dynamic>> messages,
+  ) {
     if (messages.isEmpty) return;
     unawaited(_persistChatInternal(messages, chatId, silent: true));
   }
@@ -3158,7 +3389,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   }) async {
     // Check if chat exists in storage (not just if chatId is null)
     // With pre-generated IDs, chatId is never null but chat may not exist yet
-    final bool chatExistsInStorage = chatId != null &&
+    final bool chatExistsInStorage =
+        chatId != null &&
         ChatStorageService.savedChats.any((c) => c.id == chatId);
     final bool isNewChat = !chatExistsInStorage;
 
@@ -3173,7 +3405,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       // of an old chat while user is on a different chat
       if (silent) {
         if (kDebugMode) {
-          debugPrint('│ 🔇 [PERSIST] Silent save completed for chat: ${stored.id}');
+          debugPrint(
+            '│ 🔇 [PERSIST] Silent save completed for chat: ${stored.id}',
+          );
         }
         return;
       }
@@ -3188,7 +3422,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           debugPrint('');
         }
         if (kDebugMode) {
-          debugPrint('┌─────────────────────────────────────────────────────────────');
+          debugPrint(
+            '┌─────────────────────────────────────────────────────────────',
+          );
         }
         if (kDebugMode) {
           debugPrint('│ 🆕 [SEND-DESKTOP] NEW CHAT CREATED!');
@@ -3197,13 +3433,19 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           debugPrint('│ 🆕 [SEND-DESKTOP] New chat ID: ${stored.id}');
         }
         if (kDebugMode) {
-          debugPrint('│ 🆕 [SEND-DESKTOP] Calling widget.onChatIdChanged(${stored.id})');
+          debugPrint(
+            '│ 🆕 [SEND-DESKTOP] Calling widget.onChatIdChanged(${stored.id})',
+          );
         }
         if (kDebugMode) {
-          debugPrint('│ 🆕 [SEND-DESKTOP] This should update ChatStorageService.selectedChatId');
+          debugPrint(
+            '│ 🆕 [SEND-DESKTOP] This should update ChatStorageService.selectedChatId',
+          );
         }
         if (kDebugMode) {
-          debugPrint('└─────────────────────────────────────────────────────────────');
+          debugPrint(
+            '└─────────────────────────────────────────────────────────────',
+          );
         }
         widget.onChatIdChanged(stored.id);
       }
@@ -3329,16 +3571,22 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           final decoded = jsonDecode(attachmentsJson);
           if (decoded is List) {
             attachments = decoded
-                .map((item) => DocumentAttachment.fromJson(
-                    item as Map<String, dynamic>))
+                .map(
+                  (item) =>
+                      DocumentAttachment.fromJson(item as Map<String, dynamic>),
+                )
                 .toList();
             if (kDebugMode) {
-              debugPrint('📄 [AttachmentDebug] Extracted ${attachments.length} attachments from message $index');
+              debugPrint(
+                '📄 [AttachmentDebug] Extracted ${attachments.length} attachments from message $index',
+              );
             }
           }
         } catch (e) {
           if (kDebugMode) {
-            debugPrint('📄 [AttachmentDebug] Failed to decode attachments JSON: $e');
+            debugPrint(
+              '📄 [AttachmentDebug] Failed to decode attachments JSON: $e',
+            );
           }
         }
       }
@@ -3374,245 +3622,261 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           // Main chat area
           Expanded(
             child: DropTarget(
-        onDragDone: (detail) {
-          final List<String> filePaths = detail.files
-              .map((file) => file.path)
-              .where((path) => path.isNotEmpty)
-              .toList();
-          if (filePaths.isNotEmpty) {
-            _handleDroppedFiles(filePaths);
-          }
-        },
-        onDragEntered: (detail) {
-          setState(() {
-            _isDraggingFiles = true;
-          });
-        },
-        onDragExited: (detail) {
-          setState(() {
-            _isDraggingFiles = false;
-          });
-        },
-        child: Builder(
-          builder: (context) {
-            final Color accent = Theme.of(context).colorScheme.primary;
-            final Color bg = Theme.of(context).scaffoldBackgroundColor;
+              onDragDone: (detail) {
+                final List<String> filePaths = detail.files
+                    .map((file) => file.path)
+                    .where((path) => path.isNotEmpty)
+                    .toList();
+                if (filePaths.isNotEmpty) {
+                  _handleDroppedFiles(filePaths);
+                }
+              },
+              onDragEntered: (detail) {
+                setState(() {
+                  _isDraggingFiles = true;
+                });
+              },
+              onDragExited: (detail) {
+                setState(() {
+                  _isDraggingFiles = false;
+                });
+              },
+              child: Builder(
+                builder: (context) {
+                  final Color accent = Theme.of(context).colorScheme.primary;
+                  final Color bg = Theme.of(context).scaffoldBackgroundColor;
 
-            return Stack(
-              children: [
-                // Visual feedback when dragging files
-                if (_isDraggingFiles)
-                  Positioned.fill(
-                    child: Container(
-                      color: accent.withValues(alpha: 0.1),
-                      child: Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 32,
-                            vertical: 24,
-                          ),
-                          decoration: BoxDecoration(
-                            color: bg,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: accent, width: 2),
-                            boxShadow: [
-                              BoxShadow(
-                                color: accent.withValues(alpha: 0.3),
-                                blurRadius: 20,
-                                spreadRadius: 5,
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.cloud_upload, color: accent, size: 32),
-                              const SizedBox(width: 16),
-                              Text(
-                                'Drop files here to upload',
-                                style: TextStyle(
-                                  color: iconFg,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
+                  return Stack(
+                    children: [
+                      // Visual feedback when dragging files
+                      if (_isDraggingFiles)
+                        Positioned.fill(
+                          child: Container(
+                            color: accent.withValues(alpha: 0.1),
+                            child: Center(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 32,
+                                  vertical: 24,
                                 ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                // Loading indicator when switching chats
-                if (_isLoadingChat)
-                  Positioned.fill(
-                    child: Container(
-                      color: bg.withValues(alpha: 0.7),
-                      child: Center(
-                        child: CircularProgressIndicator(
-                          color: accent,
-                          strokeWidth: 3,
-                        ),
-                      ),
-                    ),
-                  ),
-                if (!isChatEmpty)
-                  Positioned(
-                    top: 0,
-                    bottom: inputAreaTotalHeight,
-                    left: 0,
-                    right: 0,
-                    child: Padding(
-                      padding: EdgeInsets.zero,
-                      child: Align(
-                        alignment: Alignment.center,
-                        child: Container(
-                          constraints: BoxConstraints(
-                            maxWidth: expandedInputWidth,
-                          ),
-                          child: SelectionArea(
-                            child: ListView.builder(
-                                controller: _scrollController,
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: effectiveHorizontalPadding,
-                                  vertical: 10,
-                                ),
-                                itemCount: renderMessages.length,
-                                addAutomaticKeepAlives: true, // Keep message widgets alive
-                                addRepaintBoundaries: true,
-                                cacheExtent: 2000.0, // Increase cache to keep more messages in memory
-                                itemBuilder: (_, int i) {
-                                  final _MessageRenderData data =
-                                      renderMessages[i];
-                                  final String? reasoningText =
-                                      data.reasoning.trim().isEmpty
-                                      ? null
-                                      : data.reasoning;
-                                  final bool isBeingEdited =
-                                      _editingMessageIndex == i;
-                                  return RepaintBoundary(
-                                    child: MessageBubble(
-                                      key: ValueKey('msg_$i'),
-                                      message: data.displayText,
-                                      reasoning: reasoningText,
-                                      isUser: data.isUser,
-                                      maxWidth: data.isUser
-                                          ? expandedInputWidth *
-                                                0.7 // User messages: 70%
-                                          : expandedInputWidth, // AI messages: 100%
-                                      isReasoningStreaming:
-                                          data.isReasoningStreaming,
-                                      modelLabel: data.modelLabel,
-                                      tps: data.tps,
-                                      images: data.images,
-                                      attachments: data.attachments,
-                                      actions: _buildMessageActionsForIndex(
-                                        i,
-                                        data,
-                                      ),
-                                      isEditing: isBeingEdited,
-                                      initialEditText: isBeingEdited
-                                          ? data.displayText
-                                          : null,
-                                      onSubmitEdit: isBeingEdited && data.isUser
-                                          ? (newText) =>
-                                                _submitEditedMessage(i, newText)
-                                          : null,
-                                      onCancelEdit: isBeingEdited
-                                          ? _cancelEditMessage
-                                          : null,
-                                      showReasoningTokens:
-                                          widget.showReasoningTokens,
-                                      showModelInfo: widget.showModelInfo,
-                                      showTps: widget.showTps,
+                                decoration: BoxDecoration(
+                                  color: bg,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: accent, width: 2),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: accent.withValues(alpha: 0.3),
+                                      blurRadius: 20,
+                                      spreadRadius: 5,
                                     ),
-                                  );
-                                },
-                              ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                // Scroll-to-bottom button (centered above input)
-                if (_showScrollToBottom && !isChatEmpty)
-                  Positioned(
-                    bottom: inputAreaTotalHeight + 12,
-                    left: 0,
-                    right: 0,
-                    child: Center(
-                      child: Builder(builder: (context) {
-                        final t = Theme.of(context);
-                        return Material(
-                          elevation: 4,
-                          shape: const CircleBorder(),
-                          color: t.colorScheme.surfaceContainerHighest,
-                          child: InkWell(
-                            customBorder: const CircleBorder(),
-                            onTap: () => _scrollChatToBottom(force: true),
-                            child: Padding(
-                              padding: const EdgeInsets.all(8),
-                              child: Icon(
-                                Icons.keyboard_arrow_down,
-                                size: 24,
-                                color: t.colorScheme.onSurface,
-                              ),
-                            ),
-                          ),
-                        );
-                      }),
-                    ),
-                  ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  // Position at the bottom if not empty, otherwise calculate center position
-                  bottom: showInputAreaCentered
-                      ? (MediaQuery.of(context).size.height / 2 -
-                            (inputAreaVisualHeight / 2))
-                      : effectiveHorizontalPadding, // Always keep padding from bottom edge
-                  child: Center(
-                    // Centers horizontally
-                    child: SizedBox(
-                      width: targetInputWidth, // Dynamically changes width
-                      child: Column(
-                        mainAxisSize: MainAxisSize
-                            .min, // Crucial for column inside AnimatedPositioned/Center
-                        children: [
-                          // Multiple Attachment Indicator Bar (if files are present)
-                          if (_attachedFiles.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                bottom: _kAttachmentBarMarginBottom,
-                              ), // Margin below chips
-                              child: SizedBox(
-                                width: targetInputWidth,
-                                child: AttachmentPreviewBar(
-                                  files: _attachedFiles,
-                                  onRemove: _removeAttachedFile,
+                                  ],
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.cloud_upload,
+                                      color: accent,
+                                      size: 32,
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Text(
+                                      'Drop files here to upload',
+                                      style: TextStyle(
+                                        color: iconFg,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
-                          // Search Bar
-                          _buildSearchBar(isCompactMode: widget.isCompactMode),
-                          const SizedBox(height: 8),
-                          Text(
-                            'AI/LLMs can make mistakes — double-check important info.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: iconFg.withValues(alpha: 0.7),
-                              fontSize: 11,
+                          ),
+                        ),
+                      // Loading indicator when switching chats
+                      if (_isLoadingChat)
+                        Positioned.fill(
+                          child: Container(
+                            color: bg.withValues(alpha: 0.7),
+                            child: Center(
+                              child: CircularProgressIndicator(
+                                color: accent,
+                                strokeWidth: 3,
+                              ),
                             ),
                           ),
-                        ],
+                        ),
+                      if (!isChatEmpty)
+                        Positioned(
+                          top: 0,
+                          bottom: inputAreaTotalHeight,
+                          left: 0,
+                          right: 0,
+                          child: Padding(
+                            padding: EdgeInsets.zero,
+                            child: Align(
+                              alignment: Alignment.center,
+                              child: Container(
+                                constraints: BoxConstraints(
+                                  maxWidth: expandedInputWidth,
+                                ),
+                                child: SelectionArea(
+                                  child: ListView.builder(
+                                    controller: _scrollController,
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: effectiveHorizontalPadding,
+                                      vertical: 10,
+                                    ),
+                                    itemCount: renderMessages.length,
+                                    addAutomaticKeepAlives:
+                                        true, // Keep message widgets alive
+                                    addRepaintBoundaries: true,
+                                    cacheExtent:
+                                        2000.0, // Increase cache to keep more messages in memory
+                                    itemBuilder: (_, int i) {
+                                      final _MessageRenderData data =
+                                          renderMessages[i];
+                                      final String? reasoningText =
+                                          data.reasoning.trim().isEmpty
+                                          ? null
+                                          : data.reasoning;
+                                      final bool isBeingEdited =
+                                          _editingMessageIndex == i;
+                                      return RepaintBoundary(
+                                        child: MessageBubble(
+                                          key: ValueKey('msg_$i'),
+                                          message: data.displayText,
+                                          reasoning: reasoningText,
+                                          isUser: data.isUser,
+                                          maxWidth: data.isUser
+                                              ? expandedInputWidth *
+                                                    0.7 // User messages: 70%
+                                              : expandedInputWidth, // AI messages: 100%
+                                          isReasoningStreaming:
+                                              data.isReasoningStreaming,
+                                          modelLabel: data.modelLabel,
+                                          tps: data.tps,
+                                          images: data.images,
+                                          attachments: data.attachments,
+                                          actions: _buildMessageActionsForIndex(
+                                            i,
+                                            data,
+                                          ),
+                                          isEditing: isBeingEdited,
+                                          initialEditText: isBeingEdited
+                                              ? data.displayText
+                                              : null,
+                                          onSubmitEdit:
+                                              isBeingEdited && data.isUser
+                                              ? (newText) =>
+                                                    _submitEditedMessage(
+                                                      i,
+                                                      newText,
+                                                    )
+                                              : null,
+                                          onCancelEdit: isBeingEdited
+                                              ? _cancelEditMessage
+                                              : null,
+                                          showReasoningTokens:
+                                              widget.showReasoningTokens,
+                                          showModelInfo: widget.showModelInfo,
+                                          showTps: widget.showTps,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      // Scroll-to-bottom button (centered above input)
+                      if (_showScrollToBottom && !isChatEmpty)
+                        Positioned(
+                          bottom: inputAreaTotalHeight + 12,
+                          left: 0,
+                          right: 0,
+                          child: Center(
+                            child: Builder(
+                              builder: (context) {
+                                final t = Theme.of(context);
+                                return Material(
+                                  elevation: 4,
+                                  shape: const CircleBorder(),
+                                  color: t.colorScheme.surfaceContainerHighest,
+                                  child: InkWell(
+                                    customBorder: const CircleBorder(),
+                                    onTap: () =>
+                                        _scrollChatToBottom(force: true),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(8),
+                                      child: Icon(
+                                        Icons.keyboard_arrow_down,
+                                        size: 24,
+                                        color: t.colorScheme.onSurface,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        // Position at the bottom if not empty, otherwise calculate center position
+                        bottom: showInputAreaCentered
+                            ? (MediaQuery.of(context).size.height / 2 -
+                                  (inputAreaVisualHeight / 2))
+                            : effectiveHorizontalPadding, // Always keep padding from bottom edge
+                        child: Center(
+                          // Centers horizontally
+                          child: SizedBox(
+                            width:
+                                targetInputWidth, // Dynamically changes width
+                            child: Column(
+                              mainAxisSize: MainAxisSize
+                                  .min, // Crucial for column inside AnimatedPositioned/Center
+                              children: [
+                                // Multiple Attachment Indicator Bar (if files are present)
+                                if (_attachedFiles.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(
+                                      bottom: _kAttachmentBarMarginBottom,
+                                    ), // Margin below chips
+                                    child: SizedBox(
+                                      width: targetInputWidth,
+                                      child: AttachmentPreviewBar(
+                                        files: _attachedFiles,
+                                        onRemove: _removeAttachedFile,
+                                      ),
+                                    ),
+                                  ),
+                                // Search Bar
+                                _buildSearchBar(
+                                  isCompactMode: widget.isCompactMode,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'AI/LLMs can make mistakes — double-check important info.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: iconFg.withValues(alpha: 0.7),
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
-      ),
+                    ],
+                  );
+                },
+              ),
+            ),
           ),
           // Project panel (right side) - only shown in project mode
           if (isProjectMode && widget.projectId != null)
@@ -3753,8 +4017,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                     color: (_isStreaming || _isSending)
                         ? Colors.red
                         : _isImageGenMode
-                            ? accent.withValues(alpha: 0.9)
-                            : accent,
+                        ? accent.withValues(alpha: 0.9)
+                        : accent,
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: _isTranscribingAudio || _isGeneratingImage
@@ -3771,8 +4035,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                           (_isStreaming || _isSending)
                               ? Icons.stop
                               : _isImageGenMode
-                                  ? Icons.auto_awesome
-                                  : Icons.arrow_upward,
+                              ? Icons.auto_awesome
+                              : Icons.arrow_upward,
                           color: Colors.black,
                         ),
                 ),
@@ -3807,11 +4071,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                     ? () {} // No-op while generating
                                     : () {
                                         setState(
-                                          () => _isImageGenMode = !_isImageGenMode,
+                                          () => _isImageGenMode =
+                                              !_isImageGenMode,
                                         );
                                         if (kDebugMode) {
                                           debugPrint(
-                                          'Image Gen mode toggled: $_isImageGenMode',
+                                            'Image Gen mode toggled: $_isImageGenMode',
                                           );
                                         }
                                       },
@@ -3826,13 +4091,17 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                 selectedProjectId: _selectedProjectId,
                                 onProjectSelected: (projectId) {
                                   if (kDebugMode) {
-                                    debugPrint('📁 onProjectSelected callback: $projectId (was: $_selectedProjectId)');
+                                    debugPrint(
+                                      '📁 onProjectSelected callback: $projectId (was: $_selectedProjectId)',
+                                    );
                                   }
                                   setState(() {
                                     _selectedProjectId = projectId;
                                   });
                                   if (kDebugMode) {
-                                    debugPrint('📁 After setState: $_selectedProjectId');
+                                    debugPrint(
+                                      '📁 After setState: $_selectedProjectId',
+                                    );
                                   }
                                 },
                                 textFieldFocusNode: _textFieldFocusNode,
@@ -3850,7 +4119,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                     });
                                     if (kDebugMode) {
                                       debugPrint(
-                                      'Selected model ID: $_selectedModelId',
+                                        'Selected model ID: $_selectedModelId',
                                       );
                                     }
                                   },
