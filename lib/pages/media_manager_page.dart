@@ -86,8 +86,9 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
 
   Future<void> _deleteImage(StoredImage image) async {
     // First check if this image is used in any chats
-    final chatsUsingImage =
-        await ImageStorageService.findChatsUsingImage(image.path);
+    final chatsUsingImage = await ImageStorageService.findChatsUsingImage(
+      image.path,
+    );
 
     if (!mounted) return;
 
@@ -95,7 +96,8 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
 
     if (chatsUsingImage.isNotEmpty) {
       // Show warning dialog with chat names
-      shouldDelete = await showDialog<bool>(
+      shouldDelete =
+          await showDialog<bool>(
             context: context,
             builder: (context) => AlertDialog(
               title: const Text('Image Used in Chats'),
@@ -114,23 +116,28 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: chatsUsingImage
-                            .map((chat) => Padding(
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 4),
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.chat_bubble_outline,
-                                          size: 16),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          chat.chatName,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
+                            .map(
+                              (chat) => Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 4,
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.chat_bubble_outline,
+                                      size: 16,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        chat.chatName,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                    ],
-                                  ),
-                                ))
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            )
                             .toList(),
                       ),
                     ),
@@ -163,12 +170,14 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
           false;
     } else {
       // Simple confirmation dialog
-      shouldDelete = await showDialog<bool>(
+      shouldDelete =
+          await showDialog<bool>(
             context: context,
             builder: (context) => AlertDialog(
               title: const Text('Delete Image'),
               content: const Text(
-                  'Are you sure you want to delete this image? This action cannot be undone.'),
+                'Are you sure you want to delete this image? This action cannot be undone.',
+              ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context, false),
@@ -196,15 +205,15 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Image deleted')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Image deleted')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to delete image: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to delete image: $e')));
       }
     }
   }
@@ -227,7 +236,8 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
 
     if (usageMap.isNotEmpty) {
       // Show warning about images used in chats
-      shouldDelete = await showDialog<bool>(
+      shouldDelete =
+          await showDialog<bool>(
             context: context,
             builder: (context) => AlertDialog(
               title: const Text('Some Images Are Used in Chats'),
@@ -248,8 +258,7 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                      'Delete all ${_selectedImages.length} selected images?'),
+                  Text('Delete all ${_selectedImages.length} selected images?'),
                 ],
               ),
               actions: [
@@ -267,12 +276,14 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
           ) ??
           false;
     } else {
-      shouldDelete = await showDialog<bool>(
+      shouldDelete =
+          await showDialog<bool>(
             context: context,
             builder: (context) => AlertDialog(
               title: const Text('Delete Selected Images'),
               content: Text(
-                  'Delete ${_selectedImages.length} selected images? This action cannot be undone.'),
+                'Delete ${_selectedImages.length} selected images? This action cannot be undone.',
+              ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context, false),
@@ -314,13 +325,13 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
       if (failedCount > 0) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content:
-                  Text('Deleted $deletedCount images, $failedCount failed')),
+            content: Text('Deleted $deletedCount images, $failedCount failed'),
+          ),
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Deleted $deletedCount images')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Deleted $deletedCount images')));
       }
     }
   }
@@ -381,7 +392,10 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
                 if (_isSelectionMode) ...[
                   Text(
                     '${_selectedImages.length} selected',
-                    style: TextStyle(color: iconFg, fontWeight: FontWeight.w500),
+                    style: TextStyle(
+                      color: iconFg,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                   const Spacer(),
                   IconButton(
@@ -416,9 +430,11 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isSelectionMode
-            ? '${_selectedImages.length} selected'
-            : 'Media Manager'),
+        title: Text(
+          _isSelectionMode
+              ? '${_selectedImages.length} selected'
+              : 'Media Manager',
+        ),
         leading: _isSelectionMode
             ? IconButton(
                 icon: const Icon(Icons.close),
@@ -476,8 +492,11 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.image_not_supported,
-                size: 64, color: iconFg.withValues(alpha: 0.3)),
+            Icon(
+              Icons.image_not_supported,
+              size: 64,
+              color: iconFg.withValues(alpha: 0.3),
+            ),
             const SizedBox(height: 16),
             Text(
               'No images stored',
@@ -514,7 +533,9 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
           ),
           // Grid/List
           Expanded(
-            child: isMobile ? _buildMobileList(iconFg) : _buildDesktopGrid(iconFg),
+            child: isMobile
+                ? _buildMobileList(iconFg)
+                : _buildDesktopGrid(iconFg),
           ),
         ],
       ),
@@ -550,7 +571,11 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
     );
   }
 
-  Widget _buildImageCard(StoredImage image, Color iconFg, {bool compact = false}) {
+  Widget _buildImageCard(
+    StoredImage image,
+    Color iconFg, {
+    bool compact = false,
+  }) {
     final isSelected = _selectedImages.contains(image.path);
     final accentColor = Theme.of(context).colorScheme.primary;
 
@@ -610,6 +635,7 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
                 return Image.memory(
                   bytes,
                   fit: BoxFit.cover,
+                  cacheWidth: 400, // 200px grid cell × 2 for retina
                   errorBuilder: (context, error, stackTrace) => Container(
                     color: iconFg.withValues(alpha: 0.1),
                     child: Icon(
@@ -652,7 +678,11 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
                     color: Colors.black54,
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: const Icon(Icons.delete, color: Colors.white, size: 18),
+                  child: const Icon(
+                    Icons.delete,
+                    color: Colors.white,
+                    size: 18,
+                  ),
                 ),
                 onPressed: () => _deleteImage(image),
                 tooltip: 'Delete',
@@ -816,9 +846,11 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
   }
 
   Future<void> _preloadAdjacentImages(int index) async {
-    final indicesToLoad = [index - 1, index, index + 1]
-        .where((i) => i >= 0 && i < widget.images.length)
-        .toList();
+    final indicesToLoad = [
+      index - 1,
+      index,
+      index + 1,
+    ].where((i) => i >= 0 && i < widget.images.length).toList();
 
     for (final i in indicesToLoad) {
       final path = widget.images[i].path;
@@ -857,157 +889,163 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: Stack(
-        children: [
-          // Dismiss on tap background
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(color: Colors.transparent),
-          ),
-
-          // PageView for swiping
-          PageView.builder(
-            controller: _pageController,
-            onPageChanged: _onPageChanged,
-            itemCount: widget.images.length,
-            itemBuilder: (context, index) {
-              final image = widget.images[index];
-              final bytes = _loadedImages[image.path];
-
-              return GestureDetector(
-                onTap: () {}, // Prevent dismissing when tapping image
-                child: Center(
-                  child: bytes != null
-                      ? InteractiveViewer(
-                          minScale: 0.5,
-                          maxScale: 4.0,
-                          child: Image.memory(
-                            bytes,
-                            fit: BoxFit.contain,
-                          ),
-                        )
-                      : const CircularProgressIndicator(color: Colors.white),
-                ),
-              );
-            },
-          ),
-
-          // Top bar with close button and counter
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 8,
-            left: 16,
-            right: 16,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // Close button
-                _buildIconButton(
-                  icon: Icons.close,
-                  onTap: () => Navigator.pop(context),
-                ),
-                // Image counter
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Text(
-                    '${_currentIndex + 1} / ${widget.images.length}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-                // Placeholder for symmetry
-                const SizedBox(width: 40),
-              ],
+          children: [
+            // Dismiss on tap background
+            GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Container(color: Colors.transparent),
             ),
-          ),
 
-          // Bottom bar with info and delete
-          Positioned(
-            bottom: MediaQuery.of(context).padding.bottom + 16,
-            left: 16,
-            right: 16,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Image info
-                if (currentImage.createdAt != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
+            // PageView for swiping
+            PageView.builder(
+              controller: _pageController,
+              onPageChanged: _onPageChanged,
+              itemCount: widget.images.length,
+              itemBuilder: (context, index) {
+                final image = widget.images[index];
+                final bytes = _loadedImages[image.path];
+
+                return GestureDetector(
+                  onTap: () {}, // Prevent dismissing when tapping image
+                  child: Center(
+                    child: bytes != null
+                        ? InteractiveViewer(
+                            minScale: 0.5,
+                            maxScale: 4.0,
+                            child: Image.memory(bytes, fit: BoxFit.contain),
+                          )
+                        : const CircularProgressIndicator(color: Colors.white),
+                  ),
+                );
+              },
+            ),
+
+            // Top bar with close button and counter
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 8,
+              left: 16,
+              right: 16,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Close button
+                  _buildIconButton(
+                    icon: Icons.close,
+                    onTap: () => Navigator.pop(context),
+                  ),
+                  // Image counter
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                     child: Text(
-                      _formatDate(currentImage.createdAt),
+                      '${_currentIndex + 1} / ${widget.images.length}',
                       style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 13,
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),
-                // Delete button
-                ElevatedButton.icon(
-                  onPressed: () => widget.onDelete(currentImage),
-                  icon: const Icon(Icons.delete_outline),
-                  label: const Text('Delete'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red.shade700,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
+                  // Placeholder for symmetry
+                  const SizedBox(width: 40),
+                ],
+              ),
+            ),
+
+            // Bottom bar with info and delete
+            Positioned(
+              bottom: MediaQuery.of(context).padding.bottom + 16,
+              left: 16,
+              right: 16,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Image info
+                  if (currentImage.createdAt != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Text(
+                        _formatDate(currentImage.createdAt),
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  // Delete button
+                  ElevatedButton.icon(
+                    onPressed: () => widget.onDelete(currentImage),
+                    icon: const Icon(Icons.delete_outline),
+                    label: const Text('Delete'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red.shade700,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
-
-          // Left arrow (if not first)
-          if (_currentIndex > 0)
-            Positioned(
-              left: 8,
-              top: 0,
-              bottom: 0,
-              child: Center(
-                child: _buildIconButton(
-                  icon: Icons.chevron_left,
-                  onTap: () {
-                    _pageController.previousPage(
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
-                    );
-                  },
-                ),
+                ],
               ),
             ),
 
-          // Right arrow (if not last)
-          if (_currentIndex < widget.images.length - 1)
-            Positioned(
-              right: 8,
-              top: 0,
-              bottom: 0,
-              child: Center(
-                child: _buildIconButton(
-                  icon: Icons.chevron_right,
-                  onTap: () {
-                    _pageController.nextPage(
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
-                    );
-                  },
+            // Left arrow (if not first)
+            if (_currentIndex > 0)
+              Positioned(
+                left: 8,
+                top: 0,
+                bottom: 0,
+                child: Center(
+                  child: _buildIconButton(
+                    icon: Icons.chevron_left,
+                    onTap: () {
+                      _pageController.previousPage(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                      );
+                    },
+                  ),
                 ),
               ),
-            ),
+
+            // Right arrow (if not last)
+            if (_currentIndex < widget.images.length - 1)
+              Positioned(
+                right: 8,
+                top: 0,
+                bottom: 0,
+                child: Center(
+                  child: _buildIconButton(
+                    icon: Icons.chevron_right,
+                    onTap: () {
+                      _pageController.nextPage(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                      );
+                    },
+                  ),
+                ),
+              ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildIconButton({required IconData icon, required VoidCallback onTap}) {
+  Widget _buildIconButton({
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(

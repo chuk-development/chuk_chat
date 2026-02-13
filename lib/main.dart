@@ -94,20 +94,23 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
     await _initService.waitForSupabase();
     if (!mounted) return;
 
-    // Initialize session manager now that Supabase is ready.
-    // This subscribes to onAuthStateChange and handles user session
-    // initialization (chat loading, sync, theme from Supabase).
-    _sessionManager.initialize(
-      onSessionRevoked: _onSessionRevoked,
-      onPasswordMismatch: _onPasswordMismatch,
-    );
-
-    // Initialize notifications and load theme in PARALLEL to reduce startup freeze
+    // Load local theme FIRST so the UI has correct colors immediately.
+    // This must complete BEFORE SessionManager subscribes to auth events,
+    // because the initial auth event fires synchronously and triggers
+    // loadFromSupabaseAsync() — which would race with loadFromPrefs().
     await Future.wait([
       NotificationService.initialize(navigatorKey),
       _themeService.loadFromPrefs(),
     ]);
     if (!mounted) return;
+
+    // Initialize session manager now that Supabase is ready and local
+    // theme is loaded. This subscribes to onAuthStateChange and handles
+    // user session initialization (chat loading, sync, theme from Supabase).
+    _sessionManager.initialize(
+      onSessionRevoked: _onSessionRevoked,
+      onPasswordMismatch: _onPasswordMismatch,
+    );
 
     // Check launch notification (depends on notification init above)
     await NotificationService.checkLaunchNotification();
