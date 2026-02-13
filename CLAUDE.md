@@ -112,18 +112,22 @@ Stale cache? Purge Cloudflare: Dashboard > chuk.chat > Caching > Purge Everythin
 
 ## Creating a Release
 
-1. Bump version in `pubspec.yaml`
-2. Build: `./scripts/build-release.sh all` (Android + Linux + Web)
-3. Commit, tag, push: `git tag vX.Y.Z && git push origin master --tags`
-4. Upload to GitHub Release:
+1. Bump version in `pubspec.yaml` (e.g. `1.0.24` — no `+buildnumber` suffix)
+2. Commit: `git commit -am "chore: bump version to 1.0.25"`
+3. Tag and push: `git tag v1.0.25 && git push origin master --tags`
+4. Trigger CI build (builds Android, Linux x64/ARM64, Windows, macOS):
    ```bash
-   VERSION=X.Y.Z  # e.g., 1.0.24
-   gh release create v$VERSION \
-     build/app/outputs/flutter-apk/app-release.apk \
-     chuk_chat-$VERSION-linux-x64.tar.gz \
-     --title "Release $VERSION" --generate-notes
+   gh workflow run build-cross-platform.yml \
+     --field build_android=true \
+     --field build_linux_x64=true \
+     --field build_linux_arm64=true \
+     --field build_windows=true \
+     --field build_macos=true \
+     --field build_ios=false \
+     --field enable_signing=false
    ```
-5. CI auto-builds: Windows (GitHub Actions), iOS (Codemagic) — triggered by tag push
+5. CI creates the GitHub Release with all artifacts automatically
+6. Web deploys automatically via Dokploy on push to master
 
 ## Privacy: Logging
 
