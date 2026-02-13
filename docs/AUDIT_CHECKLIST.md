@@ -91,6 +91,9 @@ Zuletzt konsolidiert: **2026-02-13**
 - [x] **Network Security Config erlaubt User-Certs in Debug** *(Security Audit L1)*
   Standard-Praxis, nur Debug-Builds betroffen. Minimal risk.
 
+- [x] **CAPTCHA deaktiviert** *(Security Audit I3)*
+  Nicht umsetzbar: Flutter-Native-Apps (Android/Linux) können Web-basierte CAPTCHA-Widgets (hCaptcha/Turnstile) nicht rendern. Rate Limits (30 Signups/5min pro IP) bleiben als Schutz gegen automatisierte Account-Erstellung.
+
 ---
 
 ## Offen — Flutter Client
@@ -255,10 +258,6 @@ Zuletzt konsolidiert: **2026-02-13**
   `supabase/config.toml` — `minimum_password_length` auf 8 erhöht, `password_requirements` auf `"lower_upper_letters_digits"` gesetzt. Client-seitig `InputValidator.minPasswordLength` ebenfalls auf 8 angehoben. Test-Suite angepasst (7-Zeichen-Test, min-length-Test). *Hinweis: Produktions-Supabase muss separat über Dashboard aktualisiert werden.*
   *Quelle: Security Audit L6*
 
-- [ ] **CAPTCHA deaktiviert** — NIEDRIG
-  `supabase/config.toml:164-167` — Kein Captcha für Signup. Rate Limits existieren (30/5min), aber automatisierte Account-Erstellung möglich. *Erfordert Captcha-Provider (hCaptcha/Turnstile) API-Keys und Client-seitige Integration.*
-  *Quelle: Security Audit I3*
-
 - [ ] **MFA deaktiviert** — NIEDRIG
   `supabase/config.toml:241-254` — Alle MFA-Methoden (TOTP, Phone, WebAuthn) deaktiviert. *Erfordert Client-seitige MFA-Flows (Enrollment, Verification) bevor Server-seitig aktiviert werden kann. Feature Request, kein Quick Fix.*
   *Quelle: Security Audit I4*
@@ -274,9 +273,9 @@ Zuletzt konsolidiert: **2026-02-13**
 | Kategorie | Anzahl |
 |-----------|--------|
 | Behoben | 45 |
-| Kein echtes Problem | 5 |
+| Kein echtes Problem | 6 |
 | **Offen — Flutter Client** | **3** |
 | **Offen — Architektur/Performance** | **0** |
 | **Offen — API Server** | **0** |
-| **Offen — Supabase/Infra** | **2** |
-| **Gesamt offen** | **5** |
+| **Offen — Supabase/Infra** | **1** |
+| **Gesamt offen** | **4** |
