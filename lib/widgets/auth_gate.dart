@@ -5,6 +5,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:chuk_chat/services/supabase_service.dart';
 
+/// Switches between [signedInBuilder] and [signedOutBuilder] based on
+/// the current Supabase auth session.
+///
+/// Auth state changes are handled exclusively by [SessionManagerService]
+/// (business logic) and this widget (UI switching). There is no duplicate
+/// subscription — each listener has a distinct responsibility.
 class AuthGate extends StatefulWidget {
   const AuthGate({
     super.key,
@@ -22,59 +28,36 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
-  late StreamSubscription<AuthState> _authSubscription;
+  StreamSubscription<AuthState>? _authSubscription;
   Session? _session;
   bool _checkingSession = true;
 
   @override
   void initState() {
     super.initState();
-
-    // Check if Supabase is ready, otherwise wait a bit
     _initializeAuthState();
   }
 
-  Future<void> _initializeAuthState() async {
-    // Wait briefly for Supabase to initialize
-    for (int i = 0; i < 20; i++) {
-      try {
-        final session = SupabaseService.auth.currentSession;
-        _session = session;
-        _checkingSession = session == null;
-
-        _authSubscription = SupabaseService.auth.onAuthStateChange.listen((event) {
-          if (!mounted) return;
-          setState(() {
-            _session = event.session;
-            _checkingSession = false;
-          });
-        });
-
-        if (mounted) {
-          setState(() {
-            if (_session != null) {
-              _checkingSession = false;
-            }
-          });
-        }
-
-        // Show UI after brief delay even if no session
-        if (_session == null && mounted) {
-          await Future.delayed(const Duration(milliseconds: 50));
-          if (mounted) {
-            setState(() {
-              _checkingSession = false;
-            });
-          }
-        }
-        return;
-      } catch (_) {
-        // Supabase not ready yet
-        await Future.delayed(const Duration(milliseconds: 50));
-      }
+  void _initializeAuthState() {
+    // Read current session synchronously. Supabase is guaranteed to be
+    // initialized by the time AuthGate builds because main.dart calls
+    // waitForSupabase() before the first frame that renders this widget.
+    try {
+      _session = SupabaseService.auth.currentSession;
+    } catch (_) {
+      // Supabase not yet ready — stay in loading state briefly.
     }
 
-    // Timeout - show UI anyway
+    // Listen for future auth changes (sign-in, sign-out, token refresh).
+    _authSubscription = SupabaseService.auth.onAuthStateChange.listen((event) {
+      if (!mounted) return;
+      setState(() {
+        _session = event.session;
+        _checkingSession = false;
+      });
+    });
+
+    // Show UI immediately — no artificial delay needed.
     if (mounted) {
       setState(() {
         _checkingSession = false;
@@ -84,7 +67,7 @@ class _AuthGateState extends State<AuthGate> {
 
   @override
   void dispose() {
-    _authSubscription.cancel();
+    _authSubscription?.cancel();
     super.dispose();
   }
 

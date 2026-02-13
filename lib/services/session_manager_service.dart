@@ -7,10 +7,12 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:chuk_chat/platform_config.dart';
+import 'package:chuk_chat/services/app_initialization_service.dart';
 import 'package:chuk_chat/services/app_theme_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_sync_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/services/model_prefetch_service.dart';
 import 'package:chuk_chat/services/password_revision_service.dart';
 import 'package:chuk_chat/services/project_storage_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
@@ -33,6 +35,7 @@ class SessionManagerService extends ChangeNotifier {
 
   StreamSubscription<AuthState>? _authSubscription;
   bool _isInitialized = false;
+  String? _sessionInitializedForUser;
 
   bool get isInitialized => _isInitialized;
 
@@ -85,6 +88,18 @@ class SessionManagerService extends ChangeNotifier {
     } catch (e) {
       if (kDebugMode) {
         debugPrint('⚠️ [SessionManager] Password revision check failed: $e');
+      }
+    }
+
+    // Initialize user session (chat loading, sync, theme) — but only once
+    // per user. Token refreshes re-trigger onAuthStateChange, so we guard
+    // against redundant initialization.
+    if (_sessionInitializedForUser != user.id) {
+      _sessionInitializedForUser = user.id;
+      unawaited(AppInitializationService.instance.initializeUserSession(user));
+      unawaited(AppThemeService.instance.loadFromSupabaseAsync());
+      if (kFeatureSessionManagement) {
+        unawaited(ModelPrefetchService.prefetch());
       }
     }
 
@@ -154,6 +169,9 @@ class SessionManagerService extends ChangeNotifier {
     if (kDebugMode) {
       debugPrint('🔐 [SessionManager] Performing logout cleanup');
     }
+
+    // Reset session guard so next login re-initializes
+    _sessionInitializedForUser = null;
 
     ChatSyncService.stop();
 
