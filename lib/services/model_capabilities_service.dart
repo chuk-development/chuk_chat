@@ -29,10 +29,14 @@ class ModelCapabilitiesService {
         }
       }
       _isInitialized = true;
-      debugPrint('✅ [ModelCapabilities] Initialized with ${_visionSupportCache.length} models, ${_visionSupportCache.entries.where((e) => e.value).length} support vision');
+      if (kDebugMode) {
+        debugPrint('✅ [ModelCapabilities] Initialized with ${_visionSupportCache.length} models, ${_visionSupportCache.entries.where((e) => e.value).length} support vision');
+      }
     } catch (error) {
       // If initialization fails, cache stays empty (all models = no vision)
-      debugPrint('⚠️ [ModelCapabilities] Initialization failed: $error');
+      if (kDebugMode) {
+        debugPrint('⚠️ [ModelCapabilities] Initialization failed: $error');
+      }
       _isInitialized = false;
     }
   }
@@ -56,7 +60,9 @@ class ModelCapabilitiesService {
     if (modelId.isEmpty) return false;
     final supports = _visionSupportCache[modelId] ?? false;
     if (!_isInitialized && modelId.isNotEmpty) {
-      debugPrint('⚠️ [ModelCapabilities] Checked $modelId before initialization');
+      if (kDebugMode) {
+        debugPrint('⚠️ [ModelCapabilities] Checked $modelId before initialization');
+      }
     }
     return supports;
   }

@@ -89,13 +89,17 @@ class MessageCompositionService {
     );
 
     // Debug: Log what we received
-    debugPrint('📝 [MessageComposition] prepareMessage called:');
-    debugPrint('  - userInput: ${userInput.length} chars');
-    debugPrint('  - attachedFiles: ${attachedFiles.length}');
-    for (final f in attachedFiles) {
-      debugPrint('    - ${f.fileName}: isImage=${f.isImage}, encPath=${f.encryptedImagePath != null}, markdown=${f.markdownContent != null}');
+    if (kDebugMode) {
+      debugPrint('📝 [MessageComposition] prepareMessage called:');
+      debugPrint('  - userInput: ${userInput.length} chars');
+      debugPrint('  - attachedFiles: ${attachedFiles.length}');
+      for (final f in attachedFiles) {
+        debugPrint(
+          '    - ${f.fileName}: isImage=${f.isImage}, encPath=${f.encryptedImagePath != null}, markdown=${f.markdownContent != null}',
+        );
+      }
+      debugPrint('  - hasAttachments: $hasAttachments');
     }
-    debugPrint('  - hasAttachments: $hasAttachments');
 
     if (!hasText && !hasAttachments) {
       return MessageCompositionResult.error('No content to send');
@@ -184,7 +188,11 @@ class MessageCompositionService {
           .where((f) => !f.isImage && f.markdownContent != null)
           .toList();
 
-      debugPrint('🖼️ [MessageComposition] Found ${imageFiles.length} images, ${documentFiles.length} documents');
+      if (kDebugMode) {
+        debugPrint(
+          '🖼️ [MessageComposition] Found ${imageFiles.length} images, ${documentFiles.length} documents',
+        );
+      }
 
       // Build display message with attachment names
       final attachmentNames = <String>[];
@@ -234,9 +242,11 @@ class MessageCompositionService {
             imageStoragePaths.add(imageFile.encryptedImagePath!);
           }
         }
-        debugPrint(
-          '🖼️ [MessageComposition] Collected ${imageStoragePaths.length} image storage paths',
-        );
+        if (kDebugMode) {
+          debugPrint(
+            '🖼️ [MessageComposition] Collected ${imageStoragePaths.length} image storage paths',
+          );
+        }
       }
 
       // Add documents with markdown content

@@ -22,7 +22,9 @@ class EnvLoader {
 
     // Only attempt file loading on desktop platforms
     if (!_isDesktop) {
-      debugPrint('EnvLoader: Not a desktop platform, skipping .env file loading');
+      if (kDebugMode) {
+        debugPrint('EnvLoader: Not a desktop platform, skipping .env file loading');
+      }
       return;
     }
 
@@ -39,21 +41,29 @@ class EnvLoader {
         final file = File(path);
         if (await file.exists()) {
           envFile = file;
-          debugPrint('EnvLoader: Found .env at: $path');
+          if (kDebugMode) {
+            debugPrint('EnvLoader: Found .env at: $path');
+          }
           break;
         }
       }
 
       if (envFile == null) {
-        debugPrint('EnvLoader: No .env file found, using compile-time values');
+        if (kDebugMode) {
+          debugPrint('EnvLoader: No .env file found, using compile-time values');
+        }
         return;
       }
 
       final contents = await envFile.readAsString();
       _parseEnvFile(contents);
-      debugPrint('EnvLoader: Loaded ${_values.length} environment variables');
+      if (kDebugMode) {
+        debugPrint('EnvLoader: Loaded ${_values.length} environment variables');
+      }
     } catch (e) {
-      debugPrint('EnvLoader: Failed to load .env file: $e');
+      if (kDebugMode) {
+        debugPrint('EnvLoader: Failed to load .env file: $e');
+      }
     }
   }
 
@@ -77,21 +87,29 @@ class EnvLoader {
         final file = File(path);
         if (file.existsSync()) {
           envFile = file;
-          debugPrint('EnvLoader: Found .env at: $path');
+          if (kDebugMode) {
+            debugPrint('EnvLoader: Found .env at: $path');
+          }
           break;
         }
       }
 
       if (envFile == null) {
-        debugPrint('EnvLoader: No .env file found, using compile-time values');
+        if (kDebugMode) {
+          debugPrint('EnvLoader: No .env file found, using compile-time values');
+        }
         return;
       }
 
       final contents = envFile.readAsStringSync();
       _parseEnvFile(contents);
-      debugPrint('EnvLoader: Loaded ${_values.length} environment variables');
+      if (kDebugMode) {
+        debugPrint('EnvLoader: Loaded ${_values.length} environment variables');
+      }
     } catch (e) {
-      debugPrint('EnvLoader: Failed to load .env file: $e');
+      if (kDebugMode) {
+        debugPrint('EnvLoader: Failed to load .env file: $e');
+      }
     }
   }
 

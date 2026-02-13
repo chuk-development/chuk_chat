@@ -147,8 +147,12 @@ class _SidebarMobileState extends State<SidebarMobile> {
         _profile = record;
       });
     } catch (error, stackTrace) {
-      debugPrint('SidebarMobile profile load failed: $error');
-      debugPrint('$stackTrace');
+      if (kDebugMode) {
+        debugPrint('SidebarMobile profile load failed: $error');
+      }
+      if (kDebugMode) {
+        debugPrint('$stackTrace');
+      }
     }
   }
 
@@ -180,8 +184,12 @@ class _SidebarMobileState extends State<SidebarMobile> {
         _isOfflineMode = !NetworkStatusService.isOnline;
       });
     } catch (error, stackTrace) {
-      debugPrint('SidebarMobile chat sync failed: $error');
-      debugPrint('$stackTrace');
+      if (kDebugMode) {
+        debugPrint('SidebarMobile chat sync failed: $error');
+      }
+      if (kDebugMode) {
+        debugPrint('$stackTrace');
+      }
     }
   }
 
@@ -251,12 +259,24 @@ class _SidebarMobileState extends State<SidebarMobile> {
   }
 
   void _openChat(StoredChat chat) {
-    debugPrint('');
-    debugPrint('═══════════════════════════════════════════════════════════');
-    debugPrint('👆 [SIDEBAR-MOBILE] User clicked chat');
-    debugPrint('👆 [SIDEBAR-MOBILE] Chat ID: ${chat.id}');
-    debugPrint('👆 [SIDEBAR-MOBILE] Preview: "${chat.previewText.substring(0, chat.previewText.length > 40 ? 40 : chat.previewText.length)}..."');
-    debugPrint('═══════════════════════════════════════════════════════════');
+    if (kDebugMode) {
+      debugPrint('');
+    }
+    if (kDebugMode) {
+      debugPrint('═══════════════════════════════════════════════════════════');
+    }
+    if (kDebugMode) {
+      debugPrint('👆 [SIDEBAR-MOBILE] User clicked chat');
+    }
+    if (kDebugMode) {
+      debugPrint('👆 [SIDEBAR-MOBILE] Chat ID: ${chat.id}');
+    }
+    if (kDebugMode) {
+      debugPrint('👆 [SIDEBAR-MOBILE] Preview: "${chat.previewText.substring(0, chat.previewText.length > 40 ? 40 : chat.previewText.length)}..."');
+    }
+    if (kDebugMode) {
+      debugPrint('═══════════════════════════════════════════════════════════');
+    }
     widget.onChatSelected(chat.id);
   }
 
@@ -431,8 +451,12 @@ class _SidebarMobileState extends State<SidebarMobile> {
         _filteredRecentChats = filtered;
       });
     } catch (error, stackTrace) {
-      debugPrint('SidebarMobile filtering failed: $error');
-      debugPrint('$stackTrace');
+      if (kDebugMode) {
+        debugPrint('SidebarMobile filtering failed: $error');
+      }
+      if (kDebugMode) {
+        debugPrint('$stackTrace');
+      }
       if (!mounted || currentGeneration != _filterGeneration) return;
       final List<StoredChat> fallback = _filterChatsLocally(
         savedChats,
@@ -710,12 +734,24 @@ class _SidebarMobileState extends State<SidebarMobile> {
                   return _buildRecentItem(
                     storedChat,
                     onTap: () {
-                      debugPrint('');
-                      debugPrint('═══════════════════════════════════════════════════════════');
-                      debugPrint('👆 [SIDEBAR-MOBILE] User tapped recent chat');
-                      debugPrint('👆 [SIDEBAR-MOBILE] Chat ID: ${storedChat.id}');
-                      debugPrint('👆 [SIDEBAR-MOBILE] Preview: "${storedChat.previewText.substring(0, storedChat.previewText.length > 40 ? 40 : storedChat.previewText.length)}..."');
-                      debugPrint('═══════════════════════════════════════════════════════════');
+                      if (kDebugMode) {
+                        debugPrint('');
+                      }
+                      if (kDebugMode) {
+                        debugPrint('═══════════════════════════════════════════════════════════');
+                      }
+                      if (kDebugMode) {
+                        debugPrint('👆 [SIDEBAR-MOBILE] User tapped recent chat');
+                      }
+                      if (kDebugMode) {
+                        debugPrint('👆 [SIDEBAR-MOBILE] Chat ID: ${storedChat.id}');
+                      }
+                      if (kDebugMode) {
+                        debugPrint('👆 [SIDEBAR-MOBILE] Preview: "${storedChat.previewText.substring(0, storedChat.previewText.length > 40 ? 40 : storedChat.previewText.length)}..."');
+                      }
+                      if (kDebugMode) {
+                        debugPrint('═══════════════════════════════════════════════════════════');
+                      }
                       widget.onChatSelected(storedChat.id);
                     },
                     onDelete: () => _confirmAndDeleteChat(storedChat),

@@ -233,15 +233,15 @@ class ApiRateLimiter {
       config: config,
     );
 
-    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    debugPrint('📊 RATE LIMIT STATUS');
-    debugPrint('Endpoint: $endpoint');
-    debugPrint('Requests remaining: $remaining/${config.maxRequests}');
+      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      debugPrint('📊 RATE LIMIT STATUS');
+      debugPrint('Endpoint: $endpoint');
+      debugPrint('Requests remaining: $remaining/${config.maxRequests}');
     if (resetTime != null) {
-      debugPrint('Resets in: ${_formatDuration(resetTime)}');
+        debugPrint('Resets in: ${_formatDuration(resetTime)}');
     } else {
-      debugPrint('No active limit');
+        debugPrint('No active limit');
     }
-    debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   }
 }

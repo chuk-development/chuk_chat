@@ -215,12 +215,16 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
 
       // Fetch fresh models in background (don't await)
       unawaited(_fetchModels().catchError((e) {
-        debugPrint('Background model fetch failed: $e');
+        if (kDebugMode) {
+          debugPrint('Background model fetch failed: $e');
+        }
       }));
     } catch (error) {
       _errorMessage = 'Error initializing model selection: $error';
       _selectedModelName = 'Error Loading';
-      debugPrint('Error initializing model selection: $error');
+      if (kDebugMode) {
+        debugPrint('Error initializing model selection: $error');
+      }
     } finally {
       if (mounted && _isLoadingModels) {
         setState(() => _isLoadingModels = false);
@@ -433,7 +437,9 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
             try {
               await ModelCacheService.saveAvailableModels(payload);
             } catch (error) {
-              debugPrint('Failed to save available models to cache: $error');
+              if (kDebugMode) {
+                debugPrint('Failed to save available models to cache: $error');
+              }
             }
           });
 
@@ -444,9 +450,11 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
                 _lastSavedPreferences,
               );
             } catch (error) {
-              debugPrint(
+              if (kDebugMode) {
+                debugPrint(
                 'Failed to save provider preferences to cache: $error',
-              );
+                );
+              }
             }
           });
         }
@@ -494,7 +502,9 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
   }
 
   Future<void> _handleApiUnavailable({required String debugDetails}) async {
-    debugPrint('Model fetch unavailable: $debugDetails');
+    if (kDebugMode) {
+      debugPrint('Model fetch unavailable: $debugDetails');
+    }
     final bool hasConnectivity =
         await NetworkStatusService.hasInternetConnection();
     final String message = hasConnectivity
@@ -777,7 +787,9 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
               try {
                 await UserPreferencesService.saveSelectedModel(value);
               } catch (error) {
-                debugPrint('Failed to save selected model: $error');
+                if (kDebugMode) {
+                  debugPrint('Failed to save selected model: $error');
+                }
 
                 if (!context.mounted) return;
 

@@ -63,11 +63,17 @@ class StreamingChatService {
 
       // Privacy: Only log in debug mode
       if (kDebugMode) {
-        debugPrint('═══════════════════════════════════════════════════════════');
+        debugPrint(
+          '═══════════════════════════════════════════════════════════',
+        );
         debugPrint('📤 STREAMING CHAT REQUEST');
         debugPrint('Provider: $providerSlug | Model: $modelId');
-        debugPrint('Message: ${message.length} chars | History: ${history?.length ?? 0}');
-        debugPrint('═══════════════════════════════════════════════════════════');
+        debugPrint(
+          'Message: ${message.length} chars | History: ${history?.length ?? 0}',
+        );
+        debugPrint(
+          '═══════════════════════════════════════════════════════════',
+        );
       }
 
       response = await client.send(request);

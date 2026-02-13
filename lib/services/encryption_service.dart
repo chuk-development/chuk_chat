@@ -347,7 +347,9 @@ class EncryptionService {
       }
     } catch (e) {
       // Ignore metadata sync failures - not critical for key loading
-      debugPrint('⚠️ [Encryption] Background metadata sync failed: $e');
+      if (kDebugMode) {
+        debugPrint('⚠️ [Encryption] Background metadata sync failed: $e');
+      }
     }
   }
 

@@ -1,5 +1,4 @@
 // lib/widgets/message_bubble.dart
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
@@ -8,6 +7,7 @@ import 'package:chuk_chat/widgets/document_viewer.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chuk_chat/constants.dart';
+import 'package:flutter/foundation.dart';
 
 /// Document attachment data
 class DocumentAttachment {
@@ -20,10 +20,7 @@ class DocumentAttachment {
   final String markdownContent;
 
   Map<String, String> toJson() {
-    return {
-      'fileName': fileName,
-      'markdownContent': markdownContent,
-    };
+    return {'fileName': fileName, 'markdownContent': markdownContent};
   }
 
   factory DocumentAttachment.fromJson(Map<String, dynamic> json) {
@@ -136,8 +133,7 @@ class _MessageBubbleState extends State<MessageBubble>
   }
 
   bool get _shouldShowTps {
-    final show =
-        widget.showTps ?? kDefaultShowTps;
+    final show = widget.showTps ?? kDefaultShowTps;
     return show && widget.tps != null && widget.tps! > 0;
   }
 
@@ -521,7 +517,10 @@ class _MessageBubbleState extends State<MessageBubble>
                   builder: (context) {
                     final accent = Theme.of(context).colorScheme.primary;
                     return Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: accent.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(4),
@@ -609,11 +608,7 @@ class _MessageBubbleState extends State<MessageBubble>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    Icons.description,
-                    size: 18,
-                    color: iconColor,
-                  ),
+                  Icon(Icons.description, size: 18, color: iconColor),
                   const SizedBox(width: 6),
                   Flexible(
                     child: Text(
@@ -733,7 +728,9 @@ class _CachedImageThumbnailState extends State<_CachedImageThumbnail>
     try {
       if (widget.imageDataUrl.startsWith('data:image/')) {
         // Legacy Base64 format - no longer supported, skip loading
-        debugPrint('⏭️ Skipping legacy Base64 image');
+        if (kDebugMode) {
+          debugPrint('⏭️ Skipping legacy Base64 image');
+        }
       } else {
         // Storage path - download and decrypt
         _cachedBytes = await ImageStorageService.downloadAndDecryptImage(
@@ -741,7 +738,9 @@ class _CachedImageThumbnailState extends State<_CachedImageThumbnail>
         );
       }
     } catch (e) {
-      debugPrint('Failed to load image: $e');
+      if (kDebugMode) {
+        debugPrint('Failed to load image: $e');
+      }
     }
     if (mounted) {
       setState(() {

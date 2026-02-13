@@ -35,7 +35,9 @@ class AudioRecordingHandler {
       }
 
       if (!await _audioRecorder.hasPermission()) {
-        debugPrint('Microphone permission required');
+        if (kDebugMode) {
+          debugPrint('Microphone permission required');
+        }
         return false;
       }
 
@@ -78,7 +80,9 @@ class AudioRecordingHandler {
       _isMicActive = true;
       return true;
     } catch (error, stackTrace) {
-      debugPrint('Failed to start microphone: $error\n$stackTrace');
+      if (kDebugMode) {
+        debugPrint('Failed to start microphone: $error\n$stackTrace');
+      }
       return false;
     }
   }
@@ -107,7 +111,9 @@ class AudioRecordingHandler {
             final response = await http.get(Uri.parse(path));
             _lastRecordedBytes = response.bodyBytes;
           } catch (e) {
-            debugPrint('Failed to fetch web audio blob: $e');
+            if (kDebugMode) {
+              debugPrint('Failed to fetch web audio blob: $e');
+            }
             _lastRecordedBytes = null;
           }
         } else {
@@ -126,7 +132,9 @@ class AudioRecordingHandler {
         }
       }
     } catch (error, stackTrace) {
-      debugPrint('Failed to stop microphone: $error\n$stackTrace');
+      if (kDebugMode) {
+        debugPrint('Failed to stop microphone: $error\n$stackTrace');
+      }
     }
     _isMicActive = false;
   }
@@ -277,10 +285,14 @@ class AudioRecordingHandler {
       return true;
     }
     if (status.isPermanentlyDenied) {
-      debugPrint('Enable mic in settings');
+      if (kDebugMode) {
+        debugPrint('Enable mic in settings');
+      }
       return false;
     }
-    debugPrint('Mic permission required');
+    if (kDebugMode) {
+      debugPrint('Mic permission required');
+    }
     return false;
   }
 
@@ -302,7 +314,9 @@ class AudioRecordingHandler {
         await file.delete();
       }
     } catch (error, stackTrace) {
-      debugPrint('Failed to delete audio file: $error\n$stackTrace');
+      if (kDebugMode) {
+        debugPrint('Failed to delete audio file: $error\n$stackTrace');
+      }
     }
   }
 

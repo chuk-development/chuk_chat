@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 
+import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
@@ -12,85 +13,13 @@ import 'package:chuk_chat/pages/media_manager_page.dart';
 import 'package:chuk_chat/pages/settings_page.dart';
 import 'package:chuk_chat/pages/coming_soon_page.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:flutter/foundation.dart';
 
 /* ---------- ROOT WRAPPER DESKTOP (for Desktop, Web, and Tablets) ---------- */
 class RootWrapperDesktop extends StatefulWidget {
-  final Brightness currentThemeMode;
-  final Color currentAccentColor;
-  final Color currentIconFgColor;
-  final Color currentBgColor;
-  final Function(Brightness) setThemeMode;
-  final Function(Color) setAccentColor;
-  final Function(Color) setIconFgColor;
-  final Function(Color) setBgColor;
+  final AppShellConfig config;
 
-  final bool grainEnabled;
-  final Function(bool) setGrainEnabled;
-
-  final bool showReasoningTokens;
-  final Function(bool) setShowReasoningTokens;
-  final bool showModelInfo;
-  final Function(bool) setShowModelInfo;
-  final bool showTps;
-  final Function(bool) setShowTps;
-  final bool autoSendVoiceTranscription;
-  final Function(bool) setAutoSendVoiceTranscription;
-  // Image generation settings
-  final bool imageGenEnabled;
-  final Function(bool) setImageGenEnabled;
-  final String imageGenDefaultSize;
-  final Function(String) setImageGenDefaultSize;
-  final int imageGenCustomWidth;
-  final Function(int) setImageGenCustomWidth;
-  final int imageGenCustomHeight;
-  final Function(int) setImageGenCustomHeight;
-  final bool imageGenUseCustomSize;
-  final Function(bool) setImageGenUseCustomSize;
-  // AI context settings
-  final bool includeRecentImagesInHistory;
-  final Function(bool) setIncludeRecentImagesInHistory;
-  final bool includeAllImagesInHistory;
-  final Function(bool) setIncludeAllImagesInHistory;
-  final bool includeReasoningInHistory;
-  final Function(bool) setIncludeReasoningInHistory;
-
-  const RootWrapperDesktop({
-    super.key,
-    required this.currentThemeMode,
-    required this.currentAccentColor,
-    required this.currentIconFgColor,
-    required this.currentBgColor,
-    required this.setThemeMode,
-    required this.setAccentColor,
-    required this.setIconFgColor,
-    required this.setBgColor,
-    required this.grainEnabled,
-    required this.setGrainEnabled,
-    required this.showReasoningTokens,
-    required this.setShowReasoningTokens,
-    required this.showModelInfo,
-    required this.setShowModelInfo,
-    required this.showTps,
-    required this.setShowTps,
-    required this.autoSendVoiceTranscription,
-    required this.setAutoSendVoiceTranscription,
-    required this.imageGenEnabled,
-    required this.setImageGenEnabled,
-    required this.imageGenDefaultSize,
-    required this.setImageGenDefaultSize,
-    required this.imageGenCustomWidth,
-    required this.setImageGenCustomWidth,
-    required this.imageGenCustomHeight,
-    required this.setImageGenCustomHeight,
-    required this.imageGenUseCustomSize,
-    required this.setImageGenUseCustomSize,
-    required this.includeRecentImagesInHistory,
-    required this.setIncludeRecentImagesInHistory,
-    required this.includeAllImagesInHistory,
-    required this.setIncludeAllImagesInHistory,
-    required this.includeReasoningInHistory,
-    required this.setIncludeReasoningInHistory,
-  });
+  const RootWrapperDesktop({super.key, required this.config});
 
   @override
   State<RootWrapperDesktop> createState() => _RootWrapperDesktopState();
@@ -106,44 +35,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   void _openSettingsPage() {
     if (_isSidebarExpanded) _toggleSidebar();
     Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => SettingsPage(
-          currentThemeMode: widget.currentThemeMode,
-          currentAccentColor: widget.currentAccentColor,
-          currentIconFgColor: widget.currentIconFgColor,
-          currentBgColor: widget.currentBgColor,
-          setThemeMode: widget.setThemeMode,
-          setAccentColor: widget.setAccentColor,
-          setIconFgColor: widget.setIconFgColor,
-          setBgColor: widget.setBgColor,
-          grainEnabled: widget.grainEnabled,
-          setGrainEnabled: widget.setGrainEnabled,
-          showReasoningTokens: widget.showReasoningTokens,
-          setShowReasoningTokens: widget.setShowReasoningTokens,
-          showModelInfo: widget.showModelInfo,
-          setShowModelInfo: widget.setShowModelInfo,
-          showTps: widget.showTps,
-          setShowTps: widget.setShowTps,
-          autoSendVoiceTranscription: widget.autoSendVoiceTranscription,
-          setAutoSendVoiceTranscription: widget.setAutoSendVoiceTranscription,
-          imageGenEnabled: widget.imageGenEnabled,
-          setImageGenEnabled: widget.setImageGenEnabled,
-          imageGenDefaultSize: widget.imageGenDefaultSize,
-          setImageGenDefaultSize: widget.setImageGenDefaultSize,
-          imageGenCustomWidth: widget.imageGenCustomWidth,
-          setImageGenCustomWidth: widget.setImageGenCustomWidth,
-          imageGenCustomHeight: widget.imageGenCustomHeight,
-          setImageGenCustomHeight: widget.setImageGenCustomHeight,
-          imageGenUseCustomSize: widget.imageGenUseCustomSize,
-          setImageGenUseCustomSize: widget.setImageGenUseCustomSize,
-          includeRecentImagesInHistory: widget.includeRecentImagesInHistory,
-          setIncludeRecentImagesInHistory: widget.setIncludeRecentImagesInHistory,
-          includeAllImagesInHistory: widget.includeAllImagesInHistory,
-          setIncludeAllImagesInHistory: widget.setIncludeAllImagesInHistory,
-          includeReasoningInHistory: widget.includeReasoningInHistory,
-          setIncludeReasoningInHistory: widget.setIncludeReasoningInHistory,
-        ),
-      ),
+      MaterialPageRoute(builder: (_) => SettingsPage(config: widget.config)),
     );
   }
 
@@ -206,20 +98,54 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     // CRITICAL: Block rapid chat switching while another chat is loading
     // This is a second line of defense (sidebar also checks this)
     if (ChatStorageService.isLoadingChat) {
-      debugPrint('');
-      debugPrint('┌─────────────────────────────────────────────────────────────');
-      debugPrint('│ 🚫 [ROOT-DESKTOP] BLOCKED - Chat is still loading');
-      debugPrint('│ 🚫 [ROOT-DESKTOP] Ignoring selection: $chatId');
-      debugPrint('└─────────────────────────────────────────────────────────────');
+      if (kDebugMode) {
+        debugPrint('');
+      }
+      if (kDebugMode) {
+        debugPrint(
+          '┌─────────────────────────────────────────────────────────────',
+        );
+      }
+      if (kDebugMode) {
+        debugPrint('│ 🚫 [ROOT-DESKTOP] BLOCKED - Chat is still loading');
+      }
+      if (kDebugMode) {
+        debugPrint('│ 🚫 [ROOT-DESKTOP] Ignoring selection: $chatId');
+      }
+      if (kDebugMode) {
+        debugPrint(
+          '└─────────────────────────────────────────────────────────────',
+        );
+      }
       return;
     }
-    debugPrint('');
-    debugPrint('┌─────────────────────────────────────────────────────────────');
-    debugPrint('│ 📥 [ROOT-DESKTOP] _handleChatSelected called');
-    debugPrint('│ 📥 [ROOT-DESKTOP] New chatId: $chatId');
-    debugPrint('│ 📥 [ROOT-DESKTOP] Old selectedChatId: ${ChatStorageService.selectedChatId}');
-    debugPrint('│ 📥 [ROOT-DESKTOP] Calling setState() to rebuild...');
-    debugPrint('└─────────────────────────────────────────────────────────────');
+    if (kDebugMode) {
+      debugPrint('');
+    }
+    if (kDebugMode) {
+      debugPrint(
+        '┌─────────────────────────────────────────────────────────────',
+      );
+    }
+    if (kDebugMode) {
+      debugPrint('│ 📥 [ROOT-DESKTOP] _handleChatSelected called');
+    }
+    if (kDebugMode) {
+      debugPrint('│ 📥 [ROOT-DESKTOP] New chatId: $chatId');
+    }
+    if (kDebugMode) {
+      debugPrint(
+        '│ 📥 [ROOT-DESKTOP] Old selectedChatId: ${ChatStorageService.selectedChatId}',
+      );
+    }
+    if (kDebugMode) {
+      debugPrint('│ 📥 [ROOT-DESKTOP] Calling setState() to rebuild...');
+    }
+    if (kDebugMode) {
+      debugPrint(
+        '└─────────────────────────────────────────────────────────────',
+      );
+    }
     setState(() {
       ChatStorageService.selectedChatId = chatId;
     });
@@ -272,20 +198,20 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       },
       isSidebarExpanded: _isSidebarExpanded,
       isCompactMode: isCompactMode,
-      showReasoningTokens: widget.showReasoningTokens,
-      showModelInfo: widget.showModelInfo,
-      showTps: widget.showTps,
+      showReasoningTokens: widget.config.showReasoningTokens,
+      showModelInfo: widget.config.showModelInfo,
+      showTps: widget.config.showTps,
       projectId: _activeProjectId,
       onExitProject: _exitProject,
       // Image generation settings
-      imageGenEnabled: widget.imageGenEnabled,
-      imageGenDefaultSize: widget.imageGenDefaultSize,
-      imageGenCustomWidth: widget.imageGenCustomWidth,
-      imageGenCustomHeight: widget.imageGenCustomHeight,
-      imageGenUseCustomSize: widget.imageGenUseCustomSize,
-      includeRecentImagesInHistory: widget.includeRecentImagesInHistory,
-      includeAllImagesInHistory: widget.includeAllImagesInHistory,
-      includeReasoningInHistory: widget.includeReasoningInHistory,
+      imageGenEnabled: widget.config.imageGenEnabled,
+      imageGenDefaultSize: widget.config.imageGenDefaultSize,
+      imageGenCustomWidth: widget.config.imageGenCustomWidth,
+      imageGenCustomHeight: widget.config.imageGenCustomHeight,
+      imageGenUseCustomSize: widget.config.imageGenUseCustomSize,
+      includeRecentImagesInHistory: widget.config.includeRecentImagesInHistory,
+      includeAllImagesInHistory: widget.config.includeAllImagesInHistory,
+      includeReasoningInHistory: widget.config.includeReasoningInHistory,
     );
 
     // Panel width for Projects/Media - responsive based on screen width
@@ -297,11 +223,16 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     final double panelWidth = availableForPanel >= minPanelWidth
         ? math.min(400.0, availableForPanel)
         : 0;
-    final bool showPanel = _activePanel != null && !isCompactMode && panelWidth > 0;
+    final bool showPanel =
+        _activePanel != null && !isCompactMode && panelWidth > 0;
 
     // Debug: Log panel state when active
     if (_activePanel != null) {
-      debugPrint('📐 Panel: screen=$screenWidth, sidebar=$sidebarWidth, available=$availableForPanel, panelWidth=$panelWidth, showPanel=$showPanel');
+      if (kDebugMode) {
+        debugPrint(
+          '📐 Panel: screen=$screenWidth, sidebar=$sidebarWidth, available=$availableForPanel, panelWidth=$panelWidth, showPanel=$showPanel',
+        );
+      }
     }
 
     return Scaffold(
@@ -327,9 +258,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                 decoration: BoxDecoration(
                   color: Theme.of(context).scaffoldBackgroundColor,
                   border: Border(
-                    left: BorderSide(
-                      color: iconFg.withValues(alpha: 0.2),
-                    ),
+                    left: BorderSide(color: iconFg.withValues(alpha: 0.2)),
                   ),
                 ),
                 child: Column(
@@ -468,7 +397,11 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                 onTap: () {
                   // Block new chat while another chat is loading
                   if (ChatStorageService.isLoadingChat) {
-                    debugPrint('🚫 [ROOT-DESKTOP] BLOCKED newChat - Chat is still loading');
+                    if (kDebugMode) {
+                      debugPrint(
+                        '🚫 [ROOT-DESKTOP] BLOCKED newChat - Chat is still loading',
+                      );
+                    }
                     return;
                   }
                   _chatUIKey.currentState?.newChat();
@@ -567,7 +500,9 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                   kSpacingBetweenTopButtons +
                   kButtonVisualHeight +
                   kSpacingBetweenTopButtons +
-                  (kFeatureProjects ? kButtonVisualHeight + kSpacingBetweenTopButtons : 0),
+                  (kFeatureProjects
+                      ? kButtonVisualHeight + kSpacingBetweenTopButtons
+                      : 0),
               left: kFixedLeftPadding,
               child: InkWell(
                 onTap: _openAssistantsPage,
@@ -616,8 +551,12 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                   kSpacingBetweenTopButtons +
                   kButtonVisualHeight +
                   kSpacingBetweenTopButtons +
-                  (kFeatureProjects ? kButtonVisualHeight + kSpacingBetweenTopButtons : 0) +
-                  (kFeatureAssistants ? kButtonVisualHeight + kSpacingBetweenTopButtons : 0),
+                  (kFeatureProjects
+                      ? kButtonVisualHeight + kSpacingBetweenTopButtons
+                      : 0) +
+                  (kFeatureAssistants
+                      ? kButtonVisualHeight + kSpacingBetweenTopButtons
+                      : 0),
               left: kFixedLeftPadding,
               child: InkWell(
                 onTap: _openMediaPage,

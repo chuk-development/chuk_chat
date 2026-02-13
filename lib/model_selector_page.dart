@@ -5,6 +5,7 @@ import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_svg/flutter_svg.dart'; // Import for SVG support
+import 'package:flutter/foundation.dart';
 
 // Import your app constants for colors and theme
 import 'package:chuk_chat/utils/color_extensions.dart'; // Import the new extension
@@ -181,25 +182,45 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
     try {
       await _fetchModels();
     } on TimeoutException catch (error, stackTrace) {
-      debugPrint('Model selector initialization timeout: $error');
-      debugPrint('Stack trace: $stackTrace');
+      if (kDebugMode) {
+        debugPrint('Model selector initialization timeout: $error');
+      }
+      if (kDebugMode) {
+        debugPrint('Stack trace: $stackTrace');
+      }
       await _handleApiUnavailable('Request timed out: $error');
     } on SocketException catch (error, stackTrace) {
-      debugPrint('Model selector initialization network error: $error');
-      debugPrint('Stack trace: $stackTrace');
+      if (kDebugMode) {
+        debugPrint('Model selector initialization network error: $error');
+      }
+      if (kDebugMode) {
+        debugPrint('Stack trace: $stackTrace');
+      }
       await _handleApiUnavailable('Network error: $error');
     } on HttpException catch (error, stackTrace) {
-      debugPrint('Model selector initialization HTTP error: $error');
-      debugPrint('Stack trace: $stackTrace');
+      if (kDebugMode) {
+        debugPrint('Model selector initialization HTTP error: $error');
+      }
+      if (kDebugMode) {
+        debugPrint('Stack trace: $stackTrace');
+      }
       await _handleApiUnavailable('HTTP error: $error');
     } on FormatException catch (error, stackTrace) {
-      debugPrint('Model selector initialization format error: $error');
-      debugPrint('Stack trace: $stackTrace');
+      if (kDebugMode) {
+        debugPrint('Model selector initialization format error: $error');
+      }
+      if (kDebugMode) {
+        debugPrint('Stack trace: $stackTrace');
+      }
       await _handleApiUnavailable('Data format error: $error');
     } catch (error, stackTrace) {
       // Rethrow non-Exception/unknown errors so programming errors are not swallowed
-      debugPrint('Model selector initialization unexpected error: $error');
-      debugPrint('Stack trace: $stackTrace');
+      if (kDebugMode) {
+        debugPrint('Model selector initialization unexpected error: $error');
+      }
+      if (kDebugMode) {
+        debugPrint('Stack trace: $stackTrace');
+      }
       rethrow;
     }
   }
@@ -298,7 +319,9 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
   }
 
   Future<void> _handleApiUnavailable(String debugDetails) async {
-    debugPrint('Model selector API unavailable: $debugDetails');
+    if (kDebugMode) {
+      debugPrint('Model selector API unavailable: $debugDetails');
+    }
     final bool hasConnectivity =
         await NetworkStatusService.hasInternetConnection();
     final String message = hasConnectivity
@@ -421,7 +444,9 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
           height: size,
           fit: BoxFit.contain,
           errorBuilder: (context, error, stackTrace) {
-            debugPrint('Error loading image from $imageUrl: $error');
+            if (kDebugMode) {
+              debugPrint('Error loading image from $imageUrl: $error');
+            }
             return Icon(
               fallbackIcon,
               color: iconFg.lighten(0.3),

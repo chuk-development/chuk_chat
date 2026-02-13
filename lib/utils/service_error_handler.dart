@@ -12,8 +12,8 @@ class ServiceErrorHandler {
       debugPrint('❌ DioException${context != null ? " ($context)" : ""}: ${error.type}');
       debugPrint('   Message: ${error.message}');
       if (error.response != null) {
-        debugPrint('   Status: ${error.response?.statusCode}');
-        debugPrint('   Data: ${error.response?.data}');
+          debugPrint('   Status: ${error.response?.statusCode}');
+          debugPrint('   Data: ${error.response?.data}');
       }
     }
 
@@ -83,12 +83,10 @@ class ServiceErrorHandler {
 
   /// Handle generic exceptions
   static String handleGenericException(Object error, {String? context}) {
-    if (kDebugMode) {
       debugPrint('❌ Exception${context != null ? " ($context)" : ""}: $error');
       if (error is Error) {
         debugPrint('   Stack trace: ${error.stackTrace}');
       }
-    }
 
     if (error is DioException) {
       return handleDioException(error, context: context);

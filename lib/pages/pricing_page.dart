@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart';
 
 final SupabaseClient _supabase = Supabase.instance.client;
 
@@ -175,7 +176,9 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
     } catch (error) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      debugPrint('Error loading user status: $error');
+      if (kDebugMode) {
+        debugPrint('Error loading user status: $error');
+      }
     }
   }
 

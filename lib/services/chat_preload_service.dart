@@ -57,7 +57,9 @@ class ChatPreloadService {
   static Future<void> startBackgroundPreload() async {
     // Already complete or in progress
     if (_isPreloadComplete || _isPreloading) {
-      debugPrint('⏭️ [Preload] Already ${_isPreloadComplete ? "complete" : "in progress"}');
+      if (kDebugMode) {
+        debugPrint('⏭️ [Preload] Already ${_isPreloadComplete ? "complete" : "in progress"}');
+      }
       return;
     }
 
@@ -65,14 +67,18 @@ class ChatPreloadService {
     if (!EncryptionService.hasKey) {
       final loaded = await EncryptionService.tryLoadKey();
       if (!loaded) {
-        debugPrint('⚠️ [Preload] No encryption key, cannot preload');
+        if (kDebugMode) {
+          debugPrint('⚠️ [Preload] No encryption key, cannot preload');
+        }
         return;
       }
     }
 
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
-      debugPrint('⚠️ [Preload] No user signed in');
+      if (kDebugMode) {
+        debugPrint('⚠️ [Preload] No user signed in');
+      }
       return;
     }
 
@@ -81,7 +87,9 @@ class ChatPreloadService {
     _progress = 0.0;
     _loadedCount = 0;
 
-    debugPrint('🔄 [Preload] Starting background preload...');
+    if (kDebugMode) {
+      debugPrint('🔄 [Preload] Starting background preload...');
+    }
     final stopwatch = Stopwatch()..start();
 
     try {
@@ -94,7 +102,9 @@ class ChatPreloadService {
       _totalCount = chatsToLoad.length;
 
       if (chatsToLoad.isEmpty) {
-        debugPrint('✅ [Preload] All ${ChatStorageState.chatsById.length} chats already loaded');
+        if (kDebugMode) {
+          debugPrint('✅ [Preload] All ${ChatStorageState.chatsById.length} chats already loaded');
+        }
         _isPreloadComplete = true;
         _progress = 1.0;
         _progressController.add(1.0);
@@ -102,7 +112,9 @@ class ChatPreloadService {
         return;
       }
 
-      debugPrint('📦 [Preload] Loading $_totalCount chats in batches of $_batchSize...');
+      if (kDebugMode) {
+        debugPrint('📦 [Preload] Loading $_totalCount chats in batches of $_batchSize...');
+      }
 
       // Process in batches to avoid blocking UI
       for (int i = 0; i < chatsToLoad.length; i += _batchSize) {
@@ -124,14 +136,18 @@ class ChatPreloadService {
       }
 
       stopwatch.stop();
-      debugPrint('✅ [Preload] Complete: $_totalCount chats in ${stopwatch.elapsedMilliseconds}ms');
+      if (kDebugMode) {
+        debugPrint('✅ [Preload] Complete: $_totalCount chats in ${stopwatch.elapsedMilliseconds}ms');
+      }
 
       _isPreloadComplete = true;
       _progress = 1.0;
       _progressController.add(1.0);
       ChatStorageState.notifyChanges();
     } catch (e) {
-      debugPrint('❌ [Preload] Error: $e');
+      if (kDebugMode) {
+        debugPrint('❌ [Preload] Error: $e');
+      }
     } finally {
       _isPreloading = false;
       _preloadCompleter?.complete();
@@ -194,11 +210,15 @@ class ChatPreloadService {
 
           ChatStorageState.chatsById[chatId] = chat;
         } catch (e) {
-          debugPrint('⚠️ [Preload] Failed to deserialize chat: $e');
+          if (kDebugMode) {
+            debugPrint('⚠️ [Preload] Failed to deserialize chat: $e');
+          }
         }
       }
     } catch (e) {
-      debugPrint('⚠️ [Preload] Batch load failed: $e');
+      if (kDebugMode) {
+        debugPrint('⚠️ [Preload] Batch load failed: $e');
+      }
     }
   }
 

@@ -137,7 +137,9 @@ class NetworkStatusService {
   static void _updateStatus(bool isOnline) {
     if (_isOnlineNotifier.value != isOnline) {
       _isOnlineNotifier.value = isOnline;
-      debugPrint('Network status changed: ${isOnline ? 'ONLINE' : 'OFFLINE'}');
+      if (kDebugMode) {
+        debugPrint('Network status changed: ${isOnline ? 'ONLINE' : 'OFFLINE'}');
+      }
     }
   }
 

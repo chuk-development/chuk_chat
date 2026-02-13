@@ -1,5 +1,5 @@
 // lib/platform_specific/chat/handlers/chat_persistence_handler.dart
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -44,9 +44,11 @@ class ChatPersistenceHandler {
             // We don't use the result here since we're not waiting
           })
           .catchError((error) {
-            debugPrint(
-              '⚠️ [ChatPersistence] Background operation failed: $error',
-            );
+            if (kDebugMode) {
+              debugPrint(
+                '⚠️ [ChatPersistence] Background operation failed: $error',
+              );
+            }
           });
       return null;
     }
@@ -61,9 +63,11 @@ class ChatPersistenceHandler {
     // CRITICAL: Capture chatId at the start to prevent race conditions
     final String? chatIdAtStart = chatId;
 
-    debugPrint(
-      '📝 [ChatPersistence] Starting persist: chatId=$chatId, messages=${messagesCopy.length}, offline=$isOffline, silent=$silent',
-    );
+    if (kDebugMode) {
+      debugPrint(
+        '📝 [ChatPersistence] Starting persist: chatId=$chatId, messages=${messagesCopy.length}, offline=$isOffline, silent=$silent',
+      );
+    }
 
     try {
       // Check if chat actually exists in storage
@@ -71,7 +75,9 @@ class ChatPersistenceHandler {
           chatId != null &&
           ChatStorageService.savedChats.any((chat) => chat.id == chatId);
 
-      debugPrint('📋 [ChatPersistence] Chat exists in storage: $chatExists');
+      if (kDebugMode) {
+        debugPrint('📋 [ChatPersistence] Chat exists in storage: $chatExists');
+      }
 
       // If chatId is provided but chat doesn't exist in storage, we need to INSERT not UPDATE
       final stored = chatExists
@@ -79,22 +85,30 @@ class ChatPersistenceHandler {
           : await ChatStorageService.saveChat(messagesCopy, chatId: chatId);
 
       if (stored == null) {
-        debugPrint(
-          '❌ [ChatPersistence] Failed: ChatStorageService returned null',
-        );
+        if (kDebugMode) {
+          debugPrint(
+            '❌ [ChatPersistence] Failed: ChatStorageService returned null',
+          );
+        }
         return null;
       }
 
-      debugPrint(
-        '✅ [ChatPersistence] Success: chatId=${stored.id}, messages=${stored.messages.length}',
-      );
+      if (kDebugMode) {
+        debugPrint(
+          '✅ [ChatPersistence] Success: chatId=${stored.id}, messages=${stored.messages.length}',
+        );
+      }
 
       // Notify about chat ID assignment (unless silent mode)
       // Silent mode is used when persisting old chat in background after user moved to new chat
       if (!silent && (chatIdAtStart == null || chatIdAtStart != stored.id)) {
         onChatIdAssigned?.call(stored.id);
       } else if (silent) {
-        debugPrint('│ 🔇 [ChatPersistence] Silent mode - skipping onChatIdAssigned callback');
+        if (kDebugMode) {
+          debugPrint(
+            '│ 🔇 [ChatPersistence] Silent mode - skipping onChatIdAssigned callback',
+          );
+        }
       }
 
       // Note: We don't set selectedChatIndex here - that's managed by the UI layer
@@ -102,14 +116,20 @@ class ChatPersistenceHandler {
       return stored;
     } catch (error, stackTrace) {
       final String errorStr = error.toString().toLowerCase();
-      debugPrint('❌ [ChatPersistence] Exception: $error');
-      debugPrint('Stack trace: $stackTrace');
+      if (kDebugMode) {
+        debugPrint('❌ [ChatPersistence] Exception: $error');
+      }
+      if (kDebugMode) {
+        debugPrint('Stack trace: $stackTrace');
+      }
 
       // Don't show errors for network issues or when offline
       if (NetworkStatusService.isNetworkError(error) || isOffline) {
-        debugPrint(
-          '🌐 [ChatPersistence] Network/offline error (expected when offline)',
-        );
+        if (kDebugMode) {
+          debugPrint(
+            '🌐 [ChatPersistence] Network/offline error (expected when offline)',
+          );
+        }
         // Silently fail - chats will sync when back online
         return null;
       }
@@ -119,24 +139,32 @@ class ChatPersistenceHandler {
           errorStr.contains('access') ||
           errorStr.contains('denied') ||
           errorStr.contains('unauthorized')) {
-        debugPrint('🔒 [ChatPersistence] Permission/auth error');
+        if (kDebugMode) {
+          debugPrint('🔒 [ChatPersistence] Permission/auth error');
+        }
 
         // Check if we actually have a valid session
         final session = SupabaseService.auth.currentSession;
         if (session == null) {
-          debugPrint('❌ [ChatPersistence] No session found');
+          if (kDebugMode) {
+            debugPrint('❌ [ChatPersistence] No session found');
+          }
           onShowSnackBar?.call('Please sign in to save chats');
         } else {
-          debugPrint(
-            '⚠️ [ChatPersistence] Has session but permission denied - RLS policy issue?',
-          );
+          if (kDebugMode) {
+            debugPrint(
+              '⚠️ [ChatPersistence] Has session but permission denied - RLS policy issue?',
+            );
+          }
         }
         return null;
       }
 
       // Check if it's an encryption error
       if (errorStr.contains('encryption') || errorStr.contains('key')) {
-        debugPrint('🔐 [ChatPersistence] Encryption error');
+        if (kDebugMode) {
+          debugPrint('🔐 [ChatPersistence] Encryption error');
+        }
         onShowSnackBar?.call(
           'Error saving chat. Your messages are still visible.',
         );
@@ -144,7 +172,9 @@ class ChatPersistenceHandler {
       }
 
       // For other errors, log but don't show to user (too disruptive)
-      debugPrint('⚠️ [ChatPersistence] Unknown error type: $errorStr');
+      if (kDebugMode) {
+        debugPrint('⚠️ [ChatPersistence] Unknown error type: $errorStr');
+      }
       return null;
     }
   }
@@ -163,7 +193,9 @@ class ChatPersistenceHandler {
       );
 
       if (chatIndex == -1) {
-        debugPrint('Chat $chatId not found in storage');
+        if (kDebugMode) {
+          debugPrint('Chat $chatId not found in storage');
+        }
         return;
       }
 
@@ -177,14 +209,20 @@ class ChatPersistenceHandler {
 
         // Save back to storage
         await ChatStorageService.updateChat(chatId, messages);
-        debugPrint(
-          'Updated background chat $chatId message at index $messageIndex',
-        );
+        if (kDebugMode) {
+          debugPrint(
+            'Updated background chat $chatId message at index $messageIndex',
+          );
+        }
       } else {
-        debugPrint('Invalid message index $messageIndex for chat $chatId');
+        if (kDebugMode) {
+          debugPrint('Invalid message index $messageIndex for chat $chatId');
+        }
       }
     } catch (e) {
-      debugPrint('Error updating background chat message: $e');
+      if (kDebugMode) {
+        debugPrint('Error updating background chat message: $e');
+      }
     }
   }
 }

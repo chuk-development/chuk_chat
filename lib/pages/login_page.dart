@@ -10,6 +10,7 @@ import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/input_validator.dart';
 import 'package:chuk_chat/widgets/password_strength_meter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/foundation.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -214,7 +215,9 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _launchUrl(String url) async {
     final Uri uri = Uri.parse(url);
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      debugPrint('Could not launch $url');
+      if (kDebugMode) {
+        debugPrint('Could not launch $url');
+      }
     }
   }
 

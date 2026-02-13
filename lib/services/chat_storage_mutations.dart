@@ -102,7 +102,9 @@ class ChatStorageMutations {
 
     // Also update the title cache for sidebar persistence
     await saveTitlesToCache(user.id, ChatStorageState.chatsById.values.toList());
-    debugPrint('✅ [ChatStorage] Renamed chat $chatId to "$newName" (updatedAt: $newUpdatedAt)');
+    if (kDebugMode) {
+      debugPrint('✅ [ChatStorage] Renamed chat $chatId to "$newName" (updatedAt: $newUpdatedAt)');
+    }
   }
 
   /// Re-encrypt all chats with stored chat data
@@ -140,16 +142,22 @@ class ChatStorageMutations {
   /// Export all chats as JSON string.
   /// This will wait for all chats to be fully loaded before exporting.
   static Future<String> exportChats() async {
-    debugPrint('📤 [Export] Starting export...');
+    if (kDebugMode) {
+      debugPrint('📤 [Export] Starting export...');
+    }
 
     // Wait for any pending loads
     if (ChatStorageState.loadingCompleter != null) {
-      debugPrint('📤 [Export] Waiting for pending loads...');
+      if (kDebugMode) {
+        debugPrint('📤 [Export] Waiting for pending loads...');
+      }
       await ChatStorageState.loadingCompleter!.future;
     }
 
     // Ensure all chats are fully loaded (messages decrypted)
-    debugPrint('📤 [Export] Ensuring all chats are preloaded...');
+    if (kDebugMode) {
+      debugPrint('📤 [Export] Ensuring all chats are preloaded...');
+    }
     await ChatPreloadService.awaitPreload();
 
     // Now all chats should be fully loaded
@@ -157,7 +165,9 @@ class ChatStorageMutations {
     final fullyLoadedChats = chats.where((chat) => chat.isFullyLoaded).toList();
 
     if (fullyLoadedChats.length < chats.length) {
-      debugPrint('⚠️ [Export] Only ${fullyLoadedChats.length}/${chats.length} chats fully loaded');
+      if (kDebugMode) {
+        debugPrint('⚠️ [Export] Only ${fullyLoadedChats.length}/${chats.length} chats fully loaded');
+      }
     }
 
     final exportPayload = fullyLoadedChats
@@ -171,7 +181,9 @@ class ChatStorageMutations {
         )
         .toList();
 
-    debugPrint('📤 [Export] Exported ${exportPayload.length} chats');
+    if (kDebugMode) {
+      debugPrint('📤 [Export] Exported ${exportPayload.length} chats');
+    }
     return jsonEncode(exportPayload);
   }
 
@@ -197,5 +209,7 @@ Future<void> saveTitlesToCache(String userId, List<StoredChat> chats) async {
 
   await prefs.setString(cacheKey, jsonEncode(data));
   final withTimestamp = chats.where((c) => c.updatedAt != null).length;
-  debugPrint('💾 [ChatStorage] Saved ${chats.length} titles to cache ($withTimestamp with updatedAt)');
+  if (kDebugMode) {
+    debugPrint('💾 [ChatStorage] Saved ${chats.length} titles to cache ($withTimestamp with updatedAt)');
+  }
 }

@@ -29,13 +29,17 @@ class ChatStorageSidebar {
 
     // Prevent concurrent loads - return existing future if already loading
     if (ChatStorageState.isLoading) {
-      debugPrint('⏳ [ChatStorage] Sidebar load already in progress, waiting...');
+      if (kDebugMode) {
+        debugPrint('⏳ [ChatStorage] Sidebar load already in progress, waiting...');
+      }
       return ChatStorageState.loadingCompleter!.future;
     }
 
     // Already loaded from cache - nothing to do
     if (ChatStorageState.cacheLoaded) {
-      debugPrint('✅ [ChatStorage] Cache already loaded, skipping');
+      if (kDebugMode) {
+        debugPrint('✅ [ChatStorage] Cache already loaded, skipping');
+      }
       return;
     }
 
@@ -50,12 +54,16 @@ class ChatStorageSidebar {
       ChatStorageState.notifyChangesImmediate();
       ChatStorageState.cacheLoaded = true;
 
-      debugPrint('✅ [ChatStorage] Sidebar ready (${ChatStorageState.chatsById.length} chats, UI notified)');
+      if (kDebugMode) {
+        debugPrint('✅ [ChatStorage] Sidebar ready (${ChatStorageState.chatsById.length} chats, UI notified)');
+      }
 
       // Mark initial load complete - ChatSyncService can now start syncing
       ChatStorageState.initialSyncComplete = true;
     } catch (e) {
-      debugPrint('❌ [ChatStorage] Sidebar load failed: $e');
+      if (kDebugMode) {
+        debugPrint('❌ [ChatStorage] Sidebar load failed: $e');
+      }
       rethrow;
     } finally {
       ChatStorageState.loadingCompleter?.complete();
@@ -83,7 +91,9 @@ class ChatStorageSidebar {
     final raw = prefs.getString(cacheKey);
 
     if (raw == null || raw.isEmpty) {
-      debugPrint('📦 [ChatStorage] No title cache found (prefs: ${prefsTime}ms)');
+      if (kDebugMode) {
+        debugPrint('📦 [ChatStorage] No title cache found (prefs: ${prefsTime}ms)');
+      }
       return;
     }
 
@@ -111,12 +121,18 @@ class ChatStorageSidebar {
         );
       }
       stopwatch.stop();
-      debugPrint('📦 [ChatStorage] Cache: prefs=${prefsTime}ms, parse=${parseTime - prefsTime}ms, objects=${stopwatch.elapsedMilliseconds - parseTime}ms, loaded=${ChatStorageState.chatsById.length} chats');
+      if (kDebugMode) {
+        debugPrint('📦 [ChatStorage] Cache: prefs=${prefsTime}ms, parse=${parseTime - prefsTime}ms, objects=${stopwatch.elapsedMilliseconds - parseTime}ms, loaded=${ChatStorageState.chatsById.length} chats');
+      }
       // Debug: show sample of cached updatedAt values
       final sample = ChatStorageState.chatsById.values.take(3).map((c) => '${c.id.substring(0, 8)}: updatedAt=${c.updatedAt}').join(', ');
-      debugPrint('📦 [ChatStorage] Sample cache timestamps: $sample');
+      if (kDebugMode) {
+        debugPrint('📦 [ChatStorage] Sample cache timestamps: $sample');
+      }
     } catch (e) {
-      debugPrint('⚠️ [ChatStorage] Failed to parse title cache: $e');
+      if (kDebugMode) {
+        debugPrint('⚠️ [ChatStorage] Failed to parse title cache: $e');
+      }
     }
   }
 
@@ -128,7 +144,9 @@ class ChatStorageSidebar {
     bool hasChanges = false;
 
     try {
-      debugPrint('🔄 [ChatStorage] Syncing titles from network...');
+      if (kDebugMode) {
+        debugPrint('🔄 [ChatStorage] Syncing titles from network...');
+      }
 
       final rows = await SupabaseService.client
           .from('encrypted_chats')
@@ -136,7 +154,9 @@ class ChatStorageSidebar {
           .eq('user_id', userId)
           .order('created_at', ascending: false);
 
-      debugPrint('📦 [ChatStorage] Fetched ${rows.length} chat metadata (${stopwatch.elapsedMilliseconds}ms)');
+      if (kDebugMode) {
+        debugPrint('📦 [ChatStorage] Fetched ${rows.length} chat metadata (${stopwatch.elapsedMilliseconds}ms)');
+      }
 
       if (rows.isEmpty) {
         if (ChatStorageState.chatsById.isNotEmpty) {
@@ -191,14 +211,18 @@ class ChatStorageSidebar {
         // If server has no updated_at and we have a cached title, use cache
 
         if (needsDecryption) {
-          debugPrint('🔓 [ChatStorage] Decrypt needed for $id: $reason');
+          if (kDebugMode) {
+            debugPrint('🔓 [ChatStorage] Decrypt needed for $id: $reason');
+          }
           rowsNeedingDecryption.add(row);
         } else {
           rowsWithCachedTitle.add(row);
         }
       }
 
-      debugPrint('📦 [ChatStorage] ${rowsNeedingDecryption.length} need decryption, ${rowsWithCachedTitle.length} using cache');
+      if (kDebugMode) {
+        debugPrint('📦 [ChatStorage] ${rowsNeedingDecryption.length} need decryption, ${rowsWithCachedTitle.length} using cache');
+      }
 
       // Only decrypt titles that need it
       final decryptedChats = await _decryptTitlesBatch(rowsNeedingDecryption);
@@ -231,7 +255,9 @@ class ChatStorageSidebar {
           } else {
             ChatStorageState.chatsById[chat.id] = chat;
           }
-          debugPrint('📝 [ChatStorage] Updated timestamp only for ${chat.id.substring(0, 8)}');
+          if (kDebugMode) {
+            debugPrint('📝 [ChatStorage] Updated timestamp only for ${chat.id.substring(0, 8)}');
+          }
         }
       }
 
@@ -258,19 +284,27 @@ class ChatStorageSidebar {
 
       // Only notify if something changed
       if (hasChanges) {
-        debugPrint('🔔 [ChatStorage] Changes detected, notifying UI');
+        if (kDebugMode) {
+          debugPrint('🔔 [ChatStorage] Changes detected, notifying UI');
+        }
         ChatStorageState.notifyChanges();
       } else {
-        debugPrint('✓ [ChatStorage] No changes detected, skipping UI notify');
+        if (kDebugMode) {
+          debugPrint('✓ [ChatStorage] No changes detected, skipping UI notify');
+        }
       }
 
       // Always update cache (timestamps might have changed)
       await saveTitlesToCache(userId, ChatStorageState.chatsById.values.toList());
 
       stopwatch.stop();
-      debugPrint('✅ [ChatStorage] Network sync complete (${stopwatch.elapsedMilliseconds}ms)');
+      if (kDebugMode) {
+        debugPrint('✅ [ChatStorage] Network sync complete (${stopwatch.elapsedMilliseconds}ms)');
+      }
     } catch (e) {
-      debugPrint('⚠️ [ChatStorage] Network sync failed: $e');
+      if (kDebugMode) {
+        debugPrint('⚠️ [ChatStorage] Network sync failed: $e');
+      }
     }
   }
 
@@ -304,7 +338,9 @@ class ChatStorageSidebar {
     // BUT only if encryption key is already loaded - don't block waiting for it!
     if (encryptedTitles.isNotEmpty) {
       if (!EncryptionService.hasKey) {
-        debugPrint('⏭️ [ChatStorage] Skipping title decryption - key not loaded yet');
+        if (kDebugMode) {
+          debugPrint('⏭️ [ChatStorage] Skipping title decryption - key not loaded yet');
+        }
         // Keep using cached/fallback titles - decryption will happen on next sync
         return results;
       }
@@ -320,7 +356,9 @@ class ChatStorageSidebar {
           }
         }
       } catch (e) {
-        debugPrint('⚠️ [ChatStorage] Title batch decryption failed: $e');
+        if (kDebugMode) {
+          debugPrint('⚠️ [ChatStorage] Title batch decryption failed: $e');
+        }
         // Continue with title-less chats
       }
     }

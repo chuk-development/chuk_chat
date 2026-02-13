@@ -14,8 +14,8 @@ class QueuedRequest<T> {
     required this.id,
     required this.operation,
     required this.priority,
-  })  : completer = Completer<T>(),
-        queuedAt = DateTime.now();
+  }) : completer = Completer<T>(),
+       queuedAt = DateTime.now();
 
   Future<T> get future => completer.future;
 }
@@ -128,12 +128,12 @@ class ApiRequestQueue {
 
   /// Get queue statistics.
   Map<String, int> get statistics => {
-        'queued': _totalQueued,
-        'completed': _totalCompleted,
-        'failed': _totalFailed,
-        'pending': _queue.length,
-        'active': _activeRequests,
-      };
+    'queued': _totalQueued,
+    'completed': _totalCompleted,
+    'failed': _totalFailed,
+    'pending': _queue.length,
+    'active': _activeRequests,
+  };
 
   /// Clear the queue (cancels all pending requests).
   void clear() {
@@ -167,10 +167,7 @@ class ApiRequestQueue {
 /// Convenience extension for adding queue support to functions.
 extension QueueableFunction<T> on Future<T> Function() {
   /// Execute this function through the request queue.
-  Future<T> queued({
-    required String id,
-    int priority = 0,
-  }) {
+  Future<T> queued({required String id, int priority = 0}) {
     return ApiRequestQueue().enqueue(
       id: id,
       operation: this,

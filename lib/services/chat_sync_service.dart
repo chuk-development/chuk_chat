@@ -26,9 +26,11 @@ class ChatSyncService {
   static void start() {
     if (_isEnabled) return;
     _isEnabled = true;
-    debugPrint(
+    if (kDebugMode) {
+      debugPrint(
       '🔄 [ChatSync] Starting sync service (${_pollIntervalSeconds}s interval)',
-    );
+      );
+    }
 
     // Initial sync after short delay
     Future.delayed(const Duration(seconds: 1), () {
@@ -50,20 +52,26 @@ class ChatSyncService {
     _syncTimer?.cancel();
     _syncTimer = null;
     _hasCompletedFirstSync = false; // Reset for next login
-    debugPrint('⏹️ [ChatSync] Stopped sync service');
+    if (kDebugMode) {
+      debugPrint('⏹️ [ChatSync] Stopped sync service');
+    }
   }
 
   /// Pause syncing (e.g., when app is backgrounded)
   static void pause() {
     _syncTimer?.cancel();
     _syncTimer = null;
-    debugPrint('⏸️ [ChatSync] Paused sync service');
+    if (kDebugMode) {
+      debugPrint('⏸️ [ChatSync] Paused sync service');
+    }
   }
 
   /// Resume syncing (e.g., when app comes to foreground)
   static void resume() {
     if (!_isEnabled) return;
-    debugPrint('▶️ [ChatSync] Resuming sync service');
+    if (kDebugMode) {
+      debugPrint('▶️ [ChatSync] Resuming sync service');
+    }
 
     // Restart timer first (lightweight)
     _syncTimer?.cancel();
@@ -90,10 +98,14 @@ class ChatSyncService {
 
     _isSyncing = true;
     try {
-      debugPrint('🔄 [ChatSync] Resume sync - fetching latest titles...');
+      if (kDebugMode) {
+        debugPrint('🔄 [ChatSync] Resume sync - fetching latest titles...');
+      }
       await ChatStorageService.syncTitlesFromNetwork();
     } catch (e) {
-      debugPrint('⚠️ [ChatSync] Resume sync failed: $e');
+      if (kDebugMode) {
+        debugPrint('⚠️ [ChatSync] Resume sync failed: $e');
+      }
     } finally {
       _isSyncing = false;
     }
@@ -112,13 +124,17 @@ class ChatSyncService {
     // Wait for initial cache load to complete before syncing
     // This prevents race conditions and duplicate work on startup
     if (!ChatStorageService.initialSyncComplete) {
-      debugPrint('⏳ [ChatSync] Waiting for initial cache load...');
+      if (kDebugMode) {
+        debugPrint('⏳ [ChatSync] Waiting for initial cache load...');
+      }
       return;
     }
 
     // Skip sync if we know we're offline (use cached status to avoid delays)
     if (!NetworkStatusService.isOnline) {
-      debugPrint('⏸️ [ChatSync] Skipping sync - offline');
+      if (kDebugMode) {
+        debugPrint('⏸️ [ChatSync] Skipping sync - offline');
+      }
       return;
     }
 
@@ -132,7 +148,9 @@ class ChatSyncService {
     // On first sync after startup, sync titles from network
     // This ensures we have the latest titles without full payload fetch
     if (!_hasCompletedFirstSync) {
-      debugPrint('🔄 [ChatSync] First sync - syncing titles from network...');
+      if (kDebugMode) {
+        debugPrint('🔄 [ChatSync] First sync - syncing titles from network...');
+      }
       await ChatStorageService.syncTitlesFromNetwork();
       _hasCompletedFirstSync = true;
     }
@@ -182,9 +200,11 @@ class ChatSyncService {
       final idsToFetch = {...newChatIds, ...updatedChatIds};
 
       if (idsToFetch.isNotEmpty) {
-        debugPrint(
+        if (kDebugMode) {
+          debugPrint(
           '🔄 [ChatSync] Fetching ${idsToFetch.length} chats (${newChatIds.length} new, ${updatedChatIds.length} updated)',
-        );
+          );
+        }
 
         final fullChats = await SupabaseService.client
             .from('encrypted_chats')
@@ -210,25 +230,33 @@ class ChatSyncService {
 
       // Step 3: Remove deleted chats from local state
       if (deletedChatIds.isNotEmpty) {
-        debugPrint(
+        if (kDebugMode) {
+          debugPrint(
           '🗑️ [ChatSync] Removing ${deletedChatIds.length} deleted chats',
-        );
+          );
+        }
         for (final id in deletedChatIds) {
           ChatStorageService.removeChatLocally(id);
         }
       }
 
       if (idsToFetch.isNotEmpty || deletedChatIds.isNotEmpty) {
-        debugPrint('✅ [ChatSync] Sync complete');
+        if (kDebugMode) {
+          debugPrint('✅ [ChatSync] Sync complete');
+        }
       }
     } catch (e) {
-      debugPrint('❌ [ChatSync] Sync failed: $e');
+      if (kDebugMode) {
+        debugPrint('❌ [ChatSync] Sync failed: $e');
+      }
       // If this looks like a network error, trigger a network check
       // This updates the offline indicator if we actually lost connectivity
       if (NetworkStatusService.isNetworkError(e)) {
-        debugPrint(
+        if (kDebugMode) {
+          debugPrint(
           '🌐 [ChatSync] Network error detected, checking connectivity...',
-        );
+          );
+        }
         unawaited(NetworkStatusService.hasInternetConnection(useCache: false));
       }
     } finally {

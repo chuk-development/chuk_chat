@@ -43,7 +43,9 @@ Rules:
       _autoGenerateTitlesEnabled = prefs.getBool(_settingsKey) ?? false;
       return _autoGenerateTitlesEnabled!;
     } catch (e) {
-      debugPrint('Error loading auto title setting: $e');
+      if (kDebugMode) {
+        debugPrint('Error loading auto title setting: $e');
+      }
       return false;
     }
   }
@@ -54,9 +56,13 @@ Rules:
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_settingsKey, enabled);
       _autoGenerateTitlesEnabled = enabled;
-      debugPrint('Auto title generation ${enabled ? 'enabled' : 'disabled'}');
+      if (kDebugMode) {
+        debugPrint('Auto title generation ${enabled ? 'enabled' : 'disabled'}');
+      }
     } catch (e) {
-      debugPrint('Error saving auto title setting: $e');
+      if (kDebugMode) {
+        debugPrint('Error saving auto title setting: $e');
+      }
     }
   }
 
@@ -70,7 +76,9 @@ Rules:
       _customSystemPrompt = prefs.getString(_systemPromptKey);
       return _customSystemPrompt ?? defaultSystemPrompt;
     } catch (e) {
-      debugPrint('Error loading system prompt: $e');
+      if (kDebugMode) {
+        debugPrint('Error loading system prompt: $e');
+      }
       return defaultSystemPrompt;
     }
   }
@@ -83,14 +91,20 @@ Rules:
         // Clear custom prompt if empty or same as default
         await prefs.remove(_systemPromptKey);
         _customSystemPrompt = null;
-        debugPrint('System prompt reset to default');
+        if (kDebugMode) {
+          debugPrint('System prompt reset to default');
+        }
       } else {
         await prefs.setString(_systemPromptKey, prompt);
         _customSystemPrompt = prompt;
-        debugPrint('Custom system prompt saved');
+        if (kDebugMode) {
+          debugPrint('Custom system prompt saved');
+        }
       }
     } catch (e) {
-      debugPrint('Error saving system prompt: $e');
+      if (kDebugMode) {
+        debugPrint('Error saving system prompt: $e');
+      }
     }
   }
 
@@ -100,9 +114,13 @@ Rules:
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_systemPromptKey);
       _customSystemPrompt = null;
-      debugPrint('System prompt reset to default');
+      if (kDebugMode) {
+        debugPrint('System prompt reset to default');
+      }
     } catch (e) {
-      debugPrint('Error resetting system prompt: $e');
+      if (kDebugMode) {
+        debugPrint('Error resetting system prompt: $e');
+      }
     }
   }
 
@@ -117,14 +135,18 @@ Rules:
   static Future<String?> generateTitle(String firstMessage) async {
     // Check if feature is enabled
     if (!await isEnabled()) {
-      debugPrint('📝 [TitleGen] Auto title generation is disabled');
+      if (kDebugMode) {
+        debugPrint('📝 [TitleGen] Auto title generation is disabled');
+      }
       return null;
     }
 
     try {
       final session = SupabaseService.auth.currentSession;
       if (session == null) {
-        debugPrint('📝 [TitleGen] No session for title generation');
+        if (kDebugMode) {
+          debugPrint('📝 [TitleGen] No session for title generation');
+        }
         return null;
       }
 
@@ -157,7 +179,9 @@ Rules:
           case ContentEvent(:final text):
             titleBuffer.write(text);
           case ErrorEvent(:final message):
-            debugPrint('📝 [TitleGen] Error: $message');
+            if (kDebugMode) {
+              debugPrint('📝 [TitleGen] Error: $message');
+            }
             return null;
           case DoneEvent():
             break;
@@ -177,7 +201,9 @@ Rules:
       }
 
       if (title.isEmpty) {
-        debugPrint('📝 [TitleGen] Empty response');
+        if (kDebugMode) {
+          debugPrint('📝 [TitleGen] Empty response');
+        }
         return null;
       }
 
@@ -235,18 +261,30 @@ Rules:
       }
 
       final title = await generateTitle(firstMessage);
-      debugPrint('📝 [TitleGen] Generated title result: $title');
+      if (kDebugMode) {
+        debugPrint('📝 [TitleGen] Generated title result: $title');
+      }
 
       if (title != null && title.isNotEmpty) {
-        debugPrint('📝 [TitleGen] Calling renameChat($chatId, $title)');
+        if (kDebugMode) {
+          debugPrint('📝 [TitleGen] Calling renameChat($chatId, $title)');
+        }
         await ChatStorageService.renameChat(chatId, title);
-        debugPrint('📝 [TitleGen] Successfully applied title to chat $chatId: $title');
+        if (kDebugMode) {
+          debugPrint('📝 [TitleGen] Successfully applied title to chat $chatId: $title');
+        }
       } else {
-        debugPrint('📝 [TitleGen] Title was null or empty, not applying');
+        if (kDebugMode) {
+          debugPrint('📝 [TitleGen] Title was null or empty, not applying');
+        }
       }
     } catch (e, stackTrace) {
-      debugPrint('📝 [TitleGen] Error applying title: $e');
-      debugPrint('📝 [TitleGen] Stack trace: $stackTrace');
+      if (kDebugMode) {
+        debugPrint('📝 [TitleGen] Error applying title: $e');
+      }
+      if (kDebugMode) {
+        debugPrint('📝 [TitleGen] Stack trace: $stackTrace');
+      }
     }
   }
 }

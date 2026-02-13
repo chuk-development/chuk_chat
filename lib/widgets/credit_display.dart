@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:flutter/foundation.dart';
 
 final SupabaseClient _supabase = Supabase.instance.client;
 
@@ -107,13 +108,19 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
           creditLoading = false;
           _hasLoadedOnce = true;
         });
-        debugPrint('📦 [CreditMixin] Loaded from cache: €$remaining / €$total');
+        if (kDebugMode) {
+          debugPrint('📦 [CreditMixin] Loaded from cache: €$remaining / €$total');
+        }
       } else {
         // No cache - keep loading state, server will provide value
-        debugPrint('📦 [CreditMixin] No cache - waiting for server');
+        if (kDebugMode) {
+          debugPrint('📦 [CreditMixin] No cache - waiting for server');
+        }
       }
     } catch (e) {
-      debugPrint('⚠️ [CreditMixin] Cache load failed: $e');
+      if (kDebugMode) {
+        debugPrint('⚠️ [CreditMixin] Cache load failed: $e');
+      }
       // On error, keep loading - server will handle it
     }
   }
@@ -125,7 +132,9 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
       await prefs.setDouble(_kCachedTotalCreditsAllocated, total);
       await prefs.setDouble(_kCachedRemainingCredits, remaining);
     } catch (e) {
-      debugPrint('⚠️ [CreditMixin] Cache save failed: $e');
+      if (kDebugMode) {
+        debugPrint('⚠️ [CreditMixin] Cache save failed: $e');
+      }
     }
   }
 
@@ -191,16 +200,20 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
 
       // Save to cache in background
       unawaited(_saveCreditsToCache(totalCredits, remainingCredits));
-      debugPrint(
+      if (kDebugMode) {
+        debugPrint(
         '✅ [CreditMixin] Loaded from API: €$remainingCredits / €$totalCredits',
-      );
+        );
+      }
     } catch (error) {
       if (!mounted) return;
       setState(() {
         creditLoading = false;
         _hasLoadedOnce = true;
       });
-      debugPrint('⚠️ [CreditMixin] API load failed (using cache): $error');
+      if (kDebugMode) {
+        debugPrint('⚠️ [CreditMixin] API load failed (using cache): $error');
+      }
     }
   }
 
@@ -474,7 +487,9 @@ class _BalanceBadgeState extends State<BalanceBadge> {
     // Listen for network status changes - refresh when back online
     _networkListener = () {
       if (NetworkStatusService.isOnline && mounted) {
-        debugPrint('🌐 [Credits] Back online - refreshing balance');
+        if (kDebugMode) {
+          debugPrint('🌐 [Credits] Back online - refreshing balance');
+        }
         _loadBalance(silent: true);
       }
     };
@@ -509,13 +524,19 @@ class _BalanceBadgeState extends State<BalanceBadge> {
           _freeMessagesTotal = cachedFreeTotal ?? 10;
           _loading = false;
         });
-        debugPrint('📦 [BalanceBadge] Loaded from cache: €$_credits');
+        if (kDebugMode) {
+          debugPrint('📦 [BalanceBadge] Loaded from cache: €$_credits');
+        }
       } else {
         // No cache - keep loading state, server will provide value
-        debugPrint('📦 [BalanceBadge] No cache - waiting for server');
+        if (kDebugMode) {
+          debugPrint('📦 [BalanceBadge] No cache - waiting for server');
+        }
       }
     } catch (e) {
-      debugPrint('⚠️ [BalanceBadge] Cache load failed: $e');
+      if (kDebugMode) {
+        debugPrint('⚠️ [BalanceBadge] Cache load failed: $e');
+      }
       // On error, keep loading - server will handle it
     }
   }
@@ -529,7 +550,9 @@ class _BalanceBadgeState extends State<BalanceBadge> {
       await prefs.setInt(_kCachedFreeMessagesRemaining, _freeMessagesRemaining);
       await prefs.setInt(_kCachedFreeMessagesTotal, _freeMessagesTotal);
     } catch (e) {
-      debugPrint('⚠️ [Credits] Cache save failed: $e');
+      if (kDebugMode) {
+        debugPrint('⚠️ [Credits] Cache save failed: $e');
+      }
     }
   }
 
@@ -577,11 +600,15 @@ class _BalanceBadgeState extends State<BalanceBadge> {
 
       // Save to cache for offline access (in background)
       unawaited(_saveToCache());
-      debugPrint(
+      if (kDebugMode) {
+        debugPrint(
         '✅ [BalanceBadge] Loaded from API: €$_credits, $_freeMessagesRemaining/$_freeMessagesTotal free',
-      );
+        );
+      }
     } catch (e) {
-      debugPrint('⚠️ [BalanceBadge] API load failed (using cache): $e');
+      if (kDebugMode) {
+        debugPrint('⚠️ [BalanceBadge] API load failed (using cache): $e');
+      }
       if (mounted) setState(() => _loading = false);
       // Don't clear data on error - keep showing cached values
     }

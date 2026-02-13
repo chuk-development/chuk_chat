@@ -71,7 +71,7 @@ class SecureTokenHandler {
         );
       }
 
-      debugPrint(safeMes);
+        debugPrint(safeMes);
     }
   }
 
@@ -128,11 +128,11 @@ class SecureTokenHandler {
 
     debugPrint('═══════════════════════════════════════════════════════════');
     debugPrint('📤 API REQUEST');
-    debugPrint('Method: $method');
-    debugPrint('Endpoint: $endpoint');
+      debugPrint('Method: $method');
+      debugPrint('Endpoint: $endpoint');
 
     if (accessToken != null) {
-      debugPrint('Authorization: Bearer ${maskToken(accessToken)}');
+        debugPrint('Authorization: Bearer ${maskToken(accessToken)}');
     }
 
     if (payload != null && payload.isNotEmpty) {
@@ -146,10 +146,10 @@ class SecureTokenHandler {
         }
       }
 
-      debugPrint('Payload: $safePayload');
+        debugPrint('Payload: $safePayload');
     }
 
-    debugPrint('═══════════════════════════════════════════════════════════');
+      debugPrint('═══════════════════════════════════════════════════════════');
   }
 
   /// Logs an API response with masked tokens.
@@ -163,8 +163,8 @@ class SecureTokenHandler {
 
     debugPrint('═══════════════════════════════════════════════════════════');
     debugPrint(success ? '✅ API SUCCESS' : '❌ API ERROR');
-    debugPrint('Endpoint: $endpoint');
-    debugPrint('Status: $statusCode');
+      debugPrint('Endpoint: $endpoint');
+      debugPrint('Status: $statusCode');
 
     if (error != null) {
       // Make sure error doesn't contain any tokens
@@ -172,10 +172,10 @@ class SecureTokenHandler {
         RegExp(r'[a-zA-Z0-9._-]{40,}'),
         (match) => maskToken(match.group(0) ?? ''),
       );
-      debugPrint('Error: $safeError');
+        debugPrint('Error: $safeError');
     }
 
-    debugPrint('═══════════════════════════════════════════════════════════');
+      debugPrint('═══════════════════════════════════════════════════════════');
   }
 
   /// Logs a WebSocket connection with masked tokens.
@@ -187,12 +187,12 @@ class SecureTokenHandler {
 
     debugPrint('═══════════════════════════════════════════════════════════');
     debugPrint('🔌 WEBSOCKET CONNECTION');
-    debugPrint('URL: $url');
+      debugPrint('URL: $url');
 
     if (accessToken != null) {
-      debugPrint('Token: ${maskToken(accessToken)}');
+        debugPrint('Token: ${maskToken(accessToken)}');
     }
 
-    debugPrint('═══════════════════════════════════════════════════════════');
+      debugPrint('═══════════════════════════════════════════════════════════');
   }
 }

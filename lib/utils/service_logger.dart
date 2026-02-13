@@ -39,10 +39,10 @@ class ServiceLogger {
     final contextStr = context != null ? ' [$context]' : '';
     debugPrint('$_levelError$contextStr $message');
     if (exception != null) {
-      debugPrint('   Exception: $exception');
+        debugPrint('   Exception: $exception');
     }
     if (stackTrace != null) {
-      debugPrint('   Stack trace: $stackTrace');
+        debugPrint('   Stack trace: $stackTrace');
     }
   }
 
@@ -65,7 +65,7 @@ class ServiceLogger {
     final contextStr = context != null ? ' [$context]' : '';
     debugPrint('🌐$contextStr API Request: $method $endpoint');
     if (params != null && params.isNotEmpty) {
-      debugPrint('   Params: $params');
+        debugPrint('   Params: $params');
     }
     if (headers != null && headers.isNotEmpty) {
       // Mask authorization headers
@@ -73,7 +73,7 @@ class ServiceLogger {
       if (safeHeaders.containsKey('Authorization')) {
         safeHeaders['Authorization'] = '[MASKED]';
       }
-      debugPrint('   Headers: $safeHeaders');
+        debugPrint('   Headers: $safeHeaders');
     }
   }
 
@@ -93,9 +93,9 @@ class ServiceLogger {
       // Truncate large responses
       final dataStr = responseData.toString();
       if (dataStr.length > 500) {
-        debugPrint('   Data: ${dataStr.substring(0, 500)}... [truncated]');
+          debugPrint('   Data: ${dataStr.substring(0, 500)}... [truncated]');
       } else {
-        debugPrint('   Data: $dataStr');
+          debugPrint('   Data: $dataStr');
       }
     }
   }
@@ -121,7 +121,7 @@ class ServiceLogger {
     final contextStr = context != null ? ' [$context]' : '';
     debugPrint('❌$contextStr Failed: $operationName');
     if (exception != null) {
-      debugPrint('   Reason: $exception');
+        debugPrint('   Reason: $exception');
     }
   }
 
@@ -172,7 +172,7 @@ class ServiceLogger {
     final contextStr = context != null ? ' [$context]' : '';
     final status = isOnline ? 'ONLINE' : 'OFFLINE';
     final emoji = isOnline ? '🌐' : '📴';
-    debugPrint('$emoji$contextStr Network status: $status');
+      debugPrint('$emoji$contextStr Network status: $status');
   }
 
   /// Log stream events (only in debug mode)
@@ -188,9 +188,9 @@ class ServiceLogger {
     if (data != null) {
       // Truncate large data
       if (data.length > 200) {
-        debugPrint('   Data: ${data.substring(0, 200)}... [truncated]');
+          debugPrint('   Data: ${data.substring(0, 200)}... [truncated]');
       } else {
-        debugPrint('   Data: $data');
+          debugPrint('   Data: $data');
       }
     }
   }
@@ -230,7 +230,7 @@ class ServiceLogger {
     if (label != null) {
       debugPrint('━━━━━━━━━━━━━━━━━━━━━ $label ━━━━━━━━━━━━━━━━━━━━━');
     } else {
-      debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     }
   }
 }

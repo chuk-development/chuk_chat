@@ -353,19 +353,39 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     super.didUpdateWidget(oldWidget);
     // ID-BASED: Only react when the actual chat ID changes
     if (widget.selectedChatId != oldWidget.selectedChatId) {
-      debugPrint('');
-      debugPrint('┌─────────────────────────────────────────────────────────────');
-      debugPrint('│ 🔄 [CHAT-UI-MOBILE] didUpdateWidget triggered');
-      debugPrint('│ 🔄 [CHAT-UI-MOBILE] OLD widget.selectedChatId: ${oldWidget.selectedChatId}');
-      debugPrint('│ 🔄 [CHAT-UI-MOBILE] NEW widget.selectedChatId: ${widget.selectedChatId}');
-      debugPrint('│ 🔄 [CHAT-UI-MOBILE] Current _activeChatId: $_activeChatId');
-      debugPrint('│ 🔄 [CHAT-UI-MOBILE] _isSendingMessage: $_isSendingMessage');
-      debugPrint('│ 🔄 [CHAT-UI-MOBILE] _streamingHandler.isStreaming: ${_streamingHandler.isStreaming}');
-      debugPrint('└─────────────────────────────────────────────────────────────');
+      if (kDebugMode) {
+        debugPrint('');
+      }
+      if (kDebugMode) {
+        debugPrint('┌─────────────────────────────────────────────────────────────');
+      }
+      if (kDebugMode) {
+        debugPrint('│ 🔄 [CHAT-UI-MOBILE] didUpdateWidget triggered');
+      }
+      if (kDebugMode) {
+        debugPrint('│ 🔄 [CHAT-UI-MOBILE] OLD widget.selectedChatId: ${oldWidget.selectedChatId}');
+      }
+      if (kDebugMode) {
+        debugPrint('│ 🔄 [CHAT-UI-MOBILE] NEW widget.selectedChatId: ${widget.selectedChatId}');
+      }
+      if (kDebugMode) {
+        debugPrint('│ 🔄 [CHAT-UI-MOBILE] Current _activeChatId: $_activeChatId');
+      }
+      if (kDebugMode) {
+        debugPrint('│ 🔄 [CHAT-UI-MOBILE] _isSendingMessage: $_isSendingMessage');
+      }
+      if (kDebugMode) {
+        debugPrint('│ 🔄 [CHAT-UI-MOBILE] _streamingHandler.isStreaming: ${_streamingHandler.isStreaming}');
+      }
+      if (kDebugMode) {
+        debugPrint('└─────────────────────────────────────────────────────────────');
+      }
 
       // Skip if we're already on this chat
       if (widget.selectedChatId == _activeChatId) {
-        debugPrint('⚠️ [CHAT-UI-MOBILE] SKIP - already on this chat');
+        if (kDebugMode) {
+          debugPrint('⚠️ [CHAT-UI-MOBILE] SKIP - already on this chat');
+        }
         return;
       }
 
@@ -373,7 +393,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       // This can happen due to stale parent rebuilds. If we have an active chat
       // with messages, keep it instead of switching to a blank "new" chat.
       if (widget.selectedChatId == null && _activeChatId != null && _messages.isNotEmpty) {
-        debugPrint('⚠️ [CHAT-UI-MOBILE] IGNORING null from parent - we have active chat: $_activeChatId');
+        if (kDebugMode) {
+          debugPrint('⚠️ [CHAT-UI-MOBILE] IGNORING null from parent - we have active chat: $_activeChatId');
+        }
         // Sync the parent back to our active chat
         widget.onChatIdChanged(_activeChatId);
         return;
@@ -386,7 +408,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       // 1. Immediate persist after message send/receive
       // 2. Persist in newChat() before clearing
       // 3. Chats are already saved to Supabase during message operations
-      debugPrint('│ 📝 [CHAT-UI-MOBILE] Chat switch - NOT persisting (already saved on message ops)');
+      if (kDebugMode) {
+        debugPrint('│ 📝 [CHAT-UI-MOBILE] Chat switch - NOT persisting (already saved on message ops)');
+      }
 
       // BACKGROUND STREAMING: If current chat is streaming, snapshot messages
       // to StreamingManager before clearing. This ensures the stream can
@@ -399,7 +423,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           _activeChatId!,
           messagesCopy,
         );
-        debugPrint('│ 📦 [CHAT-UI-MOBILE] Snapshotted ${messagesCopy.length} messages for background stream: $_activeChatId');
+        if (kDebugMode) {
+          debugPrint('│ 📦 [CHAT-UI-MOBILE] Snapshotted ${messagesCopy.length} messages for background stream: $_activeChatId');
+        }
       }
 
       setState(() {
@@ -409,9 +435,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         _messageActionsHandler.cancelEdit();
       });
 
-      debugPrint('│ 🔄 [CHAT-UI-MOBILE] About to call _loadChatById(${widget.selectedChatId})');
+      if (kDebugMode) {
+        debugPrint('│ 🔄 [CHAT-UI-MOBILE] About to call _loadChatById(${widget.selectedChatId})');
+      }
       _loadChatById(widget.selectedChatId);
-      debugPrint('│ 🔄 [CHAT-UI-MOBILE] After _loadChatById, _activeChatId: $_activeChatId');
+      if (kDebugMode) {
+        debugPrint('│ 🔄 [CHAT-UI-MOBILE] After _loadChatById, _activeChatId: $_activeChatId');
+      }
 
       final bool newChatIsStreaming =
           _activeChatId != null &&
@@ -448,13 +478,27 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   // --- CHAT MANAGEMENT ---
 
   void _loadChatById(String? chatId) {
-    debugPrint('');
-    debugPrint('┌─────────────────────────────────────────────────────────────');
-    debugPrint('│ 📂 [LOAD-CHAT-MOBILE] _loadChatById called');
-    debugPrint('│ 📂 [LOAD-CHAT-MOBILE] chatId param: $chatId');
-    debugPrint('│ 📂 [LOAD-CHAT-MOBILE] Current _activeChatId: $_activeChatId');
-    debugPrint('│ 📂 [LOAD-CHAT-MOBILE] Sidebar expanded: ${widget.isSidebarExpanded}');
-    debugPrint('└─────────────────────────────────────────────────────────────');
+    if (kDebugMode) {
+      debugPrint('');
+    }
+    if (kDebugMode) {
+      debugPrint('┌─────────────────────────────────────────────────────────────');
+    }
+    if (kDebugMode) {
+      debugPrint('│ 📂 [LOAD-CHAT-MOBILE] _loadChatById called');
+    }
+    if (kDebugMode) {
+      debugPrint('│ 📂 [LOAD-CHAT-MOBILE] chatId param: $chatId');
+    }
+    if (kDebugMode) {
+      debugPrint('│ 📂 [LOAD-CHAT-MOBILE] Current _activeChatId: $_activeChatId');
+    }
+    if (kDebugMode) {
+      debugPrint('│ 📂 [LOAD-CHAT-MOBILE] Sidebar expanded: ${widget.isSidebarExpanded}');
+    }
+    if (kDebugMode) {
+      debugPrint('└─────────────────────────────────────────────────────────────');
+    }
 
     // Capture sidebar state NOW - before any async operations
     final bool sidebarWasExpanded = widget.isSidebarExpanded;
@@ -473,7 +517,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
     if (chatId == null) {
       // New chat - clear everything
-      debugPrint('│ 📂 [LOAD-CHAT-MOBILE] chatId is NULL - clearing for new chat');
+      if (kDebugMode) {
+        debugPrint('│ 📂 [LOAD-CHAT-MOBILE] chatId is NULL - clearing for new chat');
+      }
       _messages.clear();
       _fileHandler.clearAll();
       _activeChatId = null;
@@ -484,7 +530,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       if (storedChat != null) {
         // LAZY LOADING: Check if chat is fully loaded
         if (!storedChat.isFullyLoaded) {
-          debugPrint('│ 📂 [LOAD-CHAT-MOBILE] Chat $chatId not fully loaded, fetching...');
+          if (kDebugMode) {
+            debugPrint('│ 📂 [LOAD-CHAT-MOBILE] Chat $chatId not fully loaded, fetching...');
+          }
           storedChat = await ChatStorageService.loadFullChat(chatId);
 
           // Check for stale load after async operation
@@ -492,8 +540,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         }
 
         if (storedChat != null && storedChat.isFullyLoaded) {
-          debugPrint('│ 📂 [LOAD-CHAT-MOBILE] FOUND chat $chatId with ${storedChat.messages.length} messages');
-          debugPrint('│ 📂 [LOAD-CHAT-MOBILE] Setting _activeChatId = ${storedChat.id}');
+          if (kDebugMode) {
+            debugPrint('│ 📂 [LOAD-CHAT-MOBILE] FOUND chat $chatId with ${storedChat.messages.length} messages');
+          }
+          if (kDebugMode) {
+            debugPrint('│ 📂 [LOAD-CHAT-MOBILE] Setting _activeChatId = ${storedChat.id}');
+          }
           _activeChatId = storedChat.id;
           _messages
             ..clear()
@@ -517,7 +569,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                 // Include attachments if present
                 if (message.attachments != null && message.attachments!.isNotEmpty) {
                   map['attachments'] = message.attachments!;
-                  debugPrint('📄 [AttachmentDebug] Loading message with attachments field');
+                  if (kDebugMode) {
+                    debugPrint('📄 [AttachmentDebug] Loading message with attachments field');
+                  }
                 }
                 // Include attachedFilesJson for retry/resend support
                 if (message.attachedFilesJson != null && message.attachedFilesJson!.isNotEmpty) {
@@ -528,16 +582,24 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
             );
         } else {
           // Chat load failed - treat as new chat
-          debugPrint('│ ⚠️ [LOAD-CHAT-MOBILE] Chat $chatId load failed!');
+          if (kDebugMode) {
+            debugPrint('│ ⚠️ [LOAD-CHAT-MOBILE] Chat $chatId load failed!');
+          }
           _messages.clear();
           _fileHandler.clearAll();
           _activeChatId = null;
         }
       } else {
         // Chat not found - treat as new chat
-        debugPrint('│ ⚠️ [LOAD-CHAT-MOBILE] Chat $chatId NOT FOUND!');
-        debugPrint('│ ⚠️ [LOAD-CHAT-MOBILE] Available chats: ${ChatStorageService.savedChats.map((c) => c.id).take(5).toList()}...');
-        debugPrint('│ ⚠️ [LOAD-CHAT-MOBILE] Treating as new chat, setting _activeChatId = null');
+        if (kDebugMode) {
+          debugPrint('│ ⚠️ [LOAD-CHAT-MOBILE] Chat $chatId NOT FOUND!');
+        }
+        if (kDebugMode) {
+          debugPrint('│ ⚠️ [LOAD-CHAT-MOBILE] Available chats: ${ChatStorageService.savedChats.map((c) => c.id).take(5).toList()}...');
+        }
+        if (kDebugMode) {
+          debugPrint('│ ⚠️ [LOAD-CHAT-MOBILE] Treating as new chat, setting _activeChatId = null');
+        }
         _messages.clear();
         _fileHandler.clearAll();
         _activeChatId = null;
@@ -593,7 +655,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   }
 
   void newChat() {
-    debugPrint('🆕 [NewChat] Starting newChat(), current _activeChatId: $_activeChatId');
+    if (kDebugMode) {
+      debugPrint('🆕 [NewChat] Starting newChat(), current _activeChatId: $_activeChatId');
+    }
 
     // Capture current chat data for background persistence
     final chatIdToSave = _activeChatId;
@@ -612,7 +676,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
     // Notify parent that we're now on a new chat (null ID)
     widget.onChatIdChanged(null);
-    debugPrint('🆕 [NewChat] After setState, _activeChatId: $_activeChatId');
+    if (kDebugMode) {
+      debugPrint('🆕 [NewChat] After setState, _activeChatId: $_activeChatId');
+    }
     _scrollChatToBottom(force: true);
     if (!widget.isSidebarExpanded) {
       _textFieldFocusNode.requestFocus();
@@ -636,7 +702,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       // No chat to save, just refresh sidebar
       unawaited(ChatStorageService.loadSavedChatsForSidebar());
     }
-    debugPrint('🆕 [NewChat] Background operations started');
+    if (kDebugMode) {
+      debugPrint('🆕 [NewChat] Background operations started');
+    }
   }
 
   // --- AUDIO HANDLERS ---
@@ -1353,18 +1421,24 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     String chatId,
     double? tps,
   ) async {
-    debugPrint('✅ [FinalizeMessage] chatId: $chatId, index: $index, _activeChatId: $_activeChatId');
+    if (kDebugMode) {
+      debugPrint('✅ [FinalizeMessage] chatId: $chatId, index: $index, _activeChatId: $_activeChatId');
+    }
 
     // CRITICAL: Clear flags now that streaming is complete
     // This allows realtime updates and didUpdateWidget to proceed
     if (_isSendingMessage) {
       _isSendingMessage = false;
-      debugPrint('✅ [FinalizeMessage] Cleared _isSendingMessage flag');
+      if (kDebugMode) {
+        debugPrint('✅ [FinalizeMessage] Cleared _isSendingMessage flag');
+      }
     }
     // RELEASE GLOBAL LOCK when streaming completes
     if (ChatStorageService.isMessageOperationInProgress) {
       ChatStorageService.isMessageOperationInProgress = false;
-      debugPrint('🔓 [FinalizeMessage] GLOBAL LOCK RELEASED (stream complete)');
+      if (kDebugMode) {
+        debugPrint('🔓 [FinalizeMessage] GLOBAL LOCK RELEASED (stream complete)');
+      }
     }
 
     // Check if this is the active chat (for UI updates)
@@ -1416,7 +1490,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     // Generate chat ID if needed (new chat)
     if (_activeChatId == null) {
       _activeChatId = _uuid.v4();
-      debugPrint('🆔 [ImageGen] PRE-GENERATED Chat ID: $_activeChatId');
+      if (kDebugMode) {
+        debugPrint('🆔 [ImageGen] PRE-GENERATED Chat ID: $_activeChatId');
+      }
     }
 
     final bool firstMessageInChat = _messages.isEmpty;
@@ -1517,7 +1593,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         }
       }
     } catch (e) {
-      debugPrint('Image generation error: $e');
+      if (kDebugMode) {
+        debugPrint('Image generation error: $e');
+      }
       if (!mounted) return;
 
       setState(() {
@@ -1607,7 +1685,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     // SET GLOBAL LOCK IMMEDIATELY - before any async operations or early returns
     // This prevents didUpdateWidget from loading a different chat during send
     ChatStorageService.isMessageOperationInProgress = true;
-    debugPrint('🔒 [SendMessage] GLOBAL LOCK SET');
+    if (kDebugMode) {
+      debugPrint('🔒 [SendMessage] GLOBAL LOCK SET');
+    }
 
     if (_isCurrentChatStreaming) {
       // Current chat is streaming - cancel it
@@ -1619,14 +1699,18 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     if (_isOffline) {
       _showSnackBar('You are offline. Please check your connection.');
       ChatStorageService.isMessageOperationInProgress = false;
-      debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (offline)');
+      if (kDebugMode) {
+        debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (offline)');
+      }
       return;
     }
 
     if (_fileHandler.hasUploading) {
       _showSnackBar('Upload in progress');
       ChatStorageService.isMessageOperationInProgress = false;
-      debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (uploading)');
+      if (kDebugMode) {
+        debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (uploading)');
+      }
       return;
     }
 
@@ -1634,19 +1718,25 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     if (_selectedModelId.isEmpty) {
       _showSnackBar('Please select a model first');
       ChatStorageService.isMessageOperationInProgress = false;
-      debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (no model selected)');
+      if (kDebugMode) {
+        debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (no model selected)');
+      }
       return;
     }
 
     // Set flag to block realtime updates during send operation
     _isSendingMessage = true;
-    debugPrint('📨 [SendMessage] Starting send, _activeChatId BEFORE: $_activeChatId');
+    if (kDebugMode) {
+      debugPrint('📨 [SendMessage] Starting send, _activeChatId BEFORE: $_activeChatId');
+    }
 
     // CRITICAL FIX: Sync _activeChatId with widget.selectedChatId if out of sync
     // This handles cases where _activeChatId was cleared but user is still on existing chat
     if (_activeChatId == null && widget.selectedChatId != null) {
       _activeChatId = widget.selectedChatId;
-      debugPrint('⚠️ [SendMessage] SYNCED _activeChatId with widget.selectedChatId: $_activeChatId');
+      if (kDebugMode) {
+        debugPrint('⚠️ [SendMessage] SYNCED _activeChatId with widget.selectedChatId: $_activeChatId');
+      }
     }
 
     // Credit/free message checks are handled server-side (API returns 402)
@@ -1657,7 +1747,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     if (originalUserInput.isEmpty && !hasAttachments) {
       _isSendingMessage = false;
       ChatStorageService.isMessageOperationInProgress = false;
-      debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (empty input)');
+      if (kDebugMode) {
+        debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (empty input)');
+      }
       return;
     }
 
@@ -1676,7 +1768,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     if (!validationResult.isValid) {
       _isSendingMessage = false;
       ChatStorageService.isMessageOperationInProgress = false;
-      debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (invalid message)');
+      if (kDebugMode) {
+        debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (invalid message)');
+      }
       _showSnackBar(validationResult.errorMessage ?? 'Invalid message');
       return;
     }
@@ -1685,7 +1779,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     if (!mounted) {
       _isSendingMessage = false;
       ChatStorageService.isMessageOperationInProgress = false;
-      debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (widget disposed during prepareMessage)');
+      if (kDebugMode) {
+        debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (widget disposed during prepareMessage)');
+      }
       return;
     }
 
@@ -1695,8 +1791,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     final bool isNewChat = _activeChatId == null;
     _activeChatId ??= _uuid.v4();
     final String chatIdForThisMessage = _activeChatId!;
-    debugPrint('📨 [SendMessage] _activeChatId AFTER: $_activeChatId (isNewChat: $isNewChat)');
-    debugPrint('📨 [SendMessage] Using chatIdForThisMessage: $chatIdForThisMessage');
+    if (kDebugMode) {
+      debugPrint('📨 [SendMessage] _activeChatId AFTER: $_activeChatId (isNewChat: $isNewChat)');
+    }
+    if (kDebugMode) {
+      debugPrint('📨 [SendMessage] Using chatIdForThisMessage: $chatIdForThisMessage');
+    }
 
     // Extract prepared values from validation result
     final String displayMessageText = validationResult.displayMessageText!;
@@ -1705,7 +1805,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     // CRITICAL: Capture attached files BEFORE clearing them
     // These need to be passed to the streaming handler for the API call
     final List<AttachedFile> attachedFilesForApi = List.from(_fileHandler.attachedFiles);
-    debugPrint('📎 [SendMessage] Captured ${attachedFilesForApi.length} attached files for API call');
+    if (kDebugMode) {
+      debugPrint('📎 [SendMessage] Captured ${attachedFilesForApi.length} attached files for API call');
+    }
 
     // Add user message
     setState(() {
@@ -1734,7 +1836,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
       if (documentAttachments.isNotEmpty) {
         userMessage['attachments'] = jsonEncode(documentAttachments);
-        debugPrint('📄 [AttachmentDebug] Storing ${documentAttachments.length} attachments');
+        if (kDebugMode) {
+          debugPrint('📄 [AttachmentDebug] Storing ${documentAttachments.length} attachments');
+        }
       }
 
       // Store original AttachedFile objects for resend functionality
@@ -1742,11 +1846,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         userMessage['attachedFilesJson'] = jsonEncode(
           attachedFilesForApi.map((f) => f.toJson()).toList(),
         );
-        debugPrint('💾 [AttachmentDebug] Storing ${attachedFilesForApi.length} attached files for resend');
+        if (kDebugMode) {
+          debugPrint('💾 [AttachmentDebug] Storing ${attachedFilesForApi.length} attached files for resend');
+        }
       }
 
       _messages.add(userMessage);
-      debugPrint('💾 [MessageDebug] Message added to _messages list. Total messages: ${_messages.length}');
+      if (kDebugMode) {
+        debugPrint('💾 [MessageDebug] Message added to _messages list. Total messages: ${_messages.length}');
+      }
 
       _controller.clear();
       // Always clear attachments after sending (not just uploaded ones)
@@ -1780,13 +1888,17 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     if (!mounted) {
       _isSendingMessage = false;
       ChatStorageService.isMessageOperationInProgress = false;
-      debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (widget disposed during persistChat)');
+      if (kDebugMode) {
+        debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (widget disposed during persistChat)');
+      }
       return;
     }
 
     // Verify the stored chat ID matches what we expected
     if (storedChat != null && storedChat.id != chatIdForThisMessage) {
-      debugPrint('⚠️ [ChatDebug] Chat ID mismatch! Expected: $chatIdForThisMessage, Got: ${storedChat.id}');
+      if (kDebugMode) {
+        debugPrint('⚠️ [ChatDebug] Chat ID mismatch! Expected: $chatIdForThisMessage, Got: ${storedChat.id}');
+      }
     }
 
     // Keep _activeChatId in sync (should already be correct, but ensure consistency)
@@ -1795,13 +1907,27 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
       // ID-BASED: Notify parent when a new chat is created
       if (isNewChat) {
-        debugPrint('');
-        debugPrint('┌─────────────────────────────────────────────────────────────');
-        debugPrint('│ 🆕 [SEND-MOBILE] NEW CHAT CREATED!');
-        debugPrint('│ 🆕 [SEND-MOBILE] New chat ID: ${storedChat.id}');
-        debugPrint('│ 🆕 [SEND-MOBILE] Calling widget.onChatIdChanged(${storedChat.id})');
-        debugPrint('│ 🆕 [SEND-MOBILE] This should update ChatStorageService.selectedChatId');
-        debugPrint('└─────────────────────────────────────────────────────────────');
+        if (kDebugMode) {
+          debugPrint('');
+        }
+        if (kDebugMode) {
+          debugPrint('┌─────────────────────────────────────────────────────────────');
+        }
+        if (kDebugMode) {
+          debugPrint('│ 🆕 [SEND-MOBILE] NEW CHAT CREATED!');
+        }
+        if (kDebugMode) {
+          debugPrint('│ 🆕 [SEND-MOBILE] New chat ID: ${storedChat.id}');
+        }
+        if (kDebugMode) {
+          debugPrint('│ 🆕 [SEND-MOBILE] Calling widget.onChatIdChanged(${storedChat.id})');
+        }
+        if (kDebugMode) {
+          debugPrint('│ 🆕 [SEND-MOBILE] This should update ChatStorageService.selectedChatId');
+        }
+        if (kDebugMode) {
+          debugPrint('└─────────────────────────────────────────────────────────────');
+        }
         widget.onChatIdChanged(storedChat.id);
 
         // Auto-generate title for new chats (fire and forget)
@@ -1817,10 +1943,16 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
     // Send with streaming handler using the CAPTURED chatId, not _activeChatId
     // This prevents race conditions where _activeChatId could be changed by callbacks
-    debugPrint('📤 [ChatDebug] Sending to streaming handler with chatId: $chatIdForThisMessage');
-    debugPrint('📤 [ChatDebug] Sending ${attachedFilesForApi.length} attached files to API');
+    if (kDebugMode) {
+      debugPrint('📤 [ChatDebug] Sending to streaming handler with chatId: $chatIdForThisMessage');
+    }
+    if (kDebugMode) {
+      debugPrint('📤 [ChatDebug] Sending ${attachedFilesForApi.length} attached files to API');
+    }
     if (_selectedProjectId != null) {
-      debugPrint('📁 [ChatDebug] Project context included: $_selectedProjectId');
+      if (kDebugMode) {
+        debugPrint('📁 [ChatDebug] Project context included: $_selectedProjectId');
+      }
     }
     // NOTE: _isSendingMessage is cleared in _finalizeAiMessage() when streaming completes,
     // NOT here. This prevents race conditions where didUpdateWidget fires while streaming.
@@ -1872,7 +2004,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           _systemPrompt = basePrompt;
         }
       } catch (error) {
-        debugPrint('Error resolving system prompt for send: $error');
+        if (kDebugMode) {
+          debugPrint('Error resolving system prompt for send: $error');
+        }
       }
     }
 
@@ -1886,7 +2020,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         }
         return projectContext;
       } catch (error) {
-        debugPrint('Error building project system message: $error');
+        if (kDebugMode) {
+          debugPrint('Error building project system message: $error');
+        }
         // Fall back to base prompt if project context fails
       }
     }
@@ -1990,10 +2126,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           attachedFilesForResend = decoded
               .map((item) => AttachedFile.fromJson(item as Map<String, dynamic>))
               .toList();
-          debugPrint('🔄 [ResendDebug] Reconstructed ${attachedFilesForResend.length} attached files for resend');
+          if (kDebugMode) {
+            debugPrint('🔄 [ResendDebug] Reconstructed ${attachedFilesForResend.length} attached files for resend');
+          }
         }
       } catch (e) {
-        debugPrint('🔄 [ResendDebug] Failed to parse attachedFilesJson: $e');
+        if (kDebugMode) {
+          debugPrint('🔄 [ResendDebug] Failed to parse attachedFilesJson: $e');
+        }
       }
     }
 
@@ -2168,7 +2308,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         _systemPrompt = systemPrompt;
       });
     } catch (e) {
-      debugPrint('Error loading system prompt: $e');
+      if (kDebugMode) {
+        debugPrint('Error loading system prompt: $e');
+      }
     }
   }
 
@@ -2182,13 +2324,17 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         setState(() {
           _selectedModelId = savedModelId;
         });
-        debugPrint('Loaded saved model preference: $savedModelId');
+        if (kDebugMode) {
+          debugPrint('Loaded saved model preference: $savedModelId');
+        }
         // Update the global notifier so dropdown stays in sync
         ModelSelectionDropdown.selectedModelNotifier.value = savedModelId;
         await _loadProviderSlugForModel(savedModelId);
       } else {
         // No model saved - use fallback
-        debugPrint('No saved model preference - using fallback');
+        if (kDebugMode) {
+          debugPrint('No saved model preference - using fallback');
+        }
         const fallbackModelId = 'deepseek/deepseek-chat-v3.1';
         setState(() {
           _selectedModelId = fallbackModelId;
@@ -2197,7 +2343,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         await _loadProviderSlugForModel(fallbackModelId);
       }
     } catch (e) {
-      debugPrint('Error loading saved model preference: $e');
+      if (kDebugMode) {
+        debugPrint('Error loading saved model preference: $e');
+      }
       // Use fallback on error
       const fallbackModelId = 'deepseek/deepseek-chat-v3.1';
       setState(() {
@@ -2429,7 +2577,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                         images = decoded.cast<String>();
                                       }
                                     } catch (e) {
-                                      debugPrint('Failed to decode images JSON: $e');
+                                      if (kDebugMode) {
+                                        debugPrint('Failed to decode images JSON: $e');
+                                      }
                                     }
                                   }
 
@@ -2444,10 +2594,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                             .map((item) => DocumentAttachment.fromJson(
                                                 item as Map<String, dynamic>))
                                             .toList();
-                                        debugPrint('📄 [AttachmentDebug] Extracted ${attachments.length} attachments from message $i');
+                                        if (kDebugMode) {
+                                          debugPrint('📄 [AttachmentDebug] Extracted ${attachments.length} attachments from message $i');
+                                        }
                                       }
                                     } catch (e) {
-                                      debugPrint('📄 [AttachmentDebug] Failed to decode attachments JSON: $e');
+                                      if (kDebugMode) {
+                                        debugPrint('📄 [AttachmentDebug] Failed to decode attachments JSON: $e');
+                                      }
                                     }
                                   }
 
@@ -2662,7 +2816,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                       setState(() {
                         _isImageGenMode = !_isImageGenMode;
                       });
-                      debugPrint('Image Gen mode toggled: $_isImageGenMode');
+                      if (kDebugMode) {
+                        debugPrint('Image Gen mode toggled: $_isImageGenMode');
+                      }
                     },
               isActive: _isImageGenMode || _isGeneratingImage,
               color: _isImageGenMode || _isGeneratingImage ? accent : iconFg,
