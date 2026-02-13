@@ -2443,26 +2443,27 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         ModelSelectionDropdown.selectedModelNotifier.value = savedModelId;
         await _loadProviderSlugForModel(savedModelId);
       } else {
-        // No model saved - use fallback
+        // No cached model — force-fetch from Supabase (trigger sets default)
         if (kDebugMode) {
-          debugPrint('No saved model preference - using fallback');
+          debugPrint(
+            'No cached model preference, fetching default from Supabase',
+          );
         }
-        const fallbackModelId = 'deepseek/deepseek-chat-v3.1';
-        setState(() {
-          _selectedModelId = fallbackModelId;
-        });
-        ModelSelectionDropdown.selectedModelNotifier.value = fallbackModelId;
-        await _loadProviderSlugForModel(fallbackModelId);
+        final defaultModelId =
+            await UserPreferencesService.forceLoadSelectedModel();
+        if (!mounted) return;
+        if (defaultModelId != null && defaultModelId.isNotEmpty) {
+          setState(() {
+            _selectedModelId = defaultModelId;
+          });
+          ModelSelectionDropdown.selectedModelNotifier.value = defaultModelId;
+          await _loadProviderSlugForModel(defaultModelId);
+        }
       }
     } catch (e) {
       if (kDebugMode) {
         debugPrint('Error loading saved model preference: $e');
       }
-      // Use fallback on error
-      const fallbackModelId = 'deepseek/deepseek-chat-v3.1';
-      setState(() {
-        _selectedModelId = fallbackModelId;
-      });
     }
   }
 

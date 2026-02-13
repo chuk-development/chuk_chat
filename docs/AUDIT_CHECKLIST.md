@@ -207,42 +207,40 @@ Zuletzt konsolidiert: **2026-02-13**
 
 ### Hoch
 
-- [ ] **Service Role Key als Default Client** — HOCH
-  `api_server/main.py:104` — API Server nutzt `SUPABASE_SERVICE_KEY` für alle Operationen. Bypassed alle RLS-Policies.
-  Fix: Per-Request Supabase Clients mit User-JWT für user-scoped Operationen.
+- [x] **Service Role Key als Default Client** — HOCH
+  `payment_service.py` — Alle user-scoped Methoden (`get_credits_remaining`, `check_sufficient_credits`, `check_credits_atomic`, `create_checkout_session`, `create_portal_session`) haben jetzt optionalen `user_client` Parameter. Alle Caller in `main.py` (Transcription, HTTP Chat, WebSocket, Image Gen, Checkout, Portal, User Status) übergeben `user.client`. Admin-Client bleibt korrekt für: `log_usage` (Server-only Write), `sync_single_subscription`/`sync_all_subscriptions_from_stripe` (Webhook/Startup), `delete_user_account` (Admin-Op).
   *Quelle: Security Audit H2*
 
-- [ ] **CORS erlaubt Wildcard Methods/Headers** — HOCH
-  `api_server/main.py:430-442` — `allow_methods=["*"]` und `allow_headers=["*"]` mit `allow_credentials=True`.
-  Fix: Auf spezifische Methods/Headers einschränken.
+- [x] **CORS erlaubt Wildcard Methods/Headers** — HOCH
+  `api_server/main.py` — Bereits in Commit `259d923` (2026-02-11) gefixt: Explizite `allow_methods` (GET/POST/PUT/DELETE/OPTIONS), explizite `allow_headers` (Authorization, Content-Type, etc.), explizite `allow_origins`.
   *Quelle: Security Audit H3*
 
 ### Mittel
 
-- [ ] **In-Memory Rate Limiting (nicht verteilt)** — MITTEL
-  `api_server/main.py:186-191` — Rate Limiting mit `defaultdict` statt Redis. Bei mehreren Replicas: Limits = N × Limit.
+- [x] **In-Memory Rate Limiting (nicht verteilt)** — MITTEL
+  `api_server/main.py` — Bereits in Commits `259d923`/`a277a89` (2026-02-11) gefixt: Verteiltes Rate-Limiting via Supabase RPC `check_rate_limit()`. `slowapi` bleibt als IP-basierter Fallback. Residual-Risiko: Bei Supabase-RPC-Fehler fail-open (akzeptabel für Verfügbarkeit).
   *Quelle: Security Audit M4*
 
-- [ ] **JWT ohne Signatur-Verifikation im Rate Limiter** — MITTEL
-  `api_server/main.py:250` — `jwt.decode(token, options={"verify_signature": False})`. Angreifer kann fake `sub`-Claims nutzen.
+- [x] **JWT ohne Signatur-Verifikation im Rate Limiter** — MITTEL
+  `parse_jwt_scopes()` wird NUR nach `supabase.auth.get_user()` aufgerufen (verify_token Dependency + WebSocket Auth Loop). Safety-Invariant dokumentiert im Docstring. Kein Risiko, da Token bereits serverseitig validiert ist.
   *Quelle: Security Audit M5*
 
-- [ ] **Webhook Idempotency Race Condition** — MITTEL
-  `api_server/main.py:2516-2531` — Bei non-unique DB-Errors wird Processing fortgesetzt statt übersprungen. Mögliche doppelte Credit-Zuweisung.
+- [x] **Webhook Idempotency Race Condition** — MITTEL
+  `api_server/main.py` — TOCTOU-Race eliminiert: Bei Duplicate-Key-Error wird jetzt ein atomischer `UPDATE ... WHERE status = 'failed'` ausgeführt statt SELECT → Check → Process. Nur eine Instanz kann ein fehlgeschlagenes Webhook reclaimen. Bei `status = 'processing'` oder `status = 'completed'` wird sofort übersprungen. Error-Handler markiert Events als `failed` statt sie als `processing` hängen zu lassen.
   *Quelle: Security Audit M6*
 
 ### Niedrig
 
-- [ ] **File Upload Filename direkt verwendet** — NIEDRIG
-  `api_server/main.py:778` — Dateiendung aus Upload-Filename ohne Whitelist-Validierung.
+- [x] **File Upload Filename direkt verwendet** — NIEDRIG
+  `convert_files.py` — `sanitize_filename()` Funktion hinzugefügt: Strippt Path-Komponenten (Traversal-Schutz), entfernt Control Characters und HTML-signifikante Zeichen (`<>&"'`), truncated auf 255 Zeichen. Wird im `/v1/ai/convert-file` Response und im Log-Message verwendet. Audio-Endpoint (`file.filename`) ist nur intern genutzt (Groq API, nicht im Response).
   *Quelle: Security Audit L3*
 
-- [ ] **Kein globales Request-Size-Limit** — NIEDRIG
-  `api_server/main.py` — Einzelne Endpoints haben Limits, aber kein globales. `await request.body()` liest alles in den Speicher.
+- [x] **Kein globales Request-Size-Limit** — NIEDRIG
+  `api_server/main.py` — Content-Length-Check war bereits vorhanden. Neu: ASGI receive-Channel wird gewrappt um Streaming/Chunked-Uploads zu begrenzen. Zählt empfangene Bytes und wirft HTTP 413 bei Überschreitung von `MAX_REQUEST_BODY_SIZE` (100 MB). Schützt auch gegen fehlenden/gefälschten Content-Length Header.
   *Quelle: Security Audit L4*
 
-- [ ] **Health Endpoint zeigt Connection Count** — NIEDRIG
-  `api_server/main.py:486` — Unauthentifizierter Endpoint gibt `active_connections` zurück.
+- [x] **Health Endpoint zeigt Connection Count** — NIEDRIG
+  `api_server/main.py` — Bereits in Commit `259d923` (2026-02-11) gefixt: Gibt nur `{"status": "ok"}` zurück.
   *Quelle: Security Audit L5*
 
 ---
@@ -276,10 +274,10 @@ Zuletzt konsolidiert: **2026-02-13**
 
 | Kategorie | Anzahl |
 |-----------|--------|
-| Behoben | 34 |
+| Behoben | 42 |
 | Kein echtes Problem | 5 |
 | **Offen — Flutter Client** | **3** |
 | **Offen — Architektur/Performance** | **0** |
-| **Offen — API Server** | **8** |
+| **Offen — API Server** | **0** |
 | **Offen — Supabase/Infra** | **5** |
-| **Gesamt offen** | **16** |
+| **Gesamt offen** | **8** |
