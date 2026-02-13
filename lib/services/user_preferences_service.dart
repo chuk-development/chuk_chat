@@ -6,7 +6,6 @@ import 'package:chuk_chat/core/model_selection_events.dart';
 
 class UserPreferencesService {
   const UserPreferencesService._();
-  static const String _kFallbackModelId = 'deepseek/deepseek-chat-v3.1';
   static Map<String, String>? _cachedProviderPreferences;
   static DateTime? _providerPrefsFetchedAt;
   static Future<Map<String, String>>? _providerPrefsInFlight;
@@ -128,6 +127,14 @@ class UserPreferencesService {
     } finally {
       _selectedModelInFlight = null;
     }
+  }
+
+  /// Force-load the selected model directly from Supabase, bypassing cache.
+  /// Used when no cached model exists and we need the Supabase trigger default.
+  static Future<String?> forceLoadSelectedModel() async {
+    final userId = SupabaseService.auth.currentUser?.id;
+    if (userId == null) return null;
+    return _fetchModelFromNetwork(userId);
   }
 
   /// Fetch model preference from network (blocking)
@@ -561,13 +568,14 @@ class UserPreferencesService {
       if (selectedModelId != null && selectedModelId.trim().isEmpty) {
         selectedModelId = null;
       }
-      selectedModelId ??= _kFallbackModelId;
 
       final Map<String, dynamic> upsertData = {
         'user_id': userId,
-        'selected_model_id': selectedModelId,
         'system_prompt': encryptedPrompt,
       };
+      if (selectedModelId != null) {
+        upsertData['selected_model_id'] = selectedModelId;
+      }
 
       // Upsert the encrypted system prompt
       final response = await SupabaseService.client
