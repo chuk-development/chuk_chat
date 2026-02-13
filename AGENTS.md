@@ -14,7 +14,7 @@ flutter test test/models/chat_message_test.dart
 # Run tests matching a name pattern
 flutter test --name "validateEmail"
 
-# Static analysis
+# Static analysis (4 pre-existing info-level lints in chat_ui_desktop.dart are acceptable)
 flutter analyze
 
 # Format code
@@ -23,8 +23,12 @@ dart format .
 # Run locally (loads .env automatically)
 ./run.sh linux          # desktop
 ./run.sh android        # mobile
+```
 
-# Build Android (ALWAYS use --release, debug is unusably slow)
+### Building
+
+```bash
+# Android (ALWAYS --release, debug is unusably slow)
 flutter build apk --release \
   --dart-define-from-file=.env \
   --dart-define=PLATFORM_MOBILE=true \
@@ -32,19 +36,45 @@ flutter build apk --release \
   --dart-define=FEATURE_VOICE_MODE=false \
   --tree-shake-icons --target-platform android-arm64
 
-# Build Linux
+# Linux
 flutter build linux --release --dart-define-from-file=.env
 
-# Build all platforms
+# Web
+flutter build web --release --dart-define-from-file=.env
+
+# Local all-platform build
 ./scripts/build-release.sh all
 ```
+
+- **ALWAYS** `--dart-define-from-file=.env` for credentials, **NEVER** `source .env`
+- If app shows "Supabase credentials are not configured" → `flutter clean` and rebuild
+
+### Creating a Release
+
+1. Bump version in `pubspec.yaml` (e.g. `1.0.25` — **no** `+buildnumber` suffix)
+2. Commit: `git commit -am "chore: bump version to 1.0.25"`
+3. Tag and push: `git tag v1.0.25 && git push origin master --tags`
+4. Trigger CI build:
+   ```bash
+   gh workflow run build-cross-platform.yml \
+     --field build_android=true \
+     --field build_linux_x64=true \
+     --field build_linux_arm64=true \
+     --field build_windows=true \
+     --field build_macos=true \
+     --field build_ios=false \
+     --field enable_signing=false
+   ```
+5. CI creates the GitHub Release with all artifacts automatically
+6. Web deploys automatically via Dokploy on push to master
 
 ### Mandatory Post-Task Workflow
 
 1. `flutter test` — all must pass
-2. `coderabbit review --plain` (timeout 300s) — fix any findings
-3. Commit with descriptive message
-4. `git push`
+2. `flutter analyze` — 0 new issues (4 pre-existing info-level lints in `chat_ui_desktop.dart` OK)
+3. `coderabbit review --plain` (timeout 300s) — fix any findings (free tier, rate limited ~15 min cooldown)
+4. Commit with descriptive message
+5. `git push`
 
 **Do NOT push if tests fail or CodeRabbit finds issues.**
 
@@ -98,7 +128,7 @@ No third-party state management (no Provider, Riverpod, Bloc). Uses:
 
 ## Privacy & Logging
 
-**All logs are disabled in release builds.** Strict rules:
+**All logs are disabled in release builds.** `debugPrint()` is NOT a no-op in release.
 
 - **ALWAYS** wrap `debugPrint()` in `if (kDebugMode) { ... }`
 - **NEVER** log message content, tokens, passwords, or emails
@@ -118,17 +148,18 @@ Feature flags are defined in `lib/platform_config.dart` via `--dart-define`:
 
 - When adding UI features, implement in **both** `chat_ui_desktop.dart` **and** `chat_ui_mobile.dart`
 - Web cannot use `dart:io` — use `package:chuk_chat/utils/io_helper.dart` instead
-- Always use `--dart-define-from-file=.env` for credentials, never `source .env`
+- Web credentials: `--dart-define` unreliable with dart2js. `Dockerfile.web` generates `lib/web_env.dart`. Priority: `--dart-define` > `web_env.dart` > `.env`.
 
 ## Critical Gotchas
 
-1. **Message field preservation**: When loading messages from storage, preserve ALL fields including `images` and `attachments` in both desktop and mobile UIs.
-2. **Mobile image sending**: Capture `attachedFiles` BEFORE clearing in `setState`, then pass the captured list to the streaming handler.
-3. **Image persistence**: Use `MessageCompositionService.prepareMessage()` and encode images as `jsonEncode(images)` in `userMessage['images']`.
+1. **Message field preservation**: Preserve ALL fields including `images` and `attachments` when loading from storage.
+2. **Mobile image sending**: Capture `attachedFiles` BEFORE clearing in `setState`, then pass to streaming handler.
+3. **Image persistence**: Use `MessageCompositionService.prepareMessage()`, encode images as `jsonEncode(images)`.
 4. **Mobile streaming focus**: Do NOT refocus text field on every streaming token.
-5. **Theme/customization sync**: Changes must update both `SharedPreferences` (local) and Supabase (remote).
+5. **Theme/customization sync**: Must update both `SharedPreferences` (local) and Supabase (remote).
 6. **Encryption**: All chat data is encrypted client-side. Never log or commit unencrypted data.
-7. **Web credentials**: `--dart-define` is unreliable with dart2js. `Dockerfile.web` generates `lib/web_env.dart` at build time. Priority: `--dart-define` > `web_env.dart` > `.env`.
+7. **Supabase onAuthStateChange**: Fires an initial event synchronously when you subscribe. Guard against races.
+8. **Image cache**: Limited by bytes only (50 MB), NOT by pixel count. See `lib/utils/lru_byte_cache.dart`.
 
 ## Project Structure
 
@@ -171,3 +202,11 @@ test/
 | `docs/GOTCHAS.md` | **Read this first** — critical bugs to avoid |
 | `docs/COMMON_TASKS.md` | Step-by-step for adding services, pages, features |
 | `docs/DATABASE.md` | Supabase tables and schema |
+| `docs/LINUX_BUILDS.md` | Fastlane packaging (DEB, RPM, AppImage, Flatpak) |
+
+## API Server
+
+Separate repo at `/home/user/git/api_server/`. FastAPI + Supabase + Stripe.
+- No test suite — verify with `python3 -c "import py_compile; py_compile.compile('main.py', doraise=True)"`
+- Pre-existing LSP type errors (mutagen, fal_client, Supabase dynamic typing) are not bugs
+- User-scoped endpoints must pass `user.client` to PaymentService methods (not admin client)
