@@ -127,7 +127,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
   // Computed property - checks if CURRENT chat is streaming
   bool get _isCurrentChatStreaming =>
-      _activeChatId != null && _streamingHandler.isChatStreaming(_activeChatId!);
+      _activeChatId != null &&
+      _streamingHandler.isChatStreaming(_activeChatId!);
 
   static const double _kMaxChatContentWidth = 760.0;
   static const double _kAttachmentBarMarginBottom = 8.0;
@@ -192,9 +193,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
             Icon(
@@ -203,9 +202,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
               size: 28,
             ),
             const SizedBox(width: 12),
-            const Expanded(
-              child: Text('Free Messages Used'),
-            ),
+            const Expanded(child: Text('Free Messages Used')),
           ],
         ),
         content: Column(
@@ -240,7 +237,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Visit Chuk Chat on desktop to subscribe and get unlimited messages.',
+                      'Visit Chuk Chat on desktop to subscribe and get €16 in monthly AI credits.',
                       style: TextStyle(
                         fontSize: 14,
                         color: theme.textTheme.bodyMedium?.color,
@@ -275,8 +272,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       // A line is roughly 22 chars, so 3 lines = ~66 chars
       // Also check for newlines
       final int newlineCount = '\n'.allMatches(text).length;
-      final bool shouldShowFullscreen =
-          text.length > 66 || newlineCount >= 2;
+      final bool shouldShowFullscreen = text.length > 66 || newlineCount >= 2;
 
       if (currentTextIsEmpty != _lastTextWasEmpty ||
           shouldShowFullscreen != _showFullscreenButton) {
@@ -357,28 +353,42 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         debugPrint('');
       }
       if (kDebugMode) {
-        debugPrint('┌─────────────────────────────────────────────────────────────');
+        debugPrint(
+          '┌─────────────────────────────────────────────────────────────',
+        );
       }
       if (kDebugMode) {
         debugPrint('│ 🔄 [CHAT-UI-MOBILE] didUpdateWidget triggered');
       }
       if (kDebugMode) {
-        debugPrint('│ 🔄 [CHAT-UI-MOBILE] OLD widget.selectedChatId: ${oldWidget.selectedChatId}');
+        debugPrint(
+          '│ 🔄 [CHAT-UI-MOBILE] OLD widget.selectedChatId: ${oldWidget.selectedChatId}',
+        );
       }
       if (kDebugMode) {
-        debugPrint('│ 🔄 [CHAT-UI-MOBILE] NEW widget.selectedChatId: ${widget.selectedChatId}');
+        debugPrint(
+          '│ 🔄 [CHAT-UI-MOBILE] NEW widget.selectedChatId: ${widget.selectedChatId}',
+        );
       }
       if (kDebugMode) {
-        debugPrint('│ 🔄 [CHAT-UI-MOBILE] Current _activeChatId: $_activeChatId');
+        debugPrint(
+          '│ 🔄 [CHAT-UI-MOBILE] Current _activeChatId: $_activeChatId',
+        );
       }
       if (kDebugMode) {
-        debugPrint('│ 🔄 [CHAT-UI-MOBILE] _isSendingMessage: $_isSendingMessage');
+        debugPrint(
+          '│ 🔄 [CHAT-UI-MOBILE] _isSendingMessage: $_isSendingMessage',
+        );
       }
       if (kDebugMode) {
-        debugPrint('│ 🔄 [CHAT-UI-MOBILE] _streamingHandler.isStreaming: ${_streamingHandler.isStreaming}');
+        debugPrint(
+          '│ 🔄 [CHAT-UI-MOBILE] _streamingHandler.isStreaming: ${_streamingHandler.isStreaming}',
+        );
       }
       if (kDebugMode) {
-        debugPrint('└─────────────────────────────────────────────────────────────');
+        debugPrint(
+          '└─────────────────────────────────────────────────────────────',
+        );
       }
 
       // Skip if we're already on this chat
@@ -392,9 +402,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       // CRITICAL FIX: Don't clear an active chat just because parent sent null
       // This can happen due to stale parent rebuilds. If we have an active chat
       // with messages, keep it instead of switching to a blank "new" chat.
-      if (widget.selectedChatId == null && _activeChatId != null && _messages.isNotEmpty) {
+      if (widget.selectedChatId == null &&
+          _activeChatId != null &&
+          _messages.isNotEmpty) {
         if (kDebugMode) {
-          debugPrint('⚠️ [CHAT-UI-MOBILE] IGNORING null from parent - we have active chat: $_activeChatId');
+          debugPrint(
+            '⚠️ [CHAT-UI-MOBILE] IGNORING null from parent - we have active chat: $_activeChatId',
+          );
         }
         // Sync the parent back to our active chat
         widget.onChatIdChanged(_activeChatId);
@@ -409,22 +423,24 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       // 2. Persist in newChat() before clearing
       // 3. Chats are already saved to Supabase during message operations
       if (kDebugMode) {
-        debugPrint('│ 📝 [CHAT-UI-MOBILE] Chat switch - NOT persisting (already saved on message ops)');
+        debugPrint(
+          '│ 📝 [CHAT-UI-MOBILE] Chat switch - NOT persisting (already saved on message ops)',
+        );
       }
 
       // BACKGROUND STREAMING: If current chat is streaming, snapshot messages
       // to StreamingManager before clearing. This ensures the stream can
       // continue in background and persist correctly when complete.
-      if (_activeChatId != null && _streamingHandler.isChatStreaming(_activeChatId!)) {
+      if (_activeChatId != null &&
+          _streamingHandler.isChatStreaming(_activeChatId!)) {
         final messagesCopy = _messages
             .map((m) => Map<String, dynamic>.from(m))
             .toList();
-        _streamingHandler.setBackgroundMessages(
-          _activeChatId!,
-          messagesCopy,
-        );
+        _streamingHandler.setBackgroundMessages(_activeChatId!, messagesCopy);
         if (kDebugMode) {
-          debugPrint('│ 📦 [CHAT-UI-MOBILE] Snapshotted ${messagesCopy.length} messages for background stream: $_activeChatId');
+          debugPrint(
+            '│ 📦 [CHAT-UI-MOBILE] Snapshotted ${messagesCopy.length} messages for background stream: $_activeChatId',
+          );
         }
       }
 
@@ -436,11 +452,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       });
 
       if (kDebugMode) {
-        debugPrint('│ 🔄 [CHAT-UI-MOBILE] About to call _loadChatById(${widget.selectedChatId})');
+        debugPrint(
+          '│ 🔄 [CHAT-UI-MOBILE] About to call _loadChatById(${widget.selectedChatId})',
+        );
       }
       _loadChatById(widget.selectedChatId);
       if (kDebugMode) {
-        debugPrint('│ 🔄 [CHAT-UI-MOBILE] After _loadChatById, _activeChatId: $_activeChatId');
+        debugPrint(
+          '│ 🔄 [CHAT-UI-MOBILE] After _loadChatById, _activeChatId: $_activeChatId',
+        );
       }
 
       final bool newChatIsStreaming =
@@ -482,7 +502,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       debugPrint('');
     }
     if (kDebugMode) {
-      debugPrint('┌─────────────────────────────────────────────────────────────');
+      debugPrint(
+        '┌─────────────────────────────────────────────────────────────',
+      );
     }
     if (kDebugMode) {
       debugPrint('│ 📂 [LOAD-CHAT-MOBILE] _loadChatById called');
@@ -491,13 +513,19 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       debugPrint('│ 📂 [LOAD-CHAT-MOBILE] chatId param: $chatId');
     }
     if (kDebugMode) {
-      debugPrint('│ 📂 [LOAD-CHAT-MOBILE] Current _activeChatId: $_activeChatId');
+      debugPrint(
+        '│ 📂 [LOAD-CHAT-MOBILE] Current _activeChatId: $_activeChatId',
+      );
     }
     if (kDebugMode) {
-      debugPrint('│ 📂 [LOAD-CHAT-MOBILE] Sidebar expanded: ${widget.isSidebarExpanded}');
+      debugPrint(
+        '│ 📂 [LOAD-CHAT-MOBILE] Sidebar expanded: ${widget.isSidebarExpanded}',
+      );
     }
     if (kDebugMode) {
-      debugPrint('└─────────────────────────────────────────────────────────────');
+      debugPrint(
+        '└─────────────────────────────────────────────────────────────',
+      );
     }
 
     // Capture sidebar state NOW - before any async operations
@@ -512,13 +540,18 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     _loadChatByIdAsync(chatId, sidebarWasExpanded);
   }
 
-  Future<void> _loadChatByIdAsync(String? chatId, bool sidebarWasExpanded) async {
+  Future<void> _loadChatByIdAsync(
+    String? chatId,
+    bool sidebarWasExpanded,
+  ) async {
     if (!mounted) return;
 
     if (chatId == null) {
       // New chat - clear everything
       if (kDebugMode) {
-        debugPrint('│ 📂 [LOAD-CHAT-MOBILE] chatId is NULL - clearing for new chat');
+        debugPrint(
+          '│ 📂 [LOAD-CHAT-MOBILE] chatId is NULL - clearing for new chat',
+        );
       }
       _messages.clear();
       _fileHandler.clearAll();
@@ -531,7 +564,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         // LAZY LOADING: Check if chat is fully loaded
         if (!storedChat.isFullyLoaded) {
           if (kDebugMode) {
-            debugPrint('│ 📂 [LOAD-CHAT-MOBILE] Chat $chatId not fully loaded, fetching...');
+            debugPrint(
+              '│ 📂 [LOAD-CHAT-MOBILE] Chat $chatId not fully loaded, fetching...',
+            );
           }
           storedChat = await ChatStorageService.loadFullChat(chatId);
 
@@ -541,10 +576,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
         if (storedChat != null && storedChat.isFullyLoaded) {
           if (kDebugMode) {
-            debugPrint('│ 📂 [LOAD-CHAT-MOBILE] FOUND chat $chatId with ${storedChat.messages.length} messages');
+            debugPrint(
+              '│ 📂 [LOAD-CHAT-MOBILE] FOUND chat $chatId with ${storedChat.messages.length} messages',
+            );
           }
           if (kDebugMode) {
-            debugPrint('│ 📂 [LOAD-CHAT-MOBILE] Setting _activeChatId = ${storedChat.id}');
+            debugPrint(
+              '│ 📂 [LOAD-CHAT-MOBILE] Setting _activeChatId = ${storedChat.id}',
+            );
           }
           _activeChatId = storedChat.id;
           _messages
@@ -567,14 +606,18 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                   map['images'] = message.images!;
                 }
                 // Include attachments if present
-                if (message.attachments != null && message.attachments!.isNotEmpty) {
+                if (message.attachments != null &&
+                    message.attachments!.isNotEmpty) {
                   map['attachments'] = message.attachments!;
                   if (kDebugMode) {
-                    debugPrint('📄 [AttachmentDebug] Loading message with attachments field');
+                    debugPrint(
+                      '📄 [AttachmentDebug] Loading message with attachments field',
+                    );
                   }
                 }
                 // Include attachedFilesJson for retry/resend support
-                if (message.attachedFilesJson != null && message.attachedFilesJson!.isNotEmpty) {
+                if (message.attachedFilesJson != null &&
+                    message.attachedFilesJson!.isNotEmpty) {
                   map['attachedFilesJson'] = message.attachedFilesJson!;
                 }
                 return map;
@@ -595,10 +638,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           debugPrint('│ ⚠️ [LOAD-CHAT-MOBILE] Chat $chatId NOT FOUND!');
         }
         if (kDebugMode) {
-          debugPrint('│ ⚠️ [LOAD-CHAT-MOBILE] Available chats: ${ChatStorageService.savedChats.map((c) => c.id).take(5).toList()}...');
+          debugPrint(
+            '│ ⚠️ [LOAD-CHAT-MOBILE] Available chats: ${ChatStorageService.savedChats.map((c) => c.id).take(5).toList()}...',
+          );
         }
         if (kDebugMode) {
-          debugPrint('│ ⚠️ [LOAD-CHAT-MOBILE] Treating as new chat, setting _activeChatId = null');
+          debugPrint(
+            '│ ⚠️ [LOAD-CHAT-MOBILE] Treating as new chat, setting _activeChatId = null',
+          );
         }
         _messages.clear();
         _fileHandler.clearAll();
@@ -656,7 +703,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
   void newChat() {
     if (kDebugMode) {
-      debugPrint('🆕 [NewChat] Starting newChat(), current _activeChatId: $_activeChatId');
+      debugPrint(
+        '🆕 [NewChat] Starting newChat(), current _activeChatId: $_activeChatId',
+      );
     }
 
     // Capture current chat data for background persistence
@@ -688,16 +737,20 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     // CRITICAL: Use silent=true to prevent onChatIdAssigned from changing
     // the selected chat - we're now on a NEW chat!
     if (messagesToSave != null && chatIdToSave != null) {
-      unawaited(_persistenceHandler.persistChat(
-        messages: messagesToSave,
-        chatId: chatIdToSave,
-        waitForCompletion: false,
-        isOffline: _isOffline,
-        silent: true,
-      ).then((_) {
-        // Refresh sidebar after persist completes
-        unawaited(ChatStorageService.loadSavedChatsForSidebar());
-      }));
+      unawaited(
+        _persistenceHandler
+            .persistChat(
+              messages: messagesToSave,
+              chatId: chatIdToSave,
+              waitForCompletion: false,
+              isOffline: _isOffline,
+              silent: true,
+            )
+            .then((_) {
+              // Refresh sidebar after persist completes
+              unawaited(ChatStorageService.loadSavedChatsForSidebar());
+            }),
+      );
     } else {
       // No chat to save, just refresh sidebar
       unawaited(ChatStorageService.loadSavedChatsForSidebar());
@@ -1000,13 +1053,17 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                         Icon(
                           Icons.folder_open,
                           size: 48,
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.3,
+                          ),
                         ),
                         const SizedBox(height: 12),
                         Text(
                           'No projects yet',
                           style: TextStyle(
-                            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.6,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -1051,7 +1108,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                           project.id,
                           project.name,
                           Icons.folder,
-                          subtitle: ProjectMessageService.getProjectContextSummary(project),
+                          subtitle:
+                              ProjectMessageService.getProjectContextSummary(
+                                project,
+                              ),
                         );
                       },
                     ),
@@ -1111,7 +1171,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       try {
         final project = await ProjectStorageService.createProject(
           nameController.text.trim(),
-          description: descController.text.trim().isEmpty ? null : descController.text.trim(),
+          description: descController.text.trim().isEmpty
+              ? null
+              : descController.text.trim(),
         );
         _showSnackBar('Project "${project.name}" created');
         // Open the project management page
@@ -1166,15 +1228,16 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   }) {
     final isSelected = _selectedProjectId == projectId;
     // Check if this project already contains the current chat
-    final project = projectId != null ? ProjectStorageService.getProject(projectId) : null;
-    final bool chatInProject = project != null && _activeChatId != null &&
+    final project = projectId != null
+        ? ProjectStorageService.getProject(projectId)
+        : null;
+    final bool chatInProject =
+        project != null &&
+        _activeChatId != null &&
         project.chatIds.contains(_activeChatId);
 
     return ListTile(
-      leading: Icon(
-        icon,
-        color: isSelected ? theme.colorScheme.primary : null,
-      ),
+      leading: Icon(icon, color: isSelected ? theme.colorScheme.primary : null),
       title: Text(
         name,
         style: TextStyle(
@@ -1186,8 +1249,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (isSelected)
-            Icon(Icons.check, color: theme.colorScheme.primary),
+          if (isSelected) Icon(Icons.check, color: theme.colorScheme.primary),
           if (projectId != null) ...[
             // Link/unlink chat button
             if (_activeChatId != null) ...[
@@ -1200,7 +1262,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                       ? Colors.orange
                       : theme.colorScheme.primary.withValues(alpha: 0.7),
                 ),
-                tooltip: chatInProject ? 'Remove chat from project' : 'Add chat to project',
+                tooltip: chatInProject
+                    ? 'Remove chat from project'
+                    : 'Add chat to project',
                 onPressed: () async {
                   Navigator.of(sheetContext).pop();
                   if (chatInProject) {
@@ -1258,7 +1322,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   Future<void> _removeChatFromProject(String projectId) async {
     if (_activeChatId == null) return;
     try {
-      await ProjectStorageService.removeChatFromProject(projectId, _activeChatId!);
+      await ProjectStorageService.removeChatFromProject(
+        projectId,
+        _activeChatId!,
+      );
       _showSnackBar('Chat removed from project');
       setState(() {});
     } catch (e) {
@@ -1327,11 +1394,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       ),
       child: Row(
         children: [
-          Icon(
-            Icons.folder,
-            size: 18,
-            color: theme.colorScheme.primary,
-          ),
+          Icon(Icons.folder, size: 18, color: theme.colorScheme.primary),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -1422,7 +1485,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     double? tps,
   ) async {
     if (kDebugMode) {
-      debugPrint('✅ [FinalizeMessage] chatId: $chatId, index: $index, _activeChatId: $_activeChatId');
+      debugPrint(
+        '✅ [FinalizeMessage] chatId: $chatId, index: $index, _activeChatId: $_activeChatId',
+      );
     }
 
     // CRITICAL: Clear flags now that streaming is complete
@@ -1437,7 +1502,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     if (ChatStorageService.isMessageOperationInProgress) {
       ChatStorageService.isMessageOperationInProgress = false;
       if (kDebugMode) {
-        debugPrint('🔓 [FinalizeMessage] GLOBAL LOCK RELEASED (stream complete)');
+        debugPrint(
+          '🔓 [FinalizeMessage] GLOBAL LOCK RELEASED (stream complete)',
+        );
       }
     }
 
@@ -1501,11 +1568,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     setState(() {
       _isGeneratingImage = true;
       // Add user message with the prompt
-      _messages.add({
-        'sender': 'user',
-        'text': prompt,
-        'reasoning': '',
-      });
+      _messages.add({'sender': 'user', 'text': prompt, 'reasoning': ''});
       _controller.clear();
       // Add AI placeholder message
       _messages.add({
@@ -1560,7 +1623,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
           // Add cost info if available
           if (result.costEur != null) {
-            aiMessage['text'] = 'Image generated (${result.costEur!.toStringAsFixed(2)} EUR)';
+            aiMessage['text'] =
+                'Image generated (${result.costEur!.toStringAsFixed(2)} EUR)';
           }
 
           if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
@@ -1577,7 +1641,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         // Handle error
         setState(() {
           if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
-            _messages[placeholderIndex]['text'] = 'Error: ${result.errorMessage ?? "Image generation failed"}';
+            _messages[placeholderIndex]['text'] =
+                'Error: ${result.errorMessage ?? "Image generation failed"}';
           }
           _isGeneratingImage = false;
         });
@@ -1617,9 +1682,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
             Icon(
@@ -1648,7 +1711,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
               'Subscribe to get credits for AI image generation and chat messages.',
               style: TextStyle(
                 fontSize: 14,
-                color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.8),
+                color: theme.textTheme.bodyMedium?.color?.withValues(
+                  alpha: 0.8,
+                ),
               ),
             ),
           ],
@@ -1727,7 +1792,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     // Set flag to block realtime updates during send operation
     _isSendingMessage = true;
     if (kDebugMode) {
-      debugPrint('📨 [SendMessage] Starting send, _activeChatId BEFORE: $_activeChatId');
+      debugPrint(
+        '📨 [SendMessage] Starting send, _activeChatId BEFORE: $_activeChatId',
+      );
     }
 
     // CRITICAL FIX: Sync _activeChatId with widget.selectedChatId if out of sync
@@ -1735,7 +1802,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     if (_activeChatId == null && widget.selectedChatId != null) {
       _activeChatId = widget.selectedChatId;
       if (kDebugMode) {
-        debugPrint('⚠️ [SendMessage] SYNCED _activeChatId with widget.selectedChatId: $_activeChatId');
+        debugPrint(
+          '⚠️ [SendMessage] SYNCED _activeChatId with widget.selectedChatId: $_activeChatId',
+        );
       }
     }
 
@@ -1757,13 +1826,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     final List<Map<String, dynamic>> apiHistory = _buildApiHistory();
     final MessageCompositionResult validationResult =
         await MessageCompositionService.prepareMessage(
-      userInput: originalUserInput,
-      attachedFiles: _fileHandler.attachedFiles,
-      selectedModelId: _selectedModelId,
-      apiHistory: apiHistory,
-      systemPrompt: _systemPrompt,
-      getProviderSlug: _ensureProviderSlugForCurrentModel,
-    );
+          userInput: originalUserInput,
+          attachedFiles: _fileHandler.attachedFiles,
+          selectedModelId: _selectedModelId,
+          apiHistory: apiHistory,
+          systemPrompt: _systemPrompt,
+          getProviderSlug: _ensureProviderSlugForCurrentModel,
+        );
 
     if (!validationResult.isValid) {
       _isSendingMessage = false;
@@ -1780,7 +1849,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       _isSendingMessage = false;
       ChatStorageService.isMessageOperationInProgress = false;
       if (kDebugMode) {
-        debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (widget disposed during prepareMessage)');
+        debugPrint(
+          '🔓 [SendMessage] GLOBAL LOCK RELEASED (widget disposed during prepareMessage)',
+        );
       }
       return;
     }
@@ -1792,10 +1863,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     _activeChatId ??= _uuid.v4();
     final String chatIdForThisMessage = _activeChatId!;
     if (kDebugMode) {
-      debugPrint('📨 [SendMessage] _activeChatId AFTER: $_activeChatId (isNewChat: $isNewChat)');
+      debugPrint(
+        '📨 [SendMessage] _activeChatId AFTER: $_activeChatId (isNewChat: $isNewChat)',
+      );
     }
     if (kDebugMode) {
-      debugPrint('📨 [SendMessage] Using chatIdForThisMessage: $chatIdForThisMessage');
+      debugPrint(
+        '📨 [SendMessage] Using chatIdForThisMessage: $chatIdForThisMessage',
+      );
     }
 
     // Extract prepared values from validation result
@@ -1804,9 +1879,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
     // CRITICAL: Capture attached files BEFORE clearing them
     // These need to be passed to the streaming handler for the API call
-    final List<AttachedFile> attachedFilesForApi = List.from(_fileHandler.attachedFiles);
+    final List<AttachedFile> attachedFilesForApi = List.from(
+      _fileHandler.attachedFiles,
+    );
     if (kDebugMode) {
-      debugPrint('📎 [SendMessage] Captured ${attachedFilesForApi.length} attached files for API call');
+      debugPrint(
+        '📎 [SendMessage] Captured ${attachedFilesForApi.length} attached files for API call',
+      );
     }
 
     // Add user message
@@ -1828,16 +1907,20 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       // Store document attachments as JSON-encoded string if present
       final documentAttachments = attachedFilesForApi
           .where((f) => !f.isImage && f.markdownContent != null)
-          .map((f) => {
-                'fileName': f.fileName,
-                'markdownContent': f.markdownContent!,
-              })
+          .map(
+            (f) => {
+              'fileName': f.fileName,
+              'markdownContent': f.markdownContent!,
+            },
+          )
           .toList();
 
       if (documentAttachments.isNotEmpty) {
         userMessage['attachments'] = jsonEncode(documentAttachments);
         if (kDebugMode) {
-          debugPrint('📄 [AttachmentDebug] Storing ${documentAttachments.length} attachments');
+          debugPrint(
+            '📄 [AttachmentDebug] Storing ${documentAttachments.length} attachments',
+          );
         }
       }
 
@@ -1847,13 +1930,17 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           attachedFilesForApi.map((f) => f.toJson()).toList(),
         );
         if (kDebugMode) {
-          debugPrint('💾 [AttachmentDebug] Storing ${attachedFilesForApi.length} attached files for resend');
+          debugPrint(
+            '💾 [AttachmentDebug] Storing ${attachedFilesForApi.length} attached files for resend',
+          );
         }
       }
 
       _messages.add(userMessage);
       if (kDebugMode) {
-        debugPrint('💾 [MessageDebug] Message added to _messages list. Total messages: ${_messages.length}');
+        debugPrint(
+          '💾 [MessageDebug] Message added to _messages list. Total messages: ${_messages.length}',
+        );
       }
 
       _controller.clear();
@@ -1889,7 +1976,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       _isSendingMessage = false;
       ChatStorageService.isMessageOperationInProgress = false;
       if (kDebugMode) {
-        debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (widget disposed during persistChat)');
+        debugPrint(
+          '🔓 [SendMessage] GLOBAL LOCK RELEASED (widget disposed during persistChat)',
+        );
       }
       return;
     }
@@ -1897,7 +1986,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     // Verify the stored chat ID matches what we expected
     if (storedChat != null && storedChat.id != chatIdForThisMessage) {
       if (kDebugMode) {
-        debugPrint('⚠️ [ChatDebug] Chat ID mismatch! Expected: $chatIdForThisMessage, Got: ${storedChat.id}');
+        debugPrint(
+          '⚠️ [ChatDebug] Chat ID mismatch! Expected: $chatIdForThisMessage, Got: ${storedChat.id}',
+        );
       }
     }
 
@@ -1911,7 +2002,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           debugPrint('');
         }
         if (kDebugMode) {
-          debugPrint('┌─────────────────────────────────────────────────────────────');
+          debugPrint(
+            '┌─────────────────────────────────────────────────────────────',
+          );
         }
         if (kDebugMode) {
           debugPrint('│ 🆕 [SEND-MOBILE] NEW CHAT CREATED!');
@@ -1920,21 +2013,29 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           debugPrint('│ 🆕 [SEND-MOBILE] New chat ID: ${storedChat.id}');
         }
         if (kDebugMode) {
-          debugPrint('│ 🆕 [SEND-MOBILE] Calling widget.onChatIdChanged(${storedChat.id})');
+          debugPrint(
+            '│ 🆕 [SEND-MOBILE] Calling widget.onChatIdChanged(${storedChat.id})',
+          );
         }
         if (kDebugMode) {
-          debugPrint('│ 🆕 [SEND-MOBILE] This should update ChatStorageService.selectedChatId');
+          debugPrint(
+            '│ 🆕 [SEND-MOBILE] This should update ChatStorageService.selectedChatId',
+          );
         }
         if (kDebugMode) {
-          debugPrint('└─────────────────────────────────────────────────────────────');
+          debugPrint(
+            '└─────────────────────────────────────────────────────────────',
+          );
         }
         widget.onChatIdChanged(storedChat.id);
 
         // Auto-generate title for new chats (fire and forget)
-        unawaited(TitleGenerationService.generateAndApplyTitle(
-          storedChat.id,
-          displayMessageText,
-        ));
+        unawaited(
+          TitleGenerationService.generateAndApplyTitle(
+            storedChat.id,
+            displayMessageText,
+          ),
+        );
       }
     }
 
@@ -1944,14 +2045,20 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     // Send with streaming handler using the CAPTURED chatId, not _activeChatId
     // This prevents race conditions where _activeChatId could be changed by callbacks
     if (kDebugMode) {
-      debugPrint('📤 [ChatDebug] Sending to streaming handler with chatId: $chatIdForThisMessage');
+      debugPrint(
+        '📤 [ChatDebug] Sending to streaming handler with chatId: $chatIdForThisMessage',
+      );
     }
     if (kDebugMode) {
-      debugPrint('📤 [ChatDebug] Sending ${attachedFilesForApi.length} attached files to API');
+      debugPrint(
+        '📤 [ChatDebug] Sending ${attachedFilesForApi.length} attached files to API',
+      );
     }
     if (_selectedProjectId != null) {
       if (kDebugMode) {
-        debugPrint('📁 [ChatDebug] Project context included: $_selectedProjectId');
+        debugPrint(
+          '📁 [ChatDebug] Project context included: $_selectedProjectId',
+        );
       }
     }
     // NOTE: _isSendingMessage is cleared in _finalizeAiMessage() when streaming completes,
@@ -2013,7 +2120,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     // If a project is active, prepend project context
     if (_selectedProjectId != null && kFeatureProjects) {
       try {
-        final projectContext = await ProjectMessageService.buildProjectSystemMessage(_selectedProjectId!);
+        final projectContext =
+            await ProjectMessageService.buildProjectSystemMessage(
+              _selectedProjectId!,
+            );
         // Combine project context with user's system prompt
         if (basePrompt != null && basePrompt.isNotEmpty) {
           return '$projectContext\n\n---\n\nAdditional User Instructions:\n$basePrompt';
@@ -2042,7 +2152,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     if (ChatStorageService.isMessageOperationInProgress) {
       ChatStorageService.isMessageOperationInProgress = false;
       if (kDebugMode) {
-        debugPrint('🔓 [CancelledMessage] GLOBAL LOCK RELEASED (stream cancelled)');
+        debugPrint(
+          '🔓 [CancelledMessage] GLOBAL LOCK RELEASED (stream cancelled)',
+        );
       }
     }
 
@@ -2124,10 +2236,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         final decoded = jsonDecode(attachedFilesJson);
         if (decoded is List) {
           attachedFilesForResend = decoded
-              .map((item) => AttachedFile.fromJson(item as Map<String, dynamic>))
+              .map(
+                (item) => AttachedFile.fromJson(item as Map<String, dynamic>),
+              )
               .toList();
           if (kDebugMode) {
-            debugPrint('🔄 [ResendDebug] Reconstructed ${attachedFilesForResend.length} attached files for resend');
+            debugPrint(
+              '🔄 [ResendDebug] Reconstructed ${attachedFilesForResend.length} attached files for resend',
+            );
           }
         }
       } catch (e) {
@@ -2196,8 +2312,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     final String? result = await showDialog<String>(
       context: context,
       builder: (BuildContext dialogContext) {
-        final TextEditingController dialogController =
-            TextEditingController(text: currentText);
+        final TextEditingController dialogController = TextEditingController(
+          text: currentText,
+        );
         return Dialog.fullscreen(
           child: Scaffold(
             backgroundColor: theme.scaffoldBackgroundColor,
@@ -2493,10 +2610,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     final bool hasAttachments = _fileHandler.hasAttachments;
     final bool hasMessages = _messages.isNotEmpty;
     final double composerReservedSpace =
-        40.0 +
-        (hasAttachments ? 80.0 : 0.0) +
-        32.0 +
-        mediaQuery.padding.bottom;
+        40.0 + (hasAttachments ? 80.0 : 0.0) + 32.0 + mediaQuery.padding.bottom;
     final EdgeInsets listPadding = EdgeInsets.fromLTRB(
       effectiveHorizontalPadding,
       10,
@@ -2525,148 +2639,182 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                     child: Stack(
                       children: [
                         hasMessages
-                        ? Align(
-                        alignment: Alignment.center,
-                        child: Container(
-                          constraints: BoxConstraints(
-                            maxWidth: expandedInputWidth,
-                          ),
-                          child: SelectionArea(
-                            child: ListView.builder(
-                                controller: _scrollController,
-                                padding: listPadding,
-                                itemCount: _messages.length,
-                                addAutomaticKeepAlives: false,
-                                addRepaintBoundaries: true,
-                                cacheExtent: 1000.0,
-                                itemBuilder: (_, int i) {
-                                  final Map<String, String> raw = _messages[i];
-                                  final String sender = raw['sender'] ?? 'ai';
-                                  final bool isAiMessage = sender != 'user';
-                                  final bool isStreamingMessage =
-                                      _isCurrentChatStreaming &&
-                                      i == _messages.length - 1 &&
-                                      isAiMessage;
-                                  final String displayText = (raw['text'] ?? '')
-                                      .trimRight();
-                                  final String reasoning =
-                                      raw['reasoning'] ?? '';
-                                  final String? modelLabel = isAiMessage
-                                      ? _formatModelInfo(
-                                          raw['modelId'],
-                                          raw['provider'],
-                                        )
-                                      : null;
-                                  final String? reasoningText =
-                                      reasoning.trim().isEmpty
-                                      ? null
-                                      : reasoning;
-                                  final bool isBeingEdited =
-                                      _messageActionsHandler
-                                          .editingMessageIndex ==
-                                      i;
-                                  final bool isUser = sender == 'user';
+                            ? Align(
+                                alignment: Alignment.center,
+                                child: Container(
+                                  constraints: BoxConstraints(
+                                    maxWidth: expandedInputWidth,
+                                  ),
+                                  child: SelectionArea(
+                                    child: ListView.builder(
+                                      controller: _scrollController,
+                                      padding: listPadding,
+                                      itemCount: _messages.length,
+                                      addAutomaticKeepAlives: false,
+                                      addRepaintBoundaries: true,
+                                      cacheExtent: 1000.0,
+                                      itemBuilder: (_, int i) {
+                                        final Map<String, String> raw =
+                                            _messages[i];
+                                        final String sender =
+                                            raw['sender'] ?? 'ai';
+                                        final bool isAiMessage =
+                                            sender != 'user';
+                                        final bool isStreamingMessage =
+                                            _isCurrentChatStreaming &&
+                                            i == _messages.length - 1 &&
+                                            isAiMessage;
+                                        final String displayText =
+                                            (raw['text'] ?? '').trimRight();
+                                        final String reasoning =
+                                            raw['reasoning'] ?? '';
+                                        final String? modelLabel = isAiMessage
+                                            ? _formatModelInfo(
+                                                raw['modelId'],
+                                                raw['provider'],
+                                              )
+                                            : null;
+                                        final String? reasoningText =
+                                            reasoning.trim().isEmpty
+                                            ? null
+                                            : reasoning;
+                                        final bool isBeingEdited =
+                                            _messageActionsHandler
+                                                .editingMessageIndex ==
+                                            i;
+                                        final bool isUser = sender == 'user';
 
-                                  // Parse images from JSON
-                                  List<String>? images;
-                                  final String? imagesJson = raw['images'];
-                                  if (imagesJson != null && imagesJson.isNotEmpty) {
-                                    try {
-                                      final decoded = jsonDecode(imagesJson);
-                                      if (decoded is List) {
-                                        images = decoded.cast<String>();
-                                      }
-                                    } catch (e) {
-                                      if (kDebugMode) {
-                                        debugPrint('Failed to decode images JSON: $e');
-                                      }
-                                    }
-                                  }
-
-                                  // Parse document attachments from JSON
-                                  List<DocumentAttachment>? attachments;
-                                  final String? attachmentsJson = raw['attachments'];
-                                  if (attachmentsJson != null && attachmentsJson.isNotEmpty) {
-                                    try {
-                                      final decoded = jsonDecode(attachmentsJson);
-                                      if (decoded is List) {
-                                        attachments = decoded
-                                            .map((item) => DocumentAttachment.fromJson(
-                                                item as Map<String, dynamic>))
-                                            .toList();
-                                        if (kDebugMode) {
-                                          debugPrint('📄 [AttachmentDebug] Extracted ${attachments.length} attachments from message $i');
-                                        }
-                                      }
-                                    } catch (e) {
-                                      if (kDebugMode) {
-                                        debugPrint('📄 [AttachmentDebug] Failed to decode attachments JSON: $e');
-                                      }
-                                    }
-                                  }
-
-                                  // Parse TPS value from message
-                                  final tpsStr = raw['tps'];
-                                  double? tps;
-                                  if (tpsStr != null && tpsStr.isNotEmpty) {
-                                    tps = double.tryParse(tpsStr);
-                                  }
-
-                                  return RepaintBoundary(
-                                    child: MessageBubble(
-                                      key: ValueKey('msg_$i'),
-                                      message: displayText,
-                                      reasoning: reasoningText,
-                                      isUser: isUser,
-                                      maxWidth: isUser
-                                          ? expandedInputWidth * 0.7
-                                          : expandedInputWidth,
-                                      isReasoningStreaming: isStreamingMessage,
-                                      modelLabel: modelLabel,
-                                      tps: tps,
-                                      images: images,
-                                      attachments: attachments,
-                                      actions: _messageActionsHandler
-                                          .buildActionsForMessage(
-                                            index: i,
-                                            messageText: displayText,
-                                            isUser: isUser,
-                                            isStreaming: isStreamingMessage,
-                                            onEdit: (index) {
-                                              setState(() {
-                                                _messageActionsHandler
-                                                    .startEdit(index);
-                                              });
-                                            },
-                                            onResendMessage: _resendMessageAt,
-                                          ),
-                                      isEditing: isBeingEdited,
-                                      initialEditText: isBeingEdited
-                                          ? displayText
-                                          : null,
-                                      onSubmitEdit: isBeingEdited && isUser
-                                          ? (newText) =>
-                                                _submitEditedMessage(i, newText)
-                                          : null,
-                                      onCancelEdit: isBeingEdited
-                                          ? () {
-                                              setState(() {
-                                                _messageActionsHandler
-                                                    .cancelEdit();
-                                              });
+                                        // Parse images from JSON
+                                        List<String>? images;
+                                        final String? imagesJson =
+                                            raw['images'];
+                                        if (imagesJson != null &&
+                                            imagesJson.isNotEmpty) {
+                                          try {
+                                            final decoded = jsonDecode(
+                                              imagesJson,
+                                            );
+                                            if (decoded is List) {
+                                              images = decoded.cast<String>();
                                             }
-                                          : null,
-                                      showReasoningTokens: widget.showReasoningTokens,
-                                      showModelInfo: widget.showModelInfo,
-                                      showTps: widget.showTps,
+                                          } catch (e) {
+                                            if (kDebugMode) {
+                                              debugPrint(
+                                                'Failed to decode images JSON: $e',
+                                              );
+                                            }
+                                          }
+                                        }
+
+                                        // Parse document attachments from JSON
+                                        List<DocumentAttachment>? attachments;
+                                        final String? attachmentsJson =
+                                            raw['attachments'];
+                                        if (attachmentsJson != null &&
+                                            attachmentsJson.isNotEmpty) {
+                                          try {
+                                            final decoded = jsonDecode(
+                                              attachmentsJson,
+                                            );
+                                            if (decoded is List) {
+                                              attachments = decoded
+                                                  .map(
+                                                    (item) =>
+                                                        DocumentAttachment.fromJson(
+                                                          item
+                                                              as Map<
+                                                                String,
+                                                                dynamic
+                                                              >,
+                                                        ),
+                                                  )
+                                                  .toList();
+                                              if (kDebugMode) {
+                                                debugPrint(
+                                                  '📄 [AttachmentDebug] Extracted ${attachments.length} attachments from message $i',
+                                                );
+                                              }
+                                            }
+                                          } catch (e) {
+                                            if (kDebugMode) {
+                                              debugPrint(
+                                                '📄 [AttachmentDebug] Failed to decode attachments JSON: $e',
+                                              );
+                                            }
+                                          }
+                                        }
+
+                                        // Parse TPS value from message
+                                        final tpsStr = raw['tps'];
+                                        double? tps;
+                                        if (tpsStr != null &&
+                                            tpsStr.isNotEmpty) {
+                                          tps = double.tryParse(tpsStr);
+                                        }
+
+                                        return RepaintBoundary(
+                                          child: MessageBubble(
+                                            key: ValueKey('msg_$i'),
+                                            message: displayText,
+                                            reasoning: reasoningText,
+                                            isUser: isUser,
+                                            maxWidth: isUser
+                                                ? expandedInputWidth * 0.7
+                                                : expandedInputWidth,
+                                            isReasoningStreaming:
+                                                isStreamingMessage,
+                                            modelLabel: modelLabel,
+                                            tps: tps,
+                                            images: images,
+                                            attachments: attachments,
+                                            actions: _messageActionsHandler
+                                                .buildActionsForMessage(
+                                                  index: i,
+                                                  messageText: displayText,
+                                                  isUser: isUser,
+                                                  isStreaming:
+                                                      isStreamingMessage,
+                                                  onEdit: (index) {
+                                                    setState(() {
+                                                      _messageActionsHandler
+                                                          .startEdit(index);
+                                                    });
+                                                  },
+                                                  onResendMessage:
+                                                      _resendMessageAt,
+                                                ),
+                                            isEditing: isBeingEdited,
+                                            initialEditText: isBeingEdited
+                                                ? displayText
+                                                : null,
+                                            onSubmitEdit:
+                                                isBeingEdited && isUser
+                                                ? (newText) =>
+                                                      _submitEditedMessage(
+                                                        i,
+                                                        newText,
+                                                      )
+                                                : null,
+                                            onCancelEdit: isBeingEdited
+                                                ? () {
+                                                    setState(() {
+                                                      _messageActionsHandler
+                                                          .cancelEdit();
+                                                    });
+                                                  }
+                                                : null,
+                                            showReasoningTokens:
+                                                widget.showReasoningTokens,
+                                            showModelInfo: widget.showModelInfo,
+                                            showTps: widget.showTps,
+                                          ),
+                                        );
+                                      },
                                     ),
-                                  );
-                                },
-                              ),
-                          ),
-                        ),
-                      )
-                    : const SizedBox.expand(),
+                                  ),
+                                ),
+                              )
+                            : const SizedBox.expand(),
                         // Scroll-to-bottom button (centered above input)
                         if (_showScrollToBottom && hasMessages)
                           Positioned(
@@ -2677,7 +2825,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                               child: Material(
                                 elevation: 4,
                                 shape: const CircleBorder(),
-                                color: theme.colorScheme.surfaceContainerHighest,
+                                color:
+                                    theme.colorScheme.surfaceContainerHighest,
                                 child: InkWell(
                                   customBorder: const CircleBorder(),
                                   onTap: () => _scrollChatToBottom(force: true),
@@ -2695,74 +2844,75 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                           ),
                       ],
                     ),
-              ),
-              Padding(
-                padding: EdgeInsets.only(
-                  left: effectiveHorizontalPadding,
-                  right: effectiveHorizontalPadding,
-                  bottom: effectiveHorizontalPadding,
-                ),
-                child: SafeArea(
-                  top: false,
-                  child: Center(
-                    child: SizedBox(
-                      width: expandedInputWidth,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // Project indicator
-                          if (kFeatureProjects && _selectedProjectId != null)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: _buildProjectIndicator(theme),
-                            ),
-                          if (hasAttachments)
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                bottom: _kAttachmentBarMarginBottom,
+                  ),
+                  Padding(
+                    padding: EdgeInsets.only(
+                      left: effectiveHorizontalPadding,
+                      right: effectiveHorizontalPadding,
+                      bottom: effectiveHorizontalPadding,
+                    ),
+                    child: SafeArea(
+                      top: false,
+                      child: Center(
+                        child: SizedBox(
+                          width: expandedInputWidth,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // Project indicator
+                              if (kFeatureProjects &&
+                                  _selectedProjectId != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: _buildProjectIndicator(theme),
+                                ),
+                              if (hasAttachments)
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                    bottom: _kAttachmentBarMarginBottom,
+                                  ),
+                                  child: AttachmentPreviewBar(
+                                    files: _fileHandler.attachedFiles,
+                                    onRemove: _fileHandler.removeFile,
+                                  ),
+                                ),
+                              _buildSearchBar(
+                                isCompactMode: isCompactModeForModelDropdown,
+                                theme: theme,
+                                iconFg: iconFg,
                               ),
-                              child: AttachmentPreviewBar(
-                                files: _fileHandler.attachedFiles,
-                                onRemove: _fileHandler.removeFile,
+                              const SizedBox(height: 8),
+                              Text(
+                                'AI/LLMs can make mistakes — double-check important info.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: iconFg.withValues(alpha: 0.7),
+                                  fontSize: 11,
+                                ),
                               ),
-                            ),
-                          _buildSearchBar(
-                            isCompactMode: isCompactModeForModelDropdown,
-                            theme: theme,
-                            iconFg: iconFg,
+                            ],
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'AI/LLMs can make mistakes — double-check important info.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: iconFg.withValues(alpha: 0.7),
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-      // Loading indicator when switching chats
-      if (_isLoadingChat)
-        Positioned.fill(
-          child: Container(
-            color: bg.withValues(alpha: 0.7),
-            child: Center(
-              child: CircularProgressIndicator(
-                color: accent,
-                strokeWidth: 3,
+                ],
               ),
             ),
           ),
-        ),
+          // Loading indicator when switching chats
+          if (_isLoadingChat)
+            Positioned.fill(
+              child: Container(
+                color: bg.withValues(alpha: 0.7),
+                child: Center(
+                  child: CircularProgressIndicator(
+                    color: accent,
+                    strokeWidth: 3,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -2941,22 +3091,28 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                 : ((_isCurrentChatStreaming || _isSendingMessage)
                       ? Icons.stop_rounded
                       : _isImageGenMode
-                          ? Icons.auto_awesome
-                          : (_controller.text.trim().isEmpty && !hasAttachments
-                                ? (kFeatureVoiceMode ? Icons.graphic_eq_rounded : Icons.arrow_upward_rounded)
-                                : Icons.arrow_upward_rounded)),
+                      ? Icons.auto_awesome
+                      : (_controller.text.trim().isEmpty && !hasAttachments
+                            ? (kFeatureVoiceMode
+                                  ? Icons.graphic_eq_rounded
+                                  : Icons.arrow_upward_rounded)
+                            : Icons.arrow_upward_rounded)),
             onTap: _audioHandler.isMicActive
                 ? _handleAudioSend
                 : ((_isCurrentChatStreaming || _isSendingMessage)
                       ? _cancelCurrentOperation
                       : _isImageGenMode && !_isGeneratingImage
-                          ? _generateImage
-                          : (_controller.text.trim().isEmpty && !hasAttachments && kFeatureVoiceMode
-                                ? () => _openComingSoonFeature('Voice Mode')
-                                : _sendMessage)),
+                      ? _generateImage
+                      : (_controller.text.trim().isEmpty &&
+                                !hasAttachments &&
+                                kFeatureVoiceMode
+                            ? () => _openComingSoonFeature('Voice Mode')
+                            : _sendMessage)),
             color: _audioHandler.isMicActive
                 ? accent
-                : ((_isCurrentChatStreaming || _isSendingMessage) ? Colors.red : accent),
+                : ((_isCurrentChatStreaming || _isSendingMessage)
+                      ? Colors.red
+                      : accent),
             isLoading: _audioHandler.isTranscribingAudio || _isGeneratingImage,
             semanticsId: 'send_button',
           ),
