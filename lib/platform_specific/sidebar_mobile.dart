@@ -65,9 +65,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
   @override
   void initState() {
     super.initState();
-    // Chat loading handled by main.dart and ChatSyncService
-    // unawaited(_loadChatsAndRefresh());
-    // _startAutoRefresh();
+    // Chat loading handled by AppInitializationService and ChatSyncService
     _searchController.addListener(_onSearchChanged);
     unawaited(_loadProfile());
     _chatUpdatesSub = ChatStorageService.changes.listen((changedChatId) {
