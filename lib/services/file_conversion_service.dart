@@ -52,10 +52,13 @@ class FileConversionService {
         final uploadLimiter = UploadRateLimiter();
         if (!uploadLimiter.isUploadAllowed(userId)) {
           final timeUntilReset = uploadLimiter.getTimeUntilReset(userId);
-          final minutes = timeUntilReset != null ? (timeUntilReset / 60).ceil() : 5;
+          final minutes = timeUntilReset != null
+              ? (timeUntilReset / 60).ceil()
+              : 5;
           return {
             'success': false,
-            'error': 'Too many uploads. Please wait $minutes minute(s) before trying again.',
+            'error':
+                'Too many uploads. Please wait $minutes minute(s) before trying again.',
             'markdown': null,
           };
         }
@@ -85,15 +88,29 @@ class FileConversionService {
       }
 
       // Validate file before upload (size, MIME type, archive content)
-      debugPrint('═══════════════════════════════════════════════════════════');
-      debugPrint('🔒 VALIDATING FILE UPLOAD');
-      debugPrint('File: ${file.path.split('/').last}');
-      debugPrint('═══════════════════════════════════════════════════════════');
+      if (kDebugMode) {
+        debugPrint(
+          '═══════════════════════════════════════════════════════════',
+        );
+      }
+      if (kDebugMode) {
+        debugPrint('🔒 VALIDATING FILE UPLOAD');
+      }
+      if (kDebugMode) {
+        debugPrint('File: ${file.path.split('/').last}');
+      }
+      if (kDebugMode) {
+        debugPrint(
+          '═══════════════════════════════════════════════════════════',
+        );
+      }
 
       final validationResult = await FileUploadValidator.validateFile(filePath);
 
       if (!validationResult.isValid) {
-        debugPrint('❌ VALIDATION FAILED: ${validationResult.errorMessage}');
+        if (kDebugMode) {
+          debugPrint('❌ VALIDATION FAILED: ${validationResult.errorMessage}');
+        }
         return {
           'success': false,
           'error': validationResult.errorMessage ?? 'File validation failed',
@@ -101,14 +118,26 @@ class FileConversionService {
         };
       }
 
-      debugPrint('✅ VALIDATION PASSED');
+      if (kDebugMode) {
+        debugPrint('✅ VALIDATION PASSED');
+      }
       if (validationResult.fileSizeBytes != null) {
-        debugPrint('File size: ${FileUploadValidator.formatFileSize(validationResult.fileSizeBytes!)}');
+        if (kDebugMode) {
+          debugPrint(
+            'File size: ${FileUploadValidator.formatFileSize(validationResult.fileSizeBytes!)}',
+          );
+        }
       }
       if (validationResult.mimeType != null) {
-        debugPrint('MIME type: ${validationResult.mimeType}');
+        if (kDebugMode) {
+          debugPrint('MIME type: ${validationResult.mimeType}');
+        }
       }
-      debugPrint('═══════════════════════════════════════════════════════════');
+      if (kDebugMode) {
+        debugPrint(
+          '═══════════════════════════════════════════════════════════',
+        );
+      }
 
       // Record upload attempt and API request for rate limiting
       if (userId != null) {
@@ -132,24 +161,21 @@ class FileConversionService {
       }
 
       // Validate token before use
-      final tokenError = SecureTokenHandler.validateTokenForRequest(accessToken, context: 'File conversion');
+      final tokenError = SecureTokenHandler.validateTokenForRequest(
+        accessToken,
+        context: 'File conversion',
+      );
       if (tokenError != null) {
-        return {
-          'success': false,
-          'error': tokenError,
-          'markdown': null,
-        };
+        return {'success': false, 'error': tokenError, 'markdown': null};
       }
 
       // Create Dio instance with proper timeout settings and certificate pinning
       final dio = CertificatePinning.createSecureDio(
         baseUrl: _apiBaseUrl,
-        headers: {
-          'Authorization': 'Bearer $accessToken',
-        },
+        headers: {'Authorization': 'Bearer $accessToken'},
         connectTimeout: const Duration(seconds: 30),
         receiveTimeout: const Duration(minutes: 5), // For large files
-        sendTimeout: const Duration(minutes: 5),    // For large files
+        sendTimeout: const Duration(minutes: 5), // For large files
       );
 
       // Log request with masked token
@@ -162,10 +188,7 @@ class FileConversionService {
 
       // Create multipart form data
       final formData = FormData.fromMap({
-        'file': await MultipartFile.fromFile(
-          filePath,
-          filename: fileName,
-        ),
+        'file': await MultipartFile.fromFile(filePath, filename: fileName),
       });
 
       // Send the request
@@ -201,19 +224,20 @@ class FileConversionService {
       // Check if converted content exceeds token limit (40k tokens ≈ 160k chars)
       if (markdown.length > maxCharsPerFile) {
         final estimatedTokens = (markdown.length / 4).round();
-        debugPrint('⚠️ File too large after conversion: ${markdown.length} chars (~$estimatedTokens tokens)');
+        if (kDebugMode) {
+          debugPrint(
+            '⚠️ File too large after conversion: ${markdown.length} chars (~$estimatedTokens tokens)',
+          );
+        }
         return {
           'success': false,
-          'error': 'File is too large (~$estimatedTokens tokens). Maximum allowed is $maxTokensPerFile tokens. Try a smaller file.',
+          'error':
+              'File is too large (~$estimatedTokens tokens). Maximum allowed is $maxTokensPerFile tokens. Try a smaller file.',
           'markdown': null,
         };
       }
 
-      return {
-        'success': true,
-        'error': null,
-        'markdown': markdown,
-      };
+      return {'success': true, 'error': null, 'markdown': markdown};
     } on DioException catch (e) {
       String errorMessage = 'File conversion failed';
 
@@ -253,22 +277,22 @@ class FileConversionService {
         success: false,
       );
 
-      return {
-        'success': false,
-        'error': errorMessage,
-        'markdown': null,
-      };
+      return {'success': false, 'error': errorMessage, 'markdown': null};
     } catch (e, stackTrace) {
       final errorMessage = 'Unexpected error: ${e.toString()}';
 
       // Log unexpected error with secure handling
       if (kDebugMode) {
-        debugPrint('═══════════════════════════════════════════════════════════');
+        debugPrint(
+          '═══════════════════════════════════════════════════════════',
+        );
         debugPrint('❌ FILE CONVERSION ERROR (Unexpected)');
         debugPrint('File: ${filePath.split('/').last}');
         debugPrint('Error: $errorMessage');
         debugPrint('Stack Trace: $stackTrace');
-        debugPrint('═══════════════════════════════════════════════════════════');
+        debugPrint(
+          '═══════════════════════════════════════════════════════════',
+        );
       }
 
       return {
@@ -297,7 +321,9 @@ class FileConversionService {
       }
 
       final tokenError = SecureTokenHandler.validateTokenForRequest(
-          accessToken, context: 'File conversion');
+        accessToken,
+        context: 'File conversion',
+      );
       if (tokenError != null) {
         return {'success': false, 'error': tokenError, 'markdown': null};
       }
@@ -330,7 +356,8 @@ class FileConversionService {
         final estimatedTokens = (markdown.length / 4).round();
         return {
           'success': false,
-          'error': 'File is too large (~$estimatedTokens tokens). Maximum allowed is $maxTokensPerFile tokens.',
+          'error':
+              'File is too large (~$estimatedTokens tokens). Maximum allowed is $maxTokensPerFile tokens.',
           'markdown': null,
         };
       }

@@ -288,8 +288,12 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
     try {
       builtWidgets = generator.buildWidgets(widget.text, config: config);
     } catch (error, stackTrace) {
-      debugPrint('Markdown parsing error: $error');
-      debugPrint('Stack trace: $stackTrace');
+      if (kDebugMode) {
+        debugPrint('Markdown parsing error: $error');
+      }
+      if (kDebugMode) {
+        debugPrint('Stack trace: $stackTrace');
+      }
       builtWidgets = <Widget>[
         Text(
           widget.text,
@@ -702,7 +706,9 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
       }).timeout(
         const Duration(seconds: 2),
         onTimeout: () {
-          debugPrint('Highlight timeout for language: ${normalizedLanguage.isEmpty ? '(auto-detect)' : normalizedLanguage}');
+          if (kDebugMode) {
+            debugPrint('Highlight timeout for language: ${normalizedLanguage.isEmpty ? '(auto-detect)' : normalizedLanguage}');
+          }
           return <hi.Node>[];
         },
       );
@@ -725,9 +731,13 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
       }
     } catch (e, stackTrace) {
       final String langDesc = normalizedLanguage.isEmpty ? '(auto-detect)' : normalizedLanguage;
-      debugPrint('Highlight error for language "$langDesc": $e');
+      if (kDebugMode) {
+        debugPrint('Highlight error for language "$langDesc": $e');
+      }
       if (e is! TimeoutException) {
-        debugPrint('Stack trace: $stackTrace');
+        if (kDebugMode) {
+          debugPrint('Stack trace: $stackTrace');
+        }
       }
       // Fallback to plain text
       if (mounted) {
@@ -932,13 +942,17 @@ List<TextSpan> _convertNodesSafely(
       try {
         spans.addAll(_collectSpans(node, theme, baseStyle, null));
       } catch (e) {
-        debugPrint('Error converting node: $e');
+        if (kDebugMode) {
+          debugPrint('Error converting node: $e');
+        }
         // Skip problematic nodes
         continue;
       }
     }
   } catch (e) {
-    debugPrint('Error in _convertNodesSafely: $e');
+    if (kDebugMode) {
+      debugPrint('Error in _convertNodesSafely: $e');
+    }
     return <TextSpan>[];
   }
   return spans;
@@ -959,7 +973,9 @@ List<TextSpan> _collectSpans(
 
     // DEBUG: Log unknown classNames
     if (className.isNotEmpty && !theme.containsKey(className)) {
-      debugPrint('⚠️ Unknown syntax className: "$className" - value: "${node.value}"');
+      if (kDebugMode) {
+        debugPrint('⚠️ Unknown syntax className: "$className" - value: "${node.value}"');
+      }
     }
 
     TextStyle? themeStyle = className.isNotEmpty
@@ -995,7 +1011,9 @@ List<TextSpan> _collectSpans(
           _collectSpans(child, theme, baseStyle, themeStyle ?? parentThemeStyle),
         );
       } catch (e) {
-        debugPrint('Error collecting child spans: $e');
+        if (kDebugMode) {
+          debugPrint('Error collecting child spans: $e');
+        }
         // Skip problematic child nodes
         continue;
       }
@@ -1007,7 +1025,9 @@ List<TextSpan> _collectSpans(
 
     return <TextSpan>[TextSpan(children: childSpans, style: effectiveStyle)];
   } catch (error) {
-    debugPrint('Error in _collectSpans: $error');
+    if (kDebugMode) {
+      debugPrint('Error in _collectSpans: $error');
+    }
     // Return a safe fallback span
     final String fallbackText = node.value ?? '';
     return fallbackText.isNotEmpty
@@ -1123,7 +1143,9 @@ class LatexNode extends SpanNode {
 
       return mathWidget;
     } catch (e) {
-      debugPrint('LaTeX rendering error: $e');
+      if (kDebugMode) {
+        debugPrint('LaTeX rendering error: $e');
+      }
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
         decoration: BoxDecoration(

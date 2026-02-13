@@ -215,7 +215,9 @@ class ImageStorageService {
       // Notify listeners that this image was deleted
       _deletedImagesController.add(storagePath);
 
-      debugPrint('🗑️ [ImageStorage] Deleted and notified: $storagePath');
+      if (kDebugMode) {
+        debugPrint('🗑️ [ImageStorage] Deleted and notified: $storagePath');
+      }
     } catch (e) {
       throw Exception('Failed to delete encrypted image: $e');
     }
@@ -260,7 +262,9 @@ class ImageStorageService {
           )
           .toList();
     } catch (e) {
-      debugPrint('Failed to list user images: $e');
+      if (kDebugMode) {
+        debugPrint('Failed to list user images: $e');
+      }
       throw Exception('Failed to list images: $e');
     }
   }
@@ -315,7 +319,9 @@ class ImageStorageService {
               }
             }
           } catch (e) {
-            debugPrint('Failed to decrypt chat name: $e');
+            if (kDebugMode) {
+              debugPrint('Failed to decrypt chat name: $e');
+            }
           }
         }
 
@@ -324,7 +330,9 @@ class ImageStorageService {
 
       return result;
     } catch (e) {
-      debugPrint('Failed to find chats using image: $e');
+      if (kDebugMode) {
+        debugPrint('Failed to find chats using image: $e');
+      }
       throw Exception('Failed to find chats using image: $e');
     }
   }

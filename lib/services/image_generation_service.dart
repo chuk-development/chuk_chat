@@ -150,7 +150,9 @@ class ImageGenerationService {
           // Download image
           final imageResponse = await http.get(Uri.parse(imageUrl));
           if (imageResponse.statusCode != 200) {
-            debugPrint('Failed to download generated image: ${imageResponse.statusCode}');
+            if (kDebugMode) {
+              debugPrint('Failed to download generated image: ${imageResponse.statusCode}');
+            }
           } else {
             imageBytes = imageResponse.bodyBytes;
 
@@ -158,11 +160,15 @@ class ImageGenerationService {
             final user = SupabaseService.auth.currentUser;
             if (user != null && imageBytes.isNotEmpty) {
               encryptedPath = await ImageStorageService.uploadEncryptedImage(imageBytes);
-              debugPrint('Stored generated image at: $encryptedPath');
+              if (kDebugMode) {
+                debugPrint('Stored generated image at: $encryptedPath');
+              }
             }
           }
         } catch (e) {
-          debugPrint('Error storing generated image: $e');
+          if (kDebugMode) {
+            debugPrint('Error storing generated image: $e');
+          }
           // Continue even if storage fails - we still have the URL
         }
       }
@@ -178,7 +184,9 @@ class ImageGenerationService {
         costEur: costEur,
       );
     } catch (e) {
-      debugPrint('Image generation error: $e');
+      if (kDebugMode) {
+        debugPrint('Image generation error: $e');
+      }
       return ImageGenerationResult.error('Image generation failed: $e');
     }
   }

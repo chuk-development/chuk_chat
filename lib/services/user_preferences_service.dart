@@ -23,7 +23,9 @@ class UserPreferencesService {
     try {
       final session = SupabaseService.auth.currentSession;
       if (session == null) {
-        debugPrint('No authenticated session found');
+        if (kDebugMode) {
+          debugPrint('No authenticated session found');
+        }
         return false;
       }
 
@@ -39,7 +41,9 @@ class UserPreferencesService {
           .select();
 
       if (response.isNotEmpty) {
-        debugPrint('Successfully saved model preference: $modelId');
+        if (kDebugMode) {
+          debugPrint('Successfully saved model preference: $modelId');
+        }
         await ModelCacheService.saveSelectedModel(userId, modelId);
         // Update in-memory cache immediately
         _cachedSelectedModel = modelId;
@@ -48,7 +52,9 @@ class UserPreferencesService {
         ModelSelectionEventBus().notifyModelSelected(modelId);
         return true;
       } else {
-        debugPrint('Failed to save model preference: empty response');
+        if (kDebugMode) {
+          debugPrint('Failed to save model preference: empty response');
+        }
         return false;
       }
     } catch (e) {
@@ -56,7 +62,9 @@ class UserPreferencesService {
       if (userId != null) {
         await ModelCacheService.saveSelectedModel(userId, modelId);
       }
-      debugPrint('Error saving model preference: $e');
+      if (kDebugMode) {
+        debugPrint('Error saving model preference: $e');
+      }
       return false;
     }
   }
@@ -80,21 +88,27 @@ class UserPreferencesService {
     if (_cachedSelectedModel != null &&
         _selectedModelFetchedAt != null &&
         now.difference(_selectedModelFetchedAt!) < _kSelectedModelTtl) {
-      debugPrint('Using cached model preference: $_cachedSelectedModel');
+      if (kDebugMode) {
+        debugPrint('Using cached model preference: $_cachedSelectedModel');
+      }
       return _cachedSelectedModel;
     }
 
     Future<String?> performFetch() async {
       final userId = SupabaseService.auth.currentUser?.id;
       if (userId == null) {
-        debugPrint('No authenticated user found');
+        if (kDebugMode) {
+          debugPrint('No authenticated user found');
+        }
         return null;
       }
 
       // STEP 1: Load from local cache FIRST (instant)
       final cachedModel = await ModelCacheService.loadSelectedModel(userId);
       if (cachedModel != null && cachedModel.isNotEmpty) {
-        debugPrint('Loaded model preference from cache: $cachedModel');
+        if (kDebugMode) {
+          debugPrint('Loaded model preference from cache: $cachedModel');
+        }
         _cachedSelectedModel = cachedModel;
         _selectedModelFetchedAt = DateTime.now();
 
@@ -127,7 +141,9 @@ class UserPreferencesService {
 
       if (response != null && response['selected_model_id'] != null) {
         final modelId = response['selected_model_id'] as String;
-        debugPrint('Loaded model preference from network: $modelId');
+        if (kDebugMode) {
+          debugPrint('Loaded model preference from network: $modelId');
+        }
         await ModelCacheService.saveSelectedModel(userId, modelId);
         _cachedSelectedModel = modelId;
         _selectedModelFetchedAt = DateTime.now();
@@ -136,11 +152,15 @@ class UserPreferencesService {
         await ModelCacheService.saveSelectedModel(userId, '');
         _cachedSelectedModel = null;
         _selectedModelFetchedAt = DateTime.now();
-        debugPrint('No model preference found for user');
+        if (kDebugMode) {
+          debugPrint('No model preference found for user');
+        }
         return null;
       }
     } catch (e) {
-      debugPrint('Error fetching model preference: $e');
+      if (kDebugMode) {
+        debugPrint('Error fetching model preference: $e');
+      }
       return null;
     }
   }
@@ -157,7 +177,9 @@ class UserPreferencesService {
       if (response != null && response['selected_model_id'] != null) {
         final modelId = response['selected_model_id'] as String;
         if (modelId != _cachedSelectedModel) {
-          debugPrint('Model preference updated from network: $modelId');
+          if (kDebugMode) {
+            debugPrint('Model preference updated from network: $modelId');
+          }
           await ModelCacheService.saveSelectedModel(userId, modelId);
           _cachedSelectedModel = modelId;
           _selectedModelFetchedAt = DateTime.now();
@@ -166,7 +188,9 @@ class UserPreferencesService {
         }
       }
     } catch (e) {
-      debugPrint('Background model sync failed: $e');
+      if (kDebugMode) {
+        debugPrint('Background model sync failed: $e');
+      }
     }
   }
 
@@ -175,7 +199,9 @@ class UserPreferencesService {
     try {
       final session = SupabaseService.auth.currentSession;
       if (session == null) {
-        debugPrint('No authenticated session found');
+        if (kDebugMode) {
+          debugPrint('No authenticated session found');
+        }
         return false;
       }
 
@@ -189,17 +215,23 @@ class UserPreferencesService {
 
       final int deletedCount = response.length;
       if (deletedCount > 0) {
-        debugPrint('Cleared $deletedCount model preference(s) for user');
+        if (kDebugMode) {
+          debugPrint('Cleared $deletedCount model preference(s) for user');
+        }
         await ModelCacheService.saveSelectedModel(userId, '');
         // Clear in-memory cache
         _cachedSelectedModel = null;
         _selectedModelFetchedAt = null;
         return true;
       }
-      debugPrint('No model preferences found to clear for user');
+      if (kDebugMode) {
+        debugPrint('No model preferences found to clear for user');
+      }
       return false;
     } catch (e) {
-      debugPrint('Error clearing model preference: $e');
+      if (kDebugMode) {
+        debugPrint('Error clearing model preference: $e');
+      }
       return false;
     }
   }
@@ -212,7 +244,9 @@ class UserPreferencesService {
     try {
       final session = SupabaseService.auth.currentSession;
       if (session == null) {
-        debugPrint('No authenticated session found');
+        if (kDebugMode) {
+          debugPrint('No authenticated session found');
+        }
         return false;
       }
 
@@ -229,9 +263,11 @@ class UserPreferencesService {
           .select();
 
       if (response.isNotEmpty) {
-        debugPrint(
-          'Successfully saved provider preference: $modelId -> $providerSlug',
-        );
+        if (kDebugMode) {
+          debugPrint(
+            'Successfully saved provider preference: $modelId -> $providerSlug',
+          );
+        }
         await ModelCacheService.updateProviderPreference(
           userId,
           modelId,
@@ -243,7 +279,9 @@ class UserPreferencesService {
         }
         return true;
       } else {
-        debugPrint('Failed to save provider preference: empty response');
+        if (kDebugMode) {
+          debugPrint('Failed to save provider preference: empty response');
+        }
         return false;
       }
     } catch (e) {
@@ -257,7 +295,9 @@ class UserPreferencesService {
           providerSlug,
         );
       }
-      debugPrint('Error saving provider preference: $e');
+      if (kDebugMode) {
+        debugPrint('Error saving provider preference: $e');
+      }
       return false;
     }
   }
@@ -267,7 +307,9 @@ class UserPreferencesService {
     try {
       final session = SupabaseService.auth.currentSession;
       if (session == null) {
-        debugPrint('No authenticated session found');
+        if (kDebugMode) {
+          debugPrint('No authenticated session found');
+        }
         return false;
       }
 
@@ -282,7 +324,9 @@ class UserPreferencesService {
 
       final int deletedCount = response.length;
       if (deletedCount > 0) {
-        debugPrint('Cleared provider preference for model: $modelId');
+        if (kDebugMode) {
+          debugPrint('Cleared provider preference for model: $modelId');
+        }
         await ModelCacheService.clearProviderPreference(userId, modelId);
         // Remove from in-memory cache immediately to avoid stale data
         if (_cachedProviderPreferences != null) {
@@ -291,14 +335,18 @@ class UserPreferencesService {
         return true;
       }
 
-      debugPrint('No provider preference found to clear for model: $modelId');
+      if (kDebugMode) {
+        debugPrint('No provider preference found to clear for model: $modelId');
+      }
       return false;
     } catch (e) {
       final userId = SupabaseService.auth.currentUser?.id;
       if (userId != null) {
         await ModelCacheService.clearProviderPreference(userId, modelId);
       }
-      debugPrint('Error clearing provider preference for $modelId: $e');
+      if (kDebugMode) {
+        debugPrint('Error clearing provider preference for $modelId: $e');
+      }
       return false;
     }
   }
@@ -308,7 +356,9 @@ class UserPreferencesService {
     try {
       final session = SupabaseService.auth.currentSession;
       if (session == null) {
-        debugPrint('No authenticated session found');
+        if (kDebugMode) {
+          debugPrint('No authenticated session found');
+        }
         return null;
       }
 
@@ -323,7 +373,9 @@ class UserPreferencesService {
 
       if (response != null && response['provider_slug'] != null) {
         final providerSlug = response['provider_slug'] as String;
-        debugPrint('Loaded provider preference: $modelId -> $providerSlug');
+        if (kDebugMode) {
+          debugPrint('Loaded provider preference: $modelId -> $providerSlug');
+        }
         await ModelCacheService.updateProviderPreference(
           userId,
           modelId,
@@ -331,7 +383,9 @@ class UserPreferencesService {
         );
         return providerSlug;
       } else {
-        debugPrint('No provider preference found for model: $modelId');
+        if (kDebugMode) {
+          debugPrint('No provider preference found for model: $modelId');
+        }
         return null;
       }
     } catch (e) {
@@ -340,13 +394,17 @@ class UserPreferencesService {
         final cached = await ModelCacheService.loadProviderPreferences(userId);
         if (cached.containsKey(modelId)) {
           final providerSlug = cached[modelId]!;
-          debugPrint(
-            'Loaded cached provider preference: $modelId -> $providerSlug',
-          );
+          if (kDebugMode) {
+            debugPrint(
+              'Loaded cached provider preference: $modelId -> $providerSlug',
+            );
+          }
           return providerSlug;
         }
       }
-      debugPrint('Error loading provider preference: $e');
+      if (kDebugMode) {
+        debugPrint('Error loading provider preference: $e');
+      }
       return null;
     }
   }
@@ -367,7 +425,9 @@ class UserPreferencesService {
       try {
         final session = SupabaseService.auth.currentSession;
         if (session == null) {
-          debugPrint('No authenticated session found');
+          if (kDebugMode) {
+            debugPrint('No authenticated session found');
+          }
           return {};
         }
 
@@ -384,7 +444,9 @@ class UserPreferencesService {
               row['provider_slug'] as String;
         }
 
-        debugPrint('Loaded ${preferences.length} provider preferences');
+        if (kDebugMode) {
+          debugPrint('Loaded ${preferences.length} provider preferences');
+        }
         await ModelCacheService.saveProviderPreferences(userId, preferences);
         _cachedProviderPreferences = preferences;
         _providerPrefsFetchedAt = DateTime.now();
@@ -396,15 +458,19 @@ class UserPreferencesService {
             userId,
           );
           if (cached.isNotEmpty) {
-            debugPrint(
-              'Loaded ${cached.length} cached provider preferences for offline use',
-            );
+            if (kDebugMode) {
+              debugPrint(
+                'Loaded ${cached.length} cached provider preferences for offline use',
+              );
+            }
             _cachedProviderPreferences = cached;
             _providerPrefsFetchedAt = DateTime.now();
             return Map<String, String>.from(cached);
           }
         }
-        debugPrint('Error loading all provider preferences: $e');
+        if (kDebugMode) {
+          debugPrint('Error loading all provider preferences: $e');
+        }
         return {};
       }
     }
@@ -422,7 +488,9 @@ class UserPreferencesService {
     try {
       final session = SupabaseService.auth.currentSession;
       if (session == null) {
-        debugPrint('No authenticated session found');
+        if (kDebugMode) {
+          debugPrint('No authenticated session found');
+        }
         return false;
       }
 
@@ -435,14 +503,25 @@ class UserPreferencesService {
           .select();
 
       final int deletedCount = response.length;
+
+      // Clear in-memory cache to prevent stale data
+      _cachedProviderPreferences = null;
+      _providerPrefsFetchedAt = null;
+
       if (deletedCount > 0) {
-        debugPrint('Cleared $deletedCount provider preference(s) for user');
+        if (kDebugMode) {
+          debugPrint('Cleared $deletedCount provider preference(s) for user');
+        }
         return true;
       }
-      debugPrint('No provider preferences found to clear for user');
+      if (kDebugMode) {
+        debugPrint('No provider preferences found to clear for user');
+      }
       return false;
     } catch (e) {
-      debugPrint('Error clearing provider preferences: $e');
+      if (kDebugMode) {
+        debugPrint('Error clearing provider preferences: $e');
+      }
       return false;
     }
   }
@@ -452,7 +531,9 @@ class UserPreferencesService {
     try {
       final session = SupabaseService.auth.currentSession;
       if (session == null) {
-        debugPrint('No authenticated session found');
+        if (kDebugMode) {
+          debugPrint('No authenticated session found');
+        }
         return false;
       }
 
@@ -470,7 +551,9 @@ class UserPreferencesService {
             .maybeSingle();
         selectedModelId = (response?['selected_model_id'] as String?)?.trim();
       } catch (error) {
-        debugPrint('Unable to load existing model preference: $error');
+        if (kDebugMode) {
+          debugPrint('Unable to load existing model preference: $error');
+        }
       }
 
       selectedModelId ??= await ModelCacheService.loadSelectedModel(userId);
@@ -492,14 +575,20 @@ class UserPreferencesService {
           .select();
 
       if (response.isNotEmpty) {
-        debugPrint('Successfully saved encrypted system prompt');
+        if (kDebugMode) {
+          debugPrint('Successfully saved encrypted system prompt');
+        }
         return true;
       } else {
-        debugPrint('Failed to save system prompt: empty response');
+        if (kDebugMode) {
+          debugPrint('Failed to save system prompt: empty response');
+        }
         return false;
       }
     } catch (e) {
-      debugPrint('Error saving system prompt: $e');
+      if (kDebugMode) {
+        debugPrint('Error saving system prompt: $e');
+      }
       return false;
     }
   }
@@ -509,7 +598,9 @@ class UserPreferencesService {
     try {
       final session = SupabaseService.auth.currentSession;
       if (session == null) {
-        debugPrint('No authenticated session found');
+        if (kDebugMode) {
+          debugPrint('No authenticated session found');
+        }
         return null;
       }
 
@@ -529,16 +620,22 @@ class UserPreferencesService {
           encryptedPrompt,
         );
 
-        debugPrint(
-          'Loaded encrypted system prompt: ${decryptedPrompt.length} characters',
-        );
+        if (kDebugMode) {
+          debugPrint(
+            'Loaded encrypted system prompt: ${decryptedPrompt.length} characters',
+          );
+        }
         return decryptedPrompt;
       } else {
-        debugPrint('No system prompt found for user');
+        if (kDebugMode) {
+          debugPrint('No system prompt found for user');
+        }
         return null;
       }
     } catch (e) {
-      debugPrint('Error loading system prompt: $e');
+      if (kDebugMode) {
+        debugPrint('Error loading system prompt: $e');
+      }
       return null;
     }
   }
@@ -548,7 +645,9 @@ class UserPreferencesService {
     try {
       final session = SupabaseService.auth.currentSession;
       if (session == null) {
-        debugPrint('No authenticated session found');
+        if (kDebugMode) {
+          debugPrint('No authenticated session found');
+        }
         return false;
       }
 
@@ -562,14 +661,20 @@ class UserPreferencesService {
           .select();
 
       if (response.isNotEmpty) {
-        debugPrint('Successfully cleared system prompt');
+        if (kDebugMode) {
+          debugPrint('Successfully cleared system prompt');
+        }
         return true;
       } else {
-        debugPrint('No system prompt found to clear');
+        if (kDebugMode) {
+          debugPrint('No system prompt found to clear');
+        }
         return false;
       }
     } catch (e) {
-      debugPrint('Error clearing system prompt: $e');
+      if (kDebugMode) {
+        debugPrint('Error clearing system prompt: $e');
+      }
       return false;
     }
   }

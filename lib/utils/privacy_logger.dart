@@ -54,7 +54,7 @@ class PrivacyLogger {
         debugPrint('   Error: $error');
       }
       if (stackTrace != null) {
-        debugPrint('   Stack: $stackTrace');
+          debugPrint('   Stack: $stackTrace');
       }
     }
   }

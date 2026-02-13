@@ -107,13 +107,17 @@ class ProjectStorageService {
           final project = Project.fromJson(json);
           _projectsById[project.id] = project;
         }
-        debugPrint('✅ [ProjectStorage] Loaded ${_projectsById.length} projects from cache');
+        if (kDebugMode) {
+          debugPrint('✅ [ProjectStorage] Loaded ${_projectsById.length} projects from cache');
+        }
         _cacheLoaded = true;
         // Use immediate notify for cache load - don't auto-save (we just loaded!)
         _notifyChangesImmediate();
       }
     } catch (e) {
-      debugPrint('⚠️ [ProjectStorage] Failed to load cache: $e');
+      if (kDebugMode) {
+        debugPrint('⚠️ [ProjectStorage] Failed to load cache: $e');
+      }
     }
   }
 
@@ -123,9 +127,13 @@ class ProjectStorageService {
       final prefs = await SharedPreferences.getInstance();
       final jsonList = _projectsById.values.map((p) => p.toJson()).toList();
       await prefs.setString(_cacheKey, jsonEncode(jsonList));
-      debugPrint('✅ [ProjectStorage] Saved ${jsonList.length} projects to cache');
+      if (kDebugMode) {
+        debugPrint('✅ [ProjectStorage] Saved ${jsonList.length} projects to cache');
+      }
     } catch (e) {
-      debugPrint('⚠️ [ProjectStorage] Failed to save cache: $e');
+      if (kDebugMode) {
+        debugPrint('⚠️ [ProjectStorage] Failed to save cache: $e');
+      }
     }
   }
 
@@ -141,7 +149,9 @@ class ProjectStorageService {
 
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
-      debugPrint('⚠️ [ProjectStorage] No user signed in, clearing projects');
+      if (kDebugMode) {
+        debugPrint('⚠️ [ProjectStorage] No user signed in, clearing projects');
+      }
       _projectsById.clear();
       _notifyChanges(updateCache: false);
       return;
@@ -149,7 +159,9 @@ class ProjectStorageService {
 
     // Prevent concurrent loads - wait for existing load to finish
     if (_isLoading) {
-      debugPrint('⏳ [ProjectStorage] Load already in progress, waiting...');
+      if (kDebugMode) {
+        debugPrint('⏳ [ProjectStorage] Load already in progress, waiting...');
+      }
       return _loadingCompleter!.future;
     }
     _loadingCompleter = Completer<void>();
@@ -163,7 +175,9 @@ class ProjectStorageService {
           .eq('user_id', user.id)
           .order('created_at', ascending: false);
 
-      debugPrint('✅ [ProjectStorage] Loaded ${projectRows.length} projects from server');
+      if (kDebugMode) {
+        debugPrint('✅ [ProjectStorage] Loaded ${projectRows.length} projects from server');
+      }
 
       // Skip network fetch work if no projects
       if (projectRows.isEmpty) {
@@ -224,7 +238,9 @@ class ProjectStorageService {
       // Notify without auto-save since we just saved
       _notifyChanges(updateCache: false);
     } catch (e, st) {
-      debugPrint('❌ [ProjectStorage] Failed to load projects: $e\n$st');
+      if (kDebugMode) {
+        debugPrint('❌ [ProjectStorage] Failed to load projects: $e\n$st');
+      }
       // Don't rethrow if we have cached data
       if (_projectsById.isEmpty) rethrow;
     } finally {
@@ -265,10 +281,14 @@ class ProjectStorageService {
       _projectsById[project.id] = project;
       _notifyChanges();
 
-      debugPrint('✅ [ProjectStorage] Created project: ${project.id}');
+      if (kDebugMode) {
+        debugPrint('✅ [ProjectStorage] Created project: ${project.id}');
+      }
       return project;
     } catch (e, st) {
-      debugPrint('❌ [ProjectStorage] Failed to create project: $e\n$st');
+      if (kDebugMode) {
+        debugPrint('❌ [ProjectStorage] Failed to create project: $e\n$st');
+      }
       rethrow;
     }
   }
@@ -315,10 +335,14 @@ class ProjectStorageService {
       _projectsById[projectId] = project;
       _notifyChanges();
 
-      debugPrint('✅ [ProjectStorage] Updated project: $projectId');
+      if (kDebugMode) {
+        debugPrint('✅ [ProjectStorage] Updated project: $projectId');
+      }
       return project;
     } catch (e, st) {
-      debugPrint('❌ [ProjectStorage] Failed to update project: $e\n$st');
+      if (kDebugMode) {
+        debugPrint('❌ [ProjectStorage] Failed to update project: $e\n$st');
+      }
       rethrow;
     }
   }
@@ -343,9 +367,13 @@ class ProjectStorageService {
       }
       _notifyChanges();
 
-      debugPrint('🗑️ [ProjectStorage] Deleted project: $projectId');
+      if (kDebugMode) {
+        debugPrint('🗑️ [ProjectStorage] Deleted project: $projectId');
+      }
     } catch (e, st) {
-      debugPrint('❌ [ProjectStorage] Failed to delete project: $e\n$st');
+      if (kDebugMode) {
+        debugPrint('❌ [ProjectStorage] Failed to delete project: $e\n$st');
+      }
       rethrow;
     }
   }
@@ -370,11 +398,15 @@ class ProjectStorageService {
         _notifyChanges();
       }
 
-      debugPrint(
+      if (kDebugMode) {
+        debugPrint(
         '📦 [ProjectStorage] ${archived ? 'Archived' : 'Unarchived'} project: $projectId',
-      );
+        );
+      }
     } catch (e, st) {
-      debugPrint('❌ [ProjectStorage] Failed to archive project: $e\n$st');
+      if (kDebugMode) {
+        debugPrint('❌ [ProjectStorage] Failed to archive project: $e\n$st');
+      }
       rethrow;
     }
   }
@@ -407,14 +439,20 @@ class ProjectStorageService {
         _notifyChanges();
       }
 
-      debugPrint('✅ [ProjectStorage] Added chat $chatId to project $projectId');
+      if (kDebugMode) {
+        debugPrint('✅ [ProjectStorage] Added chat $chatId to project $projectId');
+      }
     } catch (e, st) {
       // Ignore unique constraint violations (chat already in project)
       if (e.toString().contains('unique_project_chat')) {
-        debugPrint('⚠️ [ProjectStorage] Chat already in project');
+        if (kDebugMode) {
+          debugPrint('⚠️ [ProjectStorage] Chat already in project');
+        }
         return;
       }
-      debugPrint('❌ [ProjectStorage] Failed to add chat to project: $e\n$st');
+      if (kDebugMode) {
+        debugPrint('❌ [ProjectStorage] Failed to add chat to project: $e\n$st');
+      }
       rethrow;
     }
   }
@@ -444,13 +482,17 @@ class ProjectStorageService {
         _notifyChanges();
       }
 
-      debugPrint(
+      if (kDebugMode) {
+        debugPrint(
         '✅ [ProjectStorage] Removed chat $chatId from project $projectId',
-      );
+        );
+      }
     } catch (e, st) {
-      debugPrint(
+      if (kDebugMode) {
+        debugPrint(
         '❌ [ProjectStorage] Failed to remove chat from project: $e\n$st',
-      );
+        );
+      }
       rethrow;
     }
   }
@@ -554,12 +596,16 @@ class ProjectStorageService {
           }
 
           markdownSummary = '**File: $fileName**\n\n```$extension\n$content\n```';
-          debugPrint('📝 [ProjectStorage] Plain text file read directly: $fileName');
+          if (kDebugMode) {
+            debugPrint('📝 [ProjectStorage] Plain text file read directly: $fileName');
+          }
         } else if (filePath != null && FileConstants.requiresConversion(extension)) {
           // Binary file: use convert-file API - notify UI
           onConversionStart?.call();
           try {
-            debugPrint('📝 [ProjectStorage] Generating markdown via API for: $fileName');
+            if (kDebugMode) {
+              debugPrint('📝 [ProjectStorage] Generating markdown via API for: $fileName');
+            }
             final result = await FileConversionService.convertFile(
               filePath: filePath,
               accessToken: session.accessToken,
@@ -567,7 +613,9 @@ class ProjectStorageService {
             );
             if (result['success'] == true && result['markdown'] != null) {
               markdownSummary = result['markdown'] as String;
-              debugPrint('✅ [ProjectStorage] Markdown generated successfully');
+              if (kDebugMode) {
+                debugPrint('✅ [ProjectStorage] Markdown generated successfully');
+              }
             } else {
               // Propagate the error to the UI instead of silently continuing
               final error = result['error'] as String?;
@@ -575,13 +623,17 @@ class ProjectStorageService {
                 // Token limit error - throw to show to user
                 throw StateError(error);
               }
-              debugPrint('⚠️ [ProjectStorage] Markdown generation failed: $error');
+              if (kDebugMode) {
+                debugPrint('⚠️ [ProjectStorage] Markdown generation failed: $error');
+              }
             }
           } catch (e) {
             if (e is StateError) {
               rethrow; // Re-throw token limit errors
             }
-            debugPrint('⚠️ [ProjectStorage] Markdown generation error: $e');
+            if (kDebugMode) {
+              debugPrint('⚠️ [ProjectStorage] Markdown generation error: $e');
+            }
             // Continue without markdown - don't fail the upload for other errors
           }
         }
@@ -617,10 +669,14 @@ class ProjectStorageService {
         _notifyChanges();
       }
 
-      debugPrint('✅ [ProjectStorage] Uploaded file: $fileName to $projectId');
+      if (kDebugMode) {
+        debugPrint('✅ [ProjectStorage] Uploaded file: $fileName to $projectId');
+      }
       return projectFile;
     } catch (e, st) {
-      debugPrint('❌ [ProjectStorage] Failed to upload file: $e\n$st');
+      if (kDebugMode) {
+        debugPrint('❌ [ProjectStorage] Failed to upload file: $e\n$st');
+      }
       rethrow;
     }
   }
@@ -650,7 +706,9 @@ class ProjectStorageService {
               .from(bucketName)
               .remove([file.storagePath]);
         } catch (e) {
-          debugPrint('⚠️ [ProjectStorage] Failed to delete file from storage: $e');
+          if (kDebugMode) {
+            debugPrint('⚠️ [ProjectStorage] Failed to delete file from storage: $e');
+          }
           // Continue even if storage deletion fails
         }
       }
@@ -663,9 +721,13 @@ class ProjectStorageService {
         _notifyChanges();
       }
 
-      debugPrint('🗑️ [ProjectStorage] Deleted file: $fileId');
+      if (kDebugMode) {
+        debugPrint('🗑️ [ProjectStorage] Deleted file: $fileId');
+      }
     } catch (e, st) {
-      debugPrint('❌ [ProjectStorage] Failed to delete file: $e\n$st');
+      if (kDebugMode) {
+        debugPrint('❌ [ProjectStorage] Failed to delete file: $e\n$st');
+      }
       rethrow;
     }
   }
@@ -719,7 +781,9 @@ class ProjectStorageService {
 
       return decryptedContent;
     } catch (e, st) {
-      debugPrint('❌ [ProjectStorage] Failed to download/decrypt file: $e\n$st');
+      if (kDebugMode) {
+        debugPrint('❌ [ProjectStorage] Failed to download/decrypt file: $e\n$st');
+      }
       rethrow;
     }
   }
@@ -761,7 +825,9 @@ class ProjectStorageService {
       // Return as bytes
       return Uint8List.fromList(utf8.encode(decryptedContent));
     } catch (e, st) {
-      debugPrint('❌ [ProjectStorage] Failed to download file: $e\n$st');
+      if (kDebugMode) {
+        debugPrint('❌ [ProjectStorage] Failed to download file: $e\n$st');
+      }
       rethrow;
     }
   }
@@ -836,9 +902,13 @@ class ProjectStorageService {
         _notifyChanges();
       }
 
-      debugPrint('✅ [ProjectStorage] Updated file content: $fileId');
+      if (kDebugMode) {
+        debugPrint('✅ [ProjectStorage] Updated file content: $fileId');
+      }
     } catch (e, st) {
-      debugPrint('❌ [ProjectStorage] Failed to update file: $e\n$st');
+      if (kDebugMode) {
+        debugPrint('❌ [ProjectStorage] Failed to update file: $e\n$st');
+      }
       rethrow;
     }
   }
@@ -875,9 +945,13 @@ class ProjectStorageService {
         _notifyChanges();
       }
 
-      debugPrint('✅ [ProjectStorage] Updated file markdown: $fileId');
+      if (kDebugMode) {
+        debugPrint('✅ [ProjectStorage] Updated file markdown: $fileId');
+      }
     } catch (e, st) {
-      debugPrint('❌ [ProjectStorage] Failed to update markdown: $e\n$st');
+      if (kDebugMode) {
+        debugPrint('❌ [ProjectStorage] Failed to update markdown: $e\n$st');
+      }
       rethrow;
     }
   }

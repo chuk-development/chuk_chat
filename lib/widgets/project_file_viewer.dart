@@ -96,7 +96,9 @@ class _ProjectFileViewerState extends State<ProjectFileViewer>
           );
         } catch (e) {
           // pdfx doesn't support this platform (Linux, etc.)
-          debugPrint('⚠️ PDF viewing not supported on this platform: $e');
+          if (kDebugMode) {
+            debugPrint('⚠️ PDF viewing not supported on this platform: $e');
+          }
           _pdfNotSupported = true;
         }
       } else if (widget.file.isImage) {

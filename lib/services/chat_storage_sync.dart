@@ -76,13 +76,17 @@ class ChatStorageSync {
 
     // Skip if we're currently saving this chat (to avoid conflicts)
     if (ChatStorageState.savingChats.contains(chatId)) {
-      debugPrint('⏭️ [ChatStorage] Skipping sync for chat being saved: $chatId');
+      if (kDebugMode) {
+        debugPrint('⏭️ [ChatStorage] Skipping sync for chat being saved: $chatId');
+      }
       return;
     }
 
     // Skip if there's a pending save operation
     if (ChatStorageState.pendingSaves.containsKey(chatId)) {
-      debugPrint('⏭️ [ChatStorage] Skipping sync for chat with pending save: $chatId');
+      if (kDebugMode) {
+        debugPrint('⏭️ [ChatStorage] Skipping sync for chat with pending save: $chatId');
+      }
       return;
     }
 
@@ -109,7 +113,9 @@ class ChatStorageSync {
         final syncedUpdatedAt = chat.updatedAt ?? chat.createdAt;
 
         if (syncedUpdatedAt.isAfter(existingUpdatedAt)) {
-          debugPrint('🔄 [ChatStorage] Updating chat from sync: $chatId');
+          if (kDebugMode) {
+            debugPrint('🔄 [ChatStorage] Updating chat from sync: $chatId');
+          }
           ChatStorageState.chatsById[chatId] = chat;
           ChatStorageState.notifyChanges(chatId);
           // Also update local cache for offline access
@@ -119,7 +125,9 @@ class ChatStorageSync {
         }
       } else {
         // New chat from another device
-        debugPrint('➕ [ChatStorage] Adding new chat from sync: $chatId');
+        if (kDebugMode) {
+          debugPrint('➕ [ChatStorage] Adding new chat from sync: $chatId');
+        }
         ChatStorageState.chatsById[chatId] = chat;
         ChatStorageState.notifyChanges(chatId);
         // Also add to local cache for offline access
@@ -128,11 +136,17 @@ class ChatStorageSync {
         }
       }
     } on SecretBoxAuthenticationError {
-      debugPrint('🔐 [ChatStorage] Failed to decrypt synced chat: $chatId');
+      if (kDebugMode) {
+        debugPrint('🔐 [ChatStorage] Failed to decrypt synced chat: $chatId');
+      }
     } on FormatException catch (e) {
-      debugPrint('📄 [ChatStorage] Invalid format for synced chat: $chatId - $e');
+      if (kDebugMode) {
+        debugPrint('📄 [ChatStorage] Invalid format for synced chat: $chatId - $e');
+      }
     } catch (e) {
-      debugPrint('❌ [ChatStorage] Error merging synced chat: $chatId - $e');
+      if (kDebugMode) {
+        debugPrint('❌ [ChatStorage] Error merging synced chat: $chatId - $e');
+      }
     }
   }
 
@@ -145,11 +159,15 @@ class ChatStorageSync {
     final validRows = rows.where((row) {
       final chatId = row['id'] as String;
       if (ChatStorageState.savingChats.contains(chatId)) {
-        debugPrint('⏭️ [ChatStorage] Skipping sync for chat being saved: $chatId');
+        if (kDebugMode) {
+          debugPrint('⏭️ [ChatStorage] Skipping sync for chat being saved: $chatId');
+        }
         return false;
       }
       if (ChatStorageState.pendingSaves.containsKey(chatId)) {
-        debugPrint('⏭️ [ChatStorage] Skipping sync for chat with pending save: $chatId');
+        if (kDebugMode) {
+          debugPrint('⏭️ [ChatStorage] Skipping sync for chat with pending save: $chatId');
+        }
         return false;
       }
       final payload = row['encrypted_payload'] as String?;
@@ -158,7 +176,9 @@ class ChatStorageSync {
 
     if (validRows.isEmpty) return;
 
-    debugPrint('🔄 [ChatStorage] Batch merging ${validRows.length} chats...');
+    if (kDebugMode) {
+      debugPrint('🔄 [ChatStorage] Batch merging ${validRows.length} chats...');
+    }
 
     // Extract payloads for batch decryption
     final payloads = validRows.map((r) => r['encrypted_payload'] as String).toList();
@@ -212,17 +232,23 @@ class ChatStorageSync {
             await Future.delayed(Duration.zero);
           }
         } catch (e) {
-          debugPrint('❌ [ChatStorage] Error processing synced chat $chatId: $e');
+          if (kDebugMode) {
+            debugPrint('❌ [ChatStorage] Error processing synced chat $chatId: $e');
+          }
         }
       }
 
       // Single notification after all chats processed
       if (addedCount > 0 || updatedCount > 0) {
         ChatStorageState.notifyChanges();
-        debugPrint('✅ [ChatStorage] Batch sync complete: $addedCount added, $updatedCount updated');
+        if (kDebugMode) {
+          debugPrint('✅ [ChatStorage] Batch sync complete: $addedCount added, $updatedCount updated');
+        }
       }
     } catch (e) {
-      debugPrint('❌ [ChatStorage] Batch merge failed: $e');
+      if (kDebugMode) {
+        debugPrint('❌ [ChatStorage] Batch merge failed: $e');
+      }
       // Fall back to individual processing
       for (final row in validRows) {
         await mergeSyncedChat(row);
@@ -235,7 +261,9 @@ class ChatStorageSync {
   static void removeChatLocally(String chatId) {
     if (!ChatStorageState.chatsById.containsKey(chatId)) return;
 
-    debugPrint('🗑️ [ChatStorage] Removing locally deleted chat: $chatId');
+    if (kDebugMode) {
+      debugPrint('🗑️ [ChatStorage] Removing locally deleted chat: $chatId');
+    }
 
     // Find the index before removal
     final deletedIndex = ChatStorageState.savedChats.indexWhere((c) => c.id == chatId);

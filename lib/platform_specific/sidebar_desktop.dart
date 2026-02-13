@@ -11,6 +11,7 @@ import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart'; // Import the color extensions
 import 'package:chuk_chat/widgets/credit_display.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:flutter/foundation.dart';
 
 class SidebarDesktop extends StatefulWidget {
   final Function(String? chatId) onChatSelected;
@@ -237,19 +238,41 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
     // CRITICAL: Block rapid chat switching while another chat is loading
     // This prevents race conditions that cause data corruption
     if (ChatStorageService.isLoadingChat) {
-      debugPrint('');
-      debugPrint('═══════════════════════════════════════════════════════════');
-      debugPrint('🚫 [SIDEBAR] BLOCKED - Chat is still loading');
-      debugPrint('🚫 [SIDEBAR] User tried to click: "${chat.previewText.substring(0, chat.previewText.length > 30 ? 30 : chat.previewText.length)}..."');
-      debugPrint('═══════════════════════════════════════════════════════════');
+      if (kDebugMode) {
+        debugPrint('');
+      }
+      if (kDebugMode) {
+        debugPrint('═══════════════════════════════════════════════════════════');
+      }
+      if (kDebugMode) {
+        debugPrint('🚫 [SIDEBAR] BLOCKED - Chat is still loading');
+      }
+      if (kDebugMode) {
+        debugPrint('🚫 [SIDEBAR] User tried to click: "${chat.previewText.substring(0, chat.previewText.length > 30 ? 30 : chat.previewText.length)}..."');
+      }
+      if (kDebugMode) {
+        debugPrint('═══════════════════════════════════════════════════════════');
+      }
       return;
     }
-    debugPrint('');
-    debugPrint('═══════════════════════════════════════════════════════════');
-    debugPrint('👆 [SIDEBAR] User clicked chat: "${chat.previewText.substring(0, chat.previewText.length > 30 ? 30 : chat.previewText.length)}..."');
-    debugPrint('👆 [SIDEBAR] Chat ID: ${chat.id}');
-    debugPrint('👆 [SIDEBAR] Calling onChatSelected(${chat.id})');
-    debugPrint('═══════════════════════════════════════════════════════════');
+    if (kDebugMode) {
+      debugPrint('');
+    }
+    if (kDebugMode) {
+      debugPrint('═══════════════════════════════════════════════════════════');
+    }
+    if (kDebugMode) {
+      debugPrint('👆 [SIDEBAR] User clicked chat: "${chat.previewText.substring(0, chat.previewText.length > 30 ? 30 : chat.previewText.length)}..."');
+    }
+    if (kDebugMode) {
+      debugPrint('👆 [SIDEBAR] Chat ID: ${chat.id}');
+    }
+    if (kDebugMode) {
+      debugPrint('👆 [SIDEBAR] Calling onChatSelected(${chat.id})');
+    }
+    if (kDebugMode) {
+      debugPrint('═══════════════════════════════════════════════════════════');
+    }
     widget.onChatSelected(chat.id);
   }
 
@@ -478,18 +501,38 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
                   onTap: () {
                     // CRITICAL: Block rapid chat switching while another chat is loading
                     if (ChatStorageService.isLoadingChat) {
-                      debugPrint('');
-                      debugPrint('═══════════════════════════════════════════════════════════');
-                      debugPrint('🚫 [SIDEBAR-DESKTOP] BLOCKED - Chat is still loading');
-                      debugPrint('═══════════════════════════════════════════════════════════');
+                      if (kDebugMode) {
+                        debugPrint('');
+                      }
+                      if (kDebugMode) {
+                        debugPrint('═══════════════════════════════════════════════════════════');
+                      }
+                      if (kDebugMode) {
+                        debugPrint('🚫 [SIDEBAR-DESKTOP] BLOCKED - Chat is still loading');
+                      }
+                      if (kDebugMode) {
+                        debugPrint('═══════════════════════════════════════════════════════════');
+                      }
                       return;
                     }
-                    debugPrint('');
-                    debugPrint('═══════════════════════════════════════════════════════════');
-                    debugPrint('👆 [SIDEBAR-DESKTOP] User tapped recent chat');
-                    debugPrint('👆 [SIDEBAR-DESKTOP] Chat ID: ${storedChat.id}');
-                    debugPrint('👆 [SIDEBAR-DESKTOP] Preview: "${storedChat.previewText.substring(0, storedChat.previewText.length > 40 ? 40 : storedChat.previewText.length)}..."');
-                    debugPrint('═══════════════════════════════════════════════════════════');
+                    if (kDebugMode) {
+                      debugPrint('');
+                    }
+                    if (kDebugMode) {
+                      debugPrint('═══════════════════════════════════════════════════════════');
+                    }
+                    if (kDebugMode) {
+                      debugPrint('👆 [SIDEBAR-DESKTOP] User tapped recent chat');
+                    }
+                    if (kDebugMode) {
+                      debugPrint('👆 [SIDEBAR-DESKTOP] Chat ID: ${storedChat.id}');
+                    }
+                    if (kDebugMode) {
+                      debugPrint('👆 [SIDEBAR-DESKTOP] Preview: "${storedChat.previewText.substring(0, storedChat.previewText.length > 40 ? 40 : storedChat.previewText.length)}..."');
+                    }
+                    if (kDebugMode) {
+                      debugPrint('═══════════════════════════════════════════════════════════');
+                    }
                     widget.onChatSelected(storedChat.id);
                   },
                   onDelete: () => _confirmAndDeleteChat(storedChat),

@@ -105,22 +105,22 @@ Zuletzt konsolidiert: **2026-02-13**
   `AndroidManifest.xml` — `android:allowBackup="false"` + `android:fullBackupContent="false"` (Android <=11) + `android:dataExtractionRules` (Android 12+) gesetzt. Cloud- und Device-Transfer-Backups vollständig deaktiviert.
   *Quelle: Audit 2025-12*
 
-- [ ] **Debug-Logs in Release** — HOCH
-  `debugPrint()` ist in Flutter kein No-Op in Release. ~616 von 714 Aufrufen nicht in `kDebugMode` gewrappt. Betrifft u.a. Credit-Balances, Markdown-Errors, Chat-State.
+- [x] **Debug-Logs in Release** — HOCH
+  Alle 873 `debugPrint()`-Aufrufe in 53 Dateien in `if (kDebugMode)` gewrappt. `flutter analyze` zeigt 0 Issues.
   *Quelle: Audit 2025-12 + Security Audit H1 + Greptile #11-16*
 
-- [ ] **Prop Drilling in RootWrapper** — HOCH
-  `root_wrapper_desktop.dart` und `root_wrapper_mobile.dart` nehmen je **34 required Parameter**. Kein Config-Objekt, kein InheritedWidget.
+- [x] **Prop Drilling in RootWrapper** — HOCH
+  `AppShellConfig` bündelt alle 34 Parameter. Refactored in 9 Dateien: main.dart, root_wrapper_io/stub/desktop/mobile, settings_page, customization_page, theme_page. ChatUI-Dateien behalten eigene Parameter (haben zusätzliche UI-spezifische Felder).
   *Quelle: Audit 2025-12 + Refactoring Plan #7*
 
-- [ ] **WebSocket ohne Timeout** — HOCH
-  `lib/services/websocket_chat_service.dart` — Keine Connection- oder Idle-Timeout. Hängende Verbindungen können endlos bestehen.
+- [x] **WebSocket ohne Timeout** — HOCH
+  Connection-Timeout (15s), First-Chunk-Timeout (120s), Idle-Timer (60s) im StreamingManager. Bei Timeout wird "Thinking..."-State aufgeräumt und User bekommt Fehlermeldung. Alle debugPrints in kDebugMode gewrappt.
   *Quelle: Greptile #8*
 
 ### Mittel
 
-- [ ] **Certificate Pinning ist Scaffolding** — MITTEL
-  `lib/utils/certificate_pinning.dart` — Infrastruktur existiert, aber `configureDio()` erzwingt Pinning auf keiner Plattform. `validateCertificateBytes()` wird nie aufgerufen. WebSocket-Verbindungen haben gar kein Pinning.
+- [x] **Certificate Pinning ist Scaffolding** — MITTEL
+  Echtes SHA-256 Certificate Pinning implementiert. `badCertificateCallback` auf `IOHttpClientAdapter` validiert Leaf + Intermediate CA Hashes in Release-Builds. Conditional Import (IO/Web) via `certificate_pinning_register.dart`. Registration in `main()`.
   *Quelle: Audit 2025-12 + Security Audit M3 + Greptile #2, #9*
 
 - [ ] **God Classes (teilweise entschärft)** — MITTEL
@@ -282,10 +282,10 @@ Zuletzt konsolidiert: **2026-02-13**
 
 | Kategorie | Anzahl |
 |-----------|--------|
-| Behoben | 17 |
+| Behoben | 21 |
 | Kein echtes Problem | 5 |
-| **Offen — Flutter Client** | **12** |
+| **Offen — Flutter Client** | **8** |
 | **Offen — Architektur/Performance** | **8** |
 | **Offen — API Server** | **8** |
 | **Offen — Supabase/Infra** | **5** |
-| **Gesamt offen** | **33** |
+| **Gesamt offen** | **29** |

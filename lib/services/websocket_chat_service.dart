@@ -11,6 +11,15 @@ import 'package:chuk_chat/models/chat_stream_event.dart';
 /// WebSocket provides better reliability than HTTP streaming,
 /// especially on mobile devices when the app is backgrounded.
 class WebSocketChatService {
+  /// Timeout for establishing the WebSocket connection.
+  static const _connectionTimeout = Duration(seconds: 15);
+
+  /// Timeout for receiving the first response chunk after sending a message.
+  /// This covers the "thinking" phase where the model is processing.
+  static const _firstChunkTimeout = Duration(seconds: 120);
+
+  // Inter-chunk timeout (60s) is handled by StreamingManager's idle timer.
+
   static Uri get _wsBaseUrl {
     final httpUrl = ApiConfigService.apiBaseUrl;
     final uri = Uri.parse(httpUrl);
@@ -33,6 +42,11 @@ class WebSocketChatService {
   /// - Bidirectional communication
   /// - Lower latency
   /// - Better mobile battery efficiency
+  ///
+  /// Timeouts:
+  /// - Connection: [_connectionTimeout] (15s)
+  /// - First chunk: [_firstChunkTimeout] (120s) — covers model "thinking" time
+  /// - Between chunks: [_interChunkTimeout] (60s) — detects dead connections
   static Stream<ChatStreamEvent> sendStreamingChat({
     required String accessToken,
     required String message,
@@ -78,9 +92,17 @@ class WebSocketChatService {
         );
       }
 
-      // Connect to WebSocket
+      // Connect to WebSocket with connection timeout
       channel = WebSocketChannel.connect(wsUrl);
-      await channel.ready;
+      try {
+        await channel.ready.timeout(_connectionTimeout);
+      } on TimeoutException {
+        yield ChatStreamEvent.error(
+          'Connection timed out after ${_connectionTimeout.inSeconds}s. '
+          'Please check your internet connection and try again.',
+        );
+        return;
+      }
 
       if (kDebugMode) {
         debugPrint('✅ WebSocket connected');
@@ -122,8 +144,22 @@ class WebSocketChatService {
         debugPrint('📤 Request sent via WebSocket');
       }
 
-      // Listen for responses
-      await for (final message in channel.stream) {
+      // Listen for responses with a generous timeout to cover the initial
+      // model thinking time. The StreamingManager's idle timer
+      // (see streaming_manager_io.dart) provides a separate, shorter
+      // inter-chunk timeout once the first chunk has arrived.
+      bool receivedFirstChunk = false;
+
+      await for (final message in channel.stream.timeout(
+        _firstChunkTimeout,
+        onTimeout: (sink) {
+          // No data received within the timeout window — close the sink
+          // to break out of the await-for loop.
+          sink.close();
+        },
+      )) {
+        receivedFirstChunk = true;
+
         if (message is String) {
           try {
             final Map<String, dynamic> data = jsonDecode(message);
@@ -179,6 +215,20 @@ class WebSocketChatService {
           }
         }
       }
+
+      // If we never received any chunk, the timeout triggered
+      if (!receivedFirstChunk) {
+        yield ChatStreamEvent.error(
+          'No response received after ${_firstChunkTimeout.inSeconds}s. '
+          'The server may be overloaded — please try again.',
+        );
+      }
+    } on TimeoutException {
+      // Inter-chunk timeout (from StreamingManager idle timer)
+      yield ChatStreamEvent.error(
+        'Response timed out — the server stopped responding. '
+        'Please try again.',
+      );
     } on WebSocketChannelException catch (e) {
       if (kDebugMode) {
         debugPrint(

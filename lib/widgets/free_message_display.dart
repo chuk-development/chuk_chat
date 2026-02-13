@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:flutter/foundation.dart';
 
 final SupabaseClient _supabase = Supabase.instance.client;
 
@@ -99,13 +100,19 @@ mixin _FreeMessageListenerMixin<T extends StatefulWidget> on State<T> {
           freeMessageLoading = false;
           _hasLoadedOnce = true;
         });
-        debugPrint('📦 [FreeMsg] Loaded from cache: $remaining / $total');
+        if (kDebugMode) {
+          debugPrint('📦 [FreeMsg] Loaded from cache: $remaining / $total');
+        }
       } else {
         // No cache - keep loading, remote will update soon
-        debugPrint('📦 [FreeMsg] No cache - waiting for remote');
+        if (kDebugMode) {
+          debugPrint('📦 [FreeMsg] No cache - waiting for remote');
+        }
       }
     } catch (e) {
-      debugPrint('⚠️ [FreeMsg] Cache load failed: $e');
+      if (kDebugMode) {
+        debugPrint('⚠️ [FreeMsg] Cache load failed: $e');
+      }
       // On error, keep loading - remote will handle it
     }
   }
@@ -117,7 +124,9 @@ mixin _FreeMessageListenerMixin<T extends StatefulWidget> on State<T> {
       await prefs.setInt(_kCachedFreeTotal, total);
       await prefs.setInt(_kCachedFreeUsed, used);
     } catch (e) {
-      debugPrint('⚠️ [FreeMsg] Cache save failed: $e');
+      if (kDebugMode) {
+        debugPrint('⚠️ [FreeMsg] Cache save failed: $e');
+      }
     }
   }
 
@@ -168,14 +177,18 @@ mixin _FreeMessageListenerMixin<T extends StatefulWidget> on State<T> {
 
       // Save to cache in background
       unawaited(_saveToCache(total, used));
-      debugPrint('✅ [FreeMsg] Loaded from remote: $remaining / $total');
+      if (kDebugMode) {
+        debugPrint('✅ [FreeMsg] Loaded from remote: $remaining / $total');
+      }
     } catch (error) {
       if (!mounted) return;
       setState(() {
         freeMessageLoading = false;
         _hasLoadedOnce = true;
       });
-      debugPrint('⚠️ [FreeMsg] Remote load failed (using cache): $error');
+      if (kDebugMode) {
+        debugPrint('⚠️ [FreeMsg] Remote load failed (using cache): $error');
+      }
     }
   }
 
@@ -463,7 +476,9 @@ class FreeMessageService {
 
       return (total - used).clamp(0, total);
     } catch (e) {
-      debugPrint('Error getting free messages: $e');
+      if (kDebugMode) {
+        debugPrint('Error getting free messages: $e');
+      }
       return null;
     }
   }

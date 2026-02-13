@@ -1,64 +1,14 @@
 // lib/pages/customization_page.dart
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/services/title_generation_service.dart';
 
 class CustomizationPage extends StatefulWidget {
-  final bool autoSendVoiceTranscription;
-  final Function(bool) setAutoSendVoiceTranscription;
-  final bool showReasoningTokens;
-  final Function(bool) setShowReasoningTokens;
-  final bool showModelInfo;
-  final Function(bool) setShowModelInfo;
-  final bool showTps;
-  final Function(bool) setShowTps;
-  // Image generation settings
-  final bool imageGenEnabled;
-  final Function(bool) setImageGenEnabled;
-  final String imageGenDefaultSize;
-  final Function(String) setImageGenDefaultSize;
-  final int imageGenCustomWidth;
-  final Function(int) setImageGenCustomWidth;
-  final int imageGenCustomHeight;
-  final Function(int) setImageGenCustomHeight;
-  final bool imageGenUseCustomSize;
-  final Function(bool) setImageGenUseCustomSize;
-  // AI context settings
-  final bool includeRecentImagesInHistory;
-  final Function(bool) setIncludeRecentImagesInHistory;
-  final bool includeAllImagesInHistory;
-  final Function(bool) setIncludeAllImagesInHistory;
-  final bool includeReasoningInHistory;
-  final Function(bool) setIncludeReasoningInHistory;
+  final AppShellConfig config;
 
-  const CustomizationPage({
-    super.key,
-    required this.autoSendVoiceTranscription,
-    required this.setAutoSendVoiceTranscription,
-    required this.showReasoningTokens,
-    required this.setShowReasoningTokens,
-    required this.showModelInfo,
-    required this.setShowModelInfo,
-    required this.showTps,
-    required this.setShowTps,
-    required this.imageGenEnabled,
-    required this.setImageGenEnabled,
-    required this.imageGenDefaultSize,
-    required this.setImageGenDefaultSize,
-    required this.imageGenCustomWidth,
-    required this.setImageGenCustomWidth,
-    required this.imageGenCustomHeight,
-    required this.setImageGenCustomHeight,
-    required this.imageGenUseCustomSize,
-    required this.setImageGenUseCustomSize,
-    required this.includeRecentImagesInHistory,
-    required this.setIncludeRecentImagesInHistory,
-    required this.includeAllImagesInHistory,
-    required this.setIncludeAllImagesInHistory,
-    required this.includeReasoningInHistory,
-    required this.setIncludeReasoningInHistory,
-  });
+  const CustomizationPage({super.key, required this.config});
 
   @override
   State<CustomizationPage> createState() => _CustomizationPageState();
@@ -88,29 +38,53 @@ class _CustomizationPageState extends State<CustomizationPage> {
 
   // Size preset options with their dimensions
   static const Map<String, Map<String, dynamic>> _sizePresets = {
-    'square_hd': {'label': 'Square HD (1024×1024)', 'width': 1024, 'height': 1024},
+    'square_hd': {
+      'label': 'Square HD (1024×1024)',
+      'width': 1024,
+      'height': 1024,
+    },
     'square': {'label': 'Square (512×512)', 'width': 512, 'height': 512},
-    'portrait_4_3': {'label': 'Portrait 4:3 (768×1024)', 'width': 768, 'height': 1024},
-    'portrait_16_9': {'label': 'Portrait 16:9 (576×1024)', 'width': 576, 'height': 1024},
-    'landscape_4_3': {'label': 'Landscape 4:3 (1024×768)', 'width': 1024, 'height': 768},
-    'landscape_16_9': {'label': 'Landscape 16:9 (1024×576)', 'width': 1024, 'height': 576},
+    'portrait_4_3': {
+      'label': 'Portrait 4:3 (768×1024)',
+      'width': 768,
+      'height': 1024,
+    },
+    'portrait_16_9': {
+      'label': 'Portrait 16:9 (576×1024)',
+      'width': 576,
+      'height': 1024,
+    },
+    'landscape_4_3': {
+      'label': 'Landscape 4:3 (1024×768)',
+      'width': 1024,
+      'height': 768,
+    },
+    'landscape_16_9': {
+      'label': 'Landscape 16:9 (1024×576)',
+      'width': 1024,
+      'height': 576,
+    },
   };
 
   @override
   void initState() {
     super.initState();
-    _selectedAutoSendVoiceTranscription = widget.autoSendVoiceTranscription;
-    _selectedShowReasoningTokens = widget.showReasoningTokens;
-    _selectedShowModelInfo = widget.showModelInfo;
-    _selectedShowTps = widget.showTps;
-    _selectedImageGenEnabled = widget.imageGenEnabled;
-    _selectedImageGenDefaultSize = widget.imageGenDefaultSize;
-    _selectedImageGenCustomWidth = widget.imageGenCustomWidth;
-    _selectedImageGenCustomHeight = widget.imageGenCustomHeight;
-    _selectedImageGenUseCustomSize = widget.imageGenUseCustomSize;
-    _selectedIncludeRecentImagesInHistory = widget.includeRecentImagesInHistory;
-    _selectedIncludeAllImagesInHistory = widget.includeAllImagesInHistory;
-    _selectedIncludeReasoningInHistory = widget.includeReasoningInHistory;
+    _selectedAutoSendVoiceTranscription =
+        widget.config.autoSendVoiceTranscription;
+    _selectedShowReasoningTokens = widget.config.showReasoningTokens;
+    _selectedShowModelInfo = widget.config.showModelInfo;
+    _selectedShowTps = widget.config.showTps;
+    _selectedImageGenEnabled = widget.config.imageGenEnabled;
+    _selectedImageGenDefaultSize = widget.config.imageGenDefaultSize;
+    _selectedImageGenCustomWidth = widget.config.imageGenCustomWidth;
+    _selectedImageGenCustomHeight = widget.config.imageGenCustomHeight;
+    _selectedImageGenUseCustomSize = widget.config.imageGenUseCustomSize;
+    _selectedIncludeRecentImagesInHistory =
+        widget.config.includeRecentImagesInHistory;
+    _selectedIncludeAllImagesInHistory =
+        widget.config.includeAllImagesInHistory;
+    _selectedIncludeReasoningInHistory =
+        widget.config.includeReasoningInHistory;
     _loadAutoTitleSetting();
   }
 
@@ -197,13 +171,14 @@ class _CustomizationPageState extends State<CustomizationPage> {
           _buildToggleCard(
             context,
             title: 'Auto-send voice messages',
-            subtitle: 'Automatically send transcribed voice messages without confirmation',
+            subtitle:
+                'Automatically send transcribed voice messages without confirmation',
             value: _selectedAutoSendVoiceTranscription,
             onChanged: (bool value) {
               setState(() {
                 _selectedAutoSendVoiceTranscription = value;
               });
-              widget.setAutoSendVoiceTranscription(value);
+              widget.config.setAutoSendVoiceTranscription(value);
             },
             scaffoldBg: scaffoldBg,
             iconFg: iconFg,
@@ -234,7 +209,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
               setState(() {
                 _selectedShowReasoningTokens = value;
               });
-              widget.setShowReasoningTokens(value);
+              widget.config.setShowReasoningTokens(value);
             },
             scaffoldBg: scaffoldBg,
             iconFg: iconFg,
@@ -249,7 +224,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
               setState(() {
                 _selectedShowModelInfo = value;
               });
-              widget.setShowModelInfo(value);
+              widget.config.setShowModelInfo(value);
             },
             scaffoldBg: scaffoldBg,
             iconFg: iconFg,
@@ -264,7 +239,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
               setState(() {
                 _selectedShowTps = value;
               });
-              widget.setShowTps(value);
+              widget.config.setShowTps(value);
             },
             scaffoldBg: scaffoldBg,
             iconFg: iconFg,
@@ -272,12 +247,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
           const SizedBox(height: 24),
 
           // AI Context Section
-          _buildSectionHeader(
-            context,
-            'AI Context',
-            Icons.psychology,
-            iconFg,
-          ),
+          _buildSectionHeader(context, 'AI Context', Icons.psychology, iconFg),
           const SizedBox(height: 12),
           _buildToggleCard(
             context,
@@ -288,7 +258,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
               setState(() {
                 _selectedIncludeRecentImagesInHistory = value;
               });
-              widget.setIncludeRecentImagesInHistory(value);
+              widget.config.setIncludeRecentImagesInHistory(value);
             },
             scaffoldBg: scaffoldBg,
             iconFg: iconFg,
@@ -297,13 +267,14 @@ class _CustomizationPageState extends State<CustomizationPage> {
           _buildToggleCard(
             context,
             title: 'All images in context',
-            subtitle: 'Send all conversation images to the AI (uses more tokens)',
+            subtitle:
+                'Send all conversation images to the AI (uses more tokens)',
             value: _selectedIncludeAllImagesInHistory,
             onChanged: (bool value) {
               setState(() {
                 _selectedIncludeAllImagesInHistory = value;
               });
-              widget.setIncludeAllImagesInHistory(value);
+              widget.config.setIncludeAllImagesInHistory(value);
             },
             scaffoldBg: scaffoldBg,
             iconFg: iconFg,
@@ -318,7 +289,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
               setState(() {
                 _selectedIncludeReasoningInHistory = value;
               });
-              widget.setIncludeReasoningInHistory(value);
+              widget.config.setIncludeReasoningInHistory(value);
             },
             scaffoldBg: scaffoldBg,
             iconFg: iconFg,
@@ -333,12 +304,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
           const SizedBox(height: 24),
 
           // Auto Chat Titles Section
-          _buildSectionHeader(
-            context,
-            'Chat Titles',
-            Icons.title,
-            iconFg,
-          ),
+          _buildSectionHeader(context, 'Chat Titles', Icons.title, iconFg),
           const SizedBox(height: 12),
           _buildToggleCard(
             context,
@@ -388,7 +354,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
                 setState(() {
                   _selectedImageGenEnabled = value;
                 });
-                widget.setImageGenEnabled(value);
+                widget.config.setImageGenEnabled(value);
               },
               scaffoldBg: scaffoldBg,
               iconFg: iconFg,
@@ -406,7 +372,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
                   setState(() {
                     _selectedImageGenUseCustomSize = value;
                   });
-                  widget.setImageGenUseCustomSize(value);
+                  widget.config.setImageGenUseCustomSize(value);
                 },
                 scaffoldBg: scaffoldBg,
                 iconFg: iconFg,
@@ -467,7 +433,9 @@ class _CustomizationPageState extends State<CustomizationPage> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          _hasCustomPrompt ? 'Using custom prompt' : 'Using default prompt',
+                          _hasCustomPrompt
+                              ? 'Using custom prompt'
+                              : 'Using default prompt',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: iconFg.withValues(alpha: 0.7),
                           ),
@@ -510,15 +478,21 @@ class _CustomizationPageState extends State<CustomizationPage> {
                       fillColor: scaffoldBg,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: iconFg.withValues(alpha: 0.3)),
+                        borderSide: BorderSide(
+                          color: iconFg.withValues(alpha: 0.3),
+                        ),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: iconFg.withValues(alpha: 0.3)),
+                        borderSide: BorderSide(
+                          color: iconFg.withValues(alpha: 0.3),
+                        ),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: theme.colorScheme.primary),
+                        borderSide: BorderSide(
+                          color: theme.colorScheme.primary,
+                        ),
                       ),
                       contentPadding: const EdgeInsets.all(12),
                     ),
@@ -578,7 +552,10 @@ class _CustomizationPageState extends State<CustomizationPage> {
               initialValue: _selectedImageGenDefaultSize,
               decoration: InputDecoration(
                 isDense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                   borderSide: BorderSide(color: iconFg.withValues(alpha: 0.3)),
@@ -606,7 +583,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
                   setState(() {
                     _selectedImageGenDefaultSize = value;
                   });
-                  widget.setImageGenDefaultSize(value);
+                  widget.config.setImageGenDefaultSize(value);
                 }
               },
             ),
@@ -647,10 +624,15 @@ class _CustomizationPageState extends State<CustomizationPage> {
                     decoration: InputDecoration(
                       labelText: 'Width',
                       isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: iconFg.withValues(alpha: 0.3)),
+                        borderSide: BorderSide(
+                          color: iconFg.withValues(alpha: 0.3),
+                        ),
                       ),
                     ),
                     onChanged: (value) {
@@ -659,7 +641,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
                         setState(() {
                           _selectedImageGenCustomWidth = width;
                         });
-                        widget.setImageGenCustomWidth(width);
+                        widget.config.setImageGenCustomWidth(width);
                       }
                     },
                   ),
@@ -674,10 +656,15 @@ class _CustomizationPageState extends State<CustomizationPage> {
                     decoration: InputDecoration(
                       labelText: 'Height',
                       isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: iconFg.withValues(alpha: 0.3)),
+                        borderSide: BorderSide(
+                          color: iconFg.withValues(alpha: 0.3),
+                        ),
                       ),
                     ),
                     onChanged: (value) {
@@ -686,7 +673,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
                         setState(() {
                           _selectedImageGenCustomHeight = height;
                         });
-                        widget.setImageGenCustomHeight(height);
+                        widget.config.setImageGenCustomHeight(height);
                       }
                     },
                   ),
@@ -778,7 +765,9 @@ class _CustomizationPageState extends State<CustomizationPage> {
         ),
         value: value,
         onChanged: onChanged,
-        activeTrackColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+        activeTrackColor: Theme.of(
+          context,
+        ).colorScheme.primary.withValues(alpha: 0.5),
         activeThumbColor: Theme.of(context).colorScheme.primary,
       ),
     );

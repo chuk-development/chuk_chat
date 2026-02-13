@@ -1,6 +1,6 @@
 // lib/platform_specific/chat/handlers/file_attachment_handler.dart
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:file_picker/file_picker.dart';
@@ -118,7 +118,9 @@ class FileAttachmentHandler {
     );
 
     if (result == null || result.files.isEmpty) {
-      debugPrint('File picking canceled.');
+      if (kDebugMode) {
+        debugPrint('File picking canceled.');
+      }
       return;
     }
 
@@ -310,11 +312,15 @@ class FileAttachmentHandler {
         onUpdate?.call();
       }
 
-      debugPrint(
-        'Image "$fileName" uploaded and encrypted successfully: $storagePath',
-      );
+      if (kDebugMode) {
+        debugPrint(
+          'Image "$fileName" uploaded and encrypted successfully: $storagePath',
+        );
+      }
     } catch (error) {
-      debugPrint('Failed to upload encrypted image "$fileName": $error');
+      if (kDebugMode) {
+        debugPrint('Failed to upload encrypted image "$fileName": $error');
+      }
       onError?.call('Failed to upload image "$fileName": $error');
 
       // Remove failed upload

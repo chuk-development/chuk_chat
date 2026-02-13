@@ -106,16 +106,22 @@ class SupabaseService {
         _lastRefreshTime = DateTime.now();
         // Check if this is a network error - keep existing session
         if (NetworkStatusService.isNetworkError(error)) {
-          debugPrint('📴 Session refresh failed (network): ${error.message} - keeping session');
+          if (kDebugMode) {
+            debugPrint('📴 Session refresh failed (network): ${error.message} - keeping session');
+          }
           return auth.currentSession; // Keep existing session on network error
         }
         // Actual auth error (e.g., token revoked)
-        debugPrint('⚠️ Session refresh auth error: ${error.message}');
+        if (kDebugMode) {
+          debugPrint('⚠️ Session refresh auth error: ${error.message}');
+        }
         return null;
       } catch (e) {
         // Generic error (SocketException, etc.) - likely network related
         _lastRefreshTime = DateTime.now();
-        debugPrint('📴 Session refresh error: $e - keeping session');
+        if (kDebugMode) {
+          debugPrint('📴 Session refresh error: $e - keeping session');
+        }
         return auth.currentSession; // Keep existing session
       }
     }
@@ -132,7 +138,9 @@ class SupabaseService {
     try {
       await auth.signOut();
     } on AuthException catch (error) {
-      debugPrint('Failed to sign out: ${error.message}');
+      if (kDebugMode) {
+        debugPrint('Failed to sign out: ${error.message}');
+      }
     }
   }
 }

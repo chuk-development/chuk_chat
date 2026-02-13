@@ -2,34 +2,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 
 class ThemePage extends StatefulWidget {
-  final Brightness currentThemeMode;
-  final Color currentAccentColor;
-  final Color currentIconFgColor;
-  final Color currentBgColor;
-  final Function(Brightness) setThemeMode;
-  final Function(Color) setAccentColor;
-  final Function(Color) setIconFgColor;
-  final Function(Color) setBgColor;
-  final bool grainEnabled;
-  final Function(bool) setGrainEnabled;
+  final AppShellConfig config;
 
-  const ThemePage({
-    super.key,
-    required this.currentThemeMode,
-    required this.currentAccentColor,
-    required this.currentIconFgColor,
-    required this.currentBgColor,
-    required this.setThemeMode,
-    required this.setAccentColor,
-    required this.setIconFgColor,
-    required this.setBgColor,
-    required this.grainEnabled,
-    required this.setGrainEnabled,
-  });
+  const ThemePage({super.key, required this.config});
 
   @override
   State<ThemePage> createState() => _ThemePageState();
@@ -77,11 +57,11 @@ class _ThemePageState extends State<ThemePage> {
   @override
   void initState() {
     super.initState();
-    _selectedThemeMode = widget.currentThemeMode;
-    _selectedAccentColor = widget.currentAccentColor;
-    _selectedIconFgColor = widget.currentIconFgColor;
-    _selectedBgColor = widget.currentBgColor;
-    _selectedGrain = widget.grainEnabled;
+    _selectedThemeMode = widget.config.currentThemeMode;
+    _selectedAccentColor = widget.config.currentAccentColor;
+    _selectedIconFgColor = widget.config.currentIconFgColor;
+    _selectedBgColor = widget.config.currentBgColor;
+    _selectedGrain = widget.config.grainEnabled;
 
     _accentHexController.text = _selectedAccentColor.toHexString();
     _iconFgHexController.text = _selectedIconFgColor.toHexString();
@@ -97,18 +77,19 @@ class _ThemePageState extends State<ThemePage> {
   }
 
   void _applyThemeChanges() {
-    widget.setThemeMode(_selectedThemeMode);
-    widget.setAccentColor(_selectedAccentColor);
-    widget.setIconFgColor(_selectedIconFgColor);
-    widget.setBgColor(_selectedBgColor);
-    widget.setGrainEnabled(_selectedGrain);
+    widget.config.setThemeMode(_selectedThemeMode);
+    widget.config.setAccentColor(_selectedAccentColor);
+    widget.config.setIconFgColor(_selectedIconFgColor);
+    widget.config.setBgColor(_selectedBgColor);
+    widget.config.setGrainEnabled(_selectedGrain);
   }
 
   void _updateThemeMode(bool useDarkMode) {
     setState(() {
       _selectedThemeMode = useDarkMode ? Brightness.dark : Brightness.light;
-      _selectedBgColor =
-          useDarkMode ? kDefaultBgColor : kDefaultBgColor.lighten(0.8);
+      _selectedBgColor = useDarkMode
+          ? kDefaultBgColor
+          : kDefaultBgColor.lighten(0.8);
       _bgHexController.text = _selectedBgColor.toHexString();
       _applyThemeChanges();
     });
@@ -147,8 +128,7 @@ class _ThemePageState extends State<ThemePage> {
             child: ListTile(
               title: Text(
                 'Dark Mode',
-                style:
-                    TextStyle(color: iconFg, fontWeight: FontWeight.w600),
+                style: TextStyle(color: iconFg, fontWeight: FontWeight.w600),
               ),
               subtitle: Text(
                 'Toggle between dark and light themes',
@@ -182,7 +162,10 @@ class _ThemePageState extends State<ThemePage> {
             onHexChanged: (hex) {
               try {
                 final c = ColorExtension.fromHexString(hex);
-                setState(() { _selectedAccentColor = c; _applyThemeChanges(); });
+                setState(() {
+                  _selectedAccentColor = c;
+                  _applyThemeChanges();
+                });
               } catch (_) {}
             },
             iconFg: iconFg,
@@ -208,7 +191,10 @@ class _ThemePageState extends State<ThemePage> {
             onHexChanged: (hex) {
               try {
                 final c = ColorExtension.fromHexString(hex);
-                setState(() { _selectedIconFgColor = c; _applyThemeChanges(); });
+                setState(() {
+                  _selectedIconFgColor = c;
+                  _applyThemeChanges();
+                });
               } catch (_) {}
             },
             iconFg: iconFg,
@@ -234,7 +220,10 @@ class _ThemePageState extends State<ThemePage> {
             onHexChanged: (hex) {
               try {
                 final c = ColorExtension.fromHexString(hex);
-                setState(() { _selectedBgColor = c; _applyThemeChanges(); });
+                setState(() {
+                  _selectedBgColor = c;
+                  _applyThemeChanges();
+                });
               } catch (_) {}
             },
             iconFg: iconFg,
@@ -249,8 +238,7 @@ class _ThemePageState extends State<ThemePage> {
             child: ListTile(
               title: Text(
                 'Film Grain Effect',
-                style:
-                    TextStyle(color: iconFg, fontWeight: FontWeight.w600),
+                style: TextStyle(color: iconFg, fontWeight: FontWeight.w600),
               ),
               subtitle: Text(
                 'Add a subtle shot-on-film texture',
@@ -302,9 +290,19 @@ class _ThemePageState extends State<ThemePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: TextStyle(color: iconFg, fontSize: 18, fontWeight: FontWeight.bold)),
+        Text(
+          title,
+          style: TextStyle(
+            color: iconFg,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         const SizedBox(height: 8),
-        Text(description, style: TextStyle(color: iconFg.withValues(alpha: 0.6), fontSize: 14)),
+        Text(
+          description,
+          style: TextStyle(color: iconFg.withValues(alpha: 0.6), fontSize: 14),
+        ),
         const SizedBox(height: 16),
 
         // Hex input
@@ -314,7 +312,10 @@ class _ThemePageState extends State<ThemePage> {
             controller: hexController,
             decoration: InputDecoration(
               labelText: 'Custom Hex Color (#RRGGBB)',
-              prefixIcon: Icon(Icons.colorize, color: iconFg.withValues(alpha: 0.7)),
+              prefixIcon: Icon(
+                Icons.colorize,
+                color: iconFg.withValues(alpha: 0.7),
+              ),
               suffixIcon: IconButton(
                 icon: Icon(Icons.check_circle, color: accent),
                 onPressed: () => onHexChanged(hexController.text),
@@ -357,7 +358,9 @@ class _ThemePageState extends State<ThemePage> {
                         ]
                       : [],
                 ),
-                child: isSelected ? const Icon(Icons.check, color: Colors.white, size: 28) : null,
+                child: isSelected
+                    ? const Icon(Icons.check, color: Colors.white, size: 28)
+                    : null,
               ),
             );
           }).toList(),

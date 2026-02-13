@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'package:cryptography/cryptography.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb, kReleaseMode, debugPrint;
+import 'package:flutter/foundation.dart'
+    show kDebugMode, kIsWeb, kReleaseMode, debugPrint;
 
 /// Certificate pin configuration for a domain.
 class CertificatePin {
@@ -52,32 +53,53 @@ class CertificateValidationResult {
 ///
 /// Certificate pinning prevents man-in-the-middle attacks by ensuring
 /// the app only trusts specific SSL certificates.
+///
+/// Pinning is enforced in release builds on native platforms (Android,
+/// iOS, Linux, macOS, Windows). In debug mode it is disabled to allow
+/// proxy tools like Charles/mitmproxy. On web, the browser handles TLS.
+///
+/// To update pins after certificate rotation:
+///   openssl s_client -connect api.chuk.chat:443 2>/dev/null \
+///     | openssl x509 -outform DER | openssl dgst -sha256 -binary | base64
 class CertificatePinning {
   CertificatePinning._();
 
   /// Whether certificate pinning is enabled (production only).
   static bool get isEnabled => kReleaseMode;
 
+  /// IO-level Dio configurator. Set by [registerNativeConfigurator] from
+  /// platform-specific bootstrap code. On web this stays null (no-op).
+  static void Function(Dio dio, List<CertificatePin> pins)? _nativeConfigurator;
+
+  /// Register the native (dart:io) Dio configurator.
+  /// Called once during app startup from non-web code.
+  static void registerNativeConfigurator(
+    void Function(Dio dio, List<CertificatePin> pins) configurator,
+  ) {
+    _nativeConfigurator = configurator;
+  }
+
   /// Certificate pins for known domains.
   ///
-  /// Configured for api.chuk.chat with primary and backup certificates.
-  /// NOTE: You must update these hashes with actual certificate fingerprints.
-  /// To get the fingerprint, run:
-  ///   openssl s_client -connect api.chuk.chat:443 2>/dev/null | openssl x509 -outform DER | openssl dgst -sha256 -binary | base64
-  /// See SECURITY.md for certificate rotation instructions.
+  /// Pin both the leaf certificate AND the intermediate CA so that
+  /// a leaf-cert rotation doesn't immediately brick the app — the
+  /// intermediate pin acts as a grace-period backup.
   static final List<CertificatePin> _pins = [
     CertificatePin(
       domain: 'api.chuk.chat',
       sha256Hashes: [
-        '6SjgbPUGy4S9HIjSAYwbZy0SGs9igY0W9+Ly2HxGlI4=',  // Primary certificate
-        '6SjgbPUGy4S9HIjSAYwbZy0SGs9igY0W9+Ly2HxGlI4=',  // Backup (update before cert rotation)
+        'KmvfH2LK5C+SyrlN/6GezJzEQ0JHBMRgDkfPxpp5tGU=', // Leaf certificate
+        'HfwWBfutNY2LyET3bRUgP6ycpcGnn9SFf/ryhk++v5Y=', // Intermediate CA (backup)
       ],
       includeSubdomains: true,
     ),
   ];
 
   /// Configure Dio instance with certificate pinning.
-  /// Certificate pinning is not supported on web (browser handles TLS).
+  ///
+  /// On native platforms in release mode, installs a
+  /// badCertificateCallback that validates the server certificate's
+  /// SHA-256 fingerprint against [_pins]. On web or debug mode: no-op.
   static void configureDio(Dio dio) {
     if (kIsWeb) return; // Browser handles TLS/certificate validation
 
@@ -95,13 +117,21 @@ class CertificatePinning {
       return;
     }
 
-    // Certificate pinning with IOHttpClientAdapter only works on native platforms.
-    // On native, import dart:io and dio/io.dart to configure.
-    // Skipped here to avoid dart:io dependency on web.
-    // The browser's TLS stack handles certificate validation on web.
-
-    if (kDebugMode) {
-      debugPrint('Certificate pinning configured for ${_pins.length} domain(s)');
+    if (_nativeConfigurator != null) {
+      _nativeConfigurator!(dio, _pins);
+      if (kDebugMode) {
+        debugPrint(
+          'Certificate pinning ENFORCED for ${_pins.length} domain(s)',
+        );
+      }
+    } else {
+      // On native platforms in release mode, a missing configurator means
+      // pinning was expected but won't be applied. Throw to avoid silent
+      // downgrade to unpinned connections. (Web is already excluded above.)
+      throw StateError(
+        'Certificate pinning: native configurator not registered. '
+        'Call registerNativeConfigurator() during app startup.',
+      );
     }
   }
 
@@ -127,8 +157,7 @@ class CertificatePinning {
     return dio;
   }
 
-  /// Validate a certificate against configured pins.
-  /// Only works on native platforms (web browsers handle TLS internally).
+  /// Validate a certificate's DER bytes against configured pins.
   static Future<CertificateValidationResult> validateCertificateBytes({
     required List<int> derBytes,
     required String host,
@@ -137,7 +166,7 @@ class CertificatePinning {
       return CertificateValidationResult.success();
     }
 
-    final pin = _findPinForDomain(host);
+    final pin = findPinForDomain(host);
     if (pin == null) {
       if (kDebugMode) {
         return CertificateValidationResult.success();
@@ -163,7 +192,7 @@ class CertificatePinning {
   }
 
   /// Find certificate pin for a given domain.
-  static CertificatePin? _findPinForDomain(String host) {
+  static CertificatePin? findPinForDomain(String host) {
     for (final pin in _pins) {
       if (pin.domain == host) {
         return pin;
@@ -176,16 +205,18 @@ class CertificatePinning {
     return null;
   }
 
+  /// Get all configured pins.
+  static List<CertificatePin> get configuredPins => List.unmodifiable(_pins);
+
   /// Add a certificate pin dynamically (for testing or runtime configuration).
   static void addPin(CertificatePin pin) {
     if (_pins.any((p) => p.domain == pin.domain)) {
-      // Remove existing pin for this domain
       _pins.removeWhere((p) => p.domain == pin.domain);
     }
     _pins.add(pin);
 
     if (kDebugMode) {
-      debugPrint('📌 Added certificate pin for ${pin.domain}');
+      debugPrint('Added certificate pin for ${pin.domain}');
       debugPrint('   Hashes: ${pin.sha256Hashes.length}');
       debugPrint('   Subdomains: ${pin.includeSubdomains}');
     }
@@ -196,7 +227,7 @@ class CertificatePinning {
     _pins.removeWhere((pin) => pin.domain == domain);
 
     if (kDebugMode) {
-      debugPrint('🔓 Removed certificate pin for $domain');
+      debugPrint('Removed certificate pin for $domain');
     }
   }
 
@@ -205,24 +236,21 @@ class CertificatePinning {
     _pins.clear();
 
     if (kDebugMode) {
-      debugPrint('🧹 Cleared all certificate pins');
+      debugPrint('Cleared all certificate pins');
     }
   }
-
-  /// Get all configured pins (for debugging).
-  static List<CertificatePin> get configuredPins => List.unmodifiable(_pins);
 
   /// Log certificate pinning status.
   static void logStatus() {
     if (!kDebugMode) return;
 
     debugPrint('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    debugPrint('🔒 CERTIFICATE PINNING STATUS');
+    debugPrint('CERTIFICATE PINNING STATUS');
     debugPrint('Enabled: ${isEnabled ? 'YES (production)' : 'NO (debug)'}');
     debugPrint('Configured pins: ${_pins.length}');
 
     for (final pin in _pins) {
-      debugPrint('  • ${pin.domain}');
+      debugPrint('  - ${pin.domain}');
       debugPrint('    Hashes: ${pin.sha256Hashes.length}');
       debugPrint('    Subdomains: ${pin.includeSubdomains}');
     }

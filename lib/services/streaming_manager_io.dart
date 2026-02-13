@@ -20,13 +20,18 @@ class StreamingManager {
   DateTime? _lastNotificationUpdate;
   static const _notificationUpdateInterval = Duration(milliseconds: 500);
 
+  /// Idle timeout: if no event arrives for this duration, the stream
+  /// is considered dead. This prevents the "Thinking..." state from
+  /// hanging forever when the server silently drops the connection.
+  static const _idleTimeout = Duration(seconds: 60);
+
   // Track if app is in background - only show notification when backgrounded
   bool _isAppInBackground = false;
 
   /// Check if a chat is currently streaming
   bool isStreaming(String chatId) {
     return _activeStreams.containsKey(chatId) &&
-           _activeStreams[chatId]!.isActive;
+        _activeStreams[chatId]!.isActive;
   }
 
   /// Check if ANY chat is currently streaming
@@ -53,13 +58,15 @@ class StreamingManager {
     final streamSub = stream.listen(
       (event) {
         // Handle events in async function to allow awaiting notifications
-        unawaited(_handleStreamEvent(
-          chatId: chatId,
-          event: event,
-          onUpdate: onUpdate,
-          onComplete: onComplete,
-          onError: onError,
-        ));
+        unawaited(
+          _handleStreamEvent(
+            chatId: chatId,
+            event: event,
+            onUpdate: onUpdate,
+            onComplete: onComplete,
+            onError: onError,
+          ),
+        );
       },
       onError: (error) {
         if (kDebugMode) {
@@ -75,26 +82,51 @@ class StreamingManager {
       },
       onDone: () {
         // Handle stream close in async function
-        unawaited(_handleStreamClose(
-          chatId: chatId,
-          onComplete: onComplete,
-        ));
+        unawaited(_handleStreamClose(chatId: chatId, onComplete: onComplete));
       },
       cancelOnError: false, // Don't cancel on error, let ErrorEvent handle it
     );
 
-    _activeStreams[chatId] = _ActiveStream(
+    final activeStream = _ActiveStream(
       subscription: streamSub,
       messageIndex: messageIndex,
       chatId: chatId,
       chatTitle: chatTitle,
     );
+
+    // Start idle timer — if no events arrive within _idleTimeout,
+    // treat the stream as dead and clean up.
+    activeStream.idleTimer = Timer(_idleTimeout, () {
+      if (kDebugMode) {
+        debugPrint(
+          '[StreamingManager] Idle timeout for chat $chatId — no data received for ${_idleTimeout.inSeconds}s',
+        );
+      }
+      final content = activeStream.contentBuffer.toString();
+      if (content.isEmpty) {
+        onError(
+          'No response received — the server may be overloaded. '
+          'Please try again.',
+        );
+      } else {
+        // We already have partial content — complete with what we have
+        onComplete(
+          content,
+          activeStream.reasoningBuffer.toString(),
+          activeStream.tps,
+        );
+      }
+      _cleanupStream(chatId);
+    });
+
+    _activeStreams[chatId] = activeStream;
   }
 
   /// Cancel stream for a specific chat
   Future<void> cancelStream(String chatId) async {
     final activeStream = _activeStreams[chatId];
     if (activeStream != null) {
+      activeStream.cancelIdleTimer();
       await activeStream.subscription.cancel();
       _activeStreams.remove(chatId);
       if (kDebugMode) {
@@ -116,7 +148,8 @@ class StreamingManager {
   }
 
   void _cleanupStream(String chatId) {
-    _activeStreams.remove(chatId);
+    final stream = _activeStreams.remove(chatId);
+    stream?.cancelIdleTimer();
     // Stop foreground service if no more active streams
     if (Platform.isAndroid && !hasActiveStreams) {
       unawaited(StreamingForegroundService.stopService());
@@ -134,10 +167,13 @@ class StreamingManager {
       final reasoningLen = stream.reasoningBuffer.length;
       stream.isActive = false;
       stream.completedAt = DateTime.now();
+      stream.cancelIdleTimer();
       // Cancel the subscription but keep the entry in the map
       unawaited(stream.subscription.cancel());
       if (kDebugMode) {
-        debugPrint('[StreamingManager] Completed stream $chatId: content=$contentLen chars, reasoning=$reasoningLen chars');
+        debugPrint(
+          '[StreamingManager] Completed stream $chatId: content=$contentLen chars, reasoning=$reasoningLen chars',
+        );
       }
     }
     // Evict stale completed streams to prevent memory accumulation
@@ -177,10 +213,13 @@ class StreamingManager {
 
     // If still over max, remove oldest completed streams
     if (completedCount - staleIds.length > _maxCompletedStreams) {
-      final completedEntries = _activeStreams.entries
-          .where((e) => !e.value.isActive && e.value.completedAt != null)
-          .toList()
-        ..sort((a, b) => a.value.completedAt!.compareTo(b.value.completedAt!));
+      final completedEntries =
+          _activeStreams.entries
+              .where((e) => !e.value.isActive && e.value.completedAt != null)
+              .toList()
+            ..sort(
+              (a, b) => a.value.completedAt!.compareTo(b.value.completedAt!),
+            );
 
       final toRemove = completedEntries.length - _maxCompletedStreams;
       for (int i = 0; i < toRemove; i++) {
@@ -200,13 +239,34 @@ class StreamingManager {
     final activeStream = _activeStreams[chatId];
     if (activeStream == null || !activeStream.isActive) return;
 
+    // Reset idle timer on every event — connection is still alive
+    activeStream.cancelIdleTimer();
+    activeStream.idleTimer = Timer(_idleTimeout, () {
+      if (kDebugMode) {
+        debugPrint(
+          '[StreamingManager] Idle timeout for chat $chatId — no data for ${_idleTimeout.inSeconds}s',
+        );
+      }
+      final content = activeStream.contentBuffer.toString();
+      if (content.isEmpty) {
+        onError(
+          'Response timed out — the server stopped responding. '
+          'Please try again.',
+        );
+      } else {
+        onComplete(
+          content,
+          activeStream.reasoningBuffer.toString(),
+          activeStream.tps,
+        );
+      }
+      _cleanupStream(chatId);
+    });
+
     if (event is ContentEvent) {
       activeStream.contentBuffer.write(event.text);
       final content = activeStream.contentBuffer.toString();
-      onUpdate(
-        content,
-        activeStream.reasoningBuffer.toString(),
-      );
+      onUpdate(content, activeStream.reasoningBuffer.toString());
       // Update notification with streaming content (throttled)
       _updateNotificationThrottled(content);
     } else if (event is ReasoningEvent) {
@@ -295,7 +355,8 @@ class StreamingManager {
 
     final now = DateTime.now();
     if (_lastNotificationUpdate != null &&
-        now.difference(_lastNotificationUpdate!) < _notificationUpdateInterval) {
+        now.difference(_lastNotificationUpdate!) <
+            _notificationUpdateInterval) {
       return; // Skip update, too soon
     }
 
@@ -314,24 +375,34 @@ class StreamingManager {
     if (isInBackground && hasActiveStreams) {
       // App went to background with active streams - start foreground service
       if (kDebugMode) {
-        debugPrint('[StreamingManager] App backgrounded with active streams - starting foreground service');
+        debugPrint(
+          '[StreamingManager] App backgrounded with active streams - starting foreground service',
+        );
       }
-      unawaited(StreamingForegroundService.startService().then((_) {
-        // Update notification with current content
-        for (final stream in _activeStreams.values) {
-          if (stream.isActive) {
-            final content = stream.contentBuffer.toString();
-            if (content.isNotEmpty) {
-              unawaited(StreamingForegroundService.updateNotification(content: content));
+      unawaited(
+        StreamingForegroundService.startService().then((_) {
+          // Update notification with current content
+          for (final stream in _activeStreams.values) {
+            if (stream.isActive) {
+              final content = stream.contentBuffer.toString();
+              if (content.isNotEmpty) {
+                unawaited(
+                  StreamingForegroundService.updateNotification(
+                    content: content,
+                  ),
+                );
+              }
+              break; // Just use the first active stream's content
             }
-            break; // Just use the first active stream's content
           }
-        }
-      }));
+        }),
+      );
     } else if (!isInBackground && StreamingForegroundService.isRunning) {
       // App came to foreground - stop foreground service (notification no longer needed)
       if (kDebugMode) {
-        debugPrint('[StreamingManager] App resumed - stopping foreground service');
+        debugPrint(
+          '[StreamingManager] App resumed - stopping foreground service',
+        );
       }
       unawaited(StreamingForegroundService.stopService());
     }
@@ -340,9 +411,7 @@ class StreamingManager {
   /// Get info about active streams (for debugging)
   Map<String, bool> getActiveStreamsInfo() {
     return Map.fromEntries(
-      _activeStreams.entries.map(
-        (e) => MapEntry(e.key, e.value.isActive),
-      ),
+      _activeStreams.entries.map((e) => MapEntry(e.key, e.value.isActive)),
     );
   }
 
@@ -396,14 +465,18 @@ class StreamingManager {
     if (stream != null && !stream.isActive) {
       _activeStreams.remove(chatId);
       if (kDebugMode) {
-        debugPrint('[StreamingManager] Consumed completed stream for chat $chatId');
+        debugPrint(
+          '[StreamingManager] Consumed completed stream for chat $chatId',
+        );
       }
     }
   }
 
   /// Store background messages for a streaming chat
   /// Called when user switches away from an actively streaming chat
-  void setBackgroundMessages(String chatId, List<Map<String, dynamic>> messages, {
+  void setBackgroundMessages(
+    String chatId,
+    List<Map<String, dynamic>> messages, {
     String? modelId,
     String? provider,
   }) {
@@ -414,7 +487,9 @@ class StreamingManager {
     stream.modelId = modelId;
     stream.provider = provider;
     if (kDebugMode) {
-      debugPrint('[StreamingManager] Stored ${messages.length} background messages for chat $chatId');
+      debugPrint(
+        '[StreamingManager] Stored ${messages.length} background messages for chat $chatId',
+      );
     }
   }
 
@@ -422,7 +497,9 @@ class StreamingManager {
   /// Returns null if chat is not streaming in background
   List<Map<String, dynamic>>? getBackgroundMessages(String chatId) {
     final stream = _activeStreams[chatId];
-    if (stream == null || !stream.isActive || stream.backgroundMessages == null) {
+    if (stream == null ||
+        !stream.isActive ||
+        stream.backgroundMessages == null) {
       return null;
     }
 
@@ -432,7 +509,8 @@ class StreamingManager {
         .toList();
     if (stream.messageIndex < messages.length) {
       messages[stream.messageIndex]['text'] = stream.contentBuffer.toString();
-      messages[stream.messageIndex]['reasoning'] = stream.reasoningBuffer.toString();
+      messages[stream.messageIndex]['reasoning'] = stream.reasoningBuffer
+          .toString();
     }
     return messages;
   }
@@ -440,7 +518,9 @@ class StreamingManager {
   /// Check if a chat has background messages stored
   bool hasBackgroundMessages(String chatId) {
     final stream = _activeStreams[chatId];
-    return stream != null && stream.isActive && stream.backgroundMessages != null;
+    return stream != null &&
+        stream.isActive &&
+        stream.backgroundMessages != null;
   }
 }
 
@@ -459,6 +539,11 @@ class _ActiveStream {
   // Timestamp when stream completed (for TTL eviction)
   DateTime? completedAt;
 
+  // Idle timer: fires when no events arrive for too long.
+  // Reset on every incoming event. If it fires, the stream is
+  // considered dead and will be cleaned up with an error.
+  Timer? idleTimer;
+
   // Background message storage for when user switches away during streaming
   List<Map<String, dynamic>>? backgroundMessages;
   String? modelId;
@@ -470,4 +555,9 @@ class _ActiveStream {
     required this.chatId,
     this.chatTitle,
   });
+
+  void cancelIdleTimer() {
+    idleTimer?.cancel();
+    idleTimer = null;
+  }
 }

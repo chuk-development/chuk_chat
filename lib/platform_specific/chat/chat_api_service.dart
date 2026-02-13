@@ -29,10 +29,14 @@ class ChatApiService {
 
   ChatApiService({this.onUploadStatusUpdate}) {
     // Log the current API configuration for debugging
-    debugPrint('ChatApiService initialized with API URL: $_apiBaseUrl');
-    debugPrint(
+    if (kDebugMode) {
+      debugPrint('ChatApiService initialized with API URL: $_apiBaseUrl');
+    }
+    if (kDebugMode) {
+      debugPrint(
       'API Configuration: ${ApiConfigService.configurationDescription}',
-    );
+      );
+    }
   }
 
   /// Uploads a file and processes its content.
@@ -59,7 +63,9 @@ class ChatApiService {
         final markdown = '**File: $fileName**\n\n```$extension\n$content\n```';
 
         onUploadStatusUpdate?.call(fileId, markdown, false, null);
-        debugPrint('Plain text file "$fileName" read directly (no API call).');
+        if (kDebugMode) {
+          debugPrint('Plain text file "$fileName" read directly (no API call).');
+        }
         return;
       }
 
@@ -91,9 +97,11 @@ class ChatApiService {
           false,
           null,
         );
-        debugPrint(
+        if (kDebugMode) {
+          debugPrint(
           'File "$fileName" conversion successful. Markdown content received.',
-        );
+          );
+        }
       } else {
         final errorMessage = result['error'] ?? 'Unknown conversion error';
         onUploadStatusUpdate?.call(
@@ -102,10 +110,14 @@ class ChatApiService {
           false,
           'Failed to convert "$fileName": $errorMessage',
         );
-        debugPrint('File conversion failed for "$fileName": $errorMessage');
+        if (kDebugMode) {
+          debugPrint('File conversion failed for "$fileName": $errorMessage');
+        }
       }
     } catch (e) {
-      debugPrint('Unexpected error processing "$fileName": $e');
+      if (kDebugMode) {
+        debugPrint('Unexpected error processing "$fileName": $e');
+      }
       onUploadStatusUpdate?.call(
         fileId,
         null,
@@ -134,7 +146,9 @@ class ChatApiService {
         final content = String.fromCharCodes(bytes);
         final markdown = '**File: $fileName**\n\n```$extension\n$content\n```';
         onUploadStatusUpdate?.call(fileId, markdown, false, null);
-        debugPrint('Plain text file "$fileName" read directly from bytes.');
+        if (kDebugMode) {
+          debugPrint('Plain text file "$fileName" read directly from bytes.');
+        }
         return;
       }
 
@@ -159,14 +173,18 @@ class ChatApiService {
 
       if (result['success'] == true) {
         onUploadStatusUpdate?.call(fileId, result['markdown'], false, null);
-        debugPrint('File "$fileName" conversion successful.');
+        if (kDebugMode) {
+          debugPrint('File "$fileName" conversion successful.');
+        }
       } else {
         final errorMessage = result['error'] ?? 'Unknown conversion error';
         onUploadStatusUpdate?.call(fileId, null, false,
           'Failed to convert "$fileName": $errorMessage');
       }
     } catch (e) {
-      debugPrint('Unexpected error processing "$fileName": $e');
+      if (kDebugMode) {
+        debugPrint('Unexpected error processing "$fileName": $e');
+      }
       onUploadStatusUpdate?.call(fileId, null, false,
         'Error processing "$fileName": ${e.toString()}');
     }
@@ -219,7 +237,9 @@ class ChatApiService {
             decoded = parsed.cast<String, dynamic>();
           }
         } catch (error) {
-          debugPrint('Failed to decode transcription response: $error');
+          if (kDebugMode) {
+            debugPrint('Failed to decode transcription response: $error');
+          }
         }
       }
 
@@ -280,7 +300,9 @@ class ChatApiService {
             decoded = parsed.cast<String, dynamic>();
           }
         } catch (error) {
-          debugPrint('Failed to decode transcription response: $error');
+          if (kDebugMode) {
+            debugPrint('Failed to decode transcription response: $error');
+          }
         }
       }
 

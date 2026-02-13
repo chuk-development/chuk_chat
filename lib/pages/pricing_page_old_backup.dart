@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:flutter/foundation.dart';
 
 final SupabaseClient _supabase = Supabase.instance.client;
 
@@ -120,7 +121,9 @@ class _PricingPageState extends State<PricingPage> {
       try {
         await _supabase.functions.invoke('sync_subscription');
       } catch (e) {
-        debugPrint('Sync error (not critical): $e');
+        if (kDebugMode) {
+          debugPrint('Sync error (not critical): $e');
+        }
       }
 
       final response = await _supabase
@@ -139,7 +142,9 @@ class _PricingPageState extends State<PricingPage> {
     } catch (e) {
       if (!mounted || requestToken != _loadRequestToken) return;
       setState(() => _isLoading = false);
-      debugPrint('Error loading subscription: $e');
+      if (kDebugMode) {
+        debugPrint('Error loading subscription: $e');
+      }
     }
   }
 

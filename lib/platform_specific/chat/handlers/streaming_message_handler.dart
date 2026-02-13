@@ -125,7 +125,7 @@ class StreamingMessageHandler {
       debugPrint('  - images: ${images?.length ?? 0}');
       if (images != null && images.isNotEmpty) {
         for (int i = 0; i < images.length; i++) {
-          debugPrint('  - image[$i]: ${images[i].substring(0, 50)}...');
+            debugPrint('  - image[$i]: ${images[i].substring(0, 50)}...');
         }
       }
     }
@@ -247,9 +247,7 @@ class StreamingMessageHandler {
         },
       );
     } catch (error) {
-      if (kDebugMode) {
         debugPrint('Failed to start stream: $error');
-      }
       if (onMessageFinalize != null) {
         onMessageFinalize!(
           placeholderIndex,
@@ -270,9 +268,7 @@ class StreamingMessageHandler {
   /// Cancel active stream
   Future<void> cancelStream(String? chatId) async {
     if (chatId != null && (_isStreaming || _isSending)) {
-      if (kDebugMode) {
         debugPrint('Cancelling stream for chat $chatId...');
-      }
       await _streamingManager.cancelStream(chatId);
 
       _isStreaming = false;
@@ -437,15 +433,11 @@ class StreamingMessageHandler {
           _imageBase64Cache[path] = dataUrl;
           dataUrls.add(dataUrl);
         } catch (e) {
-          if (kDebugMode) {
             debugPrint('⚠️ [StreamingHandler] Failed to resolve history image: $e');
-          }
         }
       }
     } catch (e) {
-      if (kDebugMode) {
         debugPrint('⚠️ [StreamingHandler] Failed to parse images JSON: $e');
-      }
     }
     return dataUrls;
   }
@@ -476,17 +468,13 @@ class StreamingMessageHandler {
     } catch (error) {
       // Check if this is a network error
       if (NetworkStatusService.isNetworkError(error)) {
-        if (kDebugMode) {
           debugPrint('Network error during session refresh: $error');
-        }
         onShowSnackBar?.call('Network error. Please check your connection.');
         return null;
       }
 
       // Not a network error, likely auth issue
-      if (kDebugMode) {
         debugPrint('Auth error during session refresh: $error');
-      }
       onShowSnackBar?.call('Authentication error. Please sign in again.');
       await SupabaseService.signOut();
       return null;

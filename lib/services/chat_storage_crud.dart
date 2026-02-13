@@ -42,16 +42,20 @@ class ChatStorageCrud {
     final user = SupabaseService.auth.currentUser;
     if (user == null) return null;
 
-    debugPrint('📂 [ChatStorage] Loading full chat: $chatId');
+    if (kDebugMode) {
+      debugPrint('📂 [ChatStorage] Loading full chat: $chatId');
+    }
     final stopwatch = Stopwatch()..start();
 
     try {
       // Check if already fully loaded
       final existing = ChatStorageState.chatsById[chatId];
       if (existing != null && existing.isFullyLoaded) {
-        debugPrint(
+        if (kDebugMode) {
+          debugPrint(
           '✅ [ChatStorage] Chat already fully loaded (${stopwatch.elapsedMilliseconds}ms)',
-        );
+          );
+        }
         return existing;
       }
 
@@ -67,14 +71,18 @@ class ChatStorageCrud {
           .timeout(const Duration(seconds: 10));
 
       if (rows.isEmpty) {
-        debugPrint('⚠️ [ChatStorage] Chat not found: $chatId');
+        if (kDebugMode) {
+          debugPrint('⚠️ [ChatStorage] Chat not found: $chatId');
+        }
         return null;
       }
 
       final row = rows.first;
       final encryptedPayload = row['encrypted_payload'] as String?;
       if (encryptedPayload == null || encryptedPayload.isEmpty) {
-        debugPrint('⚠️ [ChatStorage] Chat has no payload: $chatId');
+        if (kDebugMode) {
+          debugPrint('⚠️ [ChatStorage] Chat has no payload: $chatId');
+        }
         return null;
       }
 
@@ -97,16 +105,22 @@ class ChatStorageCrud {
       ChatStorageState.notifyChanges(chatId);
 
       stopwatch.stop();
-      debugPrint(
+      if (kDebugMode) {
+        debugPrint(
         '✅ [ChatStorage] Full chat loaded in ${stopwatch.elapsedMilliseconds}ms (${chatPayload.messages.length} messages)',
-      );
+        );
+      }
 
       return chat;
     } on SecretBoxAuthenticationError {
-      debugPrint('🔐 [ChatStorage] Failed to decrypt chat: $chatId');
+      if (kDebugMode) {
+        debugPrint('🔐 [ChatStorage] Failed to decrypt chat: $chatId');
+      }
       return null;
     } catch (e) {
-      debugPrint('❌ [ChatStorage] Error loading full chat: $e');
+      if (kDebugMode) {
+        debugPrint('❌ [ChatStorage] Error loading full chat: $e');
+      }
       return null;
     }
   }
@@ -128,11 +142,15 @@ class ChatStorageCrud {
     try {
       final rows = await LocalChatCacheService.load(user.id);
       if (rows.isEmpty) {
-        debugPrint('📦 [ChatStorage] Cache empty');
+        if (kDebugMode) {
+          debugPrint('📦 [ChatStorage] Cache empty');
+        }
         return;
       }
 
-      debugPrint('📦 [ChatStorage] Loading ${rows.length} chats from cache...');
+      if (kDebugMode) {
+        debugPrint('📦 [ChatStorage] Loading ${rows.length} chats from cache...');
+      }
 
       // Progressive loading: first batch for fast UI, then rest in background
       const int firstBatchSize = 15;
@@ -154,9 +172,11 @@ class ChatStorageCrud {
       // Notify UI immediately with first batch
       if (ChatStorageState.chatsById.isNotEmpty) {
         ChatStorageState.notifyChanges();
-        debugPrint(
+        if (kDebugMode) {
+          debugPrint(
           '⚡ [ChatStorage] First ${ChatStorageState.chatsById.length} chats from cache (fast)',
-        );
+          );
+        }
       }
 
       // Decrypt remaining in background (also batched)
@@ -170,11 +190,15 @@ class ChatStorageCrud {
         ChatStorageState.notifyChanges();
       }
 
-      debugPrint(
+      if (kDebugMode) {
+        debugPrint(
         '✅ [ChatStorage] Loaded ${ChatStorageState.chatsById.length} chats from cache',
-      );
+        );
+      }
     } catch (e) {
-      debugPrint('❌ [ChatStorage] Cache load failed: $e');
+      if (kDebugMode) {
+        debugPrint('❌ [ChatStorage] Cache load failed: $e');
+      }
     }
   }
 
@@ -231,7 +255,9 @@ class ChatStorageCrud {
   static Future<void> loadChats() async {
     // Prevent concurrent loads - wait for existing operation
     if (ChatStorageState.isLoading) {
-      debugPrint('⏳ [ChatStorage] Load already in progress, waiting...');
+      if (kDebugMode) {
+        debugPrint('⏳ [ChatStorage] Load already in progress, waiting...');
+      }
       return ChatStorageState.loadingCompleter!.future;
     }
     ChatStorageState.loadingCompleter = Completer<void>();
@@ -239,7 +265,9 @@ class ChatStorageCrud {
     try {
       final user = SupabaseService.auth.currentUser;
       if (user == null) {
-        debugPrint('⚠️ [ChatStorage] No user signed in, clearing chats');
+        if (kDebugMode) {
+          debugPrint('⚠️ [ChatStorage] No user signed in, clearing chats');
+        }
         ChatStorageState.chatsById.clear();
         ChatStorageState.notifyChanges();
         return;
@@ -254,7 +282,9 @@ class ChatStorageCrud {
 
       if (isOnline) {
         try {
-          debugPrint('🌐 [ChatStorage] Network status: ONLINE');
+          if (kDebugMode) {
+            debugPrint('🌐 [ChatStorage] Network status: ONLINE');
+          }
           rows = await SupabaseService.client
               .from('encrypted_chats')
               .select(
@@ -263,39 +293,53 @@ class ChatStorageCrud {
               .eq('user_id', user.id)
               .order('created_at', ascending: false)
               .timeout(const Duration(seconds: 30));
-          debugPrint('✅ [ChatStorage] Loaded ${rows.length} chats from remote');
+          if (kDebugMode) {
+            debugPrint('✅ [ChatStorage] Loaded ${rows.length} chats from remote');
+          }
 
           // Update cache with remote data (use replaceAll to avoid race conditions)
           unawaited(LocalChatCacheService.replaceAll(user.id, rows));
         } catch (error, stackTrace) {
           remoteError = error;
           remoteStack = stackTrace;
-          debugPrint('❌ [ChatStorage] Failed to load from remote: $error');
+          if (kDebugMode) {
+            debugPrint('❌ [ChatStorage] Failed to load from remote: $error');
+          }
 
           // Fall back to cache
           try {
             rows = await LocalChatCacheService.load(user.id);
             loadedFromCache = true;
-            debugPrint(
+            if (kDebugMode) {
+              debugPrint(
               '📦 [ChatStorage] Loaded ${rows.length} chats from cache (fallback)',
-            );
+              );
+            }
           } catch (cacheError) {
-            debugPrint(
+            if (kDebugMode) {
+              debugPrint(
               '❌ [ChatStorage] Failed to load from cache: $cacheError',
-            );
+              );
+            }
             rows = [];
           }
         }
       } else {
-        debugPrint('🌐 [ChatStorage] Network status: OFFLINE');
+        if (kDebugMode) {
+          debugPrint('🌐 [ChatStorage] Network status: OFFLINE');
+        }
         try {
           rows = await LocalChatCacheService.load(user.id);
           loadedFromCache = true;
-          debugPrint(
+          if (kDebugMode) {
+            debugPrint(
             '📦 [ChatStorage] Loaded ${rows.length} chats from cache (offline)',
-          );
+            );
+          }
         } catch (error) {
-          debugPrint('❌ [ChatStorage] Failed to load from cache: $error');
+          if (kDebugMode) {
+            debugPrint('❌ [ChatStorage] Failed to load from cache: $error');
+          }
           rows = [];
         }
       }
@@ -320,16 +364,20 @@ class ChatStorageCrud {
       // Notify UI immediately so sidebar shows first chats
       if (ChatStorageState.chatsById.isNotEmpty) {
         ChatStorageState.notifyChanges();
-        debugPrint(
+        if (kDebugMode) {
+          debugPrint(
           '⚡ [ChatStorage] First ${ChatStorageState.chatsById.length} chats ready (fast path)',
-        );
+          );
+        }
       }
 
       // Decrypt remaining chats in background (also batched)
       if (remainingBatch.isNotEmpty) {
-        debugPrint(
+        if (kDebugMode) {
+          debugPrint(
           '🔄 [ChatStorage] Decrypting ${remainingBatch.length} more chats in background...',
-        );
+          );
+        }
         final remainingChats = await _decryptChatRowsBatch(remainingBatch);
         for (final chat in remainingChats) {
           if (chat != null) {
@@ -337,9 +385,11 @@ class ChatStorageCrud {
           }
         }
         ChatStorageState.notifyChanges();
-        debugPrint(
+        if (kDebugMode) {
+          debugPrint(
           '✅ [ChatStorage] All ${ChatStorageState.chatsById.length} chats loaded',
-        );
+          );
+        }
       } else if (ChatStorageState.chatsById.isEmpty) {
         // No chats at all - still notify
         ChatStorageState.notifyChanges();
@@ -347,9 +397,11 @@ class ChatStorageCrud {
 
       // Log all loaded chats for debugging
       if (ChatStorageState.chatsById.isNotEmpty) {
-        debugPrint(
+        if (kDebugMode) {
+          debugPrint(
           '📋 [ChatStorage] Current chats in memory (${ChatStorageState.chatsById.length}):',
-        );
+          );
+        }
         for (final entry in ChatStorageState.chatsById.entries) {
           final chat = entry.value;
           final firstUserMsg = chat.messages
@@ -358,18 +410,24 @@ class ChatStorageCrud {
           final title = (firstUserMsg?.text.length ?? 0) > 40
               ? '${firstUserMsg!.text.substring(0, 40)}...'
               : (firstUserMsg?.text ?? 'No user message');
-          debugPrint(
+          if (kDebugMode) {
+            debugPrint(
             '   - ${entry.key.substring(0, 8)}... : "$title" (${chat.messages.length} msgs)',
-          );
+            );
+          }
         }
       }
 
       if (loadedFromCache && remoteError != null) {
-        debugPrint(
+        if (kDebugMode) {
+          debugPrint(
           'ChatStorageService loaded chats from offline cache: $remoteError',
-        );
+          );
+        }
         if (remoteStack != null) {
-          debugPrint('Stack trace: $remoteStack');
+          if (kDebugMode) {
+            debugPrint('Stack trace: $remoteStack');
+          }
         }
       }
     } finally {
@@ -444,19 +502,25 @@ class ChatStorageCrud {
     // CRITICAL: Always use a proper UUID to ensure savingChats tracks the same ID
     // that gets inserted into Supabase. This prevents race conditions with realtime events.
     final effectiveChatId = chatId ?? ChatStorageState.uuid.v4();
-    debugPrint(
+    if (kDebugMode) {
+      debugPrint(
       '💾 [ChatStorage] saveChat: $effectiveChatId (${messagesMaps.length} messages)',
-    );
+      );
+    }
 
     // If there's already a pending save for this chat, wait for it
     if (ChatStorageState.pendingSaves.containsKey(effectiveChatId)) {
-      debugPrint('⏳ [ChatStorage] Waiting for pending save: $effectiveChatId');
+      if (kDebugMode) {
+        debugPrint('⏳ [ChatStorage] Waiting for pending save: $effectiveChatId');
+      }
       return await ChatStorageState.pendingSaves[effectiveChatId]!.future;
     }
 
     // If chat already exists, update it instead
     if (ChatStorageState.chatsById.containsKey(effectiveChatId)) {
-      debugPrint('🔄 [ChatStorage] Chat exists, updating: $effectiveChatId');
+      if (kDebugMode) {
+        debugPrint('🔄 [ChatStorage] Chat exists, updating: $effectiveChatId');
+      }
       return await updateChat(effectiveChatId, messagesMaps);
     }
 
@@ -498,7 +562,9 @@ class ChatStorageCrud {
 
     final messages = _mapToChatMessages(messagesMaps);
     if (messages.isEmpty) {
-      debugPrint('⚠️ [ChatStorage] No messages to save');
+      if (kDebugMode) {
+        debugPrint('⚠️ [ChatStorage] No messages to save');
+      }
       return null;
     }
 
@@ -551,11 +617,17 @@ class ChatStorageCrud {
     final displayTitle = title.length > 50
         ? '${title.substring(0, 50)}...'
         : title;
-    debugPrint('✅ [ChatStorage] Saved new chat: $finalId');
-    debugPrint('   📝 Title: "$displayTitle"');
-    debugPrint(
+    if (kDebugMode) {
+      debugPrint('✅ [ChatStorage] Saved new chat: $finalId');
+    }
+    if (kDebugMode) {
+      debugPrint('   📝 Title: "$displayTitle"');
+    }
+    if (kDebugMode) {
+      debugPrint(
       '   📊 Messages: ${messages.length} (${messages.where((m) => m.role == "user").length} user, ${messages.where((m) => m.role == "assistant").length} assistant)',
-    );
+      );
+    }
 
     return chat;
   }
@@ -565,13 +637,17 @@ class ChatStorageCrud {
     String chatId,
     List<Map<String, dynamic>> messagesMaps,
   ) async {
-    debugPrint(
+    if (kDebugMode) {
+      debugPrint(
       '🔄 [ChatStorage] updateChat: $chatId (${messagesMaps.length} messages)',
-    );
+      );
+    }
 
     // If there's already a pending save for this chat, wait for it then try again
     if (ChatStorageState.pendingSaves.containsKey(chatId)) {
-      debugPrint('⏳ [ChatStorage] Waiting for pending operation: $chatId');
+      if (kDebugMode) {
+        debugPrint('⏳ [ChatStorage] Waiting for pending operation: $chatId');
+      }
       await ChatStorageState.pendingSaves[chatId]!.future;
     }
 
@@ -613,7 +689,9 @@ class ChatStorageCrud {
 
     final messages = _mapToChatMessages(messagesMaps);
     if (messages.isEmpty) {
-      debugPrint('⚠️ [ChatStorage] No messages to update');
+      if (kDebugMode) {
+        debugPrint('⚠️ [ChatStorage] No messages to update');
+      }
       return null;
     }
 
@@ -678,11 +756,17 @@ class ChatStorageCrud {
     final displayTitle = title.length > 50
         ? '${title.substring(0, 50)}...'
         : title;
-    debugPrint('✅ [ChatStorage] Updated chat: $chatId');
-    debugPrint('   📝 Title: "$displayTitle"');
-    debugPrint(
+    if (kDebugMode) {
+      debugPrint('✅ [ChatStorage] Updated chat: $chatId');
+    }
+    if (kDebugMode) {
+      debugPrint('   📝 Title: "$displayTitle"');
+    }
+    if (kDebugMode) {
+      debugPrint(
       '   📊 Messages: ${messages.length} (${messages.where((m) => m.role == "user").length} user, ${messages.where((m) => m.role == "assistant").length} assistant)',
-    );
+      );
+    }
 
     return chat;
   }
@@ -711,21 +795,29 @@ class ChatStorageCrud {
         }
       }
     } catch (e) {
-      debugPrint('⚠️ [ChatStorage] Failed to fetch image_paths: $e');
+      if (kDebugMode) {
+        debugPrint('⚠️ [ChatStorage] Failed to fetch image_paths: $e');
+      }
       // Continue with deletion even if fetching paths fails
     }
 
     // Delete associated images from storage (best effort, don't block on failures)
     if (imagePaths.isNotEmpty) {
-      debugPrint(
+      if (kDebugMode) {
+        debugPrint(
         '🖼️ [ChatStorage] Deleting ${imagePaths.length} images for chat: $chatId',
-      );
+        );
+      }
       for (final path in imagePaths) {
         try {
           await ImageStorageService.deleteEncryptedImage(path);
-          debugPrint('   ✅ Deleted image: $path');
+          if (kDebugMode) {
+            debugPrint('   ✅ Deleted image: $path');
+          }
         } catch (e) {
-          debugPrint('   ⚠️ Failed to delete image $path: $e');
+          if (kDebugMode) {
+            debugPrint('   ⚠️ Failed to delete image $path: $e');
+          }
           // Continue deleting other images even if one fails
         }
       }
@@ -765,6 +857,8 @@ class ChatStorageCrud {
 
     ChatStorageState.notifyChanges(chatId);
     unawaited(LocalChatCacheService.delete(user.id, chatId));
-    debugPrint('🗑️ [ChatStorage] Deleted chat: $chatId');
+    if (kDebugMode) {
+      debugPrint('🗑️ [ChatStorage] Deleted chat: $chatId');
+    }
   }
 }

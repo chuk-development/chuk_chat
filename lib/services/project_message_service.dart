@@ -72,10 +72,12 @@ class ProjectMessageService {
         // Estimate actual content length (markdown summary for PDFs, not raw file size)
         final estimatedLength = _estimateContentLength(file);
         if (totalContentLength + estimatedLength > maxTotalContentLength) {
-          debugPrint(
+          if (kDebugMode) {
+            debugPrint(
             '⚠️ [ProjectMessage] Skipping file ${file.fileName} due to size limit '
             '(estimated: $estimatedLength, total: $totalContentLength, max: $maxTotalContentLength)',
-          );
+            );
+          }
           continue;
         }
 
@@ -122,7 +124,9 @@ class ProjectMessageService {
           buffer.writeln('---');
           buffer.writeln();
         } catch (e) {
-          debugPrint('❌ [ProjectMessage] Failed to process file ${file.id}: $e');
+          if (kDebugMode) {
+            debugPrint('❌ [ProjectMessage] Failed to process file ${file.id}: $e');
+          }
           // Skip this file but continue with others
           buffer.writeln('File: ${file.fileName} (content unavailable)');
           buffer.writeln();
@@ -152,7 +156,9 @@ class ProjectMessageService {
 
       for (final chatId in project.chatIds) {
         if (chatContentLength >= maxChatContentLength) {
-          debugPrint('⚠️ [ProjectMessage] Skipping remaining chats due to size limit');
+          if (kDebugMode) {
+            debugPrint('⚠️ [ProjectMessage] Skipping remaining chats due to size limit');
+          }
           break;
         }
 
@@ -176,7 +182,9 @@ class ProjectMessageService {
           chatContentLength += chatSummary.length;
           includedChats++;
         } catch (e) {
-          debugPrint('⚠️ [ProjectMessage] Failed to load chat $chatId: $e');
+          if (kDebugMode) {
+            debugPrint('⚠️ [ProjectMessage] Failed to load chat $chatId: $e');
+          }
         }
       }
 
@@ -259,7 +267,9 @@ class ProjectMessageService {
       // Prepend to messages
       return [systemMessage, ...messages];
     } catch (e, st) {
-      debugPrint('❌ [ProjectMessage] Failed to inject context: $e\n$st');
+      if (kDebugMode) {
+        debugPrint('❌ [ProjectMessage] Failed to inject context: $e\n$st');
+      }
       // Return original messages if context injection fails
       return messages;
     }

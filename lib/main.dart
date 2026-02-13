@@ -4,7 +4,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 
+import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/platform_config.dart';
+import 'package:chuk_chat/utils/certificate_pinning_register.dart'
+    as cert_register;
 import 'package:chuk_chat/services/app_initialization_service.dart';
 import 'package:chuk_chat/services/app_lifecycle_service.dart';
 import 'package:chuk_chat/services/app_theme_service.dart';
@@ -22,6 +25,10 @@ import 'package:chuk_chat/widgets/auth_gate.dart';
 /* ---------- MAIN ---------- */
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Register certificate pinning for native platforms.
+  // On web this is a no-op (browser handles TLS).
+  cert_register.registerCertificatePinning();
 
   // Pre-initialize SharedPreferences BEFORE runApp for instant cache access
   await initChatStorageCache();
@@ -174,42 +181,47 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
 
   Widget _buildRootWrapper() {
     return RootWrapper(
-      currentThemeMode: _themeService.themeMode,
-      currentAccentColor: _themeService.accentColor,
-      currentIconFgColor: _themeService.iconFgColor,
-      currentBgColor: _themeService.bgColor,
-      setThemeMode: _themeService.setThemeMode,
-      setAccentColor: _themeService.setAccentColor,
-      setIconFgColor: _themeService.setIconFgColor,
-      setBgColor: _themeService.setBgColor,
-      grainEnabled: _themeService.grainEnabled,
-      setGrainEnabled: _themeService.setGrainEnabled,
-      showReasoningTokens: _themeService.showReasoningTokens,
-      setShowReasoningTokens: _themeService.setShowReasoningTokens,
-      showModelInfo: _themeService.showModelInfo,
-      setShowModelInfo: _themeService.setShowModelInfo,
-      showTps: _themeService.showTps,
-      setShowTps: _themeService.setShowTps,
-      autoSendVoiceTranscription: _themeService.autoSendVoiceTranscription,
-      setAutoSendVoiceTranscription:
-          _themeService.setAutoSendVoiceTranscription,
-      imageGenEnabled: _themeService.imageGenEnabled,
-      setImageGenEnabled: _themeService.setImageGenEnabled,
-      imageGenDefaultSize: _themeService.imageGenDefaultSize,
-      setImageGenDefaultSize: _themeService.setImageGenDefaultSize,
-      imageGenCustomWidth: _themeService.imageGenCustomWidth,
-      setImageGenCustomWidth: _themeService.setImageGenCustomWidth,
-      imageGenCustomHeight: _themeService.imageGenCustomHeight,
-      setImageGenCustomHeight: _themeService.setImageGenCustomHeight,
-      imageGenUseCustomSize: _themeService.imageGenUseCustomSize,
-      setImageGenUseCustomSize: _themeService.setImageGenUseCustomSize,
-      includeRecentImagesInHistory: _themeService.includeRecentImagesInHistory,
-      setIncludeRecentImagesInHistory:
-          _themeService.setIncludeRecentImagesInHistory,
-      includeAllImagesInHistory: _themeService.includeAllImagesInHistory,
-      setIncludeAllImagesInHistory: _themeService.setIncludeAllImagesInHistory,
-      includeReasoningInHistory: _themeService.includeReasoningInHistory,
-      setIncludeReasoningInHistory: _themeService.setIncludeReasoningInHistory,
+      config: AppShellConfig(
+        currentThemeMode: _themeService.themeMode,
+        currentAccentColor: _themeService.accentColor,
+        currentIconFgColor: _themeService.iconFgColor,
+        currentBgColor: _themeService.bgColor,
+        setThemeMode: _themeService.setThemeMode,
+        setAccentColor: _themeService.setAccentColor,
+        setIconFgColor: _themeService.setIconFgColor,
+        setBgColor: _themeService.setBgColor,
+        grainEnabled: _themeService.grainEnabled,
+        setGrainEnabled: _themeService.setGrainEnabled,
+        showReasoningTokens: _themeService.showReasoningTokens,
+        setShowReasoningTokens: _themeService.setShowReasoningTokens,
+        showModelInfo: _themeService.showModelInfo,
+        setShowModelInfo: _themeService.setShowModelInfo,
+        showTps: _themeService.showTps,
+        setShowTps: _themeService.setShowTps,
+        autoSendVoiceTranscription: _themeService.autoSendVoiceTranscription,
+        setAutoSendVoiceTranscription:
+            _themeService.setAutoSendVoiceTranscription,
+        imageGenEnabled: _themeService.imageGenEnabled,
+        setImageGenEnabled: _themeService.setImageGenEnabled,
+        imageGenDefaultSize: _themeService.imageGenDefaultSize,
+        setImageGenDefaultSize: _themeService.setImageGenDefaultSize,
+        imageGenCustomWidth: _themeService.imageGenCustomWidth,
+        setImageGenCustomWidth: _themeService.setImageGenCustomWidth,
+        imageGenCustomHeight: _themeService.imageGenCustomHeight,
+        setImageGenCustomHeight: _themeService.setImageGenCustomHeight,
+        imageGenUseCustomSize: _themeService.imageGenUseCustomSize,
+        setImageGenUseCustomSize: _themeService.setImageGenUseCustomSize,
+        includeRecentImagesInHistory:
+            _themeService.includeRecentImagesInHistory,
+        setIncludeRecentImagesInHistory:
+            _themeService.setIncludeRecentImagesInHistory,
+        includeAllImagesInHistory: _themeService.includeAllImagesInHistory,
+        setIncludeAllImagesInHistory:
+            _themeService.setIncludeAllImagesInHistory,
+        includeReasoningInHistory: _themeService.includeReasoningInHistory,
+        setIncludeReasoningInHistory:
+            _themeService.setIncludeReasoningInHistory,
+      ),
     );
   }
 }

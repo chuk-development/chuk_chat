@@ -35,7 +35,9 @@ class ModelPrefetchService {
       // Check if we have valid cached models - skip fetch if so
       final cacheValid = await ModelCacheService.isCacheValid();
       if (cacheValid) {
-        debugPrint('📦 [ModelPrefetch] Cache valid, skipping network fetch');
+        if (kDebugMode) {
+          debugPrint('📦 [ModelPrefetch] Cache valid, skipping network fetch');
+        }
         // Initialize capabilities service with cached data
         await ModelCapabilitiesService.initialize();
         return;
@@ -63,7 +65,9 @@ class ModelPrefetchService {
       }
 
       // Fetch models list and cache for quick reuse.
-      debugPrint('🌐 [ModelPrefetch] Fetching models from network...');
+      if (kDebugMode) {
+        debugPrint('🌐 [ModelPrefetch] Fetching models from network...');
+      }
       final response = await http
           .get(
             Uri.parse('${ApiConfigService.apiBaseUrl}/v1/models_info'),
@@ -79,17 +83,23 @@ class ModelPrefetchService {
               .map((entry) => Map<String, dynamic>.from(entry))
               .toList(growable: false);
           await ModelCacheService.saveAvailableModels(payload);
-          debugPrint('✅ [ModelPrefetch] Cached ${payload.length} models');
+          if (kDebugMode) {
+            debugPrint('✅ [ModelPrefetch] Cached ${payload.length} models');
+          }
           // Initialize capabilities service with fresh data
           await ModelCapabilitiesService.refresh();
         }
       }
     } on TimeoutException {
       // Short timeout is expected on slow networks - use cached data
-      debugPrint('⏱️ [ModelPrefetch] Timeout - using cached models');
+      if (kDebugMode) {
+        debugPrint('⏱️ [ModelPrefetch] Timeout - using cached models');
+      }
     } catch (error) {
       // Fail silently - cached models will be used
-      debugPrint('⚠️ [ModelPrefetch] Failed, using cache: $error');
+      if (kDebugMode) {
+        debugPrint('⚠️ [ModelPrefetch] Failed, using cache: $error');
+      }
     } finally {
       _isPrefetching = false;
     }

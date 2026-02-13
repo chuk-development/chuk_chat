@@ -45,24 +45,33 @@ class ChatStorageState {
   /// null = new chat (no chat selected yet)
   /// This is the primary source of truth for which chat is active.
   /// ValueNotifier for reactive selectedChatId updates
-  static final ValueNotifier<String?> selectedChatIdNotifier = ValueNotifier<String?>(null);
+  static final ValueNotifier<String?> selectedChatIdNotifier =
+      ValueNotifier<String?>(null);
 
   static String? get selectedChatId => selectedChatIdNotifier.value;
   static set selectedChatId(String? value) {
     if (selectedChatIdNotifier.value != value) {
-      debugPrint('');
-      debugPrint('┌─────────────────────────────────────────────────────────────');
-      debugPrint('│ 📍 [SELECTED-CHAT-ID] CHANGED');
-      debugPrint('│ 📍 [SELECTED-CHAT-ID] OLD: ${selectedChatIdNotifier.value}');
-      debugPrint('│ 📍 [SELECTED-CHAT-ID] NEW: $value');
-      debugPrint('│ 📍 [SELECTED-CHAT-ID] Stack trace:');
-      try {
-        throw Exception('Stack trace');
-      } catch (e, st) {
-        final lines = st.toString().split('\n').take(8).join('\n│    ');
-        debugPrint('│    $lines');
+      if (kDebugMode) {
+        debugPrint('');
+        debugPrint(
+          '┌─────────────────────────────────────────────────────────────',
+        );
+        debugPrint('│ 📍 [SELECTED-CHAT-ID] CHANGED');
+        debugPrint(
+          '│ 📍 [SELECTED-CHAT-ID] OLD: ${selectedChatIdNotifier.value}',
+        );
+        debugPrint('│ 📍 [SELECTED-CHAT-ID] NEW: $value');
+        debugPrint('│ 📍 [SELECTED-CHAT-ID] Stack trace:');
+        try {
+          throw Exception('Stack trace');
+        } catch (e, st) {
+          final lines = st.toString().split('\n').take(8).join('\n│    ');
+          debugPrint('│    $lines');
+        }
+        debugPrint(
+          '└─────────────────────────────────────────────────────────────',
+        );
       }
-      debugPrint('└─────────────────────────────────────────────────────────────');
       selectedChatIdNotifier.value = value;
     }
   }

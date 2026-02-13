@@ -43,7 +43,9 @@ class StreamingForegroundService {
     );
 
     _isInitialized = true;
-    debugPrint('[ForegroundService] Initialized');
+    if (kDebugMode) {
+      debugPrint('[ForegroundService] Initialized');
+    }
   }
 
   /// Start the foreground service when streaming begins
@@ -73,9 +75,13 @@ class StreamingForegroundService {
 
     if (result is ServiceRequestSuccess) {
       _isRunning = true;
-      debugPrint('[ForegroundService] Started');
+      if (kDebugMode) {
+        debugPrint('[ForegroundService] Started');
+      }
     } else if (result is ServiceRequestFailure) {
-      debugPrint('[ForegroundService] Failed to start: ${result.error}');
+      if (kDebugMode) {
+        debugPrint('[ForegroundService] Failed to start: ${result.error}');
+      }
     }
   }
 
@@ -114,9 +120,13 @@ class StreamingForegroundService {
     final result = await FlutterForegroundTask.stopService();
     if (result is ServiceRequestSuccess) {
       _isRunning = false;
-      debugPrint('[ForegroundService] Stopped');
+      if (kDebugMode) {
+        debugPrint('[ForegroundService] Stopped');
+      }
     } else if (result is ServiceRequestFailure) {
-      debugPrint('[ForegroundService] Failed to stop: ${result.error}');
+      if (kDebugMode) {
+        debugPrint('[ForegroundService] Failed to stop: ${result.error}');
+      }
       // Force reset state anyway
       _isRunning = false;
     }
@@ -145,7 +155,9 @@ void _foregroundTaskCallback() {
 class _StreamingTaskHandler extends TaskHandler {
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
-    debugPrint('[ForegroundTask] onStart');
+    if (kDebugMode) {
+      debugPrint('[ForegroundTask] onStart');
+    }
   }
 
   @override
@@ -155,7 +167,9 @@ class _StreamingTaskHandler extends TaskHandler {
 
   @override
   Future<void> onDestroy(DateTime timestamp) async {
-    debugPrint('[ForegroundTask] onDestroy');
+    if (kDebugMode) {
+      debugPrint('[ForegroundTask] onDestroy');
+    }
   }
 
   @override
