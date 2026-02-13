@@ -101,9 +101,8 @@ Zuletzt konsolidiert: **2026-02-13**
   `lib/utils/lru_byte_cache.dart` + `lib/services/image_storage_service.dart` — LRU-Cache mit 50 MB Byte-Limit implementiert. Nutzt `dart:collection.LinkedHashMap` für O(1) Operationen. Älteste Einträge werden automatisch evicted. 12 Unit-Tests.
   *Quelle: Audit 2025-12 + Greptile #7*
 
-- [ ] **allowBackup nicht deaktiviert** — HOCH
-  `android/app/src/main/AndroidManifest.xml` — `android:allowBackup` nicht gesetzt (Default = `true`). Encryption-Keys und Nachrichten könnten in Google-Cloud-Backups landen.
-  Fix: `android:allowBackup="false"` in `<application>` setzen.
+- [x] **allowBackup nicht deaktiviert** — HOCH
+  `AndroidManifest.xml` — `android:allowBackup="false"` + `android:fullBackupContent="false"` (Android <=11) + `android:dataExtractionRules` (Android 12+) gesetzt. Cloud- und Device-Transfer-Backups vollständig deaktiviert.
   *Quelle: Audit 2025-12*
 
 - [ ] **Debug-Logs in Release** — HOCH
@@ -283,10 +282,10 @@ Zuletzt konsolidiert: **2026-02-13**
 
 | Kategorie | Anzahl |
 |-----------|--------|
-| Behoben | 16 |
+| Behoben | 17 |
 | Kein echtes Problem | 5 |
-| **Offen — Flutter Client** | **13** |
+| **Offen — Flutter Client** | **12** |
 | **Offen — Architektur/Performance** | **8** |
 | **Offen — API Server** | **8** |
 | **Offen — Supabase/Infra** | **5** |
-| **Gesamt offen** | **34** |
+| **Gesamt offen** | **33** |
