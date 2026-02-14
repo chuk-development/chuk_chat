@@ -70,13 +70,20 @@ flutter build web --release --dart-define-from-file=.env
 
 ### Mandatory Post-Task Workflow
 
+**This workflow is non-negotiable. Follow it EVERY time you change code, in EVERY session.**
+
 1. `flutter test` — all must pass
 2. `flutter analyze` — 0 new issues (4 pre-existing info-level lints in `chat_ui_desktop.dart` OK)
-3. `coderabbit review --plain` (timeout 300s) — fix any findings (free tier, rate limited ~15 min cooldown)
+3. **BEFORE committing**: run `coderabbit review --plain` (timeout 300s) on your **uncommitted** changes
+   - CodeRabbit only reviews uncommitted files. If you commit first, it won't see your changes.
+   - Review the output and fix any findings **in your changed files** (ignore pre-existing issues in other files)
+   - Re-run `coderabbit review --plain` after fixing to confirm clean
 4. Commit with descriptive message
 5. `git push`
 
-**Do NOT push if tests fail or CodeRabbit finds issues.**
+**Do NOT commit before CodeRabbit has reviewed. Do NOT push if tests fail or CodeRabbit finds issues.**
+
+The correct order is always: **test → analyze → coderabbit (uncommitted) → fix → commit → push**
 
 ## Code Style
 
