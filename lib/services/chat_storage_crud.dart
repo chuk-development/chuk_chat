@@ -11,6 +11,7 @@ import 'package:chuk_chat/services/chat_storage_sync.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
+import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
@@ -60,62 +61,73 @@ class ChatStorageCrud {
       return existing;
     }
 
-    // Try Supabase first (online path)
-    try {
-      final rows = await SupabaseService.client
-          .from('encrypted_chats')
-          .select(
-            'id, encrypted_payload, created_at, is_starred, updated_at, encrypted_title',
-          )
-          .eq('id', chatId)
-          .eq('user_id', user.id)
-          .limit(1)
-          .timeout(const Duration(seconds: 10));
+    // Check network status first to avoid long timeout waits when offline
+    final isOnline = NetworkStatusService.isOnline;
 
-      if (rows.isNotEmpty) {
-        final row = rows.first;
-        final encryptedPayload = row['encrypted_payload'] as String?;
-        if (encryptedPayload != null && encryptedPayload.isNotEmpty) {
-          final decrypted = await EncryptionService.decryptInBackground(
-            encryptedPayload,
-          );
-          final chatPayload = await deserializePayloadAsync(decrypted);
+    if (isOnline) {
+      // Try Supabase first (online path)
+      try {
+        final rows = await SupabaseService.client
+            .from('encrypted_chats')
+            .select(
+              'id, encrypted_payload, created_at, is_starred, updated_at, encrypted_title',
+            )
+            .eq('id', chatId)
+            .eq('user_id', user.id)
+            .limit(1)
+            .timeout(const Duration(seconds: 10));
 
-          final chat = StoredChat.fromRow(
-            row,
-            chatPayload.messages,
-            customName: chatPayload.customName,
-            title: existing?.title,
-          );
-
-          ChatStorageState.chatsById[chatId] = chat;
-          ChatStorageState.notifyChanges(chatId);
-
-          stopwatch.stop();
-          if (kDebugMode) {
-            debugPrint(
-              '✅ [ChatStorage] Full chat loaded from remote in ${stopwatch.elapsedMilliseconds}ms (${chatPayload.messages.length} messages)',
+        if (rows.isNotEmpty) {
+          final row = rows.first;
+          final encryptedPayload = row['encrypted_payload'] as String?;
+          if (encryptedPayload != null && encryptedPayload.isNotEmpty) {
+            final decrypted = await EncryptionService.decryptInBackground(
+              encryptedPayload,
             );
+            final chatPayload = await deserializePayloadAsync(decrypted);
+
+            final chat = StoredChat.fromRow(
+              row,
+              chatPayload.messages,
+              customName: chatPayload.customName,
+              title: existing?.title,
+            );
+
+            ChatStorageState.chatsById[chatId] = chat;
+            ChatStorageState.notifyChanges(chatId);
+
+            stopwatch.stop();
+            if (kDebugMode) {
+              debugPrint(
+                '✅ [ChatStorage] Full chat loaded from remote in ${stopwatch.elapsedMilliseconds}ms (${chatPayload.messages.length} messages)',
+              );
+            }
+            return chat;
           }
-          return chat;
+        }
+
+        // Chat not found on server - still try local cache
+        if (kDebugMode) {
+          debugPrint(
+            '⚠️ [ChatStorage] Chat not found on server, trying local cache: $chatId',
+          );
+        }
+      } on SecretBoxAuthenticationError {
+        if (kDebugMode) {
+          debugPrint('🔐 [ChatStorage] Failed to decrypt chat: $chatId');
+        }
+        return null;
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint(
+            '⚠️ [ChatStorage] Remote load failed, trying local cache: $e',
+          );
         }
       }
-
-      // Chat not found on server - still try local cache
+    } else {
       if (kDebugMode) {
         debugPrint(
-          '⚠️ [ChatStorage] Chat not found on server, trying local cache: $chatId',
-        );
-      }
-    } on SecretBoxAuthenticationError {
-      if (kDebugMode) {
-        debugPrint('🔐 [ChatStorage] Failed to decrypt chat: $chatId');
-      }
-      return null;
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint(
-          '⚠️ [ChatStorage] Remote load failed, trying local cache: $e',
+          '📦 [ChatStorage] Offline — loading chat from local cache: $chatId',
         );
       }
     }
