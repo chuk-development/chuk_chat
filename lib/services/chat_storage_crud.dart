@@ -38,6 +38,8 @@ class ChatStorageCrud {
   /// Load a single chat's full content (messages) on demand.
   /// Used for lazy loading when user clicks on a chat in sidebar.
   /// Returns the fully loaded chat or null if not found/error.
+  ///
+  /// Strategy: Try Supabase first, fall back to local cache if offline/error.
   static Future<StoredChat?> loadFullChat(String chatId) async {
     final user = SupabaseService.auth.currentUser;
     if (user == null) return null;
@@ -47,19 +49,19 @@ class ChatStorageCrud {
     }
     final stopwatch = Stopwatch()..start();
 
-    try {
-      // Check if already fully loaded
-      final existing = ChatStorageState.chatsById[chatId];
-      if (existing != null && existing.isFullyLoaded) {
-        if (kDebugMode) {
-          debugPrint(
-            '✅ [ChatStorage] Chat already fully loaded (${stopwatch.elapsedMilliseconds}ms)',
-          );
-        }
-        return existing;
+    // Check if already fully loaded
+    final existing = ChatStorageState.chatsById[chatId];
+    if (existing != null && existing.isFullyLoaded) {
+      if (kDebugMode) {
+        debugPrint(
+          '✅ [ChatStorage] Chat already fully loaded (${stopwatch.elapsedMilliseconds}ms)',
+        );
       }
+      return existing;
+    }
 
-      // Fetch full payload from Supabase
+    // Try Supabase first (online path)
+    try {
       final rows = await SupabaseService.client
           .from('encrypted_chats')
           .select(
@@ -70,48 +72,41 @@ class ChatStorageCrud {
           .limit(1)
           .timeout(const Duration(seconds: 10));
 
-      if (rows.isEmpty) {
-        if (kDebugMode) {
-          debugPrint('⚠️ [ChatStorage] Chat not found: $chatId');
+      if (rows.isNotEmpty) {
+        final row = rows.first;
+        final encryptedPayload = row['encrypted_payload'] as String?;
+        if (encryptedPayload != null && encryptedPayload.isNotEmpty) {
+          final decrypted = await EncryptionService.decryptInBackground(
+            encryptedPayload,
+          );
+          final chatPayload = await deserializePayloadAsync(decrypted);
+
+          final chat = StoredChat.fromRow(
+            row,
+            chatPayload.messages,
+            customName: chatPayload.customName,
+            title: existing?.title,
+          );
+
+          ChatStorageState.chatsById[chatId] = chat;
+          ChatStorageState.notifyChanges(chatId);
+
+          stopwatch.stop();
+          if (kDebugMode) {
+            debugPrint(
+              '✅ [ChatStorage] Full chat loaded from remote in ${stopwatch.elapsedMilliseconds}ms (${chatPayload.messages.length} messages)',
+            );
+          }
+          return chat;
         }
-        return null;
       }
 
-      final row = rows.first;
-      final encryptedPayload = row['encrypted_payload'] as String?;
-      if (encryptedPayload == null || encryptedPayload.isEmpty) {
-        if (kDebugMode) {
-          debugPrint('⚠️ [ChatStorage] Chat has no payload: $chatId');
-        }
-        return null;
-      }
-
-      // Decrypt payload in background isolate
-      final decrypted = await EncryptionService.decryptInBackground(
-        encryptedPayload,
-      );
-      final chatPayload = await deserializePayloadAsync(decrypted);
-
-      // Create fully loaded chat
-      final chat = StoredChat.fromRow(
-        row,
-        chatPayload.messages,
-        customName: chatPayload.customName,
-        title: existing?.title, // Preserve existing title
-      );
-
-      // Update in memory
-      ChatStorageState.chatsById[chatId] = chat;
-      ChatStorageState.notifyChanges(chatId);
-
-      stopwatch.stop();
+      // Chat not found on server - still try local cache
       if (kDebugMode) {
         debugPrint(
-          '✅ [ChatStorage] Full chat loaded in ${stopwatch.elapsedMilliseconds}ms (${chatPayload.messages.length} messages)',
+          '⚠️ [ChatStorage] Chat not found on server, trying local cache: $chatId',
         );
       }
-
-      return chat;
     } on SecretBoxAuthenticationError {
       if (kDebugMode) {
         debugPrint('🔐 [ChatStorage] Failed to decrypt chat: $chatId');
@@ -119,7 +114,78 @@ class ChatStorageCrud {
       return null;
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('❌ [ChatStorage] Error loading full chat: $e');
+        debugPrint(
+          '⚠️ [ChatStorage] Remote load failed, trying local cache: $e',
+        );
+      }
+    }
+
+    // Fallback: Load from local cache (offline path)
+    return _loadFullChatFromCache(chatId, user.id, existing, stopwatch);
+  }
+
+  /// Load a single chat from local cache (SharedPreferences).
+  /// Used as fallback when Supabase is unreachable (offline mode).
+  static Future<StoredChat?> _loadFullChatFromCache(
+    String chatId,
+    String userId,
+    StoredChat? existing,
+    Stopwatch stopwatch,
+  ) async {
+    try {
+      final cachedRows = await LocalChatCacheService.load(userId);
+      final cachedRow = cachedRows.cast<Map<String, dynamic>?>().firstWhere(
+        (r) => r?['id'] == chatId,
+        orElse: () => null,
+      );
+
+      if (cachedRow == null) {
+        if (kDebugMode) {
+          debugPrint('⚠️ [ChatStorage] Chat not found in local cache: $chatId');
+        }
+        return null;
+      }
+
+      final payload = cachedRow['encrypted_payload'] as String?;
+      if (payload == null || payload.isEmpty) {
+        if (kDebugMode) {
+          debugPrint(
+            '⚠️ [ChatStorage] Chat has no payload in local cache: $chatId',
+          );
+        }
+        return null;
+      }
+
+      final decrypted = await EncryptionService.decryptInBackground(payload);
+      final chatPayload = await deserializePayloadAsync(decrypted);
+
+      final chat = StoredChat.fromRow(
+        cachedRow,
+        chatPayload.messages,
+        customName: chatPayload.customName,
+        title: existing?.title,
+      );
+
+      ChatStorageState.chatsById[chatId] = chat;
+      ChatStorageState.notifyChanges(chatId);
+
+      stopwatch.stop();
+      if (kDebugMode) {
+        debugPrint(
+          '✅ [ChatStorage] Full chat loaded from LOCAL CACHE in ${stopwatch.elapsedMilliseconds}ms (${chatPayload.messages.length} messages)',
+        );
+      }
+      return chat;
+    } on SecretBoxAuthenticationError {
+      if (kDebugMode) {
+        debugPrint(
+          '🔐 [ChatStorage] Failed to decrypt chat from cache: $chatId',
+        );
+      }
+      return null;
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ [ChatStorage] Local cache fallback failed: $e');
       }
       return null;
     }
