@@ -10,6 +10,7 @@ import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/chat_storage_sync.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
+import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:flutter/foundation.dart';
 
@@ -174,18 +175,35 @@ class ChatPreloadService {
   static Future<void> _loadBatch(List<String> chatIds, String userId) async {
     if (chatIds.isEmpty) return;
 
+    // Skip network call entirely if we know we're offline
+    if (!NetworkStatusService.isOnline) {
+      if (kDebugMode) {
+        debugPrint(
+          '📦 [Preload] Offline — loading ${chatIds.length} chats from cache',
+        );
+      }
+      await _loadBatchFromCache(chatIds, userId);
+      return;
+    }
+
     try {
-      // Fetch full payloads from Supabase
+      // Fetch full payloads from Supabase (with timeout to avoid hanging)
       final rows = await SupabaseService.client
           .from('encrypted_chats')
           .select(
             'id, encrypted_payload, created_at, is_starred, updated_at, encrypted_title',
           )
           .eq('user_id', userId)
-          .inFilter('id', chatIds);
+          .inFilter('id', chatIds)
+          .timeout(const Duration(seconds: 15));
 
       if (rows.isNotEmpty) {
         await _decryptAndStoreRows(rows);
+
+        // Write fetched rows to local cache so they're available offline
+        for (final row in rows) {
+          unawaited(LocalChatCacheService.upsert(userId, row));
+        }
         return;
       }
     } catch (e) {
