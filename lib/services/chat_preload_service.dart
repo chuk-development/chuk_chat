@@ -9,6 +9,7 @@ import 'package:chuk_chat/models/stored_chat.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/chat_storage_sync.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:flutter/foundation.dart';
 
@@ -168,7 +169,8 @@ class ChatPreloadService {
     }
   }
 
-  /// Load a batch of chats by their IDs
+  /// Load a batch of chats by their IDs.
+  /// Tries Supabase first, falls back to local cache if offline/error.
   static Future<void> _loadBatch(List<String> chatIds, String userId) async {
     if (chatIds.isEmpty) return;
 
@@ -182,59 +184,102 @@ class ChatPreloadService {
           .eq('user_id', userId)
           .inFilter('id', chatIds);
 
-      if (rows.isEmpty) return;
+      if (rows.isNotEmpty) {
+        await _decryptAndStoreRows(rows);
+        return;
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint(
+          '⚠️ [Preload] Remote batch load failed, trying local cache: $e',
+        );
+      }
+    }
 
-      // Extract encrypted payloads
-      final encryptedPayloads = <String>[];
-      final validRows = <Map<String, dynamic>>[];
+    // Fallback: Load from local cache
+    await _loadBatchFromCache(chatIds, userId);
+  }
 
-      for (final row in rows) {
-        final payload = row['encrypted_payload'] as String?;
-        if (payload != null && payload.isNotEmpty) {
-          encryptedPayloads.add(payload);
-          validRows.add(row);
+  /// Decrypt rows and store them in memory.
+  static Future<void> _decryptAndStoreRows(
+    List<Map<String, dynamic>> rows,
+  ) async {
+    final encryptedPayloads = <String>[];
+    final validRows = <Map<String, dynamic>>[];
+
+    for (final row in rows) {
+      final payload = row['encrypted_payload'] as String?;
+      if (payload != null && payload.isNotEmpty) {
+        encryptedPayloads.add(payload);
+        validRows.add(row);
+      }
+    }
+
+    if (encryptedPayloads.isEmpty) return;
+
+    // Batch decrypt all payloads in one isolate
+    final decryptedList = await EncryptionService.decryptBatchInBackground(
+      encryptedPayloads,
+    );
+
+    // Deserialize and update state
+    for (int j = 0; j < validRows.length; j++) {
+      final decrypted = decryptedList[j];
+      if (decrypted == null) continue;
+
+      try {
+        final chatPayload = await deserializePayloadAsync(decrypted);
+        final row = validRows[j];
+        final chatId = row['id'] as String;
+
+        // Preserve existing chat's title if available
+        final existing = ChatStorageState.chatsById[chatId];
+
+        final chat = StoredChat.fromRow(
+          row,
+          chatPayload.messages,
+          customName: chatPayload.customName,
+          title: existing?.title,
+        );
+
+        ChatStorageState.chatsById[chatId] = chat;
+      } catch (e) {
+        _failureCount++;
+        if (kDebugMode) {
+          debugPrint('⚠️ [Preload] Failed to deserialize chat: $e');
         }
       }
+    }
+  }
 
-      if (encryptedPayloads.isEmpty) return;
+  /// Load a batch of chats from local cache (offline fallback).
+  static Future<void> _loadBatchFromCache(
+    List<String> chatIds,
+    String userId,
+  ) async {
+    try {
+      final cachedRows = await LocalChatCacheService.load(userId);
+      if (cachedRows.isEmpty) return;
 
-      // Batch decrypt all payloads in one isolate
-      final decryptedList = await EncryptionService.decryptBatchInBackground(
-        encryptedPayloads,
-      );
+      // Filter to only the requested chat IDs
+      final chatIdSet = chatIds.toSet();
+      final matchingRows = cachedRows
+          .where((r) => chatIdSet.contains(r['id'] as String?))
+          .toList();
 
-      // Deserialize and update state
-      for (int j = 0; j < validRows.length; j++) {
-        final decrypted = decryptedList[j];
-        if (decrypted == null) continue;
+      if (matchingRows.isEmpty) return;
 
-        try {
-          final chatPayload = await deserializePayloadAsync(decrypted);
-          final row = validRows[j];
-          final chatId = row['id'] as String;
-
-          // Preserve existing chat's title if available
-          final existing = ChatStorageState.chatsById[chatId];
-
-          final chat = StoredChat.fromRow(
-            row,
-            chatPayload.messages,
-            customName: chatPayload.customName,
-            title: existing?.title,
-          );
-
-          ChatStorageState.chatsById[chatId] = chat;
-        } catch (e) {
-          _failureCount++;
-          if (kDebugMode) {
-            debugPrint('⚠️ [Preload] Failed to deserialize chat: $e');
-          }
-        }
+      if (kDebugMode) {
+        debugPrint(
+          '📦 [Preload] Loading ${matchingRows.length} chats from local cache',
+        );
       }
+
+      await _decryptAndStoreRows(matchingRows);
     } catch (e) {
       _failureCount++;
       if (kDebugMode) {
-        debugPrint('⚠️ [Preload] Batch load failed: $e');
+        debugPrint('⚠️ [Preload] Local cache batch load failed: $e');
       }
     }
   }

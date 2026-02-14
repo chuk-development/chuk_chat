@@ -43,7 +43,8 @@ List<Map<String, dynamic>> _parseAndSanitizeCacheInIsolate(String raw) {
         'created_at': createdAt,
         'is_starred': (entry['is_starred'] as bool?) ?? false,
         if (entry['updated_at'] is String) 'updated_at': entry['updated_at'],
-        if (entry['encrypted_title'] is String) 'encrypted_title': entry['encrypted_title'],
+        if (entry['encrypted_title'] is String)
+          'encrypted_title': entry['encrypted_title'],
       });
     }
   }
@@ -173,7 +174,9 @@ class LocalChatCacheService {
       'encrypted_payload': encryptedPayload,
       'created_at': createdAt,
       'is_starred': isStarred,
-      if (row['encrypted_title'] is String) 'encrypted_title': row['encrypted_title'],
+      if (row['updated_at'] is String) 'updated_at': row['updated_at'],
+      if (row['encrypted_title'] is String)
+        'encrypted_title': row['encrypted_title'],
     };
   }
 
