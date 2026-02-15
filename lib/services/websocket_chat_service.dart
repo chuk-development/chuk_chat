@@ -98,10 +98,10 @@ class WebSocketChatService {
       // Connect to WebSocket with connection timeout.
       // On native platforms in release mode, this uses certificate pinning
       // via a custom HttpClient (see websocket_connector_io.dart).
-      channel = await ws_connector
-          .connectWebSocket(wsUrl)
-          .timeout(_connectionTimeout);
       try {
+        channel = await ws_connector
+            .connectWebSocket(wsUrl)
+            .timeout(_connectionTimeout);
         await channel.ready.timeout(_connectionTimeout);
       } on TimeoutException {
         yield ChatStreamEvent.error(
