@@ -28,7 +28,7 @@ class ChatSyncService {
     _isEnabled = true;
     if (kDebugMode) {
       debugPrint(
-      '🔄 [ChatSync] Starting sync service (${_pollIntervalSeconds}s interval)',
+        '🔄 [ChatSync] Starting sync service (${_pollIntervalSeconds}s interval)',
       );
     }
 
@@ -130,10 +130,20 @@ class ChatSyncService {
       return;
     }
 
-    // Skip sync if we know we're offline (use cached status to avoid delays)
+    // Skip network sync if we know we're offline
     if (!NetworkStatusService.isOnline) {
       if (kDebugMode) {
-        debugPrint('⏸️ [ChatSync] Skipping sync - offline');
+        debugPrint('⏸️ [ChatSync] Offline - skipping network sync');
+      }
+      // If sidebar is empty, populate from encrypted cache so the user
+      // sees their chats even without a network connection.
+      if (ChatStorageState.chatsById.isEmpty) {
+        if (kDebugMode) {
+          debugPrint(
+            '📦 [ChatSync] Sidebar empty while offline, loading from cache...',
+          );
+        }
+        await ChatStorageService.loadFromCache();
       }
       return;
     }
@@ -202,7 +212,7 @@ class ChatSyncService {
       if (idsToFetch.isNotEmpty) {
         if (kDebugMode) {
           debugPrint(
-          '🔄 [ChatSync] Fetching ${idsToFetch.length} chats (${newChatIds.length} new, ${updatedChatIds.length} updated)',
+            '🔄 [ChatSync] Fetching ${idsToFetch.length} chats (${newChatIds.length} new, ${updatedChatIds.length} updated)',
           );
         }
 
@@ -232,7 +242,7 @@ class ChatSyncService {
       if (deletedChatIds.isNotEmpty) {
         if (kDebugMode) {
           debugPrint(
-          '🗑️ [ChatSync] Removing ${deletedChatIds.length} deleted chats',
+            '🗑️ [ChatSync] Removing ${deletedChatIds.length} deleted chats',
           );
         }
         for (final id in deletedChatIds) {
@@ -254,7 +264,7 @@ class ChatSyncService {
       if (NetworkStatusService.isNetworkError(e)) {
         if (kDebugMode) {
           debugPrint(
-          '🌐 [ChatSync] Network error detected, checking connectivity...',
+            '🌐 [ChatSync] Network error detected, checking connectivity...',
           );
         }
         unawaited(NetworkStatusService.hasInternetConnection(useCache: false));

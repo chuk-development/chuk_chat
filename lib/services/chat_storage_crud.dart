@@ -11,7 +11,6 @@ import 'package:chuk_chat/services/chat_storage_sync.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
-import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
@@ -61,8 +60,8 @@ class ChatStorageCrud {
       return existing;
     }
 
-    // Check network status first to avoid long timeout waits when offline
-    final isOnline = NetworkStatusService.isOnline;
+    // Check network status with a real probe to avoid stale cached state
+    final isOnline = await ChatStorageState.checkNetworkStatus();
 
     if (isOnline) {
       // Try Supabase first (online path)

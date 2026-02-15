@@ -93,14 +93,13 @@ class StreamingForegroundService {
     if (!Platform.isAndroid) return;
     if (!_isRunning) return;
 
+    // Strip markdown syntax for clean notification text
+    String displayContent = _stripMarkdown(content);
+
     // Truncate content for notification (max ~100 chars)
-    String displayContent = content;
     if (displayContent.length > 100) {
       displayContent = '${displayContent.substring(0, 97)}...';
     }
-
-    // Remove newlines for cleaner notification
-    displayContent = displayContent.replaceAll('\n', ' ').trim();
 
     if (displayContent.isEmpty) {
       displayContent = 'AI is responding...';
@@ -139,6 +138,30 @@ class StreamingForegroundService {
     final notificationPermission =
         await FlutterForegroundTask.checkNotificationPermission();
     return notificationPermission == NotificationPermission.granted;
+  }
+
+  /// Strip common markdown syntax for clean notification display.
+  static String _stripMarkdown(String content) {
+    return content
+        .replaceAll(RegExp(r'```[\s\S]*?```'), '[code]') // Code blocks
+        .replaceAll(RegExp(r'`[^`]+`'), '[code]') // Inline code
+        .replaceAll(RegExp(r'\*\*([^*]+)\*\*'), r'$1') // Bold
+        .replaceAll(RegExp(r'\*([^*]+)\*'), r'$1') // Italic
+        .replaceAll(RegExp(r'__([^_]+)__'), r'$1') // Bold (underscore)
+        .replaceAll(RegExp(r'_([^_]+)_'), r'$1') // Italic (underscore)
+        .replaceAll(RegExp(r'~~([^~]+)~~'), r'$1') // Strikethrough
+        .replaceAll(RegExp(r'^#+\s*', multiLine: true), '') // Headers
+        .replaceAll(RegExp(r'^\s*[-*+]\s+', multiLine: true), '') // Lists
+        .replaceAll(
+          RegExp(r'^\s*\d+\.\s+', multiLine: true),
+          '',
+        ) // Numbered lists
+        .replaceAll(RegExp(r'^\s*>\s*', multiLine: true), '') // Blockquotes
+        .replaceAll(RegExp(r'\[([^\]]+)\]\([^)]+\)'), r'$1') // Links
+        .replaceAll(RegExp(r'!\[([^\]]*)\]\([^)]+\)'), r'$1') // Images
+        .replaceAll(RegExp(r'\n+'), ' ') // Newlines to spaces
+        .replaceAll(RegExp(r'\s+'), ' ') // Collapse whitespace
+        .trim();
   }
 }
 

@@ -7,6 +7,7 @@ import 'package:chuk_chat/models/stored_chat.dart';
 import 'package:chuk_chat/services/chat_storage_mutations.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -30,7 +31,9 @@ class ChatStorageSidebar {
     // Prevent concurrent loads - return existing future if already loading
     if (ChatStorageState.isLoading) {
       if (kDebugMode) {
-        debugPrint('⏳ [ChatStorage] Sidebar load already in progress, waiting...');
+        debugPrint(
+          '⏳ [ChatStorage] Sidebar load already in progress, waiting...',
+        );
       }
       return ChatStorageState.loadingCompleter!.future;
     }
@@ -55,7 +58,9 @@ class ChatStorageSidebar {
       ChatStorageState.cacheLoaded = true;
 
       if (kDebugMode) {
-        debugPrint('✅ [ChatStorage] Sidebar ready (${ChatStorageState.chatsById.length} chats, UI notified)');
+        debugPrint(
+          '✅ [ChatStorage] Sidebar ready (${ChatStorageState.chatsById.length} chats, UI notified)',
+        );
       }
 
       // Mark initial load complete - ChatSyncService can now start syncing
@@ -92,8 +97,16 @@ class ChatStorageSidebar {
 
     if (raw == null || raw.isEmpty) {
       if (kDebugMode) {
-        debugPrint('📦 [ChatStorage] No title cache found (prefs: ${prefsTime}ms)');
+        debugPrint(
+          '📦 [ChatStorage] No title cache found (prefs: ${prefsTime}ms), trying encrypted cache...',
+        );
       }
+      // Fallback: build sidebar entries from LocalChatCacheService
+      // This handles the case where the app has full encrypted payloads
+      // but the lightweight title cache was never written (e.g., first
+      // online session was killed before sync finished, or user goes
+      // offline before the first title sync completes).
+      await _loadSidebarFromEncryptedCache(userId);
       return;
     }
 
@@ -112,7 +125,9 @@ class ChatStorageSidebar {
 
         ChatStorageState.chatsById[id] = StoredChat.forSidebar(
           id: id,
-          createdAt: DateTime.tryParse(item['created_at'] as String? ?? '') ?? DateTime.now(),
+          createdAt:
+              DateTime.tryParse(item['created_at'] as String? ?? '') ??
+              DateTime.now(),
           isStarred: item['is_starred'] as bool? ?? false,
           title: item['title'] as String?,
           updatedAt: item['updated_at'] != null
@@ -122,10 +137,15 @@ class ChatStorageSidebar {
       }
       stopwatch.stop();
       if (kDebugMode) {
-        debugPrint('📦 [ChatStorage] Cache: prefs=${prefsTime}ms, parse=${parseTime - prefsTime}ms, objects=${stopwatch.elapsedMilliseconds - parseTime}ms, loaded=${ChatStorageState.chatsById.length} chats');
+        debugPrint(
+          '📦 [ChatStorage] Cache: prefs=${prefsTime}ms, parse=${parseTime - prefsTime}ms, objects=${stopwatch.elapsedMilliseconds - parseTime}ms, loaded=${ChatStorageState.chatsById.length} chats',
+        );
       }
       // Debug: show sample of cached updatedAt values
-      final sample = ChatStorageState.chatsById.values.take(3).map((c) => '${c.id.substring(0, 8)}: updatedAt=${c.updatedAt}').join(', ');
+      final sample = ChatStorageState.chatsById.values
+          .take(3)
+          .map((c) => '${c.id.substring(0, 8)}: updatedAt=${c.updatedAt}')
+          .join(', ');
       if (kDebugMode) {
         debugPrint('📦 [ChatStorage] Sample cache timestamps: $sample');
       }
@@ -155,7 +175,9 @@ class ChatStorageSidebar {
           .order('created_at', ascending: false);
 
       if (kDebugMode) {
-        debugPrint('📦 [ChatStorage] Fetched ${rows.length} chat metadata (${stopwatch.elapsedMilliseconds}ms)');
+        debugPrint(
+          '📦 [ChatStorage] Fetched ${rows.length} chat metadata (${stopwatch.elapsedMilliseconds}ms)',
+        );
       }
 
       if (rows.isEmpty) {
@@ -205,7 +227,8 @@ class ChatStorageSidebar {
           } else if (rowUpdatedAt.isAfter(existing.updatedAt!)) {
             // Server is newer - needs decryption
             needsDecryption = true;
-            reason = 'updated (server: $rowUpdatedAt, cache: ${existing.updatedAt})';
+            reason =
+                'updated (server: $rowUpdatedAt, cache: ${existing.updatedAt})';
           }
         }
         // If server has no updated_at and we have a cached title, use cache
@@ -221,7 +244,9 @@ class ChatStorageSidebar {
       }
 
       if (kDebugMode) {
-        debugPrint('📦 [ChatStorage] ${rowsNeedingDecryption.length} need decryption, ${rowsWithCachedTitle.length} using cache');
+        debugPrint(
+          '📦 [ChatStorage] ${rowsNeedingDecryption.length} need decryption, ${rowsWithCachedTitle.length} using cache',
+        );
       }
 
       // Only decrypt titles that need it
@@ -236,7 +261,7 @@ class ChatStorageSidebar {
           ChatStorageState.chatsById[chat.id] = chat;
           hasChanges = true;
         } else if (existing.isStarred != chat.isStarred ||
-                   existing.title != chat.title) {
+            existing.title != chat.title) {
           if (existing.isFullyLoaded) {
             ChatStorageState.chatsById[chat.id] = existing.copyWith(
               isStarred: chat.isStarred,
@@ -251,12 +276,16 @@ class ChatStorageSidebar {
           // Title and isStarred unchanged, but we decrypted because updatedAt was newer
           // MUST save new updatedAt to cache so we don't re-decrypt next time!
           if (existing.isFullyLoaded) {
-            ChatStorageState.chatsById[chat.id] = existing.copyWith(updatedAt: chat.updatedAt);
+            ChatStorageState.chatsById[chat.id] = existing.copyWith(
+              updatedAt: chat.updatedAt,
+            );
           } else {
             ChatStorageState.chatsById[chat.id] = chat;
           }
           if (kDebugMode) {
-            debugPrint('📝 [ChatStorage] Updated timestamp only for ${chat.id.substring(0, 8)}');
+            debugPrint(
+              '📝 [ChatStorage] Updated timestamp only for ${chat.id.substring(0, 8)}',
+            );
           }
         }
       }
@@ -268,7 +297,9 @@ class ChatStorageSidebar {
         final existing = ChatStorageState.chatsById[id];
 
         if (existing != null && existing.isStarred != isStarred) {
-          ChatStorageState.chatsById[id] = existing.copyWith(isStarred: isStarred);
+          ChatStorageState.chatsById[id] = existing.copyWith(
+            isStarred: isStarred,
+          );
           hasChanges = true;
         }
       }
@@ -295,11 +326,16 @@ class ChatStorageSidebar {
       }
 
       // Always update cache (timestamps might have changed)
-      await saveTitlesToCache(userId, ChatStorageState.chatsById.values.toList());
+      await saveTitlesToCache(
+        userId,
+        ChatStorageState.chatsById.values.toList(),
+      );
 
       stopwatch.stop();
       if (kDebugMode) {
-        debugPrint('✅ [ChatStorage] Network sync complete (${stopwatch.elapsedMilliseconds}ms)');
+        debugPrint(
+          '✅ [ChatStorage] Network sync complete (${stopwatch.elapsedMilliseconds}ms)',
+        );
       }
     } catch (e) {
       if (kDebugMode) {
@@ -339,20 +375,26 @@ class ChatStorageSidebar {
     if (encryptedTitles.isNotEmpty) {
       if (!EncryptionService.hasKey) {
         if (kDebugMode) {
-          debugPrint('⏭️ [ChatStorage] Skipping title decryption - key not loaded yet');
+          debugPrint(
+            '⏭️ [ChatStorage] Skipping title decryption - key not loaded yet',
+          );
         }
         // Keep using cached/fallback titles - decryption will happen on next sync
         return results;
       }
 
       try {
-        final decryptedTitles = await EncryptionService.decryptBatchInBackground(encryptedTitles);
+        final decryptedTitles =
+            await EncryptionService.decryptBatchInBackground(encryptedTitles);
 
         for (int j = 0; j < validIndices.length; j++) {
           final i = validIndices[j];
           final decryptedTitle = decryptedTitles[j];
           if (decryptedTitle != null) {
-            results[i] = StoredChat.fromRowTitleOnly(rows[i], title: decryptedTitle);
+            results[i] = StoredChat.fromRowTitleOnly(
+              rows[i],
+              title: decryptedTitle,
+            );
           }
         }
       } catch (e) {
@@ -364,5 +406,109 @@ class ChatStorageSidebar {
     }
 
     return results;
+  }
+
+  /// Fallback: build sidebar entries from the full encrypted cache.
+  /// This is used when the lightweight title cache is empty but
+  /// LocalChatCacheService has encrypted payloads (e.g., from a
+  /// previous session's preload/sync).
+  static Future<void> _loadSidebarFromEncryptedCache(String userId) async {
+    try {
+      final rows = await LocalChatCacheService.load(userId);
+      if (rows.isEmpty) {
+        if (kDebugMode) {
+          debugPrint('📦 [ChatStorage] Encrypted cache also empty');
+        }
+        return;
+      }
+
+      if (kDebugMode) {
+        debugPrint(
+          '📦 [ChatStorage] Building sidebar from ${rows.length} encrypted cache entries',
+        );
+      }
+
+      // Build sidebar entries using encrypted_title if available,
+      // otherwise create title-less entries (will be filled on next sync).
+      final titlesToDecrypt = <String>[];
+      final titleIndices = <int>[];
+
+      for (int i = 0; i < rows.length; i++) {
+        final row = rows[i];
+        final id = row['id'] as String?;
+        if (id == null) continue;
+
+        // Skip if we already have this chat
+        final existing = ChatStorageState.chatsById[id];
+        if (existing != null && existing.isFullyLoaded) continue;
+
+        final encTitle = row['encrypted_title'] as String?;
+        if (encTitle != null && encTitle.isNotEmpty) {
+          titlesToDecrypt.add(encTitle);
+          titleIndices.add(i);
+        }
+
+        // Create sidebar entry (title will be null until decrypted)
+        ChatStorageState.chatsById[id] = StoredChat.forSidebar(
+          id: id,
+          createdAt:
+              DateTime.tryParse(row['created_at'] as String? ?? '') ??
+              DateTime.now(),
+          isStarred: (row['is_starred'] as bool?) ?? false,
+          updatedAt: row['updated_at'] != null
+              ? DateTime.tryParse(row['updated_at'] as String)
+              : null,
+        );
+      }
+
+      // Batch decrypt titles if encryption key is ready
+      if (titlesToDecrypt.isNotEmpty && EncryptionService.hasKey) {
+        try {
+          final decrypted = await EncryptionService.decryptBatchInBackground(
+            titlesToDecrypt,
+          );
+          for (int j = 0; j < titleIndices.length; j++) {
+            final row = rows[titleIndices[j]];
+            final id = row['id'] as String;
+            final title = decrypted[j];
+            if (title != null) {
+              ChatStorageState.chatsById[id] = StoredChat.forSidebar(
+                id: id,
+                createdAt:
+                    DateTime.tryParse(row['created_at'] as String? ?? '') ??
+                    DateTime.now(),
+                isStarred: (row['is_starred'] as bool?) ?? false,
+                title: title,
+                updatedAt: row['updated_at'] != null
+                    ? DateTime.tryParse(row['updated_at'] as String)
+                    : null,
+              );
+            }
+          }
+        } catch (e) {
+          if (kDebugMode) {
+            debugPrint(
+              '⚠️ [ChatStorage] Encrypted cache title decryption failed: $e',
+            );
+          }
+        }
+      }
+
+      if (kDebugMode) {
+        debugPrint(
+          '✅ [ChatStorage] Built ${ChatStorageState.chatsById.length} sidebar entries from encrypted cache',
+        );
+      }
+
+      // Also write the title cache so subsequent startups are instant
+      await saveTitlesToCache(
+        userId,
+        ChatStorageState.chatsById.values.toList(),
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ [ChatStorage] Encrypted cache fallback failed: $e');
+      }
+    }
   }
 }
