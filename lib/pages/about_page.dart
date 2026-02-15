@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:chuk_chat/services/update_check_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 
 class AboutPage extends StatelessWidget {
@@ -103,10 +104,13 @@ class AboutPage extends StatelessWidget {
                       children: [
                         Expanded(
                           child: OutlinedButton(
-                            onPressed: () => _launchUrl('https://chuk.chat/en/terms/'),
+                            onPressed: () =>
+                                _launchUrl('https://chuk.chat/en/terms/'),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: accent,
-                              side: BorderSide(color: accent.withValues(alpha: 0.5)),
+                              side: BorderSide(
+                                color: accent.withValues(alpha: 0.5),
+                              ),
                               padding: const EdgeInsets.symmetric(vertical: 12),
                             ),
                             child: const Text('Terms of Service'),
@@ -115,10 +119,13 @@ class AboutPage extends StatelessWidget {
                         const SizedBox(width: 12),
                         Expanded(
                           child: OutlinedButton(
-                            onPressed: () => _launchUrl('https://chuk.chat/en/privacy/'),
+                            onPressed: () =>
+                                _launchUrl('https://chuk.chat/en/privacy/'),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: accent,
-                              side: BorderSide(color: accent.withValues(alpha: 0.5)),
+                              side: BorderSide(
+                                color: accent.withValues(alpha: 0.5),
+                              ),
                               padding: const EdgeInsets.symmetric(vertical: 12),
                             ),
                             child: const Text('Privacy Policy'),
@@ -131,16 +138,41 @@ class AboutPage extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               if (versionText != null)
-                _AboutCard(
-                  icon: Icons.numbers_outlined,
-                  iconColor: accent,
-                  child: Text(
-                    'Version $versionText',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: iconColor.withValues(alpha: 0.85),
-                    ),
-                  ),
+                ValueListenableBuilder<UpdateInfo?>(
+                  valueListenable: UpdateCheckService.updateAvailable,
+                  builder: (context, updateInfo, _) {
+                    return _AboutCard(
+                      icon: updateInfo != null
+                          ? Icons.system_update_outlined
+                          : Icons.numbers_outlined,
+                      iconColor: accent,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Version $versionText',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: iconColor.withValues(alpha: 0.85),
+                            ),
+                          ),
+                          if (updateInfo != null) ...[
+                            const SizedBox(height: 6),
+                            GestureDetector(
+                              onTap: UpdateCheckService.launchDownload,
+                              child: Text(
+                                'Update available: v${updateInfo.latestVersion} — tap to download',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.primary,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    );
+                  },
                 )
               else
                 _AboutCard(
