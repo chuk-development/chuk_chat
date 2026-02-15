@@ -261,7 +261,9 @@ class StreamingMessageHandler {
         },
       );
     } catch (error) {
-      debugPrint('Failed to start stream: $error');
+      if (kDebugMode) {
+        debugPrint('Failed to start stream: $error');
+      }
       if (onMessageFinalize != null) {
         onMessageFinalize!(
           placeholderIndex,
@@ -282,7 +284,9 @@ class StreamingMessageHandler {
   /// Cancel active stream
   Future<void> cancelStream(String? chatId) async {
     if (chatId != null && (_isStreaming || _isSending)) {
-      debugPrint('Cancelling stream for chat $chatId...');
+      if (kDebugMode) {
+        debugPrint('Cancelling stream for chat $chatId...');
+      }
       await _streamingManager.cancelStream(chatId);
 
       _isStreaming = false;
@@ -455,13 +459,17 @@ class StreamingMessageHandler {
           _imageBase64Cache[path] = dataUrl;
           dataUrls.add(dataUrl);
         } catch (e) {
-          debugPrint(
-            '⚠️ [StreamingHandler] Failed to resolve history image: $e',
-          );
+          if (kDebugMode) {
+            debugPrint(
+              '⚠️ [StreamingHandler] Failed to resolve history image: $e',
+            );
+          }
         }
       }
     } catch (e) {
-      debugPrint('⚠️ [StreamingHandler] Failed to parse images JSON: $e');
+      if (kDebugMode) {
+        debugPrint('⚠️ [StreamingHandler] Failed to parse images JSON: $e');
+      }
     }
     return dataUrls;
   }
@@ -492,13 +500,17 @@ class StreamingMessageHandler {
     } catch (error) {
       // Check if this is a network error
       if (NetworkStatusService.isNetworkError(error)) {
-        debugPrint('Network error during session refresh: $error');
+        if (kDebugMode) {
+          debugPrint('Network error during session refresh: $error');
+        }
         onShowSnackBar?.call('Network error. Please check your connection.');
         return null;
       }
 
       // Not a network error, likely auth issue
-      debugPrint('Auth error during session refresh: $error');
+      if (kDebugMode) {
+        debugPrint('Auth error during session refresh: $error');
+      }
       onShowSnackBar?.call('Authentication error. Please sign in again.');
       await SupabaseService.signOut();
       return null;

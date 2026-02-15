@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/model_cache_service.dart';
+import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
@@ -214,11 +215,13 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       }
 
       // Fetch fresh models in background (don't await)
-      unawaited(_fetchModels().catchError((e) {
-        if (kDebugMode) {
-          debugPrint('Background model fetch failed: $e');
-        }
-      }));
+      unawaited(
+        _fetchModels().catchError((e) {
+          if (kDebugMode) {
+            debugPrint('Background model fetch failed: $e');
+          }
+        }),
+      );
     } catch (error) {
       _errorMessage = 'Error initializing model selection: $error';
       _selectedModelName = 'Error Loading';
@@ -241,6 +244,10 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
     final List<Map<String, dynamic>> cachedModels =
         await ModelCacheService.loadAvailableModels();
     if (cachedModels.isEmpty) return;
+
+    // Ensure in-memory vision support cache is populated from disk cache
+    // so image upload buttons work immediately on app start.
+    await ModelCapabilitiesService.initialize();
 
     final Map<String, String> cachedProviders =
         await ModelCacheService.loadProviderPreferences(userId);
@@ -436,6 +443,9 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
           Future(() async {
             try {
               await ModelCacheService.saveAvailableModels(payload);
+              // Refresh in-memory vision support cache so image upload
+              // buttons reflect the latest model capabilities immediately.
+              await ModelCapabilitiesService.refresh();
             } catch (error) {
               if (kDebugMode) {
                 debugPrint('Failed to save available models to cache: $error');
@@ -452,7 +462,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
             } catch (error) {
               if (kDebugMode) {
                 debugPrint(
-                'Failed to save provider preferences to cache: $error',
+                  'Failed to save provider preferences to cache: $error',
                 );
               }
             }
@@ -490,7 +500,9 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
           ),
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           duration: const Duration(seconds: 2),
           dismissDirection: DismissDirection.horizontal,
@@ -798,12 +810,20 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
                   SnackBar(
                     content: const Text(
                       'Failed to save model selection. Please try again.',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                     behavior: SnackBarBehavior.floating,
                     margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     duration: const Duration(seconds: 3),
                     dismissDirection: DismissDirection.horizontal,
                   ),
