@@ -15,8 +15,10 @@ class File {
   Uint8List readAsBytesSync() => Uint8List(0);
   Future<String> readAsString() async => '';
   String readAsStringSync() => '';
-  Future<File> writeAsBytes(List<int> bytes, {bool flush = false}) async => this;
-  Future<File> writeAsString(String contents, {bool flush = false}) async => this;
+  Future<File> writeAsBytes(List<int> bytes, {bool flush = false}) async =>
+      this;
+  Future<File> writeAsString(String contents, {bool flush = false}) async =>
+      this;
   Future<void> delete({bool recursive = false}) async {}
   Stream<List<int>> openRead([int? start, int? end]) => Stream.empty();
 }
@@ -40,6 +42,22 @@ class Platform {
   static const String pathSeparator = '/';
   static final Map<String, String> environment = {};
   static String get operatingSystem => 'web';
+}
+
+/// Stub ProcessResult for web
+class ProcessResult {
+  final int exitCode;
+  final dynamic stdout;
+  final dynamic stderr;
+  final int pid;
+  ProcessResult(this.pid, this.exitCode, this.stdout, this.stderr);
+}
+
+/// Stub Process class for web
+class Process {
+  static ProcessResult runSync(String executable, List<String> arguments) {
+    throw UnsupportedError('Process.runSync is not supported on web');
+  }
 }
 
 /// Stub SocketException for web

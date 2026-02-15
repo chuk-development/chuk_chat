@@ -10,7 +10,9 @@ import 'package:chuk_chat/services/streaming_manager.dart';
 import 'package:chuk_chat/services/profile_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart'; // Import the color extensions
+import 'package:chuk_chat/services/update_check_service.dart';
 import 'package:chuk_chat/widgets/credit_display.dart';
+import 'package:chuk_chat/widgets/update_banner.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:flutter/foundation.dart';
 
@@ -80,6 +82,8 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
     NetworkStatusService.isOnlineListenable.addListener(
       _onNetworkStatusChanged,
     );
+    // Check for app updates in background
+    unawaited(UpdateCheckService.checkForUpdate());
   }
 
   @override
@@ -571,6 +575,9 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
               },
             ),
           ),
+
+          // Update available banner
+          const UpdateBanner(),
 
           // User profile section at the bottom
           Align(

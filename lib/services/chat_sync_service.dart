@@ -143,7 +143,13 @@ class ChatSyncService {
             '📦 [ChatSync] Sidebar empty while offline, loading from cache...',
           );
         }
-        await ChatStorageService.loadFromCache();
+        try {
+          await ChatStorageService.loadFromCache();
+        } catch (e) {
+          if (kDebugMode) {
+            debugPrint('⚠️ [ChatSync] Failed to load from cache: $e');
+          }
+        }
       }
       return;
     }

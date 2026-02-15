@@ -10,7 +10,9 @@ import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/profile_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart'; // Assuming this exists
+import 'package:chuk_chat/services/update_check_service.dart';
 import 'package:chuk_chat/widgets/credit_display.dart';
+import 'package:chuk_chat/widgets/update_banner.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 
 class SidebarMobile extends StatefulWidget {
@@ -83,6 +85,8 @@ class _SidebarMobileState extends State<SidebarMobile> {
       _onNetworkStatusChanged,
     );
     unawaited(_filterRecentChats());
+    // Check for app updates in background
+    unawaited(UpdateCheckService.checkForUpdate());
   }
 
   @override
@@ -771,6 +775,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
               ],
             ),
           ),
+
+          // Update available banner
+          const UpdateBanner(),
 
           // User profile section at the bottom (styled from main.dart)
           Align(
