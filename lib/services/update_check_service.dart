@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:chuk_chat/utils/arch_helper.dart';
 import 'package:chuk_chat/utils/io_helper.dart';
 
 /// Checks for app updates via the public GitHub Releases API.
@@ -165,15 +166,24 @@ class UpdateCheckService {
 
   /// Get ordered list of asset name patterns to match for the current platform.
   /// First match wins — most specific patterns come first.
-  /// Uses io_helper Platform (real on native, stub on web).
+  /// Uses dart:ffi Abi for architecture detection (via arch_helper.dart).
   static List<String> _getAssetPatterns() {
+    final arch = getCurrentArch(); // From arch_helper.dart
+
     if (Platform.isAndroid) {
-      // Prefer arm64 (most common modern Android), fall back to others
-      return ['android-armv8', 'android-arm64', 'android-x64', 'android'];
+      switch (arch) {
+        case 'arm64':
+          return ['android-armv8', 'android-arm64', 'android'];
+        case 'arm':
+          return ['android-armv7', 'android-arm', 'android'];
+        case 'x64':
+          return ['android-x64', 'android'];
+        default:
+          return ['android-armv8', 'android'];
+      }
     }
     if (Platform.isLinux) {
-      final arch = _getLinuxArch();
-      if (arch == 'aarch64' || arch == 'arm64') {
+      if (arch == 'arm64') {
         return [
           'linux-arm64.deb',
           'linux-aarch64.appimage',
@@ -200,19 +210,6 @@ class UpdateCheckService {
       return ['ios'];
     }
     return [];
-  }
-
-  /// Detect Linux CPU architecture via uname.
-  /// Falls back to x86_64 on any error (including web where Process is unavailable).
-  static String _getLinuxArch() {
-    try {
-      // Process.runSync is only available on native platforms.
-      // On web this will throw; the catch returns the safe default.
-      final result = Process.runSync('uname', const <String>['-m']);
-      return result.stdout.toString().trim().toLowerCase();
-    } catch (_) {
-      return 'x86_64';
-    }
   }
 
   /// Launch the download URL for the current platform.
