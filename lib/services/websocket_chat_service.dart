@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+
+import 'package:chuk_chat/models/chat_stream_event.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
+import 'package:chuk_chat/services/websocket_connector.dart' as ws_connector;
 import 'package:chuk_chat/utils/secure_token_handler.dart';
-import 'package:chuk_chat/models/chat_stream_event.dart';
 
 /// Service for handling streaming chat responses via WebSocket.
 /// WebSocket provides better reliability than HTTP streaming,
@@ -92,8 +95,12 @@ class WebSocketChatService {
         );
       }
 
-      // Connect to WebSocket with connection timeout
-      channel = WebSocketChannel.connect(wsUrl);
+      // Connect to WebSocket with connection timeout.
+      // On native platforms in release mode, this uses certificate pinning
+      // via a custom HttpClient (see websocket_connector_io.dart).
+      channel = await ws_connector
+          .connectWebSocket(wsUrl)
+          .timeout(_connectionTimeout);
       try {
         await channel.ready.timeout(_connectionTimeout);
       } on TimeoutException {

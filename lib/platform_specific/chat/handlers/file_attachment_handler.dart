@@ -10,6 +10,7 @@ import 'package:chuk_chat/constants/file_constants.dart';
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
+import 'package:chuk_chat/utils/file_upload_validator.dart';
 
 /// Handles file and image attachments
 class FileAttachmentHandler {
@@ -201,7 +202,19 @@ class FileAttachmentHandler {
 
     // Handle images differently - compress, encrypt, and upload to storage
     if (isImage) {
-      _uploadEncryptedImage(file, fileName, fileId);
+      // Validate image magic bytes before uploading
+      final imageBytes = await file.readAsBytes();
+      final validation = FileUploadValidator.validateImageBytes(
+        imageBytes,
+        fileName,
+      );
+      if (!validation.isValid) {
+        onError?.call(validation.errorMessage ?? 'Invalid image file');
+        _attachedFiles.removeWhere((f) => f.id == fileId);
+        onUpdate?.call();
+        return;
+      }
+      _uploadEncryptedImageFromBytes(imageBytes, fileName, fileId);
     } else {
       _chatApiService.performFileUpload(file, fileName, fileId);
     }
@@ -251,6 +264,17 @@ class FileAttachmentHandler {
     onUpdate?.call();
 
     if (isImage) {
+      // Validate image magic bytes before uploading
+      final validation = FileUploadValidator.validateImageBytes(
+        bytes,
+        fileName,
+      );
+      if (!validation.isValid) {
+        onError?.call(validation.errorMessage ?? 'Invalid image file');
+        _attachedFiles.removeWhere((f) => f.id == fileId);
+        onUpdate?.call();
+        return;
+      }
       _uploadEncryptedImageFromBytes(bytes, fileName, fileId);
     } else {
       _chatApiService.performFileUploadFromBytes(bytes, fileName, fileId);
@@ -278,52 +302,6 @@ class FileAttachmentHandler {
       }
     } catch (error) {
       onError?.call('Failed to upload image "$fileName": $error');
-      int index = _attachedFiles.indexWhere((f) => f.id == fileId);
-      if (index != -1) {
-        _attachedFiles.removeAt(index);
-        onUpdate?.call();
-      }
-    }
-  }
-
-  /// Upload image with compression and encryption
-  Future<void> _uploadEncryptedImage(
-    File file,
-    String fileName,
-    String fileId,
-  ) async {
-    try {
-      // Read image bytes
-      final Uint8List imageBytes = await file.readAsBytes();
-
-      // Upload to encrypted storage (compression + encryption happens inside)
-      final String storagePath = await ImageStorageService.uploadEncryptedImage(
-        imageBytes,
-      );
-
-      // Update the attached file with the storage path
-      int index = _attachedFiles.indexWhere((f) => f.id == fileId);
-      if (index != -1) {
-        _attachedFiles[index] = _attachedFiles[index].copyWith(
-          encryptedImagePath: storagePath,
-          isUploading: false,
-          // Don't set markdownContent for images - they'll be sent separately
-        );
-        onUpdate?.call();
-      }
-
-      if (kDebugMode) {
-        debugPrint(
-          'Image "$fileName" uploaded and encrypted successfully: $storagePath',
-        );
-      }
-    } catch (error) {
-      if (kDebugMode) {
-        debugPrint('Failed to upload encrypted image "$fileName": $error');
-      }
-      onError?.call('Failed to upload image "$fileName": $error');
-
-      // Remove failed upload
       int index = _attachedFiles.indexWhere((f) => f.id == fileId);
       if (index != -1) {
         _attachedFiles.removeAt(index);
