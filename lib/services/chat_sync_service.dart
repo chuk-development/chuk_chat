@@ -1,6 +1,7 @@
 // lib/services/chat_sync_service.dart
 import 'dart:async';
 
+import 'package:chuk_chat/services/chat_preload_service.dart';
 import 'package:chuk_chat/services/chat_storage_mutations.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
@@ -18,6 +19,18 @@ class ChatSyncService {
   static bool _isSyncing = false;
   static bool _isEnabled = false;
   static bool _hasCompletedFirstSync = false;
+
+  /// Completer that resolves when the first sync cycle finishes.
+  /// Used by ChatPreloadService to wait before preloading.
+  static Completer<void>? _firstSyncCompleter;
+
+  /// Future that resolves when the first sync cycle finishes.
+  /// Returns immediately if first sync already completed.
+  static Future<void> get firstSyncComplete {
+    if (_hasCompletedFirstSync) return Future.value();
+    _firstSyncCompleter ??= Completer<void>();
+    return _firstSyncCompleter!.future;
+  }
 
   /// How often to poll for changes (in seconds)
   static const int _pollIntervalSeconds = 5;
@@ -52,6 +65,7 @@ class ChatSyncService {
     _syncTimer?.cancel();
     _syncTimer = null;
     _hasCompletedFirstSync = false; // Reset for next login
+    _firstSyncCompleter = null;
     if (kDebugMode) {
       debugPrint('⏹️ [ChatSync] Stopped sync service');
     }
@@ -86,11 +100,13 @@ class ChatSyncService {
     });
   }
 
-  /// Sync titles when app resumes - fetches latest from network
+  /// Sync titles when app resumes - fetches latest from network.
+  /// Does NOT check NetworkStatusService.isOnline here because
+  /// [resume] is called after a fresh network probe in AppLifecycleService,
+  /// so the status is already up-to-date by the time we get here.
   static Future<void> _syncTitlesOnResume() async {
     if (_isSyncing) return;
     if (!ChatStorageService.initialSyncComplete) return;
-    if (!NetworkStatusService.isOnline) return;
 
     final user = SupabaseService.auth.currentUser;
     if (user == null) return;
@@ -130,28 +146,39 @@ class ChatSyncService {
       return;
     }
 
-    // Skip network sync if we know we're offline
+    // If we think we're offline, do a fresh probe — the user may have
+    // restored connectivity (e.g. turned off flight mode) and the cached
+    // status is stale.
     if (!NetworkStatusService.isOnline) {
-      if (kDebugMode) {
-        debugPrint('⏸️ [ChatSync] Offline - skipping network sync');
-      }
-      // If sidebar is empty, populate from encrypted cache so the user
-      // sees their chats even without a network connection.
-      if (ChatStorageState.chatsById.isEmpty) {
+      final nowOnline = await NetworkStatusService.hasInternetConnection(
+        useCache: false,
+        timeout: const Duration(seconds: 5),
+      );
+      if (!nowOnline) {
         if (kDebugMode) {
-          debugPrint(
-            '📦 [ChatSync] Sidebar empty while offline, loading from cache...',
-          );
+          debugPrint('⏸️ [ChatSync] Still offline - skipping network sync');
         }
-        try {
-          await ChatStorageService.loadFromCache();
-        } catch (e) {
+        // If sidebar is empty, populate from encrypted cache so the user
+        // sees their chats even without a network connection.
+        if (ChatStorageState.chatsById.isEmpty) {
           if (kDebugMode) {
-            debugPrint('⚠️ [ChatSync] Failed to load from cache: $e');
+            debugPrint(
+              '📦 [ChatSync] Sidebar empty while offline, loading from cache...',
+            );
+          }
+          try {
+            await ChatStorageService.loadFromCache();
+          } catch (e) {
+            if (kDebugMode) {
+              debugPrint('⚠️ [ChatSync] Failed to load from cache: $e');
+            }
           }
         }
+        return;
       }
-      return;
+      if (kDebugMode) {
+        debugPrint('🟢 [ChatSync] Back online! Resuming sync...');
+      }
     }
 
     final user = SupabaseService.auth.currentUser;
@@ -169,6 +196,9 @@ class ChatSyncService {
       }
       await ChatStorageService.syncTitlesFromNetwork();
       _hasCompletedFirstSync = true;
+      if (_firstSyncCompleter != null && !_firstSyncCompleter!.isCompleted) {
+        _firstSyncCompleter!.complete();
+      }
     }
 
     try {
@@ -259,6 +289,12 @@ class ChatSyncService {
       if (idsToFetch.isNotEmpty || deletedChatIds.isNotEmpty) {
         if (kDebugMode) {
           debugPrint('✅ [ChatSync] Sync complete');
+        }
+
+        // If sync found new chats and preload already finished, trigger
+        // a follow-up preload so the new chats get cached for offline use.
+        if (newChatIds.isNotEmpty && ChatPreloadService.isPreloadComplete) {
+          unawaited(ChatPreloadService.preloadNewChats());
         }
       }
     } catch (e) {

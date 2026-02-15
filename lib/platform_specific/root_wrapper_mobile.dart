@@ -49,9 +49,9 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
       curve: Curves.easeInOut, // Smooth easing curve
     );
 
-    // Don't block UI startup - check permission after first frame
+    // Don't block UI startup - check permissions after first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _ensureMicrophonePermission();
+      _ensurePermissions();
     });
   }
 
@@ -66,9 +66,11 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
 
-    // When app comes back to foreground, refresh the session
     if (state == AppLifecycleState.resumed) {
       _refreshSessionOnResume();
+      // Re-check permissions on resume — Android can revoke them after
+      // an APK update or if the user toggled them in system settings.
+      _ensurePermissions();
     }
   }
 
@@ -90,23 +92,24 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     }
   }
 
-  Future<void> _ensureMicrophonePermission() async {
-    if (!Platform.isAndroid) {
-      return;
-    }
+  /// Re-check and request runtime permissions.
+  ///
+  /// Called both on first launch and on every resume so that permissions
+  /// are restored after an APK update or after the user toggles them
+  /// in Android system settings.
+  Future<void> _ensurePermissions() async {
+    if (!Platform.isAndroid) return;
 
-    final PermissionStatus status = await Permission.microphone.status;
-    if (status.isGranted || status.isLimited) {
-      return;
-    }
-
-    if (status.isDenied || status.isRestricted) {
+    // Microphone
+    final micStatus = await Permission.microphone.status;
+    if (micStatus.isDenied || micStatus.isRestricted) {
       await Permission.microphone.request();
-      return;
     }
 
-    if (status.isPermanentlyDenied) {
-      await openAppSettings();
+    // Notifications (Android 13+ / API 33+)
+    final notifStatus = await Permission.notification.status;
+    if (notifStatus.isDenied || notifStatus.isRestricted) {
+      await Permission.notification.request();
     }
   }
 

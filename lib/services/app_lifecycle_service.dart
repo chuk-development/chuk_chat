@@ -65,16 +65,13 @@ class AppLifecycleService extends ChangeNotifier {
       debugPrint('📱 [Lifecycle] App resumed');
     }
 
-    // Reset network failure count
+    // Reset network failure count so we don't carry stale offline state
     NetworkStatusService.resetFailureCount();
 
-    // Check network and session in background
-    unawaited(_checkNetworkAndSession());
-
-    // Resume sync after UI renders
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ChatSyncService.resume();
-    });
+    // Check network FIRST, then resume sync once we know the actual status.
+    // This prevents ChatSyncService from seeing stale isOnline=false after
+    // the user turns off flight mode.
+    unawaited(_checkNetworkThenResume());
 
     // Notify listeners
     StreamingManager().onAppLifecycleChanged(isInBackground: false);
@@ -82,6 +79,31 @@ class AppLifecycleService extends ChangeNotifier {
     // Call registered callbacks
     for (final callback in _onResumeCallbacks) {
       callback();
+    }
+  }
+
+  Future<void> _checkNetworkThenResume() async {
+    // Probe network with a fresh (non-cached) check
+    final isOnline = await NetworkStatusService.hasInternetConnection(
+      useCache: false,
+      timeout: const Duration(seconds: 5),
+    );
+
+    if (kDebugMode) {
+      debugPrint(
+        '📱 [Lifecycle] Network probe: ${isOnline ? "ONLINE" : "OFFLINE"}',
+      );
+    }
+
+    // Now that network status is up-to-date, resume sync
+    ChatSyncService.resume();
+
+    // Validate session if online
+    if (kFeatureSessionManagement &&
+        isOnline &&
+        SupabaseService.auth.currentSession != null) {
+      unawaited(_validateSession());
+      unawaited(SessionTrackingService.updateLastSeen());
     }
   }
 
@@ -99,26 +121,6 @@ class AppLifecycleService extends ChangeNotifier {
     // Call registered callbacks
     for (final callback in _onPauseCallbacks) {
       callback();
-    }
-  }
-
-  Future<void> _checkNetworkAndSession() async {
-    final isOnline = await NetworkStatusService.hasInternetConnection(
-      useCache: false,
-      timeout: const Duration(seconds: 3),
-    );
-
-    if (kDebugMode) {
-      debugPrint(
-        '📱 [Lifecycle] Network status: ${isOnline ? "ONLINE" : "OFFLINE"}',
-      );
-    }
-
-    if (kFeatureSessionManagement &&
-        isOnline &&
-        SupabaseService.auth.currentSession != null) {
-      unawaited(_validateSession());
-      unawaited(SessionTrackingService.updateLastSeen());
     }
   }
 

@@ -8,6 +8,7 @@ import 'dart:async';
 import 'package:chuk_chat/models/stored_chat.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/chat_storage_sync.dart';
+import 'package:chuk_chat/services/chat_sync_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
@@ -101,6 +102,26 @@ class ChatPreloadService {
     final stopwatch = Stopwatch()..start();
 
     try {
+      // Wait for the first sync cycle to finish so that chatsById has
+      // all chats from the server, not just stale sidebar entries.
+      try {
+        await ChatSyncService.firstSyncComplete.timeout(
+          const Duration(seconds: 30),
+        );
+        if (kDebugMode) {
+          debugPrint(
+            '✅ [Preload] First sync complete, proceeding with preload '
+            '(${ChatStorageState.chatsById.length} chats in sidebar)',
+          );
+        }
+      } on TimeoutException {
+        if (kDebugMode) {
+          debugPrint(
+            '⚠️ [Preload] First sync timed out, preloading available chats',
+          );
+        }
+      }
+
       // Get list of chats that need full loading
       final chatsToLoad = ChatStorageState.chatsById.values
           .where((chat) => !chat.isFullyLoaded)
@@ -315,6 +336,29 @@ class ChatPreloadService {
 
     // Wait for existing preload to complete
     await _preloadCompleter?.future;
+  }
+
+  /// Trigger a follow-up preload for any chats that were added after the
+  /// initial preload finished (e.g. by ChatSyncService discovering new chats).
+  /// Safe to call multiple times — no-ops if nothing new to load.
+  static Future<void> preloadNewChats() async {
+    if (_isPreloading) return;
+
+    final unloaded = ChatStorageState.chatsById.values
+        .where((chat) => !chat.isFullyLoaded)
+        .toList();
+
+    if (unloaded.isEmpty) return;
+
+    if (kDebugMode) {
+      debugPrint(
+        '🔄 [Preload] Follow-up preload for ${unloaded.length} new chats',
+      );
+    }
+
+    // Allow startBackgroundPreload to run again
+    _isPreloadComplete = false;
+    await startBackgroundPreload();
   }
 
   /// Get the number of fully loaded chats
