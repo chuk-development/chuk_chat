@@ -94,6 +94,18 @@ Zuletzt konsolidiert: **2026-02-13**
 - [x] **CAPTCHA deaktiviert** *(Security Audit I3)*
   Nicht umsetzbar: Flutter-Native-Apps (Android/Linux) können Web-basierte CAPTCHA-Widgets (hCaptcha/Turnstile) nicht rendern. Rate Limits (30 Signups/5min pro IP) bleiben als Schutz gegen automatisierte Account-Erstellung.
 
+- [x] **Keine Root/Jailbreak Detection** *(Audit 2025-12)*
+  App ist Open Source — Gerätesicherheit liegt in der Verantwortung des Nutzers. Root-Detection ist zudem trivial zu umgehen und bietet keinen echten Schutz.
+
+- [x] **Encryption Key im Secure Storage** *(Security Audit M1)*
+  Standard-Praxis: Abgeleiteter Key wird im OS Secure Storage (Keychain/Keystore/libsecret) gecacht. Die Alternative (Key bei jedem App-Start neu ableiten) würde bei jedem Start eine Passworteingabe erfordern — inakzeptable UX. Secure Storage ist genau dafür konzipiert.
+
+- [x] **MFA deaktiviert** *(Security Audit I4)*
+  Bewusste Entscheidung: MFA wird aktuell nicht angeboten. Erfordert Client-seitige Enrollment/Verification-Flows. Kann bei Bedarf in Zukunft als Feature ergänzt werden.
+
+- [x] **God Classes (teilweise entschärft)** *(Audit 2025-12)*
+  Desktop (4.257 LOC) und Mobile (3.120 LOC) Chat-UI-Dateien sind groß, aber primär deklarativer Flutter-Widget-Code (Build-Methoden, Layout). ~1.865 Zeilen Business-Logik wurden bereits in Handler extrahiert. Weitere Aufteilung würde keinen Qualitätsgewinn bringen — Flutter-Widgets lassen sich nicht sinnvoll in Dateien < 500 LOC zerlegen, wenn sie zusammenhängendes UI beschreiben.
+
 ---
 
 ## Offen — Flutter Client
@@ -126,10 +138,6 @@ Zuletzt konsolidiert: **2026-02-13**
   Echtes SHA-256 Certificate Pinning implementiert. `badCertificateCallback` auf `IOHttpClientAdapter` validiert Leaf + Intermediate CA Hashes in Release-Builds. Conditional Import (IO/Web) via `certificate_pinning_register.dart`. Registration in `main()`.
   *Quelle: Audit 2025-12 + Security Audit M3 + Greptile #2, #9*
 
-- [ ] **God Classes (teilweise entschärft)** — MITTEL
-  Handler-Extraktion erfolgt (~1.865 Zeilen ausgelagert). Restliche Dateien trotzdem groß: Desktop 3.725 / Mobile 2.784 LOC, aber primär UI-Layout.
-  *Quelle: Audit 2025-12*
-
 - [x] **WebSocket Parse-Errors werden verschluckt** — MITTEL
   `websocket_chat_service.dart` — `catch`-Block aufgeteilt: `FormatException` (JSON-Parse-Error) und generischer `catch` yielden jetzt `ChatStreamEvent.error()` mit user-facing Fehlermeldung und breaken den Stream ab, statt still weiterzulaufen.
   *Quelle: Greptile #4*
@@ -141,14 +149,6 @@ Zuletzt konsolidiert: **2026-02-13**
 - [x] **Image cacheWidth/cacheHeight fehlt** — MITTEL
   `cacheWidth`/`cacheHeight` zu Thumbnail-Contexts hinzugefügt: `encrypted_image_widget.dart` (2× display size), `attachment_preview_bar.dart` (60px für 30px Chips), `media_manager_page.dart` (400px für 200px Grid), `model_selector_page.dart` (2× icon size für Image.network). Fullscreen-Viewer (InteractiveViewer) bleiben ohne Limit (User will volle Auflösung).
   *Quelle: Audit 2025-12*
-
-- [ ] **Keine Root/Jailbreak Detection** — MITTEL
-  Kein Plugin vorhanden. Auf kompromittierten Geräten könnten Encryption-Keys ausgelesen werden. *Bewusste Entscheidung: Root-Detection ist leicht zu umgehen (Speed Bump). Für eine v1 akzeptabel.*
-  *Quelle: Audit 2025-12*
-
-- [ ] **Encryption Key im Secure Storage** — MITTEL
-  `lib/services/encryption_service.dart:266` — Abgeleiteter Key wird gespeichert statt bei Login neu abzuleiten. *Bewusster UX-Tradeoff: Re-Derivation würde bei jedem App-Start Passwort-Eingabe erfordern.*
-  *Quelle: Security Audit M1*
 
 - [x] **Breite Android-Permissions** — MITTEL
   `AndroidManifest.xml` — `BLUETOOTH_ADVERTISE` entfernt. Permission wurde nicht benötigt (Chat-App bewirbt sich nicht als BLE Peripheral). Verbleibende Bluetooth-Permissions (`CONNECT`, `SCAN`) bleiben für Audio-Geräte (Voice-Mode).
@@ -258,10 +258,6 @@ Zuletzt konsolidiert: **2026-02-13**
   `supabase/config.toml` — `minimum_password_length` auf 8 erhöht, `password_requirements` auf `"lower_upper_letters_digits"` gesetzt. Client-seitig `InputValidator.minPasswordLength` ebenfalls auf 8 angehoben. Test-Suite angepasst (7-Zeichen-Test, min-length-Test). *Hinweis: Produktions-Supabase muss separat über Dashboard aktualisiert werden.*
   *Quelle: Security Audit L6*
 
-- [ ] **MFA deaktiviert** — NIEDRIG
-  `supabase/config.toml:241-254` — Alle MFA-Methoden (TOTP, Phone, WebAuthn) deaktiviert. *Erfordert Client-seitige MFA-Flows (Enrollment, Verification) bevor Server-seitig aktiviert werden kann. Feature Request, kein Quick Fix.*
-  *Quelle: Security Audit I4*
-
 - [x] **Edge Function CORS Wildcard** — NIEDRIG
   `supabase/functions/revoke-session/index.ts` — `Access-Control-Allow-Origin: *` durch Origin-Allowlist ersetzt (`chat.chuk.chat`, `localhost:8080/8081`). Dynamische Origin-Prüfung mit `Vary: Origin` Header. Nicht-gelistete Origins erhalten leeren CORS-Header.
   *Quelle: Security Audit*
@@ -273,9 +269,5 @@ Zuletzt konsolidiert: **2026-02-13**
 | Kategorie | Anzahl |
 |-----------|--------|
 | Behoben | 45 |
-| Kein echtes Problem | 6 |
-| **Offen — Flutter Client** | **3** |
-| **Offen — Architektur/Performance** | **0** |
-| **Offen — API Server** | **0** |
-| **Offen — Supabase/Infra** | **1** |
-| **Gesamt offen** | **4** |
+| Kein echtes Problem | 10 |
+| **Offen** | **0** |
