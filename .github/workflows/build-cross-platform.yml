@@ -41,6 +41,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 env:
   DISPLAY_NAME: "Chuk Chat"
@@ -49,10 +50,35 @@ env:
 
 jobs:
   # ──────────────────────────────────────────────
+  # Cleanup old artifacts to free storage quota
+  # ──────────────────────────────────────────────
+  cleanup-artifacts:
+    name: Cleanup Old Artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete all existing artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Fetching all artifacts..."
+          ARTIFACTS=$(gh api repos/${{ github.repository }}/actions/artifacts --paginate --jq '.artifacts[].id')
+          if [ -z "$ARTIFACTS" ]; then
+            echo "No artifacts to delete."
+          else
+            COUNT=$(echo "$ARTIFACTS" | wc -l)
+            echo "Deleting $COUNT artifacts..."
+            echo "$ARTIFACTS" | while read id; do
+              gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/$id" && echo "  Deleted $id" || echo "  Failed to delete $id"
+            done
+            echo "Cleanup complete."
+          fi
+
+  # ──────────────────────────────────────────────
   # Version Bump
   # ──────────────────────────────────────────────
   version-bump:
     name: Bump Version
+    needs: cleanup-artifacts
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.bump.outputs.version }}
