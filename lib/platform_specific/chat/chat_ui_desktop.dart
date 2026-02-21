@@ -54,6 +54,8 @@ class _MessageRenderData {
     this.modelLabel,
     this.tps,
     this.images,
+    this.imageCostEur,
+    this.imageGeneratedAt,
     this.attachments,
   });
 
@@ -64,6 +66,8 @@ class _MessageRenderData {
   final String? modelLabel;
   final double? tps;
   final List<String>? images;
+  final double? imageCostEur;
+  final DateTime? imageGeneratedAt;
   final List<DocumentAttachment>? attachments;
 
   bool get isUser => sender == 'user';
@@ -475,6 +479,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 // Include images if present
                 if (message.images != null && message.images!.isNotEmpty) {
                   map['images'] = message.images!;
+                }
+                if (message.imageCostEur != null &&
+                    message.imageCostEur!.isNotEmpty) {
+                  map['imageCostEur'] = message.imageCostEur!;
+                }
+                if (message.imageGeneratedAt != null &&
+                    message.imageGeneratedAt!.isNotEmpty) {
+                  map['imageGeneratedAt'] = message.imageGeneratedAt!;
                 }
                 // Include attachments if present
                 if (message.attachments != null &&
@@ -1866,11 +1878,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             aiMessage['images'] = jsonEncode([result.encryptedPath!]);
           }
 
-          // Add cost info if available
           if (result.costEur != null) {
-            aiMessage['text'] =
-                'Image generated (${result.costEur!.toStringAsFixed(2)} EUR)';
+            aiMessage['imageCostEur'] = result.costEur!.toStringAsFixed(2);
           }
+          aiMessage['imageGeneratedAt'] = DateTime.now()
+              .toUtc()
+              .toIso8601String();
 
           if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
             _messages[placeholderIndex] = aiMessage;
@@ -3598,6 +3611,17 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         tps = double.tryParse(tpsStr);
       }
 
+      final String? imageCostStr = raw['imageCostEur'];
+      final double? imageCostEur =
+          imageCostStr != null && imageCostStr.isNotEmpty
+          ? double.tryParse(imageCostStr)
+          : null;
+      final String? imageGeneratedAtStr = raw['imageGeneratedAt'];
+      final DateTime? imageGeneratedAt =
+          imageGeneratedAtStr != null && imageGeneratedAtStr.isNotEmpty
+          ? DateTime.tryParse(imageGeneratedAtStr)
+          : null;
+
       return _MessageRenderData(
         sender: sender,
         displayText: displayText,
@@ -3608,6 +3632,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         modelLabel: modelLabel,
         tps: tps,
         images: images,
+        imageCostEur: imageCostEur,
+        imageGeneratedAt: imageGeneratedAt,
         attachments: attachments,
       );
     });
@@ -3758,6 +3784,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                           modelLabel: data.modelLabel,
                                           tps: data.tps,
                                           images: data.images,
+                                          imageCostEur: data.imageCostEur,
+                                          imageGeneratedAt:
+                                              data.imageGeneratedAt,
                                           attachments: data.attachments,
                                           actions: _buildMessageActionsForIndex(
                                             i,

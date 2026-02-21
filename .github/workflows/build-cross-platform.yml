@@ -823,15 +823,15 @@ jobs:
           echo "Published release $TAG"
           gh release view "$TAG" --repo ${{ github.repository }}
 
-      - name: Mirror to public repo
+      - name: Download assets from private release
         env:
-          GH_TOKEN: ${{ secrets.RELEASES_PAT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG=${{ needs.version-bump.outputs.tag }}
           mkdir -p downloads release-assets
 
-          # Download all assets from private release
-          gh release download "$TAG" --dir downloads --repo ${{ github.repository }} --pattern '*' || true
+          # Download all assets from private release (uses GITHUB_TOKEN which has access)
+          gh release download "$TAG" --dir downloads --repo ${{ github.repository }} --pattern '*'
 
           # Create stable-named copies for public repo
           for f in downloads/chuk_chat-*-android-arm64.apk; do [ -f "$f" ] && cp "$f" release-assets/chuk_chat-android-armv8.apk; done
@@ -851,15 +851,23 @@ jobs:
           echo "=== Stable-named assets for public repo ==="
           ls -lh release-assets/
 
+          ASSET_COUNT=$(find release-assets -type f | wc -l)
+          if [ "$ASSET_COUNT" -eq 0 ]; then
+            echo "No assets to upload!"
+            exit 1
+          fi
+          echo "Found $ASSET_COUNT assets to mirror"
+
+      - name: Mirror to public repo
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_PAT }}
+        run: |
+          TAG=${{ needs.version-bump.outputs.tag }}
+
           ASSETS=""
           for f in release-assets/*; do
             [ -f "$f" ] && ASSETS="$ASSETS $f"
           done
-
-          if [ -z "$ASSETS" ]; then
-            echo "No assets to upload!"
-            exit 1
-          fi
 
           # Delete existing public release if re-running
           gh release delete "${TAG}" --yes --cleanup-tag --repo chuk-development/chuk_chat_releases 2>/dev/null || true
@@ -879,6 +887,10 @@ jobs:
           - **.deb** — Debian/Ubuntu: `sudo dpkg -i chuk_chat-linux-amd64.deb`
           - **.AppImage** — Universal: `chmod +x chuk_chat-linux-x86_64.AppImage && ./chuk_chat-linux-x86_64.AppImage`
           - **.rpm** — Fedora/RHEL: `sudo rpm -i chuk_chat-linux-x86_64.rpm`
+
+          **Linux ARM64:**
+          - **.deb** — Debian/Ubuntu: `sudo dpkg -i chuk_chat-linux-arm64.deb`
+          - **.AppImage** — Universal (if available)
 
           **Windows:**
           - **Setup.exe** — Installer with Start Menu shortcut (recommended)

@@ -605,6 +605,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                 if (message.images != null && message.images!.isNotEmpty) {
                   map['images'] = message.images!;
                 }
+                if (message.imageCostEur != null &&
+                    message.imageCostEur!.isNotEmpty) {
+                  map['imageCostEur'] = message.imageCostEur!;
+                }
+                if (message.imageGeneratedAt != null &&
+                    message.imageGeneratedAt!.isNotEmpty) {
+                  map['imageGeneratedAt'] = message.imageGeneratedAt!;
+                }
                 // Include attachments if present
                 if (message.attachments != null &&
                     message.attachments!.isNotEmpty) {
@@ -1616,10 +1624,17 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
             aiMessage['images'] = jsonEncode([result.encryptedPath!]);
           }
 
-          // Add cost info if available
           if (result.costEur != null) {
-            aiMessage['text'] =
-                'Image generated (${result.costEur!.toStringAsFixed(2)} EUR)';
+            aiMessage['imageCostEur'] = result.costEur!.toStringAsFixed(2);
+          }
+
+          aiMessage['imageGeneratedAt'] = DateTime.now()
+              .toUtc()
+              .toIso8601String();
+
+          // Keep text empty for image-only result
+          if (result.costEur != null) {
+            aiMessage['text'] = '';
           }
 
           if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
@@ -2748,6 +2763,23 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                           tps = double.tryParse(tpsStr);
                                         }
 
+                                        final String? imageCostStr =
+                                            raw['imageCostEur'];
+                                        final double? imageCostEur =
+                                            imageCostStr != null &&
+                                                imageCostStr.isNotEmpty
+                                            ? double.tryParse(imageCostStr)
+                                            : null;
+                                        final String? imageGeneratedAtStr =
+                                            raw['imageGeneratedAt'];
+                                        final DateTime? imageGeneratedAt =
+                                            imageGeneratedAtStr != null &&
+                                                imageGeneratedAtStr.isNotEmpty
+                                            ? DateTime.tryParse(
+                                                imageGeneratedAtStr,
+                                              )
+                                            : null;
+
                                         return RepaintBoundary(
                                           child: MessageBubble(
                                             key: ValueKey('msg_$i'),
@@ -2763,6 +2795,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                             tps: tps,
                                             images: images,
                                             attachments: attachments,
+                                            imageCostEur: imageCostEur,
+                                            imageGeneratedAt: imageGeneratedAt,
                                             actions: _messageActionsHandler
                                                 .buildActionsForMessage(
                                                   index: i,
