@@ -54,7 +54,7 @@ jobs:
   # ──────────────────────────────────────────────
   cleanup-artifacts:
     name: Cleanup Old Artifacts
-    runs-on: ubuntu-latest
+    runs-on: warp-ubuntu-latest-x64-2x
     steps:
       - name: Delete all existing artifacts
         env:
@@ -79,7 +79,7 @@ jobs:
   version-bump:
     name: Bump Version
     needs: cleanup-artifacts
-    runs-on: ubuntu-latest
+    runs-on: warp-ubuntu-latest-x64-2x
     outputs:
       version: ${{ steps.bump.outputs.version }}
       version_short: ${{ steps.bump.outputs.version_short }}
@@ -107,7 +107,7 @@ jobs:
   # ──────────────────────────────────────────────
   build-android:
     name: Android APKs
-    runs-on: ubuntu-latest
+    runs-on: warp-ubuntu-latest-x64-4x
     needs: version-bump
     if: inputs.build_android
     timeout-minutes: 30
@@ -179,7 +179,7 @@ jobs:
   # ──────────────────────────────────────────────
   build-linux-x64:
     name: Linux x86_64
-    runs-on: ubuntu-latest
+    runs-on: warp-ubuntu-latest-x64-4x
     needs: version-bump
     if: inputs.build_linux_x64
     timeout-minutes: 45
@@ -403,7 +403,7 @@ jobs:
   # ──────────────────────────────────────────────
   build-linux-arm64:
     name: Linux ARM64
-    runs-on: ubuntu-24.04-arm
+    runs-on: warp-ubuntu-latest-arm64-4x
     needs: version-bump
     if: inputs.build_linux_arm64
     timeout-minutes: 60
@@ -585,7 +585,7 @@ jobs:
   # ──────────────────────────────────────────────
   build-windows:
     name: Windows
-    runs-on: windows-latest
+    runs-on: warp-windows-latest-x64-4x
     needs: version-bump
     if: inputs.build_windows
     timeout-minutes: 45
@@ -680,7 +680,7 @@ jobs:
   # ──────────────────────────────────────────────
   build-macos:
     name: macOS
-    runs-on: macos-latest
+    runs-on: warp-macos-15-arm64-6x
     needs: version-bump
     if: inputs.build_macos
     timeout-minutes: 30
@@ -729,7 +729,7 @@ jobs:
   # ──────────────────────────────────────────────
   build-ios:
     name: iOS
-    runs-on: macos-latest
+    runs-on: warp-macos-15-arm64-6x
     needs: version-bump
     if: inputs.build_ios
     timeout-minutes: 30
@@ -769,7 +769,7 @@ jobs:
   # ──────────────────────────────────────────────
   create-release:
     name: Create Release
-    runs-on: ubuntu-latest
+    runs-on: warp-ubuntu-latest-x64-2x
     needs: [version-bump, build-android, build-linux-x64, build-linux-arm64, build-windows, build-macos, build-ios]
     if: |
       always() &&
@@ -833,7 +833,7 @@ jobs:
   # ──────────────────────────────────────────────
   mirror-to-public:
     name: Mirror to Public Repo
-    runs-on: ubuntu-latest
+    runs-on: warp-ubuntu-latest-x64-2x
     needs: [version-bump, create-release]
     if: |
       always() &&
