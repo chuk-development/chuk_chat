@@ -130,7 +130,7 @@ jobs:
             --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} \
             --dart-define=PLATFORM_MOBILE=true \
             --dart-define=FEATURE_PROJECTS=false \
-            --dart-define=FEATURE_IMAGE_GEN=true \
+            --dart-define=FEATURE_IMAGE_GEN=false \
             --dart-define=FEATURE_VOICE_MODE=false \
             --tree-shake-icons
 
@@ -182,7 +182,7 @@ jobs:
             --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} \
             --dart-define=PLATFORM_DESKTOP=true \
             --dart-define=FEATURE_PROJECTS=true \
-            --dart-define=FEATURE_IMAGE_GEN=true \
+            --dart-define=FEATURE_IMAGE_GEN=false \
             --dart-define=FEATURE_VOICE_MODE=true \
             --tree-shake-icons
 
@@ -417,7 +417,7 @@ jobs:
             --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} \
             --dart-define=PLATFORM_DESKTOP=true \
             --dart-define=FEATURE_PROJECTS=true \
-            --dart-define=FEATURE_IMAGE_GEN=true \
+            --dart-define=FEATURE_IMAGE_GEN=false \
             --dart-define=FEATURE_VOICE_MODE=true \
             --tree-shake-icons
 
@@ -579,7 +579,7 @@ jobs:
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} `
             --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} `
             --dart-define=FEATURE_PROJECTS=true `
-            --dart-define=FEATURE_IMAGE_GEN=true `
+            --dart-define=FEATURE_IMAGE_GEN=false `
             --dart-define=FEATURE_VOICE_MODE=true `
             --tree-shake-icons
 
@@ -674,7 +674,7 @@ jobs:
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
             --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} \
             --dart-define=FEATURE_PROJECTS=true \
-            --dart-define=FEATURE_IMAGE_GEN=true \
+            --dart-define=FEATURE_IMAGE_GEN=false \
             --dart-define=FEATURE_VOICE_MODE=true \
             --tree-shake-icons
 
@@ -724,7 +724,7 @@ jobs:
             --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} \
             --dart-define=PLATFORM_MOBILE=true \
             --dart-define=FEATURE_PROJECTS=false \
-            --dart-define=FEATURE_IMAGE_GEN=true \
+            --dart-define=FEATURE_IMAGE_GEN=false \
             --dart-define=FEATURE_VOICE_MODE=false
 
       - name: Create archive

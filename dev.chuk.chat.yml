@@ -67,7 +67,7 @@ modules:
           --dart-define=SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-} \
           --dart-define=PLATFORM_MOBILE=false \
           --dart-define=FEATURE_PROJECTS=true \
-          --dart-define=FEATURE_IMAGE_GEN=true \
+          --dart-define=FEATURE_IMAGE_GEN=false \
           --dart-define=FEATURE_VOICE_MODE=true \
           --tree-shake-icons
 
