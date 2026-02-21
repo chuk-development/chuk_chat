@@ -146,7 +146,7 @@ jobs:
         with:
           name: android-apks
           path: build/app/outputs/flutter-apk/chuk_chat-*.apk
-          retention-days: 30
+          retention-days: 1
 
   # ──────────────────────────────────────────────
   # Linux x86_64
@@ -370,7 +370,7 @@ jobs:
             chuk_chat-*-linux-amd64.deb
             chuk_chat-*-linux-x86_64.AppImage
             chuk_chat-*-linux-x86_64.rpm
-          retention-days: 30
+          retention-days: 1
 
   # ──────────────────────────────────────────────
   # Linux ARM64
@@ -552,7 +552,7 @@ jobs:
             chuk_chat-*-linux-arm64.deb
             chuk_chat-*-linux-aarch64.AppImage
             chuk_chat-*-linux-aarch64.tar.gz
-          retention-days: 30
+          retention-days: 1
 
   # ──────────────────────────────────────────────
   # Windows
@@ -647,7 +647,7 @@ jobs:
           path: |
             chuk_chat-*-windows-x64-portable.zip
             chuk_chat-*-windows-x64-setup.exe
-          retention-days: 30
+          retention-days: 1
 
   # ──────────────────────────────────────────────
   # macOS
@@ -696,7 +696,7 @@ jobs:
         with:
           name: macos-build
           path: chuk_chat-${{ needs.version-bump.outputs.tag }}-macos.*
-          retention-days: 30
+          retention-days: 1
 
   # ──────────────────────────────────────────────
   # iOS
@@ -736,7 +736,7 @@ jobs:
         with:
           name: ios-build
           path: chuk_chat-${{ needs.version-bump.outputs.tag }}-ios.zip
-          retention-days: 30
+          retention-days: 1
 
   # ──────────────────────────────────────────────
   # Create GitHub Release
