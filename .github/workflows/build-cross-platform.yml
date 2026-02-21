@@ -74,7 +74,7 @@ jobs:
           fi
 
   # ──────────────────────────────────────────────
-  # Version Bump
+  # Version Bump + Create Draft Release
   # ──────────────────────────────────────────────
   version-bump:
     name: Bump Version
@@ -94,13 +94,47 @@ jobs:
         id: bump
         run: |
           CURRENT=$(grep '^version:' pubspec.yaml | sed 's/version: //' | tr -d '[:space:]')
-          # Strip +buildnumber suffix if present
           VER=$(echo "$CURRENT" | cut -d'+' -f1)
-
           echo "version=$VER" >> $GITHUB_OUTPUT
           echo "version_short=$VER" >> $GITHUB_OUTPUT
           echo "tag=v$VER" >> $GITHUB_OUTPUT
           echo "Using version: $VER"
+
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG=${{ steps.bump.outputs.tag }}
+          # Delete existing release/tag if present (re-runs)
+          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$TAG" \
+            --draft \
+            --title "Chuk Chat $TAG" \
+            --notes "$(cat <<'EOF'
+          ## Downloads
+
+          **Android** (choose your architecture):
+          - **ARM64** — for modern phones (recommended)
+          - **ARM32** — for older phones
+          - **x64** — for emulators / x86 devices
+
+          **Linux x86_64:**
+          - **.deb** — Debian/Ubuntu: `sudo dpkg -i chuk_chat-*-linux-amd64.deb`
+          - **.AppImage** — Universal: `chmod +x *.AppImage && ./chuk_chat-*-linux-x86_64.AppImage`
+          - **.rpm** — Fedora/RHEL: `sudo rpm -i chuk_chat-*-linux-x86_64.rpm`
+
+          **Linux ARM64** (Raspberry Pi, Asahi Linux, etc.):
+          - **.deb** — Debian/Ubuntu: `sudo dpkg -i chuk_chat-*-linux-arm64.deb`
+          - **.AppImage** — Universal (if available)
+
+          **Windows:**
+          - **Setup.exe** — Installer with Start Menu shortcut (recommended)
+          - **Portable ZIP** — extract and run, no installation needed
+
+          **macOS:**
+          - DMG or ZIP — drag to Applications
+          EOF
+          )"
 
   # ──────────────────────────────────────────────
   # Android
@@ -123,7 +157,7 @@ jobs:
         with: { channel: stable, cache: true }
 
       - name: Gradle cache
-        uses: actions/cache@v4
+        uses: WarpBuilds/cache@v1
         with:
           path: |
             ~/.gradle/caches
@@ -160,19 +194,16 @@ jobs:
             --dart-define=FEATURE_VOICE_MODE=false \
             --tree-shake-icons
 
-      - name: Rename APKs
+      - name: Rename and upload APKs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG=${{ needs.version-bump.outputs.tag }}
           cd build/app/outputs/flutter-apk
           mv app-arm64-v8a-release.apk    chuk_chat-${TAG}-android-arm64.apk   || true
           mv app-armeabi-v7a-release.apk  chuk_chat-${TAG}-android-arm32.apk   || true
           mv app-x86_64-release.apk       chuk_chat-${TAG}-android-x64.apk     || true
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: android-apks
-          path: build/app/outputs/flutter-apk/chuk_chat-*.apk
-          retention-days: 1
+          gh release upload "$TAG" chuk_chat-*.apk --repo ${{ github.repository }} --clobber
 
   # ──────────────────────────────────────────────
   # Linux x86_64
@@ -389,14 +420,16 @@ jobs:
           rpmbuild -bb ~/rpmbuild/SPECS/chuk-chat.spec
           cp ~/rpmbuild/RPMS/x86_64/chuk-chat-*.rpm chuk_chat-${TAG}-linux-x86_64.rpm || true
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: linux-x64-packages
-          path: |
-            chuk_chat-*-linux-amd64.deb
-            chuk_chat-*-linux-x86_64.AppImage
-            chuk_chat-*-linux-x86_64.rpm
-          retention-days: 1
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG=${{ needs.version-bump.outputs.tag }}
+          gh release upload "$TAG" \
+            chuk_chat-*-linux-amd64.deb \
+            chuk_chat-*-linux-x86_64.AppImage \
+            chuk_chat-*-linux-x86_64.rpm \
+            --repo ${{ github.repository }} --clobber
 
   # ──────────────────────────────────────────────
   # Linux ARM64
@@ -450,13 +483,11 @@ jobs:
       - name: Detect bundle path
         id: bundle
         run: |
-          # ARM64 bundle may be in different paths depending on runner
           if [ -d "build/linux/arm64/release/bundle" ]; then
             echo "path=build/linux/arm64/release/bundle" >> $GITHUB_OUTPUT
           elif [ -d "build/linux/aarch64/release/bundle" ]; then
             echo "path=build/linux/aarch64/release/bundle" >> $GITHUB_OUTPUT
           else
-            # Fallback: find it
             BUNDLE=$(find build/linux -name "bundle" -type d | head -1)
             echo "path=${BUNDLE}" >> $GITHUB_OUTPUT
           fi
@@ -524,7 +555,6 @@ jobs:
           TAG=${{ needs.version-bump.outputs.tag }}
           BUNDLE=${{ steps.bundle.outputs.path }}
 
-          # Download aarch64 appimagetool
           wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-aarch64.AppImage || true
           if [ -f appimagetool-aarch64.AppImage ]; then
             chmod +x appimagetool-aarch64.AppImage
@@ -571,14 +601,16 @@ jobs:
             tar -czf chuk_chat-${TAG}-linux-aarch64.tar.gz -C AppDir/usr/bin .
           fi
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: linux-arm64-packages
-          path: |
-            chuk_chat-*-linux-arm64.deb
-            chuk_chat-*-linux-aarch64.AppImage
-            chuk_chat-*-linux-aarch64.tar.gz
-          retention-days: 1
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG=${{ needs.version-bump.outputs.tag }}
+          FILES=""
+          for f in chuk_chat-*-linux-arm64.deb chuk_chat-*-linux-aarch64.AppImage chuk_chat-*-linux-aarch64.tar.gz; do
+            [ -f "$f" ] && FILES="$FILES $f"
+          done
+          [ -n "$FILES" ] && gh release upload "$TAG" $FILES --repo ${{ github.repository }} --clobber
 
   # ──────────────────────────────────────────────
   # Windows
@@ -619,10 +651,8 @@ jobs:
           $TAG = "${{ needs.version-bump.outputs.tag }}"
           $VER = "${{ needs.version-bump.outputs.version_short }}"
 
-          # Install Inno Setup via Chocolatey (pre-installed on GitHub runners)
           choco install innosetup -y --no-progress
 
-          # Create Inno Setup script
           @"
           [Setup]
           AppId={{B8F3C2A1-7D4E-4F5B-9A1C-3E8D2F6A7B9C}
@@ -664,16 +694,14 @@ jobs:
           Filename: "{app}\chuk_chat.exe"; Description: "{cm:LaunchProgram,Chuk Chat}"; Flags: nowait postinstall skipifsilent
           "@ | Out-File -Encoding UTF8 chuk_chat.iss
 
-          # Build installer (choco installs to Program Files)
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" chuk_chat.iss
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: windows-build
-          path: |
-            chuk_chat-*-windows-x64-portable.zip
-            chuk_chat-*-windows-x64-setup.exe
-          retention-days: 1
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $TAG = "${{ needs.version-bump.outputs.tag }}"
+          gh release upload "$TAG" "chuk_chat-$TAG-windows-x64-portable.zip" "chuk_chat-$TAG-windows-x64-setup.exe" --repo ${{ github.repository }} --clobber
 
   # ──────────────────────────────────────────────
   # macOS
@@ -718,11 +746,16 @@ jobs:
             || (cd build/macos/Build/Products/Release && \
                 zip -r ../../../../../chuk_chat-${{ needs.version-bump.outputs.tag }}-macos.zip chuk_chat.app)
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: macos-build
-          path: chuk_chat-${{ needs.version-bump.outputs.tag }}-macos.*
-          retention-days: 1
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG=${{ needs.version-bump.outputs.tag }}
+          FILES=""
+          for f in chuk_chat-${TAG}-macos.dmg chuk_chat-${TAG}-macos.zip; do
+            [ -f "$f" ] && FILES="$FILES $f"
+          done
+          [ -n "$FILES" ] && gh release upload "$TAG" $FILES --repo ${{ github.repository }} --clobber
 
   # ──────────────────────────────────────────────
   # iOS
@@ -753,22 +786,21 @@ jobs:
             --dart-define=FEATURE_IMAGE_GEN=false \
             --dart-define=FEATURE_VOICE_MODE=false
 
-      - name: Create archive
+      - name: Create archive and upload
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          TAG=${{ needs.version-bump.outputs.tag }}
           cd build/ios/iphoneos
-          zip -r ../../../chuk_chat-${{ needs.version-bump.outputs.tag }}-ios.zip Runner.app
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ios-build
-          path: chuk_chat-${{ needs.version-bump.outputs.tag }}-ios.zip
-          retention-days: 1
+          zip -r ../../../chuk_chat-${TAG}-ios.zip Runner.app
+          cd ../../..
+          gh release upload "$TAG" chuk_chat-${TAG}-ios.zip --repo ${{ github.repository }} --clobber
 
   # ──────────────────────────────────────────────
-  # Create GitHub Release
+  # Publish Release + Mirror to Public
   # ──────────────────────────────────────────────
-  create-release:
-    name: Create Release
+  publish-release:
+    name: Publish Release
     runs-on: warp-ubuntu-latest-x64-2x
     needs: [version-bump, build-android, build-linux-x64, build-linux-arm64, build-windows, build-macos, build-ios]
     if: |
@@ -776,140 +808,49 @@ jobs:
       needs.version-bump.result == 'success' &&
       (needs.build-android.result == 'success' || needs.build-android.result == 'skipped') &&
       (needs.build-linux-x64.result == 'success' || needs.build-linux-x64.result == 'skipped') &&
-      (needs.build-linux-arm64.result != 'cancelled') &&
+      (needs.build-linux-arm64.result == 'success' || needs.build-linux-arm64.result == 'skipped') &&
       (needs.build-windows.result == 'success' || needs.build-windows.result == 'skipped') &&
       (needs.build-macos.result == 'success' || needs.build-macos.result == 'skipped') &&
       (needs.build-ios.result == 'success' || needs.build-ios.result == 'skipped')
 
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: List artifacts
-        run: find artifacts -type f | sort
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ needs.version-bump.outputs.tag }}
-          name: Chuk Chat ${{ needs.version-bump.outputs.tag }}
-          body: |
-            ## Downloads
-
-            **Android** (choose your architecture):
-            - **ARM64** — for modern phones (recommended)
-            - **ARM32** — for older phones
-            - **x64** — for emulators / x86 devices
-
-            **Linux x86_64:**
-            - **.deb** — Debian/Ubuntu: `sudo dpkg -i chuk_chat-*-linux-amd64.deb`
-            - **.AppImage** — Universal: `chmod +x *.AppImage && ./chuk_chat-*-linux-x86_64.AppImage`
-            - **.rpm** — Fedora/RHEL: `sudo rpm -i chuk_chat-*-linux-x86_64.rpm`
-
-            **Linux ARM64** (Raspberry Pi, Asahi Linux, etc.):
-            - **.deb** — Debian/Ubuntu: `sudo dpkg -i chuk_chat-*-linux-arm64.deb`
-            - **.AppImage** — Universal (if available)
-
-            **Windows:**
-            - **Setup.exe** — Installer with Start Menu shortcut (recommended)
-            - **Portable ZIP** — extract and run, no installation needed
-
-            **macOS:**
-            - DMG or ZIP — drag to Applications
-
-          draft: false
-          prerelease: false
-          files: |
-            artifacts/android-apks/*
-            artifacts/linux-x64-packages/*
-            artifacts/linux-arm64-packages/*
-            artifacts/windows-build/*
-            artifacts/macos-build/*
-            artifacts/ios-build/*
-
-  # ──────────────────────────────────────────────
-  # Mirror to Public Releases Repo
-  # ──────────────────────────────────────────────
-  mirror-to-public:
-    name: Mirror to Public Repo
-    runs-on: warp-ubuntu-latest-x64-2x
-    needs: [version-bump, create-release]
-    if: |
-      always() &&
-      needs.create-release.result == 'success'
-
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Prepare stable-named assets
+      - name: Publish draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG=${{ needs.version-bump.outputs.tag }}
-          mkdir -p release-assets
+          gh release edit "$TAG" --draft=false --repo ${{ github.repository }}
+          echo "Published release $TAG"
+          gh release view "$TAG" --repo ${{ github.repository }}
 
-          # Android (rename arm64→armv8, arm32→armv7 for public naming)
-          for f in artifacts/android-apks/chuk_chat-*-android-arm64.apk; do
-            [ -f "$f" ] && cp "$f" release-assets/chuk_chat-android-armv8.apk
-          done
-          for f in artifacts/android-apks/chuk_chat-*-android-arm32.apk; do
-            [ -f "$f" ] && cp "$f" release-assets/chuk_chat-android-armv7.apk
-          done
-          for f in artifacts/android-apks/chuk_chat-*-android-x64.apk; do
-            [ -f "$f" ] && cp "$f" release-assets/chuk_chat-android-x64.apk
-          done
-
-          # Linux x64
-          for f in artifacts/linux-x64-packages/chuk_chat-*-linux-amd64.deb; do
-            [ -f "$f" ] && cp "$f" release-assets/chuk_chat-linux-amd64.deb
-          done
-          for f in artifacts/linux-x64-packages/chuk_chat-*-linux-x86_64.AppImage; do
-            [ -f "$f" ] && cp "$f" release-assets/chuk_chat-linux-x86_64.AppImage
-          done
-          for f in artifacts/linux-x64-packages/chuk_chat-*-linux-x86_64.rpm; do
-            [ -f "$f" ] && cp "$f" release-assets/chuk_chat-linux-x86_64.rpm
-          done
-
-          # Linux ARM64
-          for f in artifacts/linux-arm64-packages/chuk_chat-*-linux-arm64.deb; do
-            [ -f "$f" ] && cp "$f" release-assets/chuk_chat-linux-arm64.deb
-          done
-          for f in artifacts/linux-arm64-packages/chuk_chat-*-linux-aarch64.AppImage; do
-            [ -f "$f" ] && cp "$f" release-assets/chuk_chat-linux-aarch64.AppImage
-          done
-
-          # Windows
-          for f in artifacts/windows-build/chuk_chat-*-windows-x64-setup.exe; do
-            [ -f "$f" ] && cp "$f" release-assets/chuk_chat-windows-x64-setup.exe
-          done
-          for f in artifacts/windows-build/chuk_chat-*-windows-x64-portable.zip; do
-            [ -f "$f" ] && cp "$f" release-assets/chuk_chat-windows-x64-portable.zip
-          done
-
-          # macOS
-          for f in artifacts/macos-build/chuk_chat-*-macos.dmg; do
-            [ -f "$f" ] && cp "$f" release-assets/chuk_chat-macos.dmg
-          done
-          for f in artifacts/macos-build/chuk_chat-*-macos.zip; do
-            [ -f "$f" ] && cp "$f" release-assets/chuk_chat-macos.zip
-          done
-
-          # iOS
-          for f in artifacts/ios-build/chuk_chat-*-ios.zip; do
-            [ -f "$f" ] && cp "$f" release-assets/chuk_chat-ios.zip
-          done
-
-          echo "=== Stable-named assets for public repo ==="
-          ls -lh release-assets/
-
-      - name: Create release on public repo
+      - name: Mirror to public repo
         env:
           GH_TOKEN: ${{ secrets.RELEASES_PAT }}
         run: |
           TAG=${{ needs.version-bump.outputs.tag }}
+          mkdir -p downloads release-assets
 
-          # Build asset list (only include files that exist)
+          # Download all assets from private release
+          gh release download "$TAG" --dir downloads --repo ${{ github.repository }} --pattern '*' || true
+
+          # Create stable-named copies for public repo
+          for f in downloads/chuk_chat-*-android-arm64.apk; do [ -f "$f" ] && cp "$f" release-assets/chuk_chat-android-armv8.apk; done
+          for f in downloads/chuk_chat-*-android-arm32.apk; do [ -f "$f" ] && cp "$f" release-assets/chuk_chat-android-armv7.apk; done
+          for f in downloads/chuk_chat-*-android-x64.apk; do [ -f "$f" ] && cp "$f" release-assets/chuk_chat-android-x64.apk; done
+          for f in downloads/chuk_chat-*-linux-amd64.deb; do [ -f "$f" ] && cp "$f" release-assets/chuk_chat-linux-amd64.deb; done
+          for f in downloads/chuk_chat-*-linux-x86_64.AppImage; do [ -f "$f" ] && cp "$f" release-assets/chuk_chat-linux-x86_64.AppImage; done
+          for f in downloads/chuk_chat-*-linux-x86_64.rpm; do [ -f "$f" ] && cp "$f" release-assets/chuk_chat-linux-x86_64.rpm; done
+          for f in downloads/chuk_chat-*-linux-arm64.deb; do [ -f "$f" ] && cp "$f" release-assets/chuk_chat-linux-arm64.deb; done
+          for f in downloads/chuk_chat-*-linux-aarch64.AppImage; do [ -f "$f" ] && cp "$f" release-assets/chuk_chat-linux-aarch64.AppImage; done
+          for f in downloads/chuk_chat-*-windows-x64-setup.exe; do [ -f "$f" ] && cp "$f" release-assets/chuk_chat-windows-x64-setup.exe; done
+          for f in downloads/chuk_chat-*-windows-x64-portable.zip; do [ -f "$f" ] && cp "$f" release-assets/chuk_chat-windows-x64-portable.zip; done
+          for f in downloads/chuk_chat-*-macos.dmg; do [ -f "$f" ] && cp "$f" release-assets/chuk_chat-macos.dmg; done
+          for f in downloads/chuk_chat-*-macos.zip; do [ -f "$f" ] && cp "$f" release-assets/chuk_chat-macos.zip; done
+          for f in downloads/chuk_chat-*-ios.zip; do [ -f "$f" ] && cp "$f" release-assets/chuk_chat-ios.zip; done
+
+          echo "=== Stable-named assets for public repo ==="
+          ls -lh release-assets/
+
           ASSETS=""
           for f in release-assets/*; do
             [ -f "$f" ] && ASSETS="$ASSETS $f"
@@ -919,6 +860,9 @@ jobs:
             echo "No assets to upload!"
             exit 1
           fi
+
+          # Delete existing public release if re-running
+          gh release delete "${TAG}" --yes --cleanup-tag --repo chuk-development/chuk_chat_releases 2>/dev/null || true
 
           gh release create "${TAG}" $ASSETS \
             --repo chuk-development/chuk_chat_releases \
