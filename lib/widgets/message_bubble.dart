@@ -1,6 +1,7 @@
 // lib/widgets/message_bubble.dart
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
+import 'package:chuk_chat/utils/image_clipboard_service.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
 import 'package:chuk_chat/widgets/document_viewer.dart';
@@ -67,6 +68,8 @@ class MessageBubble extends StatefulWidget {
     this.showTps,
     this.images,
     this.attachments,
+    this.imageCostEur,
+    this.imageGeneratedAt,
   });
 
   final String message;
@@ -88,6 +91,8 @@ class MessageBubble extends StatefulWidget {
   final bool? showTps;
   final List<String>? images; // Base64 data URLs of images
   final List<DocumentAttachment>? attachments; // Document attachments
+  final double? imageCostEur;
+  final DateTime? imageGeneratedAt;
 
   @override
   State<MessageBubble> createState() => _MessageBubbleState();
@@ -210,15 +215,16 @@ class _MessageBubbleState extends State<MessageBubble>
   Widget _buildActionButtons(Color iconFgColor, bool alignRight) {
     return Wrap(
       alignment: alignRight ? WrapAlignment.end : WrapAlignment.start,
-      spacing: 4,
-      runSpacing: 4,
+      spacing: 1,
+      runSpacing: 1,
       children: widget.actions.map((action) {
         return Tooltip(
           message: action.tooltip,
           child: IconButton(
-            icon: Icon(action.icon, color: iconFgColor),
-            padding: const EdgeInsets.all(8),
-            constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
+            icon: Icon(action.icon, color: iconFgColor, size: 17),
+            padding: const EdgeInsets.all(3),
+            visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             onPressed: action.isEnabled ? action.onPressed : null,
           ),
         );
@@ -237,21 +243,23 @@ class _MessageBubbleState extends State<MessageBubble>
         Tooltip(
           message: 'Resend edited message',
           child: IconButton(
-            icon: Icon(Icons.send, color: iconFgColor),
-            padding: const EdgeInsets.all(8),
-            constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
+            icon: Icon(Icons.send, color: iconFgColor, size: 17),
+            padding: const EdgeInsets.all(3),
+            visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             onPressed: canSubmit
                 ? () => widget.onSubmitEdit?.call(_editController.text)
                 : null,
           ),
         ),
-        const SizedBox(width: 4),
+        const SizedBox(width: 2),
         Tooltip(
           message: 'Cancel edit',
           child: IconButton(
-            icon: Icon(Icons.close, color: iconFgColor),
-            padding: const EdgeInsets.all(8),
-            constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
+            icon: Icon(Icons.close, color: iconFgColor, size: 17),
+            padding: const EdgeInsets.all(3),
+            visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             onPressed: widget.onCancelEdit,
           ),
         ),
@@ -297,7 +305,7 @@ class _MessageBubbleState extends State<MessageBubble>
     _maybeRequestEditFocus();
 
     final Widget bubbleContent = Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
+      margin: const EdgeInsets.symmetric(vertical: 4),
       padding: containerPadding,
       decoration: decoration,
       child: Column(
@@ -321,6 +329,13 @@ class _MessageBubbleState extends State<MessageBubble>
           // Display images above the text message
           if (widget.images != null && widget.images!.isNotEmpty) ...[
             _buildImagesGrid(widget.images!),
+            if (widget.imageCostEur != null || widget.imageGeneratedAt != null)
+              _buildImageMetaMenu(
+                iconFgColor,
+                alignRight,
+                widget.imageCostEur,
+                widget.imageGeneratedAt,
+              ),
             const SizedBox(height: 8),
           ],
           // Display document attachments
@@ -351,13 +366,19 @@ class _MessageBubbleState extends State<MessageBubble>
             bubbleContent,
             if (widget.isEditing && isUserMessage)
               Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: _buildEditingControls(iconFgColor, alignRight),
+                padding: const EdgeInsets.only(top: 0),
+                child: Transform.translate(
+                  offset: const Offset(0, -2),
+                  child: _buildEditingControls(iconFgColor, alignRight),
+                ),
               ),
             if (hasActions)
               Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: _buildActionButtons(iconFgColor, alignRight),
+                padding: const EdgeInsets.only(top: 0),
+                child: Transform.translate(
+                  offset: const Offset(0, -2),
+                  child: _buildActionButtons(iconFgColor, alignRight),
+                ),
               ),
           ],
         ),
@@ -545,30 +566,73 @@ class _MessageBubbleState extends State<MessageBubble>
   }
 
   Widget _buildImagesGrid(List<String> images) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: images.asMap().entries.map((entry) {
-        final int index = entry.key;
-        final String imageDataUrl = entry.value;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double maxWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.of(context).size.width * 0.8;
 
-        return _CachedImageThumbnail(
-          imageDataUrl: imageDataUrl,
-          onTap: () {
-            // Open image viewer with all images
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => ImageViewer(
-                  imageDataUrl: imageDataUrl,
-                  initialIndex: index,
-                  allImages: images,
-                ),
-                fullscreenDialog: true,
+        if (images.length == 1) {
+          final String imageSource = images.first;
+          final double imageWidth = maxWidth;
+          final double imageHeight = 280;
+
+          return _CachedImageThumbnail(
+            imageDataUrl: imageSource,
+            width: imageWidth,
+            height: imageHeight,
+            borderRadius: 12,
+            fit: BoxFit.cover,
+            onTap: () => _openImagePreview(
+              imageSource: imageSource,
+              images: images,
+              index: 0,
+            ),
+          );
+        }
+
+        final int columns = maxWidth > 520 ? 3 : 2;
+        final double tileWidth = ((maxWidth - ((columns - 1) * 8)) / columns)
+            .clamp(120.0, 260.0);
+
+        return Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: images.asMap().entries.map((entry) {
+            final int index = entry.key;
+            final String imageSource = entry.value;
+
+            return _CachedImageThumbnail(
+              imageDataUrl: imageSource,
+              width: tileWidth,
+              height: tileWidth,
+              borderRadius: 10,
+              onTap: () => _openImagePreview(
+                imageSource: imageSource,
+                images: images,
+                index: index,
               ),
             );
-          },
+          }).toList(),
         );
-      }).toList(),
+      },
+    );
+  }
+
+  void _openImagePreview({
+    required String imageSource,
+    required List<String> images,
+    required int index,
+  }) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => ImageViewer(
+          imageDataUrl: imageSource,
+          initialIndex: index,
+          allImages: images,
+        ),
+        fullscreenDialog: true,
+      ),
     );
   }
 
@@ -691,19 +755,124 @@ class _MessageBubbleState extends State<MessageBubble>
       child: messageWidget,
     );
   }
+
+  Widget _buildImageMetaMenu(
+    Color iconFgColor,
+    bool alignRight,
+    double? imageCostEur,
+    DateTime? imageGeneratedAt,
+  ) {
+    final String generatedLabel = imageGeneratedAt != null
+        ? _formatGeneratedAt(imageGeneratedAt)
+        : 'Unknown';
+    final String? costLabel = imageCostEur != null
+        ? 'EUR ${imageCostEur.toStringAsFixed(2)}'
+        : null;
+
+    return Padding(
+      padding: alignRight
+          ? const EdgeInsets.only(top: 1, right: 6)
+          : const EdgeInsets.only(top: 1, left: 6),
+      child: Row(
+        mainAxisAlignment: alignRight
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
+        children: [
+          Tooltip(
+            message: 'Copy image',
+            child: IconButton(
+              icon: Icon(Icons.copy, color: iconFgColor.withValues(alpha: 0.8)),
+              iconSize: 15,
+              padding: EdgeInsets.zero,
+              visualDensity: VisualDensity.compact,
+              constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+              onPressed: _copyFirstImageToClipboard,
+            ),
+          ),
+          const SizedBox(width: 1),
+          PopupMenuButton<String>(
+            tooltip: 'Image details',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+            iconSize: 15,
+            icon: Icon(
+              Icons.more_vert,
+              color: iconFgColor.withValues(alpha: 0.8),
+            ),
+            itemBuilder: (context) => [
+              if (costLabel != null)
+                PopupMenuItem<String>(
+                  enabled: false,
+                  value: 'cost',
+                  child: Text('Cost: $costLabel'),
+                ),
+              PopupMenuItem<String>(
+                enabled: false,
+                value: 'time',
+                child: Text('Generated: $generatedLabel'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _copyFirstImageToClipboard() async {
+    final images = widget.images;
+    if (images == null || images.isEmpty) {
+      return;
+    }
+
+    try {
+      final bytes = await ImageStorageService.downloadAndDecryptImage(
+        images.first,
+      );
+      final copied = await ImageClipboardService.copyImageBytes(bytes);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(copied ? 'Image copied' : 'Unable to copy image'),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Unable to copy image')));
+    }
+  }
+
+  String _formatGeneratedAt(DateTime timestamp) {
+    final local = timestamp.toLocal();
+    final day = local.day.toString().padLeft(2, '0');
+    final month = local.month.toString().padLeft(2, '0');
+    final year = local.year.toString();
+    final hour = local.hour.toString().padLeft(2, '0');
+    final minute = local.minute.toString().padLeft(2, '0');
+    return '$day.$month.$year $hour:$minute';
+  }
 }
 
 /// Cached image thumbnail that decodes once and caches the bytes
 class _CachedImageThumbnail extends StatefulWidget {
   const _CachedImageThumbnail({
     required this.imageDataUrl,
+    required this.width,
+    required this.height,
     required this.onTap,
+    this.borderRadius = 8,
+    this.fit = BoxFit.cover,
   });
 
   /// Can be either:
   /// - A Base64 data URL: "data:image/jpeg;base64,..."
   /// - A storage path: "user-id/uuid.enc"
   final String imageDataUrl;
+  final double width;
+  final double height;
+  final double borderRadius;
+  final BoxFit fit;
   final VoidCallback onTap;
 
   @override
@@ -755,11 +924,11 @@ class _CachedImageThumbnailState extends State<_CachedImageThumbnail>
 
     if (_isLoading) {
       return Container(
-        width: 100,
-        height: 100,
+        width: widget.width,
+        height: widget.height,
         decoration: BoxDecoration(
           color: Colors.grey.withValues(alpha: 0.3),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(widget.borderRadius),
         ),
         child: const Center(
           child: SizedBox(
@@ -773,37 +942,38 @@ class _CachedImageThumbnailState extends State<_CachedImageThumbnail>
 
     if (_cachedBytes == null) {
       return Container(
-        width: 100,
-        height: 100,
+        width: widget.width,
+        height: widget.height,
         decoration: BoxDecoration(
           color: Colors.grey.withValues(alpha: 0.3),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(widget.borderRadius),
         ),
         child: const Icon(Icons.broken_image, size: 32),
       );
     }
 
-    return GestureDetector(
+    return InkWell(
       onTap: widget.onTap,
+      borderRadius: BorderRadius.circular(widget.borderRadius),
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(widget.borderRadius),
           child: Image.memory(
             _cachedBytes!,
-            width: 100,
-            height: 100,
-            fit: BoxFit.cover,
-            cacheWidth: 200,
-            cacheHeight: 200,
+            width: widget.width,
+            height: widget.height,
+            fit: widget.fit,
+            cacheWidth: (widget.width * 2).toInt(),
+            cacheHeight: (widget.height * 2).toInt(),
             gaplessPlayback: true,
             errorBuilder: (context, error, stackTrace) {
               return Container(
-                width: 100,
-                height: 100,
+                width: widget.width,
+                height: widget.height,
                 decoration: BoxDecoration(
                   color: Colors.grey.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(widget.borderRadius),
                 ),
                 child: const Icon(Icons.broken_image, size: 32),
               );

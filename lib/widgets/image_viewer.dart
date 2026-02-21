@@ -100,115 +100,101 @@ class _ImageViewerState extends State<ImageViewer> {
       autofocus: true,
       onKeyEvent: _handleKeyEvent,
       child: Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black.withValues(alpha: 0.7),
-        leading: IconButton(
-          icon: Icon(Icons.close, color: iconColor),
-          onPressed: () => Navigator.of(context).pop(),
-          tooltip: 'Close',
-        ),
-        title: _hasMultipleImages
-            ? Text(
-                'Image ${_currentIndex + 1} of ${widget.allImages!.length}',
-                style: TextStyle(color: iconColor),
-              )
-            : Text(
-                'Image',
-                style: TextStyle(color: iconColor),
-              ),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.zoom_in, color: iconColor),
-            onPressed: _zoomIn,
-            tooltip: 'Zoom in',
+        backgroundColor: Colors.black,
+        appBar: AppBar(
+          backgroundColor: Colors.black.withValues(alpha: 0.7),
+          leading: IconButton(
+            icon: Icon(Icons.close, color: iconColor),
+            onPressed: () => Navigator.of(context).pop(),
+            tooltip: 'Close',
           ),
-          IconButton(
-            icon: Icon(Icons.zoom_out, color: iconColor),
-            onPressed: _zoomOut,
-            tooltip: 'Zoom out',
-          ),
-          IconButton(
-            icon: Icon(Icons.refresh, color: iconColor),
-            onPressed: _resetZoom,
-            tooltip: 'Reset zoom',
-          ),
-        ],
-      ),
-      body: Stack(
-        children: [
-          // Main image viewer
-          _hasMultipleImages
-              ? PageView.builder(
-                  controller: _pageController,
-                  itemCount: widget.allImages!.length,
-                  onPageChanged: (index) {
-                    setState(() {
-                      _currentIndex = index;
-                      _resetZoom();
-                    });
-                  },
-                  itemBuilder: (context, index) {
-                    return _buildImageView(widget.allImages![index]);
-                  },
+          title: _hasMultipleImages
+              ? Text(
+                  'Image ${_currentIndex + 1} of ${widget.allImages!.length}',
+                  style: TextStyle(color: iconColor),
                 )
-              : _buildImageView(widget.imageDataUrl),
+              : Text('Image', style: TextStyle(color: iconColor)),
+        ),
+        body: Stack(
+          children: [
+            // Main image viewer
+            _hasMultipleImages
+                ? PageView.builder(
+                    controller: _pageController,
+                    itemCount: widget.allImages!.length,
+                    onPageChanged: (index) {
+                      setState(() {
+                        _currentIndex = index;
+                        _resetZoom();
+                      });
+                    },
+                    itemBuilder: (context, index) {
+                      return _buildImageView(widget.allImages![index]);
+                    },
+                  )
+                : _buildImageView(widget.imageDataUrl),
 
-          // Navigation arrows for multiple images
-          if (_hasMultipleImages) ...[
-            if (_currentIndex > 0)
-              Positioned(
-                left: 16,
-                top: 0,
-                bottom: 0,
-                child: Center(
-                  child: IconButton(
-                    icon: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.5),
-                        shape: BoxShape.circle,
+            // Navigation arrows for multiple images
+            if (_hasMultipleImages) ...[
+              if (_currentIndex > 0)
+                Positioned(
+                  left: 16,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: IconButton(
+                      icon: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.chevron_left,
+                          color: Colors.white,
+                          size: 32,
+                        ),
                       ),
-                      child: Icon(Icons.chevron_left,
-                          color: Colors.white, size: 32),
+                      onPressed: () {
+                        _pageController.previousPage(
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeInOut,
+                        );
+                      },
                     ),
-                    onPressed: () {
-                      _pageController.previousPage(
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeInOut,
-                      );
-                    },
                   ),
                 ),
-              ),
-            if (_currentIndex < widget.allImages!.length - 1)
-              Positioned(
-                right: 16,
-                top: 0,
-                bottom: 0,
-                child: Center(
-                  child: IconButton(
-                    icon: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.5),
-                        shape: BoxShape.circle,
+              if (_currentIndex < widget.allImages!.length - 1)
+                Positioned(
+                  right: 16,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: IconButton(
+                      icon: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.chevron_right,
+                          color: Colors.white,
+                          size: 32,
+                        ),
                       ),
-                      child: Icon(Icons.chevron_right,
-                          color: Colors.white, size: 32),
+                      onPressed: () {
+                        _pageController.nextPage(
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeInOut,
+                        );
+                      },
                     ),
-                    onPressed: () {
-                      _pageController.nextPage(
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeInOut,
-                      );
-                    },
                   ),
                 ),
-              ),
+            ],
           ],
-        ],
-      ),
+        ),
       ),
     );
   }
@@ -239,50 +225,45 @@ class _ImageViewerState extends State<ImageViewer> {
           );
         }
 
-        return Center(
-          child: InteractiveViewer(
-            transformationController: _transformationController,
-            minScale: 0.5,
-            maxScale: 4.0,
-            child: Image.memory(
-              snapshot.data!,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        Icons.broken_image,
-                        size: 64,
-                        color: Colors.grey,
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            return InteractiveViewer(
+              transformationController: _transformationController,
+              minScale: 0.5,
+              maxScale: 4.0,
+              boundaryMargin: const EdgeInsets.all(48),
+              child: SizedBox(
+                width: constraints.maxWidth,
+                height: constraints.maxHeight,
+                child: Image.memory(
+                  snapshot.data!,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.broken_image,
+                            size: 64,
+                            color: Colors.grey,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Failed to load image',
+                            style: TextStyle(color: Colors.grey[400]),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Failed to load image',
-                        style: TextStyle(color: Colors.grey[400]),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
+                    );
+                  },
+                ),
+              ),
+            );
+          },
         );
       },
     );
-  }
-
-  void _zoomIn() {
-    final currentScale = _transformationController.value.getMaxScaleOnAxis();
-    final newScale = (currentScale * 1.5).clamp(0.5, 4.0);
-    _transformationController.value = Matrix4.diagonal3Values(newScale, newScale, 1.0);
-  }
-
-  void _zoomOut() {
-    final currentScale = _transformationController.value.getMaxScaleOnAxis();
-    final newScale = (currentScale / 1.5).clamp(0.5, 4.0);
-    _transformationController.value = Matrix4.diagonal3Values(newScale, newScale, 1.0);
   }
 
   void _resetZoom() {

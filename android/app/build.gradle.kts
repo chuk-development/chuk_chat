@@ -14,6 +14,9 @@ plugins {
 // 3. Debug keystore fallback (for development without release keystore)
 
 val useEnvVars = System.getenv("ANDROID_KEYSTORE_PATH") != null
+val isCiBuild = System.getenv("CI")?.equals("true", ignoreCase = true) == true
+val enableR8ForRelease =
+    (project.findProperty("enableR8") as String?)?.toBooleanStrictOrNull() ?: isCiBuild
 
 val keystorePropertiesFile = rootProject.file("key.properties")
 val keystoreProperties = Properties()
@@ -68,8 +71,10 @@ android {
     buildTypes {
         release {
             // R8: Code shrinking, optimization, resource shrinking (NO obfuscation)
-            isMinifyEnabled = true
-            isShrinkResources = true
+            // Local default: disabled for faster release builds.
+            // CI default: enabled. Override with -PenableR8=true/false.
+            isMinifyEnabled = enableR8ForRelease
+            isShrinkResources = enableR8ForRelease
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
