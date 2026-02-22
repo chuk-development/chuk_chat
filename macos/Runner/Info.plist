@@ -13,7 +13,9 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>$(PRODUCT_NAME)</string>
+	<string>Chuk Chat</string>
+	<key>CFBundleDisplayName</key>
+	<string>Chuk Chat</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -29,8 +31,8 @@
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>NSCameraUsageDescription</key>
-	<string>$(PRODUCT_NAME) uses your camera</string>
+	<string>Chuk Chat uses your camera</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>$(PRODUCT_NAME) uses your microphone</string>
+	<string>Chuk Chat uses your microphone</string>
 </dict>
 </plist>
