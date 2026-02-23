@@ -283,15 +283,15 @@ class _MessageBubbleState extends State<MessageBubble>
     final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
     final Color iconFgColor = Theme.of(context).resolvedIconColor;
 
-    // Nutze die übergebene maxWidth, falls vorhanden, ansonsten den Standardwert von 70% der Bildschirmbreite
+    // Use provided maxWidth, otherwise default to 80% of screen width.
     final double effectiveMaxWidth =
-        widget.maxWidth ?? MediaQuery.of(context).size.width * 0.7;
+        widget.maxWidth ?? MediaQuery.of(context).size.width * 0.8;
 
     final bool hasActions =
         widget.actions.isNotEmpty && !(widget.isEditing && isUserMessage);
 
     final EdgeInsetsGeometry containerPadding = isUserMessage
-        ? const EdgeInsets.all(12)
+        ? const EdgeInsets.symmetric(horizontal: 14, vertical: 10)
         : const EdgeInsets.symmetric(horizontal: 4, vertical: 2);
 
     final BoxDecoration? decoration = isUserMessage
