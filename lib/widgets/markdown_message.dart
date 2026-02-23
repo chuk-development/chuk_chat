@@ -18,11 +18,15 @@ class MarkdownMessage extends StatefulWidget {
     required this.text,
     required this.textColor,
     required this.backgroundColor,
+    this.paragraphFontSize,
+    this.paragraphHeight,
   });
 
   final String text;
   final Color textColor;
   final Color backgroundColor;
+  final double? paragraphFontSize;
+  final double? paragraphHeight;
 
   @override
   State<MarkdownMessage> createState() => _MarkdownMessageState();
@@ -118,10 +122,14 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
           textStyle:
               (theme.textTheme.bodyMedium?.copyWith(
                 color: widget.textColor,
-                height: 1.45,
-                fontSize: 14,
+                height: widget.paragraphHeight ?? 1.45,
+                fontSize: widget.paragraphFontSize ?? 14,
               )) ??
-              TextStyle(color: widget.textColor, height: 1.45, fontSize: 14),
+              TextStyle(
+                color: widget.textColor,
+                height: widget.paragraphHeight ?? 1.45,
+                fontSize: widget.paragraphFontSize ?? 14,
+              ),
         ),
         H1Config(
           style:
@@ -264,16 +272,12 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
 
     final MarkdownGenerator generator = MarkdownGenerator(
       linesMargin: const EdgeInsets.symmetric(vertical: 4),
-      inlineSyntaxList: [
-        LatexSyntax(),
-      ],
+      inlineSyntaxList: [LatexSyntax()],
       generators: [
         SpanNodeGeneratorWithTag(
           tag: _latexTag,
-          generator: (e, config, visitor) => LatexNode(
-            e.attributes,
-            textColor: widget.textColor,
-          ),
+          generator: (e, config, visitor) =>
+              LatexNode(e.attributes, textColor: widget.textColor),
         ),
       ],
       richTextBuilder: (span) {
@@ -495,13 +499,28 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
     // Solarized Light inspired - RICH colors with STRONG contrast
     return <String, TextStyle>{
       // Keywords: if, for, return, class, def, while, import, from, etc.
-      'keyword': const TextStyle(color: Color(0xFF859900), fontWeight: FontWeight.w600),
-      'control': const TextStyle(color: Color(0xFF859900), fontWeight: FontWeight.w600),
-      'repeat': const TextStyle(color: Color(0xFF859900), fontWeight: FontWeight.w600),
-      'conditional': const TextStyle(color: Color(0xFF859900), fontWeight: FontWeight.w600),
+      'keyword': const TextStyle(
+        color: Color(0xFF859900),
+        fontWeight: FontWeight.w600,
+      ),
+      'control': const TextStyle(
+        color: Color(0xFF859900),
+        fontWeight: FontWeight.w600,
+      ),
+      'repeat': const TextStyle(
+        color: Color(0xFF859900),
+        fontWeight: FontWeight.w600,
+      ),
+      'conditional': const TextStyle(
+        color: Color(0xFF859900),
+        fontWeight: FontWeight.w600,
+      ),
 
       // Built-in functions: print, len, range, input, etc.
-      'built_in': const TextStyle(color: Color(0xFFCB4B16), fontWeight: FontWeight.w500),
+      'built_in': const TextStyle(
+        color: Color(0xFFCB4B16),
+        fontWeight: FontWeight.w500,
+      ),
 
       // Function definitions and calls - BLUE
       'function': const TextStyle(color: Color(0xFF268BD2)),
@@ -510,7 +529,10 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
 
       // Types, classes, and constructors - YELLOW
       'type': const TextStyle(color: Color(0xFFB58900)),
-      'class': const TextStyle(color: Color(0xFFB58900), fontWeight: FontWeight.w600),
+      'class': const TextStyle(
+        color: Color(0xFFB58900),
+        fontWeight: FontWeight.w600,
+      ),
       'constructor': const TextStyle(color: Color(0xFFB58900)),
 
       // Strings - CYAN/TEAL
@@ -693,25 +715,29 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
 
     // Check if language is in our registry - if not, skip highlighting entirely
     // This avoids the "get language error" spam from the highlight package's auto-detection
-    final bool isKnownLanguage = normalizedLanguage.isNotEmpty &&
+    final bool isKnownLanguage =
+        normalizedLanguage.isNotEmpty &&
         highlight_registry.allLanguages.containsKey(normalizedLanguage);
 
     // Pass only necessary data to the isolate
     try {
       // Run heavy parsing in an isolate
-      final List<hi.Node> nodes = await compute(_parseCode, {
-        'code': code,
-        'language': isKnownLanguage ? normalizedLanguage : null,
-        'skipHighlighting': !isKnownLanguage && normalizedLanguage.isEmpty,
-      }).timeout(
-        const Duration(seconds: 2),
-        onTimeout: () {
-          if (kDebugMode) {
-            debugPrint('Highlight timeout for language: ${normalizedLanguage.isEmpty ? '(auto-detect)' : normalizedLanguage}');
-          }
-          return <hi.Node>[];
-        },
-      );
+      final List<hi.Node> nodes =
+          await compute(_parseCode, {
+            'code': code,
+            'language': isKnownLanguage ? normalizedLanguage : null,
+            'skipHighlighting': !isKnownLanguage && normalizedLanguage.isEmpty,
+          }).timeout(
+            const Duration(seconds: 2),
+            onTimeout: () {
+              if (kDebugMode) {
+                debugPrint(
+                  'Highlight timeout for language: ${normalizedLanguage.isEmpty ? '(auto-detect)' : normalizedLanguage}',
+                );
+              }
+              return <hi.Node>[];
+            },
+          );
 
       if (!mounted) return;
 
@@ -730,7 +756,9 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
         });
       }
     } catch (e, stackTrace) {
-      final String langDesc = normalizedLanguage.isEmpty ? '(auto-detect)' : normalizedLanguage;
+      final String langDesc = normalizedLanguage.isEmpty
+          ? '(auto-detect)'
+          : normalizedLanguage;
       if (kDebugMode) {
         debugPrint('Highlight error for language "$langDesc": $e');
       }
@@ -758,8 +786,10 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
 
     for (final int codeUnit in text.runes) {
       // Skip whitespace and common punctuation
-      if (codeUnit <= 32 || (codeUnit >= 33 && codeUnit <= 47) ||
-          (codeUnit >= 58 && codeUnit <= 64) || (codeUnit >= 91 && codeUnit <= 96) ||
+      if (codeUnit <= 32 ||
+          (codeUnit >= 33 && codeUnit <= 47) ||
+          (codeUnit >= 58 && codeUnit <= 64) ||
+          (codeUnit >= 91 && codeUnit <= 96) ||
           (codeUnit >= 123 && codeUnit <= 126)) {
         continue;
       }
@@ -804,7 +834,9 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  (widget.language?.isEmpty ?? true) ? 'code' : widget.language!,
+                  (widget.language?.isEmpty ?? true)
+                      ? 'code'
+                      : widget.language!,
                   style: TextStyle(
                     color: widget.textColor.withValues(alpha: 0.7),
                     fontSize: 12,
@@ -832,7 +864,7 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
   }
 }
 
-  // Top-level function for compute
+// Top-level function for compute
 List<hi.Node> _parseCode(Map<String, dynamic> args) {
   try {
     final String code = args['code'] as String? ?? '';
@@ -878,7 +910,8 @@ List<hi.Node> _parseCode(Map<String, dynamic> args) {
       final hi.Result result = hi.highlight.parse(
         normalizedCode,
         language: language,
-        autoDetection: false, // Never use auto-detection to avoid "get language error"
+        autoDetection:
+            false, // Never use auto-detection to avoid "get language error"
       );
       return result.nodes ?? [];
     } on FormatException catch (_) {
@@ -910,8 +943,10 @@ bool _isMostlyNonAsciiCode(String text) {
 
   for (final int codeUnit in text.runes) {
     // Skip whitespace and common punctuation
-    if (codeUnit <= 32 || (codeUnit >= 33 && codeUnit <= 47) ||
-        (codeUnit >= 58 && codeUnit <= 64) || (codeUnit >= 91 && codeUnit <= 96) ||
+    if (codeUnit <= 32 ||
+        (codeUnit >= 33 && codeUnit <= 47) ||
+        (codeUnit >= 58 && codeUnit <= 64) ||
+        (codeUnit >= 91 && codeUnit <= 96) ||
         (codeUnit >= 123 && codeUnit <= 126)) {
       continue;
     }
@@ -974,7 +1009,9 @@ List<TextSpan> _collectSpans(
     // DEBUG: Log unknown classNames
     if (className.isNotEmpty && !theme.containsKey(className)) {
       if (kDebugMode) {
-        debugPrint('⚠️ Unknown syntax className: "$className" - value: "${node.value}"');
+        debugPrint(
+          '⚠️ Unknown syntax className: "$className" - value: "${node.value}"',
+        );
       }
     }
 
@@ -1008,7 +1045,12 @@ List<TextSpan> _collectSpans(
     for (final hi.Node child in children) {
       try {
         childSpans.addAll(
-          _collectSpans(child, theme, baseStyle, themeStyle ?? parentThemeStyle),
+          _collectSpans(
+            child,
+            theme,
+            baseStyle,
+            themeStyle ?? parentThemeStyle,
+          ),
         );
       } catch (e) {
         if (kDebugMode) {
@@ -1041,7 +1083,10 @@ const String _latexTag = 'latex';
 
 /// LaTeX inline syntax parser - matches $...$ and $$...$$ and \(...\) and \[...\]
 class LatexSyntax extends m.InlineSyntax {
-  LatexSyntax() : super(r'(\$\$[\s\S]+?\$\$)|(\$[^\$\n]+?\$)|(\\\([\s\S]+?\\\))|(\\\[[\s\S]+?\\\])');
+  LatexSyntax()
+    : super(
+        r'(\$\$[\s\S]+?\$\$)|(\$[^\$\n]+?\$)|(\\\([\s\S]+?\\\))|(\\\[[\s\S]+?\\\])',
+      );
 
   @override
   bool onMatch(m.InlineParser parser, Match match) {
