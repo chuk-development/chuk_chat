@@ -53,6 +53,7 @@ class MessageBubble extends StatefulWidget {
     super.key,
     required this.message,
     required this.isUser,
+    this.startsNewGroup = true,
     this.maxWidth,
     this.actions = const <MessageBubbleAction>[],
     this.reasoning,
@@ -76,6 +77,7 @@ class MessageBubble extends StatefulWidget {
   final bool
   isUser; // true for bot, false for user in voice mode (to match image)
   // In regular chat, true for user, false for AI.
+  final bool startsNewGroup;
   final double? maxWidth; // Neue optionale Eigenschaft für responsive Breite
   final List<MessageBubbleAction> actions;
   final String? reasoning;
@@ -297,7 +299,12 @@ class _MessageBubbleState extends State<MessageBubble>
     final BoxDecoration? decoration = isUserMessage
         ? BoxDecoration(
             color: accentColor.withValues(alpha: .8),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.only(
+              topLeft: const Radius.circular(16),
+              topRight: const Radius.circular(16),
+              bottomLeft: const Radius.circular(16),
+              bottomRight: Radius.circular(widget.startsNewGroup ? 5 : 16),
+            ),
             border: Border.all(color: iconFgColor.withValues(alpha: .3)),
           )
         : null;
@@ -305,7 +312,7 @@ class _MessageBubbleState extends State<MessageBubble>
     _maybeRequestEditFocus();
 
     final Widget bubbleContent = Container(
-      margin: const EdgeInsets.symmetric(vertical: 4),
+      margin: EdgeInsets.only(top: widget.startsNewGroup ? 10 : 2, bottom: 2),
       padding: containerPadding,
       decoration: decoration,
       child: Column(
@@ -744,6 +751,8 @@ class _MessageBubbleState extends State<MessageBubble>
       backgroundColor: isUserMessage
           ? accentColor.withValues(alpha: .8)
           : bgColor,
+      paragraphFontSize: isUserMessage ? 15 : null,
+      paragraphHeight: isUserMessage ? 1.38 : null,
     );
 
     if (isUserMessage) {
