@@ -2694,6 +2694,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                                 .editingMessageIndex ==
                                             i;
                                         final bool isUser = sender == 'user';
+                                        final bool startsNewGroup =
+                                            i == 0 ||
+                                            ((_messages[i - 1]['sender'] ??
+                                                    'ai') !=
+                                                sender);
 
                                         // Parse images from JSON
                                         List<String>? images;
@@ -2780,63 +2785,71 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                               )
                                             : null;
 
-                                        return RepaintBoundary(
-                                          child: MessageBubble(
-                                            key: ValueKey('msg_$i'),
-                                            message: displayText,
-                                            reasoning: reasoningText,
-                                            isUser: isUser,
-                                            maxWidth: isUser
-                                                ? expandedInputWidth * 0.8
-                                                : expandedInputWidth,
-                                            isReasoningStreaming:
-                                                isStreamingMessage,
-                                            modelLabel: modelLabel,
-                                            tps: tps,
-                                            images: images,
-                                            attachments: attachments,
-                                            imageCostEur: imageCostEur,
-                                            imageGeneratedAt: imageGeneratedAt,
-                                            actions: _messageActionsHandler
-                                                .buildActionsForMessage(
-                                                  index: i,
-                                                  messageText: displayText,
-                                                  isUser: isUser,
-                                                  isStreaming:
-                                                      isStreamingMessage,
-                                                  onEdit: (index) {
-                                                    setState(() {
-                                                      _messageActionsHandler
-                                                          .startEdit(index);
-                                                    });
-                                                  },
-                                                  onResendMessage:
-                                                      _resendMessageAt,
-                                                ),
-                                            isEditing: isBeingEdited,
-                                            initialEditText: isBeingEdited
-                                                ? displayText
-                                                : null,
-                                            onSubmitEdit:
-                                                isBeingEdited && isUser
-                                                ? (newText) =>
-                                                      _submitEditedMessage(
-                                                        i,
-                                                        newText,
-                                                      )
-                                                : null,
-                                            onCancelEdit: isBeingEdited
-                                                ? () {
-                                                    setState(() {
-                                                      _messageActionsHandler
-                                                          .cancelEdit();
-                                                    });
-                                                  }
-                                                : null,
-                                            showReasoningTokens:
-                                                widget.showReasoningTokens,
-                                            showModelInfo: widget.showModelInfo,
-                                            showTps: widget.showTps,
+                                        return Padding(
+                                          padding: EdgeInsets.only(
+                                            top: startsNewGroup ? 10 : 2,
+                                            bottom: 2,
+                                          ),
+                                          child: RepaintBoundary(
+                                            child: MessageBubble(
+                                              key: ValueKey('msg_$i'),
+                                              message: displayText,
+                                              reasoning: reasoningText,
+                                              isUser: isUser,
+                                              maxWidth: isUser
+                                                  ? expandedInputWidth * 0.8
+                                                  : expandedInputWidth,
+                                              isReasoningStreaming:
+                                                  isStreamingMessage,
+                                              modelLabel: modelLabel,
+                                              tps: tps,
+                                              images: images,
+                                              attachments: attachments,
+                                              imageCostEur: imageCostEur,
+                                              imageGeneratedAt:
+                                                  imageGeneratedAt,
+                                              actions: _messageActionsHandler
+                                                  .buildActionsForMessage(
+                                                    index: i,
+                                                    messageText: displayText,
+                                                    isUser: isUser,
+                                                    isStreaming:
+                                                        isStreamingMessage,
+                                                    onEdit: (index) {
+                                                      setState(() {
+                                                        _messageActionsHandler
+                                                            .startEdit(index);
+                                                      });
+                                                    },
+                                                    onResendMessage:
+                                                        _resendMessageAt,
+                                                  ),
+                                              isEditing: isBeingEdited,
+                                              initialEditText: isBeingEdited
+                                                  ? displayText
+                                                  : null,
+                                              onSubmitEdit:
+                                                  isBeingEdited && isUser
+                                                  ? (newText) =>
+                                                        _submitEditedMessage(
+                                                          i,
+                                                          newText,
+                                                        )
+                                                  : null,
+                                              onCancelEdit: isBeingEdited
+                                                  ? () {
+                                                      setState(() {
+                                                        _messageActionsHandler
+                                                            .cancelEdit();
+                                                      });
+                                                    }
+                                                  : null,
+                                              showReasoningTokens:
+                                                  widget.showReasoningTokens,
+                                              showModelInfo:
+                                                  widget.showModelInfo,
+                                              showTps: widget.showTps,
+                                            ),
                                           ),
                                         );
                                       },
