@@ -3152,7 +3152,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                 ? null
                 : const BoxConstraints(minHeight: pillHeight),
             decoration: pillDecoration(isActive: _audioHandler.isMicActive),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 10),
             child: _audioHandler.isMicActive
                 ? SizedBox(
                     height: pillHeight - 6, // minus border + padding
@@ -3207,7 +3207,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                             focusedBorder: InputBorder.none,
                             contentPadding: const EdgeInsets.symmetric(
                               horizontal: 0,
-                              vertical: 12,
+                              vertical: 10,
                             ),
                             isDense: true,
                             // Fullscreen button inside the text field
