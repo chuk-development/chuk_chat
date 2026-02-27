@@ -13,7 +13,11 @@ import 'package:http/http.dart' as http;
 /// Handles audio recording functionality including permissions, recording, and transcription
 class AudioRecordingHandler {
   final AudioRecorder _audioRecorder = AudioRecorder();
-  final List<double> _audioLevels = List<double>.filled(32, 0.0, growable: true);
+  final List<double> _audioLevels = List<double>.filled(
+    32,
+    0.0,
+    growable: true,
+  );
 
   StreamSubscription<Amplitude>? _amplitudeSub;
   String? _lastRecordedFilePath;
@@ -26,6 +30,11 @@ class AudioRecordingHandler {
   bool get isMicActive => _isMicActive;
   bool get isTranscribingAudio => _isTranscribingAudio;
   List<double> get audioLevels => _audioLevels;
+
+  /// Allow UI to set transcribing state for immediate feedback.
+  void setTranscribing(bool value) {
+    _isTranscribingAudio = value;
+  }
 
   /// Start microphone recording
   Future<bool> startRecording() async {
@@ -147,7 +156,10 @@ class AudioRecordingHandler {
     _isTranscribingAudio = true;
 
     if (kIsWeb) {
-      return _transcribeWebRecording(apiService: apiService, accessToken: accessToken);
+      return _transcribeWebRecording(
+        apiService: apiService,
+        accessToken: accessToken,
+      );
     }
 
     final String? audioPath = _lastRecordedFilePath;
@@ -187,11 +199,20 @@ class AudioRecordingHandler {
 
       switch (error.statusCode) {
         case 401:
-          return TranscriptionResult(success: false, error: 'Session expired', requiresLogout: true);
+          return TranscriptionResult(
+            success: false,
+            error: 'Session expired',
+            requiresLogout: true,
+          );
         case 502:
-          return TranscriptionResult(success: false, error: 'Service unavailable');
+          return TranscriptionResult(
+            success: false,
+            error: 'Service unavailable',
+          );
         default:
-          final String message = error.message.isNotEmpty ? error.message : 'Transcription failed';
+          final String message = error.message.isNotEmpty
+              ? error.message
+              : 'Transcription failed';
           return TranscriptionResult(success: false, error: message);
       }
     } on TimeoutException {
@@ -237,11 +258,20 @@ class AudioRecordingHandler {
       _isTranscribingAudio = false;
       switch (error.statusCode) {
         case 401:
-          return TranscriptionResult(success: false, error: 'Session expired', requiresLogout: true);
+          return TranscriptionResult(
+            success: false,
+            error: 'Session expired',
+            requiresLogout: true,
+          );
         case 502:
-          return TranscriptionResult(success: false, error: 'Service unavailable');
+          return TranscriptionResult(
+            success: false,
+            error: 'Service unavailable',
+          );
         default:
-          final String message = error.message.isNotEmpty ? error.message : 'Transcription failed';
+          final String message = error.message.isNotEmpty
+              ? error.message
+              : 'Transcription failed';
           return TranscriptionResult(success: false, error: message);
       }
     } on TimeoutException {
@@ -270,7 +300,10 @@ class AudioRecordingHandler {
     final double decibels = amplitude.current;
     const double minDb = -60.0;
     const double maxDb = 0.0;
-    final double normalized = ((decibels - minDb) / (maxDb - minDb)).clamp(0.0, 1.0);
+    final double normalized = ((decibels - minDb) / (maxDb - minDb)).clamp(
+      0.0,
+      1.0,
+    );
 
     if (_audioLevels.isNotEmpty) {
       _audioLevels.removeAt(0);
