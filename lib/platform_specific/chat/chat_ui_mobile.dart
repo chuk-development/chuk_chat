@@ -2988,16 +2988,61 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           ),
         ],
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      // Single Row: buttons stay short at bottom, TextField in the middle
+      // grows upward. crossAxisAlignment.end keeps everything bottom-aligned.
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          // ── Text area (grows upward as user types) ──
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
+          // ── Left buttons (stay short at bottom) ──
+          buildTinyIconButton(
+            icon: Icons.add_rounded,
+            onTap: _handleAddAttachmentTap,
+            isActive: hasAttachments,
+            color: iconFg,
+          ),
+          if (widget.imageGenEnabled) ...[
+            const SizedBox(width: 2),
+            buildTinyIconButton(
+              icon: Icons.auto_awesome,
+              onTap: _isGeneratingImage
+                  ? () {}
+                  : () {
+                      setState(() {
+                        _isImageGenMode = !_isImageGenMode;
+                      });
+                      if (kDebugMode) {
+                        debugPrint('Image Gen mode toggled: $_isImageGenMode');
+                      }
+                    },
+              isActive: _isImageGenMode || _isGeneratingImage,
+              color: _isImageGenMode || _isGeneratingImage ? accent : iconFg,
+            ),
+          ],
+          const SizedBox(width: 2),
+          GestureDetector(
+            onTap: () {},
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              child: ModelSelectionDropdown(
+                initialSelectedModelId: _selectedModelId,
+                onModelSelected: (newModelId) {
+                  setState(() {
+                    _selectedModelId = newModelId;
+                  });
+                },
+                textFieldFocusNode: _textFieldFocusNode,
+                isCompactMode: true,
+                compactLabel: '#',
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          // ── Middle: TextField (grows upward) ──
+          Expanded(
             child: _audioHandler.isMicActive
                 ? Container(
-                    height: 30,
+                    height: 32,
                     alignment: Alignment.center,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -3053,7 +3098,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                             focusedBorder: InputBorder.none,
                             contentPadding: const EdgeInsets.symmetric(
                               horizontal: 4,
-                              vertical: 4,
+                              vertical: 8,
                             ),
                             isDense: true,
                           ),
@@ -3064,114 +3109,59 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                     ),
                   ),
           ),
-          const SizedBox(height: 4),
-          // ── Bottom row: buttons stay fixed at bottom ──
-          Row(
-            children: [
-              buildTinyIconButton(
-                icon: Icons.add_rounded,
-                onTap: _handleAddAttachmentTap,
-                isActive: hasAttachments,
-                color: iconFg,
-              ),
-              if (widget.imageGenEnabled) ...[
-                const SizedBox(width: 2),
-                buildTinyIconButton(
-                  icon: Icons.auto_awesome,
-                  onTap: _isGeneratingImage
-                      ? () {}
-                      : () {
-                          setState(() {
-                            _isImageGenMode = !_isImageGenMode;
-                          });
-                          if (kDebugMode) {
-                            debugPrint(
-                              'Image Gen mode toggled: $_isImageGenMode',
-                            );
-                          }
-                        },
-                  isActive: _isImageGenMode || _isGeneratingImage,
-                  color: _isImageGenMode || _isGeneratingImage
-                      ? accent
-                      : iconFg,
-                ),
-              ],
-              const SizedBox(width: 2),
-              GestureDetector(
-                onTap: () {},
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 4,
-                  ),
-                  child: ModelSelectionDropdown(
-                    initialSelectedModelId: _selectedModelId,
-                    onModelSelected: (newModelId) {
-                      setState(() {
-                        _selectedModelId = newModelId;
-                      });
-                    },
-                    textFieldFocusNode: _textFieldFocusNode,
-                    isCompactMode: true,
-                    compactLabel: '#',
-                  ),
-                ),
-              ),
-              const Spacer(),
-              if (_showFullscreenButton && !_audioHandler.isMicActive) ...[
-                buildTinyIconButton(
-                  icon: Icons.fullscreen_rounded,
-                  onTap: _openFullscreenEditor,
-                  isActive: false,
-                  color: iconFg,
-                ),
-                const SizedBox(width: 2),
-              ],
-              buildTinyIconButton(
-                icon: _audioHandler.isMicActive
-                    ? Icons.stop_rounded
-                    : Icons.mic_rounded,
-                onTap: _handleMicTap,
-                isActive: _audioHandler.isMicActive,
-                color: _audioHandler.isMicActive ? Colors.red : iconFg,
-                semanticsId: 'mic_button',
-              ),
-              const SizedBox(width: 2),
-              buildTinyActionButton(
-                icon: _audioHandler.isMicActive
-                    ? Icons.send_rounded
-                    : ((_isCurrentChatStreaming || _isSendingMessage)
-                          ? Icons.stop_rounded
-                          : _isImageGenMode
-                          ? Icons.auto_awesome
-                          : (_controller.text.trim().isEmpty && !hasAttachments
-                                ? (kFeatureVoiceMode
-                                      ? Icons.graphic_eq_rounded
-                                      : Icons.arrow_upward_rounded)
-                                : Icons.arrow_upward_rounded)),
-                onTap: _audioHandler.isMicActive
-                    ? _handleAudioSend
-                    : ((_isCurrentChatStreaming || _isSendingMessage)
-                          ? _cancelCurrentOperation
-                          : _isImageGenMode && !_isGeneratingImage
-                          ? _generateImage
-                          : (_controller.text.trim().isEmpty &&
-                                    !hasAttachments &&
-                                    kFeatureVoiceMode
-                                ? () => _openComingSoonFeature('Voice Mode')
-                                : _sendMessage)),
-                color: _audioHandler.isMicActive
-                    ? accent
-                    : ((_isCurrentChatStreaming || _isSendingMessage)
-                          ? Colors.red
-                          : accent),
-                isLoading:
-                    _audioHandler.isTranscribingAudio || _isGeneratingImage,
-                semanticsId: 'send_button',
-              ),
-              const SizedBox(width: 4),
-            ],
+          const SizedBox(width: 4),
+          // ── Right buttons (stay short at bottom) ──
+          if (_showFullscreenButton && !_audioHandler.isMicActive) ...[
+            buildTinyIconButton(
+              icon: Icons.fullscreen_rounded,
+              onTap: _openFullscreenEditor,
+              isActive: false,
+              color: iconFg,
+            ),
+            const SizedBox(width: 2),
+          ],
+          buildTinyIconButton(
+            icon: _audioHandler.isMicActive
+                ? Icons.stop_rounded
+                : Icons.mic_rounded,
+            onTap: _handleMicTap,
+            isActive: _audioHandler.isMicActive,
+            color: _audioHandler.isMicActive ? Colors.red : iconFg,
+            semanticsId: 'mic_button',
           ),
+          const SizedBox(width: 2),
+          buildTinyActionButton(
+            icon: _audioHandler.isMicActive
+                ? Icons.send_rounded
+                : ((_isCurrentChatStreaming || _isSendingMessage)
+                      ? Icons.stop_rounded
+                      : _isImageGenMode
+                      ? Icons.auto_awesome
+                      : (_controller.text.trim().isEmpty && !hasAttachments
+                            ? (kFeatureVoiceMode
+                                  ? Icons.graphic_eq_rounded
+                                  : Icons.arrow_upward_rounded)
+                            : Icons.arrow_upward_rounded)),
+            onTap: _audioHandler.isMicActive
+                ? _handleAudioSend
+                : ((_isCurrentChatStreaming || _isSendingMessage)
+                      ? _cancelCurrentOperation
+                      : _isImageGenMode && !_isGeneratingImage
+                      ? _generateImage
+                      : (_controller.text.trim().isEmpty &&
+                                !hasAttachments &&
+                                kFeatureVoiceMode
+                            ? () => _openComingSoonFeature('Voice Mode')
+                            : _sendMessage)),
+            color: _audioHandler.isMicActive
+                ? accent
+                : ((_isCurrentChatStreaming || _isSendingMessage)
+                      ? Colors.red
+                      : accent),
+            isLoading: _audioHandler.isTranscribingAudio || _isGeneratingImage,
+            semanticsId: 'send_button',
+          ),
+          const SizedBox(width: 4),
         ],
       ),
     );
