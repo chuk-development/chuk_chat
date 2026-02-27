@@ -812,7 +812,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     final session = await _streamingHandler.getSessionSafely();
     if (session == null) return;
 
-    setState(() {}); // Trigger UI update to show loading icon
+    // Mark transcribing immediately so the send button shows loading spinner
+    // before the async transcription call sets it internally.
+    _audioHandler.setTranscribing(true);
+    if (mounted) setState(() {});
+
     final result = await _audioHandler.transcribeLastRecording(
       apiService: _chatApiService,
       accessToken: session.accessToken,
