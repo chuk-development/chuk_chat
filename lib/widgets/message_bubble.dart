@@ -9,6 +9,7 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/platform_config.dart';
 import 'package:flutter/foundation.dart';
 
 /// Document attachment data
@@ -250,9 +251,13 @@ class _MessageBubbleState extends State<MessageBubble>
                     minWidth: 24,
                     minHeight: 24,
                   ),
-                  style: IconButton.styleFrom(
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
+                  // Desktop has oversized tap targets by default — shrink them.
+                  // Mobile was already correct, so leave it untouched.
+                  style: kPlatformMobile
+                      ? null
+                      : IconButton.styleFrom(
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
                   onPressed: action.isEnabled ? action.onPressed : null,
                 ),
               );
@@ -295,9 +300,11 @@ class _MessageBubbleState extends State<MessageBubble>
                     minWidth: 24,
                     minHeight: 24,
                   ),
-                  style: IconButton.styleFrom(
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
+                  style: kPlatformMobile
+                      ? null
+                      : IconButton.styleFrom(
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
                   onPressed: canSubmit
                       ? () => widget.onSubmitEdit?.call(_editController.text)
                       : null,
@@ -313,9 +320,11 @@ class _MessageBubbleState extends State<MessageBubble>
                     minWidth: 24,
                     minHeight: 24,
                   ),
-                  style: IconButton.styleFrom(
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
+                  style: kPlatformMobile
+                      ? null
+                      : IconButton.styleFrom(
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
                   onPressed: widget.onCancelEdit,
                 ),
               ),
