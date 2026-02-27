@@ -51,7 +51,16 @@ flutter build web --release --dart-define-from-file=.env
 
 ### Creating a Release
 
-**When the user asks to "build a release" or "make a new release", ALWAYS follow these steps:**
+**Cost-control release policy (IMPORTANT):**
+
+- Do **NOT** trigger GitHub Actions release workflows for normal feature/fix tasks.
+- For routine validation, build locally on the developer machine:
+  - Android: `flutter build apk --release --dart-define-from-file=.env --dart-define=PLATFORM_MOBILE=true --dart-define=FEATURE_PROJECTS=false --dart-define=FEATURE_VOICE_MODE=false --tree-shake-icons --target-platform android-arm64`
+  - Linux: `flutter build linux --release --dart-define-from-file=.env`
+- Trigger `gh workflow run build-cross-platform.yml` **only** when the user explicitly asks for a real release (for example: "make release", "new release", "build release").
+- Prefer fewer production releases (typically one planned release per day, unless urgent hotfix).
+
+**When the user explicitly asks to "build a release" or "make a new release", ALWAYS follow these steps:**
 
 1. Bump version in `pubspec.yaml` (e.g. `1.0.26` → `1.0.27` — **no** `+buildnumber` suffix)
 2. Commit: `git commit -am "chore: bump version to 1.0.27"`

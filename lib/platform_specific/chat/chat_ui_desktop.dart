@@ -52,6 +52,7 @@ class _MessageRenderData {
     required this.reasoning,
     required this.isReasoningStreaming,
     this.modelLabel,
+    this.modelProvider,
     this.tps,
     this.images,
     this.imageCostEur,
@@ -64,6 +65,7 @@ class _MessageRenderData {
   final String reasoning;
   final bool isReasoningStreaming;
   final String? modelLabel;
+  final String? modelProvider;
   final double? tps;
   final List<String>? images;
   final double? imageCostEur;
@@ -3489,13 +3491,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     if (normalizedModel.isEmpty && normalizedProvider.isEmpty) {
       return null;
     }
+    // Return just the model name for the card header.
+    // Provider is passed separately via modelProvider parameter.
     if (normalizedModel.isEmpty) {
-      return 'Provider: $normalizedProvider';
+      return normalizedProvider;
     }
-    if (normalizedProvider.isEmpty) {
-      return 'Model: $normalizedModel';
-    }
-    return 'Model: $normalizedModel • Provider: $normalizedProvider';
+    return normalizedModel;
   }
 
   @override
@@ -3558,6 +3559,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       final bool hasReasoning = reasoning.isNotEmpty;
       final String? modelLabel = isAiMessage
           ? _formatModelInfo(raw['modelId'], raw['provider'])
+          : null;
+      final String? modelProvider = isAiMessage
+          ? (raw['provider'] ?? '').trim()
           : null;
 
       // Extract images if present (stored as JSON string)
@@ -3630,6 +3634,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         isReasoningStreaming:
             isStreamingMessage && (hasReasoning || displayText.isNotEmpty),
         modelLabel: modelLabel,
+        modelProvider: modelProvider,
         tps: tps,
         images: images,
         imageCostEur: imageCostEur,
@@ -3792,6 +3797,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                           isReasoningStreaming:
                                               data.isReasoningStreaming,
                                           modelLabel: data.modelLabel,
+                                          modelProvider: data.modelProvider,
                                           tps: data.tps,
                                           images: data.images,
                                           imageCostEur: data.imageCostEur,
