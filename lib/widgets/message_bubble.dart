@@ -238,7 +238,7 @@ class _MessageBubbleState extends State<MessageBubble>
             ),
           ),
           padding: EdgeInsets.symmetric(
-            horizontal: kPlatformMobile ? 2 : 6,
+            horizontal: kPlatformMobile ? 2 : 8,
             vertical: kPlatformMobile ? 0 : 4,
           ),
           child: Row(
@@ -250,13 +250,13 @@ class _MessageBubbleState extends State<MessageBubble>
                   icon: Icon(
                     action.icon,
                     color: iconFgColor,
-                    size: kPlatformMobile ? 15 : 17,
+                    size: kPlatformMobile ? 15 : 18,
                   ),
                   padding: EdgeInsets.all(kPlatformMobile ? 4 : 8),
                   visualDensity: VisualDensity.compact,
                   constraints: BoxConstraints(
-                    minWidth: kPlatformMobile ? 24 : 28,
-                    minHeight: kPlatformMobile ? 24 : 28,
+                    minWidth: kPlatformMobile ? 24 : 30,
+                    minHeight: kPlatformMobile ? 24 : 30,
                   ),
                   // Desktop has oversized tap targets by default — shrink them.
                   // Mobile was already correct, so leave it untouched.
@@ -294,7 +294,7 @@ class _MessageBubbleState extends State<MessageBubble>
             ),
           ),
           padding: EdgeInsets.symmetric(
-            horizontal: kPlatformMobile ? 2 : 6,
+            horizontal: kPlatformMobile ? 2 : 8,
             vertical: kPlatformMobile ? 0 : 4,
           ),
           child: Row(
@@ -306,13 +306,13 @@ class _MessageBubbleState extends State<MessageBubble>
                   icon: Icon(
                     Icons.send,
                     color: iconFgColor,
-                    size: kPlatformMobile ? 15 : 17,
+                    size: kPlatformMobile ? 15 : 18,
                   ),
                   padding: EdgeInsets.all(kPlatformMobile ? 4 : 8),
                   visualDensity: VisualDensity.compact,
                   constraints: BoxConstraints(
-                    minWidth: kPlatformMobile ? 24 : 28,
-                    minHeight: kPlatformMobile ? 24 : 28,
+                    minWidth: kPlatformMobile ? 24 : 30,
+                    minHeight: kPlatformMobile ? 24 : 30,
                   ),
                   style: kPlatformMobile
                       ? null
@@ -330,13 +330,13 @@ class _MessageBubbleState extends State<MessageBubble>
                   icon: Icon(
                     Icons.close,
                     color: iconFgColor,
-                    size: kPlatformMobile ? 15 : 17,
+                    size: kPlatformMobile ? 15 : 18,
                   ),
                   padding: EdgeInsets.all(kPlatformMobile ? 4 : 8),
                   visualDensity: VisualDensity.compact,
                   constraints: BoxConstraints(
-                    minWidth: kPlatformMobile ? 24 : 28,
-                    minHeight: kPlatformMobile ? 24 : 28,
+                    minWidth: kPlatformMobile ? 24 : 30,
+                    minHeight: kPlatformMobile ? 24 : 30,
                   ),
                   style: kPlatformMobile
                       ? null
