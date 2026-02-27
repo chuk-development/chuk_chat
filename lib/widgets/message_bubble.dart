@@ -237,7 +237,10 @@ class _MessageBubbleState extends State<MessageBubble>
               width: 1,
             ),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
+          padding: EdgeInsets.symmetric(
+            horizontal: kPlatformMobile ? 2 : 4,
+            vertical: kPlatformMobile ? 0 : 2,
+          ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: widget.actions.map((action) {
@@ -245,7 +248,7 @@ class _MessageBubbleState extends State<MessageBubble>
                 message: action.tooltip,
                 child: IconButton(
                   icon: Icon(action.icon, color: iconFgColor, size: 15),
-                  padding: const EdgeInsets.all(4),
+                  padding: EdgeInsets.all(kPlatformMobile ? 4 : 6),
                   visualDensity: VisualDensity.compact,
                   constraints: const BoxConstraints(
                     minWidth: 24,
@@ -286,7 +289,10 @@ class _MessageBubbleState extends State<MessageBubble>
               width: 1,
             ),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
+          padding: EdgeInsets.symmetric(
+            horizontal: kPlatformMobile ? 2 : 4,
+            vertical: kPlatformMobile ? 0 : 2,
+          ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -294,7 +300,7 @@ class _MessageBubbleState extends State<MessageBubble>
                 message: 'Resend edited message',
                 child: IconButton(
                   icon: Icon(Icons.send, color: iconFgColor, size: 15),
-                  padding: const EdgeInsets.all(4),
+                  padding: EdgeInsets.all(kPlatformMobile ? 4 : 6),
                   visualDensity: VisualDensity.compact,
                   constraints: const BoxConstraints(
                     minWidth: 24,
@@ -314,7 +320,7 @@ class _MessageBubbleState extends State<MessageBubble>
                 message: 'Cancel edit',
                 child: IconButton(
                   icon: Icon(Icons.close, color: iconFgColor, size: 15),
-                  padding: const EdgeInsets.all(4),
+                  padding: EdgeInsets.all(kPlatformMobile ? 4 : 6),
                   visualDensity: VisualDensity.compact,
                   constraints: const BoxConstraints(
                     minWidth: 24,
