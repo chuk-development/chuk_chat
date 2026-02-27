@@ -2318,56 +2318,146 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   Future<void> _openFullscreenEditor() async {
     final String currentText = _controller.text;
     final theme = Theme.of(context);
+    final Color bg = theme.scaffoldBackgroundColor;
+    final Color iconFg = theme.resolvedIconColor;
+    final Color accent = theme.colorScheme.primary;
+    final Color borderColor = iconFg.withValues(alpha: 0.15);
 
-    final String? result = await showDialog<String>(
+    final String? result = await showModalBottomSheet<String>(
       context: context,
-      builder: (BuildContext dialogContext) {
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext sheetContext) {
         final TextEditingController dialogController = TextEditingController(
           text: currentText,
         );
-        return Dialog.fullscreen(
-          child: Scaffold(
-            backgroundColor: theme.scaffoldBackgroundColor,
-            appBar: AppBar(
-              title: const Text('Edit Message'),
-              backgroundColor: theme.scaffoldBackgroundColor,
-              leading: IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () => Navigator.of(dialogContext).pop(),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(dialogContext).pop(dialogController.text);
-                  },
-                  child: const Text('Done'),
+        // Use most of the screen height minus status bar
+        final double sheetHeight =
+            MediaQuery.of(sheetContext).size.height * 0.75;
+
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
+          ),
+          child: Container(
+            height: sheetHeight,
+            margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            decoration: BoxDecoration(
+              color: bg.withValues(alpha: 0.98),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: borderColor, width: 1),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.1),
+                  blurRadius: 16,
+                  offset: const Offset(0, -4),
                 ),
               ],
             ),
-            body: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: TextField(
-                controller: dialogController,
-                autofocus: true,
-                maxLines: null,
-                expands: true,
-                keyboardType: TextInputType.multiline,
-                textAlignVertical: TextAlignVertical.top,
-                style: TextStyle(
-                  color: theme.colorScheme.onSurface,
-                  fontSize: 16,
-                  height: 1.4,
-                ),
-                decoration: InputDecoration(
-                  hintText: 'Type your message here...',
-                  hintStyle: TextStyle(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+            child: Column(
+              children: [
+                // Mini header row — same style as pill buttons
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 8, 0),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.edit_note_rounded,
+                        size: 18,
+                        color: iconFg.withValues(alpha: 0.6),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Compose',
+                        style: TextStyle(
+                          color: iconFg.withValues(alpha: 0.6),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: Icon(
+                          Icons.close_fullscreen_rounded,
+                          size: 18,
+                          color: iconFg.withValues(alpha: 0.5),
+                        ),
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.all(6),
+                        constraints: const BoxConstraints(
+                          minWidth: 28,
+                          minHeight: 28,
+                        ),
+                        onPressed: () => Navigator.of(
+                          sheetContext,
+                        ).pop(dialogController.text),
+                      ),
+                    ],
                   ),
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.zero,
                 ),
-                cursorColor: theme.colorScheme.primary,
-              ),
+                Divider(
+                  color: borderColor,
+                  height: 1,
+                  indent: 16,
+                  endIndent: 16,
+                ),
+                // Text field area
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: TextField(
+                      controller: dialogController,
+                      autofocus: true,
+                      maxLines: null,
+                      expands: true,
+                      keyboardType: TextInputType.multiline,
+                      textAlignVertical: TextAlignVertical.top,
+                      style: TextStyle(
+                        color: theme.colorScheme.onSurface,
+                        fontSize: 15,
+                        height: 1.4,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'Type your message here...',
+                        hintStyle: TextStyle(
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.4,
+                          ),
+                          fontSize: 15,
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 12,
+                        ),
+                      ),
+                      cursorColor: accent,
+                    ),
+                  ),
+                ),
+                // Done button at the bottom
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: TextButton(
+                      onPressed: () =>
+                          Navigator.of(sheetContext).pop(dialogController.text),
+                      style: TextButton.styleFrom(
+                        backgroundColor: accent,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: const Text(
+                        'Done',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         );
@@ -2977,199 +3067,229 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         ? Colors.red.withValues(alpha: 0.3)
         : iconFg.withValues(alpha: 0.15);
 
-    // Original single-row layout. The outer container has no border —
-    // only background + shadow. The TextField in the middle grows upward
-    // while buttons stay short at the bottom (crossAxisAlignment.end).
-    // Only the TextField area shows a visible border that follows its
-    // height, so left/right button areas don't get a tall border.
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: bg.withValues(alpha: 0.98),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 2),
-          ),
-        ],
+    // Uniform pill height for all three groups.
+    const double pillHeight = 38;
+
+    // Shared pill decoration for all three groups.
+    BoxDecoration pillDecoration({bool isActive = false}) => BoxDecoration(
+      color: bg.withValues(alpha: 0.98),
+      borderRadius: BorderRadius.circular(pillHeight / 2),
+      border: Border.all(
+        color: isActive ? Colors.red.withValues(alpha: 0.3) : borderColor,
+        width: 1,
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          buildTinyIconButton(
-            icon: Icons.add_rounded,
-            onTap: _handleAddAttachmentTap,
-            isActive: hasAttachments,
-            color: iconFg,
-          ),
-          if (widget.imageGenEnabled) ...[
-            const SizedBox(width: 2),
-            buildTinyIconButton(
-              icon: Icons.auto_awesome,
-              onTap: _isGeneratingImage
-                  ? () {}
-                  : () {
-                      setState(() {
-                        _isImageGenMode = !_isImageGenMode;
-                      });
-                      if (kDebugMode) {
-                        debugPrint('Image Gen mode toggled: $_isImageGenMode');
-                      }
-                    },
-              isActive: _isImageGenMode || _isGeneratingImage,
-              color: _isImageGenMode || _isGeneratingImage ? accent : iconFg,
-            ),
-          ],
-          const SizedBox(width: 2),
-          ModelSelectionDropdown(
-            initialSelectedModelId: _selectedModelId,
-            onModelSelected: (newModelId) {
-              setState(() {
-                _selectedModelId = newModelId;
-              });
-            },
-            textFieldFocusNode: _textFieldFocusNode,
-            isCompactMode: true,
-            compactLabel: '#',
-          ),
-          const SizedBox(width: 2),
-          // TextField in its own bordered container — only this part
-          // grows upward, with its own rounded border that follows
-          // the text height. Left/right buttons stay short outside it.
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: borderColor, width: 1),
-                borderRadius: BorderRadius.circular(18),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.05),
+          blurRadius: 8,
+          offset: const Offset(0, 1),
+        ),
+      ],
+    );
+
+    // Three-part layout: [left pill]  [text field]  [right pill]
+    // All pills have the same height; buttons centered vertically.
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        // ── Left pill: +, ImageGen, Model selector ──
+        Container(
+          height: pillHeight,
+          decoration: pillDecoration(),
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              buildTinyIconButton(
+                icon: Icons.add_rounded,
+                onTap: _handleAddAttachmentTap,
+                isActive: hasAttachments,
+                color: iconFg,
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: _audioHandler.isMicActive
-                  ? Container(
-                      height: 30,
-                      alignment: Alignment.center,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: Row(
-                          children: [
-                            buildRecordingIndicator(),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: buildAudioVisualizer(
-                                audioLevels: _audioHandler.audioLevels,
-                                accentColor: Colors.red,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  : buildKeyboardListener(
-                      focusNode: _rawKeyboardListenerFocusNode,
-                      controller: _controller,
-                      onSend: _isImageGenMode && !_isCurrentChatStreaming
-                          ? _generateImage
-                          : _sendMessage,
-                      child: Scrollbar(
-                        controller: _composerScrollController,
-                        child: Semantics(
-                          identifier: 'message_input',
-                          child: TextField(
-                            controller: _controller,
-                            focusNode: _textFieldFocusNode,
-                            autofocus: false,
-                            keyboardType: TextInputType.multiline,
-                            textInputAction: TextInputAction.newline,
-                            scrollController: _composerScrollController,
-                            style: TextStyle(
-                              color: theme.colorScheme.onSurface,
-                              fontSize: 14,
-                              height: 1.2,
-                            ),
-                            minLines: 1,
-                            maxLines: 6,
-                            decoration: InputDecoration(
-                              hintText: 'Ask me anything',
-                              hintStyle: TextStyle(
-                                color: theme.colorScheme.onSurface.withValues(
-                                  alpha: 0.5,
-                                ),
-                                fontSize: 14,
-                              ),
-                              filled: false,
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 4,
-                                vertical: 8,
-                              ),
-                              isDense: true,
-                            ),
-                            cursorColor: accent,
-                            cursorWidth: 1.5,
+              if (widget.imageGenEnabled) ...[
+                const SizedBox(width: 1),
+                buildTinyIconButton(
+                  icon: Icons.auto_awesome,
+                  onTap: _isGeneratingImage
+                      ? () {}
+                      : () {
+                          setState(() {
+                            _isImageGenMode = !_isImageGenMode;
+                          });
+                          if (kDebugMode) {
+                            debugPrint(
+                              'Image Gen mode toggled: $_isImageGenMode',
+                            );
+                          }
+                        },
+                  isActive: _isImageGenMode || _isGeneratingImage,
+                  color: _isImageGenMode || _isGeneratingImage
+                      ? accent
+                      : iconFg,
+                ),
+              ],
+              const SizedBox(width: 1),
+              ModelSelectionDropdown(
+                initialSelectedModelId: _selectedModelId,
+                onModelSelected: (newModelId) {
+                  setState(() {
+                    _selectedModelId = newModelId;
+                  });
+                },
+                textFieldFocusNode: _textFieldFocusNode,
+                isCompactMode: true,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 6),
+
+        // ── Middle: TextField (grows upward for multi-line) ──
+        Expanded(
+          child: Container(
+            constraints: const BoxConstraints(minHeight: pillHeight),
+            decoration: pillDecoration(isActive: _audioHandler.isMicActive),
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: _audioHandler.isMicActive
+                ? SizedBox(
+                    height: pillHeight - 2, // minus border
+                    child: Row(
+                      children: [
+                        buildRecordingIndicator(),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: buildAudioVisualizer(
+                            audioLevels: _audioHandler.audioLevels,
+                            accentColor: Colors.red,
                           ),
+                        ),
+                      ],
+                    ),
+                  )
+                : buildKeyboardListener(
+                    focusNode: _rawKeyboardListenerFocusNode,
+                    controller: _controller,
+                    onSend: _isImageGenMode && !_isCurrentChatStreaming
+                        ? _generateImage
+                        : _sendMessage,
+                    child: Scrollbar(
+                      controller: _composerScrollController,
+                      child: Semantics(
+                        identifier: 'message_input',
+                        child: TextField(
+                          controller: _controller,
+                          focusNode: _textFieldFocusNode,
+                          autofocus: false,
+                          keyboardType: TextInputType.multiline,
+                          textInputAction: TextInputAction.newline,
+                          scrollController: _composerScrollController,
+                          style: TextStyle(
+                            color: theme.colorScheme.onSurface,
+                            fontSize: 14,
+                            height: 1.3,
+                          ),
+                          minLines: 1,
+                          maxLines: 6,
+                          decoration: InputDecoration(
+                            hintText: 'Ask me anything',
+                            hintStyle: TextStyle(
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.5,
+                              ),
+                              fontSize: 14,
+                            ),
+                            filled: false,
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 0,
+                              vertical: 9,
+                            ),
+                            isDense: true,
+                            // Fullscreen button inside the text field
+                            suffixIcon: _showFullscreenButton
+                                ? GestureDetector(
+                                    onTap: _openFullscreenEditor,
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(left: 4),
+                                      child: Icon(
+                                        Icons.open_in_full_rounded,
+                                        size: 14,
+                                        color: iconFg.withValues(alpha: 0.4),
+                                      ),
+                                    ),
+                                  )
+                                : null,
+                            suffixIconConstraints: const BoxConstraints(
+                              minWidth: 20,
+                              minHeight: 20,
+                            ),
+                          ),
+                          cursorColor: accent,
+                          cursorWidth: 1.5,
                         ),
                       ),
                     ),
-            ),
+                  ),
           ),
-          const SizedBox(width: 4),
-          if (_showFullscreenButton && !_audioHandler.isMicActive) ...[
-            buildTinyIconButton(
-              icon: Icons.fullscreen_rounded,
-              onTap: _openFullscreenEditor,
-              isActive: false,
-              color: iconFg,
-            ),
-            const SizedBox(width: 2),
-          ],
-          buildTinyIconButton(
-            icon: _audioHandler.isMicActive
-                ? Icons.stop_rounded
-                : Icons.mic_rounded,
-            onTap: _handleMicTap,
-            isActive: _audioHandler.isMicActive,
-            color: _audioHandler.isMicActive ? Colors.red : iconFg,
-            semanticsId: 'mic_button',
+        ),
+        const SizedBox(width: 6),
+
+        // ── Right pill: Mic, Send (slightly taller) ──
+        Container(
+          height: pillHeight + 2,
+          decoration: pillDecoration(isActive: _audioHandler.isMicActive),
+          padding: const EdgeInsets.symmetric(horizontal: 5),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              buildTinyIconButton(
+                icon: _audioHandler.isMicActive
+                    ? Icons.stop_rounded
+                    : Icons.mic_rounded,
+                onTap: _handleMicTap,
+                isActive: _audioHandler.isMicActive,
+                color: _audioHandler.isMicActive ? Colors.red : iconFg,
+                semanticsId: 'mic_button',
+              ),
+              const SizedBox(width: 3),
+              buildTinyActionButton(
+                icon: _audioHandler.isMicActive
+                    ? Icons.send_rounded
+                    : ((_isCurrentChatStreaming || _isSendingMessage)
+                          ? Icons.stop_rounded
+                          : _isImageGenMode
+                          ? Icons.auto_awesome
+                          : (_controller.text.trim().isEmpty && !hasAttachments
+                                ? (kFeatureVoiceMode
+                                      ? Icons.graphic_eq_rounded
+                                      : Icons.arrow_upward_rounded)
+                                : Icons.arrow_upward_rounded)),
+                onTap: _audioHandler.isMicActive
+                    ? _handleAudioSend
+                    : ((_isCurrentChatStreaming || _isSendingMessage)
+                          ? _cancelCurrentOperation
+                          : _isImageGenMode && !_isGeneratingImage
+                          ? _generateImage
+                          : (_controller.text.trim().isEmpty &&
+                                    !hasAttachments &&
+                                    kFeatureVoiceMode
+                                ? () => _openComingSoonFeature('Voice Mode')
+                                : _sendMessage)),
+                color: _audioHandler.isMicActive
+                    ? accent
+                    : ((_isCurrentChatStreaming || _isSendingMessage)
+                          ? Colors.red
+                          : accent),
+                isLoading:
+                    _audioHandler.isTranscribingAudio || _isGeneratingImage,
+                semanticsId: 'send_button',
+              ),
+            ],
           ),
-          const SizedBox(width: 2),
-          buildTinyActionButton(
-            icon: _audioHandler.isMicActive
-                ? Icons.send_rounded
-                : ((_isCurrentChatStreaming || _isSendingMessage)
-                      ? Icons.stop_rounded
-                      : _isImageGenMode
-                      ? Icons.auto_awesome
-                      : (_controller.text.trim().isEmpty && !hasAttachments
-                            ? (kFeatureVoiceMode
-                                  ? Icons.graphic_eq_rounded
-                                  : Icons.arrow_upward_rounded)
-                            : Icons.arrow_upward_rounded)),
-            onTap: _audioHandler.isMicActive
-                ? _handleAudioSend
-                : ((_isCurrentChatStreaming || _isSendingMessage)
-                      ? _cancelCurrentOperation
-                      : _isImageGenMode && !_isGeneratingImage
-                      ? _generateImage
-                      : (_controller.text.trim().isEmpty &&
-                                !hasAttachments &&
-                                kFeatureVoiceMode
-                            ? () => _openComingSoonFeature('Voice Mode')
-                            : _sendMessage)),
-            color: _audioHandler.isMicActive
-                ? accent
-                : ((_isCurrentChatStreaming || _isSendingMessage)
-                      ? Colors.red
-                      : accent),
-            isLoading: _audioHandler.isTranscribingAudio || _isGeneratingImage,
-            semanticsId: 'send_button',
-          ),
-          const SizedBox(width: 4),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

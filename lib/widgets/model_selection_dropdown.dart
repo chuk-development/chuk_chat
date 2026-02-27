@@ -658,7 +658,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
 
   double _effectiveButtonWidth(double maxAvailableWidth) {
     if (widget.isCompactMode) {
-      return 44.0;
+      return 32.0;
     }
 
     // Limit max width to 180px for cleaner UI
@@ -674,7 +674,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
     final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
     final Color iconFgColor = Theme.of(context).resolvedIconColor;
 
-    final double effectiveWidth = widget.isCompactMode ? 44.0 : buttonWidth;
+    final double effectiveWidth = widget.isCompactMode ? 32.0 : buttonWidth;
 
     return MouseRegion(
       onEnter: (_) => isHovered.value = true,
@@ -682,12 +682,29 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       child: ValueListenableBuilder<bool>(
         valueListenable: isHovered,
         builder: (context, hovered, child) {
+          // Compact mode: 32x32 circle matching icon buttons
+          if (widget.isCompactMode) {
+            return Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: hovered
+                    ? iconFgColor.withValues(alpha: 0.1)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                Icons.tag_rounded,
+                size: 18,
+                color: iconFgColor.withValues(alpha: 0.6),
+              ),
+            );
+          }
+
           return AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             curve: Curves.easeOutCubic,
-            padding: widget.isCompactMode
-                ? EdgeInsets.zero
-                : const EdgeInsets.symmetric(horizontal: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 10),
             height: 36,
             width: effectiveWidth,
             decoration: BoxDecoration(
@@ -700,45 +717,26 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
                 width: hovered ? 1.2 : 0.8,
               ),
             ),
-            alignment: widget.isCompactMode
-                ? Alignment.center
-                : Alignment.centerLeft,
+            alignment: Alignment.centerLeft,
             child: Row(
-              mainAxisSize: widget.isCompactMode
-                  ? MainAxisSize.max
-                  : MainAxisSize.min,
-              mainAxisAlignment: widget.isCompactMode
-                  ? MainAxisAlignment.center
-                  : MainAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.start,
               children: [
-                if (widget.isCompactMode)
-                  widget.compactLabel != null
-                      ? Text(
-                          widget.compactLabel!,
-                          style: TextStyle(
-                            color: iconFgColor,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        )
-                      : Icon(Icons.grid_3x3, color: iconFgColor, size: 20)
-                else ...[
-                  Icon(Icons.grid_3x3, color: iconFgColor, size: 20),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      _selectedModelName,
-                      style: TextStyle(color: iconFgColor, fontSize: 14),
-                      softWrap: false,
-                      maxLines: 1,
-                    ),
+                Icon(Icons.grid_3x3, color: iconFgColor, size: 20),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    _selectedModelName,
+                    style: TextStyle(color: iconFgColor, fontSize: 14),
+                    softWrap: false,
+                    maxLines: 1,
                   ),
-                  Icon(
-                    Icons.keyboard_arrow_down,
-                    color: iconFgColor.withValues(alpha: 0.8),
-                    size: 16,
-                  ),
-                ],
+                ),
+                Icon(
+                  Icons.keyboard_arrow_down,
+                  color: iconFgColor.withValues(alpha: 0.8),
+                  size: 16,
+                ),
               ],
             ),
           );
