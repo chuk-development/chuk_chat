@@ -3236,9 +3236,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         ),
         const SizedBox(width: 6),
 
-        // ── Right pill: Mic, Send (slightly taller) ──
+        // ── Right pill: Mic, Send ──
         Container(
-          height: pillHeight + 4,
+          height: pillHeight,
           decoration: pillDecoration(isActive: _audioHandler.isMicActive),
           padding: const EdgeInsets.symmetric(horizontal: 5),
           child: Row(
