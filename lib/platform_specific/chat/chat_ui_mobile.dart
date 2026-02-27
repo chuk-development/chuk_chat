@@ -2699,6 +2699,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                             ((_messages[i - 1]['sender'] ??
                                                     'ai') !=
                                                 sender);
+                                        final bool endsGroup =
+                                            i == _messages.length - 1 ||
+                                            ((_messages[i + 1]['sender'] ??
+                                                    'ai') !=
+                                                sender);
 
                                         // Parse images from JSON
                                         List<String>? images;
@@ -2792,6 +2797,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                             reasoning: reasoningText,
                                             isUser: isUser,
                                             startsNewGroup: startsNewGroup,
+                                            endsGroup: endsGroup,
                                             maxWidth: isUser
                                                 ? expandedInputWidth * 0.8
                                                 : expandedInputWidth,
@@ -2984,6 +2990,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       ),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           buildTinyIconButton(
             icon: Icons.add_rounded,

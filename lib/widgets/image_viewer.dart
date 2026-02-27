@@ -231,10 +231,11 @@ class _ImageViewerState extends State<ImageViewer> {
               transformationController: _transformationController,
               minScale: 0.5,
               maxScale: 4.0,
-              boundaryMargin: const EdgeInsets.all(48),
-              child: SizedBox(
-                width: constraints.maxWidth,
-                height: constraints.maxHeight,
+              // No boundaryMargin at default zoom - prevents panning into
+              // black space when the image already fits on screen.
+              // Users can still zoom in and then pan freely.
+              boundaryMargin: EdgeInsets.zero,
+              child: Center(
                 child: Image.memory(
                   snapshot.data!,
                   fit: BoxFit.contain,

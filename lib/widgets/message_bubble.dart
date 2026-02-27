@@ -6,6 +6,7 @@ import 'package:chuk_chat/widgets/markdown_message.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
 import 'package:chuk_chat/widgets/document_viewer.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:flutter/foundation.dart';
@@ -54,6 +55,7 @@ class MessageBubble extends StatefulWidget {
     required this.message,
     required this.isUser,
     this.startsNewGroup = true,
+    this.endsGroup = true,
     this.maxWidth,
     this.actions = const <MessageBubbleAction>[],
     this.reasoning,
@@ -78,6 +80,7 @@ class MessageBubble extends StatefulWidget {
   isUser; // true for bot, false for user in voice mode (to match image)
   // In regular chat, true for user, false for AI.
   final bool startsNewGroup;
+  final bool endsGroup; // Last message before sender changes (shows tail)
   final double? maxWidth; // Neue optionale Eigenschaft für responsive Breite
   final List<MessageBubbleAction> actions;
   final String? reasoning;
@@ -103,7 +106,7 @@ class MessageBubble extends StatefulWidget {
 class _MessageBubbleState extends State<MessageBubble>
     with AutomaticKeepAliveClientMixin {
   bool _isReasoningExpanded = false;
-  bool _isModelInfoExpanded = false;
+  final Set<String> _expandedCards = {};
   final TextEditingController _editController = TextEditingController();
   final FocusNode _editFocusNode = FocusNode();
   bool _shouldFocusEditField = false;
@@ -215,54 +218,97 @@ class _MessageBubbleState extends State<MessageBubble>
   }
 
   Widget _buildActionButtons(Color iconFgColor, bool alignRight) {
-    return Wrap(
-      alignment: alignRight ? WrapAlignment.end : WrapAlignment.start,
-      spacing: 1,
-      runSpacing: 1,
-      children: widget.actions.map((action) {
-        return Tooltip(
-          message: action.tooltip,
-          child: IconButton(
-            icon: Icon(action.icon, color: iconFgColor, size: 17),
-            padding: const EdgeInsets.all(3),
-            visualDensity: VisualDensity.compact,
-            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-            onPressed: action.isEnabled ? action.onPressed : null,
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildEditingControls(Color iconFgColor, bool alignRight) {
-    final bool canSubmit = widget.onSubmitEdit != null;
+    final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
     return Row(
       mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: alignRight
           ? MainAxisAlignment.end
           : MainAxisAlignment.start,
       children: [
-        Tooltip(
-          message: 'Resend edited message',
-          child: IconButton(
-            icon: Icon(Icons.send, color: iconFgColor, size: 17),
-            padding: const EdgeInsets.all(3),
-            visualDensity: VisualDensity.compact,
-            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-            onPressed: canSubmit
-                ? () => widget.onSubmitEdit?.call(_editController.text)
-                : null,
+        Container(
+          decoration: BoxDecoration(
+            color: bgColor.lighten(0.05),
+            borderRadius: BorderRadius.circular(100),
+            border: Border.all(
+              color: iconFgColor.withValues(alpha: 0.15),
+              width: 1,
+            ),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: widget.actions.map((action) {
+              return Tooltip(
+                message: action.tooltip,
+                child: IconButton(
+                  icon: Icon(action.icon, color: iconFgColor, size: 15),
+                  padding: const EdgeInsets.all(4),
+                  visualDensity: VisualDensity.compact,
+                  constraints: const BoxConstraints(
+                    minWidth: 24,
+                    minHeight: 24,
+                  ),
+                  onPressed: action.isEnabled ? action.onPressed : null,
+                ),
+              );
+            }).toList(),
           ),
         ),
-        const SizedBox(width: 2),
-        Tooltip(
-          message: 'Cancel edit',
-          child: IconButton(
-            icon: Icon(Icons.close, color: iconFgColor, size: 17),
-            padding: const EdgeInsets.all(3),
-            visualDensity: VisualDensity.compact,
-            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-            onPressed: widget.onCancelEdit,
+      ],
+    );
+  }
+
+  Widget _buildEditingControls(Color iconFgColor, bool alignRight) {
+    final bool canSubmit = widget.onSubmitEdit != null;
+    final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: alignRight
+          ? MainAxisAlignment.end
+          : MainAxisAlignment.start,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            color: bgColor.lighten(0.05),
+            borderRadius: BorderRadius.circular(100),
+            border: Border.all(
+              color: iconFgColor.withValues(alpha: 0.15),
+              width: 1,
+            ),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Tooltip(
+                message: 'Resend edited message',
+                child: IconButton(
+                  icon: Icon(Icons.send, color: iconFgColor, size: 15),
+                  padding: const EdgeInsets.all(4),
+                  visualDensity: VisualDensity.compact,
+                  constraints: const BoxConstraints(
+                    minWidth: 24,
+                    minHeight: 24,
+                  ),
+                  onPressed: canSubmit
+                      ? () => widget.onSubmitEdit?.call(_editController.text)
+                      : null,
+                ),
+              ),
+              Tooltip(
+                message: 'Cancel edit',
+                child: IconButton(
+                  icon: Icon(Icons.close, color: iconFgColor, size: 15),
+                  padding: const EdgeInsets.all(4),
+                  visualDensity: VisualDensity.compact,
+                  constraints: const BoxConstraints(
+                    minWidth: 24,
+                    minHeight: 24,
+                  ),
+                  onPressed: widget.onCancelEdit,
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -303,7 +349,7 @@ class _MessageBubbleState extends State<MessageBubble>
               topLeft: const Radius.circular(16),
               topRight: const Radius.circular(16),
               bottomLeft: const Radius.circular(16),
-              bottomRight: Radius.circular(widget.startsNewGroup ? 5 : 16),
+              bottomRight: Radius.circular(widget.endsGroup ? 5 : 16),
             ),
             border: Border.all(color: iconFgColor.withValues(alpha: .3)),
           )
@@ -321,18 +367,8 @@ class _MessageBubbleState extends State<MessageBubble>
             ? CrossAxisAlignment.end
             : CrossAxisAlignment.start,
         children: [
-          if (_hasReasoning) ...[
-            _buildReasoningToggle(iconFgColor, alignRight),
-            const SizedBox(height: 4),
-            if (_isReasoningExpanded)
-              _buildReasoningBox(iconFgColor, alignRight),
-          ],
-          if (_hasModelInfo) ...[
-            _buildModelInfoToggle(iconFgColor, alignRight),
-            const SizedBox(height: 4),
-            if (_isModelInfoExpanded)
-              _buildModelInfoBox(iconFgColor, alignRight),
-          ],
+          if (_hasReasoning || _hasModelInfo)
+            _buildInfoStatusBar(iconFgColor, accentColor),
           // Display images above the text message
           if (widget.images != null && widget.images!.isNotEmpty) ...[
             _buildImagesGrid(widget.images!),
@@ -372,204 +408,245 @@ class _MessageBubbleState extends State<MessageBubble>
           children: [
             bubbleContent,
             if (widget.isEditing && isUserMessage)
-              Padding(
-                padding: const EdgeInsets.only(top: 0),
-                child: Transform.translate(
-                  offset: const Offset(0, -2),
-                  child: _buildEditingControls(iconFgColor, alignRight),
-                ),
-              ),
-            if (hasActions)
-              Padding(
-                padding: const EdgeInsets.only(top: 0),
-                child: Transform.translate(
-                  offset: const Offset(0, -2),
-                  child: _buildActionButtons(iconFgColor, alignRight),
-                ),
-              ),
+              _buildEditingControls(iconFgColor, alignRight),
+            if (hasActions) _buildActionButtons(iconFgColor, alignRight),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildReasoningToggle(Color iconFgColor, bool alignRight) {
-    final bool expanded = _isReasoningExpanded;
-    final IconData icon = expanded ? Icons.expand_less : Icons.expand_more;
-    final String label = expanded ? 'Hide reasoning' : 'Show reasoning';
+  /// Unified status bar for reasoning and model info, matching function_calling
+  /// client design: expandable cards with accent-tinted backgrounds.
+  Widget _buildInfoStatusBar(Color iconFgColor, Color accentColor) {
+    final bool isExpanded = _isReasoningExpanded;
+    final bool isStreaming = widget.isReasoningStreaming;
 
-    return InkWell(
-      onTap: () {
-        setState(() => _isReasoningExpanded = !expanded);
-      },
-      child: Row(
-        mainAxisAlignment: alignRight
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: iconFgColor.withValues(alpha: 0.6)),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: iconFgColor.withValues(alpha: 0.7),
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          if (widget.isReasoningStreaming) ...[
-            const SizedBox(width: 6),
-            SizedBox(
-              width: 14,
-              height: 14,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  iconFgColor.withValues(alpha: 0.6),
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
+    // Determine header label and state
+    final String label = isStreaming ? 'Reasoning...' : 'Reasoning';
+    final Color barAccent = accentColor;
 
-  Widget _buildReasoningBox(Color iconFgColor, bool alignRight) {
-    final Color containerColor = iconFgColor.withValues(alpha: 0.08);
     return Container(
-      key: const ValueKey('reasoning-expanded'),
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
-        color: containerColor,
+        color: barAccent.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: iconFgColor.withValues(alpha: 0.18)),
-      ),
-      child: Text(
-        widget.reasoning!,
-        style: TextStyle(
-          color: iconFgColor.withValues(alpha: 0.85),
-          height: 1.35,
-        ),
-        textAlign: alignRight ? TextAlign.right : TextAlign.left,
-      ),
-    );
-  }
-
-  Widget _buildModelInfoToggle(Color iconFgColor, bool alignRight) {
-    final bool expanded = _isModelInfoExpanded;
-    final IconData icon = expanded ? Icons.expand_less : Icons.expand_more;
-    final String label = expanded ? 'Hide model' : 'Show model';
-
-    return InkWell(
-      onTap: () {
-        setState(() => _isModelInfoExpanded = !expanded);
-      },
-      child: Row(
-        mainAxisAlignment: alignRight
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: iconFgColor.withValues(alpha: 0.6)),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: iconFgColor.withValues(alpha: 0.7),
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildModelInfoBox(Color iconFgColor, bool alignRight) {
-    final Color containerColor = iconFgColor.withValues(alpha: 0.08);
-    return Container(
-      key: const ValueKey('model-info-expanded'),
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: containerColor,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: iconFgColor.withValues(alpha: 0.18)),
+        border: Border.all(color: barAccent.withValues(alpha: 0.18)),
       ),
       child: Column(
-        crossAxisAlignment: alignRight
-            ? CrossAxisAlignment.end
-            : CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: alignRight
-                ? MainAxisAlignment.end
-                : MainAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.smart_toy_outlined,
-                size: 16,
-                color: iconFgColor.withValues(alpha: 0.7),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                'Model',
-                style: TextStyle(
-                  color: iconFgColor.withValues(alpha: 0.9),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                widget.modelLabel!,
-                style: TextStyle(
-                  color: iconFgColor.withValues(alpha: 0.85),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-                textAlign: alignRight ? TextAlign.right : TextAlign.left,
-              ),
-              if (_shouldShowTps) ...[
-                const SizedBox(width: 8),
-                Builder(
-                  builder: (context) {
-                    final accent = Theme.of(context).colorScheme.primary;
-                    return Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
+          // Header bar
+          InkWell(
+            onTap: () =>
+                setState(() => _isReasoningExpanded = !_isReasoningExpanded),
+            borderRadius: BorderRadius.circular(10),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              child: Row(
+                children: [
+                  if (isStreaming)
+                    SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.5,
+                        color: barAccent,
                       ),
-                      decoration: BoxDecoration(
-                        color: accent.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
+                    )
+                  else
+                    Icon(Icons.psychology, size: 14, color: barAccent),
+                  const SizedBox(width: 8),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: barAccent,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Preview text when collapsed
+                  if (!isExpanded && _hasReasoning)
+                    Expanded(
                       child: Text(
-                        '${widget.tps!.toStringAsFixed(1)} tok/s',
+                        _truncatePreview(widget.reasoning!, 60),
                         style: TextStyle(
-                          color: accent,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.5),
+                          fontSize: 12,
                         ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
                       ),
-                    );
-                  },
-                ),
-              ],
-            ],
+                    )
+                  else
+                    const Spacer(),
+                  Icon(
+                    isExpanded ? Icons.expand_less : Icons.expand_more,
+                    size: 16,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.5),
+                  ),
+                ],
+              ),
+            ),
           ),
+          // Expanded content: sub-cards for reasoning and model info
+          if (isExpanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
+              child: Column(
+                children: [
+                  if (_hasReasoning)
+                    _buildExpandableCard(
+                      key: 'reasoning',
+                      icon: Icons.psychology,
+                      label: 'Reasoning',
+                      preview: widget.reasoning!,
+                      expandedContent: widget.reasoning!,
+                      accentColor: barAccent,
+                      isRunning: isStreaming,
+                    ),
+                  if (_hasModelInfo)
+                    _buildExpandableCard(
+                      key: 'model_info',
+                      icon: Icons.smart_toy_outlined,
+                      label: widget.modelLabel!,
+                      preview: _buildModelPreview(),
+                      expandedContent: _buildModelDetails(),
+                      accentColor: Colors.green,
+                    ),
+                ],
+              ),
+            ),
         ],
       ),
     );
+  }
+
+  /// Reusable expandable card matching function_calling client design.
+  Widget _buildExpandableCard({
+    required String key,
+    required IconData icon,
+    required String label,
+    required String preview,
+    required String expandedContent,
+    required Color accentColor,
+    bool isRunning = false,
+  }) {
+    final bool cardExpanded = _expandedCards.contains(key);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      decoration: BoxDecoration(
+        color: accentColor.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: accentColor.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () => setState(() {
+              if (_expandedCards.contains(key)) {
+                _expandedCards.remove(key);
+              } else {
+                _expandedCards.add(key);
+              }
+            }),
+            borderRadius: BorderRadius.circular(10),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              child: Row(
+                children: [
+                  if (isRunning)
+                    SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.5,
+                        color: accentColor,
+                      ),
+                    )
+                  else
+                    Icon(icon, size: 14, color: accentColor),
+                  const SizedBox(width: 8),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: accentColor,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      cardExpanded ? '' : _truncatePreview(preview, 60),
+                      style: TextStyle(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.5),
+                        fontSize: 12,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                  ),
+                  Icon(
+                    cardExpanded ? Icons.expand_less : Icons.expand_more,
+                    size: 16,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.5),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (cardExpanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+              child: SelectableText(
+                expandedContent,
+                style: TextStyle(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.7),
+                  fontSize: 12,
+                  fontFamily: 'monospace',
+                  height: 1.4,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  String _buildModelPreview() {
+    if (_shouldShowTps) {
+      return '${widget.tps!.toStringAsFixed(1)} tok/s';
+    }
+    return '';
+  }
+
+  String _buildModelDetails() {
+    final buf = StringBuffer();
+    buf.writeln('Model: ${widget.modelLabel}');
+    if (_shouldShowTps) {
+      buf.writeln('Speed: ${widget.tps!.toStringAsFixed(1)} tok/s');
+    }
+    return buf.toString().trimRight();
+  }
+
+  String _truncatePreview(String text, int maxLength) {
+    final clean = text.replaceAll('\n', ' ').trim();
+    if (clean.length <= maxLength) return clean;
+    return '${clean.substring(0, maxLength)}...';
   }
 
   Widget _buildImagesGrid(List<String> images) {
@@ -973,8 +1050,10 @@ class _CachedImageThumbnailState extends State<_CachedImageThumbnail>
             width: widget.width,
             height: widget.height,
             fit: widget.fit,
+            // Only constrain cacheWidth to preserve aspect ratio during decode.
+            // Setting both cacheWidth AND cacheHeight distorts the image before
+            // BoxFit.cover can crop it properly.
             cacheWidth: (widget.width * 2).toInt(),
-            cacheHeight: (widget.height * 2).toInt(),
             gaplessPlayback: true,
             errorBuilder: (context, error, stackTrace) {
               return Container(
