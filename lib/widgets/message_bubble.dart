@@ -401,11 +401,16 @@ class _MessageBubbleState extends State<MessageBubble>
       decoration: decoration,
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        // Stretch so the reasoning card fills the full bubble width.
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        crossAxisAlignment: alignRight
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
         children: [
+          // SizedBox forces only the reasoning card to fill full bubble width.
           if (_hasReasoning || _hasModelInfo)
-            _buildInfoStatusBar(iconFgColor, accentColor),
+            SizedBox(
+              width: double.infinity,
+              child: _buildInfoStatusBar(iconFgColor, accentColor),
+            ),
           // Display images above the text message
           if (widget.images != null && widget.images!.isNotEmpty) ...[
             _buildImagesGrid(widget.images!),
