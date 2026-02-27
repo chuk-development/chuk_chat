@@ -3147,12 +3147,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         // ── Middle: TextField (grows upward for multi-line) ──
         Expanded(
           child: Container(
-            constraints: const BoxConstraints(minHeight: pillHeight),
+            height: _audioHandler.isMicActive ? pillHeight : null,
+            constraints: _audioHandler.isMicActive
+                ? null
+                : const BoxConstraints(minHeight: pillHeight),
             decoration: pillDecoration(isActive: _audioHandler.isMicActive),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
             child: _audioHandler.isMicActive
                 ? SizedBox(
-                    height: pillHeight - 2, // minus border
+                    height: pillHeight - 6, // minus border + padding
                     child: Row(
                       children: [
                         buildRecordingIndicator(),
