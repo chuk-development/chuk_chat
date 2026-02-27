@@ -3064,25 +3064,25 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     final bool hasAttachments = _fileHandler.hasAttachments;
 
     final Color borderColor = _audioHandler.isMicActive
-        ? Colors.red.withValues(alpha: 0.3)
-        : iconFg.withValues(alpha: 0.15);
+        ? Colors.red.withValues(alpha: 0.4)
+        : iconFg.withValues(alpha: 0.25);
 
     // Uniform pill height for all three groups.
-    const double pillHeight = 38;
+    const double pillHeight = 42;
 
     // Shared pill decoration for all three groups.
     BoxDecoration pillDecoration({bool isActive = false}) => BoxDecoration(
       color: bg.withValues(alpha: 0.98),
       borderRadius: BorderRadius.circular(pillHeight / 2),
       border: Border.all(
-        color: isActive ? Colors.red.withValues(alpha: 0.3) : borderColor,
-        width: 1,
+        color: isActive ? Colors.red.withValues(alpha: 0.4) : borderColor,
+        width: 1.5,
       ),
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withValues(alpha: 0.05),
-          blurRadius: 8,
-          offset: const Offset(0, 1),
+          color: Colors.black.withValues(alpha: 0.06),
+          blurRadius: 10,
+          offset: const Offset(0, 2),
         ),
       ],
     );
@@ -3238,7 +3238,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
         // ── Right pill: Mic, Send (slightly taller) ──
         Container(
-          height: pillHeight + 2,
+          height: pillHeight + 4,
           decoration: pillDecoration(isActive: _audioHandler.isMicActive),
           padding: const EdgeInsets.symmetric(horizontal: 5),
           child: Row(
