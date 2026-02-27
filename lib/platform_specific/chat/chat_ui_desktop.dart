@@ -3771,6 +3771,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                           i == 0 ||
                                           (renderMessages[i - 1].isUser !=
                                               data.isUser);
+                                      final bool endsGroup =
+                                          i == renderMessages.length - 1 ||
+                                          (renderMessages[i + 1].isUser !=
+                                              data.isUser);
                                       final bool isBeingEdited =
                                           _editingMessageIndex == i;
                                       return RepaintBoundary(
@@ -3780,6 +3784,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                           reasoning: reasoningText,
                                           isUser: data.isUser,
                                           startsNewGroup: startsNewGroup,
+                                          endsGroup: endsGroup,
                                           maxWidth: data.isUser
                                               ? expandedInputWidth *
                                                     0.8 // User messages: 80%

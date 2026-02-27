@@ -195,18 +195,15 @@ class MessageCompositionService {
       }
 
       // Build display message with attachment names
+      // Note: Image filenames (e.g. "scaled_1234.jpg" from camera) are not
+      // meaningful to the AI model, so we only show the count for images.
+      // Document filenames are kept since they provide useful context.
       final attachmentNames = <String>[];
       if (imageFiles.isNotEmpty) {
-        final imageNames = imageFiles
-            .map((f) {
-              final sanitized = InputValidator.sanitizeFileName(f.fileName);
-              final escaped = InputValidator.escapeFileNameForDisplay(
-                sanitized,
-              );
-              return '"$escaped"';
-            })
-            .join(', ');
-        attachmentNames.add('Images: $imageNames');
+        final count = imageFiles.length;
+        attachmentNames.add(
+          count == 1 ? '1 image attached' : '$count images attached',
+        );
       }
       if (documentFiles.isNotEmpty) {
         final docNames = documentFiles
