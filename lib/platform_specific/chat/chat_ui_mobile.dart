@@ -3068,7 +3068,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         : iconFg.withValues(alpha: 0.25);
 
     // Uniform pill height for all three groups.
-    const double pillHeight = 42;
+    const double pillHeight = 48;
 
     // Shared pill decoration for all three groups.
     BoxDecoration pillDecoration({bool isActive = false}) => BoxDecoration(
@@ -3076,7 +3076,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       borderRadius: BorderRadius.circular(pillHeight / 2),
       border: Border.all(
         color: isActive ? Colors.red.withValues(alpha: 0.4) : borderColor,
-        width: 1.5,
+        width: 2,
       ),
       boxShadow: [
         BoxShadow(
