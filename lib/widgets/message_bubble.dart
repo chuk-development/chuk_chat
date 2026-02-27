@@ -405,8 +405,6 @@ class _MessageBubbleState extends State<MessageBubble>
             ? CrossAxisAlignment.end
             : CrossAxisAlignment.start,
         children: [
-          if (_hasReasoning || _hasModelInfo)
-            _buildInfoStatusBar(iconFgColor, accentColor),
           // Display images above the text message
           if (widget.images != null && widget.images!.isNotEmpty) ...[
             _buildImagesGrid(widget.images!),
@@ -445,6 +443,10 @@ class _MessageBubbleState extends State<MessageBubble>
               : CrossAxisAlignment.start,
           children: [
             bubbleContent,
+            // Reasoning / model info card sits outside the bubble
+            // so it aligns flush with the message edges.
+            if (_hasReasoning || _hasModelInfo)
+              _buildInfoStatusBar(iconFgColor, accentColor),
             if (widget.isEditing && isUserMessage)
               _buildEditingControls(iconFgColor, alignRight),
             if (hasActions) _buildActionButtons(iconFgColor, alignRight),
