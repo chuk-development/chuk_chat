@@ -238,8 +238,8 @@ class _MessageBubbleState extends State<MessageBubble>
             ),
           ),
           padding: EdgeInsets.symmetric(
-            horizontal: kPlatformMobile ? 2 : 4,
-            vertical: kPlatformMobile ? 0 : 2,
+            horizontal: kPlatformMobile ? 2 : 6,
+            vertical: kPlatformMobile ? 0 : 4,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -247,12 +247,16 @@ class _MessageBubbleState extends State<MessageBubble>
               return Tooltip(
                 message: action.tooltip,
                 child: IconButton(
-                  icon: Icon(action.icon, color: iconFgColor, size: 15),
-                  padding: EdgeInsets.all(kPlatformMobile ? 4 : 6),
+                  icon: Icon(
+                    action.icon,
+                    color: iconFgColor,
+                    size: kPlatformMobile ? 15 : 17,
+                  ),
+                  padding: EdgeInsets.all(kPlatformMobile ? 4 : 8),
                   visualDensity: VisualDensity.compact,
-                  constraints: const BoxConstraints(
-                    minWidth: 24,
-                    minHeight: 24,
+                  constraints: BoxConstraints(
+                    minWidth: kPlatformMobile ? 24 : 28,
+                    minHeight: kPlatformMobile ? 24 : 28,
                   ),
                   // Desktop has oversized tap targets by default — shrink them.
                   // Mobile was already correct, so leave it untouched.
@@ -290,8 +294,8 @@ class _MessageBubbleState extends State<MessageBubble>
             ),
           ),
           padding: EdgeInsets.symmetric(
-            horizontal: kPlatformMobile ? 2 : 4,
-            vertical: kPlatformMobile ? 0 : 2,
+            horizontal: kPlatformMobile ? 2 : 6,
+            vertical: kPlatformMobile ? 0 : 4,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -299,12 +303,16 @@ class _MessageBubbleState extends State<MessageBubble>
               Tooltip(
                 message: 'Resend edited message',
                 child: IconButton(
-                  icon: Icon(Icons.send, color: iconFgColor, size: 15),
-                  padding: EdgeInsets.all(kPlatformMobile ? 4 : 6),
+                  icon: Icon(
+                    Icons.send,
+                    color: iconFgColor,
+                    size: kPlatformMobile ? 15 : 17,
+                  ),
+                  padding: EdgeInsets.all(kPlatformMobile ? 4 : 8),
                   visualDensity: VisualDensity.compact,
-                  constraints: const BoxConstraints(
-                    minWidth: 24,
-                    minHeight: 24,
+                  constraints: BoxConstraints(
+                    minWidth: kPlatformMobile ? 24 : 28,
+                    minHeight: kPlatformMobile ? 24 : 28,
                   ),
                   style: kPlatformMobile
                       ? null
@@ -319,12 +327,16 @@ class _MessageBubbleState extends State<MessageBubble>
               Tooltip(
                 message: 'Cancel edit',
                 child: IconButton(
-                  icon: Icon(Icons.close, color: iconFgColor, size: 15),
-                  padding: EdgeInsets.all(kPlatformMobile ? 4 : 6),
+                  icon: Icon(
+                    Icons.close,
+                    color: iconFgColor,
+                    size: kPlatformMobile ? 15 : 17,
+                  ),
+                  padding: EdgeInsets.all(kPlatformMobile ? 4 : 8),
                   visualDensity: VisualDensity.compact,
-                  constraints: const BoxConstraints(
-                    minWidth: 24,
-                    minHeight: 24,
+                  constraints: BoxConstraints(
+                    minWidth: kPlatformMobile ? 24 : 28,
+                    minHeight: kPlatformMobile ? 24 : 28,
                   ),
                   style: kPlatformMobile
                       ? null
