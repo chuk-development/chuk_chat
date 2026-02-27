@@ -61,6 +61,7 @@ class MessageBubble extends StatefulWidget {
     this.reasoning,
     this.isReasoningStreaming = false,
     this.modelLabel,
+    this.modelProvider,
     this.tps,
     this.isEditing = false,
     this.initialEditText,
@@ -86,6 +87,7 @@ class MessageBubble extends StatefulWidget {
   final String? reasoning;
   final bool isReasoningStreaming;
   final String? modelLabel;
+  final String? modelProvider;
   final double? tps; // Tokens per second metric
   final bool isEditing;
   final String? initialEditText;
@@ -248,6 +250,9 @@ class _MessageBubbleState extends State<MessageBubble>
                     minWidth: 24,
                     minHeight: 24,
                   ),
+                  style: IconButton.styleFrom(
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
                   onPressed: action.isEnabled ? action.onPressed : null,
                 ),
               );
@@ -290,6 +295,9 @@ class _MessageBubbleState extends State<MessageBubble>
                     minWidth: 24,
                     minHeight: 24,
                   ),
+                  style: IconButton.styleFrom(
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
                   onPressed: canSubmit
                       ? () => widget.onSubmitEdit?.call(_editController.text)
                       : null,
@@ -304,6 +312,9 @@ class _MessageBubbleState extends State<MessageBubble>
                   constraints: const BoxConstraints(
                     minWidth: 24,
                     minHeight: 24,
+                  ),
+                  style: IconButton.styleFrom(
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   onPressed: widget.onCancelEdit,
                 ),
@@ -637,6 +648,9 @@ class _MessageBubbleState extends State<MessageBubble>
   String _buildModelDetails() {
     final buf = StringBuffer();
     buf.writeln('Model: ${widget.modelLabel}');
+    if (widget.modelProvider != null && widget.modelProvider!.isNotEmpty) {
+      buf.writeln('Provider: ${widget.modelProvider}');
+    }
     if (_shouldShowTps) {
       buf.writeln('Speed: ${widget.tps!.toStringAsFixed(1)} tok/s');
     }

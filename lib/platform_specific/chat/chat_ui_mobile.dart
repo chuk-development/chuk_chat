@@ -2560,13 +2560,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     if (normalizedModel.isEmpty && normalizedProvider.isEmpty) {
       return null;
     }
+    // Return just the model name for the card header.
+    // Provider is passed separately via modelProvider parameter.
     if (normalizedModel.isEmpty) {
-      return 'Provider: $normalizedProvider';
+      return normalizedProvider;
     }
-    if (normalizedProvider.isEmpty) {
-      return 'Model: $normalizedModel';
-    }
-    return 'Model: $normalizedModel • Provider: $normalizedProvider';
+    return normalizedModel;
   }
 
   // --- BUILD METHOD ---
@@ -2684,6 +2683,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                                 raw['modelId'],
                                                 raw['provider'],
                                               )
+                                            : null;
+                                        final String? modelProvider =
+                                            isAiMessage
+                                            ? (raw['provider'] ?? '').trim()
                                             : null;
                                         final String? reasoningText =
                                             reasoning.trim().isEmpty
@@ -2804,6 +2807,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                             isReasoningStreaming:
                                                 isStreamingMessage,
                                             modelLabel: modelLabel,
+                                            modelProvider: modelProvider,
                                             tps: tps,
                                             images: images,
                                             attachments: attachments,
@@ -2973,219 +2977,199 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         ? Colors.red.withValues(alpha: 0.3)
         : iconFg.withValues(alpha: 0.15);
 
-    // Two-part layout: text field on top (narrower, grows upward),
-    // button bar on bottom (full width, stays short).
-    // They overlap by 1px so the borders merge seamlessly.
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // ── Text area: narrower, rounded top, grows upward ──
-        Transform.translate(
-          offset: const Offset(0, 1), // overlap 1px into button bar
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 36),
-            decoration: BoxDecoration(
-              color: bg.withValues(alpha: 0.98),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(20),
-              ),
-              border: Border.all(color: borderColor, width: 1),
+    // Original single-row layout. The outer container has no border —
+    // only background + shadow. The TextField in the middle grows upward
+    // while buttons stay short at the bottom (crossAxisAlignment.end).
+    // Only the TextField area shows a visible border that follows its
+    // height, so left/right button areas don't get a tall border.
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: bg.withValues(alpha: 0.98),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          buildTinyIconButton(
+            icon: Icons.add_rounded,
+            onTap: _handleAddAttachmentTap,
+            isActive: hasAttachments,
+            color: iconFg,
+          ),
+          if (widget.imageGenEnabled) ...[
+            const SizedBox(width: 2),
+            buildTinyIconButton(
+              icon: Icons.auto_awesome,
+              onTap: _isGeneratingImage
+                  ? () {}
+                  : () {
+                      setState(() {
+                        _isImageGenMode = !_isImageGenMode;
+                      });
+                      if (kDebugMode) {
+                        debugPrint('Image Gen mode toggled: $_isImageGenMode');
+                      }
+                    },
+              isActive: _isImageGenMode || _isGeneratingImage,
+              color: _isImageGenMode || _isGeneratingImage ? accent : iconFg,
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            child: _audioHandler.isMicActive
-                ? Container(
-                    height: 32,
-                    alignment: Alignment.center,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Row(
-                        children: [
-                          buildRecordingIndicator(),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: buildAudioVisualizer(
-                              audioLevels: _audioHandler.audioLevels,
-                              accentColor: Colors.red,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                : buildKeyboardListener(
-                    focusNode: _rawKeyboardListenerFocusNode,
-                    controller: _controller,
-                    onSend: _isImageGenMode && !_isCurrentChatStreaming
-                        ? _generateImage
-                        : _sendMessage,
-                    child: Scrollbar(
-                      controller: _composerScrollController,
-                      child: Semantics(
-                        identifier: 'message_input',
-                        child: TextField(
-                          controller: _controller,
-                          focusNode: _textFieldFocusNode,
-                          autofocus: false,
-                          keyboardType: TextInputType.multiline,
-                          textInputAction: TextInputAction.newline,
-                          scrollController: _composerScrollController,
-                          style: TextStyle(
-                            color: theme.colorScheme.onSurface,
-                            fontSize: 14,
-                            height: 1.2,
-                          ),
-                          minLines: 1,
-                          maxLines: 6,
-                          decoration: InputDecoration(
-                            hintText: 'Ask me anything',
-                            hintStyle: TextStyle(
-                              color: theme.colorScheme.onSurface.withValues(
-                                alpha: 0.5,
+          ],
+          const SizedBox(width: 2),
+          ModelSelectionDropdown(
+            initialSelectedModelId: _selectedModelId,
+            onModelSelected: (newModelId) {
+              setState(() {
+                _selectedModelId = newModelId;
+              });
+            },
+            textFieldFocusNode: _textFieldFocusNode,
+            isCompactMode: true,
+            compactLabel: '#',
+          ),
+          const SizedBox(width: 2),
+          // TextField in its own bordered container — only this part
+          // grows upward, with its own rounded border that follows
+          // the text height. Left/right buttons stay short outside it.
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: borderColor, width: 1),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: _audioHandler.isMicActive
+                  ? Container(
+                      height: 30,
+                      alignment: Alignment.center,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Row(
+                          children: [
+                            buildRecordingIndicator(),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: buildAudioVisualizer(
+                                audioLevels: _audioHandler.audioLevels,
+                                accentColor: Colors.red,
                               ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : buildKeyboardListener(
+                      focusNode: _rawKeyboardListenerFocusNode,
+                      controller: _controller,
+                      onSend: _isImageGenMode && !_isCurrentChatStreaming
+                          ? _generateImage
+                          : _sendMessage,
+                      child: Scrollbar(
+                        controller: _composerScrollController,
+                        child: Semantics(
+                          identifier: 'message_input',
+                          child: TextField(
+                            controller: _controller,
+                            focusNode: _textFieldFocusNode,
+                            autofocus: false,
+                            keyboardType: TextInputType.multiline,
+                            textInputAction: TextInputAction.newline,
+                            scrollController: _composerScrollController,
+                            style: TextStyle(
+                              color: theme.colorScheme.onSurface,
                               fontSize: 14,
+                              height: 1.2,
                             ),
-                            filled: false,
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 4,
-                              vertical: 6,
+                            minLines: 1,
+                            maxLines: 6,
+                            decoration: InputDecoration(
+                              hintText: 'Ask me anything',
+                              hintStyle: TextStyle(
+                                color: theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.5,
+                                ),
+                                fontSize: 14,
+                              ),
+                              filled: false,
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 8,
+                              ),
+                              isDense: true,
                             ),
-                            isDense: true,
+                            cursorColor: accent,
+                            cursorWidth: 1.5,
                           ),
-                          cursorColor: accent,
-                          cursorWidth: 1.5,
                         ),
                       ),
                     ),
-                  ),
+            ),
           ),
-        ),
-        // ── Button bar: full width, rounded, stays short ──
-        Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: bg.withValues(alpha: 0.98),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: borderColor, width: 1),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.06),
-                blurRadius: 12,
-                offset: const Offset(0, 2),
-              ),
-            ],
+          const SizedBox(width: 4),
+          if (_showFullscreenButton && !_audioHandler.isMicActive) ...[
+            buildTinyIconButton(
+              icon: Icons.fullscreen_rounded,
+              onTap: _openFullscreenEditor,
+              isActive: false,
+              color: iconFg,
+            ),
+            const SizedBox(width: 2),
+          ],
+          buildTinyIconButton(
+            icon: _audioHandler.isMicActive
+                ? Icons.stop_rounded
+                : Icons.mic_rounded,
+            onTap: _handleMicTap,
+            isActive: _audioHandler.isMicActive,
+            color: _audioHandler.isMicActive ? Colors.red : iconFg,
+            semanticsId: 'mic_button',
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: Row(
-            children: [
-              buildTinyIconButton(
-                icon: Icons.add_rounded,
-                onTap: _handleAddAttachmentTap,
-                isActive: hasAttachments,
-                color: iconFg,
-              ),
-              if (widget.imageGenEnabled) ...[
-                const SizedBox(width: 2),
-                buildTinyIconButton(
-                  icon: Icons.auto_awesome,
-                  onTap: _isGeneratingImage
-                      ? () {}
-                      : () {
-                          setState(() {
-                            _isImageGenMode = !_isImageGenMode;
-                          });
-                          if (kDebugMode) {
-                            debugPrint(
-                              'Image Gen mode toggled: $_isImageGenMode',
-                            );
-                          }
-                        },
-                  isActive: _isImageGenMode || _isGeneratingImage,
-                  color: _isImageGenMode || _isGeneratingImage
-                      ? accent
-                      : iconFg,
-                ),
-              ],
-              const SizedBox(width: 2),
-              GestureDetector(
-                onTap: () {},
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 4,
-                  ),
-                  child: ModelSelectionDropdown(
-                    initialSelectedModelId: _selectedModelId,
-                    onModelSelected: (newModelId) {
-                      setState(() {
-                        _selectedModelId = newModelId;
-                      });
-                    },
-                    textFieldFocusNode: _textFieldFocusNode,
-                    isCompactMode: true,
-                    compactLabel: '#',
-                  ),
-                ),
-              ),
-              const Spacer(),
-              if (_showFullscreenButton && !_audioHandler.isMicActive) ...[
-                buildTinyIconButton(
-                  icon: Icons.fullscreen_rounded,
-                  onTap: _openFullscreenEditor,
-                  isActive: false,
-                  color: iconFg,
-                ),
-                const SizedBox(width: 2),
-              ],
-              buildTinyIconButton(
-                icon: _audioHandler.isMicActive
-                    ? Icons.stop_rounded
-                    : Icons.mic_rounded,
-                onTap: _handleMicTap,
-                isActive: _audioHandler.isMicActive,
-                color: _audioHandler.isMicActive ? Colors.red : iconFg,
-                semanticsId: 'mic_button',
-              ),
-              const SizedBox(width: 2),
-              buildTinyActionButton(
-                icon: _audioHandler.isMicActive
-                    ? Icons.send_rounded
-                    : ((_isCurrentChatStreaming || _isSendingMessage)
-                          ? Icons.stop_rounded
-                          : _isImageGenMode
-                          ? Icons.auto_awesome
-                          : (_controller.text.trim().isEmpty && !hasAttachments
-                                ? (kFeatureVoiceMode
-                                      ? Icons.graphic_eq_rounded
-                                      : Icons.arrow_upward_rounded)
-                                : Icons.arrow_upward_rounded)),
-                onTap: _audioHandler.isMicActive
-                    ? _handleAudioSend
-                    : ((_isCurrentChatStreaming || _isSendingMessage)
-                          ? _cancelCurrentOperation
-                          : _isImageGenMode && !_isGeneratingImage
-                          ? _generateImage
-                          : (_controller.text.trim().isEmpty &&
-                                    !hasAttachments &&
-                                    kFeatureVoiceMode
-                                ? () => _openComingSoonFeature('Voice Mode')
-                                : _sendMessage)),
-                color: _audioHandler.isMicActive
-                    ? accent
-                    : ((_isCurrentChatStreaming || _isSendingMessage)
-                          ? Colors.red
-                          : accent),
-                isLoading:
-                    _audioHandler.isTranscribingAudio || _isGeneratingImage,
-                semanticsId: 'send_button',
-              ),
-              const SizedBox(width: 4),
-            ],
+          const SizedBox(width: 2),
+          buildTinyActionButton(
+            icon: _audioHandler.isMicActive
+                ? Icons.send_rounded
+                : ((_isCurrentChatStreaming || _isSendingMessage)
+                      ? Icons.stop_rounded
+                      : _isImageGenMode
+                      ? Icons.auto_awesome
+                      : (_controller.text.trim().isEmpty && !hasAttachments
+                            ? (kFeatureVoiceMode
+                                  ? Icons.graphic_eq_rounded
+                                  : Icons.arrow_upward_rounded)
+                            : Icons.arrow_upward_rounded)),
+            onTap: _audioHandler.isMicActive
+                ? _handleAudioSend
+                : ((_isCurrentChatStreaming || _isSendingMessage)
+                      ? _cancelCurrentOperation
+                      : _isImageGenMode && !_isGeneratingImage
+                      ? _generateImage
+                      : (_controller.text.trim().isEmpty &&
+                                !hasAttachments &&
+                                kFeatureVoiceMode
+                            ? () => _openComingSoonFeature('Voice Mode')
+                            : _sendMessage)),
+            color: _audioHandler.isMicActive
+                ? accent
+                : ((_isCurrentChatStreaming || _isSendingMessage)
+                      ? Colors.red
+                      : accent),
+            isLoading: _audioHandler.isTranscribingAudio || _isGeneratingImage,
+            semanticsId: 'send_button',
           ),
-        ),
-      ],
+          const SizedBox(width: 4),
+        ],
+      ),
     );
   }
 }

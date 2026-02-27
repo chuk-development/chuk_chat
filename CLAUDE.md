@@ -112,9 +112,15 @@ Stale cache? Purge Cloudflare: Dashboard > chuk.chat > Caching > Purge Everythin
 
 ## Creating a Release
 
-1. Bump version in `pubspec.yaml` (e.g. `1.0.24` — no `+buildnumber` suffix)
-2. Commit: `git commit -am "chore: bump version to 1.0.25"`
-3. Tag and push: `git tag v1.0.25 && git push origin master --tags`
+**Default policy:**
+
+- Do **not** run GitHub release workflows for normal coding tasks.
+- Build and validate Linux/Android locally first.
+- Trigger GitHub cross-platform release workflow **only** when the user explicitly asks for a real release.
+
+1. Bump version in `pubspec.yaml` (e.g. `1.0.38` → `1.0.39` — no `+buildnumber` suffix)
+2. Commit: `git commit -am "chore: bump version to 1.0.39"`
+3. Push: `git push origin master`
 4. Trigger CI build (builds Android, Linux x64/ARM64, Windows, macOS):
    ```bash
    gh workflow run build-cross-platform.yml \
@@ -123,11 +129,13 @@ Stale cache? Purge Cloudflare: Dashboard > chuk.chat > Caching > Purge Everythin
      --field build_linux_arm64=true \
      --field build_windows=true \
      --field build_macos=true \
-     --field build_ios=false \
-     --field enable_signing=false
+      --field build_ios=false \
+      --field enable_signing=true
    ```
 5. CI creates the GitHub Release with all artifacts automatically
 6. Web deploys automatically via Dokploy on push to master
+
+**Note:** Do not rely on git tags to trigger releases. Use `workflow_dispatch` for `build-cross-platform.yml`.
 
 ## Privacy: Logging
 
