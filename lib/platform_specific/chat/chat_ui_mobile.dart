@@ -3068,7 +3068,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         : iconFg.withValues(alpha: 0.25);
 
     // Uniform pill height for all three groups.
-    const double pillHeight = 48;
+    const double pillHeight = 46;
 
     // Shared pill decoration for all three groups.
     BoxDecoration pillDecoration({bool isActive = false}) => BoxDecoration(
@@ -3149,7 +3149,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           child: Container(
             constraints: const BoxConstraints(minHeight: pillHeight),
             decoration: pillDecoration(isActive: _audioHandler.isMicActive),
-            padding: const EdgeInsets.symmetric(horizontal: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
             child: _audioHandler.isMicActive
                 ? SizedBox(
                     height: pillHeight - 2, // minus border
@@ -3185,7 +3185,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                           scrollController: _composerScrollController,
                           style: TextStyle(
                             color: theme.colorScheme.onSurface,
-                            fontSize: 14,
+                            fontSize: 15,
                             height: 1.3,
                           ),
                           minLines: 1,
@@ -3196,7 +3196,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                               color: theme.colorScheme.onSurface.withValues(
                                 alpha: 0.5,
                               ),
-                              fontSize: 14,
+                              fontSize: 15,
                             ),
                             filled: false,
                             border: InputBorder.none,
@@ -3204,7 +3204,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                             focusedBorder: InputBorder.none,
                             contentPadding: const EdgeInsets.symmetric(
                               horizontal: 0,
-                              vertical: 9,
+                              vertical: 12,
                             ),
                             isDense: true,
                             // Fullscreen button inside the text field
