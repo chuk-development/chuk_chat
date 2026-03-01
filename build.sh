@@ -82,7 +82,14 @@ extract_app_info() {
     # Package name uses hyphens (chuk-chat), binary name uses underscores (chuk_chat)
     PACKAGE_NAME=$(echo "$APP_NAME" | sed 's/_/-/g')
 
-    print_success "App: $APP_NAME v$VERSION (package: $PACKAGE_NAME)"
+    # Extract patch number as Android build number (e.g. 1.0.39 -> 39)
+    # This ensures --split-per-abi version codes increase when you bump the version
+    BUILD_NUMBER=$(echo "$VERSION" | awk -F. '{print $3}')
+    if [ -z "$BUILD_NUMBER" ] || [ "$BUILD_NUMBER" -lt 1 ] 2>/dev/null; then
+        BUILD_NUMBER=1
+    fi
+
+    print_success "App: $APP_NAME v$VERSION (package: $PACKAGE_NAME, build: $BUILD_NUMBER)"
 }
 
 # Find the best app icon
@@ -473,6 +480,7 @@ build_android() {
 
     if eval flutter build apk --release --split-per-abi \
         $defines \
+        --build-number=$BUILD_NUMBER \
         --tree-shake-icons \
         --split-debug-info=build/android-debug-info \
         --obfuscate; then
@@ -502,6 +510,7 @@ build_android_desktop() {
 
     if eval flutter build apk --release --split-per-abi \
         $defines \
+        --build-number=$BUILD_NUMBER \
         --tree-shake-icons \
         --split-debug-info=build/android-debug-info \
         --obfuscate; then
