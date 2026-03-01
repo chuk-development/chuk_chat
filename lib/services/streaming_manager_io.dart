@@ -6,6 +6,7 @@ import 'package:chuk_chat/models/chat_stream_event.dart';
 import 'package:chuk_chat/services/streaming_chat_service.dart';
 import 'package:chuk_chat/services/streaming_foreground_service.dart';
 import 'package:chuk_chat/services/notification_service.dart';
+import 'package:chuk_chat/utils/tool_parser.dart';
 
 /// Manages multiple concurrent chat streams across different chats
 class StreamingManager {
@@ -508,7 +509,10 @@ class StreamingManager {
         .map((m) => Map<String, dynamic>.from(m))
         .toList();
     if (stream.messageIndex < messages.length) {
-      messages[stream.messageIndex]['text'] = stream.contentBuffer.toString();
+      final rawContent = stream.contentBuffer.toString();
+      messages[stream.messageIndex]['text'] = stripToolCallBlocksForDisplay(
+        rawContent,
+      );
       messages[stream.messageIndex]['reasoning'] = stream.reasoningBuffer
           .toString();
     }

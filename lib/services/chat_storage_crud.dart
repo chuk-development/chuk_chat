@@ -12,6 +12,7 @@ import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/utils/tool_parser.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 
@@ -563,12 +564,18 @@ class ChatStorageCrud {
         role = 'user';
       }
 
+      final rawText = m['text'] as String? ?? '';
+      final text = role == 'assistant'
+          ? stripToolCallBlocksForDisplay(rawText)
+          : rawText;
+
       return ChatMessage(
         role: role,
-        text: m['text'] as String? ?? '',
+        text: text,
         reasoning: m['reasoning'] as String?,
         images: m['images'] as String?,
         attachments: m['attachments'] as String?,
+        toolCalls: m['toolCalls'] as String?,
         modelId: m['modelId'] as String?,
         provider: m['provider'] as String?,
       );

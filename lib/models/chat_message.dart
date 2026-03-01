@@ -11,6 +11,7 @@ class ChatMessage {
     this.imageGeneratedAt,
     this.attachments,
     this.attachedFilesJson,
+    this.toolCalls,
     this.modelId,
     this.provider,
   });
@@ -25,6 +26,7 @@ class ChatMessage {
       imageGeneratedAt: json['imageGeneratedAt'] as String?,
       attachments: json['attachments'] as String?,
       attachedFilesJson: json['attachedFilesJson'] as String?,
+      toolCalls: json['toolCalls'] as String?,
       modelId: json['modelId'] as String?,
       provider: json['provider'] as String?,
     );
@@ -38,6 +40,7 @@ class ChatMessage {
   final String? imageGeneratedAt;
   final String? attachments;
   final String? attachedFilesJson;
+  final String? toolCalls;
   final String? modelId;
   final String? provider;
 
@@ -57,6 +60,7 @@ class ChatMessage {
       'attachments': attachments,
     if (attachedFilesJson != null && attachedFilesJson!.isNotEmpty)
       'attachedFilesJson': attachedFilesJson,
+    if (toolCalls != null && toolCalls!.isNotEmpty) 'toolCalls': toolCalls,
     if (modelId != null && modelId!.isNotEmpty) 'modelId': modelId,
     if (provider != null && provider!.isNotEmpty) 'provider': provider,
   };

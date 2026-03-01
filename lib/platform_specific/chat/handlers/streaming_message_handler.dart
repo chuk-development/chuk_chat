@@ -2,17 +2,22 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/websocket_chat_service.dart';
 import 'package:chuk_chat/services/streaming_manager.dart';
 import 'package:chuk_chat/services/message_composition_service.dart';
+import 'package:chuk_chat/services/tool_call_handler.dart';
+import 'package:chuk_chat/services/tool_image_result_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/models/chat_model.dart';
+import 'package:chuk_chat/utils/tool_parser.dart';
 
 /// Handles message streaming and sending
 class StreamingMessageHandler {
   final StreamingManager _streamingManager = StreamingManager();
+  final ToolCallHandler _toolCallHandler = ToolCallHandler();
 
   // Callbacks
   Function(String)? onShowSnackBar;
@@ -27,15 +32,29 @@ class StreamingMessageHandler {
     double? tps,
   )?
   onMessageFinalize;
+  Function(int index, List<ToolCall> toolCalls, String chatId)?
+  onToolCallsUpdate;
+  Function(
+    int index,
+    List<String> imagePaths,
+    String? imageCostEur,
+    String? imageGeneratedAt,
+    String toolCallsJson,
+    String chatId,
+  )?
+  onToolImagesProcessed;
   Function(String chatId, int index, String content, String reasoning)?
   onBackgroundUpdate;
   Function()? onPaymentRequired;
 
   bool _isStreaming = false;
   bool _isSending = false;
+  bool _isDisposed = false;
+  Future<void>? _activeToolLoopFuture;
 
   bool get isStreaming => _isStreaming;
   bool get isSending => _isSending;
+  Future<void>? get activeToolLoopFuture => _activeToolLoopFuture;
 
   // In-memory cache for resolved Base64 images (storage path -> data URL)
   static final Map<String, String> _imageBase64Cache = {};
@@ -56,7 +75,12 @@ class StreamingMessageHandler {
     bool includeRecentImagesInHistory = true,
     bool includeAllImagesInHistory = false,
     bool includeReasoningInHistory = false,
+    bool toolCallingEnabled = true,
+    bool toolDiscoveryMode = true,
+    bool allowMarkdownToolCalls = true,
   }) async {
+    if (_isDisposed) return;
+
     // Check if THIS specific chat is currently streaming (not some other chat)
     final bool thisChatIsStreaming =
         activeChatId != null && _streamingManager.isStreaming(activeChatId);
@@ -79,6 +103,11 @@ class StreamingMessageHandler {
 
     if (attachedFiles.any((f) => f.isUploading)) {
       onShowSnackBar?.call('Upload in progress');
+      return;
+    }
+
+    if (activeChatId == null || activeChatId.isEmpty) {
+      onShowSnackBar?.call('Cannot send message without an active chat.');
       return;
     }
 
@@ -147,75 +176,205 @@ class StreamingMessageHandler {
     _isStreaming = true;
     onUpdateUI?.call();
 
-    try {
+    final chatId = activeChatId;
+
+    final toolSession = _toolCallHandler.createSession(
+      initialUserMessage: aiPromptContent,
+      history: apiHistory,
+      accessToken: accessToken,
+      baseSystemPrompt: effectiveSystemPrompt,
+      toolCallingEnabled: toolCallingEnabled,
+      discoveryMode: toolDiscoveryMode,
+      allowMarkdownToolCalls: allowMarkdownToolCalls,
+    );
+    final initialSystemPrompt = _toolCallHandler.buildInitialSystemPrompt(
+      toolSession,
+    );
+    const int kMaxStreamingPasses = 20;
+
+    Future<void> startStreamingPass({
+      required String message,
+      required List<Map<String, dynamic>> history,
+      required String? systemPrompt,
+      List<String>? passImages,
+      int currentPass = 0,
+    }) async {
+      if (currentPass >= kMaxStreamingPasses) {
+        const stopMessage =
+            'Tool loop stopped after reaching the safety limit.';
+        if (onMessageFinalize != null) {
+          onMessageFinalize!(placeholderIndex, stopMessage, '', chatId, null);
+        }
+        if (onBackgroundUpdate != null) {
+          onBackgroundUpdate!(chatId, placeholderIndex, stopMessage, '');
+        }
+        _isStreaming = false;
+        _isSending = false;
+        onUpdateUI?.call();
+        return;
+      }
+
       final stream = WebSocketChatService.sendStreamingChat(
         accessToken: accessToken,
-        message: aiPromptContent,
+        message: message,
         modelId: selectedModelId,
         providerSlug: providerSlug,
-        history: apiHistory.isEmpty ? null : apiHistory,
-        systemPrompt: effectiveSystemPrompt,
+        history: history.isEmpty ? null : history,
+        systemPrompt: systemPrompt,
         maxTokens: maxResponseTokens,
-        images: images,
+        images: passImages,
       );
 
-      // Use StreamingManager to handle the stream
       await _streamingManager.startStream(
-        chatId: activeChatId!,
+        chatId: chatId,
         messageIndex: placeholderIndex,
         stream: stream,
         onUpdate: (content, reasoning) {
-          // Update UI for active chat
+          if (_isDisposed) return;
+          final displayContentRaw = stripToolCallBlocksForDisplay(content);
+          final displayContent = displayContentRaw;
+
           if (onMessageUpdate != null) {
             onMessageUpdate!(
               placeholderIndex,
-              content,
+              displayContent,
               reasoning,
-              activeChatId,
+              chatId,
             );
           }
-          // Always persist to database in background
           if (onBackgroundUpdate != null) {
             onBackgroundUpdate!(
-              activeChatId,
+              chatId,
               placeholderIndex,
-              content,
+              displayContent,
               reasoning,
             );
           }
         },
         onComplete: (finalContent, finalReasoning, tps) {
-          if (onMessageFinalize != null) {
-            final effectiveContent = finalContent.isEmpty
-                ? 'The model returned an empty response.'
-                : finalContent;
-            onMessageFinalize!(
-              placeholderIndex,
-              effectiveContent,
-              finalReasoning,
-              activeChatId,
-              tps,
-            );
-          }
-          // Always persist final message to database in background
-          if (onBackgroundUpdate != null) {
-            final effectiveContent = finalContent.isEmpty
-                ? 'The model returned an empty response.'
-                : finalContent;
-            onBackgroundUpdate!(
-              activeChatId,
-              placeholderIndex,
-              effectiveContent,
-              finalReasoning,
-            );
-          }
+          if (_isDisposed) return;
 
-          _isStreaming = false;
-          _isSending = false;
-          onUpdateUI?.call();
+          // onComplete is sync in StreamingManager, so tool-loop continuation
+          // runs asynchronously and is tracked for lifecycle safety.
+          final completionFuture = () async {
+            try {
+              final loopResult = await _toolCallHandler
+                  .processAssistantResponse(
+                    session: toolSession,
+                    content: finalContent,
+                    reasoning: finalReasoning,
+                    onToolCallsUpdated: (toolCalls) {
+                      onToolCallsUpdate?.call(
+                        placeholderIndex,
+                        toolCalls,
+                        chatId,
+                      );
+                    },
+                  );
+
+              if (_isDisposed) return;
+
+              if (loopResult.shouldContinue && loopResult.nextStep != null) {
+                final interimText = loopResult.interimContent?.trim() ?? '';
+
+                if (_isDisposed) return;
+                if (interimText.isNotEmpty && onMessageUpdate != null) {
+                  onMessageUpdate!(
+                    placeholderIndex,
+                    interimText,
+                    finalReasoning,
+                    chatId,
+                  );
+                }
+                if (interimText.isNotEmpty && onBackgroundUpdate != null) {
+                  onBackgroundUpdate!(
+                    chatId,
+                    placeholderIndex,
+                    interimText,
+                    finalReasoning,
+                  );
+                }
+
+                final next = loopResult.nextStep!;
+                // Yield to event loop so interim UI updates can paint first.
+                await Future<void>.delayed(Duration.zero);
+                await startStreamingPass(
+                  message: next.message,
+                  history: next.history,
+                  systemPrompt: next.systemPrompt,
+                  currentPass: currentPass + 1,
+                );
+                return;
+              }
+
+              if (_isDisposed) return;
+
+              // Persist tool-generated images to encrypted storage
+              await _processToolImages(
+                loopResult.toolCalls,
+                placeholderIndex,
+                chatId,
+              );
+
+              final effectiveContent =
+                  (loopResult.finalContent ?? finalContent).isEmpty
+                  ? 'The model returned an empty response.'
+                  : (loopResult.finalContent ?? finalContent);
+              final effectiveReasoning =
+                  loopResult.finalReasoning ?? finalReasoning;
+
+              if (onMessageFinalize != null) {
+                onMessageFinalize!(
+                  placeholderIndex,
+                  effectiveContent,
+                  effectiveReasoning,
+                  chatId,
+                  tps,
+                );
+              }
+              if (onBackgroundUpdate != null) {
+                onBackgroundUpdate!(
+                  chatId,
+                  placeholderIndex,
+                  effectiveContent,
+                  effectiveReasoning,
+                );
+              }
+
+              _isStreaming = false;
+              _isSending = false;
+              onUpdateUI?.call();
+            } catch (error) {
+              if (_isDisposed) return;
+              if (kDebugMode) {
+                debugPrint('Tool loop processing failed: $error');
+              }
+              const userMessage =
+                  'An unexpected error occurred while processing tools.';
+              if (onMessageFinalize != null) {
+                onMessageFinalize!(
+                  placeholderIndex,
+                  userMessage,
+                  '',
+                  chatId,
+                  null,
+                );
+              }
+              onShowSnackBar?.call(
+                'An unexpected error occurred. Please try again.',
+              );
+              _isStreaming = false;
+              _isSending = false;
+              onUpdateUI?.call();
+            }
+          }();
+
+          _activeToolLoopFuture = completionFuture;
+          unawaited(completionFuture);
         },
         onError: (errorMessage) {
-          // Handle 402 Payment Required from API server
+          if (_isDisposed) return;
+
           if (errorMessage == '__PAYMENT_REQUIRED__') {
             final paymentMessage =
                 'You have used all free messages. Please subscribe to continue chatting.';
@@ -224,18 +383,12 @@ class StreamingMessageHandler {
                 placeholderIndex,
                 paymentMessage,
                 '',
-                activeChatId,
+                chatId,
                 null,
               );
             }
-            // Persist to database for consistency
             if (onBackgroundUpdate != null) {
-              onBackgroundUpdate!(
-                activeChatId,
-                placeholderIndex,
-                paymentMessage,
-                '',
-              );
+              onBackgroundUpdate!(chatId, placeholderIndex, paymentMessage, '');
             }
             _isStreaming = false;
             _isSending = false;
@@ -249,7 +402,7 @@ class StreamingMessageHandler {
               placeholderIndex,
               errorMessage,
               '',
-              activeChatId,
+              chatId,
               null,
             );
           }
@@ -260,20 +413,25 @@ class StreamingMessageHandler {
           onUpdateUI?.call();
         },
       );
+    }
+
+    try {
+      await startStreamingPass(
+        message: aiPromptContent,
+        history: apiHistory,
+        systemPrompt: initialSystemPrompt,
+        passImages: images,
+      );
     } catch (error) {
+      if (_isDisposed) return;
       if (kDebugMode) {
         debugPrint('Failed to start stream: $error');
       }
+      const failureMessage = 'Failed to start streaming. Please try again.';
       if (onMessageFinalize != null) {
-        onMessageFinalize!(
-          placeholderIndex,
-          'Failed to start streaming: $error',
-          '',
-          activeChatId!,
-          null,
-        );
+        onMessageFinalize!(placeholderIndex, failureMessage, '', chatId, null);
       }
-      onShowSnackBar?.call('Failed to start streaming: $error');
+      onShowSnackBar?.call(failureMessage);
 
       _isStreaming = false;
       _isSending = false;
@@ -293,6 +451,48 @@ class StreamingMessageHandler {
       _isSending = false;
       onShowSnackBar?.call('Response cancelled');
       onUpdateUI?.call();
+    }
+  }
+
+  /// Download tool-generated images, encrypt, and persist to Supabase storage.
+  Future<void> _processToolImages(
+    List<ToolCall> toolCalls,
+    int index,
+    String chatId,
+  ) async {
+    if (toolCalls.isEmpty || _isDisposed) return;
+
+    final hasImages = toolCalls.any(
+      (c) =>
+          c.result != null &&
+          (c.result!.startsWith('IMAGE:') ||
+              c.result!.startsWith('IMAGE_DATA:')),
+    );
+    if (!hasImages) return;
+
+    try {
+      final imageResult = await ToolImageResultService.processToolCalls(
+        toolCalls,
+      );
+
+      if (imageResult.imagePaths.isEmpty || _isDisposed) return;
+
+      final updatedToolCallsJson = jsonEncode(
+        imageResult.toolCalls.map((c) => c.toJson()).toList(),
+      );
+
+      onToolImagesProcessed?.call(
+        index,
+        imageResult.imagePaths,
+        imageResult.imageCostEur,
+        imageResult.imageGeneratedAt,
+        updatedToolCallsJson,
+        chatId,
+      );
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Failed to process tool images: $error');
+      }
     }
   }
 
@@ -519,6 +719,8 @@ class StreamingMessageHandler {
 
   /// Dispose resources
   void dispose() {
+    _isDisposed = true;
+    _activeToolLoopFuture = null;
     // StreamingManager is global, don't dispose it
   }
 }

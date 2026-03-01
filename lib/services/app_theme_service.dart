@@ -50,6 +50,12 @@ class AppThemeService extends ChangeNotifier {
   bool _includeAllImagesInHistory = false;
   bool _includeReasoningInHistory = false;
 
+  // Tool-calling preferences
+  bool _toolCallingEnabled = kDefaultToolCallingEnabled;
+  bool _toolDiscoveryMode = kDefaultToolDiscoveryMode;
+  bool _showToolCalls = kDefaultShowToolCalls;
+  bool _allowMarkdownToolCalls = kDefaultAllowMarkdownToolCalls;
+
   // Keys for SharedPreferences
   static const String _kThemeModeKey = 'themeMode';
   static const String _kAccentColorKey = 'accentColor';
@@ -72,6 +78,10 @@ class AppThemeService extends ChangeNotifier {
       'includeAllImagesInHistory';
   static const String _kIncludeReasoningInHistoryKey =
       'includeReasoningInHistory';
+  static const String _kToolCallingEnabledKey = 'toolCallingEnabled';
+  static const String _kToolDiscoveryModeKey = 'toolDiscoveryMode';
+  static const String _kShowToolCallsKey = 'showToolCalls';
+  static const String _kAllowMarkdownToolCallsKey = 'allowMarkdownToolCalls';
 
   // Performance optimizations
   SharedPreferences? _cachedPrefs;
@@ -97,6 +107,10 @@ class AppThemeService extends ChangeNotifier {
   bool get includeRecentImagesInHistory => _includeRecentImagesInHistory;
   bool get includeAllImagesInHistory => _includeAllImagesInHistory;
   bool get includeReasoningInHistory => _includeReasoningInHistory;
+  bool get toolCallingEnabled => _toolCallingEnabled;
+  bool get toolDiscoveryMode => _toolDiscoveryMode;
+  bool get showToolCalls => _showToolCalls;
+  bool get allowMarkdownToolCalls => _allowMarkdownToolCalls;
   bool get hasAppliedSupabaseTheme => _hasAppliedSupabaseTheme;
 
   ThemeData? get cachedThemeData => _cachedThemeData;
@@ -145,6 +159,14 @@ class AppThemeService extends ChangeNotifier {
         prefs.getBool(_kIncludeAllImagesInHistoryKey) ?? false;
     _includeReasoningInHistory =
         prefs.getBool(_kIncludeReasoningInHistoryKey) ?? false;
+    _toolCallingEnabled =
+        prefs.getBool(_kToolCallingEnabledKey) ?? kDefaultToolCallingEnabled;
+    _toolDiscoveryMode =
+        prefs.getBool(_kToolDiscoveryModeKey) ?? kDefaultToolDiscoveryMode;
+    _showToolCalls = prefs.getBool(_kShowToolCallsKey) ?? kDefaultShowToolCalls;
+    _allowMarkdownToolCalls =
+        prefs.getBool(_kAllowMarkdownToolCallsKey) ??
+        kDefaultAllowMarkdownToolCalls;
 
     _cachedThemeData = null;
     notifyListeners();
@@ -191,6 +213,10 @@ class AppThemeService extends ChangeNotifier {
         customizationPrefs.includeRecentImagesInHistory;
     _includeAllImagesInHistory = customizationPrefs.includeAllImagesInHistory;
     _includeReasoningInHistory = customizationPrefs.includeReasoningInHistory;
+    _toolCallingEnabled = customizationPrefs.toolCallingEnabled;
+    _toolDiscoveryMode = customizationPrefs.toolDiscoveryMode;
+    _showToolCalls = customizationPrefs.showToolCalls;
+    _allowMarkdownToolCalls = customizationPrefs.allowMarkdownToolCalls;
     _hasAppliedSupabaseTheme = true;
     _cachedThemeData = null;
 
@@ -230,6 +256,10 @@ class AppThemeService extends ChangeNotifier {
       ),
       prefs.setBool(_kIncludeAllImagesInHistoryKey, _includeAllImagesInHistory),
       prefs.setBool(_kIncludeReasoningInHistoryKey, _includeReasoningInHistory),
+      prefs.setBool(_kToolCallingEnabledKey, _toolCallingEnabled),
+      prefs.setBool(_kToolDiscoveryModeKey, _toolDiscoveryMode),
+      prefs.setBool(_kShowToolCallsKey, _showToolCalls),
+      prefs.setBool(_kAllowMarkdownToolCallsKey, _allowMarkdownToolCalls),
     ]);
   }
 
@@ -287,6 +317,10 @@ class AppThemeService extends ChangeNotifier {
       includeRecentImagesInHistory: _includeRecentImagesInHistory,
       includeAllImagesInHistory: _includeAllImagesInHistory,
       includeReasoningInHistory: _includeReasoningInHistory,
+      toolCallingEnabled: _toolCallingEnabled,
+      toolDiscoveryMode: _toolDiscoveryMode,
+      showToolCalls: _showToolCalls,
+      allowMarkdownToolCalls: _allowMarkdownToolCalls,
     );
 
     try {
@@ -400,6 +434,30 @@ class AppThemeService extends ChangeNotifier {
 
   void setIncludeReasoningInHistory(bool value) {
     _includeReasoningInHistory = value;
+    notifyListeners();
+    _debouncedSyncCustomization();
+  }
+
+  void setToolCallingEnabled(bool value) {
+    _toolCallingEnabled = value;
+    notifyListeners();
+    _debouncedSyncCustomization();
+  }
+
+  void setToolDiscoveryMode(bool value) {
+    _toolDiscoveryMode = value;
+    notifyListeners();
+    _debouncedSyncCustomization();
+  }
+
+  void setShowToolCalls(bool value) {
+    _showToolCalls = value;
+    notifyListeners();
+    _debouncedSyncCustomization();
+  }
+
+  void setAllowMarkdownToolCalls(bool value) {
+    _allowMarkdownToolCalls = value;
     notifyListeners();
     _debouncedSyncCustomization();
   }

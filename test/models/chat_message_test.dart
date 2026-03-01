@@ -23,6 +23,7 @@ void main() {
         images: 'path/to/image.enc',
         attachments: 'file.pdf',
         attachedFilesJson: '[]',
+        toolCalls: '[{"name":"web_search","status":"completed"}]',
         modelId: 'gpt-4',
         provider: 'openai',
       );
@@ -30,6 +31,10 @@ void main() {
       expect(msg.images, equals('path/to/image.enc'));
       expect(msg.attachments, equals('file.pdf'));
       expect(msg.attachedFilesJson, equals('[]'));
+      expect(
+        msg.toolCalls,
+        equals('[{"name":"web_search","status":"completed"}]'),
+      );
       expect(msg.modelId, equals('gpt-4'));
       expect(msg.provider, equals('openai'));
     });
@@ -54,10 +59,7 @@ void main() {
 
   group('fromJson', () {
     test('basic fields', () {
-      final msg = ChatMessage.fromJson({
-        'role': 'user',
-        'text': 'Hello world',
-      });
+      final msg = ChatMessage.fromJson({'role': 'user', 'text': 'Hello world'});
       expect(msg.role, equals('user'));
       expect(msg.text, equals('Hello world'));
     });
@@ -97,6 +99,7 @@ void main() {
         'images': 'user123/img.enc',
         'attachments': 'doc.pdf',
         'attachedFilesJson': '[{"id":"1"}]',
+        'toolCalls': '[{"name":"web_crawl","status":"completed"}]',
         'modelId': 'claude-3',
         'provider': 'anthropic',
       });
@@ -104,6 +107,10 @@ void main() {
       expect(msg.images, equals('user123/img.enc'));
       expect(msg.attachments, equals('doc.pdf'));
       expect(msg.attachedFilesJson, equals('[{"id":"1"}]'));
+      expect(
+        msg.toolCalls,
+        equals('[{"name":"web_crawl","status":"completed"}]'),
+      );
       expect(msg.modelId, equals('claude-3'));
       expect(msg.provider, equals('anthropic'));
     });
@@ -136,11 +143,16 @@ void main() {
         role: 'assistant',
         text: 'Reply',
         reasoning: 'thought',
+        toolCalls: '[{"name":"calculate","status":"completed"}]',
         modelId: 'gpt-4',
         provider: 'openai',
       );
       final json = msg.toJson();
       expect(json['reasoning'], equals('thought'));
+      expect(
+        json['toolCalls'],
+        equals('[{"name":"calculate","status":"completed"}]'),
+      );
       expect(json['modelId'], equals('gpt-4'));
       expect(json['provider'], equals('openai'));
     });
@@ -169,6 +181,7 @@ void main() {
         images: 'path/image.enc',
         attachments: 'doc.pdf',
         attachedFilesJson: '[{"id":"file1"}]',
+        toolCalls: '[{"name":"web_search","result":"ok","status":"completed"}]',
         modelId: 'claude-3-opus',
         provider: 'anthropic',
       );
@@ -182,6 +195,7 @@ void main() {
       expect(restored.images, equals(original.images));
       expect(restored.attachments, equals(original.attachments));
       expect(restored.attachedFilesJson, equals(original.attachedFilesJson));
+      expect(restored.toolCalls, equals(original.toolCalls));
       expect(restored.modelId, equals(original.modelId));
       expect(restored.provider, equals(original.provider));
     });

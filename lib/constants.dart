@@ -20,6 +20,12 @@ const bool kDefaultShowModelInfo = false;
 /* ---------- TPS (TOKENS PER SECOND) DEFAULT ---------- */
 const bool kDefaultShowTps = false;
 
+/* ---------- TOOL CALLING DEFAULTS ---------- */
+const bool kDefaultToolCallingEnabled = true;
+const bool kDefaultToolDiscoveryMode = true;
+const bool kDefaultShowToolCalls = true;
+const bool kDefaultAllowMarkdownToolCalls = true;
+
 /* ---------- THEME BUILDER ---------- */
 ThemeData buildAppTheme({
   required Color accent,
