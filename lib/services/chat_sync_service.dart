@@ -64,6 +64,13 @@ class ChatSyncService {
     _isEnabled = false;
     _syncTimer?.cancel();
     _syncTimer = null;
+
+    if (_firstSyncCompleter != null && !_firstSyncCompleter!.isCompleted) {
+      _firstSyncCompleter!.completeError(
+        StateError('Chat sync stopped before first sync completed.'),
+      );
+    }
+
     _hasCompletedFirstSync = false; // Reset for next login
     _firstSyncCompleter = null;
     if (kDebugMode) {

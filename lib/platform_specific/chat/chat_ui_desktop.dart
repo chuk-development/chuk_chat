@@ -7,13 +7,14 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/models/chat_model.dart';
-import 'package:chuk_chat/models/chat_stream_event.dart';
+import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/services/message_composition_service.dart';
+import 'package:chuk_chat/services/tool_call_handler.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart'
     show MessageBubble, MessageBubbleAction, DocumentAttachment;
 import 'package:chuk_chat/pages/coming_soon_page.dart';
@@ -23,13 +24,14 @@ import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart'; // NEW
 import 'package:chuk_chat/services/websocket_chat_service.dart';
 import 'package:chuk_chat/services/streaming_manager.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
-import 'package:chuk_chat/services/image_generation_service.dart';
+import 'package:chuk_chat/services/tool_image_result_service.dart';
 import 'package:chuk_chat/constants/file_constants.dart';
 import 'package:chuk_chat/pages/pricing_page.dart';
 import 'package:chuk_chat/widgets/project_panel.dart';
 import 'package:chuk_chat/widgets/project_selection_dropdown.dart';
 import 'package:chuk_chat/services/project_message_service.dart';
 import 'package:chuk_chat/services/title_generation_service.dart';
+import 'package:chuk_chat/utils/tool_parser.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:chuk_chat/utils/io_helper.dart';
@@ -58,6 +60,7 @@ class _MessageRenderData {
     this.imageCostEur,
     this.imageGeneratedAt,
     this.attachments,
+    this.toolCalls,
   });
 
   final String sender;
@@ -71,6 +74,7 @@ class _MessageRenderData {
   final double? imageCostEur;
   final DateTime? imageGeneratedAt;
   final List<DocumentAttachment>? attachments;
+  final List<ToolCall>? toolCalls;
 
   bool get isUser => sender == 'user';
 }
@@ -97,6 +101,11 @@ class ChukChatUIDesktop extends StatefulWidget {
   final bool includeRecentImagesInHistory;
   final bool includeAllImagesInHistory;
   final bool includeReasoningInHistory;
+  // Tool-calling settings
+  final bool toolCallingEnabled;
+  final bool toolDiscoveryMode;
+  final bool showToolCalls;
+  final bool allowMarkdownToolCalls;
 
   const ChukChatUIDesktop({
     // RENAMED CONSTRUCTOR
@@ -119,6 +128,10 @@ class ChukChatUIDesktop extends StatefulWidget {
     this.includeRecentImagesInHistory = true,
     this.includeAllImagesInHistory = false,
     this.includeReasoningInHistory = false,
+    this.toolCallingEnabled = true,
+    this.toolDiscoveryMode = true,
+    this.showToolCalls = true,
+    this.allowMarkdownToolCalls = true,
   });
 
   @override
@@ -144,8 +157,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   String? _selectedProjectId;
   late final VoidCallback _modelSelectionListener;
 
-  bool _isImageGenMode = false; // Image generation mode toggle
-  bool _isGeneratingImage = false; // Loading state for image generation
   bool _isMicActive = false;
   final List<double> _audioLevels = List<double>.filled(
     32,
@@ -163,6 +174,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   bool _isLoadingChat = false; // Loading indicator for chat switching
   StreamSubscription<void>? _providerRefreshSubscription;
   final StreamingManager _streamingManager = StreamingManager();
+  final ToolCallHandler _toolCallHandler = ToolCallHandler();
 
   // Computed property - checks if CURRENT chat is streaming
   bool get _isStreaming =>
@@ -505,6 +517,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                     message.attachedFilesJson!.isNotEmpty) {
                   map['attachedFilesJson'] = message.attachedFilesJson!;
                 }
+                if (message.toolCalls != null &&
+                    message.toolCalls!.isNotEmpty) {
+                  map['toolCalls'] = message.toolCalls!;
+                }
                 return map;
               }),
             );
@@ -578,7 +594,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     setState(() {
       _isLoadingChat = false;
-      _isImageGenMode = false;
       _isMicActive = false;
       _isSending = _isStreaming; // Reset sending state based on current chat
       _showScrollToBottom = false;
@@ -618,7 +633,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _messages.clear();
       _animCtrl.reset();
       _activeChatId = null;
-      _isImageGenMode = false;
       _isMicActive = false;
       _isSending = false; // Reset for new chat
       _attachedFiles.clear();
@@ -1433,24 +1447,40 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     final String? systemPrompt = await _resolveSystemPromptForSend();
 
+    final toolSession = _toolCallHandler.createSession(
+      initialUserMessage: originalUserInput,
+      history: conversationHistory,
+      accessToken: accessToken,
+      baseSystemPrompt: systemPrompt,
+      toolCallingEnabled: widget.toolCallingEnabled,
+      discoveryMode: widget.toolDiscoveryMode,
+      allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
+    );
+    final initialSystemPrompt = _toolCallHandler.buildInitialSystemPrompt(
+      toolSession,
+    );
+
     // Capture chatId for this streaming operation
     final String chatIdForStream = _activeChatId!;
 
-    try {
-      final Stream<ChatStreamEvent> eventStream =
-          WebSocketChatService.sendStreamingChat(
-            accessToken: accessToken,
-            message: originalUserInput,
-            modelId: modelIdToUse,
-            providerSlug: providerToUse ?? 'openai',
-            history: conversationHistory,
-            systemPrompt: systemPrompt,
-            maxTokens: 4096,
-            temperature: 0.7,
-            images: imagesForResend,
-          );
+    Future<void> startStreamPass({
+      required String message,
+      required List<Map<String, dynamic>> history,
+      required String? passSystemPrompt,
+      List<String>? passImages,
+    }) async {
+      final eventStream = WebSocketChatService.sendStreamingChat(
+        accessToken: accessToken,
+        message: message,
+        modelId: modelIdToUse,
+        providerSlug: providerToUse ?? 'openai',
+        history: history,
+        systemPrompt: passSystemPrompt,
+        maxTokens: 4096,
+        temperature: 0.7,
+        images: passImages,
+      );
 
-      // Use StreamingManager for proper tracking
       await _streamingManager.startStream(
         chatId: chatIdForStream,
         messageIndex: placeholderIndex,
@@ -1459,63 +1489,118 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           if (mounted &&
               _isValidMessageIndex(placeholderIndex) &&
               _activeChatId == chatIdForStream) {
+            final displayContent = stripToolCallBlocksForDisplay(content);
+
             setState(() {
-              _messages[placeholderIndex]['text'] = content;
+              _messages[placeholderIndex]['text'] = displayContent;
               _messages[placeholderIndex]['reasoning'] = reasoning;
             });
             _scrollChatToBottom();
           }
         },
         onComplete: (finalContent, finalReasoning, tps) {
-          final effectiveContent = finalContent.isEmpty
-              ? 'No response received.'
-              : finalContent;
-
-          // Check if user is still viewing the same chat
-          if (_activeChatId == chatIdForStream) {
-            // User is still here - normal processing with UI update
-            if (mounted) {
-              setState(() {
-                _isSending = false;
-              });
-            }
-            _finalizeAiMessage(
-              placeholderIndex,
-              effectiveContent,
+          unawaited(() async {
+            final loopResult = await _toolCallHandler.processAssistantResponse(
+              session: toolSession,
+              content: finalContent,
               reasoning: finalReasoning,
-              tps: tps,
+              onToolCallsUpdated: (toolCalls) {
+                _updateToolCallsForMessage(
+                  placeholderIndex,
+                  toolCalls,
+                  chatIdForStream,
+                );
+              },
             );
-            _persistChatWithId(chatIdForStream);
-          } else {
-            // User switched to different chat - use background messages
-            if (kDebugMode) {
-              debugPrint(
-                '[STREAM] User switched away, using background messages for $chatIdForStream',
+
+            if (loopResult.shouldContinue && loopResult.nextStep != null) {
+              final interimText = loopResult.interimContent?.trim() ?? '';
+
+              if (_activeChatId == chatIdForStream) {
+                if (placeholderIndex >= 0 &&
+                    placeholderIndex < _messages.length) {
+                  if (interimText.isNotEmpty) {
+                    _messages[placeholderIndex]['text'] = interimText;
+                  }
+                  _messages[placeholderIndex]['reasoning'] = finalReasoning;
+                }
+                if (mounted) {
+                  setState(() {});
+                }
+                _persistChatWithId(chatIdForStream);
+              } else {
+                final backgroundMsgs = _streamingManager.getBackgroundMessages(
+                  chatIdForStream,
+                );
+                if (backgroundMsgs != null &&
+                    placeholderIndex < backgroundMsgs.length) {
+                  if (interimText.isNotEmpty) {
+                    backgroundMsgs[placeholderIndex]['text'] = interimText;
+                  }
+                  backgroundMsgs[placeholderIndex]['reasoning'] =
+                      finalReasoning;
+                  _persistChatWithIdAndMessages(
+                    chatIdForStream,
+                    backgroundMsgs,
+                  );
+                }
+              }
+
+              final next = loopResult.nextStep!;
+              await Future<void>.delayed(Duration.zero);
+              await startStreamPass(
+                message: next.message,
+                history: next.history,
+                passSystemPrompt: next.systemPrompt,
               );
+              return;
             }
-            final backgroundMsgs = _streamingManager.getBackgroundMessages(
+
+            final resolvedContent = loopResult.finalContent ?? finalContent;
+            final resolvedReasoning =
+                loopResult.finalReasoning ?? finalReasoning;
+            final effectiveContent = resolvedContent.isEmpty
+                ? 'No response received.'
+                : resolvedContent;
+
+            // Persist tool-generated images to encrypted storage
+            await _processToolImages(
+              loopResult.toolCalls,
+              placeholderIndex,
               chatIdForStream,
             );
-            if (backgroundMsgs != null &&
-                placeholderIndex < backgroundMsgs.length) {
-              backgroundMsgs[placeholderIndex]['text'] = effectiveContent;
-              backgroundMsgs[placeholderIndex]['reasoning'] = finalReasoning;
-              if (tps != null)
-                backgroundMsgs[placeholderIndex]['tps'] = tps.toString();
-              _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
+
+            if (_activeChatId == chatIdForStream) {
+              if (mounted) {
+                setState(() {
+                  _isSending = false;
+                });
+              }
+              _finalizeAiMessage(
+                placeholderIndex,
+                effectiveContent,
+                reasoning: resolvedReasoning,
+                tps: tps,
+              );
+              _persistChatWithId(chatIdForStream);
             } else {
-              // No background messages - this shouldn't happen if snapshot was made correctly
-              // DO NOT use _persistChatWithId here as _messages belongs to a DIFFERENT chat!
-              if (kDebugMode) {
-                debugPrint(
-                  '[STREAM] WARNING: No background messages for $chatIdForStream - stream result may be lost',
-                );
+              final backgroundMsgs = _streamingManager.getBackgroundMessages(
+                chatIdForStream,
+              );
+              if (backgroundMsgs != null &&
+                  placeholderIndex < backgroundMsgs.length) {
+                backgroundMsgs[placeholderIndex]['text'] = effectiveContent;
+                backgroundMsgs[placeholderIndex]['reasoning'] =
+                    resolvedReasoning;
+                if (tps != null) {
+                  backgroundMsgs[placeholderIndex]['tps'] = tps.toString();
+                }
+                _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
               }
             }
-          }
+          }());
         },
         onError: (errorMessage) {
-          // Handle 402 Payment Required from API server
           if (errorMessage == '__PAYMENT_REQUIRED__') {
             final paymentMessage =
                 'You have used all free messages. Please subscribe to continue chatting.';
@@ -1528,7 +1613,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               }
               _persistChatWithId(chatIdForStream);
             } else {
-              // User switched chats - use background messages
               final backgroundMsgs = _streamingManager.getBackgroundMessages(
                 chatIdForStream,
               );
@@ -1543,9 +1627,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             return;
           }
 
-          // Check if user is still viewing the same chat
           if (_activeChatId == chatIdForStream) {
-            // User is still here - normal processing with UI update
             if (mounted) {
               setState(() {
                 _isSending = false;
@@ -1554,12 +1636,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             _finalizeAiMessage(placeholderIndex, 'Error: $errorMessage');
             _persistChatWithId(chatIdForStream);
           } else {
-            // User switched to different chat - use background messages
-            if (kDebugMode) {
-              debugPrint(
-                '[STREAM] Error occurred, user switched away, using background messages for $chatIdForStream',
-              );
-            }
             final backgroundMsgs = _streamingManager.getBackgroundMessages(
               chatIdForStream,
             );
@@ -1568,16 +1644,18 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               backgroundMsgs[placeholderIndex]['text'] = 'Error: $errorMessage';
               backgroundMsgs[placeholderIndex]['reasoning'] = '';
               _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
-            } else {
-              // No background messages - DO NOT persist wrong messages
-              if (kDebugMode) {
-                debugPrint(
-                  '[STREAM] WARNING: No background messages for error in $chatIdForStream',
-                );
-              }
             }
           }
         },
+      );
+    }
+
+    try {
+      await startStreamPass(
+        message: originalUserInput,
+        history: conversationHistory,
+        passSystemPrompt: initialSystemPrompt,
+        passImages: imagesForResend,
       );
     } catch (e) {
       if (kDebugMode) {
@@ -1802,139 +1880,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     }
   }
 
-  /// Generate an image from the current text prompt
-  Future<void> _generateImage() async {
-    final String prompt = _controller.text.trim();
-    if (prompt.isEmpty) {
-      _showSnackBar('Please enter a prompt to generate an image.');
-      return;
-    }
-
-    if (_isGeneratingImage || _isStreaming || _isSending) {
-      _showSnackBar('Please wait for the current operation to complete.');
-      return;
-    }
-
-    // Generate chat ID if needed (new chat)
-    if (_activeChatId == null) {
-      _activeChatId = _uuid.v4();
-      if (kDebugMode) {
-        debugPrint('🆔 [ImageGen] PRE-GENERATED Chat ID: $_activeChatId');
-      }
-    }
-
-    final bool firstMessageInChat = _messages.isEmpty;
-    int placeholderIndex = -1;
-
-    setState(() {
-      _isGeneratingImage = true;
-      // Add user message with the prompt
-      _messages.add({'sender': 'user', 'text': prompt, 'reasoning': ''});
-      _controller.clear();
-      // Add AI placeholder message
-      _messages.add({
-        'sender': 'ai',
-        'text': 'Generating image...',
-        'reasoning': '',
-      });
-      placeholderIndex = _messages.length - 1;
-    });
-
-    if (firstMessageInChat) _animCtrl.forward();
-    _scrollChatToBottom(force: true);
-
-    try {
-      // Determine size settings
-      String? sizePreset;
-      int? customWidth;
-      int? customHeight;
-
-      if (widget.imageGenUseCustomSize) {
-        customWidth = widget.imageGenCustomWidth;
-        customHeight = widget.imageGenCustomHeight;
-      } else {
-        sizePreset = widget.imageGenDefaultSize;
-      }
-
-      final result = await ImageGenerationService.generateImage(
-        prompt: prompt,
-        sizePreset: sizePreset,
-        customWidth: customWidth,
-        customHeight: customHeight,
-        storeEncrypted: true,
-      );
-
-      if (!mounted) return;
-
-      if (result.success) {
-        // Update AI message with generated image
-        setState(() {
-          final aiMessage = <String, String>{
-            'sender': 'ai',
-            'text': '', // No text, just image
-            'reasoning': '',
-          };
-
-          // Store the encrypted path for persistence
-          if (result.encryptedPath != null) {
-            aiMessage['images'] = jsonEncode([result.encryptedPath!]);
-          }
-
-          if (result.costEur != null) {
-            aiMessage['imageCostEur'] = result.costEur!.toStringAsFixed(2);
-          }
-          aiMessage['imageGeneratedAt'] = DateTime.now()
-              .toUtc()
-              .toIso8601String();
-
-          if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
-            _messages[placeholderIndex] = aiMessage;
-          }
-          _isGeneratingImage = false;
-          _isImageGenMode = false; // Turn off image gen mode after success
-        });
-
-        _persistChat();
-        _scrollChatToBottom(force: true);
-        _showSnackBar('Image generated successfully!');
-      } else {
-        // Handle error
-        setState(() {
-          if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
-            _messages[placeholderIndex]['text'] =
-                'Error: ${result.errorMessage ?? "Image generation failed"}';
-          }
-          _isGeneratingImage = false;
-        });
-
-        _persistChat();
-
-        // Check if it's a payment error
-        if (result.errorMessage?.contains('credits') == true ||
-            result.errorMessage?.contains('Insufficient') == true) {
-          _showInsufficientCreditsDialog();
-        } else {
-          _showSnackBar(result.errorMessage ?? 'Image generation failed');
-        }
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('Image generation error: $e');
-      }
-      if (!mounted) return;
-
-      setState(() {
-        if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
-          _messages[placeholderIndex]['text'] = 'Error: $e';
-        }
-        _isGeneratingImage = false;
-      });
-
-      _persistChat();
-      _showSnackBar('Image generation failed: $e');
-    }
-  }
-
   /// Show dialog when API returns 402 (free messages exhausted)
   void _showPaymentRequiredDialog() {
     if (!mounted) return;
@@ -1969,77 +1914,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             const SizedBox(height: 12),
             Text(
               'Subscribe to get €16 in monthly AI credits for chat messages and image generation.',
-              style: TextStyle(
-                fontSize: 14,
-                color: theme.textTheme.bodyMedium?.color?.withValues(
-                  alpha: 0.8,
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Maybe Later'),
-          ),
-          ElevatedButton.icon(
-            icon: const Icon(Icons.rocket_launch, size: 18),
-            label: const Text('Subscribe Now'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: theme.colorScheme.primary,
-              foregroundColor: theme.colorScheme.onPrimary,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            onPressed: () {
-              Navigator.pop(dialogContext);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const PricingPage()),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Show dialog when user has insufficient credits for image generation
-  void _showInsufficientCreditsDialog() {
-    if (!mounted) return;
-    final theme = Theme.of(context);
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Icon(
-              Icons.auto_awesome,
-              color: theme.colorScheme.primary,
-              size: 28,
-            ),
-            const SizedBox(width: 12),
-            const Text('Insufficient Credits'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Image generation requires credits.',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: theme.textTheme.bodyLarge?.color,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Subscribe to get credits for AI image generation and chat messages.',
               style: TextStyle(
                 fontSize: 14,
                 color: theme.textTheme.bodyMedium?.color?.withValues(
@@ -2386,215 +2260,296 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       }
     });
 
-    try {
+    final toolSession = _toolCallHandler.createSession(
+      initialUserMessage: aiPromptContent,
+      history: apiHistory,
+      accessToken: accessToken,
+      baseSystemPrompt: systemPrompt,
+      toolCallingEnabled: widget.toolCallingEnabled,
+      discoveryMode: widget.toolDiscoveryMode,
+      allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
+    );
+    final initialSystemPrompt = _toolCallHandler.buildInitialSystemPrompt(
+      toolSession,
+    );
+
+    Future<void> startStreamPass({
+      required String message,
+      required List<Map<String, dynamic>> history,
+      required String? passSystemPrompt,
+      List<String>? passImages,
+    }) async {
       final stream = WebSocketChatService.sendStreamingChat(
         accessToken: accessToken,
-        message: aiPromptContent,
+        message: message,
         modelId: _selectedModelId,
         providerSlug: providerSlug,
-        history: apiHistory.isEmpty ? null : apiHistory,
-        systemPrompt: systemPrompt,
+        history: history.isEmpty ? null : history,
+        systemPrompt: passSystemPrompt,
         maxTokens: maxResponseTokens,
-        images: imageDataUrls,
+        images: passImages,
       );
 
-      // Use StreamingManager for proper multi-chat streaming support
-      unawaited(
-        _streamingManager.startStream(
-          chatId: chatIdForStream,
-          messageIndex: placeholderIndex,
-          stream: stream,
-          onUpdate: (content, reasoning) {
-            // ONLY update _messages if user is still viewing the SAME chat
-            // If user switched chats, _messages now belongs to a DIFFERENT chat!
-            // The streaming content is already buffered in StreamingManager.
-            if (mounted && _activeChatId == chatIdForStream) {
-              if (placeholderIndex >= 0 &&
-                  placeholderIndex < _messages.length) {
-                _messages[placeholderIndex]['text'] = content;
-                _messages[placeholderIndex]['reasoning'] = reasoning;
-              }
-              _updateAiMessage(placeholderIndex, content, reasoning);
-              _scrollChatToBottom();
+      await _streamingManager.startStream(
+        chatId: chatIdForStream,
+        messageIndex: placeholderIndex,
+        stream: stream,
+        onUpdate: (content, reasoning) {
+          if (mounted && _activeChatId == chatIdForStream) {
+            final displayContent = stripToolCallBlocksForDisplay(content);
+            if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
+              _messages[placeholderIndex]['text'] = displayContent;
+              _messages[placeholderIndex]['reasoning'] = reasoning;
             }
-          },
-          onComplete: (finalContent, finalReasoning, tps) {
+            _updateAiMessage(placeholderIndex, displayContent, reasoning);
+            _scrollChatToBottom();
+          }
+        },
+        onComplete: (finalContent, finalReasoning, tps) {
+          unawaited(() async {
             if (kDebugMode) {
               debugPrint('Stream completed for chat $chatIdForStream');
             }
-            _autoSaveTimer?.cancel();
-            // RELEASE GLOBAL LOCK when stream completes
-            ChatStorageService.isMessageOperationInProgress = false;
-            if (kDebugMode) {
-              debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (stream done)');
-            }
 
-            final effectiveContent = finalContent.isEmpty
-                ? 'The model returned an empty response.'
-                : finalContent;
+            try {
+              final loopResult = await _toolCallHandler
+                  .processAssistantResponse(
+                    session: toolSession,
+                    content: finalContent,
+                    reasoning: finalReasoning,
+                    onToolCallsUpdated: (toolCalls) {
+                      _updateToolCallsForMessage(
+                        placeholderIndex,
+                        toolCalls,
+                        chatIdForStream,
+                      );
+                    },
+                  );
 
-            // Check if user is still viewing the SAME chat
-            if (_activeChatId == chatIdForStream) {
-              // User is still here - update _messages and UI
-              if (placeholderIndex >= 0 &&
-                  placeholderIndex < _messages.length) {
-                _messages[placeholderIndex]['text'] = effectiveContent;
-                _messages[placeholderIndex]['reasoning'] = finalReasoning;
-                if (tps != null)
-                  _messages[placeholderIndex]['tps'] = tps.toString();
+              if (loopResult.shouldContinue && loopResult.nextStep != null) {
+                final interimText = loopResult.interimContent?.trim() ?? '';
+
+                if (_activeChatId == chatIdForStream) {
+                  if (placeholderIndex >= 0 &&
+                      placeholderIndex < _messages.length) {
+                    if (interimText.isNotEmpty) {
+                      _messages[placeholderIndex]['text'] = interimText;
+                    }
+                    _messages[placeholderIndex]['reasoning'] = finalReasoning;
+                  }
+                  if (mounted) {
+                    setState(() {});
+                  }
+                  _persistChatWithId(chatIdForStream);
+                } else {
+                  final backgroundMsgs = _streamingManager
+                      .getBackgroundMessages(chatIdForStream);
+                  if (backgroundMsgs != null &&
+                      placeholderIndex < backgroundMsgs.length) {
+                    if (interimText.isNotEmpty) {
+                      backgroundMsgs[placeholderIndex]['text'] = interimText;
+                    }
+                    backgroundMsgs[placeholderIndex]['reasoning'] =
+                        finalReasoning;
+                    _persistChatWithIdAndMessages(
+                      chatIdForStream,
+                      backgroundMsgs,
+                    );
+                  }
+                }
+
+                final next = loopResult.nextStep!;
+                await Future<void>.delayed(Duration.zero);
+                await startStreamPass(
+                  message: next.message,
+                  history: next.history,
+                  passSystemPrompt: next.systemPrompt,
+                );
+                return;
               }
-              if (mounted) {
-                setState(() {
-                  _isSending = false;
-                });
-              }
-              _finalizeAiMessage(
-                placeholderIndex,
-                effectiveContent,
-                reasoning: finalReasoning,
-                tps: tps,
-              );
-              _persistChatWithId(chatIdForStream);
-            } else {
-              // User switched to a DIFFERENT chat - use background messages
-              // DO NOT touch _messages as it belongs to the other chat!
-              // DO NOT touch _isSending as it's the other chat's state!
+
+              _autoSaveTimer?.cancel();
+              ChatStorageService.isMessageOperationInProgress = false;
               if (kDebugMode) {
                 debugPrint(
-                  '[STREAM] User switched away, using background messages for $chatIdForStream',
+                  '🔓 [SendMessage] GLOBAL LOCK RELEASED (stream done)',
                 );
               }
-              final backgroundMsgs = _streamingManager.getBackgroundMessages(
+
+              final resolvedContent = loopResult.finalContent ?? finalContent;
+              final resolvedReasoning =
+                  loopResult.finalReasoning ?? finalReasoning;
+              final effectiveContent = resolvedContent.isEmpty
+                  ? 'The model returned an empty response.'
+                  : resolvedContent;
+
+              // Persist tool-generated images to encrypted storage
+              await _processToolImages(
+                loopResult.toolCalls,
+                placeholderIndex,
                 chatIdForStream,
               );
-              if (backgroundMsgs != null &&
-                  placeholderIndex < backgroundMsgs.length) {
-                backgroundMsgs[placeholderIndex]['text'] = effectiveContent;
-                backgroundMsgs[placeholderIndex]['reasoning'] = finalReasoning;
-                if (tps != null)
-                  backgroundMsgs[placeholderIndex]['tps'] = tps.toString();
-                _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
-              } else {
-                if (kDebugMode) {
-                  debugPrint(
-                    '[STREAM] WARNING: No background messages for $chatIdForStream - stream result may be lost',
-                  );
-                }
-              }
-            }
-          },
-          onError: (errorMessage) {
-            if (kDebugMode) {
-              debugPrint(
-                'Stream error for chat $chatIdForStream: $errorMessage',
-              );
-            }
-            _autoSaveTimer?.cancel();
-            // RELEASE GLOBAL LOCK on error
-            ChatStorageService.isMessageOperationInProgress = false;
-            if (kDebugMode) {
-              debugPrint(
-                '🔓 [SendMessage] GLOBAL LOCK RELEASED (stream error)',
-              );
-            }
 
-            // Handle 402 Payment Required from API server
-            if (errorMessage == '__PAYMENT_REQUIRED__') {
-              final paymentMessage =
-                  'You have used all free messages. Please subscribe to continue chatting.';
               if (_activeChatId == chatIdForStream) {
-                _finalizeAiMessage(placeholderIndex, paymentMessage);
+                if (placeholderIndex >= 0 &&
+                    placeholderIndex < _messages.length) {
+                  _messages[placeholderIndex]['text'] = effectiveContent;
+                  _messages[placeholderIndex]['reasoning'] = resolvedReasoning;
+                  if (tps != null) {
+                    _messages[placeholderIndex]['tps'] = tps.toString();
+                  }
+                }
                 if (mounted) {
                   setState(() {
                     _isSending = false;
                   });
                 }
+                _finalizeAiMessage(
+                  placeholderIndex,
+                  effectiveContent,
+                  reasoning: resolvedReasoning,
+                  tps: tps,
+                );
                 _persistChatWithId(chatIdForStream);
               } else {
-                // User switched chats - use background messages
                 final backgroundMsgs = _streamingManager.getBackgroundMessages(
                   chatIdForStream,
                 );
                 if (backgroundMsgs != null &&
                     placeholderIndex < backgroundMsgs.length) {
-                  backgroundMsgs[placeholderIndex]['text'] = paymentMessage;
-                  backgroundMsgs[placeholderIndex]['reasoning'] = '';
+                  backgroundMsgs[placeholderIndex]['text'] = effectiveContent;
+                  backgroundMsgs[placeholderIndex]['reasoning'] =
+                      resolvedReasoning;
+                  if (tps != null) {
+                    backgroundMsgs[placeholderIndex]['tps'] = tps.toString();
+                  }
                   _persistChatWithIdAndMessages(
                     chatIdForStream,
                     backgroundMsgs,
                   );
                 }
               }
-              _showPaymentRequiredDialog();
-              return;
-            }
+            } catch (error) {
+              _autoSaveTimer?.cancel();
+              ChatStorageService.isMessageOperationInProgress = false;
 
-            final errorText = 'Error: $errorMessage';
-
-            // Check if user is still viewing the SAME chat
-            if (_activeChatId == chatIdForStream) {
-              // User is still here - update _messages and UI
-              if (placeholderIndex >= 0 &&
-                  placeholderIndex < _messages.length) {
-                _messages[placeholderIndex]['text'] = errorText;
+              final errorText = 'Error: $error';
+              if (_activeChatId == chatIdForStream) {
+                if (mounted) {
+                  setState(() {
+                    _isSending = false;
+                  });
+                }
+                _finalizeAiMessage(placeholderIndex, errorText);
+                _persistChatWithId(chatIdForStream);
+              } else {
+                final backgroundMsgs = _streamingManager.getBackgroundMessages(
+                  chatIdForStream,
+                );
+                if (backgroundMsgs != null &&
+                    placeholderIndex < backgroundMsgs.length) {
+                  backgroundMsgs[placeholderIndex]['text'] = errorText;
+                  _persistChatWithIdAndMessages(
+                    chatIdForStream,
+                    backgroundMsgs,
+                  );
+                }
               }
+            }
+          }());
+        },
+        onError: (errorMessage) {
+          if (kDebugMode) {
+            debugPrint('Stream error for chat $chatIdForStream: $errorMessage');
+          }
+          _autoSaveTimer?.cancel();
+          ChatStorageService.isMessageOperationInProgress = false;
+          if (kDebugMode) {
+            debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (stream error)');
+          }
+
+          if (errorMessage == '__PAYMENT_REQUIRED__') {
+            final paymentMessage =
+                'You have used all free messages. Please subscribe to continue chatting.';
+            if (_activeChatId == chatIdForStream) {
+              _finalizeAiMessage(placeholderIndex, paymentMessage);
               if (mounted) {
                 setState(() {
                   _isSending = false;
                 });
               }
-              _finalizeAiMessage(placeholderIndex, errorText);
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      errorMessage,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    behavior: SnackBarBehavior.floating,
-                    margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    duration: const Duration(seconds: 2),
-                    dismissDirection: DismissDirection.horizontal,
-                  ),
-                );
-              }
               _persistChatWithId(chatIdForStream);
             } else {
-              // User switched to a DIFFERENT chat - use background messages
-              // DO NOT touch _messages as it belongs to the other chat!
-              // DO NOT touch _isSending as it's the other chat's state!
-              if (kDebugMode) {
-                debugPrint(
-                  '[STREAM] User switched away during error, using background messages for $chatIdForStream',
-                );
-              }
               final backgroundMsgs = _streamingManager.getBackgroundMessages(
                 chatIdForStream,
               );
               if (backgroundMsgs != null &&
                   placeholderIndex < backgroundMsgs.length) {
-                backgroundMsgs[placeholderIndex]['text'] = errorText;
+                backgroundMsgs[placeholderIndex]['text'] = paymentMessage;
+                backgroundMsgs[placeholderIndex]['reasoning'] = '';
                 _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
-              } else {
-                if (kDebugMode) {
-                  debugPrint(
-                    '[STREAM] WARNING: No background messages for $chatIdForStream - error result may be lost',
-                  );
-                }
               }
             }
-          },
-        ),
+            _showPaymentRequiredDialog();
+            return;
+          }
+
+          final errorText = 'Error: $errorMessage';
+          if (_activeChatId == chatIdForStream) {
+            if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
+              _messages[placeholderIndex]['text'] = errorText;
+            }
+            if (mounted) {
+              setState(() {
+                _isSending = false;
+              });
+            }
+            _finalizeAiMessage(placeholderIndex, errorText);
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    errorMessage,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  behavior: SnackBarBehavior.floating,
+                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  duration: const Duration(seconds: 2),
+                  dismissDirection: DismissDirection.horizontal,
+                ),
+              );
+            }
+            _persistChatWithId(chatIdForStream);
+          } else {
+            final backgroundMsgs = _streamingManager.getBackgroundMessages(
+              chatIdForStream,
+            );
+            if (backgroundMsgs != null &&
+                placeholderIndex < backgroundMsgs.length) {
+              backgroundMsgs[placeholderIndex]['text'] = errorText;
+              _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
+            }
+          }
+        },
+      );
+    }
+
+    try {
+      await startStreamPass(
+        message: aiPromptContent,
+        history: apiHistory,
+        passSystemPrompt: initialSystemPrompt,
+        passImages: imageDataUrls,
       );
     } catch (error) {
       if (kDebugMode) {
@@ -2764,6 +2719,99 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       message['reasoning'] = reasoning;
       _messages[index] = message;
     });
+  }
+
+  void _updateToolCallsForMessage(
+    int index,
+    List<ToolCall> toolCalls,
+    String chatId,
+  ) {
+    final String toolCallsJson = jsonEncode(
+      toolCalls.map((call) => call.toJson()).toList(),
+    );
+
+    final bool isActiveChat = _activeChatId == chatId;
+    if (mounted && isActiveChat && index >= 0 && index < _messages.length) {
+      setState(() {
+        final message = Map<String, String>.from(_messages[index]);
+        message['toolCalls'] = toolCallsJson;
+        _messages[index] = message;
+      });
+      _persistChatWithId(chatId);
+      return;
+    }
+
+    final backgroundMsgs = _streamingManager.getBackgroundMessages(chatId);
+    if (backgroundMsgs != null && index >= 0 && index < backgroundMsgs.length) {
+      backgroundMsgs[index]['toolCalls'] = toolCallsJson;
+      _persistChatWithIdAndMessages(chatId, backgroundMsgs);
+    }
+  }
+
+  /// Download tool-generated images, encrypt, and persist to Supabase storage.
+  /// Updates the message's `images`, `imageCostEur`, `imageGeneratedAt`, and
+  /// refreshed `toolCalls` (now containing `storage_path`).
+  Future<void> _processToolImages(
+    List<ToolCall> toolCalls,
+    int index,
+    String chatId,
+  ) async {
+    if (toolCalls.isEmpty) return;
+
+    final hasImages = toolCalls.any(
+      (c) =>
+          c.result != null &&
+          (c.result!.startsWith('IMAGE:') ||
+              c.result!.startsWith('IMAGE_DATA:')),
+    );
+    if (!hasImages) return;
+
+    try {
+      final imageResult = await ToolImageResultService.processToolCalls(
+        toolCalls,
+      );
+
+      if (imageResult.imagePaths.isEmpty) return;
+
+      final updatedToolCallsJson = jsonEncode(
+        imageResult.toolCalls.map((c) => c.toJson()).toList(),
+      );
+
+      final isActiveChat = _activeChatId == chatId;
+      if (mounted && isActiveChat && index >= 0 && index < _messages.length) {
+        setState(() {
+          final message = Map<String, String>.from(_messages[index]);
+          message['images'] = jsonEncode(imageResult.imagePaths);
+          if (imageResult.imageCostEur != null) {
+            message['imageCostEur'] = imageResult.imageCostEur!;
+          }
+          if (imageResult.imageGeneratedAt != null) {
+            message['imageGeneratedAt'] = imageResult.imageGeneratedAt!;
+          }
+          message['toolCalls'] = updatedToolCallsJson;
+          _messages[index] = message;
+        });
+      } else {
+        final backgroundMsgs = _streamingManager.getBackgroundMessages(chatId);
+        if (backgroundMsgs != null &&
+            index >= 0 &&
+            index < backgroundMsgs.length) {
+          backgroundMsgs[index]['images'] = jsonEncode(imageResult.imagePaths);
+          if (imageResult.imageCostEur != null) {
+            backgroundMsgs[index]['imageCostEur'] = imageResult.imageCostEur!;
+          }
+          if (imageResult.imageGeneratedAt != null) {
+            backgroundMsgs[index]['imageGeneratedAt'] =
+                imageResult.imageGeneratedAt!;
+          }
+          backgroundMsgs[index]['toolCalls'] = updatedToolCallsJson;
+        }
+      }
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Failed to process tool images: $error');
+      }
+    }
   }
 
   void _finalizeAiMessage(
@@ -3615,6 +3663,22 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         tps = double.tryParse(tpsStr);
       }
 
+      List<ToolCall>? toolCalls;
+      final String? toolCallsJson = raw['toolCalls'];
+      if (toolCallsJson != null && toolCallsJson.isNotEmpty) {
+        try {
+          final decoded = jsonDecode(toolCallsJson);
+          if (decoded is List) {
+            toolCalls = decoded
+                .whereType<Map>()
+                .map(
+                  (item) => ToolCall.fromJson(Map<String, dynamic>.from(item)),
+                )
+                .toList();
+          }
+        } catch (_) {}
+      }
+
       final String? imageCostStr = raw['imageCostEur'];
       final double? imageCostEur =
           imageCostStr != null && imageCostStr.isNotEmpty
@@ -3640,6 +3704,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         imageCostEur: imageCostEur,
         imageGeneratedAt: imageGeneratedAt,
         attachments: attachments,
+        toolCalls: toolCalls,
       );
     });
 
@@ -3799,6 +3864,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                           modelLabel: data.modelLabel,
                                           modelProvider: data.modelProvider,
                                           tps: data.tps,
+                                          toolCalls: data.toolCalls,
+                                          showToolCalls: widget.showToolCalls,
                                           images: data.images,
                                           imageCostEur: data.imageCostEur,
                                           imageGeneratedAt:
@@ -3992,12 +4059,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                       return;
                     }
 
-                    // Handle Enter: image gen mode or send message
-                    if (_isImageGenMode && !_isStreaming) {
-                      unawaited(_generateImage());
-                    } else {
-                      unawaited(_sendMessage());
-                    }
+                    unawaited(_sendMessage());
                   },
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxHeight: 160),
@@ -4042,15 +4104,13 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 ),
               ),
               const SizedBox(width: 8),
-              // Send/Cancel Message Button (or Generate Image in image gen mode)
+              // Send/Cancel Message Button
               GestureDetector(
-                onTap: _isTranscribingAudio || _isGeneratingImage
+                onTap: _isTranscribingAudio
                     ? null
                     : () {
                         if (_isStreaming || _isSending) {
                           _cancelCurrentOperation();
-                        } else if (_isImageGenMode) {
-                          _generateImage();
                         } else {
                           _sendMessage();
                         }
@@ -4059,14 +4119,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                   width: btnW,
                   height: btnH,
                   decoration: BoxDecoration(
-                    color: (_isStreaming || _isSending)
-                        ? Colors.red
-                        : _isImageGenMode
-                        ? accent.withValues(alpha: 0.9)
-                        : accent,
+                    color: (_isStreaming || _isSending) ? Colors.red : accent,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: _isTranscribingAudio || _isGeneratingImage
+                  child: _isTranscribingAudio
                       ? const Padding(
                           padding: EdgeInsets.all(8.0),
                           child: CircularProgressIndicator(
@@ -4079,8 +4135,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                       : Icon(
                           (_isStreaming || _isSending)
                               ? Icons.stop
-                              : _isImageGenMode
-                              ? Icons.auto_awesome
                               : Icons.arrow_upward,
                           color: Colors.black,
                         ),
@@ -4107,28 +4161,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                               isActive: hasAttachments,
                               debugLabel: 'Add button',
                             ),
-                            // Image Generation Button
-                            if (widget.imageGenEnabled) ...[
-                              const SizedBox(width: 8),
-                              _buildIconBtn(
-                                icon: Icons.image,
-                                onTap: _isGeneratingImage
-                                    ? () {} // No-op while generating
-                                    : () {
-                                        setState(
-                                          () => _isImageGenMode =
-                                              !_isImageGenMode,
-                                        );
-                                        if (kDebugMode) {
-                                          debugPrint(
-                                            'Image Gen mode toggled: $_isImageGenMode',
-                                          );
-                                        }
-                                      },
-                                isActive: _isImageGenMode || _isGeneratingImage,
-                                debugLabel: 'Image Gen button',
-                              ),
-                            ],
                             // Project Selection Dropdown (only when feature enabled)
                             if (kFeatureProjects) ...[
                               const SizedBox(width: 8),

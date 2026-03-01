@@ -53,6 +53,16 @@ class AppShellConfig {
   final bool includeReasoningInHistory;
   final Function(bool) setIncludeReasoningInHistory;
 
+  // ── Tool calling ───────────────────────────────────────────
+  final bool toolCallingEnabled;
+  final Function(bool) setToolCallingEnabled;
+  final bool toolDiscoveryMode;
+  final Function(bool) setToolDiscoveryMode;
+  final bool showToolCalls;
+  final Function(bool) setShowToolCalls;
+  final bool allowMarkdownToolCalls;
+  final Function(bool) setAllowMarkdownToolCalls;
+
   const AppShellConfig({
     required this.currentThemeMode,
     required this.currentAccentColor,
@@ -88,5 +98,13 @@ class AppShellConfig {
     required this.setIncludeAllImagesInHistory,
     required this.includeReasoningInHistory,
     required this.setIncludeReasoningInHistory,
+    required this.toolCallingEnabled,
+    required this.setToolCallingEnabled,
+    required this.toolDiscoveryMode,
+    required this.setToolDiscoveryMode,
+    required this.showToolCalls,
+    required this.setShowToolCalls,
+    required this.allowMarkdownToolCalls,
+    required this.setAllowMarkdownToolCalls,
   });
 }

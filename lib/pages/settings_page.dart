@@ -9,6 +9,7 @@ import 'package:chuk_chat/model_selector_page.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/pages/theme_page.dart';
 import 'package:chuk_chat/pages/customization_page.dart';
+import 'package:chuk_chat/pages/tool_calling_settings_page.dart';
 import 'package:chuk_chat/pages/account_settings_page.dart';
 import 'package:chuk_chat/pages/about_page.dart';
 import 'package:chuk_chat/pages/pricing_page.dart';
@@ -72,6 +73,26 @@ class SettingsPage extends StatelessWidget {
                 context,
                 MaterialPageRoute(
                   builder: (_) => CustomizationPage(config: config),
+                ),
+              );
+            },
+            accentColor: accent,
+            iconFgColor: iconFg,
+            bgColor: scaffoldBg,
+          ),
+          const SizedBox(height: 16),
+
+          // Tool Calling Settings
+          _buildSettingsCard(
+            context,
+            title: 'Tool Calling',
+            subtitle: 'Control tool usage, discovery, and tool-call display',
+            icon: Icons.build_circle_outlined,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ToolCallingSettingsPage(config: config),
                 ),
               );
             },

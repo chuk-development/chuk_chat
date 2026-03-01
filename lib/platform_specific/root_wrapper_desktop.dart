@@ -212,6 +212,10 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       includeRecentImagesInHistory: widget.config.includeRecentImagesInHistory,
       includeAllImagesInHistory: widget.config.includeAllImagesInHistory,
       includeReasoningInHistory: widget.config.includeReasoningInHistory,
+      toolCallingEnabled: widget.config.toolCallingEnabled,
+      toolDiscoveryMode: widget.config.toolDiscoveryMode,
+      showToolCalls: widget.config.showToolCalls,
+      allowMarkdownToolCalls: widget.config.allowMarkdownToolCalls,
     );
 
     // Panel width for Projects/Media - responsive based on screen width

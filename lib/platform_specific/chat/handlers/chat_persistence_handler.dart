@@ -181,8 +181,10 @@ class ChatPersistenceHandler {
   Future<void> updateBackgroundChatMessage({
     required String chatId,
     required int messageIndex,
-    required String content,
-    required String reasoning,
+    String? content,
+    String? reasoning,
+    String? toolCallsJson,
+    String? tps,
   }) async {
     try {
       // Find the chat in storage
@@ -202,8 +204,18 @@ class ChatPersistenceHandler {
 
       // Update the message at the specified index
       if (messageIndex >= 0 && messageIndex < messages.length) {
-        messages[messageIndex]['text'] = content;
-        messages[messageIndex]['reasoning'] = reasoning;
+        if (content != null) {
+          messages[messageIndex]['text'] = content;
+        }
+        if (reasoning != null) {
+          messages[messageIndex]['reasoning'] = reasoning;
+        }
+        if (toolCallsJson != null) {
+          messages[messageIndex]['toolCalls'] = toolCallsJson;
+        }
+        if (tps != null) {
+          messages[messageIndex]['tps'] = tps;
+        }
 
         // Save back to storage
         await ChatStorageService.updateChat(chatId, messages);

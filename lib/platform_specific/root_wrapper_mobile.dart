@@ -1,4 +1,5 @@
 // lib/platform_specific/root_wrapper_mobile.dart
+import 'dart:async';
 import 'dart:io' show Platform;
 import 'dart:math' as math;
 
@@ -102,15 +103,41 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
 
     // Microphone
     final micStatus = await Permission.microphone.status;
-    if (micStatus.isDenied || micStatus.isRestricted) {
+    if (micStatus.isPermanentlyDenied) {
+      _showPermissionBlockedSnackBar('Microphone');
+    } else if (micStatus.isDenied || micStatus.isRestricted) {
       await Permission.microphone.request();
     }
 
     // Notifications (Android 13+ / API 33+)
     final notifStatus = await Permission.notification.status;
-    if (notifStatus.isDenied || notifStatus.isRestricted) {
+    if (notifStatus.isPermanentlyDenied) {
+      _showPermissionBlockedSnackBar('Notifications');
+    } else if (notifStatus.isDenied || notifStatus.isRestricted) {
       await Permission.notification.request();
     }
+  }
+
+  void _showPermissionBlockedSnackBar(String permissionName) {
+    if (!mounted) return;
+
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
+
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          '$permissionName permission is blocked. Enable it in app settings.',
+        ),
+        action: SnackBarAction(
+          label: 'Settings',
+          onPressed: () {
+            unawaited(openAppSettings());
+          },
+        ),
+      ),
+    );
   }
 
   void _toggleSidebar() {
@@ -329,6 +356,10 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                     widget.config.includeAllImagesInHistory,
                 includeReasoningInHistory:
                     widget.config.includeReasoningInHistory,
+                toolCallingEnabled: widget.config.toolCallingEnabled,
+                toolDiscoveryMode: widget.config.toolDiscoveryMode,
+                showToolCalls: widget.config.showToolCalls,
+                allowMarkdownToolCalls: widget.config.allowMarkdownToolCalls,
               ),
             ),
           ],

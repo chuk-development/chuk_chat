@@ -1,5 +1,8 @@
 // lib/widgets/message_bubble.dart
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/utils/image_clipboard_service.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
@@ -7,6 +10,7 @@ import 'package:chuk_chat/widgets/image_viewer.dart';
 import 'package:chuk_chat/widgets/document_viewer.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
+import 'package:chuk_chat/utils/tool_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/platform_config.dart';
@@ -71,6 +75,8 @@ class MessageBubble extends StatefulWidget {
     this.showReasoningTokens,
     this.showModelInfo,
     this.showTps,
+    this.toolCalls,
+    this.showToolCalls = true,
     this.images,
     this.attachments,
     this.imageCostEur,
@@ -97,6 +103,8 @@ class MessageBubble extends StatefulWidget {
   final bool? showReasoningTokens;
   final bool? showModelInfo;
   final bool? showTps;
+  final List<ToolCall>? toolCalls;
+  final bool showToolCalls;
   final List<String>? images; // Base64 data URLs of images
   final List<DocumentAttachment>? attachments; // Document attachments
   final double? imageCostEur;
@@ -109,6 +117,7 @@ class MessageBubble extends StatefulWidget {
 class _MessageBubbleState extends State<MessageBubble>
     with AutomaticKeepAliveClientMixin {
   bool _isReasoningExpanded = false;
+  final Map<String, bool> _blockExpanded = {};
   final Set<String> _expandedCards = {};
   final TextEditingController _editController = TextEditingController();
   final FocusNode _editFocusNode = FocusNode();
@@ -375,6 +384,15 @@ class _MessageBubbleState extends State<MessageBubble>
 
     final bool hasActions =
         widget.actions.isNotEmpty && !(widget.isEditing && isUserMessage);
+    final bool hasVisibleToolCalls =
+        !isUserMessage &&
+        widget.showToolCalls &&
+        widget.toolCalls != null &&
+        widget.toolCalls!.isNotEmpty;
+    final bool hasInfoStatusBar =
+        !isUserMessage &&
+        (_hasReasoning || _hasModelInfo) &&
+        !hasVisibleToolCalls;
 
     final EdgeInsetsGeometry containerPadding = isUserMessage
         ? const EdgeInsets.symmetric(horizontal: 14, vertical: 10)
@@ -406,7 +424,7 @@ class _MessageBubbleState extends State<MessageBubble>
             : CrossAxisAlignment.start,
         children: [
           // SizedBox forces only the reasoning card to fill full bubble width.
-          if (_hasReasoning || _hasModelInfo)
+          if (hasInfoStatusBar)
             SizedBox(
               width: double.infinity,
               child: _buildInfoStatusBar(iconFgColor, accentColor),
@@ -426,6 +444,10 @@ class _MessageBubbleState extends State<MessageBubble>
           // Display document attachments
           if (widget.attachments != null && widget.attachments!.isNotEmpty) ...[
             _buildAttachmentsChips(widget.attachments!),
+            const SizedBox(height: 8),
+          ],
+          if (hasVisibleToolCalls) ...[
+            _buildToolCallsBar(widget.toolCalls!),
             const SizedBox(height: 8),
           ],
           _buildMessageBody(
@@ -694,6 +716,248 @@ class _MessageBubbleState extends State<MessageBubble>
     return '${clean.substring(0, maxLength)}...';
   }
 
+  Widget _buildToolCallsBar(List<ToolCall> toolCalls) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final renderedAssistantText = stripToolCallBlocksForDisplay(widget.message);
+    final bool isRunning = toolCalls.any(
+      (t) =>
+          t.status == ToolCallStatus.running ||
+          t.status == ToolCallStatus.pending,
+    );
+    final bool isExpanded = _blockExpanded['tool_calls_bar'] ?? false;
+    final bool allDone =
+        toolCalls.isNotEmpty &&
+        toolCalls.every(
+          (t) =>
+              t.status == ToolCallStatus.completed ||
+              t.status == ToolCallStatus.error,
+        );
+    final bool isReasoning =
+        widget.isReasoningStreaming &&
+        allDone &&
+        (renderedAssistantText.trim().isEmpty ||
+            renderedAssistantText == 'Thinking...');
+
+    final int completedCount = toolCalls
+        .where((t) => t.status == ToolCallStatus.completed)
+        .length;
+    final String label;
+    final IconData icon;
+    final bool showSpinner;
+    if (isRunning) {
+      final runningTool = toolCalls.firstWhere(
+        (t) =>
+            t.status == ToolCallStatus.running ||
+            t.status == ToolCallStatus.pending,
+        orElse: () => toolCalls.last,
+      );
+      label = '${runningTool.name}...';
+      icon = Icons.build_circle_outlined;
+      showSpinner = true;
+    } else if (isReasoning) {
+      label = 'Reasoning...';
+      icon = Icons.psychology;
+      showSpinner = true;
+    } else {
+      final uniqueNames = toolCalls.map((t) => t.name).toSet();
+      if (uniqueNames.length <= 2) {
+        label = uniqueNames.join(', ');
+      } else {
+        label = '${toolCalls.length} tools used';
+      }
+      icon = Icons.build_circle_outlined;
+      showSpinner = false;
+    }
+
+    final Color accentColor = isReasoning
+        ? colorScheme.primary
+        : isRunning
+        ? Colors.blue
+        : (toolCalls.any((t) => t.status == ToolCallStatus.error)
+              ? Colors.orange
+              : Colors.green);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      decoration: BoxDecoration(
+        color: accentColor.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: accentColor.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () {
+              setState(() {
+                _blockExpanded['tool_calls_bar'] = !isExpanded;
+              });
+            },
+            borderRadius: BorderRadius.circular(10),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              child: Row(
+                children: [
+                  if (showSpinner)
+                    SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.5,
+                        color: accentColor,
+                      ),
+                    )
+                  else
+                    Icon(icon, size: 14, color: accentColor),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        color: accentColor,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (!showSpinner)
+                    Text(
+                      '$completedCount/${toolCalls.length}',
+                      style: TextStyle(
+                        color: colorScheme.onSurface.withValues(alpha: 0.6),
+                        fontSize: 11,
+                      ),
+                    ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    isExpanded ? Icons.expand_less : Icons.expand_more,
+                    size: 16,
+                    color: colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (isExpanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (int i = 0; i < toolCalls.length; i++) ...[
+                    if (toolCalls[i].roundThinking != null &&
+                        toolCalls[i].roundThinking!.trim().isNotEmpty)
+                      _buildExpandableCard(
+                        key: 'thinking_round_${toolCalls[i].id}_$i',
+                        icon: Icons.psychology,
+                        label: 'Reasoning',
+                        preview: toolCalls[i].roundThinking!,
+                        expandedContent: toolCalls[i].roundThinking!,
+                        accentColor: colorScheme.primary,
+                      ),
+                    _buildExpandableCard(
+                      key: 'tool_${toolCalls[i].id}',
+                      icon: _toolCallIcon(toolCalls[i].status),
+                      label: toolCalls[i].name,
+                      preview:
+                          _toolCallSubtitle(toolCalls[i]) ??
+                          (toolCalls[i].result != null
+                              ? _truncatePreview(toolCalls[i].result!, 60)
+                              : 'running...'),
+                      expandedContent: _formatToolCallDetails(toolCalls[i]),
+                      accentColor: _toolCallColor(toolCalls[i].status),
+                      isRunning: toolCalls[i].status == ToolCallStatus.running,
+                    ),
+                  ],
+                  if (_hasReasoning)
+                    _buildExpandableCard(
+                      key: 'thinking_final',
+                      icon: Icons.psychology,
+                      label: 'Reasoning',
+                      preview: widget.reasoning!,
+                      expandedContent: widget.reasoning!,
+                      accentColor: colorScheme.primary,
+                    ),
+                  if (_hasModelInfo)
+                    _buildExpandableCard(
+                      key: 'model_info_tools',
+                      icon: Icons.smart_toy_outlined,
+                      label: widget.modelLabel!,
+                      preview: _buildModelPreview(),
+                      expandedContent: _buildModelDetails(),
+                      accentColor: Colors.green,
+                    ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  IconData _toolCallIcon(ToolCallStatus status) {
+    switch (status) {
+      case ToolCallStatus.pending:
+        return Icons.hourglass_empty;
+      case ToolCallStatus.running:
+        return Icons.sync;
+      case ToolCallStatus.completed:
+        return Icons.check_circle;
+      case ToolCallStatus.error:
+        return Icons.error;
+    }
+  }
+
+  Color _toolCallColor(ToolCallStatus status) {
+    switch (status) {
+      case ToolCallStatus.pending:
+        return Colors.orange;
+      case ToolCallStatus.running:
+        return Colors.blue;
+      case ToolCallStatus.completed:
+        return Colors.green;
+      case ToolCallStatus.error:
+        return Colors.red;
+    }
+  }
+
+  String _formatToolCallDetails(ToolCall toolCall) {
+    final buffer = StringBuffer();
+    if (toolCall.arguments.isNotEmpty) {
+      buffer.writeln('Args: ${jsonEncode(toolCall.arguments)}');
+    }
+    if (toolCall.result != null && toolCall.result!.isNotEmpty) {
+      if (buffer.isNotEmpty) {
+        buffer.writeln();
+      }
+      buffer.writeln('Result: ${toolCall.result}');
+    }
+    if (buffer.isEmpty) {
+      return 'No result yet.';
+    }
+    return buffer.toString().trimRight();
+  }
+
+  String? _toolCallSubtitle(ToolCall toolCall) {
+    if (toolCall.status == ToolCallStatus.running ||
+        toolCall.status == ToolCallStatus.pending) {
+      return 'Running';
+    }
+    if (toolCall.status == ToolCallStatus.error) {
+      return toolCall.result == null
+          ? 'Failed'
+          : _truncatePreview(toolCall.result!, 70);
+    }
+
+    final result = toolCall.result;
+    if (result == null || result.trim().isEmpty) {
+      return null;
+    }
+
+    return _truncatePreview(result, 70);
+  }
+
   Widget _buildImagesGrid(List<String> images) {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -867,8 +1131,16 @@ class _MessageBubbleState extends State<MessageBubble>
       );
     }
 
+    final displayText = isUserMessage
+        ? widget.message
+        : stripToolCallBlocksForDisplay(widget.message);
+
+    if (!isUserMessage && displayText.trim().isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     final Widget messageWidget = MarkdownMessage(
-      text: widget.message,
+      text: displayText,
       textColor: iconFgColor,
       backgroundColor: isUserMessage
           ? accentColor.withValues(alpha: .8)

@@ -210,6 +210,14 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
         includeReasoningInHistory: _themeService.includeReasoningInHistory,
         setIncludeReasoningInHistory:
             _themeService.setIncludeReasoningInHistory,
+        toolCallingEnabled: _themeService.toolCallingEnabled,
+        setToolCallingEnabled: _themeService.setToolCallingEnabled,
+        toolDiscoveryMode: _themeService.toolDiscoveryMode,
+        setToolDiscoveryMode: _themeService.setToolDiscoveryMode,
+        showToolCalls: _themeService.showToolCalls,
+        setShowToolCalls: _themeService.setShowToolCalls,
+        allowMarkdownToolCalls: _themeService.allowMarkdownToolCalls,
+        setAllowMarkdownToolCalls: _themeService.setAllowMarkdownToolCalls,
       ),
     );
   }
