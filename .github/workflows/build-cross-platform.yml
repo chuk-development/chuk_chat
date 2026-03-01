@@ -185,7 +185,10 @@ jobs:
 
       - name: Build Split APKs
         run: |
+          BUILD_NUM=$(grep '^version:' pubspec.yaml | sed 's/version: //' | tr -d '[:space:]' | cut -d'+' -f1 | awk -F. '{print $3}')
+          [ -z "$BUILD_NUM" ] && BUILD_NUM=1
           flutter build apk --release --split-per-abi \
+            --build-number=$BUILD_NUM \
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
             --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} \
             --dart-define=PLATFORM_MOBILE=true \
