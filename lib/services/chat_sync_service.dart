@@ -195,20 +195,21 @@ class ChatSyncService {
 
     _isSyncing = true;
 
-    // On first sync after startup, sync titles from network
-    // This ensures we have the latest titles without full payload fetch
-    if (!_hasCompletedFirstSync) {
-      if (kDebugMode) {
-        debugPrint('🔄 [ChatSync] First sync - syncing titles from network...');
-      }
-      await ChatStorageService.syncTitlesFromNetwork();
-      _hasCompletedFirstSync = true;
-      if (_firstSyncCompleter != null && !_firstSyncCompleter!.isCompleted) {
-        _firstSyncCompleter!.complete();
-      }
-    }
-
     try {
+      // On first sync after startup, sync titles from network
+      // This ensures we have the latest titles without full payload fetch
+      if (!_hasCompletedFirstSync) {
+        if (kDebugMode) {
+          debugPrint(
+            '🔄 [ChatSync] First sync - syncing titles from network...',
+          );
+        }
+        await ChatStorageService.syncTitlesFromNetwork();
+        _hasCompletedFirstSync = true;
+        if (_firstSyncCompleter != null && !_firstSyncCompleter!.isCompleted) {
+          _firstSyncCompleter!.complete();
+        }
+      }
       // Step 1: Fetch lightweight metadata from cloud (id + updated_at only)
       final cloudChats = await SupabaseService.client
           .from('encrypted_chats')

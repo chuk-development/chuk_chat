@@ -184,6 +184,9 @@ class ChatPersistenceHandler {
     String? content,
     String? reasoning,
     String? toolCallsJson,
+    String? images,
+    String? imageCostEur,
+    String? imageGeneratedAt,
     String? tps,
   }) async {
     try {
@@ -212,6 +215,15 @@ class ChatPersistenceHandler {
         }
         if (toolCallsJson != null) {
           messages[messageIndex]['toolCalls'] = toolCallsJson;
+        }
+        if (images != null) {
+          messages[messageIndex]['images'] = images;
+        }
+        if (imageCostEur != null) {
+          messages[messageIndex]['imageCostEur'] = imageCostEur;
+        }
+        if (imageGeneratedAt != null) {
+          messages[messageIndex]['imageGeneratedAt'] = imageGeneratedAt;
         }
         if (tps != null) {
           messages[messageIndex]['tps'] = tps;

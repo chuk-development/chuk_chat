@@ -32,7 +32,7 @@ DeserializeResult deserializePayloadIsolate(String json) {
     return DeserializeResult(messages, customName: customName);
   }
 
-  // Version 1 migration - normalize field names
+  // Version 1 migration - normalize field names, preserving all fields
   final List<dynamic> rawMessages = map['messages'] as List<dynamic>;
   final messages = rawMessages.map((m) {
     final msg = m as Map<String, dynamic>;
@@ -40,6 +40,16 @@ DeserializeResult deserializePayloadIsolate(String json) {
       'role': msg['role'] as String? ?? 'user',
       'text': msg['text'] as String? ?? '',
       if (msg['reasoning'] != null) 'reasoning': msg['reasoning'],
+      if (msg['images'] != null) 'images': msg['images'],
+      if (msg['imageCostEur'] != null) 'imageCostEur': msg['imageCostEur'],
+      if (msg['imageGeneratedAt'] != null)
+        'imageGeneratedAt': msg['imageGeneratedAt'],
+      if (msg['attachments'] != null) 'attachments': msg['attachments'],
+      if (msg['attachedFilesJson'] != null)
+        'attachedFilesJson': msg['attachedFilesJson'],
+      if (msg['toolCalls'] != null) 'toolCalls': msg['toolCalls'],
+      if (msg['modelId'] != null) 'modelId': msg['modelId'],
+      if (msg['provider'] != null) 'provider': msg['provider'],
     };
   }).toList();
   return DeserializeResult(messages, customName: customName);

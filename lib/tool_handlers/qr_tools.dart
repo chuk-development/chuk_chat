@@ -6,12 +6,15 @@ Future<String> executeGenerateQr(
   Map<String, dynamic> args, {
   http.Client? client,
 }) async {
-  final data = (args['data'] as String? ?? '').trim();
+  final data = (args['data']?.toString() ?? '').trim();
   if (data.isEmpty) {
     return 'Error: "data" parameter required';
   }
 
-  final requestedSize = (args['size'] as num?)?.toInt() ?? 400;
+  final sizeArg = args['size'];
+  final requestedSize = sizeArg is num
+      ? sizeArg.toInt()
+      : int.tryParse(sizeArg?.toString() ?? '') ?? 400;
   final size = requestedSize.clamp(100, 1000);
 
   final effectiveClient = client ?? http.Client();

@@ -12,8 +12,10 @@ import 'package:chuk_chat/pages/projects_page.dart';
 import 'package:chuk_chat/pages/media_manager_page.dart';
 import 'package:chuk_chat/pages/settings_page.dart';
 import 'package:chuk_chat/pages/coming_soon_page.dart';
+import 'package:chuk_chat/utils/debug_chat_formatter.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 /* ---------- ROOT WRAPPER DESKTOP (for Desktop, Web, and Tablets) ---------- */
 class RootWrapperDesktop extends StatefulWidget {
@@ -158,6 +160,24 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     setState(() {
       _isSidebarExpanded = !_isSidebarExpanded;
     });
+  }
+
+  void _copyDebugChat() {
+    final messages = _chatUIKey.currentState?.debugMessages;
+    if (messages == null || messages.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No messages to copy')));
+      return;
+    }
+    final text = DebugChatFormatter.format(messages);
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Copied ${messages.length} messages (debug)'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   Future<void> _handleChatDeleted(String deletedChatId) async {
@@ -543,6 +563,18 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                     ],
                   ),
                 ),
+              ),
+            ),
+
+          // Layer: Copy debug chat button (top-right of chat area)
+          if (showContent)
+            Positioned(
+              top: kTopInitialSpacing,
+              right: (showPanel ? panelWidth : 0) + 12,
+              child: IconButton(
+                icon: Icon(Icons.copy_all, color: iconFg, size: 20),
+                onPressed: _copyDebugChat,
+                tooltip: 'Copy full chat (debug)',
               ),
             ),
 

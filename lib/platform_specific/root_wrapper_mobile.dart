@@ -15,8 +15,10 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:chuk_chat/pages/coming_soon_page.dart';
+import 'package:chuk_chat/utils/debug_chat_formatter.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 /* ---------- ROOT WRAPPER MOBILE (for Phones) ---------- */
 class RootWrapperMobile extends StatefulWidget {
@@ -255,6 +257,24 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     _chatUIMobileKey.currentState?.newChat();
   }
 
+  void _copyDebugChat() {
+    final messages = _chatUIMobileKey.currentState?.debugMessages;
+    if (messages == null || messages.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No messages to copy')));
+      return;
+    }
+    final text = DebugChatFormatter.format(messages);
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Copied ${messages.length} messages (debug)'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
@@ -313,6 +333,14 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                 ),
               ),
               actions: [
+                Semantics(
+                  identifier: 'copy_debug_chat_button',
+                  child: IconButton(
+                    icon: Icon(Icons.copy_all, color: iconFg),
+                    onPressed: _copyDebugChat,
+                    tooltip: 'Copy full chat (debug)',
+                  ),
+                ),
                 Padding(
                   padding: const EdgeInsets.only(right: 12),
                   child: Semantics(

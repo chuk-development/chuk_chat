@@ -719,6 +719,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     }
   }
 
+  /// Returns the current messages list for debug export.
+  List<Map<String, String>> get debugMessages =>
+      _messages.map((m) => Map<String, String>.from(m)).toList();
+
   void newChat() {
     if (kDebugMode) {
       debugPrint(
@@ -850,6 +854,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         _controller.selection = TextSelection.fromPosition(
           TextPosition(offset: result.text!.length),
         );
+        // Set sending flag instantly so loading indicator shows without gap
+        if (widget.autoSendVoiceTranscription) {
+          _isSendingMessage = true;
+        }
       });
 
       // If auto-send is enabled, send the message immediately
@@ -1553,6 +1561,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         chatId: chatId,
         messageIndex: index,
         toolCallsJson: toolCallsJson,
+        images: jsonEncode(imagePaths),
+        imageCostEur: imageCostEur,
+        imageGeneratedAt: imageGeneratedAt,
       );
     }
   }

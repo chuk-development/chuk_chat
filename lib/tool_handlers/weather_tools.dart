@@ -93,10 +93,12 @@ Future<Map<String, dynamic>?> _resolveCoordinates(
   Map<String, dynamic> args,
   http.Client client,
 ) async {
-  if (args.containsKey('latitude') && args.containsKey('longitude')) {
+  final lat = args['latitude'];
+  final lon = args['longitude'];
+  if (lat is num && lon is num) {
     return {
-      'lat': (args['latitude'] as num).toDouble(),
-      'lon': (args['longitude'] as num).toDouble(),
+      'lat': lat.toDouble(),
+      'lon': lon.toDouble(),
       'name': args['location'] as String?,
     };
   }

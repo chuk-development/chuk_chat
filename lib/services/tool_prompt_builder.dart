@@ -185,12 +185,50 @@ FORMAT: Emit raw $toolCallStart...$toolCallEnd tags only. Do NOT wrap tool calls
 4. NEVER invent factual data (phone numbers, addresses, URLs, prices, ratings). Only include what tools returned.
 5. web_search gives snippets/previews only. For exact details, verify with web_crawl.
 6. Never stop with intention-only text (e.g. "I will now search"). Do the next tool_call or provide the final answer.
+7. COST & PRIVACY: Before calling generate_image or edit_image, ALWAYS briefly inform the user that (a) it costs credits and (b) generated/edited images are NOT end-to-end encrypted and can be seen by the service operator. Then proceed with the tool call in the same response — do not wait for confirmation unless the user previously expressed privacy concerns.
 
 ### Research depth:
 Do NOT give shallow one-search answers. For any factual question:
 1) web_search -> find sources
 2) web_crawl on 1-3 best results -> get full details and context
 3) If gaps remain, do another web_search from a different angle
-4) Compile final answer from crawled content, not just search snippets''';
+4) Compile final answer from crawled content, not just search snippets
+
+${_mapProtocol()}''';
+  }
+
+  /// Map rendering protocol — tells the AI it can embed interactive maps
+  /// in its responses using <map> XML tags. These are NOT tools — the AI
+  /// writes JSON inside <map> tags as part of its text response.
+  String _mapProtocol() {
+    return '''
+## VISUAL OUTPUT: Maps
+
+You can embed interactive maps directly in your responses. These are NOT tools — just write JSON inside <map> tags as part of your text.
+
+### Map types:
+
+Type "markers" (simple pins):
+<map>
+{"type":"markers","title":"Cities","markers":[{"lat":54.32,"lon":10.13,"label":"Kiel"}]}
+</map>
+
+Type "places" (rich cards with details):
+<map>
+{"type":"places","title":"Restaurants","places":[{"name":"Example","lat":54.3,"lon":10.1,"cuisine":"Italian","opening_hours":"Mo-Fr 12-22","address":"Str. 82"}]}
+</map>
+
+Type "route" (navigation with polyline):
+<map>
+{"type":"route","from":{"lat":54.32,"lon":10.13,"label":"Kiel"},"to":{"lat":53.55,"lon":9.99,"label":"Hamburg"},"distance_km":"96.5","duration_min":"58"}
+</map>
+
+### Map rules:
+1. <map> tags go OUTSIDE tool_call tags — they are part of your text response.
+2. ALWAYS include a <map> after location/restaurant/route tool results that contain coordinates.
+3. Write your FULL text answer FIRST, then the <map> at the very END.
+4. STOP after the closing </map> tag. Do not write text after it.
+5. In <map> JSON: only include fields from tool results. Do NOT fabricate data.
+6. For places maps: include all fields the tool returned (name, lat, lon, cuisine, address, phone, website, opening_hours, rating, review_count, price_range). Omit fields marked "NOT AVAILABLE".''';
   }
 }

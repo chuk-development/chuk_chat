@@ -159,8 +159,10 @@ Future<String> _executeHistory(
   final change = lastClose - firstClose;
   final changePct = firstClose == 0 ? 0 : (change / firstClose) * 100;
 
-  final closes = points.map((p) => p['close'] as double).toList();
-  closes.sort();
+  final highs = points.map((p) => p['high'] as double).toList();
+  final lows = points.map((p) => p['low'] as double).toList();
+  highs.sort();
+  lows.sort();
 
   buf.writeln();
   buf.writeln('Summary:');
@@ -170,8 +172,8 @@ Future<String> _executeHistory(
     'Change: ${change >= 0 ? '+' : ''}${change.toStringAsFixed(2)} '
     '(${changePct >= 0 ? '+' : ''}${changePct.toStringAsFixed(2)}%)',
   );
-  buf.writeln('Period high: ${closes.last.toStringAsFixed(2)}');
-  buf.writeln('Period low: ${closes.first.toStringAsFixed(2)}');
+  buf.writeln('Period high: ${highs.last.toStringAsFixed(2)}');
+  buf.writeln('Period low: ${lows.first.toStringAsFixed(2)}');
 
   return buf.toString().trimRight();
 }
@@ -240,18 +242,20 @@ Future<Map<String, dynamic>?> _fetchChartData(
   required String interval,
 }) async {
   final uri = Uri.parse(
-    'https://query1.finance.yahoo.com/v8/finance/chart/$symbol'
+    'https://query1.finance.yahoo.com/v8/finance/chart/${Uri.encodeComponent(symbol)}'
     '?range=${Uri.encodeQueryComponent(range)}'
     '&interval=${Uri.encodeQueryComponent(interval)}',
   );
 
-  final response = await client.get(
-    uri,
-    headers: const {
-      'Accept': 'application/json',
-      'User-Agent': 'chuk-chat/1.0',
-    },
-  );
+  final response = await client
+      .get(
+        uri,
+        headers: const {
+          'Accept': 'application/json',
+          'User-Agent': 'chuk-chat/1.0',
+        },
+      )
+      .timeout(const Duration(seconds: 15));
   if (response.statusCode != 200) {
     return null;
   }

@@ -4,7 +4,7 @@ import 'dart:math' as math;
 ///
 /// Supports:
 /// - Complex expressions: "2 + 3 * 4", "(5 + 3) * 2", "2^10"
-/// - Functions: sqrt, sin, cos, tan, log, ln, abs
+/// - Functions: sqrt, sin, cos, tan, log, ln, abs, exp, ceil, floor
 /// - Constants: pi, e
 /// - Percentages: "15% of 200"
 /// - Format 1: {"expression": "5 + 3 * 2"}
@@ -77,12 +77,20 @@ String _evalExpression(String raw) {
   // Normalise common symbols
   var expr = raw
       .replaceAll('\u00D7', '*') // ×
-      .replaceAll('\u00F7', '/') // ÷
-      .replaceAll(',', '.'); // European decimal separator
+      .replaceAll('\u00F7', '/'); // ÷
 
-  // Replace constants
+  // Handle commas: strip thousand separators (digit,digit{3}) then convert
+  // remaining commas to dots for European decimal notation.
+  expr = expr.replaceAll(RegExp(r'(?<=\d),(?=\d{3}\b)'), '');
+  expr = expr.replaceAll(',', '.');
+
+  // Replace constants (use negative lookbehind/lookahead to avoid matching
+  // the 'e' in scientific notation like 3e5 or 1.5e-10).
   expr = expr.replaceAll(RegExp(r'\bpi\b', caseSensitive: false), '${math.pi}');
-  expr = expr.replaceAll(RegExp(r'\be\b', caseSensitive: false), '${math.e}');
+  expr = expr.replaceAll(
+    RegExp(r'(?<!\d\.?)(?<!\d)\be\b(?![+-]?\d)', caseSensitive: false),
+    '${math.e}',
+  );
 
   // Handle percentage: "50% of 200" -> "0.50 * 200"
   expr = expr.replaceAllMapped(
@@ -211,6 +219,7 @@ class _ExprParser {
 
   double parseNumber() {
     final start = pos;
+    // Consume digits and decimal point
     while (pos < input.length &&
         (input[pos].codeUnitAt(0) >= 48 && input[pos].codeUnitAt(0) <= 57 ||
             input[pos] == '.')) {
@@ -221,6 +230,18 @@ class _ExprParser {
         'Expected number at position $pos: '
         '"${input.substring(pos, (pos + 10).clamp(0, input.length))}"',
       );
+    }
+    // Handle scientific notation: e.g. 3e5, 1.5e-10, 2E+3
+    if (pos < input.length && (input[pos] == 'e' || input[pos] == 'E')) {
+      pos++;
+      if (pos < input.length && (input[pos] == '+' || input[pos] == '-')) {
+        pos++;
+      }
+      while (pos < input.length &&
+          input[pos].codeUnitAt(0) >= 48 &&
+          input[pos].codeUnitAt(0) <= 57) {
+        pos++;
+      }
     }
     return double.parse(input.substring(start, pos));
   }

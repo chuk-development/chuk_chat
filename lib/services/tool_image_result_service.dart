@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:crypto/crypto.dart' show sha256;
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
@@ -73,10 +74,12 @@ class ToolImageResultService {
           latestImageCostEur = costEur.toStringAsFixed(2);
         }
 
-        latestGeneratedAt ??= _coerceDateTimeIso(
-          payload['generated_at'] ?? payload['generatedAt'],
-        );
-        latestGeneratedAt ??= DateTime.now().toUtc().toIso8601String();
+        latestGeneratedAt =
+            _coerceDateTimeIso(
+              payload['generated_at'] ?? payload['generatedAt'],
+            ) ??
+            latestGeneratedAt ??
+            DateTime.now().toUtc().toIso8601String();
         continue;
       }
 
@@ -156,15 +159,15 @@ class ToolImageResultService {
   }
 
   static Future<String?> _uploadFromDataUri(String dataUri) {
-    final sourceKey = 'data:${dataUri.length}:${dataUri.hashCode}';
+    final commaIndex = dataUri.indexOf(',');
+    if (!dataUri.startsWith('data:') || commaIndex < 0) {
+      return Future.value(null);
+    }
+    final encoded = dataUri.substring(commaIndex + 1);
+    final contentHash = sha256.convert(utf8.encode(encoded)).toString();
+    final sourceKey = 'data:$contentHash';
     return _cacheUpload(sourceKey, () async {
       try {
-        final commaIndex = dataUri.indexOf(',');
-        if (!dataUri.startsWith('data:') || commaIndex < 0) {
-          return null;
-        }
-
-        final encoded = dataUri.substring(commaIndex + 1);
         final bytes = base64Decode(encoded);
         if (bytes.isEmpty) {
           return null;
@@ -191,13 +194,49 @@ class ToolImageResultService {
     });
   }
 
+  /// Returns true if the host is a private/internal address that should not
+  /// be fetched (SSRF protection).
+  static bool _isPrivateHost(String host) {
+    final lower = host.toLowerCase();
+    if (lower == 'localhost' || lower == '::1') return true;
+    // Cloud metadata endpoints
+    if (lower == '169.254.169.254' || lower == 'metadata.google.internal') {
+      return true;
+    }
+    // IPv4 private ranges
+    final parts = lower.split('.');
+    if (parts.length == 4) {
+      final a = int.tryParse(parts[0]);
+      final b = int.tryParse(parts[1]);
+      if (a == 127) return true; // 127.0.0.0/8
+      if (a == 10) return true; // 10.0.0.0/8
+      if (a == 172 && b != null && b >= 16 && b <= 31) return true; // 172.16-31
+      if (a == 192 && b == 168) return true; // 192.168.0.0/16
+      if (a == 169 && b == 254) return true; // link-local
+    }
+    return false;
+  }
+
   static Future<String?> _uploadFromUrl(String url) {
+    // SSRF validation: only allow http(s) to public hosts.
+    final uri = Uri.tryParse(url);
+    if (uri == null ||
+        !uri.hasScheme ||
+        !{'http', 'https'}.contains(uri.scheme.toLowerCase()) ||
+        uri.host.isEmpty ||
+        _isPrivateHost(uri.host)) {
+      if (kDebugMode) {
+        debugPrint('Rejected URL with invalid or private host: $url');
+      }
+      return Future.value(null);
+    }
+
     final sourceKey = 'url:$url';
     return _cacheUpload(sourceKey, () async {
       try {
         final response = await http
             .get(
-              Uri.parse(url),
+              uri,
               headers: const {
                 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64)',
                 'Accept': 'image/*,*/*;q=0.8',

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -48,6 +49,7 @@ class ToolExecutor {
     'uuid_generator',
     'notes',
     'generate_qr',
+    'ask_user',
     'web_search',
     'web_crawl',
     'generate_image',
@@ -407,6 +409,8 @@ class ToolExecutor {
         return _wrapOutput(await notes_tools.executeNotes(args));
       case 'generate_qr':
         return _wrapOutput(await qr_tools.executeGenerateQr(args));
+      case 'ask_user':
+        return _wrapOutput(_executeAskUser(args));
 
       // -- Tool discovery --
       case 'find_tools':
@@ -479,6 +483,52 @@ class ToolExecutor {
           isError: true,
         );
     }
+  }
+
+  /// Format a numbered list of options for the user to choose from.
+  /// Returns the formatted question so the model can present it.
+  String _executeAskUser(Map<String, dynamic> args) {
+    final question = (args['question'] as String? ?? '').trim();
+    if (question.isEmpty) {
+      return 'Error: "question" parameter required';
+    }
+
+    final rawOptions = args['options'];
+    List<String> options;
+    if (rawOptions is List) {
+      options = rawOptions.map((o) => o.toString().trim()).toList();
+    } else if (rawOptions is String) {
+      // Try JSON-decode in case model sends stringified list
+      try {
+        final decoded = jsonDecode(rawOptions);
+        if (decoded is List) {
+          options = decoded.map((o) => o.toString().trim()).toList();
+        } else {
+          return 'Error: "options" must be a list of strings';
+        }
+      } catch (_) {
+        return 'Error: "options" must be a list of strings';
+      }
+    } else {
+      return 'Error: "options" parameter required (list of 2-6 choices)';
+    }
+
+    if (options.length < 2 || options.length > 6) {
+      return 'Error: provide 2-6 options, got ${options.length}';
+    }
+
+    final buf = StringBuffer();
+    buf.writeln('QUESTION_FOR_USER: $question');
+    buf.writeln();
+    for (var i = 0; i < options.length; i++) {
+      buf.writeln('${i + 1}) ${options[i]}');
+    }
+    buf.writeln();
+    buf.writeln(
+      'Present this question and these numbered options to the user. '
+      'Wait for their reply before proceeding.',
+    );
+    return buf.toString().trimRight();
   }
 
   ToolExecutionResult _wrapOutput(String output) {

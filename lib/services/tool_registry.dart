@@ -15,6 +15,7 @@ const Map<String, ToolCategory> toolCategoryMap = {
   'uuid_generator': ToolCategory.basic,
   'notes': ToolCategory.basic,
   'generate_qr': ToolCategory.basic,
+  'ask_user': ToolCategory.basic,
   'web_search': ToolCategory.search,
   'web_crawl': ToolCategory.search,
   'generate_image': ToolCategory.search,
@@ -36,8 +37,10 @@ const Map<String, String> discoveryCatalog = {
       'Find places and restaurants, geocode addresses and calculate routes / '
       'Orte und Restaurants finden, Adressen geocoden, Routen berechnen',
   'Web':
-      'Search the internet, crawl/read webpages, generate/fetch images / '
-      'Im Internet suchen, Webseiten lesen, Bilder erzeugen/holen',
+      'Search the internet, crawl/read webpages, generate/edit/fetch images '
+      '(costs credits, not private) / '
+      'Im Internet suchen, Webseiten lesen, Bilder erzeugen/bearbeiten/holen '
+      '(kostet Credits, nicht privat)',
   'Finance / Finanzen':
       'Get stock quotes and historical price data / '
       'Aktienkurse und Kursverlauf abrufen',
@@ -170,6 +173,33 @@ final List<ClientTool> builtinTools = [
     tags: ['qr', 'qrcode', 'barcode', 'scan', 'link', 'url'],
   ),
 
+  // -- Interaction --
+  ClientTool(
+    name: 'ask_user',
+    description:
+        'Present the user with a question and numbered options to choose '
+        'from. Use when you need clarification or the user should pick '
+        'between alternatives before proceeding. The result is shown as '
+        'a numbered list; the user replies with their choice.',
+    parameters: {
+      'question': 'string (required: the question to ask)',
+      'options':
+          'list of strings (required: 2-6 short option labels, e.g. '
+          '["Option A", "Option B", "Option C"])',
+    },
+    type: ToolType.builtin,
+    tags: [
+      'ask',
+      'question',
+      'confirm',
+      'choose',
+      'select',
+      'fragen',
+      'auswahl',
+      'bestätigen',
+    ],
+  ),
+
   // -- Web --
   ClientTool(
     name: 'web_search',
@@ -222,10 +252,14 @@ final List<ClientTool> builtinTools = [
   ClientTool(
     name: 'generate_image',
     description:
-        'Generate an image from a text prompt and return image metadata '
-        '(URL, dimensions, seed).',
+        'Generate an image from a text prompt. Returns image metadata '
+        '(URL, dimensions, seed). Costs credits (~0.01 EUR per image). '
+        'PRIVACY: generated images are processed on an external server and '
+        'the operator can see them — they are NOT end-to-end encrypted like '
+        'chat messages. Before calling, inform the user about the cost and '
+        'that image generation is not private.',
     parameters: {
-      'prompt': 'string (required image prompt)',
+      'prompt': 'string (required: descriptive image prompt)',
       'image_size':
           'string (optional preset: square_hd, square, portrait_4_3, '
           'portrait_16_9, landscape_4_3, landscape_16_9)',
@@ -247,8 +281,11 @@ final List<ClientTool> builtinTools = [
     description:
         'Edit/modify an existing image with a text instruction. Requires '
         'the URL of the source image and a prompt describing the edit. '
-        'Example: {"prompt": "Make the sky sunset orange", '
-        '"image_url": "https://..."}',
+        'Costs credits (~0.10 EUR per edit). '
+        'PRIVACY: the source image and result are processed on an external '
+        'server and the operator can see them — they are NOT end-to-end '
+        'encrypted like chat messages. Before calling, inform the user about '
+        'the cost and that image editing is not private.',
     parameters: {
       'prompt': 'string (required: edit instruction)',
       'image_url': 'string (required: URL of the image to edit)',
@@ -268,23 +305,22 @@ final List<ClientTool> builtinTools = [
   ClientTool(
     name: 'fetch_image',
     description:
-        'Download an image from URL and return IMAGE_DATA metadata for chat '
-        'image handling.',
-    parameters: {'url': 'string (required image URL)'},
+        'Download an image from a URL and store it in the chat. Use this '
+        'to display an external image inline. Returns IMAGE_DATA metadata. '
+        'Max size 4 MB.',
+    parameters: {'url': 'string (required: direct image URL)'},
     type: ToolType.builtin,
     tags: ['image', 'fetch', 'download', 'picture', 'url', 'bild', 'foto'],
   ),
   ClientTool(
     name: 'view_chat_images',
     description:
-        'View/analyze images in this chat using your vision input. ONLY call '
-        'this when the user explicitly asks you to look at, describe, or '
-        'analyze an image. Do NOT call this automatically after generating '
-        'or fetching images. You can optionally filter by index to view '
-        'specific images only.',
+        'Analyze images already present in this chat using vision. ONLY call '
+        'when the user explicitly asks to look at, describe, or analyze an '
+        'image. Do NOT call automatically after generating or fetching images.',
     parameters: {
       'indices':
-          'string (optional comma-separated image indices to analyze, '
+          'string (optional: comma-separated image indices to analyze, '
           'e.g. "0,2")',
     },
     type: ToolType.builtin,
@@ -293,15 +329,15 @@ final List<ClientTool> builtinTools = [
   ClientTool(
     name: 'stock_data',
     description:
-        'Get stock market data. Actions: quote, history, compare. Return '
-        'prices/time-series for provided symbols.',
+        'Get stock market data from Yahoo Finance. Actions: quote (current '
+        'price), history (time-series chart data), compare (multiple '
+        'tickers). Returns OHLC prices, volume, and summary statistics.',
     parameters: {
-      'action': 'string (optional: quote, history, compare)',
+      'action': 'string (optional, default quote: quote, history, compare)',
       'symbol': 'string (required for quote/history, e.g. AAPL)',
-      'symbols': 'string/list (required for compare, e.g. AAPL,MSFT,NVDA)',
-      'period':
-          'string (optional history range, e.g. 5d, 1mo, 3mo, 6mo, 1y, 5y)',
-      'interval': 'string (optional history interval, e.g. 1d, 1h, 30m, 5m)',
+      'symbols': 'string or list (required for compare, e.g. "AAPL,MSFT,NVDA")',
+      'period': 'string (optional history range: 5d, 1mo, 3mo, 6mo, 1y, 5y)',
+      'interval': 'string (optional history interval: 1d, 1h, 30m, 5m)',
     },
     type: ToolType.builtin,
     tags: [
@@ -321,8 +357,9 @@ final List<ClientTool> builtinTools = [
   ClientTool(
     name: 'search_places',
     description:
-        'Search places/POIs by query and optional location context '
-        '(city or lat/lon radius).',
+        'Search places and points of interest via OpenStreetMap/Nominatim. '
+        'Filter by query and optional location (city name or lat/lon with '
+        'radius).',
     parameters: {
       'query': 'string (required, e.g. pharmacy, museum, cafe)',
       'city': 'string (optional city/region filter)',
@@ -337,8 +374,9 @@ final List<ClientTool> builtinTools = [
   ClientTool(
     name: 'search_restaurants',
     description:
-        'Search restaurants by query/cuisine and optional location context '
-        '(city or lat/lon radius).',
+        'Search restaurants via OpenStreetMap/Nominatim. Filter by '
+        'cuisine type and optional location (city name or lat/lon with '
+        'radius).',
     parameters: {
       'query': 'string (optional restaurant keyword)',
       'cuisine': 'string (optional cuisine, e.g. italian, sushi)',
@@ -368,8 +406,8 @@ final List<ClientTool> builtinTools = [
   ClientTool(
     name: 'get_route',
     description:
-        'Compute route between coordinates. Returns distance, duration, and '
-        'step summary.',
+        'Compute a route between two coordinates via OSRM. Returns distance, '
+        'estimated duration, and turn-by-turn step summary.',
     parameters: {
       'from_lat': 'number (required)',
       'from_lon': 'number (required)',
