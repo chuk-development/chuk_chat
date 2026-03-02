@@ -1467,6 +1467,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // Capture chatId for this streaming operation
     final String chatIdForStream = _activeChatId!;
 
+    // Accumulates display text across all streaming passes so that AI text
+    // from earlier passes is never lost when a new pass begins.
+    final accumulatedText = StringBuffer();
+
     Future<void> startStreamPass({
       required String message,
       required List<Map<String, dynamic>> history,
@@ -1494,9 +1498,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               _isValidMessageIndex(placeholderIndex) &&
               _activeChatId == chatIdForStream) {
             final displayContent = stripToolCallBlocksForDisplay(content);
+            final fullDisplay = accumulatedText.isEmpty
+                ? displayContent
+                : '$accumulatedText$displayContent';
 
             setState(() {
-              _messages[placeholderIndex]['text'] = displayContent;
+              _messages[placeholderIndex]['text'] = fullDisplay;
               _messages[placeholderIndex]['reasoning'] = reasoning;
             });
             _scrollChatToBottom();
@@ -1520,11 +1527,18 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             if (loopResult.shouldContinue && loopResult.nextStep != null) {
               final interimText = loopResult.interimContent?.trim() ?? '';
 
+              // Accumulate this pass's text so it persists in the UI.
+              if (interimText.isNotEmpty) {
+                accumulatedText.write(interimText);
+                accumulatedText.write('\n\n');
+              }
+              final accumulated = accumulatedText.toString().trimRight();
+
               if (_activeChatId == chatIdForStream) {
                 if (placeholderIndex >= 0 &&
                     placeholderIndex < _messages.length) {
-                  if (interimText.isNotEmpty) {
-                    _messages[placeholderIndex]['text'] = interimText;
+                  if (accumulated.isNotEmpty) {
+                    _messages[placeholderIndex]['text'] = accumulated;
                   }
                   _messages[placeholderIndex]['reasoning'] = finalReasoning;
                 }
@@ -1538,8 +1552,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 );
                 if (backgroundMsgs != null &&
                     placeholderIndex < backgroundMsgs.length) {
-                  if (interimText.isNotEmpty) {
-                    backgroundMsgs[placeholderIndex]['text'] = interimText;
+                  if (accumulated.isNotEmpty) {
+                    backgroundMsgs[placeholderIndex]['text'] = accumulated;
                   }
                   backgroundMsgs[placeholderIndex]['reasoning'] =
                       finalReasoning;
@@ -1563,9 +1577,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             final resolvedContent = loopResult.finalContent ?? finalContent;
             final resolvedReasoning =
                 loopResult.finalReasoning ?? finalReasoning;
-            final effectiveContent = resolvedContent.isEmpty
+            final rawContent = resolvedContent.isEmpty
                 ? 'No response received.'
                 : resolvedContent;
+
+            // Prepend accumulated text from previous passes so nothing is lost.
+            final effectiveContent = accumulatedText.isEmpty
+                ? rawContent
+                : '$accumulatedText$rawContent';
 
             // Persist tool-generated images to encrypted storage
             await _processToolImages(
@@ -2277,6 +2296,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       toolSession,
     );
 
+    // Accumulates display text across all streaming passes so that AI text
+    // from earlier passes is never lost when a new pass begins.
+    final accumulatedText = StringBuffer();
+
     Future<void> startStreamPass({
       required String message,
       required List<Map<String, dynamic>> history,
@@ -2301,11 +2324,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         onUpdate: (content, reasoning) {
           if (mounted && _activeChatId == chatIdForStream) {
             final displayContent = stripToolCallBlocksForDisplay(content);
+            final fullDisplay = accumulatedText.isEmpty
+                ? displayContent
+                : '$accumulatedText$displayContent';
             if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
-              _messages[placeholderIndex]['text'] = displayContent;
+              _messages[placeholderIndex]['text'] = fullDisplay;
               _messages[placeholderIndex]['reasoning'] = reasoning;
             }
-            _updateAiMessage(placeholderIndex, displayContent, reasoning);
+            _updateAiMessage(placeholderIndex, fullDisplay, reasoning);
             _scrollChatToBottom();
           }
         },
@@ -2333,11 +2359,18 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               if (loopResult.shouldContinue && loopResult.nextStep != null) {
                 final interimText = loopResult.interimContent?.trim() ?? '';
 
+                // Accumulate this pass's text so it persists in the UI.
+                if (interimText.isNotEmpty) {
+                  accumulatedText.write(interimText);
+                  accumulatedText.write('\n\n');
+                }
+                final accumulated = accumulatedText.toString().trimRight();
+
                 if (_activeChatId == chatIdForStream) {
                   if (placeholderIndex >= 0 &&
                       placeholderIndex < _messages.length) {
-                    if (interimText.isNotEmpty) {
-                      _messages[placeholderIndex]['text'] = interimText;
+                    if (accumulated.isNotEmpty) {
+                      _messages[placeholderIndex]['text'] = accumulated;
                     }
                     _messages[placeholderIndex]['reasoning'] = finalReasoning;
                   }
@@ -2350,8 +2383,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                       .getBackgroundMessages(chatIdForStream);
                   if (backgroundMsgs != null &&
                       placeholderIndex < backgroundMsgs.length) {
-                    if (interimText.isNotEmpty) {
-                      backgroundMsgs[placeholderIndex]['text'] = interimText;
+                    if (accumulated.isNotEmpty) {
+                      backgroundMsgs[placeholderIndex]['text'] = accumulated;
                     }
                     backgroundMsgs[placeholderIndex]['reasoning'] =
                         finalReasoning;
@@ -2383,9 +2416,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               final resolvedContent = loopResult.finalContent ?? finalContent;
               final resolvedReasoning =
                   loopResult.finalReasoning ?? finalReasoning;
-              final effectiveContent = resolvedContent.isEmpty
+              final rawContent = resolvedContent.isEmpty
                   ? 'The model returned an empty response.'
                   : resolvedContent;
+
+              // Prepend accumulated text from previous passes so nothing is lost.
+              final effectiveContent = accumulatedText.isEmpty
+                  ? rawContent
+                  : '$accumulatedText$rawContent';
 
               // Persist tool-generated images to encrypted storage
               await _processToolImages(

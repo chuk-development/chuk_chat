@@ -192,6 +192,10 @@ class StreamingMessageHandler {
     );
     const int kMaxStreamingPasses = 20;
 
+    // Accumulates display text across all streaming passes so that AI text
+    // from earlier passes is never lost when a new pass begins.
+    final accumulatedText = StringBuffer();
+
     Future<void> startStreamingPass({
       required String message,
       required List<Map<String, dynamic>> history,
@@ -231,22 +235,19 @@ class StreamingMessageHandler {
         stream: stream,
         onUpdate: (content, reasoning) {
           if (_isDisposed) return;
-          final displayContentRaw = stripToolCallBlocksForDisplay(content);
-          final displayContent = displayContentRaw;
+          final displayContent = stripToolCallBlocksForDisplay(content);
+          final fullDisplay = accumulatedText.isEmpty
+              ? displayContent
+              : '$accumulatedText$displayContent';
 
           if (onMessageUpdate != null) {
-            onMessageUpdate!(
-              placeholderIndex,
-              displayContent,
-              reasoning,
-              chatId,
-            );
+            onMessageUpdate!(placeholderIndex, fullDisplay, reasoning, chatId);
           }
           if (onBackgroundUpdate != null) {
             onBackgroundUpdate!(
               chatId,
               placeholderIndex,
-              displayContent,
+              fullDisplay,
               reasoning,
             );
           }
@@ -277,20 +278,27 @@ class StreamingMessageHandler {
               if (loopResult.shouldContinue && loopResult.nextStep != null) {
                 final interimText = loopResult.interimContent?.trim() ?? '';
 
+                // Accumulate this pass's text so it persists in the UI.
+                if (interimText.isNotEmpty) {
+                  accumulatedText.write(interimText);
+                  accumulatedText.write('\n\n');
+                }
+                final accumulated = accumulatedText.toString().trimRight();
+
                 if (_isDisposed) return;
-                if (interimText.isNotEmpty && onMessageUpdate != null) {
+                if (accumulated.isNotEmpty && onMessageUpdate != null) {
                   onMessageUpdate!(
                     placeholderIndex,
-                    interimText,
+                    accumulated,
                     finalReasoning,
                     chatId,
                   );
                 }
-                if (interimText.isNotEmpty && onBackgroundUpdate != null) {
+                if (accumulated.isNotEmpty && onBackgroundUpdate != null) {
                   onBackgroundUpdate!(
                     chatId,
                     placeholderIndex,
-                    interimText,
+                    accumulated,
                     finalReasoning,
                   );
                 }
@@ -316,10 +324,15 @@ class StreamingMessageHandler {
                 chatId,
               );
 
-              final effectiveContent =
+              final rawContent =
                   (loopResult.finalContent ?? finalContent).isEmpty
                   ? 'The model returned an empty response.'
                   : (loopResult.finalContent ?? finalContent);
+              // Prepend accumulated text from previous passes so nothing
+              // is lost.
+              final effectiveContent = accumulatedText.isEmpty
+                  ? rawContent
+                  : '$accumulatedText$rawContent';
               final effectiveReasoning =
                   loopResult.finalReasoning ?? finalReasoning;
 
