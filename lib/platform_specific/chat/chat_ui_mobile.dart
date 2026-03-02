@@ -1987,23 +1987,24 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
   /// Resolve system prompt with project context (if any)
   Future<String?> _resolveSystemPromptForSend() async {
-    // Start with user's base system prompt
-    String? basePrompt = _systemPrompt;
-    if (basePrompt == null) {
-      try {
-        basePrompt = await UserPreferencesService.loadSystemPrompt();
-        if (mounted) {
-          setState(() {
-            _systemPrompt = basePrompt;
-          });
-        } else {
+    // Always reload the system prompt from the database so that changes
+    // made in SystemPromptPage take effect without restarting the app.
+    String? basePrompt;
+    try {
+      basePrompt = await UserPreferencesService.loadSystemPrompt();
+      if (mounted) {
+        setState(() {
           _systemPrompt = basePrompt;
-        }
-      } catch (error) {
-        if (kDebugMode) {
-          debugPrint('Error resolving system prompt for send: $error');
-        }
+        });
+      } else {
+        _systemPrompt = basePrompt;
       }
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Error resolving system prompt for send: $error');
+      }
+      // Fall back to cached value if reload fails (e.g. offline).
+      basePrompt = _systemPrompt;
     }
 
     // If a project is active, prepend project context
