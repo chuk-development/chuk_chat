@@ -236,7 +236,7 @@ class ToolCallHandler {
             discoveredTools: session.discoveredTools,
           ),
         ),
-        interimContent: _extractPreToolText(cleanedContent),
+        interimContent: _stripToolCallBlocks(cleanedContent),
         toolCalls: _cloneToolCalls(session.toolCalls),
       );
     }
