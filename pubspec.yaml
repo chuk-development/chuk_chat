@@ -40,6 +40,8 @@ dependencies:
   flutter_foreground_task: ^8.11.0  # Keep streaming alive when app backgrounded
   flutter_local_notifications: ^18.0.1  # Completion notifications with deep linking
   pasteboard: ^0.4.0
+  flutter_map: ^8.2.2          # Map widget for displaying locations/routes
+  latlong2: ^0.9.1              # Coordinate math (LatLng type)
 
 dev_dependencies:
   flutter_test:

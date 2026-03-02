@@ -29,18 +29,15 @@ Future<String> executeSearchPlaces(
   final shouldCloseClient = client == null;
 
   try {
-    final where = _buildWhereClause(
-      city: city,
-      latitude: lat,
-      longitude: lon,
-      radiusMeters: radius,
-    );
-    final searchQuery = where == null ? query : '$query $where';
+    final searchQuery = city.isNotEmpty ? '$query $city' : query;
 
     final results = await _searchNominatim(
       client: effectiveClient,
       query: searchQuery,
       limit: limit,
+      latitude: lat,
+      longitude: lon,
+      radiusMeters: city.isEmpty ? radius : null,
     );
 
     if (results.isEmpty) {
@@ -77,13 +74,6 @@ Future<String> executeSearchRestaurants(
   final shouldCloseClient = client == null;
 
   try {
-    final where = _buildWhereClause(
-      city: city,
-      latitude: lat,
-      longitude: lon,
-      radiusMeters: radius,
-    );
-
     final parts = <String>['restaurant'];
     if (query.isNotEmpty) {
       parts.add(query);
@@ -91,14 +81,17 @@ Future<String> executeSearchRestaurants(
     if (cuisine.isNotEmpty) {
       parts.add(cuisine);
     }
-    if (where != null) {
-      parts.add(where);
+    if (city.isNotEmpty) {
+      parts.add(city);
     }
 
     final results = await _searchNominatim(
       client: effectiveClient,
       query: parts.join(' '),
       limit: limit,
+      latitude: lat,
+      longitude: lon,
+      radiusMeters: city.isEmpty ? radius : null,
     );
 
     if (results.isEmpty) {
@@ -206,7 +199,9 @@ Future<String> executeGetRoute(
     'foot' => 'foot',
     'cycling' => 'bike',
     'bike' => 'bike',
-    _ => 'driving',
+    'driving' => 'car',
+    'car' => 'car',
+    _ => 'car',
   };
 
   final effectiveClient = client ?? http.Client();
@@ -276,11 +271,25 @@ Future<List<Map<String, dynamic>>> _searchNominatim({
   required http.Client client,
   required String query,
   required int limit,
+  double? latitude,
+  double? longitude,
+  int? radiusMeters,
 }) async {
-  final uri = Uri.parse(
-    '$_nominatimBaseUrl/search'
-    '?format=jsonv2&q=${Uri.encodeComponent(query)}&limit=$limit',
-  );
+  var url =
+      '$_nominatimBaseUrl/search'
+      '?format=jsonv2&q=${Uri.encodeComponent(query)}&limit=$limit';
+
+  // Use Nominatim viewbox for spatial filtering when coordinates are provided
+  if (latitude != null && longitude != null && radiusMeters != null) {
+    // Convert radius to approximate degree offset (~111km per degree)
+    final delta = radiusMeters / 111000.0;
+    final viewbox =
+        '${longitude - delta},${latitude + delta},'
+        '${longitude + delta},${latitude - delta}';
+    url += '&viewbox=$viewbox&bounded=1';
+  }
+
+  final uri = Uri.parse(url);
 
   final response = await client.get(uri, headers: _defaultHeaders);
   if (response.statusCode != 200) {
@@ -346,23 +355,6 @@ String _formatPlaceResults({
   }
 
   return buf.toString().trimRight();
-}
-
-String? _buildWhereClause({
-  required String city,
-  required double? latitude,
-  required double? longitude,
-  required int radiusMeters,
-}) {
-  if (city.isNotEmpty) {
-    return city;
-  }
-
-  if (latitude != null && longitude != null) {
-    return 'near $latitude,$longitude within ${radiusMeters}m';
-  }
-
-  return null;
 }
 
 String _buildInstruction({

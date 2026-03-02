@@ -603,6 +603,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
   }
 
+  /// Returns the current messages list for debug export.
+  List<Map<String, String>> get debugMessages =>
+      _messages.map((m) => Map<String, String>.from(m)).toList();
+
   void newChat() {
     // Capture current chat data for background persistence
     final chatIdToSave = _activeChatId;

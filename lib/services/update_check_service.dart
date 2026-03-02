@@ -108,10 +108,12 @@ class UpdateCheckService {
 
       _lastCheckTime = DateTime.now();
     } on TimeoutException {
+      _lastCheckTime = DateTime.now(); // Prevent rapid retries on failure
       if (kDebugMode) {
         debugPrint('[UpdateCheck] Timeout');
       }
     } catch (e) {
+      _lastCheckTime = DateTime.now(); // Prevent rapid retries on failure
       if (kDebugMode) {
         debugPrint('[UpdateCheck] Failed: $e');
       }

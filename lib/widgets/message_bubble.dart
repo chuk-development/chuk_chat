@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/utils/image_clipboard_service.dart';
+import 'package:chuk_chat/widgets/map_block_renderer.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
 import 'package:chuk_chat/widgets/document_viewer.dart';
@@ -1137,6 +1138,32 @@ class _MessageBubbleState extends State<MessageBubble>
 
     if (!isUserMessage && displayText.trim().isEmpty) {
       return const SizedBox.shrink();
+    }
+
+    // For AI messages, check for embedded <map> blocks
+    if (!isUserMessage && hasMapBlocks(displayText)) {
+      final segments = parseMapSegments(displayText);
+      final widgets = <Widget>[];
+      for (final segment in segments) {
+        if (segment.isMap) {
+          widgets.add(MapBlockWidget(jsonString: segment.content));
+        } else {
+          widgets.add(
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: MarkdownMessage(
+                text: segment.content,
+                textColor: iconFgColor,
+                backgroundColor: bgColor,
+              ),
+            ),
+          );
+        }
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: widgets,
+      );
     }
 
     final Widget messageWidget = MarkdownMessage(

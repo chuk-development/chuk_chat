@@ -187,7 +187,7 @@ class InputValidator {
   /// Validates password strength and returns detailed feedback.
   ///
   /// Requirements:
-  /// - Minimum 6 characters
+  /// - Minimum 8 characters
   /// - At least one uppercase letter
   /// - At least one lowercase letter
   /// - At least one digit
