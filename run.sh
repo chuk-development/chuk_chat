@@ -21,6 +21,13 @@ DEVICE="${1:-linux}"
 # Build dart-define arguments
 DART_DEFINES="--dart-define=SUPABASE_URL=$SUPABASE_URL --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY"
 
+# Override the local API server URL (debug builds use http://localhost:8000 by default).
+# Set LOCAL_API_URL in .env or export it to change:
+#   LOCAL_API_URL=http://192.168.1.10:8000  ./run.sh linux
+if [ -n "$LOCAL_API_URL" ]; then
+  DART_DEFINES="$DART_DEFINES --dart-define=LOCAL_API_URL=$LOCAL_API_URL"
+fi
+
 # Add any additional dart-defines for features
 if [ -n "$FEATURE_PROJECTS" ]; then
   DART_DEFINES="$DART_DEFINES --dart-define=FEATURE_PROJECTS=$FEATURE_PROJECTS"

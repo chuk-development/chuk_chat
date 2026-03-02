@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:chuk_chat/platform_config.dart';
+import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/widgets/credit_display.dart';
 import 'package:flutter/gestures.dart';
@@ -12,11 +13,8 @@ import 'package:flutter/foundation.dart';
 
 final SupabaseClient _supabase = Supabase.instance.client;
 
-// API base URL - defaults to production
-const String _apiBaseUrl = String.fromEnvironment(
-  'API_BASE_URL',
-  defaultValue: 'https://api.chuk.chat',
-);
+// API base URL - resolved from ApiConfigService (debug → local, release → production)
+final String _apiBaseUrl = ApiConfigService.apiBaseUrl;
 
 Future<void> _launchExternalUrl(String url) async {
   final Uri? uri = Uri.tryParse(url);

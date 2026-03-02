@@ -11,6 +11,7 @@ import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/utils/color_extensions.dart'; // Import the new extension
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
+import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/api_status_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -134,8 +135,7 @@ class ModelSelectorPage extends StatefulWidget {
 }
 
 class _ModelSelectorPageState extends State<ModelSelectorPage> {
-  final String _baseUrl =
-      'https://api.chuk.chat'; // <--- IMPORTANT: SET YOUR FASTAPI SERVER URL HERE
+  final String _baseUrl = ApiConfigService.apiBaseUrl;
   List<CustomModelInfo> _models = [];
   Map<String, ModelProviderInfo?> _selectedProviders = {};
   bool _isLoading = true;

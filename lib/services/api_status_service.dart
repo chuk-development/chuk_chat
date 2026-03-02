@@ -1,10 +1,13 @@
 // lib/services/api_status_service.dart
 import 'dart:async';
+
 import 'package:http/http.dart' as http;
+
+import 'package:chuk_chat/services/api_config_service.dart';
 
 /// Utility helpers for checking the availability of the primary API.
 class ApiStatusService {
-  static const String _defaultBaseUrl = 'https://api.chuk.chat';
+  static String get _defaultBaseUrl => ApiConfigService.apiBaseUrl;
   static const Duration _defaultTimeout = Duration(seconds: 4);
 
   /// Returns `true` when the API responds to either `/health` or a HEAD request

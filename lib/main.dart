@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/utils/certificate_pinning_register.dart'
     as cert_register;
+import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/app_initialization_service.dart';
 import 'package:chuk_chat/services/app_lifecycle_service.dart';
 import 'package:chuk_chat/services/app_theme_service.dart';
@@ -26,6 +27,11 @@ Future<void> main() async {
   // Register certificate pinning for native platforms.
   // On web this is a no-op (browser handles TLS).
   cert_register.registerCertificatePinning();
+
+  // Log which API server we're targeting (only visible in debug builds)
+  if (kDebugMode) {
+    debugPrint('[API] Using server: ${ApiConfigService.apiBaseUrl}');
+  }
 
   // Pre-initialize SharedPreferences BEFORE runApp for instant cache access
   await initChatStorageCache();
