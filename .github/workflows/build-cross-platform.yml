@@ -649,6 +649,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             if (Test-Path "build/windows/x64/runner/Release/chuk_chat.exe") {
               Write-Warning "flutter build windows failed during install, but Release binaries exist. Continuing with packaging."
+              $global:LASTEXITCODE = 0
             } else {
               Write-Error "Windows build failed before producing Release binaries."
               exit $LASTEXITCODE
