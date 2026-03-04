@@ -4158,13 +4158,15 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 ),
               ),
               const SizedBox(width: 8),
-              // Send/Cancel Message Button
+              // Smart Send Button: sends audio when mic active, text otherwise
               GestureDetector(
                 onTap: _isTranscribingAudio
                     ? null
                     : () {
                         if (_isStreaming || _isSending) {
                           _cancelCurrentOperation();
+                        } else if (_isMicActive) {
+                          _handleAudioSend();
                         } else {
                           _sendMessage();
                         }
@@ -4273,57 +4275,21 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 isActive: _isMicActive,
                 debugLabel: 'Mic button',
               ),
-              // Voice Mode button (only when feature enabled) or Audio Send button
-              if (_isMicActive || kFeatureVoiceMode) ...[
+              // Voice Mode button (only when feature enabled, hidden during recording)
+              if (!_isMicActive && kFeatureVoiceMode) ...[
                 const SizedBox(width: 8),
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 200),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  child: _isMicActive
-                      ? GestureDetector(
-                          key: const ValueKey<String>('audio-send-button'),
-                          onTap: _isTranscribingAudio ? null : _handleAudioSend,
-                          child: Container(
-                            width: 44,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: accent,
-                              borderRadius: BorderRadius.circular(buttonRadius),
-                            ),
-                            child: _isTranscribingAudio
-                                ? const Padding(
-                                    padding: EdgeInsets.all(8.0),
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        Colors.black,
-                                      ),
-                                    ),
-                                  )
-                                : const Icon(
-                                    Icons.north_rounded,
-                                    color: Colors.black,
-                                    size: 20,
-                                  ),
-                          ),
-                        )
-                      : GestureDetector(
-                          key: const ValueKey<String>('voice-mode-button'),
-                          onTap: () => _openComingSoonFeature('Voice Mode'),
-                          child: Container(
-                            width: 44,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: accent,
-                              borderRadius: BorderRadius.circular(buttonRadius),
-                            ),
-                            child: const Icon(
-                              Icons.graphic_eq,
-                              color: Colors.black,
-                            ),
-                          ),
-                        ),
+                GestureDetector(
+                  key: const ValueKey<String>('voice-mode-button'),
+                  onTap: () => _openComingSoonFeature('Voice Mode'),
+                  child: Container(
+                    width: 44,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: accent,
+                      borderRadius: BorderRadius.circular(buttonRadius),
+                    ),
+                    child: const Icon(Icons.graphic_eq, color: Colors.black),
+                  ),
                 ),
               ],
             ],
