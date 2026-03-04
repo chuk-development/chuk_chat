@@ -606,7 +606,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
                           style: TextStyle(
                             color: iconFg,
                             fontSize: 16,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
@@ -662,7 +662,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
         style: TextStyle(
           color: iconFg,
           fontSize: 14,
-          fontWeight: FontWeight.bold,
+          fontWeight: FontWeight.w800,
         ),
       ),
     );
@@ -690,7 +690,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
           leading: _leadingIconPlaceholder(Icons.star, iconFgColor: accent),
           title: Text(
             title,
-            style: TextStyle(color: iconFg),
+            style: TextStyle(color: iconFg, fontWeight: FontWeight.w600),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -743,6 +743,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
                   ? iconFgColor.withValues(alpha: 0.38)
                   : (isSelected ? accentColor : iconFgColor),
               fontSize: 15,
+              fontWeight: FontWeight.w600,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
