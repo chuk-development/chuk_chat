@@ -307,17 +307,11 @@ class StreamingMessageHandler {
                     : <ToolCall>[];
                 previousToolCallCount = allToolCalls.length;
 
-                // Add text block for this pass's visible text.
-                if (interimText.isNotEmpty) {
-                  contentBlocks.add(ContentBlock.text(interimText));
-                }
-                // Add tool_calls block for this pass's tool calls.
-                // If the AI didn't say anything to the user since the last
-                // tool_calls block, merge into that block instead of creating
-                // a separate collapsible bar.
+                // Merge tool calls into a single block across passes.
+                // Intermediate text is accumulated for the final text block
+                // — only the final answer creates a visible text block.
                 if (newToolCalls.isNotEmpty) {
-                  if (interimText.isEmpty &&
-                      contentBlocks.isNotEmpty &&
+                  if (contentBlocks.isNotEmpty &&
                       contentBlocks.last.type == ContentBlockType.toolCalls) {
                     final merged = [
                       ...contentBlocks.last.toolCalls!,
@@ -385,11 +379,18 @@ class StreamingMessageHandler {
               final effectiveReasoning =
                   loopResult.finalReasoning ?? finalReasoning;
 
+              // Prepend accumulated text from previous passes so nothing
+              // is lost in the flat message field (backward compat).
+              final effectiveContent = accumulatedText.isEmpty
+                  ? rawContent
+                  : '$accumulatedText$rawContent';
+
               // --- Build final content blocks ---
               if (contentBlocks.isNotEmpty) {
-                // Multi-pass: add the final answer as a text block.
+                // Use the full accumulated text (all passes) for the
+                // single text block shown below the tool calls bar.
                 final finalText = stripToolCallBlocksForDisplay(
-                  rawContent,
+                  effectiveContent,
                 ).trim();
                 if (effectiveReasoning.isNotEmpty) {
                   contentBlocks.add(ContentBlock.reasoning(effectiveReasoning));
@@ -403,12 +404,6 @@ class StreamingMessageHandler {
                   chatId,
                 );
               }
-
-              // Prepend accumulated text from previous passes so nothing
-              // is lost in the flat message field (backward compat).
-              final effectiveContent = accumulatedText.isEmpty
-                  ? rawContent
-                  : '$accumulatedText$rawContent';
 
               if (onMessageFinalize != null) {
                 onMessageFinalize!(

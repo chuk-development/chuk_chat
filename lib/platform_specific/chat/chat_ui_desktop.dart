@@ -1550,14 +1550,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                   : <ToolCall>[];
               previousToolCallCount = allToolCalls.length;
 
-              if (interimText.isNotEmpty) {
-                contentBlocks.add(ContentBlock.text(interimText));
-              }
-              // Merge into the previous tool_calls block when the AI
-              // didn't say anything to the user between passes.
+              // Merge tool calls into a single block across passes.
+              // Intermediate text is accumulated for the final text block.
               if (newToolCalls.isNotEmpty) {
-                if (interimText.isEmpty &&
-                    contentBlocks.isNotEmpty &&
+                if (contentBlocks.isNotEmpty &&
                     contentBlocks.last.type == ContentBlockType.toolCalls) {
                   final merged = [
                     ...contentBlocks.last.toolCalls!,
@@ -1627,10 +1623,17 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 ? 'The model returned an empty response. Tap resend on your last message to continue.'
                 : resolvedContent;
 
+            // Prepend accumulated text from previous passes so nothing is lost.
+            final effectiveContent = accumulatedText.isEmpty
+                ? rawContent
+                : '$accumulatedText$rawContent';
+
             // Build final content blocks.
             if (contentBlocks.isNotEmpty) {
+              // Use the full accumulated text (all passes) for the
+              // single text block shown below the tool calls bar.
               final finalText = stripToolCallBlocksForDisplay(
-                rawContent,
+                effectiveContent,
               ).trim();
               if (resolvedReasoning.isNotEmpty) {
                 contentBlocks.add(ContentBlock.reasoning(resolvedReasoning));
@@ -1642,11 +1645,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             final contentBlocksJson = contentBlocks.isNotEmpty
                 ? jsonEncode(contentBlocks.map((b) => b.toJson()).toList())
                 : null;
-
-            // Prepend accumulated text from previous passes so nothing is lost.
-            final effectiveContent = accumulatedText.isEmpty
-                ? rawContent
-                : '$accumulatedText$rawContent';
 
             // Persist tool-generated images to encrypted storage
             await _processToolImages(
@@ -2473,14 +2471,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                     : <ToolCall>[];
                 previousToolCallCount2 = allToolCalls.length;
 
-                if (interimText.isNotEmpty) {
-                  contentBlocks2.add(ContentBlock.text(interimText));
-                }
-                // Merge into the previous tool_calls block when the AI
-                // didn't say anything to the user between passes.
+                // Merge tool calls into a single block across passes.
+                // Intermediate text is accumulated for the final text block.
                 if (newToolCalls.isNotEmpty) {
-                  if (interimText.isEmpty &&
-                      contentBlocks2.isNotEmpty &&
+                  if (contentBlocks2.isNotEmpty &&
                       contentBlocks2.last.type == ContentBlockType.toolCalls) {
                     final merged = [
                       ...contentBlocks2.last.toolCalls!,
@@ -2557,10 +2551,17 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                   ? 'The model returned an empty response. Tap resend on your last message to continue.'
                   : resolvedContent;
 
+              // Prepend accumulated text from previous passes so nothing is lost.
+              final effectiveContent = accumulatedText2.isEmpty
+                  ? rawContent
+                  : '$accumulatedText2$rawContent';
+
               // Build final content blocks.
               if (contentBlocks2.isNotEmpty) {
+                // Use the full accumulated text (all passes) for the
+                // single text block shown below the tool calls bar.
                 final finalText = stripToolCallBlocksForDisplay(
-                  rawContent,
+                  effectiveContent,
                 ).trim();
                 if (resolvedReasoning.isNotEmpty) {
                   contentBlocks2.add(ContentBlock.reasoning(resolvedReasoning));
@@ -2572,11 +2573,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               final contentBlocksJson = contentBlocks2.isNotEmpty
                   ? jsonEncode(contentBlocks2.map((b) => b.toJson()).toList())
                   : null;
-
-              // Prepend accumulated text from previous passes so nothing is lost.
-              final effectiveContent = accumulatedText2.isEmpty
-                  ? rawContent
-                  : '$accumulatedText2$rawContent';
 
               // Persist tool-generated images to encrypted storage
               await _processToolImages(
