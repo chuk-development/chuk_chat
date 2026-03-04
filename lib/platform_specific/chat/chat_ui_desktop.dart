@@ -4201,7 +4201,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                           size: 22,
                         )
                       : Transform(
-                          transform: Matrix4.diagonal3Values(1, 0.9, 1),
+                          transform: Matrix4.diagonal3Values(1, 0.95, 1),
                           alignment: Alignment.center,
                           child: const Icon(
                             Icons.arrow_upward_rounded,
