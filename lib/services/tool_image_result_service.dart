@@ -58,9 +58,8 @@ class ToolImageResultService {
         }
 
         final extracted = await _ensureStoragePath(payload);
-        if (extracted.updatedPayload != null) {
-          call.result = 'IMAGE:${jsonEncode(extracted.updatedPayload)}';
-        }
+        final normalizedPayload = extracted.updatedPayload ?? payload;
+        call.result = 'IMAGE:${jsonEncode(normalizedPayload)}';
 
         final storagePath = extracted.storagePath;
         if (storagePath != null && seenPaths.add(storagePath)) {
@@ -90,9 +89,8 @@ class ToolImageResultService {
         }
 
         final extracted = await _ensureStoragePath(payload);
-        if (extracted.updatedPayload != null) {
-          call.result = 'IMAGE_DATA:${jsonEncode(extracted.updatedPayload)}';
-        }
+        final normalizedPayload = extracted.updatedPayload ?? payload;
+        call.result = 'IMAGE_DATA:${jsonEncode(normalizedPayload)}';
 
         final storagePath = extracted.storagePath;
         if (storagePath != null && seenPaths.add(storagePath)) {
@@ -295,8 +293,33 @@ class ToolImageResultService {
   }
 
   static Map<String, dynamic>? _tryDecodeMap(String jsonString) {
+    final trimmed = jsonString.trim();
+
+    final direct = _decodeMap(trimmed);
+    if (direct != null) {
+      return direct;
+    }
+
+    final firstLineIndex = trimmed.indexOf('\n');
+    if (firstLineIndex > 0) {
+      final firstLine = trimmed.substring(0, firstLineIndex).trim();
+      final firstLineDecoded = _decodeMap(firstLine);
+      if (firstLineDecoded != null) {
+        return firstLineDecoded;
+      }
+    }
+
+    final extracted = _extractLeadingJsonObject(trimmed);
+    if (extracted != null) {
+      return _decodeMap(extracted);
+    }
+
+    return null;
+  }
+
+  static Map<String, dynamic>? _decodeMap(String value) {
     try {
-      final decoded = jsonDecode(jsonString);
+      final decoded = jsonDecode(value);
       if (decoded is Map<String, dynamic>) {
         return decoded;
       }
@@ -304,6 +327,52 @@ class ToolImageResultService {
     } catch (_) {
       return null;
     }
+  }
+
+  static String? _extractLeadingJsonObject(String text) {
+    final start = text.indexOf('{');
+    if (start < 0) {
+      return null;
+    }
+
+    var depth = 0;
+    var inString = false;
+    var escaped = false;
+
+    for (var i = start; i < text.length; i++) {
+      final char = text[i];
+
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        if (char == r'\') {
+          escaped = true;
+          continue;
+        }
+        if (char == '"') {
+          inString = false;
+        }
+        continue;
+      }
+
+      if (char == '"') {
+        inString = true;
+        continue;
+      }
+
+      if (char == '{') {
+        depth++;
+      } else if (char == '}') {
+        depth--;
+        if (depth == 0) {
+          return text.substring(start, i + 1);
+        }
+      }
+    }
+
+    return null;
   }
 
   static String? _nonEmptyString(dynamic value) {
