@@ -1549,8 +1549,21 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               if (interimText.isNotEmpty) {
                 contentBlocks.add(ContentBlock.text(interimText));
               }
+              // Merge into the previous tool_calls block when the AI
+              // didn't say anything to the user between passes.
               if (newToolCalls.isNotEmpty) {
-                contentBlocks.add(ContentBlock.toolCalls(newToolCalls));
+                if (interimText.isEmpty &&
+                    contentBlocks.isNotEmpty &&
+                    contentBlocks.last.type == ContentBlockType.toolCalls) {
+                  final merged = [
+                    ...contentBlocks.last.toolCalls!,
+                    ...newToolCalls,
+                  ];
+                  contentBlocks[contentBlocks.length - 1] =
+                      ContentBlock.toolCalls(merged);
+                } else {
+                  contentBlocks.add(ContentBlock.toolCalls(newToolCalls));
+                }
               }
 
               // Accumulate text for backward-compat message field.
@@ -2432,8 +2445,21 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 if (interimText.isNotEmpty) {
                   contentBlocks2.add(ContentBlock.text(interimText));
                 }
+                // Merge into the previous tool_calls block when the AI
+                // didn't say anything to the user between passes.
                 if (newToolCalls.isNotEmpty) {
-                  contentBlocks2.add(ContentBlock.toolCalls(newToolCalls));
+                  if (interimText.isEmpty &&
+                      contentBlocks2.isNotEmpty &&
+                      contentBlocks2.last.type == ContentBlockType.toolCalls) {
+                    final merged = [
+                      ...contentBlocks2.last.toolCalls!,
+                      ...newToolCalls,
+                    ];
+                    contentBlocks2[contentBlocks2.length - 1] =
+                        ContentBlock.toolCalls(merged);
+                  } else {
+                    contentBlocks2.add(ContentBlock.toolCalls(newToolCalls));
+                  }
                 }
 
                 // Accumulate text for backward-compat message field.
