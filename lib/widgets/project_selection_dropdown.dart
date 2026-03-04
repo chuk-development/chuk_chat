@@ -20,7 +20,8 @@ class ProjectSelectionDropdown extends StatefulWidget {
   });
 
   @override
-  State<ProjectSelectionDropdown> createState() => _ProjectSelectionDropdownState();
+  State<ProjectSelectionDropdown> createState() =>
+      _ProjectSelectionDropdownState();
 }
 
 class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
@@ -88,18 +89,18 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
           final Color borderColor = _hasProject
               ? iconFgColor.withValues(alpha: 0.6)
               : hovered
-                  ? iconFgColor
-                  : iconFgColor.withValues(alpha: 0.3);
-          final double borderWidth = _hasProject ? 1.0 : (hovered ? 1.2 : 0.8);
+              ? iconFgColor
+              : iconFgColor.withValues(alpha: 0.3);
+          final double borderWidth = _hasProject ? 2.0 : (hovered ? 2.2 : 1.8);
 
           return AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             curve: Curves.easeOutCubic,
-            height: 36,
-            padding: EdgeInsets.symmetric(horizontal: _hasProject ? 8 : 0),
+            height: 42,
+            padding: EdgeInsets.symmetric(horizontal: _hasProject ? 10 : 0),
             decoration: BoxDecoration(
               color: effectiveBgColor,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(21),
               border: Border.all(color: borderColor, width: borderWidth),
             ),
             child: _hasProject
@@ -112,7 +113,10 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
                         constraints: const BoxConstraints(maxWidth: 80),
                         child: Text(
                           _selectedProjectName,
-                          style: TextStyle(color: effectiveIconColor, fontSize: 13),
+                          style: TextStyle(
+                            color: effectiveIconColor,
+                            fontSize: 13,
+                          ),
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1,
                         ),
@@ -125,10 +129,10 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
                       ),
                     ],
                   )
-                // Same size as other icon buttons: 44x36
+                // Same size as other icon buttons: 50x42
                 : SizedBox(
-                    width: 44,
-                    height: 36,
+                    width: 50,
+                    height: 42,
                     child: Icon(
                       Icons.folder_outlined,
                       color: effectiveIconColor,
@@ -207,7 +211,9 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
                   children: [
                     Icon(
                       Icons.folder,
-                      color: isSelected ? iconFgColor : iconFgColor.withValues(alpha: 0.6),
+                      color: isSelected
+                          ? iconFgColor
+                          : iconFgColor.withValues(alpha: 0.6),
                       size: 18,
                     ),
                     const SizedBox(width: 12),
@@ -215,12 +221,15 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
                       child: Text(
                         project.name,
                         style: TextStyle(
-                          color: isSelected ? iconFgColor : iconFgColor.withValues(alpha: 0.8),
+                          color: isSelected
+                              ? iconFgColor
+                              : iconFgColor.withValues(alpha: 0.8),
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    if (isSelected) Icon(Icons.check, color: iconFgColor, size: 18),
+                    if (isSelected)
+                      Icon(Icons.check, color: iconFgColor, size: 18),
                   ],
                 ),
               ),

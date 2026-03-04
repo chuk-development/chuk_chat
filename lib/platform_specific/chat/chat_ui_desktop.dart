@@ -2,6 +2,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'dart:math' as math; // For min/max
 import 'dart:async';
 import 'dart:convert';
@@ -1456,6 +1457,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       initialUserMessage: originalUserInput,
       history: conversationHistory,
       accessToken: accessToken,
+      discoveryContextKey: _activeChatId,
       baseSystemPrompt: systemPrompt,
       toolCallingEnabled: widget.toolCallingEnabled,
       discoveryMode: widget.toolDiscoveryMode,
@@ -2288,6 +2290,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       initialUserMessage: aiPromptContent,
       history: apiHistory,
       accessToken: accessToken,
+      discoveryContextKey: chatIdForStream,
       baseSystemPrompt: systemPrompt,
       toolCallingEnabled: widget.toolCallingEnabled,
       discoveryMode: widget.toolDiscoveryMode,
@@ -4046,7 +4049,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   // NEW: Extracted Attachment Bar Widget
   Widget _buildSearchBar({required bool isCompactMode}) {
-    const btnH = 36.0, btnW = 44.0;
+    const btnH = 42.0, btnW = 50.0;
+    const containerRadius = 23.0;
+    const buttonRadius = 21.0;
     final Color bg = Theme.of(context).scaffoldBackgroundColor;
     final Color accent = Theme.of(context).colorScheme.primary;
     final Color iconFg = Theme.of(context).resolvedIconColor;
@@ -4059,8 +4064,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       constraints: const BoxConstraints(minHeight: _kSearchBarContentHeight),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: iconFg.withValues(alpha: 0.3)),
+        borderRadius: BorderRadius.circular(containerRadius),
+        border: Border.all(color: iconFg.withValues(alpha: 0.3), width: 2),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Column(
@@ -4163,7 +4168,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                   height: btnH,
                   decoration: BoxDecoration(
                     color: (_isStreaming || _isSending) ? Colors.red : accent,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(buttonRadius),
                   ),
                   child: _isTranscribingAudio
                       ? const Padding(
@@ -4175,11 +4180,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                             ),
                           ),
                         )
-                      : Icon(
-                          (_isStreaming || _isSending)
-                              ? Icons.stop
-                              : Icons.arrow_upward,
+                      : (_isStreaming || _isSending)
+                      ? const Icon(Icons.stop, color: Colors.black, size: 24)
+                      : const Icon(
+                          Icons.north_rounded,
                           color: Colors.black,
+                          size: 24,
                         ),
                 ),
               ),
@@ -4255,7 +4261,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               const SizedBox(width: 8),
               // Mic Button (acts as record/stop toggle)
               _buildIconBtn(
-                icon: _isMicActive ? Icons.stop : Icons.mic,
+                icon: _isMicActive ? Icons.stop : Icons.mic_rounded,
+                iconSize: 18,
                 onTap: _handleMicTap,
                 isActive: _isMicActive,
                 debugLabel: 'Mic button',
@@ -4272,11 +4279,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                           key: const ValueKey<String>('audio-send-button'),
                           onTap: _isTranscribingAudio ? null : _handleAudioSend,
                           child: Container(
-                            width: 44,
-                            height: 36,
+                            width: 50,
+                            height: 42,
                             decoration: BoxDecoration(
                               color: accent,
-                              borderRadius: BorderRadius.circular(10),
+                              borderRadius: BorderRadius.circular(buttonRadius),
                             ),
                             child: _isTranscribingAudio
                                 ? const Padding(
@@ -4288,18 +4295,22 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                       ),
                                     ),
                                   )
-                                : const Icon(Icons.send, color: Colors.black),
+                                : const Icon(
+                                    Icons.north_rounded,
+                                    color: Colors.black,
+                                    size: 20,
+                                  ),
                           ),
                         )
                       : GestureDetector(
                           key: const ValueKey<String>('voice-mode-button'),
                           onTap: () => _openComingSoonFeature('Voice Mode'),
                           child: Container(
-                            width: 44,
-                            height: 36,
+                            width: 50,
+                            height: 42,
                             decoration: BoxDecoration(
                               color: accent,
-                              borderRadius: BorderRadius.circular(10),
+                              borderRadius: BorderRadius.circular(buttonRadius),
                             ),
                             child: const Icon(
                               Icons.graphic_eq,
@@ -4317,11 +4328,18 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   }
 
   Widget _buildIconBtn({
-    required IconData icon,
+    IconData? icon,
+    String? svgAssetPath,
+    double iconSize = 20,
     required VoidCallback onTap,
     required bool isActive,
     String? debugLabel,
   }) {
+    assert(
+      icon != null || svgAssetPath != null,
+      'Either icon or svgAssetPath must be provided.',
+    );
+
     final Color bg = Theme.of(context).scaffoldBackgroundColor;
     final Color iconFg = Theme.of(context).resolvedIconColor;
 
@@ -4332,7 +4350,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       onExit: (_) => isHovered.value = false,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(18),
         splashFactory: InkRipple.splashFactory,
         hoverColor: Colors.transparent,
         highlightColor: Colors.transparent,
@@ -4349,25 +4367,35 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 : iconFg.withValues(alpha: 0.3);
 
             final double effectiveBorderWidth = hovered
-                ? 1.2
+                ? 2.2
                 : isActive
-                ? 1.0
-                : 0.8;
+                ? 2.0
+                : 1.8;
 
             return AnimatedContainer(
               duration: const Duration(milliseconds: 150),
               curve: Curves.easeOutCubic,
-              width: 44,
-              height: 36,
+              width: 50,
+              height: 42,
               decoration: BoxDecoration(
                 color: effectiveBgColor,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(21),
                 border: Border.all(
                   color: effectiveBorderColor,
                   width: effectiveBorderWidth,
                 ),
               ),
-              child: Icon(icon, color: effectiveIconColor, size: 20),
+              child: svgAssetPath != null
+                  ? SvgPicture.asset(
+                      svgAssetPath,
+                      width: iconSize,
+                      height: iconSize,
+                      colorFilter: ColorFilter.mode(
+                        effectiveIconColor,
+                        BlendMode.srcIn,
+                      ),
+                    )
+                  : Icon(icon!, color: effectiveIconColor, size: iconSize + 2),
             );
           },
         ),
