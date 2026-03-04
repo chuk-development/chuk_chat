@@ -96,11 +96,11 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
           return AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             curve: Curves.easeOutCubic,
-            height: 42,
-            padding: EdgeInsets.symmetric(horizontal: _hasProject ? 10 : 0),
+            height: 36,
+            padding: EdgeInsets.symmetric(horizontal: _hasProject ? 8 : 0),
             decoration: BoxDecoration(
               color: effectiveBgColor,
-              borderRadius: BorderRadius.circular(21),
+              borderRadius: BorderRadius.circular(18),
               border: Border.all(color: borderColor, width: borderWidth),
             ),
             child: _hasProject
@@ -129,10 +129,10 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
                       ),
                     ],
                   )
-                // Same size as other icon buttons: 50x42
+                // Same size as other icon buttons: 44x36
                 : SizedBox(
-                    width: 50,
-                    height: 42,
+                    width: 44,
+                    height: 36,
                     child: Icon(
                       Icons.folder_outlined,
                       color: effectiveIconColor,

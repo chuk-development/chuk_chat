@@ -22,7 +22,7 @@ const double _menuHorizontalPadding = 32.0; // 16 left + 16 right
 const double _menuTrailingAllowance = 64.0; // Checkmark + internal spacing
 const double _menuExtraAllowance = 12.0; // Safety margin against glyph clipping
 const double _buttonHorizontalPadding = 20.0; // 10 left + 10 right
-const double _buttonTrailingAllowance = 44.0; // Icon + arrow + spacing
+const double _buttonTrailingAllowance = 56.0; // Icon + arrow + spacing + extra
 
 class _WidthMetrics {
   final double menuWidth;
@@ -724,12 +724,12 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
           return AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             curve: Curves.easeOutCubic,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            height: 42,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            height: 36,
             width: effectiveWidth,
             decoration: BoxDecoration(
               color: bgColor,
-              borderRadius: BorderRadius.circular(21),
+              borderRadius: BorderRadius.circular(18),
               border: Border.all(
                 color: hovered
                     ? iconFgColor
@@ -795,6 +795,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
               borderRadius: BorderRadius.circular(12),
               side: BorderSide(
                 color: theme.resolvedIconColor.withValues(alpha: 0.3),
+                width: 2,
               ),
             ),
             onCanceled: () {

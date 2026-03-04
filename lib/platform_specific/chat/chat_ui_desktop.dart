@@ -4049,9 +4049,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   // NEW: Extracted Attachment Bar Widget
   Widget _buildSearchBar({required bool isCompactMode}) {
-    const btnH = 42.0, btnW = 50.0;
+    const btnH = 36.0, btnW = 44.0;
     const containerRadius = 23.0;
-    const buttonRadius = 21.0;
+    const buttonRadius = 18.0;
     final Color bg = Theme.of(context).scaffoldBackgroundColor;
     final Color accent = Theme.of(context).colorScheme.primary;
     final Color iconFg = Theme.of(context).resolvedIconColor;
@@ -4279,8 +4279,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                           key: const ValueKey<String>('audio-send-button'),
                           onTap: _isTranscribingAudio ? null : _handleAudioSend,
                           child: Container(
-                            width: 50,
-                            height: 42,
+                            width: 44,
+                            height: 36,
                             decoration: BoxDecoration(
                               color: accent,
                               borderRadius: BorderRadius.circular(buttonRadius),
@@ -4306,8 +4306,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                           key: const ValueKey<String>('voice-mode-button'),
                           onTap: () => _openComingSoonFeature('Voice Mode'),
                           child: Container(
-                            width: 50,
-                            height: 42,
+                            width: 44,
+                            height: 36,
                             decoration: BoxDecoration(
                               color: accent,
                               borderRadius: BorderRadius.circular(buttonRadius),
@@ -4375,11 +4375,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             return AnimatedContainer(
               duration: const Duration(milliseconds: 150),
               curve: Curves.easeOutCubic,
-              width: 50,
-              height: 42,
+              width: 44,
+              height: 36,
               decoration: BoxDecoration(
                 color: effectiveBgColor,
-                borderRadius: BorderRadius.circular(21),
+                borderRadius: BorderRadius.circular(18),
                 border: Border.all(
                   color: effectiveBorderColor,
                   width: effectiveBorderWidth,
@@ -4395,7 +4395,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                         BlendMode.srcIn,
                       ),
                     )
-                  : Icon(icon!, color: effectiveIconColor, size: iconSize + 2),
+                  : Icon(icon!, color: effectiveIconColor, size: iconSize),
             );
           },
         ),
