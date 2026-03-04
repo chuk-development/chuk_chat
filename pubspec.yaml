@@ -1,7 +1,7 @@
 name: chuk_chat
 description: "Chuk Chat — AI chat client for all platforms."
 
-version: 1.0.40
+version: 1.0.41
 
 environment:
   sdk: ^3.9.2
