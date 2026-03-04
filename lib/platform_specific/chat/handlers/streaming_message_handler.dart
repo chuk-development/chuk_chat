@@ -312,8 +312,22 @@ class StreamingMessageHandler {
                   contentBlocks.add(ContentBlock.text(interimText));
                 }
                 // Add tool_calls block for this pass's tool calls.
+                // If the AI didn't say anything to the user since the last
+                // tool_calls block, merge into that block instead of creating
+                // a separate collapsible bar.
                 if (newToolCalls.isNotEmpty) {
-                  contentBlocks.add(ContentBlock.toolCalls(newToolCalls));
+                  if (interimText.isEmpty &&
+                      contentBlocks.isNotEmpty &&
+                      contentBlocks.last.type == ContentBlockType.toolCalls) {
+                    final merged = [
+                      ...contentBlocks.last.toolCalls!,
+                      ...newToolCalls,
+                    ];
+                    contentBlocks[contentBlocks.length - 1] =
+                        ContentBlock.toolCalls(merged);
+                  } else {
+                    contentBlocks.add(ContentBlock.toolCalls(newToolCalls));
+                  }
                 }
 
                 // Fire content blocks update so the UI can render them.
