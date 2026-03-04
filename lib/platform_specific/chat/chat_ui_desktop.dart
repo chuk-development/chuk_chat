@@ -4179,12 +4179,18 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                     borderRadius: BorderRadius.circular(buttonRadius),
                   ),
                   child: _isTranscribingAudio
-                      ? const Padding(
-                          padding: EdgeInsets.all(8.0),
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.black,
+                      ? Center(
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              valueColor: const AlwaysStoppedAnimation<Color>(
+                                Colors.black,
+                              ),
+                              backgroundColor: Colors.black.withValues(
+                                alpha: 0.2,
+                              ),
                             ),
                           ),
                         )
