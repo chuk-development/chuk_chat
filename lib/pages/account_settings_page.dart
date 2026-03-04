@@ -132,7 +132,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
           backgroundColor: Theme.of(context).colorScheme.primary,
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           duration: const Duration(seconds: 2),
           dismissDirection: DismissDirection.horizontal,
@@ -202,7 +204,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
           backgroundColor: Theme.of(context).colorScheme.primary,
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           duration: const Duration(seconds: 2),
           dismissDirection: DismissDirection.horizontal,
@@ -224,32 +228,217 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
   }
 
   Future<void> _deleteAccount() async {
-    final confirmed = await showDialog<bool>(
+    // ── Step 1: First warning ──
+    final step1 = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Account'),
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
+            SizedBox(width: 10),
+            Text('Delete Account?'),
+          ],
+        ),
         content: const Text(
-          'This will permanently delete your account, cancel any active '
-          'subscriptions, and erase all your data. This action cannot be '
-          'undone.\n\nAre you sure you want to continue?',
+          'Are you sure you want to delete your account?\n\n'
+          'This will permanently erase:\n'
+          '  - All your chats and messages\n'
+          '  - All stored memories\n'
+          '  - Your profile and settings\n'
+          '  - Any active subscriptions\n\n'
+          'This action is irreversible. Your data cannot be recovered.',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () => Navigator.of(ctx).pop(false),
             child: const Text('Cancel'),
           ),
           TextButton(
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete My Account'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Yes, I want to delete'),
           ),
         ],
       ),
     );
 
-    if (confirmed != true || !mounted) return;
+    if (step1 != true || !mounted) return;
 
+    // ── Step 2: Final warning ──
+    final step2 = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.delete_forever, color: Colors.red, size: 28),
+            SizedBox(width: 10),
+            Text('This is permanent'),
+          ],
+        ),
+        content: const Text(
+          'This is your last chance to turn back.\n\n'
+          'Once deleted, there is absolutely no way to recover '
+          'your account, chats, memories, or any associated data.\n\n'
+          'Everything will be gone forever.\n\n'
+          'Do you still want to proceed?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('No, keep my account'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete everything'),
+          ),
+        ],
+      ),
+    );
+
+    if (step2 != true || !mounted) return;
+
+    // ── Step 3: Password confirmation ──
+    final passwordController = TextEditingController();
+    final passwordConfirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        String? errorText;
+        bool isVerifying = false;
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) => AlertDialog(
+            title: const Text('Confirm your password'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'To confirm account deletion, please enter your password.',
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: passwordController,
+                  obscureText: true,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    labelText: 'Password',
+                    errorText: errorText,
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.lock_outline),
+                  ),
+                  onSubmitted: isVerifying
+                      ? null
+                      : (_) async {
+                          final password = passwordController.text.trim();
+                          if (password.isEmpty) {
+                            setDialogState(
+                              () => errorText = 'Password is required',
+                            );
+                            return;
+                          }
+                          setDialogState(() {
+                            isVerifying = true;
+                            errorText = null;
+                          });
+                          try {
+                            final email = Supabase
+                                .instance
+                                .client
+                                .auth
+                                .currentUser
+                                ?.email;
+                            if (email == null) {
+                              throw Exception('No email found');
+                            }
+                            await Supabase.instance.client.auth
+                                .signInWithPassword(
+                                  email: email,
+                                  password: password,
+                                );
+                            if (ctx.mounted) Navigator.of(ctx).pop(true);
+                          } on AuthException catch (e) {
+                            setDialogState(() {
+                              isVerifying = false;
+                              errorText = e.message;
+                            });
+                          } catch (e) {
+                            setDialogState(() {
+                              isVerifying = false;
+                              errorText = 'Verification failed: $e';
+                            });
+                          }
+                        },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: isVerifying
+                    ? null
+                    : () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                onPressed: isVerifying
+                    ? null
+                    : () async {
+                        final password = passwordController.text.trim();
+                        if (password.isEmpty) {
+                          setDialogState(
+                            () => errorText = 'Password is required',
+                          );
+                          return;
+                        }
+                        setDialogState(() {
+                          isVerifying = true;
+                          errorText = null;
+                        });
+                        try {
+                          final email =
+                              Supabase.instance.client.auth.currentUser?.email;
+                          if (email == null) {
+                            throw Exception('No email found');
+                          }
+                          await Supabase.instance.client.auth
+                              .signInWithPassword(
+                                email: email,
+                                password: password,
+                              );
+                          if (ctx.mounted) Navigator.of(ctx).pop(true);
+                        } on AuthException catch (e) {
+                          setDialogState(() {
+                            isVerifying = false;
+                            errorText = e.message;
+                          });
+                        } catch (e) {
+                          setDialogState(() {
+                            isVerifying = false;
+                            errorText = 'Verification failed: $e';
+                          });
+                        }
+                      },
+                child: isVerifying
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Verify & Delete'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    passwordController.dispose();
+    if (passwordConfirmed != true || !mounted) return;
+
+    // ── Step 4: Execute deletion ──
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _isDeletingAccount = true);
 
@@ -614,8 +803,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                         borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-                    onPressed:
-                        _isDeletingAccount ? null : _deleteAccount,
+                    onPressed: _isDeletingAccount ? null : _deleteAccount,
                     child: _isDeletingAccount
                         ? const SizedBox(
                             height: 18,
