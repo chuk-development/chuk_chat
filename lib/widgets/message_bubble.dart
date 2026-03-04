@@ -503,13 +503,6 @@ class _MessageBubbleState extends State<MessageBubble>
         ),
       if (widget.images != null && widget.images!.isNotEmpty) ...[
         _buildImagesGrid(widget.images!),
-        if (widget.imageCostEur != null || widget.imageGeneratedAt != null)
-          _buildImageMetaMenu(
-            iconFgColor,
-            alignRight,
-            widget.imageCostEur,
-            widget.imageGeneratedAt,
-          ),
         const SizedBox(height: 8),
       ],
       if (widget.attachments != null && widget.attachments!.isNotEmpty) ...[
@@ -526,6 +519,16 @@ class _MessageBubbleState extends State<MessageBubble>
         bgColor: bgColor,
         isUserMessage: isUserMessage,
       ),
+      // Image actions go below the text, matching the regular action buttons.
+      if (widget.images != null &&
+          widget.images!.isNotEmpty &&
+          (widget.imageCostEur != null || widget.imageGeneratedAt != null))
+        _buildImageMetaMenu(
+          iconFgColor,
+          alignRight,
+          widget.imageCostEur,
+          widget.imageGeneratedAt,
+        ),
     ];
   }
 
@@ -540,19 +543,10 @@ class _MessageBubbleState extends State<MessageBubble>
     final blocks = widget.contentBlocks!;
     final children = <Widget>[];
 
-    // Images always at top
-    if (widget.images != null && widget.images!.isNotEmpty) {
+    // Images at top (actions added at the bottom after all text).
+    final bool hasImages = widget.images != null && widget.images!.isNotEmpty;
+    if (hasImages) {
       children.add(_buildImagesGrid(widget.images!));
-      if (widget.imageCostEur != null || widget.imageGeneratedAt != null) {
-        children.add(
-          _buildImageMetaMenu(
-            iconFgColor,
-            alignRight,
-            widget.imageCostEur,
-            widget.imageGeneratedAt,
-          ),
-        );
-      }
       children.add(const SizedBox(height: 8));
     }
 
@@ -628,16 +622,15 @@ class _MessageBubbleState extends State<MessageBubble>
       }
     }
 
-    // Model info at the bottom (when content blocks handle reasoning)
-    if (_hasModelInfo) {
+    // Image actions at the bottom, matching the regular action buttons.
+    if (hasImages &&
+        (widget.imageCostEur != null || widget.imageGeneratedAt != null)) {
       children.add(
-        _buildExpandableCard(
-          key: 'model_info_blocks',
-          icon: Icons.smart_toy_outlined,
-          label: widget.modelLabel!,
-          preview: _buildModelPreview(),
-          expandedContent: _buildModelDetails(),
-          accentColor: Colors.green,
+        _buildImageMetaMenu(
+          iconFgColor,
+          alignRight,
+          widget.imageCostEur,
+          widget.imageGeneratedAt,
         ),
       );
     }
@@ -1108,9 +1101,9 @@ class _MessageBubbleState extends State<MessageBubble>
                       expandedContent: widget.reasoning!,
                       accentColor: colorScheme.primary,
                     ),
-                  if (!isContentBlock && _hasModelInfo)
+                  if (_hasModelInfo)
                     _buildExpandableCard(
-                      key: 'model_info_tools',
+                      key: 'model_info_$expandKey',
                       icon: Icons.smart_toy_outlined,
                       label: widget.modelLabel!,
                       preview: _buildModelPreview(),
@@ -1481,11 +1474,12 @@ class _MessageBubbleState extends State<MessageBubble>
                 ),
                 PopupMenuButton<String>(
                   tooltip: 'Image details',
-                  padding: EdgeInsets.zero,
+                  padding: EdgeInsets.all(kPlatformMobile ? 4 : 8),
                   constraints: BoxConstraints(
                     minWidth: kPlatformMobile ? 24 : 30,
                     minHeight: kPlatformMobile ? 24 : 30,
                   ),
+                  menuPadding: EdgeInsets.zero,
                   iconSize: kPlatformMobile ? 15 : 18,
                   icon: Icon(Icons.more_vert, color: iconFgColor),
                   style: kPlatformMobile
