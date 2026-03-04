@@ -4200,10 +4200,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                           color: Colors.black,
                           size: 22,
                         )
-                      : const Icon(
-                          Icons.expand_less_rounded,
-                          color: Colors.black,
-                          size: 28,
+                      : Transform(
+                          transform: Matrix4.diagonal3Values(1, 0.75, 1),
+                          alignment: Alignment.center,
+                          child: const Icon(
+                            Icons.arrow_upward_rounded,
+                            color: Colors.black,
+                            size: 24,
+                          ),
                         ),
                 ),
               ),
