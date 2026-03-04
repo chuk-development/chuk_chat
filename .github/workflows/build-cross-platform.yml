@@ -105,12 +105,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG=${{ steps.bump.outputs.tag }}
-          # Delete existing release/tag if present (re-runs)
-          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
-          gh release create "$TAG" \
-            --draft \
-            --title "Chuk Chat $TAG" \
-            --notes "$(cat <<'EOF'
+          if gh release view "$TAG" --repo ${{ github.repository }} >/dev/null 2>&1; then
+            echo "Release $TAG already exists - keeping current assets."
+          else
+            gh release create "$TAG" \
+              --draft \
+              --title "Chuk Chat $TAG" \
+              --notes "$(cat <<'EOF'
           ## Downloads
 
           **Android** (choose your architecture):
@@ -134,7 +135,8 @@ jobs:
           **macOS:**
           - DMG or ZIP — drag to Applications
           EOF
-          )"
+            )"
+          fi
 
   # ──────────────────────────────────────────────
   # Android
@@ -643,6 +645,15 @@ jobs:
             --dart-define=FEATURE_IMAGE_GEN=false `
             --dart-define=FEATURE_VOICE_MODE=true `
             --tree-shake-icons
+
+          if ($LASTEXITCODE -ne 0) {
+            if (Test-Path "build/windows/x64/runner/Release/chuk_chat.exe") {
+              Write-Warning "flutter build windows failed during install, but Release binaries exist. Continuing with packaging."
+            } else {
+              Write-Error "Windows build failed before producing Release binaries."
+              exit $LASTEXITCODE
+            }
+          }
 
       - name: Create portable ZIP
         run: |
