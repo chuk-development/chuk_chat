@@ -251,6 +251,27 @@ class ToolEnforcer {
           'Do not pass the full user request.';
     }
 
+    final lowered = words.map((w) => w.toLowerCase()).toList();
+    const visualWords = {
+      'chart',
+      'charts',
+      'graph',
+      'graphs',
+      'plot',
+      'diagram',
+      'map',
+      'maps',
+      'karte',
+      'karten',
+    };
+    final isVisualOnly =
+        lowered.isNotEmpty && lowered.every((w) => visualWords.contains(w));
+    if (isVisualOnly) {
+      return 'find_tools is for DATA tools, not visual rendering tags. '
+          'Do not search for chart/map tools. Discover data tools and then '
+          'output <chart>/<map> directly in the final response text.';
+    }
+
     return null;
   }
 

@@ -19,6 +19,28 @@ const companions = <String, List<String>>{
   'notes': ['search_chats'],
 };
 
+void _appendToolDefinition(
+  StringBuffer buf,
+  ClientTool tool,
+  String Function(String) getDescription,
+) {
+  buf.writeln('TOOL: ${tool.name}');
+  buf.writeln('Description: ${getDescription(tool.name)}');
+  if (tool.parameters.isNotEmpty) {
+    buf.writeln('Parameters:');
+    for (final entry in tool.parameters.entries) {
+      if (entry.value is Map) {
+        final ptype = (entry.value as Map)['type'] ?? 'string';
+        final pdesc = (entry.value as Map)['description'] ?? '';
+        buf.writeln('  - ${entry.key} ($ptype): $pdesc');
+      } else {
+        buf.writeln('  - ${entry.key}: ${entry.value}');
+      }
+    }
+  }
+  buf.writeln();
+}
+
 /// Find tools by keyword/query. Returns full tool definitions for matching
 /// tools.
 ///
@@ -90,6 +112,90 @@ String executeFindTools({
         '"web search", "email", "rechnen"';
   }
 
+  const visualKeywords = {
+    'chart',
+    'charts',
+    'graph',
+    'graphs',
+    'plot',
+    'diagram',
+    'visual',
+    'visualize',
+    'visualization',
+    'map',
+    'maps',
+    'karte',
+    'karten',
+    'route',
+    'routing',
+  };
+  const chartKeywords = {
+    'chart',
+    'charts',
+    'graph',
+    'graphs',
+    'plot',
+    'diagram',
+    'visual',
+    'visualize',
+    'visualization',
+  };
+  const mapKeywords = {'map', 'maps', 'karte', 'karten', 'route', 'routing'};
+
+  final hasChartIntent = queryWords.any(chartKeywords.contains);
+  final hasMapIntent = queryWords.any(mapKeywords.contains);
+  final isVisualOnlyQuery = queryWords.every(visualKeywords.contains);
+
+  if (isVisualOnlyQuery && (hasChartIntent || hasMapIntent)) {
+    final recommendedNames = <String>{
+      if (hasChartIntent) ...[
+        'web_search',
+        'web_crawl',
+        'stock_data',
+        'weather',
+      ],
+      if (hasMapIntent) ...[
+        'search_places',
+        'search_restaurants',
+        'geocode',
+        'get_route',
+      ],
+    };
+
+    final recommendedTools = recommendedNames
+        .map((name) => tools[name])
+        .whereType<ClientTool>()
+        .where((tool) => isAvailable(tool.name))
+        .toList();
+
+    final buf = StringBuffer();
+    buf.writeln(
+      'Chart/map rendering is built into the UI and is NOT a tool. '
+      'Do NOT call find_tools again for chart/map.',
+    );
+    buf.writeln(
+      'Use data tools to gather facts, then emit <chart> or <map> in your '
+      'final text response.',
+    );
+    buf.writeln();
+
+    if (recommendedTools.isNotEmpty) {
+      buf.writeln('Recommended data tools for "$query":');
+      buf.writeln();
+      for (final tool in recommendedTools) {
+        _appendToolDefinition(buf, tool, getDescription);
+      }
+      buf.writeln(
+        'You can now call these tools using '
+        '<tool_call>{"name": "tool_name", "arguments": {...}}</tool_call>',
+      );
+      return buf.toString();
+    }
+
+    return '${buf.toString().trimRight()}\nNo matching data tools are currently '
+        'available.';
+  }
+
   final scored = <MapEntry<ClientTool, int>>[];
 
   for (final tool in tools.values) {
@@ -151,21 +257,7 @@ String executeFindTools({
       );
       buf.writeln();
       for (final tool in fallbackTools) {
-        buf.writeln('TOOL: ${tool.name}');
-        buf.writeln('Description: ${getDescription(tool.name)}');
-        if (tool.parameters.isNotEmpty) {
-          buf.writeln('Parameters:');
-          for (final entry in tool.parameters.entries) {
-            if (entry.value is Map) {
-              final ptype = (entry.value as Map)['type'] ?? 'string';
-              final pdesc = (entry.value as Map)['description'] ?? '';
-              buf.writeln('  - ${entry.key} ($ptype): $pdesc');
-            } else {
-              buf.writeln('  - ${entry.key}: ${entry.value}');
-            }
-          }
-        }
-        buf.writeln();
+        _appendToolDefinition(buf, tool, getDescription);
       }
       buf.writeln(
         'You can now call these tools using '
@@ -202,21 +294,7 @@ String executeFindTools({
   buf.writeln('Found ${topTools.length} matching tools for "$query":');
   buf.writeln();
   for (final tool in topTools) {
-    buf.writeln('TOOL: ${tool.name}');
-    buf.writeln('Description: ${getDescription(tool.name)}');
-    if (tool.parameters.isNotEmpty) {
-      buf.writeln('Parameters:');
-      for (final entry in tool.parameters.entries) {
-        if (entry.value is Map) {
-          final ptype = (entry.value as Map)['type'] ?? 'string';
-          final pdesc = (entry.value as Map)['description'] ?? '';
-          buf.writeln('  - ${entry.key} ($ptype): $pdesc');
-        } else {
-          buf.writeln('  - ${entry.key}: ${entry.value}');
-        }
-      }
-    }
-    buf.writeln();
+    _appendToolDefinition(buf, tool, getDescription);
   }
   buf.writeln(
     'You can now call these tools using '

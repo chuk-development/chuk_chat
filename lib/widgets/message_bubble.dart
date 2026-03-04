@@ -133,8 +133,14 @@ class _MessageBubbleState extends State<MessageBubble>
     with AutomaticKeepAliveClientMixin {
   /// Regex to find `<chart>` and `<map>` blocks in message content.
   static final RegExp _richBlockRegex = RegExp(
-    r'<(chart|map)>([\s\S]*?)</\1>',
+    r'<\s*(chart|map)\s*>([\s\S]*?)<\s*/\s*\1\s*>',
     multiLine: true,
+    caseSensitive: false,
+  );
+
+  static final RegExp _visualBlockStartRegex = RegExp(
+    r'<\s*(chart|map)\b',
+    caseSensitive: false,
   );
 
   bool _isReasoningExpanded = false;
@@ -178,6 +184,31 @@ class _MessageBubbleState extends State<MessageBubble>
   bool get _shouldShowTps {
     final show = widget.showTps ?? kDefaultShowTps;
     return show && widget.tps != null && widget.tps! > 0;
+  }
+
+  bool get _isQrImageMessage {
+    bool hasQrTool(Iterable<ToolCall> calls) {
+      return calls.any(
+        (call) => call.name.trim().toLowerCase() == 'generate_qr',
+      );
+    }
+
+    final topLevelCalls = widget.toolCalls;
+    if (topLevelCalls != null && hasQrTool(topLevelCalls)) {
+      return true;
+    }
+
+    final blocks = widget.contentBlocks;
+    if (blocks != null) {
+      for (final block in blocks) {
+        final calls = block.toolCalls;
+        if (calls != null && hasQrTool(calls)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
   }
 
   @override
@@ -502,13 +533,16 @@ class _MessageBubbleState extends State<MessageBubble>
     required bool hasInfoStatusBar,
     required bool hasVisibleToolCalls,
   }) {
+    final bool hasImages = widget.images != null && widget.images!.isNotEmpty;
+    final bool placeQrImageAboveResponse = hasImages && _isQrImageMessage;
+
     return [
       if (hasInfoStatusBar)
         SizedBox(
           width: double.infinity,
           child: _buildInfoStatusBar(iconFgColor, accentColor),
         ),
-      if (widget.images != null && widget.images!.isNotEmpty) ...[
+      if (hasImages && !placeQrImageAboveResponse) ...[
         _buildImagesGrid(widget.images!),
         const SizedBox(height: 8),
       ],
@@ -518,6 +552,10 @@ class _MessageBubbleState extends State<MessageBubble>
       ],
       if (hasVisibleToolCalls) ...[
         _buildToolCallsBar(widget.toolCalls!),
+        const SizedBox(height: 8),
+      ],
+      if (hasImages && placeQrImageAboveResponse) ...[
+        _buildImagesGrid(widget.images!),
         const SizedBox(height: 8),
       ],
       _buildMessageBody(
@@ -550,12 +588,16 @@ class _MessageBubbleState extends State<MessageBubble>
     final blocks = widget.contentBlocks!;
     final children = <Widget>[];
 
-    // Images at top (actions added at the bottom after all text).
+    // By default, images render at the top.
+    // For QR messages, render just above the AI response text.
     final bool hasImages = widget.images != null && widget.images!.isNotEmpty;
-    if (hasImages) {
+    final bool placeQrImageAboveResponse = hasImages && _isQrImageMessage;
+    if (hasImages && !placeQrImageAboveResponse) {
       children.add(_buildImagesGrid(widget.images!));
       children.add(const SizedBox(height: 8));
     }
+
+    var insertedQrImage = false;
 
     // Document attachments
     if (widget.attachments != null && widget.attachments!.isNotEmpty) {
@@ -579,6 +621,11 @@ class _MessageBubbleState extends State<MessageBubble>
       switch (block.type) {
         case ContentBlockType.text:
           if (block.text != null && block.text!.trim().isNotEmpty) {
+            if (placeQrImageAboveResponse && !insertedQrImage) {
+              children.add(_buildImagesGrid(widget.images!));
+              children.add(const SizedBox(height: 8));
+              insertedQrImage = true;
+            }
             children.add(_buildBlockText(block.text!, iconFgColor, bgColor));
           }
         case ContentBlockType.toolCalls:
@@ -616,6 +663,11 @@ class _MessageBubbleState extends State<MessageBubble>
     if (widget.isStreamingMessage) {
       final trailingText = stripToolCallBlocksForDisplay(widget.message).trim();
       if (trailingText.isNotEmpty) {
+        if (placeQrImageAboveResponse && !insertedQrImage) {
+          children.add(_buildImagesGrid(widget.images!));
+          children.add(const SizedBox(height: 8));
+          insertedQrImage = true;
+        }
         children.add(
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
@@ -627,6 +679,11 @@ class _MessageBubbleState extends State<MessageBubble>
           ),
         );
       }
+    }
+
+    if (placeQrImageAboveResponse && !insertedQrImage) {
+      children.add(_buildImagesGrid(widget.images!));
+      children.add(const SizedBox(height: 8));
     }
 
     // Image actions at the bottom, matching the regular action buttons.
@@ -650,7 +707,7 @@ class _MessageBubbleState extends State<MessageBubble>
   }
 
   bool _hasVisualBlocks(String content) {
-    return content.contains('<chart>') || content.contains('<map>');
+    return _visualBlockStartRegex.hasMatch(content);
   }
 
   dynamic _tryParseJson(String raw) {
@@ -699,7 +756,7 @@ class _MessageBubbleState extends State<MessageBubble>
         );
       }
 
-      final blockType = match.group(1)!;
+      final blockType = match.group(1)!.toLowerCase();
       final blockJson = match.group(2)!.trim();
 
       try {
@@ -1297,6 +1354,29 @@ class _MessageBubbleState extends State<MessageBubble>
         final double maxWidth = constraints.maxWidth.isFinite
             ? constraints.maxWidth
             : MediaQuery.of(context).size.width * 0.8;
+        final bool compactQrLayout = _isQrImageMessage && images.length == 1;
+
+        if (compactQrLayout) {
+          final String imageSource = images.first;
+          final double squareSize =
+              (kPlatformMobile ? maxWidth * 0.45 : maxWidth * 0.32).clamp(
+                120.0,
+                190.0,
+              );
+
+          return _CachedImageThumbnail(
+            imageDataUrl: imageSource,
+            width: squareSize,
+            height: squareSize,
+            borderRadius: 12,
+            fit: BoxFit.contain,
+            onTap: () => _openImagePreview(
+              imageSource: imageSource,
+              images: images,
+              index: 0,
+            ),
+          );
+        }
 
         if (images.length == 1) {
           final String imageSource = images.first;
