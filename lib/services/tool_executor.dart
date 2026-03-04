@@ -18,6 +18,11 @@ import 'package:chuk_chat/tool_handlers/qr_tools.dart' as qr_tools;
 import 'package:chuk_chat/tool_handlers/stock_tools.dart' as stock_tools;
 import 'package:chuk_chat/tool_handlers/weather_tools.dart' as weather_tools;
 import 'package:chuk_chat/tool_handlers/web_tools.dart' as web_tools;
+import 'package:chuk_chat/tool_handlers/platform_tools.dart' as platform_tools;
+import 'package:chuk_chat/tool_handlers/chat_search_tools.dart'
+    as chat_search_tools;
+import 'package:chuk_chat/tool_handlers/nextcloud_tools.dart'
+    as nextcloud_tools;
 
 class ToolExecutionResult {
   const ToolExecutionResult({required this.output, required this.isError});
@@ -34,7 +39,13 @@ class ToolExecutor {
   final Map<String, ClientTool> _tools = {};
   final Map<String, bool> _enabledTools = {};
   final Map<String, String> _customToolDescriptions = {};
+  bool _mapVisualOutputEnabled = true;
+  bool _chartVisualOutputEnabled = true;
   Future<void>? _loadPrefsFuture;
+
+  static const String _kMapVisualOutputEnabledKey = 'visual_output_map_enabled';
+  static const String _kChartVisualOutputEnabledKey =
+      'visual_output_chart_enabled';
 
   static const Set<String> _builtinExecutableToolNames = {
     'find_tools',
@@ -62,6 +73,16 @@ class ToolExecutor {
     'search_restaurants',
     'geocode',
     'get_route',
+    'spotify_control',
+    'bash',
+    'github',
+    'slack',
+    'google_calendar',
+    'gmail',
+    'email',
+    'nextcloud',
+    'device',
+    'search_chats',
   };
 
   static const Set<String> _defaultDisabledTools = {};
@@ -109,6 +130,9 @@ class ToolExecutor {
   /// Get all registered tools.
   List<ClientTool> get allRegisteredTools => _tools.values.toList();
 
+  bool get mapVisualOutputEnabled => _mapVisualOutputEnabled;
+  bool get chartVisualOutputEnabled => _chartVisualOutputEnabled;
+
   Future<void> loadPreferences() {
     _loadPrefsFuture ??= _loadPreferencesInternal();
     return _loadPrefsFuture!;
@@ -130,6 +154,23 @@ class ToolExecutor {
         _customToolDescriptions.remove(name);
       }
     }
+
+    _mapVisualOutputEnabled =
+        prefs.getBool(_kMapVisualOutputEnabledKey) ?? true;
+    _chartVisualOutputEnabled =
+        prefs.getBool(_kChartVisualOutputEnabledKey) ?? true;
+  }
+
+  Future<void> setMapVisualOutputEnabled(bool enabled) async {
+    _mapVisualOutputEnabled = enabled;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kMapVisualOutputEnabledKey, enabled);
+  }
+
+  Future<void> setChartVisualOutputEnabled(bool enabled) async {
+    _chartVisualOutputEnabled = enabled;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kChartVisualOutputEnabledKey, enabled);
   }
 
   Future<void> setToolEnabled(String name, bool enabled) async {
@@ -203,6 +244,11 @@ class ToolExecutor {
       await prefs.setBool('tool_enabled_$name', defaultEnabled);
       await prefs.remove('tool_desc_$name');
     }
+
+    _mapVisualOutputEnabled = true;
+    _chartVisualOutputEnabled = true;
+    await prefs.setBool(_kMapVisualOutputEnabledKey, true);
+    await prefs.setBool(_kChartVisualOutputEnabledKey, true);
   }
 
   /// Get only active tools -- this is what gets sent to the LLM.
@@ -235,6 +281,20 @@ class ToolExecutor {
         return true; // Free APIs
       case ToolCategory.device:
         return true;
+      case ToolCategory.spotify:
+        return platform_tools.isPlatformServiceConnected('spotify');
+      case ToolCategory.bash:
+        return platform_tools.isPlatformServiceConnected('bash');
+      case ToolCategory.github:
+        return platform_tools.isPlatformServiceConnected('github');
+      case ToolCategory.slack:
+        return platform_tools.isPlatformServiceConnected('slack');
+      case ToolCategory.google:
+        return platform_tools.isPlatformServiceConnected('google');
+      case ToolCategory.email:
+        return platform_tools.isPlatformServiceConnected('email');
+      case ToolCategory.nextcloud:
+        return nextcloud_tools.isNextcloudConnected();
     }
   }
 
@@ -407,6 +467,8 @@ class ToolExecutor {
         );
       case 'notes':
         return _wrapOutput(await notes_tools.executeNotes(args));
+      case 'search_chats':
+        return _wrapOutput(await chat_search_tools.executeSearchChats(args));
       case 'generate_qr':
         return _wrapOutput(await qr_tools.executeGenerateQr(args));
       case 'ask_user':
@@ -476,6 +538,28 @@ class ToolExecutor {
       // -- Weather --
       case 'weather':
         return _wrapOutput(await weather_tools.executeWeather(args));
+
+      // -- Platform-specific tools (stub on web) --
+      case 'spotify_control':
+        return _wrapOutput(await platform_tools.executeSpotify(args));
+      case 'bash':
+        return _wrapOutput(await platform_tools.executeBash(args));
+      case 'github':
+        return _wrapOutput(await platform_tools.executeGitHub(args));
+      case 'slack':
+        return _wrapOutput(await platform_tools.executeSlack(args));
+      case 'google_calendar':
+        return _wrapOutput(await platform_tools.executeGoogleCalendar(args));
+      case 'gmail':
+        return _wrapOutput(await platform_tools.executeGmail(args));
+      case 'email':
+        return _wrapOutput(await platform_tools.executeEmail(args));
+      case 'device':
+        return _wrapOutput(await platform_tools.executeDevice(args));
+
+      // -- Nextcloud (web-safe) --
+      case 'nextcloud':
+        return _wrapOutput(await nextcloud_tools.executeNextcloud(args));
 
       default:
         return ToolExecutionResult(

@@ -15,6 +15,8 @@ const companions = <String, List<String>>{
   'geocode': ['get_route'],
   'stock_data': ['web_search', 'web_crawl'],
   'weather': ['geocode', 'web_search'],
+  'search_chats': ['notes'],
+  'notes': ['search_chats'],
 };
 
 /// Find tools by keyword/query. Returns full tool definitions for matching
@@ -80,11 +82,11 @@ String executeFindTools({
   };
   final queryWords = query
       .split(RegExp(r'\s+'))
-      .where((w) => w.length > 2 && !noiseWords.contains(w))
+      .where((w) => w.length >= 2 && !noiseWords.contains(w))
       .toList();
 
   if (queryWords.isEmpty) {
-    return 'Error: query too vague. Use keywords like "restaurant", '
+    return 'Error: query too vague. Use keywords like "qr", "restaurant", '
         '"web search", "email", "rechnen"';
   }
 

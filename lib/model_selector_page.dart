@@ -325,9 +325,9 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
     }
     final bool hasConnectivity =
         await NetworkStatusService.hasInternetConnection();
-    final String message = hasConnectivity
-        ? 'We are currently doing maintenance and will be right back.'
-        : 'You appear to be offline. Please check your internet connection.';
+    final String message = _buildApiUnavailableMessage(
+      hasConnectivity: hasConnectivity,
+    );
     if (!mounted) return;
     setState(() {
       _error = message;
@@ -335,6 +335,26 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
     });
     _showSnackBar(message);
     _startApiAvailabilityPolling();
+  }
+
+  String _buildApiUnavailableMessage({required bool hasConnectivity}) {
+    if (!hasConnectivity) {
+      return 'You appear to be offline. Please check your internet connection.';
+    }
+
+    final Uri? apiUri = Uri.tryParse(_baseUrl);
+    final String host = apiUri?.host.toLowerCase() ?? '';
+    final bool isLocalHost =
+        host == 'localhost' ||
+        host == '127.0.0.1' ||
+        host == '10.0.2.2' ||
+        host == '10.0.3.2';
+
+    if (kDebugMode && isLocalHost) {
+      return 'Cannot reach local API server at $_baseUrl.';
+    }
+
+    return 'We are currently doing maintenance and will be right back.';
   }
 
   void _showSnackBar(String message) {

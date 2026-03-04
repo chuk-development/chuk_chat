@@ -218,20 +218,34 @@ void _openFullscreenMap(
   BuildContext context, {
   required LatLng center,
   required double zoom,
-  required List<Widget> mapChildren,
   String? title,
   List<Map<String, dynamic>>? places,
+  List<Map<String, dynamic>>? markers,
   List<LatLng>? fitPoints,
+  double? routeFromLat,
+  double? routeFromLon,
+  double? routeToLat,
+  double? routeToLon,
+  String? routeFromLabel,
+  String? routeToLabel,
+  int? initialSelectedPlaceIndex,
 }) {
   Navigator.of(context).push(
     MaterialPageRoute(
       builder: (ctx) => FullscreenMapPage(
         center: center,
         zoom: zoom,
-        mapChildren: mapChildren,
         title: title ?? 'Map',
         places: places,
+        markers: markers,
         fitPoints: fitPoints,
+        routeFromLat: routeFromLat,
+        routeFromLon: routeFromLon,
+        routeToLat: routeToLat,
+        routeToLon: routeToLon,
+        routeFromLabel: routeFromLabel,
+        routeToLabel: routeToLabel,
+        initialSelectedPlaceIndex: initialSelectedPlaceIndex,
       ),
     ),
   );
@@ -245,6 +259,14 @@ Widget _buildMapPreview(
   String? title,
   List<LatLng>? fitPoints,
   List<Map<String, dynamic>>? places,
+  List<Map<String, dynamic>>? markers,
+  int? initialSelectedPlaceIndex,
+  double? routeFromLat,
+  double? routeFromLon,
+  double? routeToLat,
+  double? routeToLon,
+  String? routeFromLabel,
+  String? routeToLabel,
 }) {
   final height = _mapPreviewHeight(context);
   return GestureDetector(
@@ -252,10 +274,17 @@ Widget _buildMapPreview(
       context,
       center: center,
       zoom: zoom,
-      mapChildren: mapChildren,
       title: title,
       places: places,
+      markers: markers,
       fitPoints: fitPoints,
+      routeFromLat: routeFromLat,
+      routeFromLon: routeFromLon,
+      routeToLat: routeToLat,
+      routeToLon: routeToLon,
+      routeFromLabel: routeFromLabel,
+      routeToLabel: routeToLabel,
+      initialSelectedPlaceIndex: initialSelectedPlaceIndex,
     ),
     child: SizedBox(
       height: height,
@@ -327,7 +356,7 @@ class _MarkersMapBlock extends StatelessWidget {
     final mapLayers = <Widget>[
       TileLayer(
         urlTemplate:
-            'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png',
+            'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png',
         subdomains: const ['a', 'b', 'c', 'd'],
       ),
       MarkerLayer(
@@ -401,6 +430,7 @@ class _MarkersMapBlock extends StatelessWidget {
             mapChildren: mapLayers,
             title: title,
             fitPoints: markerPoints,
+            markers: markers,
           ),
         ],
       ),
@@ -436,7 +466,7 @@ class _PlacesMapBlock extends StatelessWidget {
     final mapLayers = <Widget>[
       TileLayer(
         urlTemplate:
-            'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png',
+            'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png',
         subdomains: const ['a', 'b', 'c', 'd'],
       ),
       MarkerLayer(markers: _buildLabeledPlaceMarkers(places)),
@@ -489,7 +519,24 @@ class _PlacesMapBlock extends StatelessWidget {
           ),
           ...List.generate(
             places.length > 10 ? 10 : places.length,
-            (i) => _PlaceCard(place: places[i], number: i + 1),
+            (i) => _PlaceCard(
+              place: places[i],
+              number: i + 1,
+              onShowOnMap: () {
+                final p = places[i];
+                final lat = _toDouble(p['lat']);
+                final lon = _toDouble(p['lon']);
+                _openFullscreenMap(
+                  context,
+                  center: LatLng(lat, lon),
+                  zoom: zoom < 15 ? 15 : zoom,
+                  title: title,
+                  places: places,
+                  fitPoints: placePoints,
+                  initialSelectedPlaceIndex: i,
+                );
+              },
+            ),
           ),
           if (places.length > 10)
             Padding(
@@ -579,8 +626,13 @@ class _PlacesMapBlock extends StatelessWidget {
 class _PlaceCard extends StatelessWidget {
   final Map<String, dynamic> place;
   final int number;
+  final VoidCallback? onShowOnMap;
 
-  const _PlaceCard({required this.place, required this.number});
+  const _PlaceCard({
+    required this.place,
+    required this.number,
+    this.onShowOnMap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -590,8 +642,6 @@ class _PlaceCard extends StatelessWidget {
     final website = place['website'] as String?;
     final hours = place['opening_hours'] as String?;
     final address = place['address'] as String?;
-    final lat = place['lat'] != null ? _toDouble(place['lat']) : null;
-    final lon = place['lon'] != null ? _toDouble(place['lon']) : null;
     final rating = place['rating'] != null ? _toDouble(place['rating']) : null;
     final reviewCount = place['review_count'] != null
         ? (place['review_count'] is num
@@ -600,168 +650,173 @@ class _PlaceCard extends StatelessWidget {
         : null;
     final priceRange = place['price_range'] as String?;
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: Theme.of(
-            context,
-          ).colorScheme.outlineVariant.withValues(alpha: 0.3),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+        onTap: onShowOnMap,
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: Theme.of(
+                context,
+              ).colorScheme.outlineVariant.withValues(alpha: 0.3),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 24,
-                height: 24,
-                decoration: BoxDecoration(
-                  color: Colors.redAccent.shade700,
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  '$number',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  name,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
-                ),
-              ),
-              if (lat != null && lon != null)
-                Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(20),
-                    onTap: () => launchUrl(
-                      Uri.parse(
-                        'geo:$lat,$lon?q=$lat,$lon(${Uri.encodeComponent(name)})',
-                      ),
-                      mode: LaunchMode.externalApplication,
+              Row(
+                children: [
+                  Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: Colors.redAccent.shade700,
+                      shape: BoxShape.circle,
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(6),
-                      child: Icon(
-                        Icons.navigation,
-                        size: 22,
-                        color: Colors.blue.shade300,
+                    alignment: Alignment.center,
+                    child: Text(
+                      '$number',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      name,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                  ),
+                  if (onShowOnMap != null)
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: onShowOnMap,
+                        child: Padding(
+                          padding: const EdgeInsets.all(6),
+                          child: Icon(
+                            Icons.map,
+                            size: 22,
+                            color: Colors.blue.shade300,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              if (rating != null || cuisine != null || priceRange != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(
+                    children: [
+                      if (rating != null) ...[
+                        _buildStarRating(rating),
+                        const SizedBox(width: 4),
+                        Text(
+                          rating.toStringAsFixed(1),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.amber.shade300,
+                          ),
+                        ),
+                        if (reviewCount != null) ...[
+                          const SizedBox(width: 3),
+                          Text(
+                            '($reviewCount)',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                        if (cuisine != null || priceRange != null)
+                          const SizedBox(width: 8),
+                      ],
+                      if (priceRange != null) ...[
+                        Text(
+                          priceRange,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.green.shade300,
+                          ),
+                        ),
+                        if (cuisine != null) const SizedBox(width: 8),
+                      ],
+                      if (cuisine != null)
+                        Flexible(
+                          child: Text(
+                            cuisine,
+                            style: TextStyle(
+                              color: Colors.orange.shade200,
+                              fontSize: 12,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              if (address != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 3),
+                  child: Text(
+                    address,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              if (phone != null || hours != null || website != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 3),
+                  child: Wrap(
+                    spacing: 10,
+                    children: [
+                      if (phone != null)
+                        _buildInfoChip(
+                          Icons.phone,
+                          phone,
+                          onTap: () => launchUrl(Uri.parse('tel:$phone')),
+                        ),
+                      if (hours != null)
+                        _buildInfoChip(Icons.access_time, hours),
+                      if (website != null)
+                        _buildInfoChip(
+                          Icons.language,
+                          'Website',
+                          onTap: () => launchUrl(
+                            Uri.parse(
+                              website.startsWith('http')
+                                  ? website
+                                  : 'https://$website',
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
             ],
           ),
-          if (rating != null || cuisine != null || priceRange != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Row(
-                children: [
-                  if (rating != null) ...[
-                    _buildStarRating(rating),
-                    const SizedBox(width: 4),
-                    Text(
-                      rating.toStringAsFixed(1),
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.amber.shade300,
-                      ),
-                    ),
-                    if (reviewCount != null) ...[
-                      const SizedBox(width: 3),
-                      Text(
-                        '($reviewCount)',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                    if (cuisine != null || priceRange != null)
-                      const SizedBox(width: 8),
-                  ],
-                  if (priceRange != null) ...[
-                    Text(
-                      priceRange,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.green.shade300,
-                      ),
-                    ),
-                    if (cuisine != null) const SizedBox(width: 8),
-                  ],
-                  if (cuisine != null)
-                    Flexible(
-                      child: Text(
-                        cuisine,
-                        style: TextStyle(
-                          color: Colors.orange.shade200,
-                          fontSize: 12,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          if (address != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 3),
-              child: Text(
-                address,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-          if (phone != null || hours != null || website != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 3),
-              child: Wrap(
-                spacing: 10,
-                children: [
-                  if (phone != null)
-                    _buildInfoChip(
-                      Icons.phone,
-                      phone,
-                      onTap: () => launchUrl(Uri.parse('tel:$phone')),
-                    ),
-                  if (hours != null) _buildInfoChip(Icons.access_time, hours),
-                  if (website != null)
-                    _buildInfoChip(
-                      Icons.language,
-                      'Website',
-                      onTap: () => launchUrl(
-                        Uri.parse(
-                          website.startsWith('http')
-                              ? website
-                              : 'https://$website',
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-        ],
+        ),
       ),
     );
   }
@@ -859,39 +914,14 @@ class _RouteMapBlock extends StatelessWidget {
           context,
           center: LatLng(centerLat, centerLon),
           zoom: routeZoom,
-          mapChildren: [
-            TileLayer(
-              urlTemplate:
-                  'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png',
-              subdomains: const ['a', 'b', 'c', 'd'],
-            ),
-            MarkerLayer(
-              markers: [
-                Marker(
-                  point: LatLng(fromLat, fromLon),
-                  width: 34,
-                  height: 34,
-                  child: const Icon(
-                    Icons.trip_origin,
-                    color: Colors.green,
-                    size: 28,
-                  ),
-                ),
-                Marker(
-                  point: LatLng(toLat, toLon),
-                  width: 34,
-                  height: 34,
-                  child: const Icon(
-                    Icons.location_on,
-                    color: Colors.red,
-                    size: 32,
-                  ),
-                ),
-              ],
-            ),
-          ],
           title: routeTitle,
           fitPoints: fitPoints,
+          routeFromLat: fromLat,
+          routeFromLon: fromLon,
+          routeToLat: toLat,
+          routeToLon: toLon,
+          routeFromLabel: fromLabel,
+          routeToLabel: toLabel,
         );
       },
     );

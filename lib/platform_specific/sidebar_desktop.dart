@@ -470,167 +470,205 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
             endIndent: _sidebarHorizontalPadding,
           ),
 
-          // Recents Section - Scrollable
+          // Recents Section - Scrollable with floating bottom profile/update cards
           Expanded(
-            child: ListView.builder(
-              padding: EdgeInsets.zero,
-              addAutomaticKeepAlives: false,
-              addRepaintBoundaries: false,
-              cacheExtent: 200.0,
-              itemCount: _filteredRecentChats.length + 2,
-              itemBuilder: (context, index) {
-                if (index == 0) {
-                  return _buildSectionHeader('Recents', iconFg: iconFg);
-                }
-                if (index == 1) {
-                  if (_filteredRecentChats.isEmpty && _searchQuery.isEmpty) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: _sidebarHorizontalPadding,
-                        vertical: 8.0,
-                      ),
-                      child: Text(
-                        'No recent chats yet.',
-                        style: TextStyle(color: iconFg.withValues(alpha: 0.5)),
-                      ),
+            child: Stack(
+              children: [
+                ListView.builder(
+                  padding: const EdgeInsets.only(bottom: 24),
+                  addAutomaticKeepAlives: false,
+                  addRepaintBoundaries: false,
+                  cacheExtent: 200.0,
+                  itemCount: _filteredRecentChats.length + 2,
+                  itemBuilder: (context, index) {
+                    if (index == 0) {
+                      return _buildSectionHeader('Recents', iconFg: iconFg);
+                    }
+                    if (index == 1) {
+                      if (_filteredRecentChats.isEmpty &&
+                          _searchQuery.isEmpty) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: _sidebarHorizontalPadding,
+                            vertical: 8.0,
+                          ),
+                          child: Text(
+                            'No recent chats yet.',
+                            style: TextStyle(
+                              color: iconFg.withValues(alpha: 0.5),
+                            ),
+                          ),
+                        );
+                      } else if (_filteredRecentChats.isEmpty &&
+                          _searchQuery.isNotEmpty) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: _sidebarHorizontalPadding,
+                            vertical: 8.0,
+                          ),
+                          child: Text(
+                            'No chats found for "$_searchQuery".',
+                            style: TextStyle(
+                              color: iconFg.withValues(alpha: 0.5),
+                            ),
+                          ),
+                        );
+                      }
+                    }
+                    final chatIndex = index - 1;
+                    if (chatIndex < 0 ||
+                        chatIndex >= _filteredRecentChats.length) {
+                      return const SizedBox(height: 10);
+                    }
+                    final storedChat = _filteredRecentChats[chatIndex];
+                    return _buildRecentItem(
+                      storedChat,
+                      onTap: () {
+                        // CRITICAL: Block rapid chat switching while another chat is loading
+                        if (ChatStorageService.isLoadingChat) {
+                          if (kDebugMode) {
+                            debugPrint('');
+                          }
+                          if (kDebugMode) {
+                            debugPrint(
+                              '═══════════════════════════════════════════════════════════',
+                            );
+                          }
+                          if (kDebugMode) {
+                            debugPrint(
+                              '🚫 [SIDEBAR-DESKTOP] BLOCKED - Chat is still loading',
+                            );
+                          }
+                          if (kDebugMode) {
+                            debugPrint(
+                              '═══════════════════════════════════════════════════════════',
+                            );
+                          }
+                          return;
+                        }
+                        if (kDebugMode) {
+                          debugPrint('');
+                        }
+                        if (kDebugMode) {
+                          debugPrint(
+                            '═══════════════════════════════════════════════════════════',
+                          );
+                        }
+                        if (kDebugMode) {
+                          debugPrint(
+                            '👆 [SIDEBAR-DESKTOP] User tapped recent chat',
+                          );
+                        }
+                        if (kDebugMode) {
+                          debugPrint(
+                            '👆 [SIDEBAR-DESKTOP] Chat ID: ${storedChat.id}',
+                          );
+                        }
+                        if (kDebugMode) {
+                          debugPrint(
+                            '👆 [SIDEBAR-DESKTOP] Preview: "${storedChat.previewText.substring(0, storedChat.previewText.length > 40 ? 40 : storedChat.previewText.length)}..."',
+                          );
+                        }
+                        if (kDebugMode) {
+                          debugPrint(
+                            '═══════════════════════════════════════════════════════════',
+                          );
+                        }
+                        widget.onChatSelected(storedChat.id);
+                      },
+                      onDelete: () => _confirmAndDeleteChat(storedChat),
+                      accentColor: accent,
+                      iconFgColor: iconFg,
                     );
-                  } else if (_filteredRecentChats.isEmpty &&
-                      _searchQuery.isNotEmpty) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: _sidebarHorizontalPadding,
-                        vertical: 8.0,
-                      ),
-                      child: Text(
-                        'No chats found for "$_searchQuery".',
-                        style: TextStyle(color: iconFg.withValues(alpha: 0.5)),
-                      ),
-                    );
-                  }
-                }
-                final chatIndex = index - 1;
-                if (chatIndex < 0 || chatIndex >= _filteredRecentChats.length) {
-                  return const SizedBox(height: 10);
-                }
-                final storedChat = _filteredRecentChats[chatIndex];
-                return _buildRecentItem(
-                  storedChat,
-                  onTap: () {
-                    // CRITICAL: Block rapid chat switching while another chat is loading
-                    if (ChatStorageService.isLoadingChat) {
-                      if (kDebugMode) {
-                        debugPrint('');
-                      }
-                      if (kDebugMode) {
-                        debugPrint(
-                          '═══════════════════════════════════════════════════════════',
-                        );
-                      }
-                      if (kDebugMode) {
-                        debugPrint(
-                          '🚫 [SIDEBAR-DESKTOP] BLOCKED - Chat is still loading',
-                        );
-                      }
-                      if (kDebugMode) {
-                        debugPrint(
-                          '═══════════════════════════════════════════════════════════',
-                        );
-                      }
-                      return;
-                    }
-                    if (kDebugMode) {
-                      debugPrint('');
-                    }
-                    if (kDebugMode) {
-                      debugPrint(
-                        '═══════════════════════════════════════════════════════════',
-                      );
-                    }
-                    if (kDebugMode) {
-                      debugPrint(
-                        '👆 [SIDEBAR-DESKTOP] User tapped recent chat',
-                      );
-                    }
-                    if (kDebugMode) {
-                      debugPrint(
-                        '👆 [SIDEBAR-DESKTOP] Chat ID: ${storedChat.id}',
-                      );
-                    }
-                    if (kDebugMode) {
-                      debugPrint(
-                        '👆 [SIDEBAR-DESKTOP] Preview: "${storedChat.previewText.substring(0, storedChat.previewText.length > 40 ? 40 : storedChat.previewText.length)}..."',
-                      );
-                    }
-                    if (kDebugMode) {
-                      debugPrint(
-                        '═══════════════════════════════════════════════════════════',
-                      );
-                    }
-                    widget.onChatSelected(storedChat.id);
                   },
-                  onDelete: () => _confirmAndDeleteChat(storedChat),
-                  accentColor: accent,
-                  iconFgColor: iconFg,
-                );
-              },
-            ),
-          ),
-
-          // Update available banner
-          const UpdateBanner(),
-
-          // User profile section at the bottom
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 24.0),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: widget.onSettingsTapped,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: sidebarBg.lighten(0.05),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: dividerColor, width: 1),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          _displayNameFor(_profile),
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: iconFg,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          sidebarBg.withValues(alpha: 0),
+                          sidebarBg.withValues(alpha: 0.72),
+                          sidebarBg,
+                        ],
+                        stops: const [0.0, 0.56, 1.0],
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const UpdateBanner(),
+                        Align(
+                          alignment: Alignment.bottomCenter,
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(
+                              16.0,
+                              8.0,
+                              16.0,
+                              24.0,
+                            ),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: widget.onSettingsTapped,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: sidebarBg.lighten(0.05),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: dividerColor,
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        _displayNameFor(_profile),
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: iconFg,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    BalanceBadge(
+                                      textStyle: TextStyle(
+                                        color: accent,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      placeholderStyle: TextStyle(
+                                        color: iconFg.withValues(alpha: 0.6),
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 6,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Icon(Icons.settings, color: iconFg),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      BalanceBadge(
-                        textStyle: TextStyle(
-                          color: accent,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        placeholderStyle: TextStyle(
-                          color: iconFg.withValues(alpha: 0.6),
-                          fontWeight: FontWeight.w600,
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Icon(Icons.settings, color: iconFg),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
           ),
         ],

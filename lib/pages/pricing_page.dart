@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:chuk_chat/platform_config.dart';
+import 'package:chuk_chat/pages/usage_details_page.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/widgets/credit_display.dart';
@@ -242,6 +243,13 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
     );
   }
 
+  void _openUsageDetails() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const UsageDetailsPage()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -283,6 +291,57 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
           children: [
             // Credit Display
             const CreditDisplay(),
+            const SizedBox(height: 12),
+
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: scaffoldBg.lighten(0.05),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: accent.withValues(alpha: 0.35)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.query_stats, color: accent, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Open Usage Details to see every request, monthly totals, and model costs.',
+                          style: TextStyle(
+                            color: iconFg.withValues(alpha: 0.82),
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _openUsageDetails,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: accent,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      icon: const Icon(Icons.query_stats),
+                      label: const Text(
+                        'Open Usage Details',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 24),
 
             // Current Plan Card (if subscribed)

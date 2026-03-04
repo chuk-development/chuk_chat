@@ -42,4 +42,11 @@ enum ToolCategory {
   search, // Web search, web crawl, stock data, weather
   map, // Map search, geocoding, routing
   device, // Device features (GPS, calendar, alarms)
+  spotify, // Spotify playback control
+  bash, // Sandboxed shell commands (desktop only)
+  github, // GitHub repos, issues, PRs
+  slack, // Slack messaging
+  google, // Google Calendar + Gmail
+  email, // IMAP/SMTP email
+  nextcloud, // Nextcloud files, calendar, contacts
 }

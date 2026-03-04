@@ -74,6 +74,8 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
   late bool _toolDiscoveryMode;
   late bool _showToolCalls;
   late bool _allowMarkdownToolCalls;
+  bool _mapVisualOutputEnabled = true;
+  bool _chartVisualOutputEnabled = true;
   late final ToolExecutor _toolExecutor;
   bool _isLoadingToolPreferences = true;
 
@@ -94,6 +96,8 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
       return;
     }
     setState(() {
+      _mapVisualOutputEnabled = _toolExecutor.mapVisualOutputEnabled;
+      _chartVisualOutputEnabled = _toolExecutor.chartVisualOutputEnabled;
       _isLoadingToolPreferences = false;
     });
   }
@@ -108,6 +112,20 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return 2;
       case ToolCategory.device:
         return 3;
+      case ToolCategory.spotify:
+        return 4;
+      case ToolCategory.bash:
+        return 5;
+      case ToolCategory.github:
+        return 6;
+      case ToolCategory.slack:
+        return 7;
+      case ToolCategory.google:
+        return 8;
+      case ToolCategory.email:
+        return 9;
+      case ToolCategory.nextcloud:
+        return 10;
     }
   }
 
@@ -121,6 +139,20 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return 'Maps and Location';
       case ToolCategory.device:
         return 'Device';
+      case ToolCategory.spotify:
+        return 'Spotify';
+      case ToolCategory.bash:
+        return 'Bash / Terminal';
+      case ToolCategory.github:
+        return 'GitHub';
+      case ToolCategory.slack:
+        return 'Slack';
+      case ToolCategory.google:
+        return 'Google (Calendar / Gmail)';
+      case ToolCategory.email:
+        return 'Email (IMAP/SMTP)';
+      case ToolCategory.nextcloud:
+        return 'Nextcloud';
     }
   }
 
@@ -134,6 +166,20 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return Icons.map_outlined;
       case ToolCategory.device:
         return Icons.devices_outlined;
+      case ToolCategory.spotify:
+        return Icons.music_note_outlined;
+      case ToolCategory.bash:
+        return Icons.terminal_outlined;
+      case ToolCategory.github:
+        return Icons.code_outlined;
+      case ToolCategory.slack:
+        return Icons.chat_outlined;
+      case ToolCategory.google:
+        return Icons.event_outlined;
+      case ToolCategory.email:
+        return Icons.email_outlined;
+      case ToolCategory.nextcloud:
+        return Icons.cloud_outlined;
     }
   }
 
@@ -616,6 +662,55 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
             'Disable it only if you want strict XML-only tool calls.',
             scaffoldBg,
             iconFg,
+          ),
+          const SizedBox(height: 24),
+          _buildSectionHeader(
+            context,
+            'Visual Output (Non-Tool)',
+            Icons.insights_outlined,
+            iconFg,
+          ),
+          const SizedBox(height: 12),
+          _buildToggleCard(
+            context,
+            title: 'Enable map blocks (<map>)',
+            subtitle:
+                'Allow the model prompt to include map rendering instructions',
+            value: _mapVisualOutputEnabled,
+            onChanged: _toolCallingEnabled
+                ? (value) async {
+                    await _toolExecutor.setMapVisualOutputEnabled(value);
+                    if (!mounted) {
+                      return;
+                    }
+                    setState(() {
+                      _mapVisualOutputEnabled = value;
+                    });
+                  }
+                : null,
+            scaffoldBg: scaffoldBg,
+            iconFg: iconFg,
+          ),
+          const SizedBox(height: 12),
+          _buildToggleCard(
+            context,
+            title: 'Enable chart blocks (<chart>)',
+            subtitle:
+                'Allow the model prompt to include chart rendering instructions',
+            value: _chartVisualOutputEnabled,
+            onChanged: _toolCallingEnabled
+                ? (value) async {
+                    await _toolExecutor.setChartVisualOutputEnabled(value);
+                    if (!mounted) {
+                      return;
+                    }
+                    setState(() {
+                      _chartVisualOutputEnabled = value;
+                    });
+                  }
+                : null,
+            scaffoldBg: scaffoldBg,
+            iconFg: iconFg,
           ),
           const SizedBox(height: 24),
           _buildSectionHeader(

@@ -39,19 +39,38 @@ We use only open-weight models — no black boxes and no silent data collection.
 
 ## Features
 
+### Core
 - **End-to-End Encryption** — All chats encrypted client-side with AES-256-GCM before being stored or synced
 - **Cross-Platform** — Android, iOS, Linux, macOS, Windows, and Web
-- **Real-Time Streaming** — Watch AI responses as they're generated
+- **Real-Time Streaming** — Watch AI responses as they're generated, with streaming preserved across chat switches
 - **File Attachments** — Share images, PDFs, and documents with AI
-- **AI Image Generation** — Generate images directly in chat
-- **Offline Support** — Access your chat history without a connection
+- **Offline Support** — Access your chat history without a connection, with automatic network recovery and cache preloading
+
+### AI Tools
+- **Tool Calling** — Built-in tool system with registry, executor, and per-tool settings. AI can call tools and display results inline
+- **AI Image Generation** — Generate and edit images directly in chat (including Hunyuan v3 Instruct via edit-image tool)
+- **Interactive Maps** — AI responses with `<map>` blocks render inline maps with markers, popups, and route polylines (OSRM)
+- **Calculator, Weather, Stocks, QR Codes, Notes, Web Search** — Expanding set of built-in tool handlers
+- **Multi-Pass Tool Call Rendering** — Interleaved content blocks show text and tool calls in correct chronological order with collapsible UI
+
+### Account & Privacy
+- **Multi-Step Account Deletion** — GDPR-compliant three-step deletion flow with password confirmation
+- **In-App Update Checks** — Automatic version checking against GitHub Releases with platform-specific download links (APK, DEB, AppImage, DMG, EXE)
+
+### UI & UX
 - **Theme Customization** — Colors, backgrounds, dark/light mode, visual effects
+- **Redesigned Reasoning UI** — Expandable accent-tinted cards for model reasoning and tool call details
+- **Mobile Three-Pill Input** — Redesigned mobile input bar with separate attachment, text, and action pills
+- **Audio Visualizer** — Gradient glow waveform with exponential scaling for voice recording
+- **Unified Image Preview** — Consistent image viewer across desktop and mobile with copy-to-clipboard support
+- **Debug Chat Copy** — Copy full chat contents (including reasoning, tool calls, model info) to clipboard for debugging
 
 ## Security & Privacy
 
 - **Client-side encryption** — Messages are encrypted on your device before leaving it
 - **Zero-knowledge architecture** — We cannot read your chats, even if the server is compromised
-- **Certificate pinning** — Protection against MITM attacks
+- **Certificate pinning** — Protection against MITM attacks, including WebSocket connections
+- **Image validation** — Magic-byte verification on uploaded images
 - **No logging in production** — All debug logs are disabled in release builds
 
 > **If you lose your password, all your chats are permanently lost.** There is no recovery mechanism by design — this ensures maximum privacy. Choose a strong password and store it safely.
@@ -92,16 +111,16 @@ cp .env.example .env
 # Edit .env with your Supabase credentials
 
 flutter pub get
-./run.sh linux    # or: android, windows, macos, ios, web
+./run.sh linux    # or: android, android-x64, android-vm [avd_name], windows, macos, ios, web
 ```
 
 ### Build
 
 ```bash
 # Quick release build (loads credentials from .env)
-source .env && flutter build apk --release \
-  --dart-define="SUPABASE_URL=$SUPABASE_URL" \
-  --dart-define="SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY"
+flutter build apk --release \
+  --dart-define-from-file=.env \
+  --dart-define=PLATFORM_MOBILE=true
 
 # Full release (all platforms)
 ./scripts/build-release.sh all

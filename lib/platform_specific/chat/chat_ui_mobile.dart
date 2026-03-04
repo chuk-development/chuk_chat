@@ -422,8 +422,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
             '⚠️ [CHAT-UI-MOBILE] IGNORING null from parent - we have active chat: $_activeChatId',
           );
         }
-        // Sync the parent back to our active chat
-        widget.onChatIdChanged(_activeChatId);
+        // Sync the parent back to our active chat after this build pass.
+        final activeChatId = _activeChatId;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          if (activeChatId == null) return;
+          widget.onChatIdChanged(activeChatId);
+        });
         return;
       }
 
@@ -3066,6 +3071,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
             children: [
               buildTinyIconButton(
                 icon: Icons.add_rounded,
+                iconSize: 22,
                 onTap: _handleAddAttachmentTap,
                 isActive: hasAttachments,
                 color: iconFg,
@@ -3190,8 +3196,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
               buildTinyIconButton(
                 icon: _audioHandler.isMicActive
                     ? Icons.stop_rounded
-                    : Icons.mic_rounded,
-                iconSize: 14,
+                    : Icons.mic,
+                iconSize: 20,
                 onTap: _handleMicTap,
                 isActive: _audioHandler.isMicActive,
                 color: _audioHandler.isMicActive ? Colors.red : iconFg,
@@ -3206,6 +3212,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                           : (showVoiceModeAction
                                 ? Icons.graphic_eq_rounded
                                 : Icons.north_rounded)),
+                iconSize: 18,
                 onTap: _audioHandler.isMicActive
                     ? _handleAudioSend
                     : (showStopAction

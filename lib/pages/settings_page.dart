@@ -120,12 +120,12 @@ class SettingsPage extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
-          // System Prompt
+          // AI Identity & Memory
           _buildSettingsCard(
             context,
-            title: 'System Prompt',
-            subtitle: 'Set a default system prompt for all conversations',
-            icon: Icons.code,
+            title: 'AI Identity & Memory',
+            subtitle: 'Soul, user profile, memory, and system prompt',
+            icon: Icons.psychology,
             onTap: () {
               Navigator.push(
                 context,

@@ -6,6 +6,7 @@ import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/utils/image_clipboard_service.dart';
+import 'package:chuk_chat/widgets/chart_widget.dart';
 import 'package:chuk_chat/widgets/map_block_renderer.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
@@ -130,6 +131,12 @@ class MessageBubble extends StatefulWidget {
 
 class _MessageBubbleState extends State<MessageBubble>
     with AutomaticKeepAliveClientMixin {
+  /// Regex to find `<chart>` and `<map>` blocks in message content.
+  static final RegExp _richBlockRegex = RegExp(
+    r'<(chart|map)>([\s\S]*?)</\1>',
+    multiLine: true,
+  );
+
   bool _isReasoningExpanded = false;
   final Map<String, bool> _blockExpanded = {};
   final Set<String> _expandedCards = {};
@@ -642,31 +649,135 @@ class _MessageBubbleState extends State<MessageBubble>
     return children;
   }
 
-  /// Renders a text content block as a MarkdownMessage.
-  Widget _buildBlockText(String text, Color textColor, Color bgColor) {
-    // Check for embedded <map> blocks
-    if (hasMapBlocks(text)) {
-      final segments = parseMapSegments(text);
-      final widgets = <Widget>[];
-      for (final segment in segments) {
-        if (segment.isMap) {
-          widgets.add(MapBlockWidget(jsonString: segment.content));
+  bool _hasVisualBlocks(String content) {
+    return content.contains('<chart>') || content.contains('<map>');
+  }
+
+  dynamic _tryParseJson(String raw) {
+    var s = raw.trim();
+    try {
+      return jsonDecode(s);
+    } catch (_) {}
+
+    if (s.startsWith('{') && s.endsWith(']')) {
+      s = s.substring(0, s.length - 1).trim();
+      if (s.endsWith('}')) {
+        try {
+          return jsonDecode(s);
+        } catch (_) {}
+      }
+    }
+
+    s = raw.trim().replaceAll(RegExp(r',\s*([}\]])'), r'$1');
+    try {
+      return jsonDecode(s);
+    } catch (_) {}
+
+    return jsonDecode(raw.trim());
+  }
+
+  Widget _buildVisualContent({
+    required String content,
+    required Color textColor,
+    required Color bgColor,
+  }) {
+    final widgets = <Widget>[];
+    var lastEnd = 0;
+
+    for (final match in _richBlockRegex.allMatches(content)) {
+      final textBefore = content.substring(lastEnd, match.start).trim();
+      if (textBefore.isNotEmpty) {
+        widgets.add(
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: MarkdownMessage(
+              text: textBefore,
+              textColor: textColor,
+              backgroundColor: bgColor,
+            ),
+          ),
+        );
+      }
+
+      final blockType = match.group(1)!;
+      final blockJson = match.group(2)!.trim();
+
+      try {
+        if (blockType == 'map') {
+          widgets.add(MapBlockWidget(jsonString: blockJson));
         } else {
-          widgets.add(
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: MarkdownMessage(
-                text: segment.content,
-                textColor: textColor,
-                backgroundColor: bgColor,
+          final parsed = _tryParseJson(blockJson);
+          if (parsed is! Map<String, dynamic>) {
+            throw const FormatException('Expected JSON object');
+          }
+          widgets.add(ChartRenderer(data: parsed));
+        }
+      } catch (e) {
+        widgets.add(
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 4),
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Theme.of(
+                context,
+              ).colorScheme.errorContainer.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              '$blockType parse error: $e',
+              style: TextStyle(
+                fontSize: 11,
+                color: Theme.of(context).colorScheme.error,
               ),
             ),
-          );
-        }
+          ),
+        );
       }
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: widgets,
+
+      lastEnd = match.end;
+    }
+
+    final textAfter = content.substring(lastEnd).trim();
+    if (textAfter.isNotEmpty) {
+      widgets.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: MarkdownMessage(
+            text: textAfter,
+            textColor: textColor,
+            backgroundColor: bgColor,
+          ),
+        ),
+      );
+    }
+
+    if (widgets.isEmpty) {
+      widgets.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: MarkdownMessage(
+            text: content,
+            textColor: textColor,
+            backgroundColor: bgColor,
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: widgets,
+    );
+  }
+
+  /// Renders a text content block as a MarkdownMessage.
+  Widget _buildBlockText(String text, Color textColor, Color bgColor) {
+    // Check for embedded <chart> / <map> blocks
+    if (_hasVisualBlocks(text)) {
+      return _buildVisualContent(
+        content: text,
+        textColor: textColor,
+        bgColor: bgColor,
       );
     }
 
@@ -1364,29 +1475,12 @@ class _MessageBubbleState extends State<MessageBubble>
       return const SizedBox.shrink();
     }
 
-    // For AI messages, check for embedded <map> blocks
-    if (!isUserMessage && hasMapBlocks(displayText)) {
-      final segments = parseMapSegments(displayText);
-      final widgets = <Widget>[];
-      for (final segment in segments) {
-        if (segment.isMap) {
-          widgets.add(MapBlockWidget(jsonString: segment.content));
-        } else {
-          widgets.add(
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: MarkdownMessage(
-                text: segment.content,
-                textColor: iconFgColor,
-                backgroundColor: bgColor,
-              ),
-            ),
-          );
-        }
-      }
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: widgets,
+    // For AI messages, check for embedded <chart> / <map> blocks
+    if (!isUserMessage && _hasVisualBlocks(displayText)) {
+      return _buildVisualContent(
+        content: displayText,
+        textColor: iconFgColor,
+        bgColor: bgColor,
       );
     }
 
@@ -1587,9 +1681,19 @@ class _CachedImageThumbnailState extends State<_CachedImageThumbnail>
   Future<void> _loadImage() async {
     try {
       if (widget.imageDataUrl.startsWith('data:image/')) {
-        // Legacy Base64 format - no longer supported, skip loading
-        if (kDebugMode) {
-          debugPrint('⏭️ Skipping legacy Base64 image');
+        // Base64 data URI — decode inline (used by tool-generated images
+        // like QR codes, or as fallback when Supabase upload fails).
+        final commaIndex = widget.imageDataUrl.indexOf(',');
+        if (commaIndex >= 0) {
+          try {
+            _cachedBytes = base64Decode(
+              widget.imageDataUrl.substring(commaIndex + 1),
+            );
+          } catch (e) {
+            if (kDebugMode) {
+              debugPrint('Failed to decode Base64 image: $e');
+            }
+          }
         }
       } else {
         // Storage path - download and decrypt

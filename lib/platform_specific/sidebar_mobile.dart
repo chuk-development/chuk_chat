@@ -698,139 +698,176 @@ class _SidebarMobileState extends State<SidebarMobile> {
             endIndent: _sidebarHorizontalPadding,
           ),
 
-          // Recents Section - Scrollable
+          // Recents Section - Scrollable with floating bottom profile/update cards
           Expanded(
-            child: ListView(
-              padding: EdgeInsets.zero,
+            child: Stack(
               children: [
-                _buildSectionHeader('Recents', textColor: textColorDefault),
-                if (_filteredRecentChats.isEmpty && _searchQuery.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: _sidebarHorizontalPadding,
-                      vertical: 8.0,
-                    ),
-                    child: Text(
-                      'No recent chats yet.',
-                      style: TextStyle(
-                        color: iconColorDefault.withValues(alpha: 0.4),
-                      ),
-                    ),
-                  )
-                else if (_filteredRecentChats.isEmpty &&
-                    _searchQuery.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: _sidebarHorizontalPadding,
-                      vertical: 8.0,
-                    ),
-                    child: Text(
-                      'No chats found for "$_searchQuery".',
-                      style: TextStyle(
-                        color: iconColorDefault.withValues(alpha: 0.4),
-                      ),
-                    ),
-                  ),
-                ..._filteredRecentChats.map((storedChat) {
-                  return _buildRecentItem(
-                    storedChat,
-                    onTap: () {
-                      if (kDebugMode) {
-                        debugPrint('');
-                      }
-                      if (kDebugMode) {
-                        debugPrint(
-                          '═══════════════════════════════════════════════════════════',
-                        );
-                      }
-                      if (kDebugMode) {
-                        debugPrint(
-                          '👆 [SIDEBAR-MOBILE] User tapped recent chat',
-                        );
-                      }
-                      if (kDebugMode) {
-                        debugPrint(
-                          '👆 [SIDEBAR-MOBILE] Chat ID: ${storedChat.id}',
-                        );
-                      }
-                      if (kDebugMode) {
-                        debugPrint(
-                          '👆 [SIDEBAR-MOBILE] Preview: "${storedChat.previewText.substring(0, storedChat.previewText.length > 40 ? 40 : storedChat.previewText.length)}..."',
-                        );
-                      }
-                      if (kDebugMode) {
-                        debugPrint(
-                          '═══════════════════════════════════════════════════════════',
-                        );
-                      }
-                      widget.onChatSelected(storedChat.id);
-                    },
-                    onDelete: () => _confirmAndDeleteChat(storedChat),
-                    accentColor: accentColor,
-                    iconColor: iconColorDefault,
-                    textColor: textColorDefault,
-                  );
-                }),
-                const SizedBox(height: 10),
-              ],
-            ),
-          ),
-
-          // Update available banner
-          const UpdateBanner(),
-
-          // User profile section at the bottom (styled from main.dart)
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 24.0),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: widget.onSettingsTapped,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: sidebarBg.lighten(0.05),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: dividerColor, width: 1),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
+                ListView(
+                  padding: const EdgeInsets.only(bottom: 24),
+                  children: [
+                    _buildSectionHeader('Recents', textColor: textColorDefault),
+                    if (_filteredRecentChats.isEmpty && _searchQuery.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: _sidebarHorizontalPadding,
+                          vertical: 8.0,
+                        ),
                         child: Text(
-                          _displayNameFor(_profile),
-                          overflow: TextOverflow.ellipsis,
+                          'No recent chats yet.',
                           style: TextStyle(
-                            color: textColorDefault,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
+                            color: iconColorDefault.withValues(alpha: 0.4),
+                          ),
+                        ),
+                      )
+                    else if (_filteredRecentChats.isEmpty &&
+                        _searchQuery.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: _sidebarHorizontalPadding,
+                          vertical: 8.0,
+                        ),
+                        child: Text(
+                          'No chats found for "$_searchQuery".',
+                          style: TextStyle(
+                            color: iconColorDefault.withValues(alpha: 0.4),
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      BalanceBadge(
-                        textStyle: TextStyle(
-                          color: accentColor,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        placeholderStyle: TextStyle(
-                          color: textColorDefault.withValues(alpha: 0.6),
-                          fontWeight: FontWeight.w600,
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
+                    ..._filteredRecentChats.map((storedChat) {
+                      return _buildRecentItem(
+                        storedChat,
+                        onTap: () {
+                          if (kDebugMode) {
+                            debugPrint('');
+                          }
+                          if (kDebugMode) {
+                            debugPrint(
+                              '═══════════════════════════════════════════════════════════',
+                            );
+                          }
+                          if (kDebugMode) {
+                            debugPrint(
+                              '👆 [SIDEBAR-MOBILE] User tapped recent chat',
+                            );
+                          }
+                          if (kDebugMode) {
+                            debugPrint(
+                              '👆 [SIDEBAR-MOBILE] Chat ID: ${storedChat.id}',
+                            );
+                          }
+                          if (kDebugMode) {
+                            debugPrint(
+                              '👆 [SIDEBAR-MOBILE] Preview: "${storedChat.previewText.substring(0, storedChat.previewText.length > 40 ? 40 : storedChat.previewText.length)}..."',
+                            );
+                          }
+                          if (kDebugMode) {
+                            debugPrint(
+                              '═══════════════════════════════════════════════════════════',
+                            );
+                          }
+                          widget.onChatSelected(storedChat.id);
+                        },
+                        onDelete: () => _confirmAndDeleteChat(storedChat),
+                        accentColor: accentColor,
+                        iconColor: iconColorDefault,
+                        textColor: textColorDefault,
+                      );
+                    }),
+                    const SizedBox(height: 10),
+                  ],
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          sidebarBg.withValues(alpha: 0),
+                          sidebarBg.withValues(alpha: 0.72),
+                          sidebarBg,
+                        ],
+                        stops: const [0.0, 0.56, 1.0],
                       ),
-                      const SizedBox(width: 12),
-                      Icon(Icons.settings, color: iconColorDefault),
-                    ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const UpdateBanner(),
+                        Align(
+                          alignment: Alignment.bottomCenter,
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(
+                              16.0,
+                              8.0,
+                              16.0,
+                              24.0,
+                            ),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: widget.onSettingsTapped,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: sidebarBg.lighten(0.05),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: dividerColor,
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        _displayNameFor(_profile),
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: textColorDefault,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    BalanceBadge(
+                                      textStyle: TextStyle(
+                                        color: accentColor,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      placeholderStyle: TextStyle(
+                                        color: textColorDefault.withValues(
+                                          alpha: 0.6,
+                                        ),
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 6,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Icon(
+                                      Icons.settings,
+                                      color: iconColorDefault,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
           ),
         ],

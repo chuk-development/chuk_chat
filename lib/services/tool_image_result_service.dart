@@ -125,17 +125,19 @@ class ToolImageResultService {
     final dataUri = _nonEmptyString(payload['data_uri']);
     if (dataUri != null) {
       final uploadedPath = await _uploadFromDataUri(dataUri);
-      if (uploadedPath == null) {
-        return const _ExtractionResult(storagePath: null, updatedPayload: null);
+      if (uploadedPath != null) {
+        final updated = Map<String, dynamic>.from(payload)
+          ..['storage_path'] = uploadedPath
+          ..remove('data_uri');
+        return _ExtractionResult(
+          storagePath: uploadedPath,
+          updatedPayload: updated,
+        );
       }
 
-      final updated = Map<String, dynamic>.from(payload)
-        ..['storage_path'] = uploadedPath
-        ..remove('data_uri');
-      return _ExtractionResult(
-        storagePath: uploadedPath,
-        updatedPayload: updated,
-      );
+      // Upload failed — fall back to the data URI directly so the image
+      // still renders in the message bubble without encrypted storage.
+      return _ExtractionResult(storagePath: dataUri, updatedPayload: null);
     }
 
     final url =

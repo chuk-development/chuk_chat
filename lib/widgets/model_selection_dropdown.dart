@@ -168,6 +168,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
   String _errorMessage = '';
   Timer? _apiAvailabilityTimer;
   Map<String, String> _lastSavedPreferences = {};
+  late final VoidCallback _selectedModelListener;
 
   double _menuWidth = 260.0;
   double _buttonWidth = 180.0;
@@ -180,7 +181,24 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
     super.initState();
     ModelSelectionDropdown._registerState(this);
     _selectedModelId = widget.initialSelectedModelId;
+    _selectedModelListener = _handleSelectedModelNotifierChange;
+    ModelSelectionDropdown.selectedModelListenable.addListener(
+      _selectedModelListener,
+    );
     _initializeModelSelection();
+  }
+
+  void _handleSelectedModelNotifierChange() {
+    final String nextModelId =
+        ModelSelectionDropdown.selectedModelNotifier.value;
+    if (nextModelId == _selectedModelId || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _selectedModelId = nextModelId;
+    });
+    _updateSelectedModelName();
   }
 
   @override
@@ -681,8 +699,8 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       return 32.0;
     }
 
-    // Allow button to grow to fit full model name
-    double width = math.max(120.0, _buttonWidth);
+    // Allow button to grow to fit full model name (no max cap)
+    double width = math.max(140.0, _buttonWidth);
     if (maxAvailableWidth.isFinite) {
       width = math.min(width, maxAvailableWidth);
     }
@@ -742,12 +760,16 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.start,
               children: [
-                Icon(Icons.grid_3x3, color: iconFgColor, size: 20),
+                Icon(Icons.tag_rounded, color: iconFgColor, size: 20),
                 const SizedBox(width: 8),
                 Flexible(
                   child: Text(
                     _selectedModelName,
-                    style: TextStyle(color: iconFgColor, fontSize: 14),
+                    style: TextStyle(
+                      color: iconFgColor,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                     softWrap: false,
                     maxLines: 1,
                   ),
@@ -792,7 +814,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
             color: theme.scaffoldBackgroundColor,
             constraints: BoxConstraints.tightFor(width: popupWidth),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(18),
               side: BorderSide(
                 color: theme.resolvedIconColor.withValues(alpha: 0.3),
                 width: 2,
@@ -890,6 +912,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
                               color: selected
                                   ? iconFgColor
                                   : iconFgColor.withValues(alpha: 0.8),
+                              fontWeight: FontWeight.w600,
                             ),
                             softWrap: false,
                           ),
@@ -933,6 +956,9 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
 
   @override
   void dispose() {
+    ModelSelectionDropdown.selectedModelListenable.removeListener(
+      _selectedModelListener,
+    );
     ModelSelectionDropdown._unregisterState(this);
     _stopApiAvailabilityPolling();
     super.dispose();

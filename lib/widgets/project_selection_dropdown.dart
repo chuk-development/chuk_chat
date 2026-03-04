@@ -148,7 +148,7 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
       color: bgColor,
       constraints: const BoxConstraints(minWidth: 180, maxWidth: 260),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(18),
         side: BorderSide(color: iconFgColor.withValues(alpha: 0.3), width: 2),
       ),
       onCanceled: () => widget.textFieldFocusNode.requestFocus(),
