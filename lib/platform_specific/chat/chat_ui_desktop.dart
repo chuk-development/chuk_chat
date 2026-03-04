@@ -4055,9 +4055,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   // NEW: Extracted Attachment Bar Widget
   Widget _buildSearchBar({required bool isCompactMode}) {
-    const btnH = 40.0, btnW = 48.0;
+    const btnH = 36.0, btnW = 44.0;
     const containerRadius = 23.0;
-    const buttonRadius = 20.0;
+    const buttonRadius = 18.0;
     final Color bg = Theme.of(context).scaffoldBackgroundColor;
     final Color accent = Theme.of(context).colorScheme.primary;
     final Color iconFg = Theme.of(context).resolvedIconColor;
@@ -4195,11 +4195,15 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                           ),
                         )
                       : (_isStreaming || _isSending)
-                      ? const Icon(Icons.stop, color: Colors.black, size: 22)
-                      : const Icon(
-                          Icons.north_rounded,
+                      ? const Icon(
+                          Icons.stop_rounded,
                           color: Colors.black,
-                          size: 18,
+                          size: 22,
+                        )
+                      : const Icon(
+                          Icons.expand_less_rounded,
+                          color: Colors.black,
+                          size: 28,
                         ),
                 ),
               ),
