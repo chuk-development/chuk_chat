@@ -95,7 +95,13 @@ class ToolPromptBuilder {
           ),
         );
       } else if (discoveryMode) {
-        buffer.writeln(_buildDiscoveryPrompt(alwaysAvailableTools));
+        buffer.writeln(
+          _buildDiscoveryPrompt(
+            alwaysAvailableTools,
+            includeMapVisualOutput: includeMapVisualOutput,
+            includeChartVisualOutput: includeChartVisualOutput,
+          ),
+        );
       } else {
         buffer.writeln(
           _buildToolProtocol(
@@ -214,8 +220,10 @@ class ToolPromptBuilder {
   /// [alwaysAvailableTools] are tool definitions that bypass discovery
   /// (e.g. notes) and are always shown.
   String _buildDiscoveryPrompt(
-    List<Map<String, dynamic>> alwaysAvailableTools,
-  ) {
+    List<Map<String, dynamic>> alwaysAvailableTools, {
+    required bool includeMapVisualOutput,
+    required bool includeChartVisualOutput,
+  }) {
     return '''
 ALWAYS respond in the user's language.
 
@@ -247,6 +255,15 @@ RESEARCH DEPTH: Do NOT answer from a single source. A good answer requires multi
 
 After find_tools returns, you can use the discovered tools. If no tool is needed, just answer directly.
 DO NOT STALL: Never end with intention-only text like "I will search". Either emit the next tool_call, or provide a complete final answer.
+
+VISUAL OUTPUT NOTE:
+- <chart> and <map> are OUTPUT TAGS, not tools.
+- Never call find_tools for "chart", "graph", "plot", or "map" itself.
+- If user asks for a chart/map, discover DATA tools first, then emit <chart>/<map> directly in your final response text.
+
+VISUAL OUTPUT SWITCHES (current):
+- chart tags: ${includeChartVisualOutput ? 'enabled' : 'disabled'}
+- map tags: ${includeMapVisualOutput ? 'enabled' : 'disabled'}
 
 STOP after $toolCallEnd -- wait for real results. Never fabricate outputs.
 ${_buildAlwaysAvailableSection(alwaysAvailableTools)}''';
@@ -488,6 +505,9 @@ Charts and maps are disabled for this session. Do NOT emit <chart> or <map> tags
         : '<map>';
     buffer.writeln(
       '${ruleNumber++}. $tagLabel tags go OUTSIDE tool_call tags — they are part of your text response.',
+    );
+    buffer.writeln(
+      '${ruleNumber++}. Never call find_tools for chart/map rendering. They are output tags, not tools.',
     );
     buffer.writeln(
       '${ruleNumber++}. Write your FULL text answer FIRST, then $tagLabel at the very END.',
