@@ -146,6 +146,9 @@ class ChukChatUIDesktop extends StatefulWidget {
 
 class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     with SingleTickerProviderStateMixin {
+  static const String _emptyAssistantResponsePrefix =
+      'The model returned an empty response.';
+
   // RENAMED STATE
   final TextEditingController _controller = TextEditingController();
   final List<Map<String, String>> _messages = [];
@@ -1438,8 +1441,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               'image_url': {'url': u},
             });
           }
-          if (content.isNotEmpty)
+          if (content.isNotEmpty) {
             conversationHistory.add({'role': 'user', 'content': content});
+          }
         } else if (text.isNotEmpty) {
           conversationHistory.add({'role': 'user', 'content': text});
         }
@@ -1620,7 +1624,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             final resolvedReasoning =
                 loopResult.finalReasoning ?? finalReasoning;
             final rawContent = resolvedContent.isEmpty
-                ? 'No response received.'
+                ? 'The model returned an empty response. Tap resend on your last message to continue.'
                 : resolvedContent;
 
             // Build final content blocks.
@@ -1764,13 +1768,30 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   Future<void> _resendMessageAt(int index) async {
     if (!_isValidMessageIndex(index)) return;
-    final String text = (_messages[index]['text'] ?? '').trim();
+
+    int sourceIndex = index;
+    if (_messages[sourceIndex]['sender'] != 'user') {
+      sourceIndex = -1;
+      for (int i = index - 1; i >= 0; i--) {
+        if (_messages[i]['sender'] == 'user') {
+          sourceIndex = i;
+          break;
+        }
+      }
+    }
+
+    if (!_isValidMessageIndex(sourceIndex)) {
+      _showSnackBar('Nothing to resend.');
+      return;
+    }
+
+    final String text = (_messages[sourceIndex]['text'] ?? '').trim();
     if (text.isEmpty) {
       _showSnackBar('Nothing to resend.');
       return;
     }
     // Use the same logic as editing and submitting
-    await _submitEditedMessage(index, text);
+    await _submitEditedMessage(sourceIndex, text);
   }
 
   List<MessageBubbleAction> _buildMessageActionsForIndex(
@@ -1813,6 +1834,16 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           icon: Icons.replay,
           tooltip: 'Resend message',
           label: 'Resend',
+          onPressed: () => _resendMessageAt(index),
+        ),
+      );
+    } else if (!isAssistantPending &&
+        messageText.startsWith(_emptyAssistantResponsePrefix)) {
+      actions.add(
+        MessageBubbleAction(
+          icon: Icons.replay,
+          tooltip: 'Retry response',
+          label: 'Retry',
           onPressed: () => _resendMessageAt(index),
         ),
       );
@@ -2523,7 +2554,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               final resolvedReasoning =
                   loopResult.finalReasoning ?? finalReasoning;
               final rawContent = resolvedContent.isEmpty
-                  ? 'The model returned an empty response.'
+                  ? 'The model returned an empty response. Tap resend on your last message to continue.'
                   : resolvedContent;
 
               // Build final content blocks.

@@ -5,6 +5,9 @@ import 'package:chuk_chat/widgets/message_bubble.dart';
 
 /// Handles message-related actions (copy, edit, resend)
 class MessageActionsHandler {
+  static const String _emptyAssistantResponsePrefix =
+      'The model returned an empty response.';
+
   // Callbacks
   Function(String)? onShowSnackBar;
   Function(int, String)? onSubmitEdit;
@@ -96,6 +99,16 @@ class MessageActionsHandler {
           icon: Icons.replay,
           tooltip: 'Resend message',
           label: 'Resend',
+          onPressed: () => onResendMessage(index),
+        ),
+      );
+    } else if (!isAssistantPending &&
+        messageText.startsWith(_emptyAssistantResponsePrefix)) {
+      actions.add(
+        MessageBubbleAction(
+          icon: Icons.replay,
+          tooltip: 'Retry response',
+          label: 'Retry',
           onPressed: () => onResendMessage(index),
         ),
       );

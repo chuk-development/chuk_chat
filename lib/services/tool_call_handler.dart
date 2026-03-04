@@ -7,6 +7,7 @@ import 'package:chuk_chat/services/tool_enforcer.dart';
 import 'package:chuk_chat/services/tool_executor.dart';
 import 'package:chuk_chat/services/tool_prompt_builder.dart';
 import 'package:chuk_chat/services/tool_registry.dart';
+import 'package:chuk_chat/tool_handlers/notes_tools.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
 import 'package:chuk_chat/utils/tool_sanitizer.dart';
 
@@ -20,6 +21,7 @@ class ToolLoopSession {
     required this.discoveryMode,
     required this.allowMarkdownToolCalls,
     this.baseSystemPrompt,
+    this.discoveryContextKey,
   });
 
   String latestUserMessage;
@@ -30,10 +32,12 @@ class ToolLoopSession {
   final bool discoveryMode;
   final bool allowMarkdownToolCalls;
   final String? baseSystemPrompt;
+  final String? discoveryContextKey;
 
   final List<Map<String, dynamic>> discoveredTools = [];
   final Set<String> discoveredToolNames = {};
   final List<ToolCall> toolCalls = [];
+  int emptyFinalRecoveryAttempts = 0;
 }
 
 class ToolLoopStep {
@@ -102,6 +106,10 @@ class ToolCallHandler {
   factory ToolCallHandler() => _instance;
 
   final ToolExecutor _toolExecutor = ToolExecutor();
+  static const int _maxEmptyFinalRecoveryAttempts = 1;
+  static const int _maxDiscoveryContexts = 200;
+  final Map<String, _DiscoveryContextState> _discoveryContextStates =
+      <String, _DiscoveryContextState>{};
 
   ToolExecutor get toolExecutor => _toolExecutor;
 
@@ -109,6 +117,7 @@ class ToolCallHandler {
     required String initialUserMessage,
     required List<Map<String, dynamic>> history,
     required String accessToken,
+    String? discoveryContextKey,
     String? baseSystemPrompt,
     bool toolCallingEnabled = true,
     bool discoveryMode = true,
@@ -116,7 +125,7 @@ class ToolCallHandler {
   }) {
     final enforcer = ToolEnforcer(maxIterations: 24)..resetIteration();
 
-    return ToolLoopSession(
+    final session = ToolLoopSession(
       latestUserMessage: initialUserMessage,
       history: _cloneHistory(history),
       accessToken: accessToken,
@@ -125,10 +134,17 @@ class ToolCallHandler {
       discoveryMode: discoveryMode,
       allowMarkdownToolCalls: allowMarkdownToolCalls,
       baseSystemPrompt: baseSystemPrompt,
+      discoveryContextKey: discoveryContextKey,
     );
+
+    if (toolCallingEnabled && discoveryMode) {
+      _restoreDiscoveryContext(session);
+    }
+
+    return session;
   }
 
-  String buildInitialSystemPrompt(ToolLoopSession session) {
+  Future<String> buildInitialSystemPrompt(ToolLoopSession session) async {
     if (!session.toolCallingEnabled) {
       return session.baseSystemPrompt?.trim() ?? '';
     }
@@ -173,6 +189,39 @@ class ToolCallHandler {
     );
     if (parsedCalls.isEmpty) {
       final displayContent = _stripToolCallBlocks(cleanedContent);
+
+      final shouldRetryAfterEmptyResponse =
+          displayContent.trim().isEmpty &&
+          session.toolCalls.isNotEmpty &&
+          session.emptyFinalRecoveryAttempts < _maxEmptyFinalRecoveryAttempts;
+
+      if (shouldRetryAfterEmptyResponse) {
+        session.emptyFinalRecoveryAttempts++;
+
+        const retryMessage =
+            'Tool Results:\n'
+            '[INFO] The previous assistant response was empty.\n\n'
+            'Continue from the latest tool results and provide the final '
+            'answer to the user now. Do not repeat tool calls unless they '
+            'are absolutely required.';
+
+        session.latestUserMessage = retryMessage;
+        return ToolLoopResult.continueWith(
+          nextStep: ToolLoopStep(
+            message: retryMessage,
+            history: _cloneHistory(session.history),
+            systemPrompt: await _buildSystemPrompt(
+              baseSystemPrompt: session.baseSystemPrompt,
+              isToolResult: true,
+              discoveryMode: session.discoveryMode,
+              discoveredTools: session.discoveredTools,
+            ),
+          ),
+          interimContent: '',
+          toolCalls: _cloneToolCalls(session.toolCalls),
+        );
+      }
+
       return ToolLoopResult.finalAnswer(
         content: displayContent,
         reasoning: reasoning,
@@ -229,7 +278,7 @@ class ToolCallHandler {
         nextStep: ToolLoopStep(
           message: nextMessage,
           history: _cloneHistory(session.history),
-          systemPrompt: _buildSystemPrompt(
+          systemPrompt: await _buildSystemPrompt(
             baseSystemPrompt: session.baseSystemPrompt,
             isToolResult: true,
             discoveryMode: session.discoveryMode,
@@ -300,7 +349,7 @@ class ToolCallHandler {
       nextStep: ToolLoopStep(
         message: resultMessage,
         history: _cloneHistory(session.history),
-        systemPrompt: _buildSystemPrompt(
+        systemPrompt: await _buildSystemPrompt(
           baseSystemPrompt: session.baseSystemPrompt,
           isToolResult: true,
           discoveryMode: session.discoveryMode,
@@ -339,14 +388,22 @@ class ToolCallHandler {
 
     if (discoveredNames.isEmpty) return;
 
+    var hasNewTool = false;
     for (final tool in _toolExecutor.allTools) {
       if (tool.name == 'find_tools') continue;
       if (!discoveredNames.contains(tool.name)) continue;
       if (session.discoveredToolNames.contains(tool.name)) continue;
 
       session.discoveredToolNames.add(tool.name);
-      session.discoveredTools.add(tool.toJson());
+      hasNewTool = true;
     }
+
+    if (!hasNewTool) {
+      return;
+    }
+
+    _refreshDiscoveredToolDefinitions(session);
+    _storeDiscoveryContext(session);
 
     if (kDebugMode) {
       debugPrint(
@@ -356,12 +413,43 @@ class ToolCallHandler {
     }
   }
 
-  String _buildSystemPrompt({
+  Future<String> _buildSystemPrompt({
     required String? baseSystemPrompt,
     required bool isToolResult,
     required bool discoveryMode,
     required List<Map<String, dynamic>> discoveredTools,
-  }) {
+  }) async {
+    // Check if identity system is enabled before loading Soul/User/Memory.
+    final identityOn = await isIdentityEnabled();
+
+    String? soulText;
+    String? userInfoText;
+    String? memoryText;
+    Map<String, dynamic>? notesToolDef;
+
+    if (identityOn) {
+      final results = await Future.wait([
+        loadSoulText(),
+        loadUserInfoText(),
+        loadMemoryText(),
+      ]);
+      soulText = results[0];
+      userInfoText = results[1];
+      memoryText = results[2];
+
+      // Get the notes tool definition so it's always available.
+      notesToolDef = _toolExecutor.allTools
+          .where((t) => t.name == 'notes')
+          .map((t) => t.toJson())
+          .firstOrNull;
+    }
+
+    // ask_user is always available regardless of identity toggle.
+    final askUserToolDef = _toolExecutor.allTools
+        .where((t) => t.name == 'ask_user')
+        .map((t) => t.toJson())
+        .firstOrNull;
+
     final tools = _toolExecutor.allTools.map((t) => t.toJson()).toList();
     final promptBuilder = ToolPromptBuilder(discoveryMode: discoveryMode);
     final toolProtocol = promptBuilder
@@ -369,6 +457,11 @@ class ToolCallHandler {
           tools: tools,
           isToolResult: isToolResult,
           discoveredTools: discoveredTools,
+          soulText: soulText,
+          userInfoText: userInfoText,
+          memoryText: memoryText,
+          notesToolDef: notesToolDef,
+          askUserToolDef: askUserToolDef,
         )
         .trim();
 
@@ -429,4 +522,77 @@ class ToolCallHandler {
   List<ToolCall> _cloneToolCalls(List<ToolCall> calls) {
     return calls.map((c) => ToolCall.fromJson(c.toJson())).toList();
   }
+
+  void _restoreDiscoveryContext(ToolLoopSession session) {
+    final contextKey = session.discoveryContextKey?.trim();
+    if (contextKey == null || contextKey.isEmpty) {
+      return;
+    }
+
+    final stored = _discoveryContextStates[contextKey];
+    if (stored == null || stored.discoveredToolNames.isEmpty) {
+      return;
+    }
+
+    stored.lastUsedAt = DateTime.now();
+    session.discoveredToolNames.addAll(stored.discoveredToolNames);
+    _refreshDiscoveredToolDefinitions(session);
+  }
+
+  void _storeDiscoveryContext(ToolLoopSession session) {
+    final contextKey = session.discoveryContextKey?.trim();
+    if (contextKey == null || contextKey.isEmpty) {
+      return;
+    }
+    if (session.discoveredToolNames.isEmpty) {
+      return;
+    }
+
+    final state = _discoveryContextStates.putIfAbsent(
+      contextKey,
+      _DiscoveryContextState.new,
+    );
+    state.lastUsedAt = DateTime.now();
+    state.discoveredToolNames
+      ..clear()
+      ..addAll(session.discoveredToolNames);
+
+    _pruneDiscoveryContextsIfNeeded();
+  }
+
+  void _refreshDiscoveredToolDefinitions(ToolLoopSession session) {
+    final discoveredDefs = _toolExecutor.allTools
+        .where(
+          (tool) =>
+              tool.name != 'find_tools' &&
+              session.discoveredToolNames.contains(tool.name),
+        )
+        .map((tool) => tool.toJson())
+        .toList();
+
+    session.discoveredTools
+      ..clear()
+      ..addAll(discoveredDefs);
+  }
+
+  void _pruneDiscoveryContextsIfNeeded() {
+    if (_discoveryContextStates.length <= _maxDiscoveryContexts) {
+      return;
+    }
+
+    final ordered = _discoveryContextStates.entries.toList()
+      ..sort((a, b) => a.value.lastUsedAt.compareTo(b.value.lastUsedAt));
+
+    final removeCount = _discoveryContextStates.length - _maxDiscoveryContexts;
+    for (int i = 0; i < removeCount; i++) {
+      _discoveryContextStates.remove(ordered[i].key);
+    }
+  }
+}
+
+class _DiscoveryContextState {
+  _DiscoveryContextState();
+
+  DateTime lastUsedAt = DateTime.now();
+  final Set<String> discoveredToolNames = <String>{};
 }

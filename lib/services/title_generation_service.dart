@@ -10,7 +10,6 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 /// Service for automatically generating chat titles using AI.
 /// Uses qwen/qwen3-8b model via Fireworks provider over WebSocket.
 class TitleGenerationService {
-
   // Model and provider for title generation
   // Using qwen3-8b via fireworks (fast and cheap for title generation)
   static const String _titleModel = 'qwen/qwen3-8b';
@@ -21,7 +20,8 @@ class TitleGenerationService {
   static const String _systemPromptKey = 'title_gen_system_prompt';
 
   // Default system prompt - ChatGPT-style concise title generation
-  static const String defaultSystemPrompt = '''Generate a brief title for this conversation based on the user's first message.
+  static const String defaultSystemPrompt =
+      '''Generate a brief title for this conversation based on the user's first message.
 
 Rules:
 - 2-6 words maximum
@@ -32,6 +32,10 @@ Rules:
   // In-memory cache of settings
   static bool? _autoGenerateTitlesEnabled;
   static String? _customSystemPrompt;
+  static const Duration _chatLookupRetryDelay = Duration(milliseconds: 450);
+  static const int _maxChatLookupAttempts = 8;
+  static const int _maxRenameAttempts = 6;
+  static final Set<String> _inFlightTitleChats = <String>{};
 
   /// Check if auto title generation is enabled
   static Future<bool> isEnabled() async {
@@ -87,7 +91,8 @@ Rules:
   static Future<void> setSystemPrompt(String prompt) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      if (prompt.trim().isEmpty || prompt.trim() == defaultSystemPrompt.trim()) {
+      if (prompt.trim().isEmpty ||
+          prompt.trim() == defaultSystemPrompt.trim()) {
         // Clear custom prompt if empty or same as default
         await prefs.remove(_systemPromptKey);
         _customSystemPrompt = null;
@@ -160,7 +165,9 @@ Rules:
 
       // Privacy: Don't log user message content in release builds
       if (kDebugMode) {
-        debugPrint('📝 [TitleGen] Generating title for message (${firstMessage.length} chars)');
+        debugPrint(
+          '📝 [TitleGen] Generating title for message (${firstMessage.length} chars)',
+        );
       }
 
       // Use WebSocket streaming (same as main chat)
@@ -209,8 +216,12 @@ Rules:
 
       // Clean up the title
       // Remove any thinking tags that might be present (qwen models sometimes include these)
-      title = title.replaceAll(RegExp(r'<think>.*?</think>', dotAll: true), '').trim();
-      title = title.replaceAll(RegExp(r'<thinking>.*?</thinking>', dotAll: true), '').trim();
+      title = title
+          .replaceAll(RegExp(r'<think>.*?</think>', dotAll: true), '')
+          .trim();
+      title = title
+          .replaceAll(RegExp(r'<thinking>.*?</thinking>', dotAll: true), '')
+          .trim();
 
       // Remove quotes if present
       if ((title.startsWith('"') && title.endsWith('"')) ||
@@ -240,43 +251,62 @@ Rules:
 
   /// Generate and apply a title to a chat.
   /// Should be called after the first message is sent.
-  static Future<void> generateAndApplyTitle(String chatId, String firstMessage) async {
+  static Future<void> generateAndApplyTitle(
+    String chatId,
+    String firstMessage,
+  ) async {
     // Privacy: Only log non-sensitive metadata
     if (kDebugMode) {
-      debugPrint('📝 [TitleGen] generateAndApplyTitle called (${firstMessage.length} chars)');
+      debugPrint(
+        '📝 [TitleGen] generateAndApplyTitle called (${firstMessage.length} chars)',
+      );
+    }
+
+    if (!_inFlightTitleChats.add(chatId)) {
+      if (kDebugMode) {
+        debugPrint('📝 [TitleGen] Title generation already in progress');
+      }
+      return;
     }
 
     try {
-      // Check if chat already has a custom name
-      final chat = ChatStorageService.getChatById(chatId);
-      if (kDebugMode) {
-        debugPrint('📝 [TitleGen] Chat lookup: ${chat != null ? "found" : "NOT FOUND"}, hasTitle: ${chat?.customName != null}');
+      final chatReady = await _waitUntilChatAvailable(chatId);
+      if (!chatReady) {
+        if (kDebugMode) {
+          debugPrint('📝 [TitleGen] Chat not ready yet, skipping');
+        }
+        return;
       }
 
-      if (chat?.customName != null) {
+      final existingChat = ChatStorageService.getChatById(chatId);
+      if (_hasCustomName(existingChat?.customName)) {
         if (kDebugMode) {
-          debugPrint('📝 [TitleGen] Chat already has a title, skipping');
+          debugPrint('📝 [TitleGen] Chat already has a custom title, skipping');
         }
         return;
       }
 
       final title = await generateTitle(firstMessage);
-      if (kDebugMode) {
-        debugPrint('📝 [TitleGen] Generated title result: $title');
-      }
-
-      if (title != null && title.isNotEmpty) {
-        if (kDebugMode) {
-          debugPrint('📝 [TitleGen] Calling renameChat($chatId, $title)');
-        }
-        await ChatStorageService.renameChat(chatId, title);
-        if (kDebugMode) {
-          debugPrint('📝 [TitleGen] Successfully applied title to chat $chatId: $title');
-        }
-      } else {
+      if (title == null || title.isEmpty) {
         if (kDebugMode) {
           debugPrint('📝 [TitleGen] Title was null or empty, not applying');
         }
+        return;
+      }
+
+      final latestChat = ChatStorageService.getChatById(chatId);
+      if (_hasCustomName(latestChat?.customName)) {
+        if (kDebugMode) {
+          debugPrint(
+            '📝 [TitleGen] Title changed meanwhile, keeping existing one',
+          );
+        }
+        return;
+      }
+
+      final applied = await _applyTitleWithRetry(chatId, title);
+      if (kDebugMode && applied) {
+        debugPrint('📝 [TitleGen] Successfully applied generated title');
       }
     } catch (e, stackTrace) {
       if (kDebugMode) {
@@ -285,6 +315,57 @@ Rules:
       if (kDebugMode) {
         debugPrint('📝 [TitleGen] Stack trace: $stackTrace');
       }
+    } finally {
+      _inFlightTitleChats.remove(chatId);
     }
+  }
+
+  static bool _hasCustomName(String? name) {
+    return name != null && name.trim().isNotEmpty;
+  }
+
+  static Future<bool> _waitUntilChatAvailable(String chatId) async {
+    for (int attempt = 0; attempt < _maxChatLookupAttempts; attempt++) {
+      final chat = ChatStorageService.getChatById(chatId);
+      if (chat != null) {
+        return true;
+      }
+
+      try {
+        await ChatStorageService.loadFullChat(chatId);
+      } catch (_) {
+        // Chat may not exist yet; retry below.
+      }
+
+      if (ChatStorageService.getChatById(chatId) != null) {
+        return true;
+      }
+
+      await Future<void>.delayed(_chatLookupRetryDelay);
+    }
+
+    return false;
+  }
+
+  static Future<bool> _applyTitleWithRetry(String chatId, String title) async {
+    for (int attempt = 0; attempt < _maxRenameAttempts; attempt++) {
+      final chat = ChatStorageService.getChatById(chatId);
+      if (_hasCustomName(chat?.customName)) {
+        return true;
+      }
+
+      try {
+        await ChatStorageService.renameChat(chatId, title);
+        return true;
+      } on StateError {
+        if (attempt == _maxRenameAttempts - 1) {
+          return false;
+        }
+      }
+
+      await Future<void>.delayed(_chatLookupRetryDelay);
+    }
+
+    return false;
   }
 }
