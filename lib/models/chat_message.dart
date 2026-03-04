@@ -12,6 +12,7 @@ class ChatMessage {
     this.attachments,
     this.attachedFilesJson,
     this.toolCalls,
+    this.contentBlocks,
     this.modelId,
     this.provider,
   });
@@ -27,6 +28,7 @@ class ChatMessage {
       attachments: json['attachments'] as String?,
       attachedFilesJson: json['attachedFilesJson'] as String?,
       toolCalls: json['toolCalls'] as String?,
+      contentBlocks: json['contentBlocks'] as String?,
       modelId: json['modelId'] as String?,
       provider: json['provider'] as String?,
     );
@@ -41,6 +43,12 @@ class ChatMessage {
   final String? attachments;
   final String? attachedFilesJson;
   final String? toolCalls;
+
+  /// JSON-encoded list of [ContentBlock] objects representing the ordered
+  /// content of an AI response.  When present, the UI renders these blocks
+  /// in sequence instead of the flat text + tool-calls layout.
+  final String? contentBlocks;
+
   final String? modelId;
   final String? provider;
 
@@ -61,6 +69,8 @@ class ChatMessage {
     if (attachedFilesJson != null && attachedFilesJson!.isNotEmpty)
       'attachedFilesJson': attachedFilesJson,
     if (toolCalls != null && toolCalls!.isNotEmpty) 'toolCalls': toolCalls,
+    if (contentBlocks != null && contentBlocks!.isNotEmpty)
+      'contentBlocks': contentBlocks,
     if (modelId != null && modelId!.isNotEmpty) 'modelId': modelId,
     if (provider != null && provider!.isNotEmpty) 'provider': provider,
   };

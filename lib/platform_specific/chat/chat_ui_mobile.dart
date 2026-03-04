@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/models/chat_model.dart';
+import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -182,13 +183,18 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       ..onMessageFinalize = _finalizeAiMessage
       ..onToolCallsUpdate = _updateToolCallsForMessage
       ..onToolImagesProcessed = _handleToolImagesProcessed
+      ..onContentBlocksUpdate = _updateContentBlocksForMessage
       ..onBackgroundUpdate = (chatId, index, content, reasoning) {
-        _persistenceHandler.updateBackgroundChatMessage(
-          chatId: chatId,
-          messageIndex: index,
-          content: content,
-          reasoning: reasoning,
-        );
+        if (_activeChatId != chatId) {
+          unawaited(
+            _persistenceHandler.updateBackgroundChatMessage(
+              chatId: chatId,
+              messageIndex: index,
+              content: content,
+              reasoning: reasoning,
+            ),
+          );
+        }
       }
       ..onPaymentRequired = _showPaymentRequiredDialog;
   }
@@ -484,6 +490,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     if (_activeChatId != null) {
       _streamingHandler.cancelStream(_activeChatId);
     }
+    _persistenceHandler.dispose();
     _audioVisualizerTimer?.cancel();
     _providerRefreshSubscription?.cancel();
     NetworkStatusService.isOnlineListenable.removeListener(
@@ -1523,10 +1530,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     }
 
     if (!isActiveChat) {
-      _persistenceHandler.updateBackgroundChatMessage(
-        chatId: chatId,
-        messageIndex: index,
-        toolCallsJson: toolCallsJson,
+      unawaited(
+        _persistenceHandler.updateBackgroundChatMessage(
+          chatId: chatId,
+          messageIndex: index,
+          toolCallsJson: toolCallsJson,
+        ),
       );
     }
   }
@@ -1557,13 +1566,41 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       });
       _persistChat();
     } else if (!isActiveChat) {
-      _persistenceHandler.updateBackgroundChatMessage(
-        chatId: chatId,
-        messageIndex: index,
-        toolCallsJson: toolCallsJson,
-        images: jsonEncode(imagePaths),
-        imageCostEur: imageCostEur,
-        imageGeneratedAt: imageGeneratedAt,
+      unawaited(
+        _persistenceHandler.updateBackgroundChatMessage(
+          chatId: chatId,
+          messageIndex: index,
+          toolCallsJson: toolCallsJson,
+          images: jsonEncode(imagePaths),
+          imageCostEur: imageCostEur,
+          imageGeneratedAt: imageGeneratedAt,
+        ),
+      );
+    }
+  }
+
+  void _updateContentBlocksForMessage(
+    int index,
+    String contentBlocksJson,
+    String chatId,
+  ) {
+    final bool isActiveChat = _activeChatId == chatId;
+    if (mounted && isActiveChat && index >= 0 && index < _messages.length) {
+      setState(() {
+        final message = Map<String, String>.from(_messages[index]);
+        message['contentBlocks'] = contentBlocksJson;
+        _messages[index] = message;
+      });
+      return;
+    }
+
+    if (!isActiveChat) {
+      unawaited(
+        _persistenceHandler.updateBackgroundChatMessage(
+          chatId: chatId,
+          messageIndex: index,
+          contentBlocksJson: contentBlocksJson,
+        ),
       );
     }
   }
@@ -1623,11 +1660,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       // User switched to a different chat - _messages belongs to the OTHER chat!
       // DO NOT check _messages.length - it's the wrong chat's message list.
       // Persist using the background update handler which reads from storage.
-      _persistenceHandler.updateBackgroundChatMessage(
-        chatId: chatId,
-        messageIndex: index,
-        content: content,
-        reasoning: reasoning,
+      unawaited(
+        _persistenceHandler.updateBackgroundChatMessage(
+          chatId: chatId,
+          messageIndex: index,
+          content: content,
+          reasoning: reasoning,
+          immediate: true,
+        ),
       );
     }
   }
@@ -2616,286 +2656,277 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
               onTap: () {
                 FocusScope.of(context).unfocus();
               },
-              child: Column(
+              child: Stack(
                 children: [
-                  Expanded(
-                    child: Stack(
-                      children: [
-                        hasMessages
-                            ? Align(
-                                alignment: Alignment.center,
-                                child: Container(
-                                  constraints: BoxConstraints(
-                                    maxWidth: expandedInputWidth,
-                                  ),
-                                  child: SelectionArea(
-                                    child: ListView.builder(
-                                      controller: _scrollController,
-                                      padding: listPadding,
-                                      itemCount: _messages.length,
-                                      addAutomaticKeepAlives: false,
-                                      addRepaintBoundaries: true,
-                                      cacheExtent: 1000.0,
-                                      itemBuilder: (_, int i) {
-                                        final Map<String, String> raw =
-                                            _messages[i];
-                                        final String sender =
-                                            raw['sender'] ?? 'ai';
-                                        final bool isAiMessage =
-                                            sender != 'user';
-                                        final bool isStreamingMessage =
-                                            _isCurrentChatStreaming &&
-                                            i == _messages.length - 1 &&
-                                            isAiMessage;
-                                        final String displayText =
-                                            (raw['text'] ?? '').trimRight();
-                                        final String reasoning =
-                                            raw['reasoning'] ?? '';
-                                        final String? modelLabel = isAiMessage
-                                            ? _formatModelInfo(
-                                                raw['modelId'],
-                                                raw['provider'],
-                                              )
-                                            : null;
-                                        final String? modelProvider =
-                                            isAiMessage
-                                            ? (raw['provider'] ?? '').trim()
-                                            : null;
-                                        final String? reasoningText =
-                                            reasoning.trim().isEmpty
-                                            ? null
-                                            : reasoning;
-                                        final bool isBeingEdited =
-                                            _messageActionsHandler
-                                                .editingMessageIndex ==
-                                            i;
-                                        final bool isUser = sender == 'user';
-                                        final bool startsNewGroup =
-                                            i == 0 ||
-                                            ((_messages[i - 1]['sender'] ??
-                                                    'ai') !=
-                                                sender);
-                                        final bool endsGroup =
-                                            i == _messages.length - 1 ||
-                                            ((_messages[i + 1]['sender'] ??
-                                                    'ai') !=
-                                                sender);
+                  hasMessages
+                      ? Align(
+                          alignment: Alignment.center,
+                          child: Container(
+                            constraints: BoxConstraints(
+                              maxWidth: expandedInputWidth,
+                            ),
+                            child: SelectionArea(
+                              child: ListView.builder(
+                                controller: _scrollController,
+                                padding: listPadding,
+                                itemCount: _messages.length,
+                                addAutomaticKeepAlives: false,
+                                addRepaintBoundaries: true,
+                                cacheExtent: 1000.0,
+                                itemBuilder: (_, int i) {
+                                  final Map<String, String> raw = _messages[i];
+                                  final String sender = raw['sender'] ?? 'ai';
+                                  final bool isAiMessage = sender != 'user';
+                                  final bool isStreamingMessage =
+                                      _isCurrentChatStreaming &&
+                                      i == _messages.length - 1 &&
+                                      isAiMessage;
+                                  final String displayText = (raw['text'] ?? '')
+                                      .trimRight();
+                                  final String reasoning =
+                                      raw['reasoning'] ?? '';
+                                  final String? modelLabel = isAiMessage
+                                      ? _formatModelInfo(
+                                          raw['modelId'],
+                                          raw['provider'],
+                                        )
+                                      : null;
+                                  final String? modelProvider = isAiMessage
+                                      ? (raw['provider'] ?? '').trim()
+                                      : null;
+                                  final String? reasoningText =
+                                      reasoning.trim().isEmpty
+                                      ? null
+                                      : reasoning;
+                                  final bool isBeingEdited =
+                                      _messageActionsHandler
+                                          .editingMessageIndex ==
+                                      i;
+                                  final bool isUser = sender == 'user';
+                                  final bool startsNewGroup =
+                                      i == 0 ||
+                                      ((_messages[i - 1]['sender'] ?? 'ai') !=
+                                          sender);
+                                  final bool endsGroup =
+                                      i == _messages.length - 1 ||
+                                      ((_messages[i + 1]['sender'] ?? 'ai') !=
+                                          sender);
 
-                                        // Parse images from JSON
-                                        List<String>? images;
-                                        final String? imagesJson =
-                                            raw['images'];
-                                        if (imagesJson != null &&
-                                            imagesJson.isNotEmpty) {
-                                          try {
-                                            final decoded = jsonDecode(
-                                              imagesJson,
-                                            );
-                                            if (decoded is List) {
-                                              images = decoded.cast<String>();
-                                            }
-                                          } catch (e) {
-                                            if (kDebugMode) {
-                                              debugPrint(
-                                                'Failed to decode images JSON: $e',
-                                              );
-                                            }
-                                          }
-                                        }
-
-                                        // Parse document attachments from JSON
-                                        List<DocumentAttachment>? attachments;
-                                        final String? attachmentsJson =
-                                            raw['attachments'];
-                                        if (attachmentsJson != null &&
-                                            attachmentsJson.isNotEmpty) {
-                                          try {
-                                            final decoded = jsonDecode(
-                                              attachmentsJson,
-                                            );
-                                            if (decoded is List) {
-                                              attachments = decoded
-                                                  .map(
-                                                    (item) =>
-                                                        DocumentAttachment.fromJson(
-                                                          item
-                                                              as Map<
-                                                                String,
-                                                                dynamic
-                                                              >,
-                                                        ),
-                                                  )
-                                                  .toList();
-                                              if (kDebugMode) {
-                                                debugPrint(
-                                                  '📄 [AttachmentDebug] Extracted ${attachments.length} attachments from message $i',
-                                                );
-                                              }
-                                            }
-                                          } catch (e) {
-                                            if (kDebugMode) {
-                                              debugPrint(
-                                                '📄 [AttachmentDebug] Failed to decode attachments JSON: $e',
-                                              );
-                                            }
-                                          }
-                                        }
-
-                                        // Parse TPS value from message
-                                        final tpsStr = raw['tps'];
-                                        double? tps;
-                                        if (tpsStr != null &&
-                                            tpsStr.isNotEmpty) {
-                                          tps = double.tryParse(tpsStr);
-                                        }
-
-                                        List<ToolCall>? toolCalls;
-                                        final String? toolCallsJson =
-                                            raw['toolCalls'];
-                                        if (toolCallsJson != null &&
-                                            toolCallsJson.isNotEmpty) {
-                                          try {
-                                            final decoded = jsonDecode(
-                                              toolCallsJson,
-                                            );
-                                            if (decoded is List) {
-                                              toolCalls = decoded
-                                                  .whereType<Map>()
-                                                  .map(
-                                                    (item) => ToolCall.fromJson(
-                                                      Map<String, dynamic>.from(
-                                                        item,
-                                                      ),
-                                                    ),
-                                                  )
-                                                  .toList();
-                                            }
-                                          } catch (_) {}
-                                        }
-
-                                        final String? imageCostStr =
-                                            raw['imageCostEur'];
-                                        final double? imageCostEur =
-                                            imageCostStr != null &&
-                                                imageCostStr.isNotEmpty
-                                            ? double.tryParse(imageCostStr)
-                                            : null;
-                                        final String? imageGeneratedAtStr =
-                                            raw['imageGeneratedAt'];
-                                        final DateTime? imageGeneratedAt =
-                                            imageGeneratedAtStr != null &&
-                                                imageGeneratedAtStr.isNotEmpty
-                                            ? DateTime.tryParse(
-                                                imageGeneratedAtStr,
-                                              )
-                                            : null;
-
-                                        return RepaintBoundary(
-                                          child: MessageBubble(
-                                            key: ValueKey('msg_$i'),
-                                            message: displayText,
-                                            reasoning: reasoningText,
-                                            isUser: isUser,
-                                            startsNewGroup: startsNewGroup,
-                                            endsGroup: endsGroup,
-                                            maxWidth: isUser
-                                                ? expandedInputWidth * 0.8
-                                                : expandedInputWidth,
-                                            isReasoningStreaming:
-                                                isStreamingMessage,
-                                            modelLabel: modelLabel,
-                                            modelProvider: modelProvider,
-                                            tps: tps,
-                                            toolCalls: toolCalls,
-                                            showToolCalls: widget.showToolCalls,
-                                            images: images,
-                                            attachments: attachments,
-                                            imageCostEur: imageCostEur,
-                                            imageGeneratedAt: imageGeneratedAt,
-                                            actions: _messageActionsHandler
-                                                .buildActionsForMessage(
-                                                  index: i,
-                                                  messageText: displayText,
-                                                  isUser: isUser,
-                                                  isStreaming:
-                                                      isStreamingMessage,
-                                                  onEdit: (index) {
-                                                    setState(() {
-                                                      _messageActionsHandler
-                                                          .startEdit(index);
-                                                    });
-                                                  },
-                                                  onResendMessage:
-                                                      _resendMessageAt,
-                                                ),
-                                            isEditing: isBeingEdited,
-                                            initialEditText: isBeingEdited
-                                                ? displayText
-                                                : null,
-                                            onSubmitEdit:
-                                                isBeingEdited && isUser
-                                                ? (newText) =>
-                                                      _submitEditedMessage(
-                                                        i,
-                                                        newText,
-                                                      )
-                                                : null,
-                                            onCancelEdit: isBeingEdited
-                                                ? () {
-                                                    setState(() {
-                                                      _messageActionsHandler
-                                                          .cancelEdit();
-                                                    });
-                                                  }
-                                                : null,
-                                            showReasoningTokens:
-                                                widget.showReasoningTokens,
-                                            showModelInfo: widget.showModelInfo,
-                                            showTps: widget.showTps,
-                                          ),
+                                  // Parse images from JSON
+                                  List<String>? images;
+                                  final String? imagesJson = raw['images'];
+                                  if (imagesJson != null &&
+                                      imagesJson.isNotEmpty) {
+                                    try {
+                                      final decoded = jsonDecode(imagesJson);
+                                      if (decoded is List) {
+                                        images = decoded.cast<String>();
+                                      }
+                                    } catch (e) {
+                                      if (kDebugMode) {
+                                        debugPrint(
+                                          'Failed to decode images JSON: $e',
                                         );
-                                      },
+                                      }
+                                    }
+                                  }
+
+                                  // Parse document attachments from JSON
+                                  List<DocumentAttachment>? attachments;
+                                  final String? attachmentsJson =
+                                      raw['attachments'];
+                                  if (attachmentsJson != null &&
+                                      attachmentsJson.isNotEmpty) {
+                                    try {
+                                      final decoded = jsonDecode(
+                                        attachmentsJson,
+                                      );
+                                      if (decoded is List) {
+                                        attachments = decoded
+                                            .map(
+                                              (item) =>
+                                                  DocumentAttachment.fromJson(
+                                                    item
+                                                        as Map<String, dynamic>,
+                                                  ),
+                                            )
+                                            .toList();
+                                        if (kDebugMode) {
+                                          debugPrint(
+                                            '📄 [AttachmentDebug] Extracted ${attachments.length} attachments from message $i',
+                                          );
+                                        }
+                                      }
+                                    } catch (e) {
+                                      if (kDebugMode) {
+                                        debugPrint(
+                                          '📄 [AttachmentDebug] Failed to decode attachments JSON: $e',
+                                        );
+                                      }
+                                    }
+                                  }
+
+                                  // Parse TPS value from message
+                                  final tpsStr = raw['tps'];
+                                  double? tps;
+                                  if (tpsStr != null && tpsStr.isNotEmpty) {
+                                    tps = double.tryParse(tpsStr);
+                                  }
+
+                                  List<ToolCall>? toolCalls;
+                                  final String? toolCallsJson =
+                                      raw['toolCalls'];
+                                  if (toolCallsJson != null &&
+                                      toolCallsJson.isNotEmpty) {
+                                    try {
+                                      final decoded = jsonDecode(toolCallsJson);
+                                      if (decoded is List) {
+                                        toolCalls = decoded
+                                            .whereType<Map>()
+                                            .map(
+                                              (item) => ToolCall.fromJson(
+                                                Map<String, dynamic>.from(item),
+                                              ),
+                                            )
+                                            .toList();
+                                      }
+                                    } catch (_) {}
+                                  }
+
+                                  // Parse content blocks for interleaved
+                                  // tool call / text display.
+                                  List<ContentBlock>? parsedContentBlocks;
+                                  final String? contentBlocksJson =
+                                      raw['contentBlocks'];
+                                  if (contentBlocksJson != null &&
+                                      contentBlocksJson.isNotEmpty) {
+                                    try {
+                                      final decoded = jsonDecode(
+                                        contentBlocksJson,
+                                      );
+                                      if (decoded is List) {
+                                        parsedContentBlocks = decoded
+                                            .whereType<Map>()
+                                            .map(
+                                              (item) => ContentBlock.fromJson(
+                                                Map<String, dynamic>.from(item),
+                                              ),
+                                            )
+                                            .toList();
+                                      }
+                                    } catch (_) {}
+                                  }
+
+                                  final String? imageCostStr =
+                                      raw['imageCostEur'];
+                                  final double? imageCostEur =
+                                      imageCostStr != null &&
+                                          imageCostStr.isNotEmpty
+                                      ? double.tryParse(imageCostStr)
+                                      : null;
+                                  final String? imageGeneratedAtStr =
+                                      raw['imageGeneratedAt'];
+                                  final DateTime? imageGeneratedAt =
+                                      imageGeneratedAtStr != null &&
+                                          imageGeneratedAtStr.isNotEmpty
+                                      ? DateTime.tryParse(imageGeneratedAtStr)
+                                      : null;
+
+                                  return RepaintBoundary(
+                                    child: MessageBubble(
+                                      key: ValueKey('msg_$i'),
+                                      message: displayText,
+                                      reasoning: reasoningText,
+                                      isUser: isUser,
+                                      startsNewGroup: startsNewGroup,
+                                      endsGroup: endsGroup,
+                                      maxWidth: isUser
+                                          ? expandedInputWidth * 0.8
+                                          : expandedInputWidth,
+                                      isReasoningStreaming: isStreamingMessage,
+                                      modelLabel: modelLabel,
+                                      modelProvider: modelProvider,
+                                      tps: tps,
+                                      toolCalls: toolCalls,
+                                      showToolCalls: widget.showToolCalls,
+                                      contentBlocks: parsedContentBlocks,
+                                      isStreamingMessage: isStreamingMessage,
+                                      images: images,
+                                      attachments: attachments,
+                                      imageCostEur: imageCostEur,
+                                      imageGeneratedAt: imageGeneratedAt,
+                                      actions: _messageActionsHandler
+                                          .buildActionsForMessage(
+                                            index: i,
+                                            messageText: displayText,
+                                            isUser: isUser,
+                                            isStreaming: isStreamingMessage,
+                                            onEdit: (index) {
+                                              setState(() {
+                                                _messageActionsHandler
+                                                    .startEdit(index);
+                                              });
+                                            },
+                                            onResendMessage: _resendMessageAt,
+                                          ),
+                                      isEditing: isBeingEdited,
+                                      initialEditText: isBeingEdited
+                                          ? displayText
+                                          : null,
+                                      onSubmitEdit: isBeingEdited && isUser
+                                          ? (newText) =>
+                                                _submitEditedMessage(i, newText)
+                                          : null,
+                                      onCancelEdit: isBeingEdited
+                                          ? () {
+                                              setState(() {
+                                                _messageActionsHandler
+                                                    .cancelEdit();
+                                              });
+                                            }
+                                          : null,
+                                      showReasoningTokens:
+                                          widget.showReasoningTokens,
+                                      showModelInfo: widget.showModelInfo,
+                                      showTps: widget.showTps,
                                     ),
-                                  ),
-                                ),
-                              )
-                            : const SizedBox.expand(),
-                        // Scroll-to-bottom button (centered above input)
-                        if (_showScrollToBottom && hasMessages)
-                          Positioned(
-                            bottom: 12,
-                            left: 0,
-                            right: 0,
-                            child: Center(
-                              child: Material(
-                                elevation: 4,
-                                shape: const CircleBorder(),
-                                color:
-                                    theme.colorScheme.surfaceContainerHighest,
-                                child: InkWell(
-                                  customBorder: const CircleBorder(),
-                                  onTap: () => _scrollChatToBottom(force: true),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(8),
-                                    child: Icon(
-                                      Icons.keyboard_arrow_down,
-                                      size: 24,
-                                      color: theme.colorScheme.onSurface,
-                                    ),
-                                  ),
-                                ),
+                                  );
+                                },
                               ),
                             ),
                           ),
-                      ],
+                        )
+                      : const SizedBox.expand(),
+                  // Scroll-to-bottom button (centered above input)
+                  if (_showScrollToBottom && hasMessages)
+                    Positioned(
+                      bottom: composerReservedSpace + 12,
+                      left: 0,
+                      right: 0,
+                      child: Center(
+                        child: Material(
+                          elevation: 4,
+                          shape: const CircleBorder(),
+                          color: theme.colorScheme.surfaceContainerHighest,
+                          child: InkWell(
+                            customBorder: const CircleBorder(),
+                            onTap: () => _scrollChatToBottom(force: true),
+                            child: Padding(
+                              padding: const EdgeInsets.all(8),
+                              child: Icon(
+                                Icons.keyboard_arrow_down,
+                                size: 24,
+                                color: theme.colorScheme.onSurface,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                  Padding(
-                    padding: EdgeInsets.only(
-                      left: effectiveHorizontalPadding,
-                      right: effectiveHorizontalPadding,
-                      bottom: effectiveHorizontalPadding,
-                    ),
+                  Positioned(
+                    left: effectiveHorizontalPadding,
+                    right: effectiveHorizontalPadding,
+                    bottom: effectiveHorizontalPadding,
                     child: SafeArea(
                       top: false,
                       child: Center(
@@ -2971,6 +3002,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     final Color bg = theme.scaffoldBackgroundColor;
     final Color accent = theme.colorScheme.primary;
     final bool hasAttachments = _fileHandler.hasAttachments;
+    final bool showStopAction = _isCurrentChatStreaming || _isSendingMessage;
+    final bool showVoiceModeAction =
+        _controller.text.trim().isEmpty && !hasAttachments && kFeatureVoiceMode;
 
     final Color borderColor = _audioHandler.isMicActive
         ? Colors.red.withValues(alpha: 0.4)
@@ -3136,6 +3170,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                 icon: _audioHandler.isMicActive
                     ? Icons.stop_rounded
                     : Icons.mic_rounded,
+                iconSize: 14,
                 onTap: _handleMicTap,
                 isActive: _audioHandler.isMicActive,
                 color: _audioHandler.isMicActive ? Colors.red : iconFg,
@@ -3144,28 +3179,22 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
               const SizedBox(width: 3),
               buildTinyActionButton(
                 icon: _audioHandler.isMicActive
-                    ? Icons.send_rounded
-                    : ((_isCurrentChatStreaming || _isSendingMessage)
+                    ? Icons.north_rounded
+                    : (showStopAction
                           ? Icons.stop_rounded
-                          : (_controller.text.trim().isEmpty && !hasAttachments
-                                ? (kFeatureVoiceMode
-                                      ? Icons.graphic_eq_rounded
-                                      : Icons.arrow_upward_rounded)
-                                : Icons.arrow_upward_rounded)),
+                          : (showVoiceModeAction
+                                ? Icons.graphic_eq_rounded
+                                : Icons.north_rounded)),
                 onTap: _audioHandler.isMicActive
                     ? _handleAudioSend
-                    : ((_isCurrentChatStreaming || _isSendingMessage)
+                    : (showStopAction
                           ? _cancelCurrentOperation
-                          : (_controller.text.trim().isEmpty &&
-                                    !hasAttachments &&
-                                    kFeatureVoiceMode
+                          : (showVoiceModeAction
                                 ? () => _openComingSoonFeature('Voice Mode')
                                 : _sendMessage)),
                 color: _audioHandler.isMicActive
                     ? accent
-                    : ((_isCurrentChatStreaming || _isSendingMessage)
-                          ? Colors.red
-                          : accent),
+                    : (showStopAction ? Colors.red : accent),
                 isLoading: _audioHandler.isTranscribingAudio,
                 semanticsId: 'send_button',
               ),

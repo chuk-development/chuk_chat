@@ -8,6 +8,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/models/chat_model.dart';
+import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -62,6 +63,8 @@ class _MessageRenderData {
     this.imageGeneratedAt,
     this.attachments,
     this.toolCalls,
+    this.contentBlocks,
+    this.isStreamingMessage = false,
   });
 
   final String sender;
@@ -76,6 +79,8 @@ class _MessageRenderData {
   final DateTime? imageGeneratedAt;
   final List<DocumentAttachment>? attachments;
   final List<ToolCall>? toolCalls;
+  final List<ContentBlock>? contentBlocks;
+  final bool isStreamingMessage;
 
   bool get isUser => sender == 'user';
 }
@@ -1463,7 +1468,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       discoveryMode: widget.toolDiscoveryMode,
       allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
     );
-    final initialSystemPrompt = _toolCallHandler.buildInitialSystemPrompt(
+    final initialSystemPrompt = await _toolCallHandler.buildInitialSystemPrompt(
       toolSession,
     );
 
@@ -1473,6 +1478,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // Accumulates display text across all streaming passes so that AI text
     // from earlier passes is never lost when a new pass begins.
     final accumulatedText = StringBuffer();
+    // Ordered content blocks built across streaming passes.
+    final contentBlocks = <ContentBlock>[];
+    int previousToolCallCount = 0;
 
     Future<void> startStreamPass({
       required String message,
@@ -1501,12 +1509,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               _isValidMessageIndex(placeholderIndex) &&
               _activeChatId == chatIdForStream) {
             final displayContent = stripToolCallBlocksForDisplay(content);
-            final fullDisplay = accumulatedText.isEmpty
-                ? displayContent
-                : '$accumulatedText$displayContent';
 
             setState(() {
-              _messages[placeholderIndex]['text'] = fullDisplay;
+              _messages[placeholderIndex]['text'] = displayContent;
               _messages[placeholderIndex]['reasoning'] = reasoning;
             });
             _scrollChatToBottom();
@@ -1530,20 +1535,37 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             if (loopResult.shouldContinue && loopResult.nextStep != null) {
               final interimText = loopResult.interimContent?.trim() ?? '';
 
-              // Accumulate this pass's text so it persists in the UI.
+              // Build content blocks for this completed pass.
+              final allToolCalls = loopResult.toolCalls;
+              final newToolCalls = allToolCalls.length > previousToolCallCount
+                  ? allToolCalls.sublist(previousToolCallCount)
+                  : <ToolCall>[];
+              previousToolCallCount = allToolCalls.length;
+
+              if (interimText.isNotEmpty) {
+                contentBlocks.add(ContentBlock.text(interimText));
+              }
+              if (newToolCalls.isNotEmpty) {
+                contentBlocks.add(ContentBlock.toolCalls(newToolCalls));
+              }
+
+              // Accumulate text for backward-compat message field.
               if (interimText.isNotEmpty) {
                 accumulatedText.write(interimText);
                 accumulatedText.write('\n\n');
               }
-              final accumulated = accumulatedText.toString().trimRight();
+
+              final contentBlocksJson = jsonEncode(
+                contentBlocks.map((b) => b.toJson()).toList(),
+              );
 
               if (_activeChatId == chatIdForStream) {
                 if (placeholderIndex >= 0 &&
                     placeholderIndex < _messages.length) {
-                  if (accumulated.isNotEmpty) {
-                    _messages[placeholderIndex]['text'] = accumulated;
-                  }
+                  _messages[placeholderIndex]['text'] = '';
                   _messages[placeholderIndex]['reasoning'] = finalReasoning;
+                  _messages[placeholderIndex]['contentBlocks'] =
+                      contentBlocksJson;
                 }
                 if (mounted) {
                   setState(() {});
@@ -1555,11 +1577,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 );
                 if (backgroundMsgs != null &&
                     placeholderIndex < backgroundMsgs.length) {
-                  if (accumulated.isNotEmpty) {
-                    backgroundMsgs[placeholderIndex]['text'] = accumulated;
-                  }
+                  backgroundMsgs[placeholderIndex]['text'] = '';
                   backgroundMsgs[placeholderIndex]['reasoning'] =
                       finalReasoning;
+                  backgroundMsgs[placeholderIndex]['contentBlocks'] =
+                      contentBlocksJson;
                   _persistChatWithIdAndMessages(
                     chatIdForStream,
                     backgroundMsgs,
@@ -1583,6 +1605,22 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             final rawContent = resolvedContent.isEmpty
                 ? 'No response received.'
                 : resolvedContent;
+
+            // Build final content blocks.
+            if (contentBlocks.isNotEmpty) {
+              final finalText = stripToolCallBlocksForDisplay(
+                rawContent,
+              ).trim();
+              if (resolvedReasoning.isNotEmpty) {
+                contentBlocks.add(ContentBlock.reasoning(resolvedReasoning));
+              }
+              if (finalText.isNotEmpty) {
+                contentBlocks.add(ContentBlock.text(finalText));
+              }
+            }
+            final contentBlocksJson = contentBlocks.isNotEmpty
+                ? jsonEncode(contentBlocks.map((b) => b.toJson()).toList())
+                : null;
 
             // Prepend accumulated text from previous passes so nothing is lost.
             final effectiveContent = accumulatedText.isEmpty
@@ -1608,6 +1646,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 reasoning: resolvedReasoning,
                 tps: tps,
               );
+              if (contentBlocksJson != null &&
+                  placeholderIndex >= 0 &&
+                  placeholderIndex < _messages.length) {
+                _messages[placeholderIndex]['contentBlocks'] =
+                    contentBlocksJson;
+              }
               _persistChatWithId(chatIdForStream);
             } else {
               final backgroundMsgs = _streamingManager.getBackgroundMessages(
@@ -1618,6 +1662,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 backgroundMsgs[placeholderIndex]['text'] = effectiveContent;
                 backgroundMsgs[placeholderIndex]['reasoning'] =
                     resolvedReasoning;
+                if (contentBlocksJson != null) {
+                  backgroundMsgs[placeholderIndex]['contentBlocks'] =
+                      contentBlocksJson;
+                }
                 if (tps != null) {
                   backgroundMsgs[placeholderIndex]['tps'] = tps.toString();
                 }
@@ -2302,13 +2350,16 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       discoveryMode: widget.toolDiscoveryMode,
       allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
     );
-    final initialSystemPrompt = _toolCallHandler.buildInitialSystemPrompt(
+    final initialSystemPrompt = await _toolCallHandler.buildInitialSystemPrompt(
       toolSession,
     );
 
     // Accumulates display text across all streaming passes so that AI text
     // from earlier passes is never lost when a new pass begins.
-    final accumulatedText = StringBuffer();
+    final accumulatedText2 = StringBuffer();
+    // Ordered content blocks built across streaming passes.
+    final contentBlocks2 = <ContentBlock>[];
+    int previousToolCallCount2 = 0;
 
     Future<void> startStreamPass({
       required String message,
@@ -2334,14 +2385,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         onUpdate: (content, reasoning) {
           if (mounted && _activeChatId == chatIdForStream) {
             final displayContent = stripToolCallBlocksForDisplay(content);
-            final fullDisplay = accumulatedText.isEmpty
-                ? displayContent
-                : '$accumulatedText$displayContent';
             if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
-              _messages[placeholderIndex]['text'] = fullDisplay;
+              _messages[placeholderIndex]['text'] = displayContent;
               _messages[placeholderIndex]['reasoning'] = reasoning;
             }
-            _updateAiMessage(placeholderIndex, fullDisplay, reasoning);
+            _updateAiMessage(placeholderIndex, displayContent, reasoning);
             _scrollChatToBottom();
           }
         },
@@ -2369,20 +2417,38 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               if (loopResult.shouldContinue && loopResult.nextStep != null) {
                 final interimText = loopResult.interimContent?.trim() ?? '';
 
-                // Accumulate this pass's text so it persists in the UI.
+                // Build content blocks for this completed pass.
+                final allToolCalls = loopResult.toolCalls;
+                final newToolCalls =
+                    allToolCalls.length > previousToolCallCount2
+                    ? allToolCalls.sublist(previousToolCallCount2)
+                    : <ToolCall>[];
+                previousToolCallCount2 = allToolCalls.length;
+
                 if (interimText.isNotEmpty) {
-                  accumulatedText.write(interimText);
-                  accumulatedText.write('\n\n');
+                  contentBlocks2.add(ContentBlock.text(interimText));
                 }
-                final accumulated = accumulatedText.toString().trimRight();
+                if (newToolCalls.isNotEmpty) {
+                  contentBlocks2.add(ContentBlock.toolCalls(newToolCalls));
+                }
+
+                // Accumulate text for backward-compat message field.
+                if (interimText.isNotEmpty) {
+                  accumulatedText2.write(interimText);
+                  accumulatedText2.write('\n\n');
+                }
+
+                final contentBlocksJson = jsonEncode(
+                  contentBlocks2.map((b) => b.toJson()).toList(),
+                );
 
                 if (_activeChatId == chatIdForStream) {
                   if (placeholderIndex >= 0 &&
                       placeholderIndex < _messages.length) {
-                    if (accumulated.isNotEmpty) {
-                      _messages[placeholderIndex]['text'] = accumulated;
-                    }
+                    _messages[placeholderIndex]['text'] = '';
                     _messages[placeholderIndex]['reasoning'] = finalReasoning;
+                    _messages[placeholderIndex]['contentBlocks'] =
+                        contentBlocksJson;
                   }
                   if (mounted) {
                     setState(() {});
@@ -2393,11 +2459,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                       .getBackgroundMessages(chatIdForStream);
                   if (backgroundMsgs != null &&
                       placeholderIndex < backgroundMsgs.length) {
-                    if (accumulated.isNotEmpty) {
-                      backgroundMsgs[placeholderIndex]['text'] = accumulated;
-                    }
+                    backgroundMsgs[placeholderIndex]['text'] = '';
                     backgroundMsgs[placeholderIndex]['reasoning'] =
                         finalReasoning;
+                    backgroundMsgs[placeholderIndex]['contentBlocks'] =
+                        contentBlocksJson;
                     _persistChatWithIdAndMessages(
                       chatIdForStream,
                       backgroundMsgs,
@@ -2430,10 +2496,26 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                   ? 'The model returned an empty response.'
                   : resolvedContent;
 
+              // Build final content blocks.
+              if (contentBlocks2.isNotEmpty) {
+                final finalText = stripToolCallBlocksForDisplay(
+                  rawContent,
+                ).trim();
+                if (resolvedReasoning.isNotEmpty) {
+                  contentBlocks2.add(ContentBlock.reasoning(resolvedReasoning));
+                }
+                if (finalText.isNotEmpty) {
+                  contentBlocks2.add(ContentBlock.text(finalText));
+                }
+              }
+              final contentBlocksJson = contentBlocks2.isNotEmpty
+                  ? jsonEncode(contentBlocks2.map((b) => b.toJson()).toList())
+                  : null;
+
               // Prepend accumulated text from previous passes so nothing is lost.
-              final effectiveContent = accumulatedText.isEmpty
+              final effectiveContent = accumulatedText2.isEmpty
                   ? rawContent
-                  : '$accumulatedText$rawContent';
+                  : '$accumulatedText2$rawContent';
 
               // Persist tool-generated images to encrypted storage
               await _processToolImages(
@@ -2447,6 +2529,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                     placeholderIndex < _messages.length) {
                   _messages[placeholderIndex]['text'] = effectiveContent;
                   _messages[placeholderIndex]['reasoning'] = resolvedReasoning;
+                  if (contentBlocksJson != null) {
+                    _messages[placeholderIndex]['contentBlocks'] =
+                        contentBlocksJson;
+                  }
                   if (tps != null) {
                     _messages[placeholderIndex]['tps'] = tps.toString();
                   }
@@ -2472,6 +2558,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                   backgroundMsgs[placeholderIndex]['text'] = effectiveContent;
                   backgroundMsgs[placeholderIndex]['reasoning'] =
                       resolvedReasoning;
+                  if (contentBlocksJson != null) {
+                    backgroundMsgs[placeholderIndex]['contentBlocks'] =
+                        contentBlocksJson;
+                  }
                   if (tps != null) {
                     backgroundMsgs[placeholderIndex]['tps'] = tps.toString();
                   }
@@ -3731,6 +3821,24 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         } catch (_) {}
       }
 
+      // Parse content blocks for interleaved tool call / text display.
+      List<ContentBlock>? parsedContentBlocks;
+      final String? contentBlocksJson = raw['contentBlocks'];
+      if (contentBlocksJson != null && contentBlocksJson.isNotEmpty) {
+        try {
+          final decoded = jsonDecode(contentBlocksJson);
+          if (decoded is List) {
+            parsedContentBlocks = decoded
+                .whereType<Map>()
+                .map(
+                  (item) =>
+                      ContentBlock.fromJson(Map<String, dynamic>.from(item)),
+                )
+                .toList();
+          }
+        } catch (_) {}
+      }
+
       final String? imageCostStr = raw['imageCostEur'];
       final double? imageCostEur =
           imageCostStr != null && imageCostStr.isNotEmpty
@@ -3757,6 +3865,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         imageGeneratedAt: imageGeneratedAt,
         attachments: attachments,
         toolCalls: toolCalls,
+        contentBlocks: parsedContentBlocks,
+        isStreamingMessage: isStreamingMessage,
       );
     });
 
@@ -3918,6 +4028,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                           tps: data.tps,
                                           toolCalls: data.toolCalls,
                                           showToolCalls: widget.showToolCalls,
+                                          contentBlocks: data.contentBlocks,
+                                          isStreamingMessage:
+                                              data.isStreamingMessage,
                                           images: data.images,
                                           imageCostEur: data.imageCostEur,
                                           imageGeneratedAt:

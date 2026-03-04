@@ -1,4 +1,6 @@
 // lib/platform_specific/chat/handlers/chat_persistence_handler.dart
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
@@ -6,9 +8,23 @@ import 'package:chuk_chat/services/supabase_service.dart';
 
 /// Handles chat persistence and storage
 class ChatPersistenceHandler {
+  static const Duration _backgroundUpdateDebounce = Duration(milliseconds: 700);
+
   // Callbacks
   Function(String)? onShowSnackBar;
   Function(String chatId)? onChatIdAssigned;
+
+  final Map<String, _PendingBackgroundUpdate> _pendingBackgroundUpdates =
+      <String, _PendingBackgroundUpdate>{};
+  final Map<String, Timer> _backgroundUpdateTimers = <String, Timer>{};
+
+  void dispose() {
+    for (final timer in _backgroundUpdateTimers.values) {
+      timer.cancel();
+    }
+    _backgroundUpdateTimers.clear();
+    _pendingBackgroundUpdates.clear();
+  }
 
   /// Save or update chat in storage
   ///
@@ -63,21 +79,11 @@ class ChatPersistenceHandler {
     // CRITICAL: Capture chatId at the start to prevent race conditions
     final String? chatIdAtStart = chatId;
 
-    if (kDebugMode) {
-      debugPrint(
-        '📝 [ChatPersistence] Starting persist: chatId=$chatId, messages=${messagesCopy.length}, offline=$isOffline, silent=$silent',
-      );
-    }
-
     try {
       // Check if chat actually exists in storage
       final bool chatExists =
           chatId != null &&
           ChatStorageService.savedChats.any((chat) => chat.id == chatId);
-
-      if (kDebugMode) {
-        debugPrint('📋 [ChatPersistence] Chat exists in storage: $chatExists');
-      }
 
       // If chatId is provided but chat doesn't exist in storage, we need to INSERT not UPDATE
       final stored = chatExists
@@ -93,22 +99,10 @@ class ChatPersistenceHandler {
         return null;
       }
 
-      if (kDebugMode) {
-        debugPrint(
-          '✅ [ChatPersistence] Success: chatId=${stored.id}, messages=${stored.messages.length}',
-        );
-      }
-
       // Notify about chat ID assignment (unless silent mode)
       // Silent mode is used when persisting old chat in background after user moved to new chat
       if (!silent && (chatIdAtStart == null || chatIdAtStart != stored.id)) {
         onChatIdAssigned?.call(stored.id);
-      } else if (silent) {
-        if (kDebugMode) {
-          debugPrint(
-            '│ 🔇 [ChatPersistence] Silent mode - skipping onChatIdAssigned callback',
-          );
-        }
       }
 
       return stored;
@@ -184,67 +178,122 @@ class ChatPersistenceHandler {
     String? content,
     String? reasoning,
     String? toolCallsJson,
+    String? contentBlocksJson,
     String? images,
     String? imageCostEur,
     String? imageGeneratedAt,
     String? tps,
+    bool immediate = false,
   }) async {
-    try {
-      // Find the chat in storage
-      final chatIndex = ChatStorageService.savedChats.indexWhere(
-        (chat) => chat.id == chatId,
-      );
+    final key = '$chatId:$messageIndex';
+    final existing =
+        _pendingBackgroundUpdates[key] ??
+        _PendingBackgroundUpdate(chatId: chatId, messageIndex: messageIndex);
 
+    existing
+      ..content = content ?? existing.content
+      ..reasoning = reasoning ?? existing.reasoning
+      ..toolCallsJson = toolCallsJson ?? existing.toolCallsJson
+      ..contentBlocksJson = contentBlocksJson ?? existing.contentBlocksJson
+      ..images = images ?? existing.images
+      ..imageCostEur = imageCostEur ?? existing.imageCostEur
+      ..imageGeneratedAt = imageGeneratedAt ?? existing.imageGeneratedAt
+      ..tps = tps ?? existing.tps;
+
+    _pendingBackgroundUpdates[key] = existing;
+
+    if (immediate) {
+      _backgroundUpdateTimers.remove(key)?.cancel();
+      await _flushBackgroundUpdate(key);
+      return;
+    }
+
+    _backgroundUpdateTimers.remove(key)?.cancel();
+    _backgroundUpdateTimers[key] = Timer(_backgroundUpdateDebounce, () {
+      unawaited(_flushBackgroundUpdate(key));
+    });
+  }
+
+  Future<void> _flushBackgroundUpdate(String key) async {
+    final pending = _pendingBackgroundUpdates.remove(key);
+    _backgroundUpdateTimers.remove(key)?.cancel();
+    if (pending == null) {
+      return;
+    }
+
+    try {
+      final chatIndex = ChatStorageService.savedChats.indexWhere(
+        (chat) => chat.id == pending.chatId,
+      );
       if (chatIndex == -1) {
-        if (kDebugMode) {
-          debugPrint('Chat $chatId not found in storage');
-        }
         return;
       }
 
       final chat = ChatStorageService.savedChats[chatIndex];
-      final messages = chat.messages.map((m) => m.toJson()).toList();
-
-      // Update the message at the specified index
-      if (messageIndex >= 0 && messageIndex < messages.length) {
-        if (content != null) {
-          messages[messageIndex]['text'] = content;
-        }
-        if (reasoning != null) {
-          messages[messageIndex]['reasoning'] = reasoning;
-        }
-        if (toolCallsJson != null) {
-          messages[messageIndex]['toolCalls'] = toolCallsJson;
-        }
-        if (images != null) {
-          messages[messageIndex]['images'] = images;
-        }
-        if (imageCostEur != null) {
-          messages[messageIndex]['imageCostEur'] = imageCostEur;
-        }
-        if (imageGeneratedAt != null) {
-          messages[messageIndex]['imageGeneratedAt'] = imageGeneratedAt;
-        }
-        if (tps != null) {
-          messages[messageIndex]['tps'] = tps;
-        }
-
-        // Save back to storage
-        await ChatStorageService.updateChat(chatId, messages);
-        if (kDebugMode) {
-          debugPrint(
-            'Updated background chat $chatId message at index $messageIndex',
-          );
-        }
-      } else {
-        if (kDebugMode) {
-          debugPrint('Invalid message index $messageIndex for chat $chatId');
+      if (!chat.isFullyLoaded) {
+        final loaded = await ChatStorageService.loadFullChat(pending.chatId);
+        if (loaded == null || !loaded.isFullyLoaded) {
+          return;
         }
       }
+
+      final refreshed = ChatStorageService.getChatById(pending.chatId);
+      if (refreshed == null || !refreshed.isFullyLoaded) {
+        return;
+      }
+
+      final messages = refreshed.messages.map((m) => m.toJson()).toList();
+      if (pending.messageIndex < 0 || pending.messageIndex >= messages.length) {
+        return;
+      }
+
+      if (pending.content != null) {
+        messages[pending.messageIndex]['text'] = pending.content;
+      }
+      if (pending.reasoning != null) {
+        messages[pending.messageIndex]['reasoning'] = pending.reasoning;
+      }
+      if (pending.toolCallsJson != null) {
+        messages[pending.messageIndex]['toolCalls'] = pending.toolCallsJson;
+      }
+      if (pending.contentBlocksJson != null) {
+        messages[pending.messageIndex]['contentBlocks'] =
+            pending.contentBlocksJson;
+      }
+      if (pending.images != null) {
+        messages[pending.messageIndex]['images'] = pending.images;
+      }
+      if (pending.imageCostEur != null) {
+        messages[pending.messageIndex]['imageCostEur'] = pending.imageCostEur;
+      }
+      if (pending.imageGeneratedAt != null) {
+        messages[pending.messageIndex]['imageGeneratedAt'] =
+            pending.imageGeneratedAt;
+      }
+      if (pending.tps != null) {
+        messages[pending.messageIndex]['tps'] = pending.tps;
+      }
+
+      await ChatStorageService.updateChat(pending.chatId, messages);
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('Error updating background chat message: $e');
+        debugPrint('⚠️ [ChatPersistence] Background update failed: $e');
       }
     }
   }
+}
+
+class _PendingBackgroundUpdate {
+  _PendingBackgroundUpdate({required this.chatId, required this.messageIndex});
+
+  final String chatId;
+  final int messageIndex;
+  String? content;
+  String? reasoning;
+  String? toolCallsJson;
+  String? contentBlocksJson;
+  String? images;
+  String? imageCostEur;
+  String? imageGeneratedAt;
+  String? tps;
 }
