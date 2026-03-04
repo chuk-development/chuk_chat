@@ -380,7 +380,7 @@ class StreamingMessageHandler {
 
               final rawContent =
                   (loopResult.finalContent ?? finalContent).isEmpty
-                  ? 'The model returned an empty response.'
+                  ? 'The model returned an empty response. Tap resend on your last message to continue.'
                   : (loopResult.finalContent ?? finalContent);
               final effectiveReasoning =
                   loopResult.finalReasoning ?? finalReasoning;

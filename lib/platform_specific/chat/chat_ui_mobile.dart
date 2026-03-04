@@ -2232,12 +2232,29 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
   Future<void> _resendMessageAt(int index) async {
     if (index < 0 || index >= _messages.length) return;
-    final String text = (_messages[index]['text'] ?? '').trim();
+
+    int sourceIndex = index;
+    if (_messages[sourceIndex]['sender'] != 'user') {
+      sourceIndex = -1;
+      for (int i = index - 1; i >= 0; i--) {
+        if (_messages[i]['sender'] == 'user') {
+          sourceIndex = i;
+          break;
+        }
+      }
+    }
+
+    if (sourceIndex < 0 || sourceIndex >= _messages.length) {
+      _showSnackBar('Nothing to resend');
+      return;
+    }
+
+    final String text = (_messages[sourceIndex]['text'] ?? '').trim();
     if (text.isEmpty) {
       _showSnackBar('Nothing to resend');
       return;
     }
-    await _submitEditedMessage(index, text);
+    await _submitEditedMessage(sourceIndex, text);
   }
 
   // --- FULLSCREEN EDITOR ---
