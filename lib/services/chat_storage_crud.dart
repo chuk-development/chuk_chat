@@ -579,6 +579,7 @@ class ChatStorageCrud {
         attachments: m['attachments'] as String?,
         attachedFilesJson: m['attachedFilesJson'] as String?,
         toolCalls: m['toolCalls'] as String?,
+        contentBlocks: m['contentBlocks'] as String?,
         modelId: m['modelId'] as String?,
         provider: m['provider'] as String?,
       );
@@ -730,17 +731,8 @@ class ChatStorageCrud {
     String chatId,
     List<Map<String, dynamic>> messagesMaps,
   ) async {
-    if (kDebugMode) {
-      debugPrint(
-        '🔄 [ChatStorage] updateChat: $chatId (${messagesMaps.length} messages)',
-      );
-    }
-
     // If there's already a pending save for this chat, wait for it then try again
     if (ChatStorageState.pendingSaves.containsKey(chatId)) {
-      if (kDebugMode) {
-        debugPrint('⏳ [ChatStorage] Waiting for pending operation: $chatId');
-      }
       await ChatStorageState.pendingSaves[chatId]!.future;
     }
 
@@ -844,22 +836,6 @@ class ChatStorageCrud {
     ChatStorageState.notifyChanges(chatId);
 
     unawaited(LocalChatCacheService.upsert(user.id, updatedRow));
-
-    // Log with title for debugging
-    final displayTitle = title.length > 50
-        ? '${title.substring(0, 50)}...'
-        : title;
-    if (kDebugMode) {
-      debugPrint('✅ [ChatStorage] Updated chat: $chatId');
-    }
-    if (kDebugMode) {
-      debugPrint('   📝 Title: "$displayTitle"');
-    }
-    if (kDebugMode) {
-      debugPrint(
-        '   📊 Messages: ${messages.length} (${messages.where((m) => m.role == "user").length} user, ${messages.where((m) => m.role == "assistant").length} assistant)',
-      );
-    }
 
     return chat;
   }

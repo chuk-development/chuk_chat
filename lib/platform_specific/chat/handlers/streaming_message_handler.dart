@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/websocket_chat_service.dart';
 import 'package:chuk_chat/services/streaming_manager.dart';
@@ -43,6 +44,12 @@ class StreamingMessageHandler {
     String chatId,
   )?
   onToolImagesProcessed;
+
+  /// Called when content blocks are updated during or after the tool loop.
+  /// [contentBlocksJson] is a JSON-encoded list of [ContentBlock] objects.
+  Function(int index, String contentBlocksJson, String chatId)?
+  onContentBlocksUpdate;
+
   Function(String chatId, int index, String content, String reasoning)?
   onBackgroundUpdate;
   Function()? onPaymentRequired;
@@ -182,12 +189,13 @@ class StreamingMessageHandler {
       initialUserMessage: aiPromptContent,
       history: apiHistory,
       accessToken: accessToken,
+      discoveryContextKey: chatId,
       baseSystemPrompt: effectiveSystemPrompt,
       toolCallingEnabled: toolCallingEnabled,
       discoveryMode: toolDiscoveryMode,
       allowMarkdownToolCalls: allowMarkdownToolCalls,
     );
-    final initialSystemPrompt = _toolCallHandler.buildInitialSystemPrompt(
+    final initialSystemPrompt = await _toolCallHandler.buildInitialSystemPrompt(
       toolSession,
     );
     const int kMaxStreamingPasses = 20;
@@ -195,6 +203,15 @@ class StreamingMessageHandler {
     // Accumulates display text across all streaming passes so that AI text
     // from earlier passes is never lost when a new pass begins.
     final accumulatedText = StringBuffer();
+
+    // Ordered content blocks built across streaming passes.
+    // Each completed pass adds its text + tool_calls blocks here.
+    final contentBlocks = <ContentBlock>[];
+    int previousToolCallCount = 0;
+
+    /// Encode current content blocks to JSON.
+    String encodeBlocks() =>
+        jsonEncode(contentBlocks.map((b) => b.toJson()).toList());
 
     Future<void> startStreamingPass({
       required String message,
@@ -236,9 +253,13 @@ class StreamingMessageHandler {
         onUpdate: (content, reasoning) {
           if (_isDisposed) return;
           final displayContent = stripToolCallBlocksForDisplay(content);
-          final fullDisplay = accumulatedText.isEmpty
+
+          // When content blocks exist (multi-pass), only show current pass
+          // text — previous passes are rendered from content blocks.
+          // When no blocks yet (first pass / no tools), show full text.
+          final fullDisplay = contentBlocks.isEmpty
               ? displayContent
-              : '$accumulatedText$displayContent';
+              : displayContent;
 
           if (onMessageUpdate != null) {
             onMessageUpdate!(placeholderIndex, fullDisplay, reasoning, chatId);
@@ -278,30 +299,49 @@ class StreamingMessageHandler {
               if (loopResult.shouldContinue && loopResult.nextStep != null) {
                 final interimText = loopResult.interimContent?.trim() ?? '';
 
-                // Accumulate this pass's text so it persists in the UI.
+                // --- Build content blocks for this completed pass ---
+                // Determine which tool calls are new in this round.
+                final allToolCalls = loopResult.toolCalls;
+                final newToolCalls = allToolCalls.length > previousToolCallCount
+                    ? allToolCalls.sublist(previousToolCallCount)
+                    : <ToolCall>[];
+                previousToolCallCount = allToolCalls.length;
+
+                // Add text block for this pass's visible text.
+                if (interimText.isNotEmpty) {
+                  contentBlocks.add(ContentBlock.text(interimText));
+                }
+                // Add tool_calls block for this pass's tool calls.
+                if (newToolCalls.isNotEmpty) {
+                  contentBlocks.add(ContentBlock.toolCalls(newToolCalls));
+                }
+
+                // Fire content blocks update so the UI can render them.
+                onContentBlocksUpdate?.call(
+                  placeholderIndex,
+                  encodeBlocks(),
+                  chatId,
+                );
+
+                // Accumulate text for backward-compat message field.
                 if (interimText.isNotEmpty) {
                   accumulatedText.write(interimText);
                   accumulatedText.write('\n\n');
                 }
-                final accumulated = accumulatedText.toString().trimRight();
 
-                if (_isDisposed) return;
-                if (accumulated.isNotEmpty && onMessageUpdate != null) {
+                // Clear the message text for the next pass — content
+                // blocks handle previous passes, onMessageUpdate will
+                // show only the new pass's streaming text.
+                if (onMessageUpdate != null) {
                   onMessageUpdate!(
                     placeholderIndex,
-                    accumulated,
+                    '',
                     finalReasoning,
                     chatId,
                   );
                 }
-                if (accumulated.isNotEmpty && onBackgroundUpdate != null) {
-                  onBackgroundUpdate!(
-                    chatId,
-                    placeholderIndex,
-                    accumulated,
-                    finalReasoning,
-                  );
-                }
+
+                if (_isDisposed) return;
 
                 final next = loopResult.nextStep!;
                 // Yield to event loop so interim UI updates can paint first.
@@ -328,13 +368,33 @@ class StreamingMessageHandler {
                   (loopResult.finalContent ?? finalContent).isEmpty
                   ? 'The model returned an empty response.'
                   : (loopResult.finalContent ?? finalContent);
+              final effectiveReasoning =
+                  loopResult.finalReasoning ?? finalReasoning;
+
+              // --- Build final content blocks ---
+              if (contentBlocks.isNotEmpty) {
+                // Multi-pass: add the final answer as a text block.
+                final finalText = stripToolCallBlocksForDisplay(
+                  rawContent,
+                ).trim();
+                if (effectiveReasoning.isNotEmpty) {
+                  contentBlocks.add(ContentBlock.reasoning(effectiveReasoning));
+                }
+                if (finalText.isNotEmpty) {
+                  contentBlocks.add(ContentBlock.text(finalText));
+                }
+                onContentBlocksUpdate?.call(
+                  placeholderIndex,
+                  encodeBlocks(),
+                  chatId,
+                );
+              }
+
               // Prepend accumulated text from previous passes so nothing
-              // is lost.
+              // is lost in the flat message field (backward compat).
               final effectiveContent = accumulatedText.isEmpty
                   ? rawContent
                   : '$accumulatedText$rawContent';
-              final effectiveReasoning =
-                  loopResult.finalReasoning ?? finalReasoning;
 
               if (onMessageFinalize != null) {
                 onMessageFinalize!(

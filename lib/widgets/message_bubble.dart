@@ -2,6 +2,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/utils/image_clipboard_service.dart';
@@ -78,6 +79,8 @@ class MessageBubble extends StatefulWidget {
     this.showTps,
     this.toolCalls,
     this.showToolCalls = true,
+    this.contentBlocks,
+    this.isStreamingMessage = false,
     this.images,
     this.attachments,
     this.imageCostEur,
@@ -106,6 +109,16 @@ class MessageBubble extends StatefulWidget {
   final bool? showTps;
   final List<ToolCall>? toolCalls;
   final bool showToolCalls;
+
+  /// Ordered content blocks for interleaved AI responses.
+  /// When present and non-empty, the bubble renders these in sequence
+  /// instead of the flat text + single-tool-calls-bar layout.
+  final List<ContentBlock>? contentBlocks;
+
+  /// Whether this message is currently being streamed. Used with
+  /// [contentBlocks] to show trailing text from the active streaming pass.
+  final bool isStreamingMessage;
+
   final List<String>? images; // Base64 data URLs of images
   final List<DocumentAttachment>? attachments; // Document attachments
   final double? imageCostEur;
@@ -385,13 +398,22 @@ class _MessageBubbleState extends State<MessageBubble>
 
     final bool hasActions =
         widget.actions.isNotEmpty && !(widget.isEditing && isUserMessage);
+
+    // Check if we should use the interleaved content blocks layout
+    final bool useContentBlocks =
+        !isUserMessage &&
+        widget.contentBlocks != null &&
+        widget.contentBlocks!.isNotEmpty;
+
     final bool hasVisibleToolCalls =
         !isUserMessage &&
+        !useContentBlocks &&
         widget.showToolCalls &&
         widget.toolCalls != null &&
         widget.toolCalls!.isNotEmpty;
     final bool hasInfoStatusBar =
         !isUserMessage &&
+        !useContentBlocks &&
         (_hasReasoning || _hasModelInfo) &&
         !hasVisibleToolCalls;
 
@@ -423,41 +445,22 @@ class _MessageBubbleState extends State<MessageBubble>
         crossAxisAlignment: alignRight
             ? CrossAxisAlignment.end
             : CrossAxisAlignment.start,
-        children: [
-          // SizedBox forces only the reasoning card to fill full bubble width.
-          if (hasInfoStatusBar)
-            SizedBox(
-              width: double.infinity,
-              child: _buildInfoStatusBar(iconFgColor, accentColor),
-            ),
-          // Display images above the text message
-          if (widget.images != null && widget.images!.isNotEmpty) ...[
-            _buildImagesGrid(widget.images!),
-            if (widget.imageCostEur != null || widget.imageGeneratedAt != null)
-              _buildImageMetaMenu(
-                iconFgColor,
-                alignRight,
-                widget.imageCostEur,
-                widget.imageGeneratedAt,
+        children: useContentBlocks
+            ? _buildContentBlocksLayout(
+                iconFgColor: iconFgColor,
+                accentColor: accentColor,
+                bgColor: bgColor,
+                alignRight: alignRight,
+              )
+            : _buildClassicLayout(
+                iconFgColor: iconFgColor,
+                accentColor: accentColor,
+                bgColor: bgColor,
+                isUserMessage: isUserMessage,
+                alignRight: alignRight,
+                hasInfoStatusBar: hasInfoStatusBar,
+                hasVisibleToolCalls: hasVisibleToolCalls,
               ),
-            const SizedBox(height: 8),
-          ],
-          // Display document attachments
-          if (widget.attachments != null && widget.attachments!.isNotEmpty) ...[
-            _buildAttachmentsChips(widget.attachments!),
-            const SizedBox(height: 8),
-          ],
-          if (hasVisibleToolCalls) ...[
-            _buildToolCallsBar(widget.toolCalls!),
-            const SizedBox(height: 8),
-          ],
-          _buildMessageBody(
-            iconFgColor: iconFgColor,
-            accentColor: accentColor,
-            bgColor: bgColor,
-            isUserMessage: isUserMessage,
-          ),
-        ],
       ),
     );
 
@@ -478,6 +481,221 @@ class _MessageBubbleState extends State<MessageBubble>
           ],
         ),
       ),
+    );
+  }
+
+  /// Classic flat layout: single tool calls bar + single text block.
+  /// Used when no [ContentBlock]s are present (backward compat).
+  List<Widget> _buildClassicLayout({
+    required Color iconFgColor,
+    required Color accentColor,
+    required Color bgColor,
+    required bool isUserMessage,
+    required bool alignRight,
+    required bool hasInfoStatusBar,
+    required bool hasVisibleToolCalls,
+  }) {
+    return [
+      if (hasInfoStatusBar)
+        SizedBox(
+          width: double.infinity,
+          child: _buildInfoStatusBar(iconFgColor, accentColor),
+        ),
+      if (widget.images != null && widget.images!.isNotEmpty) ...[
+        _buildImagesGrid(widget.images!),
+        if (widget.imageCostEur != null || widget.imageGeneratedAt != null)
+          _buildImageMetaMenu(
+            iconFgColor,
+            alignRight,
+            widget.imageCostEur,
+            widget.imageGeneratedAt,
+          ),
+        const SizedBox(height: 8),
+      ],
+      if (widget.attachments != null && widget.attachments!.isNotEmpty) ...[
+        _buildAttachmentsChips(widget.attachments!),
+        const SizedBox(height: 8),
+      ],
+      if (hasVisibleToolCalls) ...[
+        _buildToolCallsBar(widget.toolCalls!),
+        const SizedBox(height: 8),
+      ],
+      _buildMessageBody(
+        iconFgColor: iconFgColor,
+        accentColor: accentColor,
+        bgColor: bgColor,
+        isUserMessage: isUserMessage,
+      ),
+    ];
+  }
+
+  /// Interleaved content blocks layout: renders text, tool calls, and
+  /// reasoning blocks in the order they were produced across streaming passes.
+  List<Widget> _buildContentBlocksLayout({
+    required Color iconFgColor,
+    required Color accentColor,
+    required Color bgColor,
+    required bool alignRight,
+  }) {
+    final blocks = widget.contentBlocks!;
+    final children = <Widget>[];
+
+    // Images always at top
+    if (widget.images != null && widget.images!.isNotEmpty) {
+      children.add(_buildImagesGrid(widget.images!));
+      if (widget.imageCostEur != null || widget.imageGeneratedAt != null) {
+        children.add(
+          _buildImageMetaMenu(
+            iconFgColor,
+            alignRight,
+            widget.imageCostEur,
+            widget.imageGeneratedAt,
+          ),
+        );
+      }
+      children.add(const SizedBox(height: 8));
+    }
+
+    // Document attachments
+    if (widget.attachments != null && widget.attachments!.isNotEmpty) {
+      children.add(_buildAttachmentsChips(widget.attachments!));
+      children.add(const SizedBox(height: 8));
+    }
+
+    // Collect tool call IDs already inside content blocks so we can detect
+    // "live" (not-yet-in-blocks) tool calls for the current streaming pass.
+    final blockToolCallIds = <String>{};
+    for (final block in blocks) {
+      if (block.type == ContentBlockType.toolCalls && block.toolCalls != null) {
+        for (final tc in block.toolCalls!) {
+          blockToolCallIds.add(tc.id);
+        }
+      }
+    }
+
+    // Render each content block in order
+    for (final block in blocks) {
+      switch (block.type) {
+        case ContentBlockType.text:
+          if (block.text != null && block.text!.trim().isNotEmpty) {
+            children.add(_buildBlockText(block.text!, iconFgColor, bgColor));
+          }
+        case ContentBlockType.toolCalls:
+          if (block.toolCalls != null &&
+              block.toolCalls!.isNotEmpty &&
+              widget.showToolCalls) {
+            children.add(
+              _buildToolCallsBar(block.toolCalls!, isContentBlock: true),
+            );
+            children.add(const SizedBox(height: 8));
+          }
+        case ContentBlockType.reasoning:
+          if (block.text != null && block.text!.trim().isNotEmpty) {
+            children.add(_buildBlockReasoning(block.text!, accentColor));
+          }
+      }
+    }
+
+    // Live tool calls: any tool calls NOT yet in a content block
+    // (from the currently-running pass).
+    if (widget.showToolCalls &&
+        widget.toolCalls != null &&
+        widget.toolCalls!.isNotEmpty) {
+      final liveToolCalls = widget.toolCalls!
+          .where((tc) => !blockToolCallIds.contains(tc.id))
+          .toList();
+      if (liveToolCalls.isNotEmpty) {
+        children.add(_buildToolCallsBar(liveToolCalls));
+        children.add(const SizedBox(height: 8));
+      }
+    }
+
+    // Trailing streaming text from the current pass (only while streaming).
+    // When finalized, all text is already in content blocks.
+    if (widget.isStreamingMessage) {
+      final trailingText = stripToolCallBlocksForDisplay(widget.message).trim();
+      if (trailingText.isNotEmpty) {
+        children.add(
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: MarkdownMessage(
+              text: trailingText,
+              textColor: iconFgColor,
+              backgroundColor: bgColor,
+            ),
+          ),
+        );
+      }
+    }
+
+    // Model info at the bottom (when content blocks handle reasoning)
+    if (_hasModelInfo) {
+      children.add(
+        _buildExpandableCard(
+          key: 'model_info_blocks',
+          icon: Icons.smart_toy_outlined,
+          label: widget.modelLabel!,
+          preview: _buildModelPreview(),
+          expandedContent: _buildModelDetails(),
+          accentColor: Colors.green,
+        ),
+      );
+    }
+
+    if (children.isEmpty) {
+      children.add(const SizedBox.shrink());
+    }
+
+    return children;
+  }
+
+  /// Renders a text content block as a MarkdownMessage.
+  Widget _buildBlockText(String text, Color textColor, Color bgColor) {
+    // Check for embedded <map> blocks
+    if (hasMapBlocks(text)) {
+      final segments = parseMapSegments(text);
+      final widgets = <Widget>[];
+      for (final segment in segments) {
+        if (segment.isMap) {
+          widgets.add(MapBlockWidget(jsonString: segment.content));
+        } else {
+          widgets.add(
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: MarkdownMessage(
+                text: segment.content,
+                textColor: textColor,
+                backgroundColor: bgColor,
+              ),
+            ),
+          );
+        }
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: widgets,
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: MarkdownMessage(
+        text: text,
+        textColor: textColor,
+        backgroundColor: bgColor,
+      ),
+    );
+  }
+
+  /// Renders a reasoning content block as an expandable card.
+  Widget _buildBlockReasoning(String text, Color accentColor) {
+    return _buildExpandableCard(
+      key: 'block_reasoning_${text.hashCode}',
+      icon: Icons.psychology,
+      label: 'Reasoning',
+      preview: text,
+      expandedContent: text,
+      accentColor: accentColor,
     );
   }
 
@@ -717,7 +935,10 @@ class _MessageBubbleState extends State<MessageBubble>
     return '${clean.substring(0, maxLength)}...';
   }
 
-  Widget _buildToolCallsBar(List<ToolCall> toolCalls) {
+  Widget _buildToolCallsBar(
+    List<ToolCall> toolCalls, {
+    bool isContentBlock = false,
+  }) {
     final colorScheme = Theme.of(context).colorScheme;
     final renderedAssistantText = stripToolCallBlocksForDisplay(widget.message);
     final bool isRunning = toolCalls.any(
@@ -725,7 +946,12 @@ class _MessageBubbleState extends State<MessageBubble>
           t.status == ToolCallStatus.running ||
           t.status == ToolCallStatus.pending,
     );
-    final bool isExpanded = _blockExpanded['tool_calls_bar'] ?? false;
+    // Use a unique expand key per content block (based on first tool call ID)
+    // so multiple tool call bars in the same message have independent state.
+    final String expandKey = isContentBlock && toolCalls.isNotEmpty
+        ? 'tool_calls_block_${toolCalls.first.id}'
+        : 'tool_calls_bar';
+    final bool isExpanded = _blockExpanded[expandKey] ?? false;
     final bool allDone =
         toolCalls.isNotEmpty &&
         toolCalls.every(
@@ -791,7 +1017,7 @@ class _MessageBubbleState extends State<MessageBubble>
           InkWell(
             onTap: () {
               setState(() {
-                _blockExpanded['tool_calls_bar'] = !isExpanded;
+                _blockExpanded[expandKey] = !isExpanded;
               });
             },
             borderRadius: BorderRadius.circular(10),
@@ -871,7 +1097,9 @@ class _MessageBubbleState extends State<MessageBubble>
                       isRunning: toolCalls[i].status == ToolCallStatus.running,
                     ),
                   ],
-                  if (_hasReasoning)
+                  // Skip reasoning/model info in content block mode —
+                  // those are rendered as separate blocks.
+                  if (!isContentBlock && _hasReasoning)
                     _buildExpandableCard(
                       key: 'thinking_final',
                       icon: Icons.psychology,
@@ -880,7 +1108,7 @@ class _MessageBubbleState extends State<MessageBubble>
                       expandedContent: widget.reasoning!,
                       accentColor: colorScheme.primary,
                     ),
-                  if (_hasModelInfo)
+                  if (!isContentBlock && _hasModelInfo)
                     _buildExpandableCard(
                       key: 'model_info_tools',
                       icon: Icons.smart_toy_outlined,
@@ -969,7 +1197,10 @@ class _MessageBubbleState extends State<MessageBubble>
         if (images.length == 1) {
           final String imageSource = images.first;
           final double imageWidth = maxWidth;
-          final double imageHeight = 280;
+          // Desktop gets a taller preview; mobile stays compact.
+          final double imageHeight = kPlatformMobile
+              ? 280
+              : (maxWidth * 0.65).clamp(280.0, 512.0);
 
           return _CachedImageThumbnail(
             imageDataUrl: imageSource,
@@ -1198,50 +1429,86 @@ class _MessageBubbleState extends State<MessageBubble>
     final String? costLabel = imageCostEur != null
         ? 'EUR ${imageCostEur.toStringAsFixed(2)}'
         : null;
+    final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
 
+    // Match the pill-shaped container style used by _buildActionButtons.
     return Padding(
       padding: alignRight
-          ? const EdgeInsets.only(top: 1, right: 6)
-          : const EdgeInsets.only(top: 1, left: 6),
+          ? const EdgeInsets.only(top: 4, right: 6)
+          : const EdgeInsets.only(top: 4, left: 6),
       child: Row(
         mainAxisAlignment: alignRight
             ? MainAxisAlignment.end
             : MainAxisAlignment.start,
         children: [
-          Tooltip(
-            message: 'Copy image',
-            child: IconButton(
-              icon: Icon(Icons.copy, color: iconFgColor.withValues(alpha: 0.8)),
-              iconSize: 15,
-              padding: EdgeInsets.zero,
-              visualDensity: VisualDensity.compact,
-              constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
-              onPressed: _copyFirstImageToClipboard,
-            ),
-          ),
-          const SizedBox(width: 1),
-          PopupMenuButton<String>(
-            tooltip: 'Image details',
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
-            iconSize: 15,
-            icon: Icon(
-              Icons.more_vert,
-              color: iconFgColor.withValues(alpha: 0.8),
-            ),
-            itemBuilder: (context) => [
-              if (costLabel != null)
-                PopupMenuItem<String>(
-                  enabled: false,
-                  value: 'cost',
-                  child: Text('Cost: $costLabel'),
-                ),
-              PopupMenuItem<String>(
-                enabled: false,
-                value: 'time',
-                child: Text('Generated: $generatedLabel'),
+          Container(
+            decoration: BoxDecoration(
+              color: bgColor.lighten(0.05),
+              borderRadius: BorderRadius.circular(100),
+              border: Border.all(
+                color: iconFgColor.withValues(alpha: 0.15),
+                width: 1,
               ),
-            ],
+            ),
+            padding: EdgeInsets.symmetric(
+              horizontal: kPlatformMobile ? 2 : 8,
+              vertical: kPlatformMobile ? 0 : 4,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Tooltip(
+                  message: 'Copy image',
+                  child: IconButton(
+                    icon: Icon(
+                      Icons.copy,
+                      color: iconFgColor,
+                      size: kPlatformMobile ? 15 : 18,
+                    ),
+                    padding: EdgeInsets.all(kPlatformMobile ? 4 : 8),
+                    visualDensity: VisualDensity.compact,
+                    constraints: BoxConstraints(
+                      minWidth: kPlatformMobile ? 24 : 30,
+                      minHeight: kPlatformMobile ? 24 : 30,
+                    ),
+                    style: kPlatformMobile
+                        ? null
+                        : IconButton.styleFrom(
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                    onPressed: _copyFirstImageToClipboard,
+                  ),
+                ),
+                PopupMenuButton<String>(
+                  tooltip: 'Image details',
+                  padding: EdgeInsets.zero,
+                  constraints: BoxConstraints(
+                    minWidth: kPlatformMobile ? 24 : 30,
+                    minHeight: kPlatformMobile ? 24 : 30,
+                  ),
+                  iconSize: kPlatformMobile ? 15 : 18,
+                  icon: Icon(Icons.more_vert, color: iconFgColor),
+                  style: kPlatformMobile
+                      ? null
+                      : IconButton.styleFrom(
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                  itemBuilder: (context) => [
+                    if (costLabel != null)
+                      PopupMenuItem<String>(
+                        enabled: false,
+                        value: 'cost',
+                        child: Text('Cost: $costLabel'),
+                      ),
+                    PopupMenuItem<String>(
+                      enabled: false,
+                      value: 'time',
+                      child: Text('Generated: $generatedLabel'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ],
       ),
