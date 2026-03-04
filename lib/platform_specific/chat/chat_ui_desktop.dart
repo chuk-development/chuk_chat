@@ -1757,57 +1757,63 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   }
 
   Widget _buildAudioVisualizer({required Color accent, required Color iconFg}) {
+    // Desktop adaptation of the mobile audio visualizer with gradient + glow
+    const int barCount = 40; // More bars for wider desktop layout
+    final int startIndex = _audioLevels.length > barCount
+        ? _audioLevels.length - barCount
+        : 0;
+
     return SizedBox(
       key: const ValueKey<String>('audio-visualizer'),
-      height: 44,
+      height: 32,
       child: Row(
-        children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final int barCount = _audioLevels.length;
-                if (barCount == 0) {
-                  return const SizedBox.shrink();
-                }
-                final double maxHeight = constraints.maxHeight;
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: List.generate(barCount, (index) {
+          final int levelIndex = startIndex + index;
+          final double rawLevel = levelIndex < _audioLevels.length
+              ? _audioLevels[levelIndex]
+              : 0.0;
 
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: List.generate(barCount, (int index) {
-                    final double level = _audioLevels[index];
-                    final double clampedLevel = level.clamp(0.0, 1.0);
-                    final double barHeight = math.max(
-                      4.0,
-                      clampedLevel * maxHeight,
-                    );
-                    return Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 1.2),
-                        child: Align(
-                          alignment: Alignment.bottomCenter,
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 90),
-                            height: barHeight,
-                            decoration: BoxDecoration(
-                              color: accent,
-                              borderRadius: BorderRadius.circular(3),
-                            ),
+          // Exponential scaling for more dramatic response
+          final double level = rawLevel * rawLevel;
+
+          // Bar height with good range (3-28px)
+          final double barHeight = (level * 26 + 3).clamp(3.0, 28.0);
+
+          // Vary opacity based on level for depth effect
+          final double opacity = (0.6 + (level * 0.4)).clamp(0.6, 1.0);
+
+          return Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 0.8),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 50),
+                curve: Curves.easeOut,
+                height: barHeight,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      accent.withValues(alpha: opacity),
+                      accent.withValues(alpha: opacity * 0.7),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(2),
+                  boxShadow: level > 0.3
+                      ? [
+                          BoxShadow(
+                            color: accent.withValues(alpha: 0.3),
+                            blurRadius: 2,
+                            spreadRadius: 0.5,
                           ),
-                        ),
-                      ),
-                    );
-                  }),
-                );
-              },
+                        ]
+                      : null,
+                ),
+              ),
             ),
-          ),
-        ],
+          );
+        }),
       ),
     );
   }
