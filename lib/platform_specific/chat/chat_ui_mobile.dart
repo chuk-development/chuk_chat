@@ -645,6 +645,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                     message.toolCalls!.isNotEmpty) {
                   map['toolCalls'] = message.toolCalls!;
                 }
+                if (message.contentBlocks != null &&
+                    message.contentBlocks!.isNotEmpty) {
+                  map['contentBlocks'] = message.contentBlocks!;
+                }
                 return map;
               }),
             );
