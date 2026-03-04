@@ -519,9 +519,9 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
     }
     final bool hasConnectivity =
         await NetworkStatusService.hasInternetConnection();
-    final String message = hasConnectivity
-        ? 'We are currently doing maintenance and will be right back.'
-        : 'You appear to be offline. Please check your internet connection.';
+    final String message = _buildApiUnavailableMessage(
+      hasConnectivity: hasConnectivity,
+    );
     if (!mounted) return;
     setState(() {
       _errorMessage = message;
@@ -543,6 +543,26 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       ),
     );
     _startApiAvailabilityPolling();
+  }
+
+  String _buildApiUnavailableMessage({required bool hasConnectivity}) {
+    if (!hasConnectivity) {
+      return 'You appear to be offline. Please check your internet connection.';
+    }
+
+    final Uri? apiUri = Uri.tryParse(_apiBaseUrl);
+    final String host = apiUri?.host.toLowerCase() ?? '';
+    final bool isLocalHost =
+        host == 'localhost' ||
+        host == '127.0.0.1' ||
+        host == '10.0.2.2' ||
+        host == '10.0.3.2';
+
+    if (kDebugMode && isLocalHost) {
+      return 'Cannot reach local API server at $_apiBaseUrl.';
+    }
+
+    return 'We are currently doing maintenance and will be right back.';
   }
 
   void _startApiAvailabilityPolling() {
@@ -661,8 +681,8 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       return 32.0;
     }
 
-    // Limit max width to 180px for cleaner UI
-    double width = math.max(120.0, math.min(_buttonWidth, 180.0));
+    // Allow button to grow to fit full model name
+    double width = math.max(120.0, _buttonWidth);
     if (maxAvailableWidth.isFinite) {
       width = math.min(width, maxAvailableWidth);
     }
@@ -704,17 +724,17 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
           return AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             curve: Curves.easeOutCubic,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            height: 36,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            height: 42,
             width: effectiveWidth,
             decoration: BoxDecoration(
               color: bgColor,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(21),
               border: Border.all(
                 color: hovered
                     ? iconFgColor
                     : iconFgColor.withValues(alpha: 0.3),
-                width: hovered ? 1.2 : 0.8,
+                width: hovered ? 2.2 : 1.8,
               ),
             ),
             alignment: Alignment.centerLeft,
