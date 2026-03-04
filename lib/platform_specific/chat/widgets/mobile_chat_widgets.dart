@@ -1,15 +1,25 @@
 // lib/platform_specific/chat/widgets/mobile_chat_widgets.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 /// Build a tiny icon button widget
 Widget buildTinyIconButton({
-  required IconData icon,
+  IconData? icon,
+  String? svgAssetPath,
   required VoidCallback? onTap,
   required bool isActive,
   required Color color,
+  double iconSize = 18,
   String? semanticsId,
 }) {
+  assert(
+    icon != null || svgAssetPath != null,
+    'Either icon or svgAssetPath must be provided.',
+  );
+
+  final Color effectiveColor = isActive ? color : color.withValues(alpha: 0.6);
+
   final result = Material(
     color: Colors.transparent,
     child: InkWell(
@@ -19,16 +29,17 @@ Widget buildTinyIconButton({
         width: 32,
         height: 32,
         decoration: BoxDecoration(
-          color: isActive
-              ? color.withValues(alpha: 0.15)
-              : Colors.transparent,
+          color: isActive ? color.withValues(alpha: 0.15) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Icon(
-          icon,
-          size: 18,
-          color: isActive ? color : color.withValues(alpha: 0.6),
-        ),
+        child: svgAssetPath != null
+            ? SvgPicture.asset(
+                svgAssetPath,
+                width: iconSize,
+                height: iconSize,
+                colorFilter: ColorFilter.mode(effectiveColor, BlendMode.srcIn),
+              )
+            : Icon(icon!, size: iconSize, color: effectiveColor),
       ),
     ),
   );
@@ -40,12 +51,19 @@ Widget buildTinyIconButton({
 
 /// Build a tiny action button widget (for send, etc.)
 Widget buildTinyActionButton({
-  required IconData icon,
+  IconData? icon,
+  String? svgAssetPath,
   required VoidCallback onTap,
   required Color color,
   bool isLoading = false,
+  double iconSize = 16,
   String? semanticsId,
 }) {
+  assert(
+    icon != null || svgAssetPath != null,
+    'Either icon or svgAssetPath must be provided.',
+  );
+
   final result = Material(
     color: Colors.transparent,
     child: InkWell(
@@ -74,10 +92,20 @@ Widget buildTinyActionButton({
                 padding: const EdgeInsets.all(8.0),
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.black),
                 ),
               )
-            : Icon(icon, size: 16, color: Colors.white),
+            : svgAssetPath != null
+            ? SvgPicture.asset(
+                svgAssetPath,
+                width: iconSize,
+                height: iconSize,
+                colorFilter: const ColorFilter.mode(
+                  Colors.black,
+                  BlendMode.srcIn,
+                ),
+              )
+            : Icon(icon!, size: iconSize, color: Colors.black),
       ),
     ),
   );
@@ -163,9 +191,7 @@ Widget buildKeyboardListener({
         );
         controller.value = value.copyWith(
           text: updatedText,
-          selection: TextSelection.collapsed(
-            offset: value.selection.start + 1,
-          ),
+          selection: TextSelection.collapsed(offset: value.selection.start + 1),
         );
         return;
       }
@@ -223,13 +249,15 @@ Widget buildAudioVisualizer({
                   ],
                 ),
                 borderRadius: BorderRadius.circular(2),
-                boxShadow: level > 0.3 ? [
-                  BoxShadow(
-                    color: accentColor.withValues(alpha: 0.3),
-                    blurRadius: 2,
-                    spreadRadius: 0.5,
-                  ),
-                ] : null,
+                boxShadow: level > 0.3
+                    ? [
+                        BoxShadow(
+                          color: accentColor.withValues(alpha: 0.3),
+                          blurRadius: 2,
+                          spreadRadius: 0.5,
+                        ),
+                      ]
+                    : null,
               ),
             ),
           ),
@@ -248,10 +276,12 @@ class _PulsatingRecordingIndicator extends StatefulWidget {
   const _PulsatingRecordingIndicator();
 
   @override
-  State<_PulsatingRecordingIndicator> createState() => _PulsatingRecordingIndicatorState();
+  State<_PulsatingRecordingIndicator> createState() =>
+      _PulsatingRecordingIndicatorState();
 }
 
-class _PulsatingRecordingIndicatorState extends State<_PulsatingRecordingIndicator>
+class _PulsatingRecordingIndicatorState
+    extends State<_PulsatingRecordingIndicator>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _animation;
@@ -263,9 +293,10 @@ class _PulsatingRecordingIndicatorState extends State<_PulsatingRecordingIndicat
       vsync: this,
       duration: const Duration(milliseconds: 1000),
     )..repeat(reverse: true);
-    _animation = Tween<double>(begin: 0.4, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _animation = Tween<double>(
+      begin: 0.4,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override
