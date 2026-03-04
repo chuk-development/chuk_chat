@@ -181,11 +181,11 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   }
 
   Future<void> _handleChatDeleted(String deletedChatId) async {
-    // If the deleted chat is the one currently displayed, start a new chat
-    if (ChatStorageService.selectedChatId == deletedChatId) {
-      _activeProjectId = null; // Clear project context
-      _chatUIKey.currentState?.newChat();
-    }
+    // ChatStorageCrud.deleteChat() already sets selectedChatId = null before
+    // this callback fires, so we cannot compare against it.  Instead, always
+    // tell the chat UI to start fresh and clear project context.
+    _activeProjectId = null;
+    _chatUIKey.currentState?.newChat();
     setState(() {});
   }
 
@@ -262,14 +262,16 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     return Scaffold(
       body: Stack(
         children: [
-          if (showContent)
-            Positioned.fill(
-              left: (!isCompactMode && _isSidebarExpanded)
-                  ? effectiveSidebarWidth
-                  : 0,
-              right: showPanel ? panelWidth : 0,
-              child: chatArea,
-            ),
+          // Always keep chatArea in the tree to avoid GlobalKey
+          // removal/insertion conflicts.  Hide via Offstage when the
+          // sidebar covers the full screen in compact mode.
+          Positioned.fill(
+            left: (!isCompactMode && _isSidebarExpanded)
+                ? effectiveSidebarWidth
+                : 0,
+            right: showPanel ? panelWidth : 0,
+            child: Offstage(offstage: !showContent, child: chatArea),
+          ),
 
           // Projects/Media Panel (right side)
           if (showPanel)

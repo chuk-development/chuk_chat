@@ -2,13 +2,36 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-const String _notesPrefsKey = 'tool_notes';
+const String _notesPrefsKey = 'tool_notes'; // legacy key-value store
+const String _memoryPrefsKey = 'identity_memory'; // new free-text store
+const String _soulPrefsKey = 'identity_soul';
+const String _userInfoPrefsKey = 'identity_user';
+const String _identityEnabledKey = 'identity_enabled';
+
+/// Whether the identity system (Soul / User / Memory) is active.
+Future<bool> isIdentityEnabled() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getBool(_identityEnabledKey) ?? true; // on by default
+}
+
+/// Persist the identity system toggle.
+Future<void> setIdentityEnabled(bool value) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setBool(_identityEnabledKey, value);
+}
 
 Future<String> executeNotes(Map<String, dynamic> args) async {
   final action = (args['action'] as String? ?? 'list').trim().toLowerCase();
 
   try {
     switch (action) {
+      case 'update_memory':
+        return _updateMemory(args);
+      case 'update_user':
+        return _updateUserInfo(args);
+      case 'update_soul':
+        return _updateSoul(args);
+      // Legacy key-value actions (still supported).
       case 'save':
         return _saveNote(args);
       case 'get':
@@ -20,15 +43,125 @@ Future<String> executeNotes(Map<String, dynamic> args) async {
       case 'clear':
         return _clearNotes();
       default:
-        return 'Error: Unknown action "$action". Use: save, get, list, '
-            'delete, clear';
+        return 'Error: Unknown action "$action". Use: update_memory, '
+            'update_user, update_soul';
     }
   } catch (error) {
     return 'Notes error: $error';
   }
 }
 
-Future<Map<String, String>> _loadNotes() async {
+// ─── Soul (personality) — AI can update but must inform the user ──────
+
+/// Load Soul text. Public for system prompt injection.
+Future<String> loadSoulText() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getString(_soulPrefsKey) ?? '';
+}
+
+/// Save Soul text. Called from settings UI.
+Future<void> saveSoulText(String text) async {
+  final prefs = await SharedPreferences.getInstance();
+  final trimmed = text.trim();
+  if (trimmed.isEmpty) {
+    await prefs.remove(_soulPrefsKey);
+  } else {
+    await prefs.setString(_soulPrefsKey, trimmed);
+  }
+}
+
+// ─── User info — AI can update via tool, user can edit in settings ────
+
+/// Load User info text. Public for system prompt injection.
+Future<String> loadUserInfoText() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getString(_userInfoPrefsKey) ?? '';
+}
+
+/// Save User info text. Called from settings UI or AI tool.
+Future<void> saveUserInfoText(String text) async {
+  final prefs = await SharedPreferences.getInstance();
+  final trimmed = text.trim();
+  if (trimmed.isEmpty) {
+    await prefs.remove(_userInfoPrefsKey);
+  } else {
+    await prefs.setString(_userInfoPrefsKey, trimmed);
+  }
+}
+
+/// AI action: update the user info text.
+Future<String> _updateUserInfo(Map<String, dynamic> args) async {
+  final content = (args['content'] as String? ?? '').trim();
+  if (content.isEmpty) {
+    return 'Error: "content" parameter required for update_user';
+  }
+  await saveUserInfoText(content);
+  return 'User info updated (${content.length} chars).';
+}
+
+// ─── Memory (long-term knowledge) — free-text, AI can update ─────────
+
+/// Load Memory text, with one-time migration from legacy key-value store.
+Future<String> loadMemoryText() async {
+  final prefs = await SharedPreferences.getInstance();
+  final text = prefs.getString(_memoryPrefsKey);
+  if (text != null) return text;
+
+  // Migrate legacy key-value notes to free text (one-time).
+  final legacyRaw = prefs.getString(_notesPrefsKey);
+  if (legacyRaw != null && legacyRaw.trim().isNotEmpty) {
+    try {
+      final decoded = jsonDecode(legacyRaw);
+      if (decoded is Map<String, dynamic> && decoded.isNotEmpty) {
+        final buf = StringBuffer();
+        for (final entry in decoded.entries) {
+          buf.writeln('- ${entry.key}: ${entry.value}');
+        }
+        final migrated = buf.toString().trim();
+        await prefs.setString(_memoryPrefsKey, migrated);
+        await prefs.remove(_notesPrefsKey);
+        return migrated;
+      }
+    } catch (_) {}
+  }
+  return '';
+}
+
+/// Save Memory text. Called from settings UI.
+Future<void> saveMemoryText(String text) async {
+  final prefs = await SharedPreferences.getInstance();
+  final trimmed = text.trim();
+  if (trimmed.isEmpty) {
+    await prefs.remove(_memoryPrefsKey);
+  } else {
+    await prefs.setString(_memoryPrefsKey, trimmed);
+  }
+}
+
+/// AI action: update the memory text.
+Future<String> _updateMemory(Map<String, dynamic> args) async {
+  final content = (args['content'] as String? ?? '').trim();
+  if (content.isEmpty) {
+    return 'Error: "content" parameter required for update_memory';
+  }
+  await saveMemoryText(content);
+  return 'Memory updated (${content.length} chars).';
+}
+
+/// AI action: update the soul (personality) text.
+/// The prompt instructs the AI to always inform the user when doing this.
+Future<String> _updateSoul(Map<String, dynamic> args) async {
+  final content = (args['content'] as String? ?? '').trim();
+  if (content.isEmpty) {
+    return 'Error: "content" parameter required for update_soul';
+  }
+  await saveSoulText(content);
+  return 'Soul updated (${content.length} chars). '
+      'IMPORTANT: Tell the user what you changed and why.';
+}
+
+/// Load all saved notes. Public so the system prompt builder can inject them.
+Future<Map<String, String>> loadAllNotes() async {
   final prefs = await SharedPreferences.getInstance();
   final raw = prefs.getString(_notesPrefsKey);
   if (raw == null || raw.trim().isEmpty) {
@@ -63,7 +196,7 @@ Future<String> _saveNote(Map<String, dynamic> args) async {
     return 'Error: "content" parameter required';
   }
 
-  final notes = await _loadNotes();
+  final notes = await loadAllNotes();
   final isUpdate = notes.containsKey(key);
   notes[key] = content;
   await _persistNotes(notes);
@@ -80,7 +213,7 @@ Future<String> _getNote(Map<String, dynamic> args) async {
     return 'Error: "key" parameter required';
   }
 
-  final notes = await _loadNotes();
+  final notes = await loadAllNotes();
   final exact = notes[key];
   if (exact != null) {
     return 'Note "$key":\n$exact';
@@ -101,7 +234,7 @@ Future<String> _getNote(Map<String, dynamic> args) async {
 }
 
 Future<String> _listNotes() async {
-  final notes = await _loadNotes();
+  final notes = await loadAllNotes();
   if (notes.isEmpty) {
     return 'No notes saved yet.';
   }
@@ -124,7 +257,7 @@ Future<String> _deleteNote(Map<String, dynamic> args) async {
     return 'Error: "key" parameter required';
   }
 
-  final notes = await _loadNotes();
+  final notes = await loadAllNotes();
   if (!notes.containsKey(key)) {
     return 'No note found with key "$key"';
   }

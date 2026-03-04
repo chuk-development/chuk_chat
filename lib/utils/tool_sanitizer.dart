@@ -23,25 +23,18 @@ String sanitizeResultForModel(String result) {
     }
   }
 
-  // Generated images — strip the internal IMAGE: prefix and return clean
-  // metadata.
+  // Generated images — strip the internal IMAGE: prefix.  The app displays
+  // the image inline automatically, so the AI should NOT share URLs or
+  // technical details (dimensions, seed, model) with the user.
   if (result.startsWith('IMAGE:')) {
     try {
       final json = result.substring(6);
       final data = jsonDecode(json) as Map<String, dynamic>;
-      final url = data['url'] ?? '';
-      final width = data['width'] ?? '';
-      final height = data['height'] ?? '';
-      final model = data['model'] ?? '';
       final prompt = data['prompt'] ?? '';
-      final seed = data['seed'] ?? '';
-      return 'Image generated successfully.\n'
-          'URL: $url\n'
-          'Size: ${width}x$height\n'
-          'Model: $model\n'
-          'Seed: $seed\n'
-          'Prompt: $prompt\n'
-          'Share the URL directly with the user.';
+      return 'Image generated successfully for prompt: "$prompt". '
+          'The image is displayed inline in the chat automatically — '
+          'do NOT share the URL, dimensions, seed, or other technical '
+          'metadata with the user.';
     } catch (_) {
       return 'Image generated successfully.';
     }

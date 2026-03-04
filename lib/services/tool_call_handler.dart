@@ -462,6 +462,8 @@ class ToolCallHandler {
           memoryText: memoryText,
           notesToolDef: notesToolDef,
           askUserToolDef: askUserToolDef,
+          includeMapVisualOutput: _toolExecutor.mapVisualOutputEnabled,
+          includeChartVisualOutput: _toolExecutor.chartVisualOutputEnabled,
         )
         .trim();
 

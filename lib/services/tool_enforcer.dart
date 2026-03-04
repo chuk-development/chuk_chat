@@ -166,9 +166,12 @@ class ToolEnforcer {
         continue;
       }
 
-      // 1b. In discovery mode, only find_tools + discovered tools
+      // 1b. In discovery mode, only find_tools + notes + ask_user +
+      //     discovered tools are allowed without discovery.
       if (discoveryMode &&
           name != 'find_tools' &&
+          name != 'notes' &&
+          name != 'ask_user' &&
           !discoveredToolNames.contains(name)) {
         rejected.add(
           RejectedToolCall(
@@ -233,7 +236,9 @@ class ToolEnforcer {
   String? _validateFindToolsArgs(Map<String, dynamic> args) {
     final query = (args['query'] ?? '').toString().trim();
     if (query.isEmpty) {
-      return 'find_tools requires a "query" argument.';
+      return 'find_tools requires a "query" argument with 1-3 short '
+          'category keywords. Example: '
+          '{"name": "find_tools", "arguments": {"query": "qr code"}}';
     }
 
     final words = query
@@ -242,7 +247,7 @@ class ToolEnforcer {
         .toList();
     if (words.length > 3 || query.length > 40) {
       return 'find_tools query must be 1-3 short category keywords '
-          '(e.g. "web search", "restaurant", "spotify", "email"). '
+          '(e.g. "qr", "web search", "restaurant", "spotify", "email"). '
           'Do not pass the full user request.';
     }
 

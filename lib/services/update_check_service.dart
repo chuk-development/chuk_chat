@@ -11,14 +11,14 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:chuk_chat/utils/arch_helper.dart';
 import 'package:chuk_chat/utils/io_helper.dart';
 
-/// Checks for app updates via the public GitHub Releases API.
+/// Checks for app updates via the GitHub Releases API.
 /// Compares the installed version against the latest release tag
 /// and provides a platform-specific direct download URL.
 class UpdateCheckService {
   const UpdateCheckService._();
 
   static const String _owner = 'chuk-development';
-  static const String _repo = 'chuk_chat_releases';
+  static const String _repo = 'chuk_chat';
   static const String _apiUrl =
       'https://api.github.com/repos/$_owner/$_repo/releases/latest';
   static const Duration _httpTimeout = Duration(seconds: 5);

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/model_cache_service.dart';
@@ -87,6 +89,12 @@ class UserPreferencesService {
     if (_cachedSelectedModel != null &&
         _selectedModelFetchedAt != null &&
         now.difference(_selectedModelFetchedAt!) < _kSelectedModelTtl) {
+      final String? userId = SupabaseService.auth.currentUser?.id;
+      if (userId != null) {
+        // Keep UI fast with in-memory cache while still checking for
+        // remote preference changes in the background.
+        unawaited(_syncModelFromNetwork(userId));
+      }
       if (kDebugMode) {
         debugPrint('Using cached model preference: $_cachedSelectedModel');
       }
@@ -140,6 +148,13 @@ class UserPreferencesService {
   /// Fetch model preference from network (blocking)
   static Future<String?> _fetchModelFromNetwork(String userId) async {
     try {
+      final session =
+          await SupabaseService.refreshSession() ??
+          SupabaseService.auth.currentSession;
+      if (session == null || session.user.id != userId) {
+        return null;
+      }
+
       final response = await SupabaseService.client
           .from('user_preferences')
           .select('selected_model_id')
@@ -175,6 +190,13 @@ class UserPreferencesService {
   /// Sync model preference from network in background
   static Future<void> _syncModelFromNetwork(String userId) async {
     try {
+      final session =
+          await SupabaseService.refreshSession() ??
+          SupabaseService.auth.currentSession;
+      if (session == null || session.user.id != userId) {
+        return;
+      }
+
       final response = await SupabaseService.client
           .from('user_preferences')
           .select('selected_model_id')

@@ -1,6 +1,9 @@
 // lib/widgets/image_viewer.dart
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import 'package:chuk_chat/services/image_storage_service.dart';
 
 /// Full-screen image viewer with zoom and pan capabilities
@@ -76,8 +79,12 @@ class _ImageViewerState extends State<ImageViewer> {
 
     Uint8List bytes;
     if (imageSource.startsWith('data:image/')) {
-      // Legacy Base64 format - no longer supported
-      throw Exception('Legacy Base64 images are no longer supported');
+      // Base64 data URI — decode inline (tool-generated images like QR codes)
+      final commaIndex = imageSource.indexOf(',');
+      if (commaIndex < 0) {
+        throw Exception('Invalid Base64 data URI');
+      }
+      bytes = base64Decode(imageSource.substring(commaIndex + 1));
     } else {
       // Storage path - download and decrypt
       bytes = await ImageStorageService.downloadAndDecryptImage(imageSource);

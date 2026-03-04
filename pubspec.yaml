@@ -41,7 +41,14 @@ dependencies:
   flutter_local_notifications: ^18.0.1  # Completion notifications with deep linking
   pasteboard: ^0.4.0
   flutter_map: ^8.2.2          # Map widget for displaying locations/routes
+  maplibre: ^0.3.2             # 3D-capable interactive maps
   latlong2: ^0.9.1              # Coordinate math (LatLng type)
+  fl_chart: ^1.1.1              # Chart rendering (bar, line, pie, scatter, radar)
+  geolocator: ^14.0.2           # GPS geolocation for device tools
+  add_2_calendar: ^3.0.1        # Native calendar event creation
+  enough_mail: ^2.1.6           # IMAP/SMTP email
+  timezone: ^0.10.0             # Timezone data for notifications
+  pretty_qr_code: ^3.6.0
 
 dev_dependencies:
   flutter_test:
@@ -51,6 +58,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/icons/
 
 msix_config:
   display_name: chuk_chat

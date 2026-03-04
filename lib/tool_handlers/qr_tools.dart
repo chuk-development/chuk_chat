@@ -1,11 +1,12 @@
 import 'dart:convert';
+import 'dart:ui' as ui;
 
-import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart';
+import 'package:pretty_qr_code/pretty_qr_code.dart';
 
-Future<String> executeGenerateQr(
-  Map<String, dynamic> args, {
-  http.Client? client,
-}) async {
+/// Generate a QR code locally using pretty_qr_code — no network call, fully
+/// private. The data never leaves the device.
+Future<String> executeGenerateQr(Map<String, dynamic> args) async {
   final data = (args['data']?.toString() ?? '').trim();
   if (data.isEmpty) {
     return 'Error: "data" parameter required';
@@ -17,46 +18,44 @@ Future<String> executeGenerateQr(
       : int.tryParse(sizeArg?.toString() ?? '') ?? 400;
   final size = requestedSize.clamp(100, 1000);
 
-  final effectiveClient = client ?? http.Client();
-  final shouldCloseClient = client == null;
-
   try {
-    final uri = Uri.parse(
-      'https://api.qrserver.com/v1/create-qr-code/'
-      '?size=${size}x$size'
-      '&data=${Uri.encodeComponent(data)}'
-      '&format=png'
-      '&margin=10',
+    final qrCode = QrCode.fromData(
+      data: data,
+      errorCorrectLevel: QrErrorCorrectLevel.M,
+    );
+    final qrImage = QrImage(qrCode);
+
+    final imageBytes = await qrImage.toImageAsBytes(
+      size: size,
+      format: ui.ImageByteFormat.png,
+      decoration: const PrettyQrDecoration(
+        background: ui.Color(0xFFFFFFFF),
+        shape: PrettyQrSmoothSymbol(color: ui.Color(0xFF000000)),
+      ),
     );
 
-    final response = await effectiveClient
-        .get(uri, headers: const {'Accept': 'image/png'})
-        .timeout(const Duration(seconds: 15));
-
-    if (response.statusCode != 200) {
-      return 'Error: QR API returned ${response.statusCode}';
+    if (imageBytes == null) {
+      return 'Error: failed to render QR code image';
     }
 
-    final bytes = response.bodyBytes;
+    final bytes = imageBytes.buffer.asUint8List();
     if (bytes.isEmpty) {
       return 'Error: QR code image is empty';
     }
 
     final result = {
       'data_uri': 'data:image/png;base64,${base64Encode(bytes)}',
-      'source_url': uri.toString(),
       'mime_type': 'image/png',
       'size_bytes': bytes.length,
     };
 
     return 'IMAGE_DATA:${jsonEncode(result)}\n\n'
-        'QR code generated for: $data\n'
+        'QR code generated locally for: $data\n'
         'Size: ${size}x$size pixels';
   } catch (error) {
-    return 'Error generating QR code: $error';
-  } finally {
-    if (shouldCloseClient) {
-      effectiveClient.close();
+    if (kDebugMode) {
+      debugPrint('QR generation error: $error');
     }
+    return 'Error generating QR code: $error';
   }
 }

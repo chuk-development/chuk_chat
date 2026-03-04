@@ -308,8 +308,13 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             '⚠️ [CHAT-UI-DESKTOP] IGNORING null from parent - we have active chat: $_activeChatId',
           );
         }
-        // Sync the parent back to our active chat
-        widget.onChatIdChanged(_activeChatId);
+        // Sync the parent back to our active chat after this build pass.
+        final activeChatId = _activeChatId;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          if (activeChatId == null) return;
+          widget.onChatIdChanged(activeChatId);
+        });
         return;
       }
 
@@ -4299,13 +4304,17 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                         textInputAction: TextInputAction.send,
                         scrollController: _composerScrollController,
                         textAlignVertical: TextAlignVertical.top,
-                        style: TextStyle(color: iconFg),
+                        style: TextStyle(
+                          color: iconFg,
+                          fontWeight: FontWeight.w600,
+                        ),
                         decoration: InputDecoration(
                           hintText: hasAttachments
                               ? 'Add a message or send documents'
                               : 'Ask me anything !',
                           hintStyle: TextStyle(
                             color: iconFg.withValues(alpha: 0.8),
+                            fontWeight: FontWeight.w600,
                           ),
                           border: InputBorder.none,
                           enabledBorder: InputBorder.none,
@@ -4397,7 +4406,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                           children: [
                             // Add Button (File Upload)
                             _buildIconBtn(
-                              icon: Icons.add,
+                              icon: Icons.add_rounded,
+                              iconSize: 24,
                               onTap: _uploadFiles,
                               isActive: hasAttachments,
                               debugLabel: 'Add button',
@@ -4453,8 +4463,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               const SizedBox(width: 8),
               // Mic Button (acts as record/stop toggle)
               _buildIconBtn(
-                icon: _isMicActive ? Icons.stop : Icons.mic_rounded,
-                iconSize: 18,
+                icon: _isMicActive ? Icons.stop_rounded : Icons.mic,
+                iconSize: 22,
                 onTap: _handleMicTap,
                 isActive: _isMicActive,
                 debugLabel: 'Mic button',

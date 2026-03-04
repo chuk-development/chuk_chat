@@ -6,10 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 /// Displays a route map with OSRM polyline, start/end markers,
-/// summary bar, optional turn-by-turn steps, and "Route in Maps" button.
+/// summary bar, and optional turn-by-turn steps.
 class RouteMapWidget extends StatefulWidget {
   final double fromLat, fromLon, toLat, toLon;
   final double centerLat, centerLon, zoom;
@@ -118,7 +117,7 @@ class _RouteMapWidgetState extends State<RouteMapWidget> {
     final mapLayers = <Widget>[
       TileLayer(
         urlTemplate:
-            'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png',
+            'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png',
         subdomains: const ['a', 'b', 'c', 'd'],
       ),
       PolylineLayer(
@@ -246,33 +245,25 @@ class _RouteMapWidgetState extends State<RouteMapWidget> {
               ],
             ),
           ),
-          // "Route in Maps" button
+          // In-app interaction hint
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 6, 12, 4),
-            child: SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () async {
-                  final uri = Uri.tryParse(
-                    'geo:${widget.toLat},${widget.toLon}'
-                    '?q=${widget.toLat},${widget.toLon}'
-                    '(${Uri.encodeComponent(widget.toLabel)})',
-                  );
-                  if (uri != null) {
-                    await launchUrl(uri, mode: LaunchMode.externalApplication);
-                  }
-                },
-                icon: const Icon(Icons.navigation, size: 16),
-                label: const Text('Route in Maps'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.blue.shade300,
-                  side: BorderSide(
-                    color: Colors.blue.shade300.withValues(alpha: 0.4),
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  textStyle: const TextStyle(fontSize: 13),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.touch_app,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
-              ),
+                const SizedBox(width: 6),
+                Text(
+                  'Tap map for interactive routing',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ),
           ),
           // Turn-by-turn steps
