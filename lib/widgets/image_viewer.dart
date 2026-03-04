@@ -29,6 +29,7 @@ class _ImageViewerState extends State<ImageViewer> {
   final TransformationController _transformationController =
       TransformationController();
   final FocusNode _focusNode = FocusNode();
+  final Map<int, GlobalKey> _imageKeys = <int, GlobalKey>{};
 
   /// Cache for loaded image bytes (storage path -> bytes)
   final Map<String, Uint8List> _imageCache = {};
@@ -98,6 +99,41 @@ class _ImageViewerState extends State<ImageViewer> {
   bool get _hasMultipleImages =>
       widget.allImages != null && widget.allImages!.length > 1;
 
+  GlobalKey _imageKeyForIndex(int index) {
+    return _imageKeys.putIfAbsent(
+      index,
+      () => GlobalKey(debugLabel: 'viewer_image_$index'),
+    );
+  }
+
+  void _handleOutsideImageTap(PointerDownEvent event) {
+    if (_hasMultipleImages) {
+      return;
+    }
+
+    // Tap-to-close only at default zoom.
+    final scale = _transformationController.value.getMaxScaleOnAxis();
+    if ((scale - 1.0).abs() > 0.01) {
+      return;
+    }
+
+    final imageContext = _imageKeyForIndex(_currentIndex).currentContext;
+    if (imageContext == null) {
+      return;
+    }
+
+    final renderObject = imageContext.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) {
+      return;
+    }
+
+    final imageRect =
+        renderObject.localToGlobal(Offset.zero) & renderObject.size;
+    if (!imageRect.contains(event.position)) {
+      Navigator.of(context).pop();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final iconColor = Theme.of(context).colorScheme.onSurface;
@@ -122,91 +158,95 @@ class _ImageViewerState extends State<ImageViewer> {
                 )
               : Text('Image', style: TextStyle(color: iconColor)),
         ),
-        body: Stack(
-          children: [
-            // Main image viewer
-            _hasMultipleImages
-                ? PageView.builder(
-                    controller: _pageController,
-                    itemCount: widget.allImages!.length,
-                    onPageChanged: (index) {
-                      setState(() {
-                        _currentIndex = index;
-                        _resetZoom();
-                      });
-                    },
-                    itemBuilder: (context, index) {
-                      return _buildImageView(widget.allImages![index]);
-                    },
-                  )
-                : _buildImageView(widget.imageDataUrl),
+        body: Listener(
+          behavior: HitTestBehavior.translucent,
+          onPointerDown: _handleOutsideImageTap,
+          child: Stack(
+            children: [
+              // Main image viewer
+              _hasMultipleImages
+                  ? PageView.builder(
+                      controller: _pageController,
+                      itemCount: widget.allImages!.length,
+                      onPageChanged: (index) {
+                        setState(() {
+                          _currentIndex = index;
+                          _resetZoom();
+                        });
+                      },
+                      itemBuilder: (context, index) {
+                        return _buildImageView(widget.allImages![index], index);
+                      },
+                    )
+                  : _buildImageView(widget.imageDataUrl, 0),
 
-            // Navigation arrows for multiple images
-            if (_hasMultipleImages) ...[
-              if (_currentIndex > 0)
-                Positioned(
-                  left: 16,
-                  top: 0,
-                  bottom: 0,
-                  child: Center(
-                    child: IconButton(
-                      icon: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.5),
-                          shape: BoxShape.circle,
+              // Navigation arrows for multiple images
+              if (_hasMultipleImages) ...[
+                if (_currentIndex > 0)
+                  Positioned(
+                    left: 16,
+                    top: 0,
+                    bottom: 0,
+                    child: Center(
+                      child: IconButton(
+                        icon: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.5),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.chevron_left,
+                            color: Colors.white,
+                            size: 32,
+                          ),
                         ),
-                        child: Icon(
-                          Icons.chevron_left,
-                          color: Colors.white,
-                          size: 32,
-                        ),
+                        onPressed: () {
+                          _pageController.previousPage(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
+                          );
+                        },
                       ),
-                      onPressed: () {
-                        _pageController.previousPage(
-                          duration: const Duration(milliseconds: 300),
-                          curve: Curves.easeInOut,
-                        );
-                      },
                     ),
                   ),
-                ),
-              if (_currentIndex < widget.allImages!.length - 1)
-                Positioned(
-                  right: 16,
-                  top: 0,
-                  bottom: 0,
-                  child: Center(
-                    child: IconButton(
-                      icon: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.5),
-                          shape: BoxShape.circle,
+                if (_currentIndex < widget.allImages!.length - 1)
+                  Positioned(
+                    right: 16,
+                    top: 0,
+                    bottom: 0,
+                    child: Center(
+                      child: IconButton(
+                        icon: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.5),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.chevron_right,
+                            color: Colors.white,
+                            size: 32,
+                          ),
                         ),
-                        child: Icon(
-                          Icons.chevron_right,
-                          color: Colors.white,
-                          size: 32,
-                        ),
+                        onPressed: () {
+                          _pageController.nextPage(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
+                          );
+                        },
                       ),
-                      onPressed: () {
-                        _pageController.nextPage(
-                          duration: const Duration(milliseconds: 300),
-                          curve: Curves.easeInOut,
-                        );
-                      },
                     ),
                   ),
-                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildImageView(String imageSource) {
+  Widget _buildImageView(String imageSource, int imageIndex) {
     return FutureBuilder<Uint8List>(
       future: _loadImageBytes(imageSource),
       builder: (context, snapshot) {
@@ -244,6 +284,7 @@ class _ImageViewerState extends State<ImageViewer> {
               boundaryMargin: EdgeInsets.zero,
               child: Center(
                 child: Image.memory(
+                  key: _imageKeyForIndex(imageIndex),
                   snapshot.data!,
                   fit: BoxFit.contain,
                   errorBuilder: (context, error, stackTrace) {

@@ -1359,21 +1359,24 @@ class _MessageBubbleState extends State<MessageBubble>
         if (compactQrLayout) {
           final String imageSource = images.first;
           final double squareSize =
-              (kPlatformMobile ? maxWidth * 0.45 : maxWidth * 0.32).clamp(
-                120.0,
-                190.0,
+              (kPlatformMobile ? maxWidth * 0.55 : maxWidth * 0.4).clamp(
+                150.0,
+                240.0,
               );
 
-          return _CachedImageThumbnail(
-            imageDataUrl: imageSource,
-            width: squareSize,
-            height: squareSize,
-            borderRadius: 12,
-            fit: BoxFit.contain,
-            onTap: () => _openImagePreview(
-              imageSource: imageSource,
-              images: images,
-              index: 0,
+          return Align(
+            alignment: Alignment.center,
+            child: _CachedImageThumbnail(
+              imageDataUrl: imageSource,
+              width: squareSize,
+              height: squareSize,
+              borderRadius: 12,
+              fit: BoxFit.contain,
+              onTap: () => _openImagePreview(
+                imageSource: imageSource,
+                images: images,
+                index: 0,
+              ),
             ),
           );
         }
@@ -1597,6 +1600,18 @@ class _MessageBubbleState extends State<MessageBubble>
         ? 'EUR ${imageCostEur.toStringAsFixed(2)}'
         : null;
     final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
+    final bool compactQrControls = _isQrImageMessage;
+    final double iconSize = kPlatformMobile
+        ? (compactQrControls ? 13 : 15)
+        : (compactQrControls ? 16 : 18);
+    final EdgeInsets buttonPadding = EdgeInsets.all(
+      kPlatformMobile
+          ? (compactQrControls ? 2 : 4)
+          : (compactQrControls ? 5 : 8),
+    );
+    final double minButtonSize = kPlatformMobile
+        ? (compactQrControls ? 20 : 24)
+        : (compactQrControls ? 26 : 30);
 
     // Match the pill-shaped container style used by _buildActionButtons.
     return Padding(
@@ -1618,8 +1633,10 @@ class _MessageBubbleState extends State<MessageBubble>
               ),
             ),
             padding: EdgeInsets.symmetric(
-              horizontal: kPlatformMobile ? 2 : 8,
-              vertical: kPlatformMobile ? 0 : 4,
+              horizontal: kPlatformMobile
+                  ? (compactQrControls ? 1 : 2)
+                  : (compactQrControls ? 5 : 8),
+              vertical: kPlatformMobile ? 0 : (compactQrControls ? 2 : 4),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -1627,16 +1644,12 @@ class _MessageBubbleState extends State<MessageBubble>
                 Tooltip(
                   message: 'Copy image',
                   child: IconButton(
-                    icon: Icon(
-                      Icons.copy,
-                      color: iconFgColor,
-                      size: kPlatformMobile ? 15 : 18,
-                    ),
-                    padding: EdgeInsets.all(kPlatformMobile ? 4 : 8),
+                    icon: Icon(Icons.copy, color: iconFgColor, size: iconSize),
+                    padding: buttonPadding,
                     visualDensity: VisualDensity.compact,
                     constraints: BoxConstraints(
-                      minWidth: kPlatformMobile ? 24 : 30,
-                      minHeight: kPlatformMobile ? 24 : 30,
+                      minWidth: minButtonSize,
+                      minHeight: minButtonSize,
                     ),
                     style: kPlatformMobile
                         ? null
@@ -1648,13 +1661,13 @@ class _MessageBubbleState extends State<MessageBubble>
                 ),
                 PopupMenuButton<String>(
                   tooltip: 'Image details',
-                  padding: EdgeInsets.all(kPlatformMobile ? 4 : 8),
+                  padding: buttonPadding,
                   constraints: BoxConstraints(
-                    minWidth: kPlatformMobile ? 24 : 30,
-                    minHeight: kPlatformMobile ? 24 : 30,
+                    minWidth: minButtonSize,
+                    minHeight: minButtonSize,
                   ),
                   menuPadding: EdgeInsets.zero,
-                  iconSize: kPlatformMobile ? 15 : 18,
+                  iconSize: iconSize,
                   icon: Icon(Icons.more_vert, color: iconFgColor),
                   style: kPlatformMobile
                       ? null

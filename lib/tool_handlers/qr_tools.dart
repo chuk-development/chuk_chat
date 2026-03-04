@@ -21,7 +21,7 @@ Future<String> executeGenerateQr(Map<String, dynamic> args) async {
   try {
     final qrCode = QrCode.fromData(
       data: data,
-      errorCorrectLevel: QrErrorCorrectLevel.M,
+      errorCorrectLevel: QrErrorCorrectLevel.H,
     );
     final qrImage = QrImage(qrCode);
 
@@ -30,7 +30,8 @@ Future<String> executeGenerateQr(Map<String, dynamic> args) async {
       format: ui.ImageByteFormat.png,
       decoration: const PrettyQrDecoration(
         background: ui.Color(0xFFFFFFFF),
-        shape: PrettyQrSmoothSymbol(color: ui.Color(0xFF000000)),
+        quietZone: PrettyQrQuietZone.standard,
+        shape: PrettyQrSquaresSymbol(color: ui.Color(0xFF000000), rounding: 0),
       ),
     );
 
@@ -49,9 +50,7 @@ Future<String> executeGenerateQr(Map<String, dynamic> args) async {
       'size_bytes': bytes.length,
     };
 
-    return 'IMAGE_DATA:${jsonEncode(result)}\n\n'
-        'QR code generated locally for: $data\n'
-        'Size: ${size}x$size pixels';
+    return 'IMAGE_DATA:${jsonEncode(result)}';
   } catch (error) {
     if (kDebugMode) {
       debugPrint('QR generation error: $error');
