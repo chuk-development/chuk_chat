@@ -648,6 +648,67 @@ jobs:
             --dart-define=FEATURE_VOICE_MODE=true `
             --tree-shake-icons
 
+      - name: Bundle VC++ runtime DLLs
+        shell: pwsh
+        run: |
+          $releaseDir = Resolve-Path "build/windows/x64/runner/Release"
+
+          function Find-RuntimeDll([string]$dllName) {
+            $patterns = @(
+              "$env:VCToolsRedistDir\\x64\\Microsoft.VC143.CRT\\$dllName",
+              "$env:VCToolsRedistDir\\x64\\Microsoft.VC142.CRT\\$dllName",
+              "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Redist\\MSVC\\*\\x64\\Microsoft.VC143.CRT\\$dllName",
+              "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Redist\\MSVC\\*\\x64\\Microsoft.VC142.CRT\\$dllName",
+              "$env:windir\\System32\\$dllName"
+            )
+
+            foreach ($pattern in $patterns) {
+              if ([string]::IsNullOrWhiteSpace($pattern)) {
+                continue
+              }
+
+              $match = Get-ChildItem -Path $pattern -File -ErrorAction SilentlyContinue | Select-Object -First 1
+              if ($match) {
+                return $match.FullName
+              }
+            }
+
+            return $null
+          }
+
+          $requiredDlls = @(
+            "msvcp140.dll",
+            "vcruntime140.dll",
+            "vcruntime140_1.dll"
+          )
+
+          $optionalDlls = @(
+            "concrt140.dll",
+            "msvcp140_1.dll",
+            "msvcp140_2.dll"
+          )
+
+          foreach ($dll in $requiredDlls) {
+            $source = Find-RuntimeDll $dll
+            if (-not $source) {
+              throw "Could not locate required runtime DLL: $dll"
+            }
+
+            Copy-Item $source -Destination (Join-Path $releaseDir $dll) -Force
+            Write-Host "Bundled required runtime DLL: $dll"
+          }
+
+          foreach ($dll in $optionalDlls) {
+            $source = Find-RuntimeDll $dll
+            if ($source) {
+              Copy-Item $source -Destination (Join-Path $releaseDir $dll) -Force
+              Write-Host "Bundled optional runtime DLL: $dll"
+            }
+          }
+
+          Write-Host "Runtime DLLs in release directory:"
+          Get-ChildItem $releaseDir -Filter "*140*.dll" | Select-Object Name, Length
+
       - name: Create portable ZIP
         run: |
           cd build/windows/x64/runner/Release
