@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 
 import 'package:chuk_chat/models/client_tool.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/tool_registry.dart' as registry;
 import 'package:chuk_chat/tool_handlers/calculate_handler.dart' as calculate;
 import 'package:chuk_chat/tool_handlers/find_tools_handler.dart' as find_tools;
@@ -46,6 +47,7 @@ class ToolExecutor {
   static const String _kMapVisualOutputEnabledKey = 'visual_output_map_enabled';
   static const String _kChartVisualOutputEnabledKey =
       'visual_output_chart_enabled';
+  static const String _kToolPrefsTable = 'user_tool_preferences';
 
   static const Set<String> _builtinExecutableToolNames = {
     'find_tools',
@@ -159,6 +161,136 @@ class ToolExecutor {
         prefs.getBool(_kMapVisualOutputEnabledKey) ?? true;
     _chartVisualOutputEnabled =
         prefs.getBool(_kChartVisualOutputEnabledKey) ?? true;
+
+    await _syncToolEnabledPreferencesFromSupabase(prefs);
+  }
+
+  String? _safeCurrentUserId() {
+    try {
+      return SupabaseService.auth.currentUser?.id;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _syncToolEnabledPreferencesFromSupabase(
+    SharedPreferences prefs,
+  ) async {
+    final userId = _safeCurrentUserId();
+    if (userId == null) {
+      return;
+    }
+
+    try {
+      final List<dynamic> remoteRows = await SupabaseService.client
+          .from(_kToolPrefsTable)
+          .select('tool_name, enabled')
+          .eq('user_id', userId);
+
+      final remoteByTool = <String, bool>{};
+      for (final row in remoteRows) {
+        if (row is! Map<String, dynamic>) {
+          continue;
+        }
+
+        final name = row['tool_name'] as String?;
+        if (name == null || name.isEmpty || name == 'find_tools') {
+          continue;
+        }
+        if (!_tools.containsKey(name)) {
+          continue;
+        }
+
+        final enabled = row['enabled'] == true;
+        remoteByTool[name] = enabled;
+        _enabledTools[name] = enabled;
+        await prefs.setBool('tool_enabled_$name', enabled);
+      }
+
+      final missingRows = <Map<String, dynamic>>[];
+      for (final name in _tools.keys) {
+        if (name == 'find_tools') {
+          continue;
+        }
+        if (remoteByTool.containsKey(name)) {
+          continue;
+        }
+
+        final enabled =
+            _enabledTools[name] ?? !_defaultDisabledTools.contains(name);
+        missingRows.add({
+          'user_id': userId,
+          'tool_name': name,
+          'enabled': enabled,
+        });
+      }
+
+      if (missingRows.isNotEmpty) {
+        await SupabaseService.client
+            .from(_kToolPrefsTable)
+            .upsert(missingRows, onConflict: 'user_id,tool_name');
+      }
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Failed to sync tool preferences from Supabase: $error');
+      }
+    }
+  }
+
+  Future<void> _syncSingleToolEnabledToSupabase(
+    String name,
+    bool enabled,
+  ) async {
+    final userId = _safeCurrentUserId();
+    if (userId == null) {
+      return;
+    }
+
+    try {
+      await SupabaseService.client.from(_kToolPrefsTable).upsert({
+        'user_id': userId,
+        'tool_name': name,
+        'enabled': enabled,
+      }, onConflict: 'user_id,tool_name');
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Failed to sync tool "$name" preference: $error');
+      }
+    }
+  }
+
+  Future<void> _syncAllToolEnabledToSupabase() async {
+    final userId = _safeCurrentUserId();
+    if (userId == null) {
+      return;
+    }
+
+    final payload = <Map<String, dynamic>>[];
+    for (final name in _tools.keys) {
+      if (name == 'find_tools') {
+        continue;
+      }
+
+      payload.add({
+        'user_id': userId,
+        'tool_name': name,
+        'enabled': _enabledTools[name] ?? !_defaultDisabledTools.contains(name),
+      });
+    }
+
+    if (payload.isEmpty) {
+      return;
+    }
+
+    try {
+      await SupabaseService.client
+          .from(_kToolPrefsTable)
+          .upsert(payload, onConflict: 'user_id,tool_name');
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Failed to sync all tool preferences: $error');
+      }
+    }
   }
 
   Future<void> setMapVisualOutputEnabled(bool enabled) async {
@@ -181,6 +313,7 @@ class ToolExecutor {
     _enabledTools[name] = enabled;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('tool_enabled_$name', enabled);
+    await _syncSingleToolEnabledToSupabase(name, enabled);
   }
 
   bool isToolEnabled(String name) {
@@ -249,6 +382,7 @@ class ToolExecutor {
     _chartVisualOutputEnabled = true;
     await prefs.setBool(_kMapVisualOutputEnabledKey, true);
     await prefs.setBool(_kChartVisualOutputEnabledKey, true);
+    await _syncAllToolEnabledToSupabase();
   }
 
   /// Get only active tools -- this is what gets sent to the LLM.

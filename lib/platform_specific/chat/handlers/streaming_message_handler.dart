@@ -12,6 +12,7 @@ import 'package:chuk_chat/services/tool_image_result_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
+import 'package:chuk_chat/services/streaming_foreground_service.dart';
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
 
@@ -57,6 +58,7 @@ class StreamingMessageHandler {
   bool _isStreaming = false;
   bool _isSending = false;
   bool _isDisposed = false;
+  bool _hasForegroundKeepAliveLock = false;
   Future<void>? _activeToolLoopFuture;
 
   bool get isStreaming => _isStreaming;
@@ -182,22 +184,41 @@ class StreamingMessageHandler {
     _isSending = true;
     _isStreaming = true;
     onUpdateUI?.call();
+    await _acquireForegroundKeepAlive();
 
     final chatId = activeChatId;
 
-    final toolSession = _toolCallHandler.createSession(
-      initialUserMessage: aiPromptContent,
-      history: apiHistory,
-      accessToken: accessToken,
-      discoveryContextKey: chatId,
-      baseSystemPrompt: effectiveSystemPrompt,
-      toolCallingEnabled: toolCallingEnabled,
-      discoveryMode: toolDiscoveryMode,
-      allowMarkdownToolCalls: allowMarkdownToolCalls,
-    );
-    final initialSystemPrompt = await _toolCallHandler.buildInitialSystemPrompt(
-      toolSession,
-    );
+    late final ToolLoopSession toolSession;
+    late final String initialSystemPrompt;
+    try {
+      toolSession = _toolCallHandler.createSession(
+        initialUserMessage: aiPromptContent,
+        history: apiHistory,
+        accessToken: accessToken,
+        discoveryContextKey: chatId,
+        baseSystemPrompt: effectiveSystemPrompt,
+        toolCallingEnabled: toolCallingEnabled,
+        discoveryMode: toolDiscoveryMode,
+        allowMarkdownToolCalls: allowMarkdownToolCalls,
+      );
+      initialSystemPrompt = await _toolCallHandler.buildInitialSystemPrompt(
+        toolSession,
+      );
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Failed to initialize tool session: $error');
+      }
+      const failureMessage = 'Failed to start streaming. Please try again.';
+      if (onMessageFinalize != null) {
+        onMessageFinalize!(placeholderIndex, failureMessage, '', chatId, null);
+      }
+      onShowSnackBar?.call(failureMessage);
+      _isStreaming = false;
+      _isSending = false;
+      onUpdateUI?.call();
+      await _releaseForegroundKeepAlive();
+      return;
+    }
     const int kMaxStreamingPasses = 20;
 
     // Accumulates display text across all streaming passes so that AI text
@@ -232,6 +253,7 @@ class StreamingMessageHandler {
         _isStreaming = false;
         _isSending = false;
         onUpdateUI?.call();
+        await _releaseForegroundKeepAlive();
         return;
       }
 
@@ -280,6 +302,11 @@ class StreamingMessageHandler {
           // runs asynchronously and is tracked for lifecycle safety.
           final completionFuture = () async {
             try {
+              await _updateForegroundNotification(
+                title: 'Running tools...',
+                content: 'AI is processing tool calls',
+              );
+
               final loopResult = await _toolCallHandler
                   .processAssistantResponse(
                     session: toolSession,
@@ -352,6 +379,10 @@ class StreamingMessageHandler {
                 if (_isDisposed) return;
 
                 final next = loopResult.nextStep!;
+                await _updateForegroundNotification(
+                  title: 'Generating response...',
+                  content: 'AI is continuing the response',
+                );
                 // Yield to event loop so interim UI updates can paint first.
                 await Future<void>.delayed(Duration.zero);
                 await startStreamingPass(
@@ -426,6 +457,7 @@ class StreamingMessageHandler {
               _isStreaming = false;
               _isSending = false;
               onUpdateUI?.call();
+              await _releaseForegroundKeepAlive();
             } catch (error) {
               if (_isDisposed) return;
               if (kDebugMode) {
@@ -448,6 +480,7 @@ class StreamingMessageHandler {
               _isStreaming = false;
               _isSending = false;
               onUpdateUI?.call();
+              await _releaseForegroundKeepAlive();
             }
           }();
 
@@ -476,6 +509,7 @@ class StreamingMessageHandler {
             _isSending = false;
             onUpdateUI?.call();
             onPaymentRequired?.call();
+            unawaited(_releaseForegroundKeepAlive());
             return;
           }
 
@@ -493,6 +527,7 @@ class StreamingMessageHandler {
           _isStreaming = false;
           _isSending = false;
           onUpdateUI?.call();
+          unawaited(_releaseForegroundKeepAlive());
         },
       );
     }
@@ -518,6 +553,7 @@ class StreamingMessageHandler {
       _isStreaming = false;
       _isSending = false;
       onUpdateUI?.call();
+      await _releaseForegroundKeepAlive();
     }
   }
 
@@ -533,6 +569,7 @@ class StreamingMessageHandler {
       _isSending = false;
       onShowSnackBar?.call('Response cancelled');
       onUpdateUI?.call();
+      await _releaseForegroundKeepAlive();
     }
   }
 
@@ -578,11 +615,65 @@ class StreamingMessageHandler {
     }
   }
 
+  Future<void> _acquireForegroundKeepAlive() async {
+    if (_hasForegroundKeepAliveLock || _isDisposed) {
+      return;
+    }
+
+    try {
+      await StreamingForegroundService.acquireKeepAliveLock(
+        title: 'Generating response...',
+        content: 'AI is working',
+      );
+      _hasForegroundKeepAliveLock = true;
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Failed to acquire foreground keep-alive lock: $error');
+      }
+    }
+  }
+
+  Future<void> _releaseForegroundKeepAlive() async {
+    if (!_hasForegroundKeepAliveLock) {
+      return;
+    }
+
+    _hasForegroundKeepAliveLock = false;
+    try {
+      await StreamingForegroundService.releaseKeepAliveLock();
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Failed to release foreground keep-alive lock: $error');
+      }
+    }
+  }
+
+  Future<void> _updateForegroundNotification({
+    required String title,
+    required String content,
+  }) async {
+    if (!_hasForegroundKeepAliveLock || _isDisposed) {
+      return;
+    }
+
+    try {
+      await StreamingForegroundService.updateNotification(
+        title: title,
+        content: content,
+      );
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Failed to update foreground notification: $error');
+      }
+    }
+  }
+
   /// Reset state (use when stuck in invalid state)
   void resetState() {
     _isStreaming = false;
     _isSending = false;
     onUpdateUI?.call();
+    unawaited(_releaseForegroundKeepAlive());
   }
 
   /// Check if a specific chat is streaming
@@ -803,6 +894,7 @@ class StreamingMessageHandler {
   void dispose() {
     _isDisposed = true;
     _activeToolLoopFuture = null;
+    unawaited(_releaseForegroundKeepAlive());
     // StreamingManager is global, don't dispose it
   }
 }

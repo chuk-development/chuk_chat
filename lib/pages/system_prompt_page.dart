@@ -131,7 +131,7 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
           prompt.isEmpty
               ? UserPreferencesService.clearSystemPrompt()
               : UserPreferencesService.saveSystemPrompt(prompt),
-        // Soul + User + Memory (SharedPreferences).
+        // Soul + User + Memory (local cache + Supabase sync).
         if (_hasSoulChanges) saveSoulText(soul),
         if (_hasUserInfoChanges) saveUserInfoText(userInfo),
         if (_hasMemoryChanges) saveMemoryText(memory),
