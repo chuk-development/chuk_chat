@@ -15,6 +15,7 @@ import 'package:chuk_chat/services/session_manager_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart'
     show initChatStorageCache;
 import 'package:chuk_chat/services/notification_service.dart';
+import 'package:chuk_chat/services/system_tray_service.dart';
 import 'package:chuk_chat/platform_specific/root_wrapper.dart';
 import 'package:chuk_chat/utils/grain_overlay.dart';
 import 'package:chuk_chat/pages/login_page.dart';
@@ -35,6 +36,9 @@ Future<void> main() async {
 
   // Pre-initialize SharedPreferences BEFORE runApp for instant cache access
   await initChatStorageCache();
+
+  // Initialize desktop system tray behavior (no-op on unsupported platforms)
+  await SystemTrayService.instance.initialize();
 
   // Initialize core services (Supabase, etc.) in background
   unawaited(AppInitializationService.instance.initializeCoreServices());
@@ -129,6 +133,7 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
     _lifecycleService.dispose();
     _sessionManager.dispose();
     _themeService.dispose();
+    unawaited(SystemTrayService.instance.dispose());
     super.dispose();
   }
 
