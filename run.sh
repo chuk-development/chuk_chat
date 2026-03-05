@@ -367,6 +367,9 @@ fi
 if [ -n "$FEATURE_VOICE_MODE" ]; then
   DART_DEFINES="$DART_DEFINES --dart-define=FEATURE_VOICE_MODE=$FEATURE_VOICE_MODE"
 fi
+if [ -n "$FEATURE_SERVER_TOOLS" ]; then
+  DART_DEFINES="$DART_DEFINES --dart-define=FEATURE_SERVER_TOOLS=$FEATURE_SERVER_TOOLS"
+fi
 
 # Run Flutter
 echo "Running flutter in debug mode with device: $DEVICE"

@@ -53,9 +53,10 @@ dart_defines_desktop() {
     echo "--dart-define=SUPABASE_URL=$SUPABASE_URL \
         --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
         --dart-define=PLATFORM_DESKTOP=true \
-        --dart-define=FEATURE_PROJECTS=true \
+        --dart-define=FEATURE_PROJECTS=false \
         --dart-define=FEATURE_IMAGE_GEN=true \
-        --dart-define=FEATURE_VOICE_MODE=true"
+        --dart-define=FEATURE_VOICE_MODE=false \
+        --dart-define=FEATURE_SERVER_TOOLS=false"
 }
 
 dart_defines_mobile() {
@@ -64,7 +65,8 @@ dart_defines_mobile() {
         --dart-define=PLATFORM_MOBILE=true \
         --dart-define=FEATURE_PROJECTS=false \
         --dart-define=FEATURE_IMAGE_GEN=true \
-        --dart-define=FEATURE_VOICE_MODE=false"
+        --dart-define=FEATURE_VOICE_MODE=false \
+        --dart-define=FEATURE_SERVER_TOOLS=false"
 }
 
 # Extract app information

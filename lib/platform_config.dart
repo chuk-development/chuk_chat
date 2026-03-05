@@ -9,8 +9,14 @@
 // flutter build linux --dart-define=PLATFORM_MOBILE=false
 // flutter build apk --dart-define=PLATFORM_DESKTOP=false
 
-const bool kPlatformMobile = bool.fromEnvironment('PLATFORM_MOBILE', defaultValue: false);
-const bool kPlatformDesktop = bool.fromEnvironment('PLATFORM_DESKTOP', defaultValue: false);
+const bool kPlatformMobile = bool.fromEnvironment(
+  'PLATFORM_MOBILE',
+  defaultValue: false,
+);
+const bool kPlatformDesktop = bool.fromEnvironment(
+  'PLATFORM_DESKTOP',
+  defaultValue: false,
+);
 
 // Auto-detect if not explicitly set
 const bool kAutoDetectPlatform = !kPlatformMobile && !kPlatformDesktop;
@@ -28,13 +34,22 @@ const bool kAutoDetectPlatform = !kPlatformMobile && !kPlatformDesktop;
 // flutter build apk  (all features disabled by default)
 
 /// Voice mode - audio recording and transcription
-const bool kFeatureVoiceMode = bool.fromEnvironment('FEATURE_VOICE_MODE', defaultValue: false);
+const bool kFeatureVoiceMode = bool.fromEnvironment(
+  'FEATURE_VOICE_MODE',
+  defaultValue: false,
+);
 
 /// Projects - workspace organization with custom system prompts
-const bool kFeatureProjects = bool.fromEnvironment('FEATURE_PROJECTS', defaultValue: false);
+const bool kFeatureProjects = bool.fromEnvironment(
+  'FEATURE_PROJECTS',
+  defaultValue: false,
+);
 
 /// Assistants - custom AI assistants (future feature)
-const bool kFeatureAssistants = bool.fromEnvironment('FEATURE_ASSISTANTS', defaultValue: false);
+const bool kFeatureAssistants = bool.fromEnvironment(
+  'FEATURE_ASSISTANTS',
+  defaultValue: false,
+);
 
 /// Image Generation - AI image creation via Z-Image Turbo
 /// Always enabled - no feature flag needed (Image Generation is production-ready)
@@ -44,4 +59,14 @@ const bool kFeatureImageGen = true;
 const bool kFeatureMediaManager = true;
 
 /// Session Management - View and manage connected devices, revoke sessions
-const bool kFeatureSessionManagement = bool.fromEnvironment('FEATURE_SESSION_MANAGEMENT', defaultValue: false);
+const bool kFeatureSessionManagement = bool.fromEnvironment(
+  'FEATURE_SESSION_MANAGEMENT',
+  defaultValue: false,
+);
+
+/// Server-backed integration tools (Spotify, GitHub, Slack, Google, Email,
+/// Nextcloud). Keep disabled until backend support is fully available.
+const bool kFeatureServerTools = bool.fromEnvironment(
+  'FEATURE_SERVER_TOOLS',
+  defaultValue: false,
+);

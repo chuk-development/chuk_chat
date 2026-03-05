@@ -8,9 +8,13 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 class StreamingForegroundService {
   static bool _isInitialized = false;
   static bool _isRunning = false;
+  static int _keepAliveLockCount = 0;
 
   /// Whether the foreground service is currently running
   static bool get isRunning => _isRunning;
+
+  /// Whether a long-running AI request currently requires keep-alive.
+  static bool get hasKeepAliveLock => _keepAliveLockCount > 0;
 
   /// Initialize the foreground task system (call once at app startup)
   static Future<void> initialize() async {
@@ -85,6 +89,40 @@ class StreamingForegroundService {
     }
   }
 
+  /// Keep service alive across multi-pass tool loops.
+  static Future<void> acquireKeepAliveLock({
+    String? title,
+    String? content,
+  }) async {
+    if (!Platform.isAndroid) return;
+
+    await startService();
+
+    if (!_isRunning) {
+      return;
+    }
+
+    _keepAliveLockCount++;
+
+    await updateNotification(
+      title: title ?? 'Generating response...',
+      content: content ?? 'AI is working',
+    );
+  }
+
+  /// Release keep-alive lock acquired by [acquireKeepAliveLock].
+  static Future<void> releaseKeepAliveLock() async {
+    if (!Platform.isAndroid) return;
+
+    if (_keepAliveLockCount > 0) {
+      _keepAliveLockCount--;
+    }
+
+    if (_keepAliveLockCount == 0) {
+      await stopService();
+    }
+  }
+
   /// Update the notification with streaming progress
   static Future<void> updateNotification({
     required String content,
@@ -112,9 +150,21 @@ class StreamingForegroundService {
   }
 
   /// Stop the foreground service when streaming completes
-  static Future<void> stopService() async {
+  static Future<void> stopService({bool force = false}) async {
     if (!Platform.isAndroid) return;
     if (!_isRunning) return;
+    if (!force && _keepAliveLockCount > 0) {
+      if (kDebugMode) {
+        debugPrint(
+          '[ForegroundService] Stop skipped, keep-alive locks active: $_keepAliveLockCount',
+        );
+      }
+      return;
+    }
+
+    if (force) {
+      _keepAliveLockCount = 0;
+    }
 
     final result = await FlutterForegroundTask.stopService();
     if (result is ServiceRequestSuccess) {

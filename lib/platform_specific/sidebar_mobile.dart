@@ -949,7 +949,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
         style: TextStyle(
           color: textColor,
           fontSize: 14,
-          fontWeight: FontWeight.bold,
+          fontWeight: FontWeight.w800,
         ),
       ),
     );
@@ -965,7 +965,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
       leading: _leadingIconPlaceholder(Icons.star, iconColor: accentColor),
       title: Text(
         title,
-        style: TextStyle(color: textColor),
+        style: TextStyle(color: textColor, fontWeight: FontWeight.w600),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
@@ -1005,6 +1005,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
               ? textColor.withValues(alpha: 0.38)
               : (isSelected ? accentColor : textColor),
           fontSize: 15,
+          fontWeight: FontWeight.w600,
         ),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,

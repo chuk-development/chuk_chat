@@ -5,9 +5,13 @@
 /// Web stub - no-op implementation (web doesn't have foreground services)
 class StreamingForegroundService {
   static final bool _isRunning = false;
+  static const bool _hasKeepAliveLock = false;
 
   /// Whether the foreground service is currently running
   static bool get isRunning => _isRunning;
+
+  /// Whether a long-running AI request currently requires keep-alive.
+  static bool get hasKeepAliveLock => _hasKeepAliveLock;
 
   /// Initialize the foreground task system (no-op on web)
   static Future<void> initialize() async {
@@ -19,6 +23,19 @@ class StreamingForegroundService {
     // No-op on web - browser handles tab state
   }
 
+  /// Keep service alive across multi-pass tool loops (no-op on web)
+  static Future<void> acquireKeepAliveLock({
+    String? title,
+    String? content,
+  }) async {
+    // No-op on web
+  }
+
+  /// Release keep-alive lock (no-op on web)
+  static Future<void> releaseKeepAliveLock() async {
+    // No-op on web
+  }
+
   /// Update the notification (no-op on web)
   static Future<void> updateNotification({
     required String content,
@@ -28,7 +45,7 @@ class StreamingForegroundService {
   }
 
   /// Stop the foreground service (no-op on web)
-  static Future<void> stopService() async {
+  static Future<void> stopService({bool force = false}) async {
     // No-op on web
   }
 

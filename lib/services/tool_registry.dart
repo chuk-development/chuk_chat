@@ -1,5 +1,16 @@
 import 'package:chuk_chat/models/client_tool.dart';
+import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/services/tool_executor.dart' show ToolExecutor;
+
+const Set<String> _serverBackedToolNames = {
+  'spotify_control',
+  'github',
+  'slack',
+  'google_calendar',
+  'gmail',
+  'email',
+  'nextcloud',
+};
 
 /// Maps tool names to their ToolCategory for enable/disable filtering.
 const Map<String, ToolCategory> toolCategoryMap = {
@@ -866,6 +877,9 @@ final List<ClientTool> builtinTools = [
 /// Register all built-in tools from [builtinTools] into a [ToolExecutor].
 void registerBuiltinTools(ToolExecutor executor) {
   for (final tool in builtinTools) {
+    if (!kFeatureServerTools && _serverBackedToolNames.contains(tool.name)) {
+      continue;
+    }
     executor.registerTool(tool);
   }
 }

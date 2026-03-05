@@ -199,6 +199,7 @@ jobs:
             --dart-define=FEATURE_PROJECTS=false \
             --dart-define=FEATURE_IMAGE_GEN=false \
             --dart-define=FEATURE_VOICE_MODE=false \
+            --dart-define=FEATURE_SERVER_TOOLS=false \
             --tree-shake-icons
 
       - name: Rename and upload APKs
@@ -245,9 +246,10 @@ jobs:
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
             --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} \
             --dart-define=PLATFORM_DESKTOP=true \
-            --dart-define=FEATURE_PROJECTS=true \
+            --dart-define=FEATURE_PROJECTS=false \
             --dart-define=FEATURE_IMAGE_GEN=false \
-            --dart-define=FEATURE_VOICE_MODE=true \
+            --dart-define=FEATURE_VOICE_MODE=false \
+            --dart-define=FEATURE_SERVER_TOOLS=false \
             --tree-shake-icons
 
       - name: Create .deb package
@@ -482,9 +484,10 @@ jobs:
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
             --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} \
             --dart-define=PLATFORM_DESKTOP=true \
-            --dart-define=FEATURE_PROJECTS=true \
+            --dart-define=FEATURE_PROJECTS=false \
             --dart-define=FEATURE_IMAGE_GEN=false \
-            --dart-define=FEATURE_VOICE_MODE=true \
+            --dart-define=FEATURE_VOICE_MODE=false \
+            --dart-define=FEATURE_SERVER_TOOLS=false \
             --tree-shake-icons
 
       - name: Detect bundle path
@@ -643,9 +646,10 @@ jobs:
           flutter build windows --release `
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} `
             --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} `
-            --dart-define=FEATURE_PROJECTS=true `
+            --dart-define=FEATURE_PROJECTS=false `
             --dart-define=FEATURE_IMAGE_GEN=false `
-            --dart-define=FEATURE_VOICE_MODE=true `
+            --dart-define=FEATURE_VOICE_MODE=false `
+            --dart-define=FEATURE_SERVER_TOOLS=false `
             --tree-shake-icons
 
       - name: Bundle VC++ runtime DLLs
@@ -795,9 +799,10 @@ jobs:
           flutter build macos --release \
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
             --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} \
-            --dart-define=FEATURE_PROJECTS=true \
+            --dart-define=FEATURE_PROJECTS=false \
             --dart-define=FEATURE_IMAGE_GEN=false \
-            --dart-define=FEATURE_VOICE_MODE=true \
+            --dart-define=FEATURE_VOICE_MODE=false \
+            --dart-define=FEATURE_SERVER_TOOLS=false \
             --tree-shake-icons
 
       - name: Create DMG
@@ -852,7 +857,8 @@ jobs:
             --dart-define=PLATFORM_MOBILE=true \
             --dart-define=FEATURE_PROJECTS=false \
             --dart-define=FEATURE_IMAGE_GEN=false \
-            --dart-define=FEATURE_VOICE_MODE=false
+            --dart-define=FEATURE_VOICE_MODE=false \
+            --dart-define=FEATURE_SERVER_TOOLS=false
 
       - name: Create archive and upload
         env:
