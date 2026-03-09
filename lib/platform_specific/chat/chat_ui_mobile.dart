@@ -102,6 +102,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   bool _lastTextWasEmpty = true;
   bool _showFullscreenButton = false;
   bool _showScrollToBottom = false;
+  bool _isInputFocused = false;
 
   // Services and handlers
   late ChatApiService _chatApiService;
@@ -274,6 +275,16 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   void _initializeListeners() {
     // Scroll listener for scroll-to-bottom button
     _scrollController.addListener(_onScrollChanged);
+
+    // Text field focus listener — collapse mic & model buttons while typing
+    _textFieldFocusNode.addListener(() {
+      final bool focused = _textFieldFocusNode.hasFocus;
+      if (focused != _isInputFocused) {
+        setState(() {
+          _isInputFocused = focused;
+        });
+      }
+    });
 
     // Text controller listener
     _controller.addListener(() {
@@ -3062,32 +3073,39 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         // ── Left pill: +, ImageGen, Model selector ──
-        Container(
-          height: pillHeight,
-          decoration: pillDecoration(),
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              buildTinyIconButton(
-                icon: Icons.add_rounded,
-                iconSize: 22,
-                onTap: _handleAddAttachmentTap,
-                isActive: hasAttachments,
-                color: iconFg,
-              ),
-              const SizedBox(width: 1),
-              ModelSelectionDropdown(
-                initialSelectedModelId: _selectedModelId,
-                onModelSelected: (newModelId) {
-                  setState(() {
-                    _selectedModelId = newModelId;
-                  });
-                },
-                textFieldFocusNode: _textFieldFocusNode,
-                isCompactMode: true,
-              ),
-            ],
+        AnimatedSize(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          alignment: Alignment.centerLeft,
+          child: Container(
+            height: pillHeight,
+            decoration: pillDecoration(),
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                buildTinyIconButton(
+                  icon: Icons.add_rounded,
+                  iconSize: 22,
+                  onTap: _handleAddAttachmentTap,
+                  isActive: hasAttachments,
+                  color: iconFg,
+                ),
+                if (!_isInputFocused) ...[
+                  const SizedBox(width: 1),
+                  ModelSelectionDropdown(
+                    initialSelectedModelId: _selectedModelId,
+                    onModelSelected: (newModelId) {
+                      setState(() {
+                        _selectedModelId = newModelId;
+                      });
+                    },
+                    textFieldFocusNode: _textFieldFocusNode,
+                    isCompactMode: true,
+                  ),
+                ],
+              ],
+            ),
           ),
         ),
         const SizedBox(width: 6),
@@ -3186,47 +3204,54 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         const SizedBox(width: 6),
 
         // ── Right pill: Mic, Send ──
-        Container(
-          height: pillHeight,
-          decoration: pillDecoration(isActive: _audioHandler.isMicActive),
-          padding: const EdgeInsets.symmetric(horizontal: 5),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              buildTinyIconButton(
-                icon: _audioHandler.isMicActive
-                    ? Icons.stop_rounded
-                    : Icons.mic,
-                iconSize: 20,
-                onTap: _handleMicTap,
-                isActive: _audioHandler.isMicActive,
-                color: _audioHandler.isMicActive ? Colors.red : iconFg,
-                semanticsId: 'mic_button',
-              ),
-              const SizedBox(width: 3),
-              buildTinyActionButton(
-                icon: _audioHandler.isMicActive
-                    ? Icons.north_rounded
-                    : (showStopAction
-                          ? Icons.stop_rounded
-                          : (showVoiceModeAction
-                                ? Icons.graphic_eq_rounded
-                                : Icons.north_rounded)),
-                iconSize: 18,
-                onTap: _audioHandler.isMicActive
-                    ? _handleAudioSend
-                    : (showStopAction
-                          ? _cancelCurrentOperation
-                          : (showVoiceModeAction
-                                ? () => _openComingSoonFeature('Voice Mode')
-                                : _sendMessage)),
-                color: _audioHandler.isMicActive
-                    ? accent
-                    : (showStopAction ? Colors.red : accent),
-                isLoading: _audioHandler.isTranscribingAudio,
-                semanticsId: 'send_button',
-              ),
-            ],
+        AnimatedSize(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          alignment: Alignment.centerRight,
+          child: Container(
+            height: pillHeight,
+            decoration: pillDecoration(isActive: _audioHandler.isMicActive),
+            padding: const EdgeInsets.symmetric(horizontal: 5),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (!_isInputFocused || _audioHandler.isMicActive) ...[
+                  buildTinyIconButton(
+                    icon: _audioHandler.isMicActive
+                        ? Icons.stop_rounded
+                        : Icons.mic,
+                    iconSize: 20,
+                    onTap: _handleMicTap,
+                    isActive: _audioHandler.isMicActive,
+                    color: _audioHandler.isMicActive ? Colors.red : iconFg,
+                    semanticsId: 'mic_button',
+                  ),
+                  const SizedBox(width: 3),
+                ],
+                buildTinyActionButton(
+                  icon: _audioHandler.isMicActive
+                      ? Icons.north_rounded
+                      : (showStopAction
+                            ? Icons.stop_rounded
+                            : (showVoiceModeAction
+                                  ? Icons.graphic_eq_rounded
+                                  : Icons.north_rounded)),
+                  iconSize: 18,
+                  onTap: _audioHandler.isMicActive
+                      ? _handleAudioSend
+                      : (showStopAction
+                            ? _cancelCurrentOperation
+                            : (showVoiceModeAction
+                                  ? () => _openComingSoonFeature('Voice Mode')
+                                  : _sendMessage)),
+                  color: _audioHandler.isMicActive
+                      ? accent
+                      : (showStopAction ? Colors.red : accent),
+                  isLoading: _audioHandler.isTranscribingAudio,
+                  semanticsId: 'send_button',
+                ),
+              ],
+            ),
           ),
         ),
       ],
