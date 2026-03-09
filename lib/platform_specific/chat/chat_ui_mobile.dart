@@ -3087,16 +3087,19 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         // ── Left pill: +, Model selector ──
+        // When collapsed (only +), minWidth == pillHeight keeps it circular.
         AnimatedSize(
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeInOut,
           alignment: Alignment.centerLeft,
           child: Container(
             height: pillHeight,
+            constraints: const BoxConstraints(minWidth: pillHeight),
             decoration: pillDecoration(),
-            padding: const EdgeInsets.symmetric(horizontal: 4),
+            padding: EdgeInsets.symmetric(horizontal: _isInputFocused ? 7 : 4),
             child: Row(
               mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 buildTinyIconButton(
                   icon: Icons.add_rounded,

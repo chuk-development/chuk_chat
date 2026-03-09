@@ -147,12 +147,12 @@ Widget buildAttachmentSheetOption({
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: borderColor),
           ),
-          padding: const EdgeInsets.symmetric(vertical: 16),
+          padding: const EdgeInsets.symmetric(vertical: 14),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: foreground),
-              const SizedBox(height: 8),
+              Icon(icon, color: foreground, size: 22),
+              const SizedBox(height: 6),
               Text(
                 label,
                 style: TextStyle(
