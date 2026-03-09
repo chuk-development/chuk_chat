@@ -49,3 +49,24 @@ class ToolCall {
 
 /// Status of a tool call in its lifecycle.
 enum ToolCallStatus { pending, running, completed, error }
+
+/// Utility to finalize any stale (running/pending) tool calls.
+///
+/// When a message is finalized but some tool calls are still in
+/// running/pending state (e.g. because of a background race condition
+/// or stream failure), this marks them as [ToolCallStatus.error] so
+/// the UI stops showing spinners.
+///
+/// Returns `true` if any tool call was modified.
+bool finalizeStaleToolCalls(List<ToolCall> toolCalls) {
+  var modified = false;
+  for (final tc in toolCalls) {
+    if (tc.status == ToolCallStatus.running ||
+        tc.status == ToolCallStatus.pending) {
+      tc.status = ToolCallStatus.error;
+      tc.result ??= 'Tool call did not complete.';
+      modified = true;
+    }
+  }
+  return modified;
+}

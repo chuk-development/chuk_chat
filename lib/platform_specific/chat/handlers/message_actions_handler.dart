@@ -67,6 +67,7 @@ class MessageActionsHandler {
     required bool isStreaming,
     required Function(int) onEdit,
     required Function(int) onResendMessage,
+    bool hasFailedToolCalls = false,
   }) {
     final bool isAssistantPending = !isUser && isStreaming;
     final List<MessageBubbleAction> actions = [];
@@ -103,7 +104,8 @@ class MessageActionsHandler {
         ),
       );
     } else if (!isAssistantPending &&
-        messageText.startsWith(_emptyAssistantResponsePrefix)) {
+        (messageText.startsWith(_emptyAssistantResponsePrefix) ||
+            hasFailedToolCalls)) {
       actions.add(
         MessageBubbleAction(
           icon: Icons.replay,

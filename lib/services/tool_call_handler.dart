@@ -106,7 +106,7 @@ class ToolCallHandler {
   factory ToolCallHandler() => _instance;
 
   final ToolExecutor _toolExecutor = ToolExecutor();
-  static const int _maxEmptyFinalRecoveryAttempts = 1;
+  static const int _maxEmptyFinalRecoveryAttempts = 3;
   static const int _maxDiscoveryContexts = 200;
   final Map<String, _DiscoveryContextState> _discoveryContextStates =
       <String, _DiscoveryContextState>{};

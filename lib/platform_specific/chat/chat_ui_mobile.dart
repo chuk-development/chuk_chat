@@ -2898,6 +2898,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                             messageText: displayText,
                                             isUser: isUser,
                                             isStreaming: isStreamingMessage,
+                                            hasFailedToolCalls:
+                                                toolCalls != null &&
+                                                toolCalls.any(
+                                                  (t) =>
+                                                      t.status ==
+                                                      ToolCallStatus.error,
+                                                ),
                                             onEdit: (index) {
                                               setState(() {
                                                 _messageActionsHandler
@@ -2926,6 +2933,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                           widget.showReasoningTokens,
                                       showModelInfo: widget.showModelInfo,
                                       showTps: widget.showTps,
+                                      onRetry: !isUser && !isStreamingMessage
+                                          ? () => _resendMessageAt(i)
+                                          : null,
                                     ),
                                   );
                                 },
