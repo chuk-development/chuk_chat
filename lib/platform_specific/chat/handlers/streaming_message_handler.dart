@@ -188,7 +188,7 @@ class StreamingMessageHandler {
 
     final chatId = activeChatId;
 
-    late final ToolLoopSession toolSession;
+    late ToolLoopSession toolSession;
     late final String initialSystemPrompt;
     try {
       toolSession = _toolCallHandler.createSession(
@@ -220,6 +220,12 @@ class StreamingMessageHandler {
       return;
     }
     const int kMaxStreamingPasses = 20;
+
+    // Message-level auto-retry: if the final answer is empty after all
+    // tool-loop retries, re-send the last user message once to give the
+    // model another chance (separate from the tool-loop internal retries).
+    const int kMaxMessageLevelRetries = 1;
+    int messageLevelRetries = 0;
 
     // Accumulates display text across all streaming passes so that AI text
     // from earlier passes is never lost when a new pass begins.
@@ -403,10 +409,81 @@ class StreamingMessageHandler {
                 chatId,
               );
 
-              final rawContent =
-                  (loopResult.finalContent ?? finalContent).isEmpty
+              // Defensive: finalize any tool calls that are still
+              // running/pending (e.g. due to background race conditions).
+              final finalToolCalls = loopResult.toolCalls;
+              finalizeStaleToolCalls(finalToolCalls);
+
+              // Also finalize stale tool calls inside content blocks.
+              for (final block in contentBlocks) {
+                if (block.type == ContentBlockType.toolCalls &&
+                    block.toolCalls != null) {
+                  finalizeStaleToolCalls(block.toolCalls!);
+                }
+              }
+
+              // Notify UI with finalized tool calls.
+              if (finalToolCalls.isNotEmpty) {
+                onToolCallsUpdate?.call(
+                  placeholderIndex,
+                  finalToolCalls,
+                  chatId,
+                );
+              }
+
+              final resolvedFinalContent =
+                  loopResult.finalContent ?? finalContent;
+
+              // Message-level auto-retry: if the model returned an empty
+              // response after all tool-loop retries, re-send the original
+              // user message once more so the model gets a fresh chance.
+              if (resolvedFinalContent.trim().isEmpty &&
+                  messageLevelRetries < kMaxMessageLevelRetries &&
+                  !_isDisposed) {
+                messageLevelRetries++;
+
+                if (kDebugMode) {
+                  debugPrint(
+                    '[StreamingHandler] Empty response after tool loop — '
+                    'auto-retrying (attempt $messageLevelRetries/$kMaxMessageLevelRetries)',
+                  );
+                }
+
+                // Reset the tool session for a clean retry
+                final retrySession = _toolCallHandler.createSession(
+                  initialUserMessage: aiPromptContent,
+                  history: apiHistory,
+                  accessToken: accessToken,
+                  discoveryContextKey: chatId,
+                  baseSystemPrompt: effectiveSystemPrompt,
+                  toolCallingEnabled: toolCallingEnabled,
+                  discoveryMode: toolDiscoveryMode,
+                  allowMarkdownToolCalls: allowMarkdownToolCalls,
+                );
+                final retryPrompt = await _toolCallHandler
+                    .buildInitialSystemPrompt(retrySession);
+
+                // Replace the tool session for subsequent passes
+                toolSession = retrySession;
+                contentBlocks.clear();
+                accumulatedText.clear();
+                previousToolCallCount = 0;
+
+                await Future<void>.delayed(const Duration(milliseconds: 500));
+                if (_isDisposed) return;
+
+                await startStreamingPass(
+                  message: aiPromptContent,
+                  history: apiHistory,
+                  systemPrompt: retryPrompt,
+                  currentPass: currentPass + 1,
+                );
+                return;
+              }
+
+              final rawContent = resolvedFinalContent.isEmpty
                   ? 'The model returned an empty response. Tap resend on your last message to continue.'
-                  : (loopResult.finalContent ?? finalContent);
+                  : resolvedFinalContent;
               final effectiveReasoning =
                   loopResult.finalReasoning ?? finalReasoning;
 

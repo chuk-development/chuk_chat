@@ -201,6 +201,49 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       8.0; // Margin between attachment bar and search bar
   static const double _kHorizontalPaddingLarge = 16.0;
   static const double _kHorizontalPaddingSmall = 8.0;
+
+  String _selectedTextOrAll(TextEditingValue value) {
+    final selection = value.selection;
+    if (selection.isValid && !selection.isCollapsed) {
+      return selection.textInside(value.text);
+    }
+    return value.text;
+  }
+
+  Widget _buildComposerContextMenu(
+    BuildContext context,
+    EditableTextState editableTextState,
+  ) {
+    final buttonItems = List<ContextMenuButtonItem>.from(
+      editableTextState.contextMenuButtonItems,
+    );
+
+    final hasCopy = buttonItems.any(
+      (item) => item.type == ContextMenuButtonType.copy,
+    );
+
+    if (!hasCopy) {
+      buttonItems.insert(
+        0,
+        ContextMenuButtonItem(
+          type: ContextMenuButtonType.copy,
+          onPressed: () {
+            final text = _selectedTextOrAll(editableTextState.textEditingValue);
+            if (text.isNotEmpty) {
+              Clipboard.setData(ClipboardData(text: text));
+            }
+            ContextMenuController.removeAny();
+          },
+        ),
+      );
+    }
+
+    return AdaptiveTextSelectionToolbar.buttonItems(
+      anchors: editableTextState.contextMenuAnchors,
+      buttonItems: buttonItems,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -1471,7 +1514,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     final String? systemPrompt = await _resolveSystemPromptForSend();
 
-    final toolSession = _toolCallHandler.createSession(
+    var toolSession = _toolCallHandler.createSession(
       initialUserMessage: originalUserInput,
       history: conversationHistory,
       accessToken: accessToken,
@@ -1487,6 +1530,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     // Capture chatId for this streaming operation
     final String chatIdForStream = _activeChatId!;
+
+    // Message-level auto-retry: if the final answer is empty after all
+    // tool-loop retries, re-send the last user message once more.
+    const int kMaxMessageLevelRetries = 1;
+    int messageLevelRetries = 0;
 
     // Accumulates display text across all streaming passes so that AI text
     // from earlier passes is never lost when a new pass begins.
@@ -1624,6 +1672,50 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             final resolvedContent = loopResult.finalContent ?? finalContent;
             final resolvedReasoning =
                 loopResult.finalReasoning ?? finalReasoning;
+
+            // Message-level auto-retry: if the model returned an empty
+            // response after all tool-loop retries, re-send the original
+            // user message once more so the model gets a fresh chance.
+            if (resolvedContent.trim().isEmpty &&
+                messageLevelRetries < kMaxMessageLevelRetries &&
+                mounted) {
+              messageLevelRetries++;
+
+              if (kDebugMode) {
+                debugPrint(
+                  '[Desktop] Empty response after tool loop — '
+                  'auto-retrying (attempt $messageLevelRetries/$kMaxMessageLevelRetries)',
+                );
+              }
+
+              toolSession = _toolCallHandler.createSession(
+                initialUserMessage: originalUserInput,
+                history: conversationHistory,
+                accessToken: accessToken,
+                discoveryContextKey: chatIdForStream,
+                baseSystemPrompt: systemPrompt,
+                toolCallingEnabled: widget.toolCallingEnabled,
+                discoveryMode: widget.toolDiscoveryMode,
+                allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
+              );
+              final retryPrompt = await _toolCallHandler
+                  .buildInitialSystemPrompt(toolSession);
+
+              contentBlocks.clear();
+              accumulatedText.clear();
+              previousToolCallCount = 0;
+
+              await Future<void>.delayed(const Duration(milliseconds: 500));
+              if (!mounted) return;
+
+              await startStreamPass(
+                message: originalUserInput,
+                history: conversationHistory,
+                passSystemPrompt: retryPrompt,
+              );
+              return;
+            }
+
             final rawContent = resolvedContent.isEmpty
                 ? 'The model returned an empty response. Tap resend on your last message to continue.'
                 : resolvedContent;
@@ -1632,6 +1724,28 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             final effectiveContent = accumulatedText.isEmpty
                 ? rawContent
                 : '$accumulatedText$rawContent';
+
+            // Defensive: finalize any tool calls that are still
+            // running/pending (e.g. due to background race conditions).
+            final finalToolCalls = loopResult.toolCalls;
+            finalizeStaleToolCalls(finalToolCalls);
+
+            // Also finalize stale tool calls inside content blocks.
+            for (final block in contentBlocks) {
+              if (block.type == ContentBlockType.toolCalls &&
+                  block.toolCalls != null) {
+                finalizeStaleToolCalls(block.toolCalls!);
+              }
+            }
+
+            // Notify UI with finalized tool calls.
+            if (finalToolCalls.isNotEmpty) {
+              _updateToolCallsForMessage(
+                placeholderIndex,
+                finalToolCalls,
+                chatIdForStream,
+              );
+            }
 
             // Build final content blocks.
             if (contentBlocks.isNotEmpty) {
@@ -1840,16 +1954,24 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           onPressed: () => _resendMessageAt(index),
         ),
       );
-    } else if (!isAssistantPending &&
-        messageText.startsWith(_emptyAssistantResponsePrefix)) {
-      actions.add(
-        MessageBubbleAction(
-          icon: Icons.replay,
-          tooltip: 'Retry response',
-          label: 'Retry',
-          onPressed: () => _resendMessageAt(index),
-        ),
+    } else if (!isAssistantPending) {
+      final bool hasEmptyResponse = messageText.startsWith(
+        _emptyAssistantResponsePrefix,
       );
+      final bool hasFailedToolCalls =
+          data.toolCalls != null &&
+          data.toolCalls!.any((t) => t.status == ToolCallStatus.error);
+
+      if (hasEmptyResponse || hasFailedToolCalls) {
+        actions.add(
+          MessageBubbleAction(
+            icon: Icons.replay,
+            tooltip: 'Retry response',
+            label: 'Retry',
+            onPressed: () => _resendMessageAt(index),
+          ),
+        );
+      }
     }
 
     return actions;
@@ -2391,7 +2513,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       }
     });
 
-    final toolSession = _toolCallHandler.createSession(
+    var toolSession = _toolCallHandler.createSession(
       initialUserMessage: aiPromptContent,
       history: apiHistory,
       accessToken: accessToken,
@@ -2404,6 +2526,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     final initialSystemPrompt = await _toolCallHandler.buildInitialSystemPrompt(
       toolSession,
     );
+
+    // Message-level auto-retry for the second streaming path.
+    const int kMaxMessageLevelRetries2 = 1;
+    int messageLevelRetries2 = 0;
 
     // Accumulates display text across all streaming passes so that AI text
     // from earlier passes is never lost when a new pass begins.
@@ -2552,6 +2678,48 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               final resolvedContent = loopResult.finalContent ?? finalContent;
               final resolvedReasoning =
                   loopResult.finalReasoning ?? finalReasoning;
+
+              // Message-level auto-retry: if the model returned empty.
+              if (resolvedContent.trim().isEmpty &&
+                  messageLevelRetries2 < kMaxMessageLevelRetries2 &&
+                  mounted) {
+                messageLevelRetries2++;
+
+                if (kDebugMode) {
+                  debugPrint(
+                    '[Desktop-Send] Empty response — auto-retrying '
+                    '(attempt $messageLevelRetries2/$kMaxMessageLevelRetries2)',
+                  );
+                }
+
+                toolSession = _toolCallHandler.createSession(
+                  initialUserMessage: aiPromptContent,
+                  history: apiHistory,
+                  accessToken: accessToken,
+                  discoveryContextKey: chatIdForStream,
+                  baseSystemPrompt: systemPrompt,
+                  toolCallingEnabled: widget.toolCallingEnabled,
+                  discoveryMode: widget.toolDiscoveryMode,
+                  allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
+                );
+                final retryPrompt = await _toolCallHandler
+                    .buildInitialSystemPrompt(toolSession);
+
+                contentBlocks2.clear();
+                accumulatedText2.clear();
+                previousToolCallCount2 = 0;
+
+                await Future<void>.delayed(const Duration(milliseconds: 500));
+                if (!mounted) return;
+
+                await startStreamPass(
+                  message: aiPromptContent,
+                  history: apiHistory,
+                  passSystemPrompt: retryPrompt,
+                );
+                return;
+              }
+
               final rawContent = resolvedContent.isEmpty
                   ? 'The model returned an empty response. Tap resend on your last message to continue.'
                   : resolvedContent;
@@ -2560,6 +2728,23 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               final effectiveContent = accumulatedText2.isEmpty
                   ? rawContent
                   : '$accumulatedText2$rawContent';
+
+              // Defensive: finalize stale tool calls.
+              final finalToolCalls = loopResult.toolCalls;
+              finalizeStaleToolCalls(finalToolCalls);
+              for (final block in contentBlocks2) {
+                if (block.type == ContentBlockType.toolCalls &&
+                    block.toolCalls != null) {
+                  finalizeStaleToolCalls(block.toolCalls!);
+                }
+              }
+              if (finalToolCalls.isNotEmpty) {
+                _updateToolCallsForMessage(
+                  placeholderIndex,
+                  finalToolCalls,
+                  chatIdForStream,
+                );
+              }
 
               // Build final content blocks.
               if (contentBlocks2.isNotEmpty) {
@@ -4121,6 +4306,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                               widget.showReasoningTokens,
                                           showModelInfo: widget.showModelInfo,
                                           showTps: widget.showTps,
+                                          onRetry:
+                                              !data.isUser &&
+                                                  !data.isStreamingMessage
+                                              ? () => _resendMessageAt(i)
+                                              : null,
                                         ),
                                       );
                                     },
@@ -4297,6 +4487,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                       child: TextField(
                         controller: _controller,
                         focusNode: _textFieldFocusNode,
+                        contextMenuBuilder: _buildComposerContextMenu,
                         autofocus: false,
                         minLines: 1,
                         maxLines: null,
