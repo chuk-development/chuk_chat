@@ -455,10 +455,18 @@ class _MessageBubbleState extends State<MessageBubble>
         widget.showToolCalls &&
         widget.toolCalls != null &&
         widget.toolCalls!.isNotEmpty;
+    // Show the info status bar when:
+    // 1. We have reasoning/model info (normal case), OR
+    // 2. The message is actively streaming and waiting for first tokens
+    //    (shows a "Connecting..." / "Reasoning..." bar instead of plain
+    //    "Thinking..." text sitting in the bubble).
+    final bool isWaitingForFirstTokens =
+        widget.isReasoningStreaming &&
+        (widget.message == 'Thinking...' || widget.message.isEmpty);
     final bool hasInfoStatusBar =
         !isUserMessage &&
         !useContentBlocks &&
-        (_hasReasoning || _hasModelInfo) &&
+        (_hasReasoning || _hasModelInfo || isWaitingForFirstTokens) &&
         !hasVisibleToolCalls;
 
     final EdgeInsetsGeometry containerPadding = isUserMessage
@@ -872,8 +880,16 @@ class _MessageBubbleState extends State<MessageBubble>
     final bool isExpanded = _isReasoningExpanded;
     final bool isStreaming = widget.isReasoningStreaming;
 
-    // Determine header label and state
-    final String label = isStreaming ? 'Reasoning...' : 'Reasoning';
+    // Determine header label and state.
+    // When the message is still "Thinking..." (no tokens yet), show
+    // "Connecting..." to indicate we're waiting for the server.
+    final bool waitingForTokens =
+        isStreaming &&
+        !_hasReasoning &&
+        (widget.message == 'Thinking...' || widget.message.isEmpty);
+    final String label = waitingForTokens
+        ? 'Connecting...'
+        : (isStreaming ? 'Reasoning...' : 'Reasoning');
     final Color barAccent = accentColor;
 
     return Container(
@@ -1616,7 +1632,8 @@ class _MessageBubbleState extends State<MessageBubble>
         ? widget.message
         : stripToolCallBlocksForDisplay(widget.message);
 
-    if (!isUserMessage && displayText.trim().isEmpty) {
+    if (!isUserMessage &&
+        (displayText.trim().isEmpty || displayText == 'Thinking...')) {
       return const SizedBox.shrink();
     }
 
