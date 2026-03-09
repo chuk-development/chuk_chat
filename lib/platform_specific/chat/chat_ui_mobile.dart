@@ -3132,7 +3132,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                 ? null
                 : const BoxConstraints(minHeight: pillHeight),
             decoration: pillDecoration(isActive: _audioHandler.isMicActive),
-            padding: const EdgeInsets.only(left: 10, right: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 10),
             child: _audioHandler.isMicActive
                 ? SizedBox(
                     height: pillHeight - 6, // minus border + padding
@@ -3149,94 +3149,86 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                       ],
                     ),
                   )
-                : Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      // Text field takes all available space
-                      Expanded(
-                        child: buildKeyboardListener(
-                          focusNode: _rawKeyboardListenerFocusNode,
+                : buildKeyboardListener(
+                    focusNode: _rawKeyboardListenerFocusNode,
+                    controller: _controller,
+                    onSend: _sendMessage,
+                    child: Scrollbar(
+                      controller: _composerScrollController,
+                      child: Semantics(
+                        identifier: 'message_input',
+                        child: TextField(
                           controller: _controller,
-                          onSend: _sendMessage,
-                          child: Scrollbar(
-                            controller: _composerScrollController,
-                            child: Semantics(
-                              identifier: 'message_input',
-                              child: TextField(
-                                controller: _controller,
-                                focusNode: _textFieldFocusNode,
-                                autofocus: false,
-                                keyboardType: TextInputType.multiline,
-                                textInputAction: TextInputAction.newline,
-                                scrollController: _composerScrollController,
-                                style: TextStyle(
-                                  color: theme.colorScheme.onSurface,
-                                  fontSize: 15,
-                                  height: 1.3,
-                                ),
-                                minLines: 1,
-                                maxLines: 6,
-                                decoration: InputDecoration(
-                                  hintText: 'Ask me anything',
-                                  hintStyle: TextStyle(
-                                    color: theme.colorScheme.onSurface
-                                        .withValues(alpha: 0.5),
-                                    fontSize: 15,
-                                  ),
-                                  filled: false,
-                                  border: InputBorder.none,
-                                  enabledBorder: InputBorder.none,
-                                  focusedBorder: InputBorder.none,
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 0,
-                                    vertical: 10,
-                                  ),
-                                  isDense: true,
-                                  // Fullscreen button inside the text field
-                                  suffixIcon: _showFullscreenButton
-                                      ? GestureDetector(
-                                          onTap: _openFullscreenEditor,
-                                          child: Padding(
-                                            padding: const EdgeInsets.only(
-                                              left: 4,
-                                            ),
-                                            child: Icon(
-                                              Icons.open_in_full_rounded,
-                                              size: 14,
-                                              color: iconFg.withValues(
-                                                alpha: 0.4,
-                                              ),
-                                            ),
-                                          ),
-                                        )
-                                      : null,
-                                  suffixIconConstraints: const BoxConstraints(
-                                    minWidth: 20,
-                                    minHeight: 20,
-                                  ),
-                                ),
-                                cursorColor: accent,
-                                cursorWidth: 1.5,
+                          focusNode: _textFieldFocusNode,
+                          autofocus: false,
+                          keyboardType: TextInputType.multiline,
+                          textInputAction: TextInputAction.newline,
+                          scrollController: _composerScrollController,
+                          style: TextStyle(
+                            color: theme.colorScheme.onSurface,
+                            fontSize: 15,
+                            height: 1.3,
+                          ),
+                          minLines: 1,
+                          maxLines: 6,
+                          decoration: InputDecoration(
+                            hintText: 'Ask me anything',
+                            hintStyle: TextStyle(
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.5,
                               ),
+                              fontSize: 15,
+                            ),
+                            filled: false,
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 0,
+                              vertical: 10,
+                            ),
+                            isDense: true,
+                            // Mic or fullscreen button as suffix icon.
+                            // Mic shown when text is empty; fullscreen
+                            // shown when text is long; otherwise nothing.
+                            suffixIcon: showInlineMic
+                                ? GestureDetector(
+                                    onTap: _handleMicTap,
+                                    child: Semantics(
+                                      identifier: 'mic_button',
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(left: 4),
+                                        child: Icon(
+                                          Icons.mic,
+                                          size: 20,
+                                          color: iconFg.withValues(alpha: 0.6),
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                : _showFullscreenButton
+                                ? GestureDetector(
+                                    onTap: _openFullscreenEditor,
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(left: 4),
+                                      child: Icon(
+                                        Icons.open_in_full_rounded,
+                                        size: 14,
+                                        color: iconFg.withValues(alpha: 0.4),
+                                      ),
+                                    ),
+                                  )
+                                : null,
+                            suffixIconConstraints: const BoxConstraints(
+                              minWidth: 24,
+                              minHeight: 24,
                             ),
                           ),
+                          cursorColor: accent,
+                          cursorWidth: 1.5,
                         ),
                       ),
-                      // Mic button inside the text field pill — disappears
-                      // as soon as the user types any text.
-                      if (showInlineMic)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 7),
-                          child: buildTinyIconButton(
-                            icon: Icons.mic,
-                            iconSize: 20,
-                            onTap: _handleMicTap,
-                            isActive: false,
-                            color: iconFg,
-                            semanticsId: 'mic_button',
-                          ),
-                        ),
-                    ],
+                    ),
                   ),
           ),
         ),
