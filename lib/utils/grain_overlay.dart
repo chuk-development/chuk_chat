@@ -2,7 +2,28 @@
 import 'dart:async'; // <-- for Timer
 import 'dart:math' as math;
 import 'dart:ui' as ui;
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+Uint8List _generateNoisePixels(List<int> params) {
+  final size = params[0];
+  final rnd = math.Random(params[1]);
+  final bytes = Uint8List(size * size * 4);
+  var i = 0;
+
+  for (var y = 0; y < size; y++) {
+    for (var x = 0; x < size; x++) {
+      final v = rnd.nextInt(256);
+      final a = 60 + rnd.nextInt(70); // 60-130 alpha
+      bytes[i++] = v; // R
+      bytes[i++] = v; // G
+      bytes[i++] = v; // B
+      bytes[i++] = a; // A
+    }
+  }
+  return bytes;
+}
 
 /// Full-screen film grain overlay.
 /// Place as the top-most child in a Stack. Colors beneath remain unchanged.
@@ -30,11 +51,21 @@ class _GrainOverlayState extends State<GrainOverlay> {
   ui.Image? _noiseImage;
   bool _regenInFlight = false;
 
+  bool get _shouldAnimateNoise =>
+      !kIsWeb && defaultTargetPlatform != TargetPlatform.linux;
+
   @override
   void initState() {
     super.initState();
-    _regenNoise(); // draw one immediately
-    _startNoiseTimer(); // then flicker at the requested cadence
+    // Generate noise after first frame. Linux gets a static grain layer
+    // to avoid startup/interaction hitches from continuous regeneration.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(_regenNoise());
+      if (_shouldAnimateNoise) {
+        _startNoiseTimer();
+      }
+    });
   }
 
   void _startNoiseTimer() {
@@ -49,32 +80,15 @@ class _GrainOverlayState extends State<GrainOverlay> {
     if (_regenInFlight) return; // prevent overlapping async work
     _regenInFlight = true;
     try {
-      final recorder = ui.PictureRecorder();
-      final canvas = Canvas(recorder);
-      final size = widget.noiseSize.toDouble();
-      final paint = Paint();
-
-      // Base gray so very dark UIs still show grain subtly.
-      canvas.drawRect(
-        Rect.fromLTWH(0, 0, size, size),
-        Paint()..color = const Color(0xFF7F7F7F),
+      final pixels = await compute(_generateNoisePixels, <int>[
+        widget.noiseSize,
+        DateTime.now().microsecondsSinceEpoch,
+      ]);
+      final img = await _decodePixelsToImage(
+        pixels,
+        widget.noiseSize,
+        widget.noiseSize,
       );
-
-      final rnd = math.Random();
-      const step = 2.0; // dot spacing; lower = more dots
-
-      // Scatter tiny dots with random brightness & alpha
-      for (double y = 0; y < size; y += step) {
-        for (double x = 0; x < size; x += step) {
-          final v = rnd.nextInt(256);
-          final a = 60 + rnd.nextInt(70); // 60–130 alpha (out of 255)
-          paint.color = Color.fromARGB(a, v, v, v);
-          canvas.drawRect(Rect.fromLTWH(x, y, 1, 1), paint);
-        }
-      }
-
-      final picture = recorder.endRecording();
-      final img = await picture.toImage(widget.noiseSize, widget.noiseSize);
 
       if (!mounted) {
         img.dispose(); // avoid leaking if widget got disposed mid-frame
@@ -92,14 +106,33 @@ class _GrainOverlayState extends State<GrainOverlay> {
     }
   }
 
+  Future<ui.Image> _decodePixelsToImage(
+    Uint8List pixels,
+    int width,
+    int height,
+  ) {
+    final completer = Completer<ui.Image>();
+    ui.decodeImageFromPixels(
+      pixels,
+      width,
+      height,
+      ui.PixelFormat.rgba8888,
+      completer.complete,
+    );
+    return completer.future;
+  }
+
   @override
   void didUpdateWidget(covariant GrainOverlay oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.speedMs != widget.speedMs) {
+    if (_shouldAnimateNoise && oldWidget.speedMs != widget.speedMs) {
       _startNoiseTimer();
+    } else if (!_shouldAnimateNoise && oldWidget.speedMs != widget.speedMs) {
+      _noiseTimer?.cancel();
+      _noiseTimer = null;
     }
     if (oldWidget.noiseSize != widget.noiseSize) {
-      _regenNoise();
+      unawaited(_regenNoise());
     }
   }
 
