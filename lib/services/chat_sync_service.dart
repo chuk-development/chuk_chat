@@ -38,7 +38,7 @@ class ChatSyncService {
   static Duration get _initialSyncDelay {
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.linux) {
       // Startup on Linux is sensitive to early network + merge work.
-      return const Duration(seconds: 14);
+      return const Duration(seconds: 10);
     }
     return const Duration(seconds: 4);
   }

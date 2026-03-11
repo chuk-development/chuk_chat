@@ -34,7 +34,7 @@ class AppInitializationService {
   bool get _isLinuxDesktop =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
 
-  static const Duration _linuxDeferredKeySyncDelay = Duration(seconds: 8);
+  static const Duration _linuxDeferredKeySyncDelay = Duration(seconds: 4);
 
   // Gives startup/session init time to settle before background decrypt work.
   static Duration get _deferredPreloadDelay {
@@ -74,7 +74,7 @@ class AppInitializationService {
         if (_isLinuxDesktop) {
           // Linux secure storage can briefly stall startup. Preload later.
           unawaited(
-            Future<void>.delayed(const Duration(seconds: 12), () async {
+            Future<void>.delayed(const Duration(seconds: 6), () async {
               if (SupabaseService.auth.currentSession == null) return;
               await _preloadEncryptionKey();
             }),
@@ -202,8 +202,8 @@ class AppInitializationService {
   Future<void> _startSyncWhenKeyReady(Stopwatch stopwatch) async {
     final retryDelays = <Duration>[
       _linuxDeferredKeySyncDelay,
-      const Duration(seconds: 10),
-      const Duration(seconds: 14),
+      const Duration(seconds: 8),
+      const Duration(seconds: 12),
     ];
 
     for (var attempt = 0; attempt < retryDelays.length; attempt++) {
