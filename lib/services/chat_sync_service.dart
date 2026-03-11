@@ -20,6 +20,7 @@ class ChatSyncService {
   static bool _isSyncing = false;
   static bool _isEnabled = false;
   static bool _hasCompletedFirstSync = false;
+  static DateTime? _lastResumeTitleSyncAt;
 
   /// Completer that resolves when the first sync cycle finishes.
   /// Used by ChatPreloadService to wait before preloading.
@@ -35,6 +36,8 @@ class ChatSyncService {
 
   /// How often to poll for changes (in seconds)
   static const int _pollIntervalSeconds = 30;
+  static const Duration _resumeTitleSyncDelay = Duration(seconds: 2);
+  static const Duration _resumeTitleSyncCooldown = Duration(seconds: 60);
   static Duration get _initialSyncDelay {
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.linux) {
       // Startup on Linux is sensitive to early network + merge work.
@@ -110,7 +113,7 @@ class ChatSyncService {
     );
 
     // Defer title sync to avoid blocking the UI on resume
-    Future.delayed(const Duration(milliseconds: 500), () {
+    Future.delayed(_resumeTitleSyncDelay, () {
       if (_isEnabled) _syncTitlesOnResume();
     });
   }
@@ -122,12 +125,18 @@ class ChatSyncService {
   static Future<void> _syncTitlesOnResume() async {
     if (_isSyncing) return;
     if (!ChatStorageService.initialSyncComplete) return;
+    final now = DateTime.now();
+    if (_lastResumeTitleSyncAt != null &&
+        now.difference(_lastResumeTitleSyncAt!) < _resumeTitleSyncCooldown) {
+      return;
+    }
 
     final user = SupabaseService.auth.currentUser;
     if (user == null) return;
     if (!EncryptionService.hasKey) return;
 
     _isSyncing = true;
+    _lastResumeTitleSyncAt = now;
     try {
       if (kDebugMode) {
         debugPrint('🔄 [ChatSync] Resume sync - fetching latest titles...');

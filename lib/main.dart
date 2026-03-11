@@ -95,7 +95,9 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
   late final DateTime _appStartedAt;
   Timer? _linuxStartupOverlayPollTimer;
   Timer? _linuxStartupOverlayTimeoutTimer;
+  Timer? _resumeSettingsSyncTimer;
   DateTime? _linuxStartupOverlayShownAt;
+  DateTime? _lastResumeSettingsSyncAt;
   bool _showLinuxStartupOverlay = false;
   bool _linuxOverlaySessionArmed = false;
   static const Duration _linuxStartupOverlayMinVisible = Duration(seconds: 6);
@@ -103,6 +105,8 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
   static const Duration _linuxStartupOverlayPollInterval = Duration(
     milliseconds: 450,
   );
+  static const Duration _linuxResumeSyncCooldown = Duration(seconds: 90);
+  static const Duration _linuxResumeSyncDelay = Duration(seconds: 2);
 
   bool get _isLinuxDesktop =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
@@ -155,12 +159,34 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
   }
 
   void _syncSettingsInBackground() {
+    final now = DateTime.now();
     if (_isLinuxDesktop) {
       final uptime = DateTime.now().difference(_appStartedAt);
       // Avoid heavy settings pull during Linux startup warmup.
       if (uptime < const Duration(seconds: 20)) {
         return;
       }
+      if (_lastResumeSettingsSyncAt != null &&
+          now.difference(_lastResumeSettingsSyncAt!) <
+              _linuxResumeSyncCooldown) {
+        return;
+      }
+
+      _resumeSettingsSyncTimer?.cancel();
+      _resumeSettingsSyncTimer = Timer(_linuxResumeSyncDelay, () {
+        if (!mounted) return;
+        _lastResumeSettingsSyncAt = DateTime.now();
+        unawaited(
+          SettingsSyncService.syncAllFromSupabase(
+            forceRefresh: false,
+          ).catchError((error) {
+            if (kDebugMode) {
+              debugPrint('⚠️ [Main] Settings background sync failed: $error');
+            }
+          }),
+        );
+      });
+      return;
     }
 
     unawaited(
@@ -306,6 +332,7 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
   void dispose() {
     _linuxStartupOverlayPollTimer?.cancel();
     _linuxStartupOverlayTimeoutTimer?.cancel();
+    _resumeSettingsSyncTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _lifecycleService.removeOnResumeCallback(_syncSettingsInBackground);
     _themeService.removeListener(_onThemeChanged);
@@ -377,103 +404,22 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
     }
 
     final theme = Theme.of(context);
-    final accent = _themeService.accentColor;
-    final bg = _themeService.bgColor;
-    final iconFg = _themeService.iconFgColor;
+    final overlayColor = theme.colorScheme.surface.withValues(alpha: 0.56);
     return Stack(
       children: [
         root,
         Positioned.fill(
-          child: ColoredBox(
-            color: bg.withValues(alpha: 0.88),
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 16,
-                ),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surface.withValues(alpha: 0.98),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: accent.withValues(alpha: 0.35)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.15),
-                      blurRadius: 18,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        color: accent.withValues(alpha: 0.16),
-                        border: Border.all(
-                          color: accent.withValues(alpha: 0.35),
-                        ),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(9),
-                        child: Image.asset(
-                          'web/icons/Icon-512.png',
-                          fit: BoxFit.contain,
-                          cacheWidth: 96,
-                          cacheHeight: 96,
-                          filterQuality: FilterQuality.medium,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(minWidth: 210),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'Chuk Chat startet...',
-                            style: theme.textTheme.bodyLarge?.copyWith(
-                              color: iconFg,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Container(
-                            width: 210,
-                            height: 5,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(999),
-                              color: accent.withValues(alpha: 0.22),
-                            ),
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: FractionallySizedBox(
-                                widthFactor: 0.68,
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(999),
-                                    color: accent.withValues(alpha: 0.9),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Bitte kurz warten...',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: iconFg.withValues(alpha: 0.78),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+          child: IgnorePointer(
+            child: ColoredBox(
+              color: overlayColor,
+              child: Center(
+                child: SizedBox(
+                  width: 36,
+                  height: 36,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 3,
+                    color: theme.colorScheme.primary,
+                  ),
                 ),
               ),
             ),
