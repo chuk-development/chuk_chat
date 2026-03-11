@@ -52,8 +52,8 @@ class SystemTrayService with TrayListener, WindowListener {
       await windowManager.setPreventClose(true);
       windowManager.addListener(this);
 
-      final iconPath = await _resolveTrayIconPath();
-      await trayManager.setIcon(iconPath);
+      await _resetTrayStateBeforeInit();
+      final iconPath = await _setTrayIconWithFallback();
 
       if (_supportsTooltip) {
         await trayManager.setToolTip('Chuk Chat');
@@ -103,7 +103,69 @@ class SystemTrayService with TrayListener, WindowListener {
     });
   }
 
-  Future<String> _resolveTrayIconPath() async {
+  Future<void> _resetTrayStateBeforeInit() async {
+    try {
+      trayManager.removeListener(this);
+    } catch (_) {
+      // Ignore missing-listener errors.
+    }
+
+    // Linux appindicator backends can keep stale tray state in-process.
+    // Destroying before re-init ensures exactly one active tray icon.
+    if (defaultTargetPlatform == TargetPlatform.linux) {
+      try {
+        await trayManager.destroy();
+      } catch (_) {
+        // Ignore when tray is not yet initialized.
+      }
+    }
+  }
+
+  Future<String> _setTrayIconWithFallback() async {
+    final candidates = await _resolveTrayIconCandidates();
+    Object? lastError;
+
+    for (final iconPath in candidates) {
+      try {
+        await trayManager.setIcon(iconPath);
+        return iconPath;
+      } catch (error) {
+        lastError = error;
+        await DiagnosticsLogService.warning(
+          'tray',
+          'Tray icon candidate failed',
+          data: {'icon_path': iconPath, 'error': error.toString()},
+        );
+      }
+    }
+
+    throw StateError('Unable to set tray icon. Last error: $lastError');
+  }
+
+  Future<List<String>> _resolveTrayIconCandidates() async {
+    final candidates = <String>[];
+
+    final bundledIcon = await _materializeBundledTrayIcon();
+    if (bundledIcon != null) {
+      candidates.add(bundledIcon);
+    }
+
+    if (defaultTargetPlatform == TargetPlatform.linux) {
+      for (final candidate in _linuxTrayFallbackCandidates) {
+        if (File(candidate).existsSync()) {
+          candidates.add(candidate);
+        }
+      }
+    }
+
+    if (candidates.isEmpty) {
+      throw StateError('No tray icon candidates available');
+    }
+
+    return candidates.toSet().toList(growable: false);
+  }
+
+  Future<String?> _materializeBundledTrayIcon() async {
     final isWindows = defaultTargetPlatform == TargetPlatform.windows;
     final assetPath = isWindows
         ? 'windows/runner/resources/app_icon.ico'
@@ -133,27 +195,14 @@ class SystemTrayService with TrayListener, WindowListener {
         debugPrint('[SystemTrayService] Failed to load icon asset: $error');
       }
 
-      if (defaultTargetPlatform == TargetPlatform.linux &&
-          _linuxTrayFallbackCandidates.isNotEmpty) {
-        for (final candidate in _linuxTrayFallbackCandidates) {
-          if (File(candidate).existsSync()) {
-            await DiagnosticsLogService.info(
-              'tray',
-              'Using fallback tray icon path',
-              data: {'icon_path': candidate},
-            );
-            return candidate;
-          }
-        }
-      }
-
-      rethrow;
+      return null;
     }
   }
 
   List<String> get _linuxTrayFallbackCandidates {
     final candidates = <String>{
       '/usr/share/icons/hicolor/512x512/apps/chuk-chat.png',
+      '/usr/share/pixmaps/chuk-chat.png',
       '/opt/chuk-chat/data/flutter_assets/web/icons/Icon-512.png',
     };
 
