@@ -244,14 +244,28 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
         setState(() => _isLoadingModels = false);
       }
 
-      // Fetch fresh models in background (don't await)
-      unawaited(
-        _fetchModels().catchError((e) {
-          if (kDebugMode) {
-            debugPrint('Background model fetch failed: $e');
-          }
-        }),
-      );
+      // Fetch fresh models in background (don't await). On Linux desktop,
+      // defer this when cache exists to keep startup interactions smooth.
+      if (_isLinuxDesktop && _allModels.isNotEmpty) {
+        unawaited(
+          Future<void>.delayed(const Duration(seconds: 8), () async {
+            if (!mounted) return;
+            await _fetchModels();
+          }).catchError((e) {
+            if (kDebugMode) {
+              debugPrint('Deferred model fetch failed: $e');
+            }
+          }),
+        );
+      } else {
+        unawaited(
+          _fetchModels().catchError((e) {
+            if (kDebugMode) {
+              debugPrint('Background model fetch failed: $e');
+            }
+          }),
+        );
+      }
     } catch (error) {
       _errorMessage = 'Error initializing model selection: $error';
       _selectedModelName = 'Error Loading';
@@ -1073,3 +1087,6 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
     return null;
   }
 }
+
+bool get _isLinuxDesktop =>
+    !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;

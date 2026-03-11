@@ -42,7 +42,13 @@ Rules:
   static String? _customSystemPrompt;
   static DateTime? _lastRemoteSyncAt;
   static Future<void>? _remoteSyncInFlight;
-  static const Duration _remoteSyncTtl = Duration(seconds: 30);
+  static Duration get _remoteSyncTtl {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.linux) {
+      return const Duration(minutes: 2);
+    }
+    return const Duration(seconds: 30);
+  }
+
   static const Duration _chatLookupRetryDelay = Duration(milliseconds: 450);
   static const int _maxChatLookupAttempts = 8;
   static const int _maxRenameAttempts = 6;
@@ -209,7 +215,10 @@ Rules:
             .eq('user_id', user.id)
             .maybeSingle();
 
-        if (row == null) return;
+        if (row == null) {
+          _lastRemoteSyncAt = DateTime.now();
+          return;
+        }
 
         final prefs = await SharedPreferences.getInstance();
 
