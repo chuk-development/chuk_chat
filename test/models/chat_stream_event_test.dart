@@ -139,9 +139,18 @@ void main() {
         }
       }
 
-      expect(types, equals([
-        'content', 'reasoning', 'usage', 'meta', 'tps', 'error', 'done',
-      ]));
+      expect(
+        types,
+        equals([
+          'content',
+          'reasoning',
+          'usage',
+          'meta',
+          'tps',
+          'error',
+          'done',
+        ]),
+      );
     });
   });
 }

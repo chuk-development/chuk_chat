@@ -174,7 +174,10 @@ void main() {
             'role': 'user',
             'content': [
               {'type': 'text', 'text': 'Hello'},
-              {'type': 'image_url', 'image_url': {'url': 'data:image/png;...'}},
+              {
+                'type': 'image_url',
+                'image_url': {'url': 'data:image/png;...'},
+              },
             ],
           },
         ],

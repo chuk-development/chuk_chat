@@ -46,7 +46,8 @@ class SupabaseConfig {
     }
 
     // Try web-generated constants (from Dockerfile.web)
-    if (web_env.webSupabaseUrl.isNotEmpty && web_env.webSupabaseAnonKey.isNotEmpty) {
+    if (web_env.webSupabaseUrl.isNotEmpty &&
+        web_env.webSupabaseAnonKey.isNotEmpty) {
       _runtimeUrl = web_env.webSupabaseUrl;
       _runtimeAnonKey = web_env.webSupabaseAnonKey;
       return;
@@ -70,7 +71,8 @@ class SupabaseConfig {
       return;
     }
 
-    if (web_env.webSupabaseUrl.isNotEmpty && web_env.webSupabaseAnonKey.isNotEmpty) {
+    if (web_env.webSupabaseUrl.isNotEmpty &&
+        web_env.webSupabaseAnonKey.isNotEmpty) {
       _runtimeUrl = web_env.webSupabaseUrl;
       _runtimeAnonKey = web_env.webSupabaseAnonKey;
       return;
@@ -110,7 +112,9 @@ class SupabaseConfig {
     final url = supabaseUrl;
     final key = supabaseAnonKey;
 
-    return url == _placeholderUrl || key == _placeholderKey ||
-           url.isEmpty || key.isEmpty;
+    return url == _placeholderUrl ||
+        key == _placeholderKey ||
+        url.isEmpty ||
+        key.isEmpty;
   }
 }

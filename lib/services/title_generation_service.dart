@@ -1,11 +1,16 @@
 // lib/services/title_generation_service.dart
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:chuk_chat/models/chat_stream_event.dart';
 import 'package:chuk_chat/services/websocket_chat_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/encryption_service.dart';
 
 /// Service for automatically generating chat titles using AI.
 /// Uses qwen/qwen3-8b model via Fireworks provider over WebSocket.
@@ -18,6 +23,9 @@ class TitleGenerationService {
   // Settings keys
   static const String _settingsKey = 'auto_generate_titles';
   static const String _systemPromptKey = 'title_gen_system_prompt';
+  static const String _decryptFailedSentinel = '__decrypt_failed__';
+  static const String _remoteEnabledColumn = 'auto_generate_titles';
+  static const String _remotePromptColumn = 'title_gen_system_prompt';
 
   // Default system prompt - ChatGPT-style concise title generation
   static const String defaultSystemPrompt =
@@ -32,6 +40,9 @@ Rules:
   // In-memory cache of settings
   static bool? _autoGenerateTitlesEnabled;
   static String? _customSystemPrompt;
+  static DateTime? _lastRemoteSyncAt;
+  static Future<void>? _remoteSyncInFlight;
+  static const Duration _remoteSyncTtl = Duration(seconds: 30);
   static const Duration _chatLookupRetryDelay = Duration(milliseconds: 450);
   static const int _maxChatLookupAttempts = 8;
   static const int _maxRenameAttempts = 6;
@@ -39,12 +50,13 @@ Rules:
 
   /// Check if auto title generation is enabled
   static Future<bool> isEnabled() async {
-    if (_autoGenerateTitlesEnabled != null) {
-      return _autoGenerateTitlesEnabled!;
-    }
     try {
       final prefs = await SharedPreferences.getInstance();
-      _autoGenerateTitlesEnabled = prefs.getBool(_settingsKey) ?? false;
+      _autoGenerateTitlesEnabled ??= prefs.getBool(_settingsKey) ?? false;
+
+      // Keep local settings synced from Supabase in the background.
+      unawaited(syncSettingsFromSupabase());
+
       return _autoGenerateTitlesEnabled!;
     } catch (e) {
       if (kDebugMode) {
@@ -56,28 +68,41 @@ Rules:
 
   /// Enable or disable auto title generation
   static Future<void> setEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_settingsKey, enabled);
+    _autoGenerateTitlesEnabled = enabled;
+
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_settingsKey, enabled);
-      _autoGenerateTitlesEnabled = enabled;
+      final session = SupabaseService.auth.currentSession;
+      if (session != null) {
+        await SupabaseService.client.from('customization_preferences').upsert({
+          'user_id': session.user.id,
+          _remoteEnabledColumn: enabled,
+        }, onConflict: 'user_id');
+      }
       if (kDebugMode) {
         debugPrint('Auto title generation ${enabled ? 'enabled' : 'disabled'}');
       }
+    } on PostgrestException catch (e) {
+      if (kDebugMode && !_isMissingTitleColumnsError(e)) {
+        debugPrint('Error syncing auto title setting: $e');
+      }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('Error saving auto title setting: $e');
+        debugPrint('Error syncing auto title setting: $e');
       }
     }
   }
 
   /// Get the current system prompt (custom or default)
   static Future<String> getSystemPrompt() async {
-    if (_customSystemPrompt != null) {
-      return _customSystemPrompt!;
-    }
     try {
       final prefs = await SharedPreferences.getInstance();
-      _customSystemPrompt = prefs.getString(_systemPromptKey);
+      _customSystemPrompt ??= prefs.getString(_systemPromptKey);
+
+      // Keep local settings synced from Supabase in the background.
+      unawaited(syncSettingsFromSupabase());
+
       return _customSystemPrompt ?? defaultSystemPrompt;
     } catch (e) {
       if (kDebugMode) {
@@ -89,43 +114,185 @@ Rules:
 
   /// Set a custom system prompt
   static Future<void> setSystemPrompt(String prompt) async {
+    final prefs = await SharedPreferences.getInstance();
+    final useDefault =
+        prompt.trim().isEmpty || prompt.trim() == defaultSystemPrompt.trim();
+
+    if (useDefault) {
+      await prefs.remove(_systemPromptKey);
+      _customSystemPrompt = null;
+    } else {
+      await prefs.setString(_systemPromptKey, prompt);
+      _customSystemPrompt = prompt;
+    }
+
     try {
-      final prefs = await SharedPreferences.getInstance();
-      if (prompt.trim().isEmpty ||
-          prompt.trim() == defaultSystemPrompt.trim()) {
-        // Clear custom prompt if empty or same as default
-        await prefs.remove(_systemPromptKey);
-        _customSystemPrompt = null;
-        if (kDebugMode) {
-          debugPrint('System prompt reset to default');
+      final session = SupabaseService.auth.currentSession;
+      if (session != null) {
+        String? encryptedPrompt;
+        if (!useDefault) {
+          encryptedPrompt = await EncryptionService.encrypt(prompt);
         }
-      } else {
-        await prefs.setString(_systemPromptKey, prompt);
-        _customSystemPrompt = prompt;
-        if (kDebugMode) {
+        await SupabaseService.client.from('customization_preferences').upsert({
+          'user_id': session.user.id,
+          _remotePromptColumn: encryptedPrompt,
+        }, onConflict: 'user_id');
+      }
+
+      if (kDebugMode) {
+        if (useDefault) {
+          debugPrint('System prompt reset to default');
+        } else {
           debugPrint('Custom system prompt saved');
         }
       }
+    } on PostgrestException catch (e) {
+      if (kDebugMode && !_isMissingTitleColumnsError(e)) {
+        debugPrint('Error syncing system prompt: $e');
+      }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('Error saving system prompt: $e');
+        debugPrint('Error syncing system prompt: $e');
       }
     }
   }
 
   /// Reset system prompt to default
   static Future<void> resetSystemPrompt() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_systemPromptKey);
+    _customSystemPrompt = null;
+
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_systemPromptKey);
-      _customSystemPrompt = null;
+      final session = SupabaseService.auth.currentSession;
+      if (session != null) {
+        await SupabaseService.client.from('customization_preferences').upsert({
+          'user_id': session.user.id,
+          _remotePromptColumn: null,
+        }, onConflict: 'user_id');
+      }
+
       if (kDebugMode) {
         debugPrint('System prompt reset to default');
       }
+    } on PostgrestException catch (e) {
+      if (kDebugMode && !_isMissingTitleColumnsError(e)) {
+        debugPrint('Error resetting system prompt sync: $e');
+      }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('Error resetting system prompt: $e');
+        debugPrint('Error resetting system prompt sync: $e');
       }
+    }
+  }
+
+  /// Refresh title settings from Supabase and cache them locally.
+  static Future<void> syncSettingsFromSupabase({bool forceRefresh = false}) {
+    if (!forceRefresh &&
+        _lastRemoteSyncAt != null &&
+        DateTime.now().difference(_lastRemoteSyncAt!) < _remoteSyncTtl) {
+      return Future<void>.value();
+    }
+
+    if (_remoteSyncInFlight != null) {
+      return _remoteSyncInFlight!;
+    }
+
+    Future<void> run() async {
+      try {
+        final user = SupabaseService.auth.currentUser;
+        if (user == null) return;
+
+        final row = await SupabaseService.client
+            .from('customization_preferences')
+            .select('$_remoteEnabledColumn,$_remotePromptColumn')
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+        if (row == null) return;
+
+        final prefs = await SharedPreferences.getInstance();
+
+        final remoteEnabled = row[_remoteEnabledColumn] as bool?;
+        if (remoteEnabled != null) {
+          _autoGenerateTitlesEnabled = remoteEnabled;
+          await prefs.setBool(_settingsKey, remoteEnabled);
+        }
+
+        if (row.containsKey(_remotePromptColumn)) {
+          final remotePromptRaw = row[_remotePromptColumn];
+          if (remotePromptRaw == null ||
+              remotePromptRaw.toString().trim().isEmpty) {
+            _customSystemPrompt = null;
+            await prefs.remove(_systemPromptKey);
+          } else {
+            final remotePrompt = await _decryptRemotePrompt(
+              remotePromptRaw.toString(),
+            );
+            if (remotePrompt == _decryptFailedSentinel) {
+              // Keep local prompt when remote decryption fails.
+            } else if (remotePrompt != null && remotePrompt.isNotEmpty) {
+              _customSystemPrompt = remotePrompt;
+              await prefs.setString(_systemPromptKey, remotePrompt);
+            }
+          }
+        }
+
+        _lastRemoteSyncAt = DateTime.now();
+      } on PostgrestException catch (e) {
+        if (kDebugMode && !_isMissingTitleColumnsError(e)) {
+          debugPrint('Failed to sync title settings from Supabase: $e');
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('Failed to sync title settings from Supabase: $e');
+        }
+      }
+    }
+
+    _remoteSyncInFlight = run();
+    return _remoteSyncInFlight!.whenComplete(() {
+      _remoteSyncInFlight = null;
+    });
+  }
+
+  static bool _isMissingTitleColumnsError(PostgrestException error) {
+    final code = error.code?.toLowerCase() ?? '';
+    final message = error.message.toLowerCase();
+    if (code != '42703' && !message.contains('does not exist')) {
+      return false;
+    }
+    return message.contains(_remoteEnabledColumn) ||
+        message.contains(_remotePromptColumn);
+  }
+
+  static bool _looksLikeEncryptedPayload(String raw) {
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) {
+        return false;
+      }
+      return decoded['v'] != null &&
+          decoded['nonce'] != null &&
+          decoded['ciphertext'] != null &&
+          decoded['mac'] != null;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<String?> _decryptRemotePrompt(String raw) async {
+    if (!_looksLikeEncryptedPayload(raw)) {
+      return raw;
+    }
+
+    try {
+      return await EncryptionService.decrypt(raw);
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('Failed to decrypt remote title prompt: $e');
+      }
+      return _decryptFailedSentinel;
     }
   }
 

@@ -83,45 +83,50 @@ class _DynamicProgressScreenState extends State<DynamicProgressScreen> {
 
     const Duration progressDuration = Duration(seconds: 30);
     const int updateIntervalMs = 50;
-    final int totalUpdates = progressDuration.inMilliseconds ~/ updateIntervalMs;
+    final int totalUpdates =
+        progressDuration.inMilliseconds ~/ updateIntervalMs;
     int currentUpdate = 0;
 
     _progressTimer = Timer.periodic(
-        const Duration(milliseconds: updateIntervalMs), (timer) {
-      if (_rawProgress < 1.0) {
-        setState(() {
-          currentUpdate++;
-          _rawProgress = (currentUpdate / totalUpdates).clamp(0.0, 1.0);
+      const Duration(milliseconds: updateIntervalMs),
+      (timer) {
+        if (_rawProgress < 1.0) {
+          setState(() {
+            currentUpdate++;
+            _rawProgress = (currentUpdate / totalUpdates).clamp(0.0, 1.0);
 
-          _randomUpdateCounter++;
-          if (_randomUpdateCounter >= _randomUpdateInterval) {
-            _generateRandomRowOffsets();
-            _randomUpdateCounter = 0;
-          }
+            _randomUpdateCounter++;
+            if (_randomUpdateCounter >= _randomUpdateInterval) {
+              _generateRandomRowOffsets();
+              _randomUpdateCounter = 0;
+            }
 
-          for (int r = 0; r < _rows; r++) {
-            final double randomOffset = _rowProgressOffsets[r];
-            final double adjustedProgress =
-                (_rawProgress + randomOffset).clamp(0.0, 1.0);
+            for (int r = 0; r < _rows; r++) {
+              final double randomOffset = _rowProgressOffsets[r];
+              final double adjustedProgress = (_rawProgress + randomOffset)
+                  .clamp(0.0, 1.0);
 
-            final int targetFilledDots =
-                (_actualDotsPerRow * adjustedProgress).round();
+              final int targetFilledDots =
+                  (_actualDotsPerRow * adjustedProgress).round();
 
-            _currentFilledDotCounts[r] =
-                max(_currentFilledDotCounts[r], targetFilledDots);
-          }
-        });
-      } else {
-        setState(() {
-          for (int r = 0; r < _rows; r++) {
-            _currentFilledDotCounts[r] = _actualDotsPerRow;
-          }
-          _rawProgress = 1.0;
-        });
-        _progressTimer?.cancel();
-        _progressTimer = null;
-      }
-    });
+              _currentFilledDotCounts[r] = max(
+                _currentFilledDotCounts[r],
+                targetFilledDots,
+              );
+            }
+          });
+        } else {
+          setState(() {
+            for (int r = 0; r < _rows; r++) {
+              _currentFilledDotCounts[r] = _actualDotsPerRow;
+            }
+            _rawProgress = 1.0;
+          });
+          _progressTimer?.cancel();
+          _progressTimer = null;
+        }
+      },
+    );
   }
 
   @override
@@ -182,9 +187,10 @@ class _DynamicProgressScreenState extends State<DynamicProgressScreen> {
                             const Text(
                               'Agents Working',
                               style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 14.0,
-                                  fontWeight: FontWeight.w500),
+                                color: Colors.white,
+                                fontSize: 14.0,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ],
                         ),
@@ -252,8 +258,9 @@ class ProgressDotsGrid extends StatelessWidget {
 
     // Prepare dot rows
     final List<Widget> dotRows = List.generate(rows, (r) {
-      final int filledDotsInThisRow =
-          (r < filledDotCounts.length) ? filledDotCounts[r] : 0;
+      final int filledDotsInThisRow = (r < filledDotCounts.length)
+          ? filledDotCounts[r]
+          : 0;
 
       // Prepare dots for the current row
       final List<Widget> currentRowDots = List.generate(dotsPerRow, (i) {
@@ -264,10 +271,7 @@ class ProgressDotsGrid extends StatelessWidget {
         return Container(
           width: dotSize,
           height: dotSize,
-          decoration: BoxDecoration(
-            color: dotColor,
-            shape: BoxShape.circle,
-          ),
+          decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
         );
       });
 
@@ -279,8 +283,9 @@ class ProgressDotsGrid extends StatelessWidget {
           children: List.generate(
             currentRowDots.length,
             (index) => Padding(
-              padding:
-                  EdgeInsets.only(right: index < currentRowDots.length - 1 ? spacing : 0),
+              padding: EdgeInsets.only(
+                right: index < currentRowDots.length - 1 ? spacing : 0,
+              ),
               child: currentRowDots[index],
             ),
           ),

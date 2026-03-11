@@ -1,6 +1,9 @@
 // lib/pages/customization_page.dart
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
+import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/services/title_generation_service.dart';
@@ -48,6 +51,8 @@ class _CustomizationPageState extends State<CustomizationPage> {
   }
 
   Future<void> _loadAutoTitleSetting() async {
+    final stopwatch = Stopwatch()..start();
+    await TitleGenerationService.syncSettingsFromSupabase(forceRefresh: true);
     final enabled = await TitleGenerationService.isEnabled();
     final prompt = await TitleGenerationService.getSystemPrompt();
     final hasCustom = await TitleGenerationService.hasCustomSystemPrompt();
@@ -58,6 +63,19 @@ class _CustomizationPageState extends State<CustomizationPage> {
         _promptController.text = prompt;
         _isLoadingTitleSetting = false;
       });
+
+      unawaited(
+        DiagnosticsLogService.timing(
+          'settings',
+          'load_customization_page_title_settings',
+          stopwatch.elapsedMilliseconds,
+          data: {
+            'platform': Theme.of(context).platform.name,
+            'auto_generate_titles': enabled,
+            'has_custom_prompt': hasCustom,
+          },
+        ),
+      );
     }
   }
 

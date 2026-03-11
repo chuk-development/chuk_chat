@@ -326,8 +326,11 @@ class AppThemeService extends ChangeNotifier {
     try {
       await const CustomizationPreferencesService().save(preferences);
       await _persistToPrefs();
-    } catch (_) {
-      // Ignore sync failures; preferences remain updated locally.
+    } catch (e) {
+      // Keep local preferences, but surface sync failures in debug builds.
+      if (kDebugMode) {
+        debugPrint('Customization sync to Supabase failed: $e');
+      }
     }
   }
 

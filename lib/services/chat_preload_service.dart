@@ -9,6 +9,7 @@ import 'package:chuk_chat/models/stored_chat.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/chat_storage_sync.dart';
 import 'package:chuk_chat/services/chat_sync_service.dart';
+import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
@@ -54,10 +55,10 @@ class ChatPreloadService {
   static int get totalCount => _totalCount;
 
   /// Batch size for loading (smaller = more responsive UI, larger = faster overall)
-  static const int _batchSize = 5;
+  static const int _batchSize = 2;
 
   /// Delay between batches to yield to UI thread (ms)
-  static const int _batchDelayMs = 50;
+  static const int _batchDelayMs = 120;
 
   /// Start background preload of all chat messages.
   /// Safe to call multiple times - will only run once.
@@ -95,11 +96,15 @@ class ChatPreloadService {
     _preloadCompleter = Completer<void>();
     _progress = 0.0;
     _loadedCount = 0;
+    _failureCount = 0;
 
     if (kDebugMode) {
       debugPrint('🔄 [Preload] Starting background preload...');
     }
     final stopwatch = Stopwatch()..start();
+    unawaited(
+      DiagnosticsLogService.info('preload', 'Background preload started'),
+    );
 
     try {
       // Wait for the first sync cycle to finish so that chatsById has
@@ -139,6 +144,14 @@ class ChatPreloadService {
         _isPreloadComplete = true;
         _progress = 1.0;
         _progressController.add(1.0);
+        unawaited(
+          DiagnosticsLogService.timing(
+            'preload',
+            'background_preload',
+            stopwatch.elapsedMilliseconds,
+            data: {'total': 0, 'loaded': 0, 'failures': _failureCount},
+          ),
+        );
         // Don't complete here — finally block handles it
         return;
       }
@@ -180,7 +193,31 @@ class ChatPreloadService {
       _progress = 1.0;
       _progressController.add(1.0);
       ChatStorageState.notifyChanges();
+      unawaited(
+        DiagnosticsLogService.timing(
+          'preload',
+          'background_preload',
+          stopwatch.elapsedMilliseconds,
+          data: {
+            'total': _totalCount,
+            'loaded': _loadedCount,
+            'failures': _failureCount,
+          },
+        ),
+      );
     } catch (e) {
+      unawaited(
+        DiagnosticsLogService.error(
+          'preload',
+          'Background preload failed',
+          error: e,
+          data: {
+            'elapsed_ms': stopwatch.elapsedMilliseconds,
+            'loaded': _loadedCount,
+            'total': _totalCount,
+          },
+        ),
+      );
       if (kDebugMode) {
         debugPrint('❌ [Preload] Error: $e');
       }
@@ -195,6 +232,7 @@ class ChatPreloadService {
   /// Tries Supabase first, falls back to local cache if offline/error.
   static Future<void> _loadBatch(List<String> chatIds, String userId) async {
     if (chatIds.isEmpty) return;
+    final stopwatch = Stopwatch()..start();
 
     // Skip network call entirely if we know we're offline
     if (!NetworkStatusService.isOnline) {
@@ -224,6 +262,19 @@ class ChatPreloadService {
         // Write fetched rows to local cache so they're available offline
         for (final row in rows) {
           unawaited(LocalChatCacheService.upsert(userId, row));
+        }
+
+        if (stopwatch.elapsedMilliseconds > 2500) {
+          unawaited(
+            DiagnosticsLogService.warning(
+              'preload',
+              'Slow preload batch from network',
+              data: {
+                'chat_count': chatIds.length,
+                'elapsed_ms': stopwatch.elapsedMilliseconds,
+              },
+            ),
+          );
         }
         return;
       }
@@ -287,6 +338,10 @@ class ChatPreloadService {
         if (kDebugMode) {
           debugPrint('⚠️ [Preload] Failed to deserialize chat: $e');
         }
+      }
+
+      if (j > 0 && j % 2 == 1) {
+        await Future<void>.delayed(Duration.zero);
       }
     }
   }

@@ -3,14 +3,105 @@ import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:chuk_chat/services/developer_options_service.dart';
 import 'package:chuk_chat/services/update_check_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 
-class AboutPage extends StatelessWidget {
+class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
 
+  @override
+  State<AboutPage> createState() => _AboutPageState();
+
+  static void _openLicenses(
+    BuildContext context,
+    PackageInfo? info,
+    String? version,
+  ) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => _ThemedLicensePage(
+          applicationName: info?.appName ?? 'Chuk Chat',
+          applicationVersion: version,
+          applicationLegalese: '© ${DateTime.now().year} Chuk Chat',
+        ),
+      ),
+    );
+  }
+
+  static String _formattedVersion(String version, String buildNumber) {
+    final String trimmedBuild = buildNumber.trim();
+    if (trimmedBuild.isEmpty || trimmedBuild == version) {
+      return version;
+    }
+    return '$version (build $trimmedBuild)';
+  }
+
+  static Future<void> _launchUrl(String url) async {
+    final Uri uri = Uri.parse(url);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (kDebugMode) {
+        debugPrint('Could not launch $url');
+      }
+    }
+  }
+}
+
+class _AboutPageState extends State<AboutPage> {
   static final Future<PackageInfo> _packageInfoFuture =
       PackageInfo.fromPlatform();
+
+  int _remainingDeveloperTaps = 3;
+  DateTime? _lastDeveloperTapAt;
+
+  Future<void> _handleVersionTap() async {
+    await DeveloperOptionsService.initialize();
+    if (!mounted) return;
+
+    if (DeveloperOptionsService.enabledNotifier.value) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Developer options already enabled'),
+          duration: Duration(seconds: 1),
+        ),
+      );
+      return;
+    }
+
+    final now = DateTime.now();
+    if (_lastDeveloperTapAt == null ||
+        now.difference(_lastDeveloperTapAt!) > const Duration(seconds: 4)) {
+      _remainingDeveloperTaps = 3;
+    }
+    _lastDeveloperTapAt = now;
+    _remainingDeveloperTaps -= 1;
+
+    if (_remainingDeveloperTaps <= 0) {
+      await DeveloperOptionsService.setEnabled(true);
+      if (!mounted) return;
+      setState(() {
+        _remainingDeveloperTaps = 3;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Developer options enabled'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    final taps = _remainingDeveloperTaps;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '$taps more tap${taps == 1 ? '' : 's'} for Developer options',
+        ),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +131,7 @@ class AboutPage extends StatelessWidget {
 
           final PackageInfo? info = snapshot.data;
           final String? versionText = info != null
-              ? _formattedVersion(info.version, info.buildNumber)
+              ? AboutPage._formattedVersion(info.version, info.buildNumber)
               : null;
 
           return ListView(
@@ -66,7 +157,8 @@ class AboutPage extends StatelessWidget {
                 icon: Icons.article_outlined,
                 iconColor: accent,
                 trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                onTap: () => _openLicenses(context, info, versionText),
+                onTap: () =>
+                    AboutPage._openLicenses(context, info, versionText),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -104,8 +196,9 @@ class AboutPage extends StatelessWidget {
                       children: [
                         Expanded(
                           child: OutlinedButton(
-                            onPressed: () =>
-                                _launchUrl('https://chuk.chat/en/terms/'),
+                            onPressed: () => AboutPage._launchUrl(
+                              'https://chuk.chat/en/terms/',
+                            ),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: accent,
                               side: BorderSide(
@@ -119,8 +212,9 @@ class AboutPage extends StatelessWidget {
                         const SizedBox(width: 12),
                         Expanded(
                           child: OutlinedButton(
-                            onPressed: () =>
-                                _launchUrl('https://chuk.chat/en/privacy/'),
+                            onPressed: () => AboutPage._launchUrl(
+                              'https://chuk.chat/en/privacy/',
+                            ),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: accent,
                               side: BorderSide(
@@ -146,6 +240,7 @@ class AboutPage extends StatelessWidget {
                           ? Icons.system_update_outlined
                           : Icons.numbers_outlined,
                       iconColor: accent,
+                      onTap: _handleVersionTap,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -201,39 +296,6 @@ class AboutPage extends StatelessWidget {
         },
       ),
     );
-  }
-
-  static void _openLicenses(
-    BuildContext context,
-    PackageInfo? info,
-    String? version,
-  ) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => _ThemedLicensePage(
-          applicationName: info?.appName ?? 'Chuk Chat',
-          applicationVersion: version,
-          applicationLegalese: '© ${DateTime.now().year} Chuk Chat',
-        ),
-      ),
-    );
-  }
-
-  static String _formattedVersion(String version, String buildNumber) {
-    final String trimmedBuild = buildNumber.trim();
-    if (trimmedBuild.isEmpty || trimmedBuild == version) {
-      return version;
-    }
-    return '$version (build $trimmedBuild)';
-  }
-
-  static Future<void> _launchUrl(String url) async {
-    final Uri uri = Uri.parse(url);
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (kDebugMode) {
-        debugPrint('Could not launch $url');
-      }
-    }
   }
 }
 

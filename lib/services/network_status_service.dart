@@ -38,7 +38,9 @@ class NetworkStatusService {
   ];
 
   // Reactive state for network status
-  static final ValueNotifier<bool> _isOnlineNotifier = ValueNotifier<bool>(true);
+  static final ValueNotifier<bool> _isOnlineNotifier = ValueNotifier<bool>(
+    true,
+  );
   static ValueListenable<bool> get isOnlineListenable => _isOnlineNotifier;
   static bool get isOnline => _isOnlineNotifier.value;
 
@@ -108,10 +110,7 @@ class NetworkStatusService {
     }
 
     // Overall timeout fallback
-    return completer.future.timeout(
-      overallTimeout,
-      onTimeout: () => false,
-    );
+    return completer.future.timeout(overallTimeout, onTimeout: () => false);
   }
 
   /// Check a single probe with its own timeout
@@ -138,7 +137,9 @@ class NetworkStatusService {
     if (_isOnlineNotifier.value != isOnline) {
       _isOnlineNotifier.value = isOnline;
       if (kDebugMode) {
-        debugPrint('Network status changed: ${isOnline ? 'ONLINE' : 'OFFLINE'}');
+        debugPrint(
+          'Network status changed: ${isOnline ? 'ONLINE' : 'OFFLINE'}',
+        );
       }
     }
   }
@@ -166,13 +167,13 @@ class NetworkStatusService {
 
     // Common network error patterns
     return errorStr.contains('socketexception') ||
-           errorStr.contains('failed host lookup') ||
-           errorStr.contains('network is unreachable') ||
-           errorStr.contains('connection refused') ||
-           errorStr.contains('connection timed out') ||
-           errorStr.contains('no route to host') ||
-           errorStr.contains('network error') ||
-           errorStr.contains('timeout');
+        errorStr.contains('failed host lookup') ||
+        errorStr.contains('network is unreachable') ||
+        errorStr.contains('connection refused') ||
+        errorStr.contains('connection timed out') ||
+        errorStr.contains('no route to host') ||
+        errorStr.contains('network error') ||
+        errorStr.contains('timeout');
   }
 }
 

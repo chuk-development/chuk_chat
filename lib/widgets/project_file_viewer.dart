@@ -20,7 +20,11 @@ class ProjectFileViewer extends StatefulWidget {
     required this.projectId,
   });
 
-  static Future<void> show(BuildContext context, ProjectFile file, String projectId) {
+  static Future<void> show(
+    BuildContext context,
+    ProjectFile file,
+    String projectId,
+  ) {
     return showDialog(
       context: context,
       builder: (context) => ProjectFileViewer(file: file, projectId: projectId),
@@ -108,12 +112,14 @@ class _ProjectFileViewerState extends State<ProjectFileViewer>
         _contentController.text = _textContent ?? '';
       }
 
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     } catch (e) {
-      setState(() {
-        _error = e.toString();
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -133,21 +139,21 @@ class _ProjectFileViewerState extends State<ProjectFileViewer>
       );
 
       _textContent = newContent;
-      setState(() => _isEditingContent = false);
+      if (mounted) setState(() => _isEditingContent = false);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('File saved')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('File saved')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to save: $e')));
       }
     } finally {
-      setState(() => _isSaving = false);
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -166,21 +172,21 @@ class _ProjectFileViewerState extends State<ProjectFileViewer>
       );
 
       _markdownSummary = newMarkdown.isEmpty ? null : newMarkdown;
-      setState(() => _isEditingMarkdown = false);
+      if (mounted) setState(() => _isEditingMarkdown = false);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Markdown saved')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Markdown saved')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to save: $e')));
       }
     } finally {
-      setState(() => _isSaving = false);
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -257,8 +263,8 @@ class _ProjectFileViewerState extends State<ProjectFileViewer>
                         widget.file.isPdf
                             ? Icons.picture_as_pdf
                             : widget.file.isImage
-                                ? Icons.image
-                                : Icons.code,
+                            ? Icons.image
+                            : Icons.code,
                         size: 18,
                       ),
                       const SizedBox(width: 8),
@@ -316,7 +322,10 @@ class _ProjectFileViewerState extends State<ProjectFileViewer>
             const SizedBox(height: 8),
             Text(
               _error!,
-              style: TextStyle(color: iconFg.withValues(alpha: 0.6), fontSize: 12),
+              style: TextStyle(
+                color: iconFg.withValues(alpha: 0.6),
+                fontSize: 12,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
@@ -376,7 +385,10 @@ class _ProjectFileViewerState extends State<ProjectFileViewer>
             child: PdfPageNumber(
               controller: _pdfController!,
               builder: (_, loadingState, page, pagesCount) => Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: iconFg.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(4),
@@ -404,12 +416,10 @@ class _ProjectFileViewerState extends State<ProjectFileViewer>
                   controller: _pdfController!,
                   builders: PdfViewPinchBuilders<DefaultBuilderOptions>(
                     options: const DefaultBuilderOptions(),
-                    documentLoaderBuilder: (_) => const Center(
-                      child: CircularProgressIndicator(),
-                    ),
-                    pageLoaderBuilder: (_) => const Center(
-                      child: CircularProgressIndicator(),
-                    ),
+                    documentLoaderBuilder: (_) =>
+                        const Center(child: CircularProgressIndicator()),
+                    pageLoaderBuilder: (_) =>
+                        const Center(child: CircularProgressIndicator()),
                     errorBuilder: (_, error) => Center(
                       child: Text(
                         'Error loading PDF: $error',
@@ -430,12 +440,7 @@ class _ProjectFileViewerState extends State<ProjectFileViewer>
       return InteractiveViewer(
         minScale: 0.5,
         maxScale: 4.0,
-        child: Center(
-          child: Image.memory(
-            _imageBytes!,
-            fit: BoxFit.contain,
-          ),
-        ),
+        child: Center(child: Image.memory(_imageBytes!, fit: BoxFit.contain)),
       );
     }
 
@@ -574,56 +579,89 @@ class _ProjectFileViewerState extends State<ProjectFileViewer>
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.all(12),
                       hintText: 'Enter markdown summary...',
-                      hintStyle: TextStyle(color: iconFg.withValues(alpha: 0.4)),
+                      hintStyle: TextStyle(
+                        color: iconFg.withValues(alpha: 0.4),
+                      ),
                     ),
                   )
                 : _markdownSummary != null && _markdownSummary!.isNotEmpty
-                    ? Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: MarkdownWidget(
-                          data: _markdownSummary!,
-                          selectable: true,
-                          config: MarkdownConfig(
-                            configs: [
-                              PConfig(textStyle: TextStyle(color: iconFg, fontSize: 14)),
-                              H1Config(style: TextStyle(color: iconFg, fontSize: 24, fontWeight: FontWeight.bold)),
-                              H2Config(style: TextStyle(color: iconFg, fontSize: 20, fontWeight: FontWeight.bold)),
-                              H3Config(style: TextStyle(color: iconFg, fontSize: 18, fontWeight: FontWeight.bold)),
-                              CodeConfig(style: TextStyle(color: accentColor, fontFamily: 'monospace')),
-                              PreConfig(
-                                textStyle: TextStyle(color: accentColor, fontFamily: 'monospace'),
-                                decoration: BoxDecoration(
-                                  color: iconFg.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                              ),
-                            ],
+                ? Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: MarkdownWidget(
+                      data: _markdownSummary!,
+                      selectable: true,
+                      config: MarkdownConfig(
+                        configs: [
+                          PConfig(
+                            textStyle: TextStyle(color: iconFg, fontSize: 14),
+                          ),
+                          H1Config(
+                            style: TextStyle(
+                              color: iconFg,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          H2Config(
+                            style: TextStyle(
+                              color: iconFg,
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          H3Config(
+                            style: TextStyle(
+                              color: iconFg,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          CodeConfig(
+                            style: TextStyle(
+                              color: accentColor,
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                          PreConfig(
+                            textStyle: TextStyle(
+                              color: accentColor,
+                              fontFamily: 'monospace',
+                            ),
+                            decoration: BoxDecoration(
+                              color: iconFg.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.description_outlined,
+                          size: 48,
+                          color: iconFg.withValues(alpha: 0.3),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No markdown summary yet',
+                          style: TextStyle(
+                            color: iconFg.withValues(alpha: 0.6),
                           ),
                         ),
-                      )
-                    : Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.description_outlined,
-                              size: 48,
-                              color: iconFg.withValues(alpha: 0.3),
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No markdown summary yet',
-                              style: TextStyle(color: iconFg.withValues(alpha: 0.6)),
-                            ),
-                            const SizedBox(height: 8),
-                            TextButton.icon(
-                              onPressed: () => setState(() => _isEditingMarkdown = true),
-                              icon: const Icon(Icons.add),
-                              label: const Text('Add summary'),
-                            ),
-                          ],
+                        const SizedBox(height: 8),
+                        TextButton.icon(
+                          onPressed: () =>
+                              setState(() => _isEditingMarkdown = true),
+                          icon: const Icon(Icons.add),
+                          label: const Text('Add summary'),
                         ),
-                      ),
+                      ],
+                    ),
+                  ),
           ),
         ),
       ],

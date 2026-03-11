@@ -58,12 +58,6 @@ const bool kFeatureImageGen = true;
 /// Media Manager - View and manage stored media (images) in Supabase
 const bool kFeatureMediaManager = true;
 
-/// Session Management - View and manage connected devices, revoke sessions
-const bool kFeatureSessionManagement = bool.fromEnvironment(
-  'FEATURE_SESSION_MANAGEMENT',
-  defaultValue: false,
-);
-
 /// Server-backed integration tools (Spotify, GitHub, Slack, Google, Email,
 /// Nextcloud). Keep disabled until backend support is fully available.
 const bool kFeatureServerTools = bool.fromEnvironment(

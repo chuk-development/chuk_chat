@@ -1,9 +1,11 @@
 // lib/widgets/message_bubble.dart
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/utils/image_clipboard_service.dart';
 import 'package:chuk_chat/widgets/chart_widget.dart';
@@ -155,6 +157,7 @@ class _MessageBubbleState extends State<MessageBubble>
   final TextEditingController _editController = TextEditingController();
   final FocusNode _editFocusNode = FocusNode();
   bool _shouldFocusEditField = false;
+  bool _complexBubbleLogged = false;
 
   @override
   bool get wantKeepAlive => true; // Keep this widget alive to prevent rebuilds
@@ -423,6 +426,7 @@ class _MessageBubbleState extends State<MessageBubble>
   @override
   Widget build(BuildContext context) {
     super.build(context); // Required for AutomaticKeepAliveClientMixin
+    final stopwatch = Stopwatch()..start();
 
     // Determine alignment based on whether it's a user message or not.
     // Historically voice mode inverted this flag, so we keep compatibility.
@@ -516,7 +520,7 @@ class _MessageBubbleState extends State<MessageBubble>
       ),
     );
 
-    return Align(
+    final result = Align(
       alignment: alignRight ? Alignment.centerRight : Alignment.centerLeft,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: effectiveMaxWidth),
@@ -534,6 +538,31 @@ class _MessageBubbleState extends State<MessageBubble>
         ),
       ),
     );
+
+    stopwatch.stop();
+    final imageCount = widget.images?.length ?? 0;
+    final isComplex = imageCount > 0 || widget.message.length > 3000;
+    if (isComplex &&
+        !_complexBubbleLogged &&
+        stopwatch.elapsedMilliseconds >= 8) {
+      _complexBubbleLogged = true;
+      unawaited(
+        DiagnosticsLogService.timing(
+          'chat_ui',
+          'message_bubble_build',
+          stopwatch.elapsedMilliseconds,
+          data: {
+            'is_user': isUserMessage,
+            'message_len': widget.message.length,
+            'image_count': imageCount,
+            'has_attachments': (widget.attachments?.isNotEmpty ?? false),
+            'has_content_blocks': (widget.contentBlocks?.isNotEmpty ?? false),
+          },
+        ),
+      );
+    }
+
+    return result;
   }
 
   /// Classic flat layout: single tool calls bar + single text block.
@@ -1646,19 +1675,19 @@ class _MessageBubbleState extends State<MessageBubble>
       );
     }
 
+    if (isUserMessage) {
+      return SelectableText(
+        displayText,
+        style: TextStyle(color: iconFgColor, fontSize: 15, height: 1.38),
+      );
+    }
+
     final Widget messageWidget = MarkdownMessage(
       text: displayText,
       textColor: iconFgColor,
-      backgroundColor: isUserMessage
-          ? accentColor.withValues(alpha: .8)
-          : bgColor,
-      paragraphFontSize: isUserMessage ? 15 : null,
-      paragraphHeight: isUserMessage ? 1.38 : null,
+      backgroundColor: bgColor,
+      wrapWithSelectionArea: false,
     );
-
-    if (isUserMessage) {
-      return messageWidget;
-    }
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -1851,6 +1880,7 @@ class _CachedImageThumbnailState extends State<_CachedImageThumbnail>
   }
 
   Future<void> _loadImage() async {
+    final stopwatch = Stopwatch()..start();
     try {
       if (widget.imageDataUrl.startsWith('data:image/')) {
         // Base64 data URI — decode inline (used by tool-generated images
@@ -1882,6 +1912,24 @@ class _CachedImageThumbnailState extends State<_CachedImageThumbnail>
       setState(() {
         _isLoading = false;
       });
+    }
+
+    stopwatch.stop();
+    if (stopwatch.elapsedMilliseconds >= 250) {
+      final bool isDataUri = widget.imageDataUrl.startsWith('data:image/');
+      unawaited(
+        DiagnosticsLogService.timing(
+          'chat_ui',
+          isDataUri ? 'decode_base64_thumbnail' : 'download_decrypt_thumbnail',
+          stopwatch.elapsedMilliseconds,
+          data: {
+            'source_type': isDataUri ? 'data_uri' : 'storage_path',
+            'width': widget.width.round(),
+            'height': widget.height.round(),
+            'bytes_loaded': _cachedBytes?.length ?? 0,
+          },
+        ),
+      );
     }
   }
 

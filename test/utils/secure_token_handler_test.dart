@@ -130,10 +130,7 @@ void main() {
   group('createSafeErrorMessage', () {
     test('message without token unchanged', () {
       const msg = 'Connection failed';
-      expect(
-        SecureTokenHandler.createSafeErrorMessage(msg),
-        equals(msg),
-      );
+      expect(SecureTokenHandler.createSafeErrorMessage(msg), equals(msg));
     });
 
     test('message containing token gets masked', () {

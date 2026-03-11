@@ -9,10 +9,11 @@ import 'package:flutter/material.dart';
 class GrainOverlay extends StatefulWidget {
   const GrainOverlay({
     super.key,
-    this.opacity = 0.12,                // how strong the grain looks (0–1)
-    this.speedMs = 180,                 // how often the noise "flickers"
-    this.noiseSize = 140,               // resolution of the generated noise tile
-    this.blendMode = BlendMode.overlay, // overlay looks filmic; try softLight/multiply too
+    this.opacity = 0.12, // how strong the grain looks (0–1)
+    this.speedMs = 180, // how often the noise "flickers"
+    this.noiseSize = 140, // resolution of the generated noise tile
+    this.blendMode =
+        BlendMode.overlay, // overlay looks filmic; try softLight/multiply too
   });
 
   final double opacity;
@@ -32,7 +33,7 @@ class _GrainOverlayState extends State<GrainOverlay> {
   @override
   void initState() {
     super.initState();
-    _regenNoise();     // draw one immediately
+    _regenNoise(); // draw one immediately
     _startNoiseTimer(); // then flicker at the requested cadence
   }
 
@@ -137,10 +138,20 @@ class _GrainPainter extends CustomPainter {
       ..blendMode = blendMode;
 
     // Tile the noise image to fill the screen.
-    final src = Rect.fromLTWH(0, 0, noise.width.toDouble(), noise.height.toDouble());
+    final src = Rect.fromLTWH(
+      0,
+      0,
+      noise.width.toDouble(),
+      noise.height.toDouble(),
+    );
     for (double y = 0; y < size.height; y += noise.height) {
       for (double x = 0; x < size.width; x += noise.width) {
-        final dst = Rect.fromLTWH(x, y, noise.width.toDouble(), noise.height.toDouble());
+        final dst = Rect.fromLTWH(
+          x,
+          y,
+          noise.width.toDouble(),
+          noise.height.toDouble(),
+        );
         canvas.drawImageRect(noise, src, dst, paint);
       }
     }

@@ -14,20 +14,35 @@ void main() {
 
     test('chat preset', () {
       expect(BackoffConfig.chat.maxRetries, equals(3));
-      expect(BackoffConfig.chat.initialDelay, equals(const Duration(milliseconds: 500)));
+      expect(
+        BackoffConfig.chat.initialDelay,
+        equals(const Duration(milliseconds: 500)),
+      );
       expect(BackoffConfig.chat.maxDelay, equals(const Duration(seconds: 10)));
     });
 
     test('fileUpload preset', () {
       expect(BackoffConfig.fileUpload.maxRetries, equals(3));
-      expect(BackoffConfig.fileUpload.initialDelay, equals(const Duration(seconds: 2)));
-      expect(BackoffConfig.fileUpload.maxDelay, equals(const Duration(minutes: 1)));
+      expect(
+        BackoffConfig.fileUpload.initialDelay,
+        equals(const Duration(seconds: 2)),
+      );
+      expect(
+        BackoffConfig.fileUpload.maxDelay,
+        equals(const Duration(minutes: 1)),
+      );
     });
 
     test('critical preset', () {
       expect(BackoffConfig.critical.maxRetries, equals(5));
-      expect(BackoffConfig.critical.initialDelay, equals(const Duration(milliseconds: 500)));
-      expect(BackoffConfig.critical.maxDelay, equals(const Duration(seconds: 30)));
+      expect(
+        BackoffConfig.critical.initialDelay,
+        equals(const Duration(milliseconds: 500)),
+      );
+      expect(
+        BackoffConfig.critical.maxDelay,
+        equals(const Duration(seconds: 30)),
+      );
     });
 
     test('custom config', () {
@@ -199,33 +214,82 @@ void main() {
 
   group('ExponentialBackoff.shouldRetryError', () {
     test('network errors should retry', () {
-      expect(ExponentialBackoff.shouldRetryError(Exception('network error')), isTrue);
-      expect(ExponentialBackoff.shouldRetryError(Exception('connection refused')), isTrue);
-      expect(ExponentialBackoff.shouldRetryError(Exception('timeout occurred')), isTrue);
-      expect(ExponentialBackoff.shouldRetryError(Exception('socket exception')), isTrue);
+      expect(
+        ExponentialBackoff.shouldRetryError(Exception('network error')),
+        isTrue,
+      );
+      expect(
+        ExponentialBackoff.shouldRetryError(Exception('connection refused')),
+        isTrue,
+      );
+      expect(
+        ExponentialBackoff.shouldRetryError(Exception('timeout occurred')),
+        isTrue,
+      );
+      expect(
+        ExponentialBackoff.shouldRetryError(Exception('socket exception')),
+        isTrue,
+      );
     });
 
     test('server 5xx errors should retry', () {
-      expect(ExponentialBackoff.shouldRetryError(Exception('500 Internal Server Error')), isTrue);
-      expect(ExponentialBackoff.shouldRetryError(Exception('502 Bad Gateway')), isTrue);
-      expect(ExponentialBackoff.shouldRetryError(Exception('503 Service Unavailable')), isTrue);
-      expect(ExponentialBackoff.shouldRetryError(Exception('504 Gateway Timeout')), isTrue);
+      expect(
+        ExponentialBackoff.shouldRetryError(
+          Exception('500 Internal Server Error'),
+        ),
+        isTrue,
+      );
+      expect(
+        ExponentialBackoff.shouldRetryError(Exception('502 Bad Gateway')),
+        isTrue,
+      );
+      expect(
+        ExponentialBackoff.shouldRetryError(
+          Exception('503 Service Unavailable'),
+        ),
+        isTrue,
+      );
+      expect(
+        ExponentialBackoff.shouldRetryError(Exception('504 Gateway Timeout')),
+        isTrue,
+      );
     });
 
     test('rate limiting (429) should retry', () {
-      expect(ExponentialBackoff.shouldRetryError(Exception('429 Too Many Requests')), isTrue);
-      expect(ExponentialBackoff.shouldRetryError(Exception('rate limit exceeded')), isTrue);
+      expect(
+        ExponentialBackoff.shouldRetryError(Exception('429 Too Many Requests')),
+        isTrue,
+      );
+      expect(
+        ExponentialBackoff.shouldRetryError(Exception('rate limit exceeded')),
+        isTrue,
+      );
     });
 
     test('client 4xx errors (except 429) should NOT retry', () {
-      expect(ExponentialBackoff.shouldRetryError(Exception('400 Bad Request')), isFalse);
-      expect(ExponentialBackoff.shouldRetryError(Exception('401 Unauthorized')), isFalse);
-      expect(ExponentialBackoff.shouldRetryError(Exception('403 Forbidden')), isFalse);
-      expect(ExponentialBackoff.shouldRetryError(Exception('404 Not Found')), isFalse);
+      expect(
+        ExponentialBackoff.shouldRetryError(Exception('400 Bad Request')),
+        isFalse,
+      );
+      expect(
+        ExponentialBackoff.shouldRetryError(Exception('401 Unauthorized')),
+        isFalse,
+      );
+      expect(
+        ExponentialBackoff.shouldRetryError(Exception('403 Forbidden')),
+        isFalse,
+      );
+      expect(
+        ExponentialBackoff.shouldRetryError(Exception('404 Not Found')),
+        isFalse,
+      );
     });
 
     test('unknown errors default to retry', () {
-      expect(ExponentialBackoff.shouldRetryError(Exception('something weird')), isTrue);
+      expect(
+        ExponentialBackoff.shouldRetryError(Exception('something weird')),
+        isTrue,
+      );
     });
   });
 }

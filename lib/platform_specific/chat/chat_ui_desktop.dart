@@ -32,6 +32,7 @@ import 'package:chuk_chat/pages/pricing_page.dart';
 import 'package:chuk_chat/widgets/project_panel.dart';
 import 'package:chuk_chat/widgets/project_selection_dropdown.dart';
 import 'package:chuk_chat/services/project_message_service.dart';
+import 'package:chuk_chat/services/artifact_context_service.dart';
 import 'package:chuk_chat/services/title_generation_service.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
 
@@ -241,6 +242,16 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     return AdaptiveTextSelectionToolbar.buttonItems(
       anchors: editableTextState.contextMenuAnchors,
       buttonItems: buttonItems,
+    );
+  }
+
+  Widget _buildMessageContextMenu(
+    BuildContext context,
+    SelectableRegionState selectableRegionState,
+  ) {
+    return AdaptiveTextSelectionToolbar.buttonItems(
+      anchors: selectableRegionState.contextMenuAnchors,
+      buttonItems: selectableRegionState.contextMenuButtonItems,
     );
   }
 
@@ -844,6 +855,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       basePrompt = _systemPrompt;
     }
 
+    var resolvedPrompt = basePrompt;
+
     // If a project is active, prepend project context
     if (_selectedProjectId != null) {
       try {
@@ -852,10 +865,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               _selectedProjectId!,
             );
         // Combine project context with user's system prompt
-        if (basePrompt != null && basePrompt.isNotEmpty) {
-          return '$projectContext\n\n---\n\nAdditional User Instructions:\n$basePrompt';
+        if (resolvedPrompt != null && resolvedPrompt.isNotEmpty) {
+          resolvedPrompt =
+              '$projectContext\n\n---\n\nAdditional User Instructions:\n$resolvedPrompt';
+        } else {
+          resolvedPrompt = projectContext;
         }
-        return projectContext;
       } catch (error) {
         if (kDebugMode) {
           debugPrint('Error building project system message: $error');
@@ -864,7 +879,27 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       }
     }
 
-    return basePrompt;
+    // Inject active artifact context for this chat.
+    final chatId = _activeChatId ?? ChatStorageService.selectedChatId;
+    if (chatId != null && chatId.isNotEmpty) {
+      try {
+        final artifactContext =
+            await ArtifactContextService.buildArtifactsSystemMessage(chatId);
+        if (artifactContext != null && artifactContext.isNotEmpty) {
+          if (resolvedPrompt != null && resolvedPrompt.isNotEmpty) {
+            resolvedPrompt = '$artifactContext\n\n---\n\n$resolvedPrompt';
+          } else {
+            resolvedPrompt = artifactContext;
+          }
+        }
+      } catch (error) {
+        if (kDebugMode) {
+          debugPrint('Error building artifact system message: $error');
+        }
+      }
+    }
+
+    return resolvedPrompt;
   }
 
   bool get _modelSupportsImageInput =>
@@ -923,7 +958,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       if (session == null) {
         _lastRecordedBytes = null;
         _showSnackBar('Session expired. Please sign in again.');
-        await SupabaseService.signOut();
         return;
       }
       final accessToken = session.accessToken;
@@ -963,7 +997,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         switch (error.statusCode) {
           case 401:
             _showSnackBar('Session expired. Please sign in again.');
-            await SupabaseService.signOut();
             break;
           case 502:
             _showSnackBar(
@@ -1011,7 +1044,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       await _deleteRecordingFile(audioPath);
       _lastRecordedFilePath = null;
       _showSnackBar('Session expired. Please sign in again.');
-      await SupabaseService.signOut();
       return;
     }
     final accessToken = session.accessToken;
@@ -1048,7 +1080,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       switch (error.statusCode) {
         case 401:
           _showSnackBar('Session expired. Please sign in again.');
-          await SupabaseService.signOut();
           break;
         case 502:
           _showSnackBar(
@@ -1444,7 +1475,15 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           ),
         );
       }
-      await SupabaseService.signOut();
+      if (mounted) {
+        setState(() {
+          _isSending = false;
+        });
+      }
+      _finalizeAiMessage(
+        placeholderIndex,
+        'Session expired. Please sign in again.',
+      );
       return;
     }
 
@@ -1570,9 +1609,13 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               _isValidMessageIndex(placeholderIndex) &&
               _activeChatId == chatIdForStream) {
             final displayContent = stripToolCallBlocksForDisplay(content);
+            final prefix = accumulatedText.toString();
+            final fullDisplay = prefix.isEmpty
+                ? displayContent
+                : '$prefix$displayContent';
 
             setState(() {
-              _messages[placeholderIndex]['text'] = displayContent;
+              _messages[placeholderIndex]['text'] = fullDisplay;
               _messages[placeholderIndex]['reasoning'] = reasoning;
             });
             _scrollChatToBottom();
@@ -1630,9 +1673,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               );
 
               if (_activeChatId == chatIdForStream) {
+                final persistedInterim = accumulatedText.toString();
                 if (placeholderIndex >= 0 &&
                     placeholderIndex < _messages.length) {
-                  _messages[placeholderIndex]['text'] = '';
+                  _messages[placeholderIndex]['text'] = persistedInterim;
                   _messages[placeholderIndex]['reasoning'] = finalReasoning;
                   _messages[placeholderIndex]['contentBlocks'] =
                       contentBlocksJson;
@@ -1647,7 +1691,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 );
                 if (backgroundMsgs != null &&
                     placeholderIndex < backgroundMsgs.length) {
-                  backgroundMsgs[placeholderIndex]['text'] = '';
+                  backgroundMsgs[placeholderIndex]['text'] = accumulatedText
+                      .toString();
                   backgroundMsgs[placeholderIndex]['reasoning'] =
                       finalReasoning;
                   backgroundMsgs[placeholderIndex]['contentBlocks'] =
@@ -2311,9 +2356,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             dismissDirection: DismissDirection.horizontal,
           ),
         );
-      }
-      if (result.errorMessage == 'Session expired. Please sign in again.') {
-        await SupabaseService.signOut();
       }
       ChatStorageService.isMessageOperationInProgress = false;
       if (kDebugMode) {
@@ -4227,93 +4269,103 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                   maxWidth: expandedInputWidth,
                                 ),
                                 child: SelectionArea(
-                                  child: ListView.builder(
-                                    controller: _scrollController,
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: effectiveHorizontalPadding,
-                                      vertical: 10,
-                                    ),
-                                    itemCount: renderMessages.length,
-                                    addAutomaticKeepAlives:
-                                        true, // Keep message widgets alive
-                                    addRepaintBoundaries: true,
-                                    cacheExtent:
-                                        2000.0, // Increase cache to keep more messages in memory
-                                    itemBuilder: (_, int i) {
-                                      final _MessageRenderData data =
-                                          renderMessages[i];
-                                      final String? reasoningText =
-                                          data.reasoning.trim().isEmpty
-                                          ? null
-                                          : data.reasoning;
-                                      final bool startsNewGroup =
-                                          i == 0 ||
-                                          (renderMessages[i - 1].isUser !=
-                                              data.isUser);
-                                      final bool endsGroup =
-                                          i == renderMessages.length - 1 ||
-                                          (renderMessages[i + 1].isUser !=
-                                              data.isUser);
-                                      final bool isBeingEdited =
-                                          _editingMessageIndex == i;
-                                      return RepaintBoundary(
-                                        child: MessageBubble(
-                                          key: ValueKey('msg_$i'),
-                                          message: data.displayText,
-                                          reasoning: reasoningText,
-                                          isUser: data.isUser,
-                                          startsNewGroup: startsNewGroup,
-                                          endsGroup: endsGroup,
-                                          maxWidth: data.isUser
-                                              ? expandedInputWidth *
-                                                    0.8 // User messages: 80%
-                                              : expandedInputWidth, // AI messages: 100%
-                                          isReasoningStreaming:
-                                              data.isReasoningStreaming,
-                                          modelLabel: data.modelLabel,
-                                          modelProvider: data.modelProvider,
-                                          tps: data.tps,
-                                          toolCalls: data.toolCalls,
-                                          showToolCalls: widget.showToolCalls,
-                                          contentBlocks: data.contentBlocks,
-                                          isStreamingMessage:
-                                              data.isStreamingMessage,
-                                          images: data.images,
-                                          imageCostEur: data.imageCostEur,
-                                          imageGeneratedAt:
-                                              data.imageGeneratedAt,
-                                          attachments: data.attachments,
-                                          actions: _buildMessageActionsForIndex(
-                                            i,
-                                            data,
-                                          ),
-                                          isEditing: isBeingEdited,
-                                          initialEditText: isBeingEdited
-                                              ? data.displayText
-                                              : null,
-                                          onSubmitEdit:
-                                              isBeingEdited && data.isUser
-                                              ? (newText) =>
-                                                    _submitEditedMessage(
-                                                      i,
-                                                      newText,
-                                                    )
-                                              : null,
-                                          onCancelEdit: isBeingEdited
-                                              ? _cancelEditMessage
-                                              : null,
-                                          showReasoningTokens:
-                                              widget.showReasoningTokens,
-                                          showModelInfo: widget.showModelInfo,
-                                          showTps: widget.showTps,
-                                          onRetry:
-                                              !data.isUser &&
-                                                  !data.isStreamingMessage
-                                              ? () => _resendMessageAt(i)
-                                              : null,
-                                        ),
-                                      );
+                                  contextMenuBuilder: _buildMessageContextMenu,
+                                  child: GestureDetector(
+                                    behavior: HitTestBehavior.translucent,
+                                    onTapDown: (_) {
+                                      // Ensure keyboard shortcuts such as Ctrl+C
+                                      // target message selection instead of the composer.
+                                      FocusScope.of(context).unfocus();
                                     },
+                                    child: ListView.builder(
+                                      controller: _scrollController,
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: effectiveHorizontalPadding,
+                                        vertical: 10,
+                                      ),
+                                      itemCount: renderMessages.length,
+                                      addAutomaticKeepAlives:
+                                          true, // Keep message widgets alive
+                                      addRepaintBoundaries: true,
+                                      cacheExtent:
+                                          2000.0, // Increase cache to keep more messages in memory
+                                      itemBuilder: (_, int i) {
+                                        final _MessageRenderData data =
+                                            renderMessages[i];
+                                        final String? reasoningText =
+                                            data.reasoning.trim().isEmpty
+                                            ? null
+                                            : data.reasoning;
+                                        final bool startsNewGroup =
+                                            i == 0 ||
+                                            (renderMessages[i - 1].isUser !=
+                                                data.isUser);
+                                        final bool endsGroup =
+                                            i == renderMessages.length - 1 ||
+                                            (renderMessages[i + 1].isUser !=
+                                                data.isUser);
+                                        final bool isBeingEdited =
+                                            _editingMessageIndex == i;
+                                        return RepaintBoundary(
+                                          child: MessageBubble(
+                                            key: ValueKey('msg_$i'),
+                                            message: data.displayText,
+                                            reasoning: reasoningText,
+                                            isUser: data.isUser,
+                                            startsNewGroup: startsNewGroup,
+                                            endsGroup: endsGroup,
+                                            maxWidth: data.isUser
+                                                ? expandedInputWidth *
+                                                      0.8 // User messages: 80%
+                                                : expandedInputWidth, // AI messages: 100%
+                                            isReasoningStreaming:
+                                                data.isReasoningStreaming,
+                                            modelLabel: data.modelLabel,
+                                            modelProvider: data.modelProvider,
+                                            tps: data.tps,
+                                            toolCalls: data.toolCalls,
+                                            showToolCalls: widget.showToolCalls,
+                                            contentBlocks: data.contentBlocks,
+                                            isStreamingMessage:
+                                                data.isStreamingMessage,
+                                            images: data.images,
+                                            imageCostEur: data.imageCostEur,
+                                            imageGeneratedAt:
+                                                data.imageGeneratedAt,
+                                            attachments: data.attachments,
+                                            actions:
+                                                _buildMessageActionsForIndex(
+                                                  i,
+                                                  data,
+                                                ),
+                                            isEditing: isBeingEdited,
+                                            initialEditText: isBeingEdited
+                                                ? data.displayText
+                                                : null,
+                                            onSubmitEdit:
+                                                isBeingEdited && data.isUser
+                                                ? (newText) =>
+                                                      _submitEditedMessage(
+                                                        i,
+                                                        newText,
+                                                      )
+                                                : null,
+                                            onCancelEdit: isBeingEdited
+                                                ? _cancelEditMessage
+                                                : null,
+                                            showReasoningTokens:
+                                                widget.showReasoningTokens,
+                                            showModelInfo: widget.showModelInfo,
+                                            showTps: widget.showTps,
+                                            onRetry:
+                                                !data.isUser &&
+                                                    !data.isStreamingMessage
+                                                ? () => _resendMessageAt(i)
+                                                : null,
+                                          ),
+                                        );
+                                      },
+                                    ),
                                   ),
                                 ),
                               ),
@@ -4489,6 +4541,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                         focusNode: _textFieldFocusNode,
                         contextMenuBuilder: _buildComposerContextMenu,
                         autofocus: false,
+                        showCursor: true,
                         minLines: 1,
                         maxLines: null,
                         keyboardType: TextInputType.multiline,
@@ -4521,7 +4574,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                           ),
                           isDense: true,
                         ),
-                        cursorColor: iconFg,
+                        cursorColor: accent,
+                        cursorWidth: 2,
                       ),
                     ),
                   ),

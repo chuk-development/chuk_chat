@@ -262,10 +262,7 @@ void main() {
     });
 
     test('non-Dio error is NOT network error', () {
-      expect(
-        ServiceErrorHandler.isNetworkError(Exception('random')),
-        isFalse,
-      );
+      expect(ServiceErrorHandler.isNetworkError(Exception('random')), isFalse);
     });
   });
 
@@ -298,10 +295,7 @@ void main() {
     });
 
     test('non-Dio error is NOT auth error', () {
-      expect(
-        ServiceErrorHandler.isAuthError(Exception('auth fail')),
-        isFalse,
-      );
+      expect(ServiceErrorHandler.isAuthError(Exception('auth fail')), isFalse);
     });
   });
 
@@ -389,10 +383,7 @@ void main() {
     });
 
     test('unknown error returns null (no retry)', () {
-      final delay = ServiceErrorHandler.getRetryDelay(
-        Exception('unknown'),
-        1,
-      );
+      final delay = ServiceErrorHandler.getRetryDelay(Exception('unknown'), 1);
       expect(delay, isNull);
     });
 
@@ -417,9 +408,8 @@ void main() {
     test('returns null on DioException', () async {
       String? errorMsg;
       final result = await ServiceErrorHandler.tryAsync<String>(
-        operation: () async => throw makeDioException(
-          DioExceptionType.connectionTimeout,
-        ),
+        operation: () async =>
+            throw makeDioException(DioExceptionType.connectionTimeout),
         context: 'test',
         onError: (msg) => errorMsg = msg,
       );

@@ -153,9 +153,6 @@ class StreamingMessageHandler {
 
     if (!result.isValid) {
       onShowSnackBar?.call(result.errorMessage ?? 'Invalid message');
-      if (result.errorMessage == 'Session expired. Please sign in again.') {
-        await SupabaseService.signOut();
-      }
       return;
     }
 
@@ -281,13 +278,10 @@ class StreamingMessageHandler {
         onUpdate: (content, reasoning) {
           if (_isDisposed) return;
           final displayContent = stripToolCallBlocksForDisplay(content);
-
-          // When content blocks exist (multi-pass), only show current pass
-          // text — previous passes are rendered from content blocks.
-          // When no blocks yet (first pass / no tools), show full text.
-          final fullDisplay = contentBlocks.isEmpty
+          final prefix = accumulatedText.toString();
+          final fullDisplay = prefix.isEmpty
               ? displayContent
-              : displayContent;
+              : '$prefix$displayContent';
 
           if (onMessageUpdate != null) {
             onMessageUpdate!(placeholderIndex, fullDisplay, reasoning, chatId);
@@ -370,15 +364,23 @@ class StreamingMessageHandler {
                   accumulatedText.write('\n\n');
                 }
 
-                // Clear the message text for the next pass — content
-                // blocks handle previous passes, onMessageUpdate will
-                // show only the new pass's streaming text.
+                // Keep accumulated visible text between passes so the user
+                // never sees earlier assistant text disappear.
+                final persistedInterim = accumulatedText.toString();
                 if (onMessageUpdate != null) {
                   onMessageUpdate!(
                     placeholderIndex,
-                    '',
+                    persistedInterim,
                     finalReasoning,
                     chatId,
+                  );
+                }
+                if (onBackgroundUpdate != null) {
+                  onBackgroundUpdate!(
+                    chatId,
+                    placeholderIndex,
+                    persistedInterim,
+                    finalReasoning,
                   );
                 }
 
@@ -942,7 +944,6 @@ class StreamingMessageHandler {
 
         // Online but no session = genuinely expired
         onShowSnackBar?.call('Session expired. Please sign in again.');
-        await SupabaseService.signOut();
         return null;
       }
 
@@ -962,7 +963,6 @@ class StreamingMessageHandler {
         debugPrint('Auth error during session refresh: $error');
       }
       onShowSnackBar?.call('Authentication error. Please sign in again.');
-      await SupabaseService.signOut();
       return null;
     }
   }

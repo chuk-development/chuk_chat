@@ -23,7 +23,9 @@ class EnvLoader {
     // Only attempt file loading on desktop platforms
     if (!_isDesktop) {
       if (kDebugMode) {
-        debugPrint('EnvLoader: Not a desktop platform, skipping .env file loading');
+        debugPrint(
+          'EnvLoader: Not a desktop platform, skipping .env file loading',
+        );
       }
       return;
     }
@@ -31,8 +33,8 @@ class EnvLoader {
     try {
       // Try multiple possible locations for the .env file
       final possiblePaths = [
-        '.env',                    // Current directory (when running from project root)
-        '../../../.env',           // When running from build directory
+        '.env', // Current directory (when running from project root)
+        '../../../.env', // When running from build directory
         '${Platform.environment['HOME']}/git/chuk_chat/.env', // Absolute fallback
       ];
 
@@ -50,7 +52,9 @@ class EnvLoader {
 
       if (envFile == null) {
         if (kDebugMode) {
-          debugPrint('EnvLoader: No .env file found, using compile-time values');
+          debugPrint(
+            'EnvLoader: No .env file found, using compile-time values',
+          );
         }
         return;
       }
@@ -96,7 +100,9 @@ class EnvLoader {
 
       if (envFile == null) {
         if (kDebugMode) {
-          debugPrint('EnvLoader: No .env file found, using compile-time values');
+          debugPrint(
+            'EnvLoader: No .env file found, using compile-time values',
+          );
         }
         return;
       }

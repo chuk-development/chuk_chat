@@ -63,7 +63,9 @@ class SecureTokenHandler {
           (match) {
             final token = match.group(1);
             if (token != null) {
-              final prefix = match.group(0)!.substring(0, match.group(0)!.indexOf(token));
+              final prefix = match
+                  .group(0)!
+                  .substring(0, match.group(0)!.indexOf(token));
               return '$prefix${maskToken(token)}';
             }
             return match.group(0) ?? '';
@@ -71,7 +73,7 @@ class SecureTokenHandler {
         );
       }
 
-        debugPrint(safeMes);
+      debugPrint(safeMes);
     }
   }
 
@@ -85,7 +87,10 @@ class SecureTokenHandler {
   }
 
   /// Validates token and returns a safe error message if invalid.
-  static String? validateTokenForRequest(String? token, {String context = 'Request'}) {
+  static String? validateTokenForRequest(
+    String? token, {
+    String context = 'Request',
+  }) {
     if (token == null || token.isEmpty) {
       return '$context failed: Authentication token is missing';
     }
@@ -128,11 +133,11 @@ class SecureTokenHandler {
 
     debugPrint('═══════════════════════════════════════════════════════════');
     debugPrint('📤 API REQUEST');
-      debugPrint('Method: $method');
-      debugPrint('Endpoint: $endpoint');
+    debugPrint('Method: $method');
+    debugPrint('Endpoint: $endpoint');
 
     if (accessToken != null) {
-        debugPrint('Authorization: Bearer ${maskToken(accessToken)}');
+      debugPrint('Authorization: Bearer ${maskToken(accessToken)}');
     }
 
     if (payload != null && payload.isNotEmpty) {
@@ -146,10 +151,10 @@ class SecureTokenHandler {
         }
       }
 
-        debugPrint('Payload: $safePayload');
+      debugPrint('Payload: $safePayload');
     }
 
-      debugPrint('═══════════════════════════════════════════════════════════');
+    debugPrint('═══════════════════════════════════════════════════════════');
   }
 
   /// Logs an API response with masked tokens.
@@ -163,8 +168,8 @@ class SecureTokenHandler {
 
     debugPrint('═══════════════════════════════════════════════════════════');
     debugPrint(success ? '✅ API SUCCESS' : '❌ API ERROR');
-      debugPrint('Endpoint: $endpoint');
-      debugPrint('Status: $statusCode');
+    debugPrint('Endpoint: $endpoint');
+    debugPrint('Status: $statusCode');
 
     if (error != null) {
       // Make sure error doesn't contain any tokens
@@ -172,10 +177,10 @@ class SecureTokenHandler {
         RegExp(r'[a-zA-Z0-9._-]{40,}'),
         (match) => maskToken(match.group(0) ?? ''),
       );
-        debugPrint('Error: $safeError');
+      debugPrint('Error: $safeError');
     }
 
-      debugPrint('═══════════════════════════════════════════════════════════');
+    debugPrint('═══════════════════════════════════════════════════════════');
   }
 
   /// Logs a WebSocket connection with masked tokens.
@@ -187,12 +192,19 @@ class SecureTokenHandler {
 
     debugPrint('═══════════════════════════════════════════════════════════');
     debugPrint('🔌 WEBSOCKET CONNECTION');
-      debugPrint('URL: $url');
+    final safeUrl = url.replaceAllMapped(
+      RegExp(
+        r'([?&](?:token|access_token|auth|jwt|api_key)=)([^&]+)',
+        caseSensitive: false,
+      ),
+      (match) => '${match.group(1)}${maskToken(match.group(2) ?? '')}',
+    );
+    debugPrint('URL: $safeUrl');
 
     if (accessToken != null) {
-        debugPrint('Token: ${maskToken(accessToken)}');
+      debugPrint('Token: ${maskToken(accessToken)}');
     }
 
-      debugPrint('═══════════════════════════════════════════════════════════');
+    debugPrint('═══════════════════════════════════════════════════════════');
   }
 }

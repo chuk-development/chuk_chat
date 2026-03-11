@@ -53,7 +53,8 @@ final Map<String, Mode> allLanguages = {
   'swift': swift,
   'cpp': cpp,
   'c++': cpp,
-  'c': cpp, // cpp mode often handles c too or I should import c.dart if available
+  'c':
+      cpp, // cpp mode often handles c too or I should import c.dart if available
   'cs': cs,
   'csharp': cs,
   'c#': cs,

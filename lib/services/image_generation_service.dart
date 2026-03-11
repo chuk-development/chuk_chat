@@ -32,10 +32,7 @@ class ImageGenerationResult {
   final String? errorMessage;
 
   factory ImageGenerationResult.error(String message) {
-    return ImageGenerationResult(
-      success: false,
-      errorMessage: message,
-    );
+    return ImageGenerationResult(success: false, errorMessage: message);
   }
 }
 
@@ -88,7 +85,9 @@ class ImageGenerationService {
       final accessToken = session.accessToken;
 
       // Build request
-      final uri = Uri.parse('${ApiConfigService.apiBaseUrl}/v1/ai/generate-image');
+      final uri = Uri.parse(
+        '${ApiConfigService.apiBaseUrl}/v1/ai/generate-image',
+      );
 
       final request = http.MultipartRequest('POST', uri);
       request.headers['Authorization'] = 'Bearer $accessToken';
@@ -151,7 +150,9 @@ class ImageGenerationService {
           final imageResponse = await http.get(Uri.parse(imageUrl));
           if (imageResponse.statusCode != 200) {
             if (kDebugMode) {
-              debugPrint('Failed to download generated image: ${imageResponse.statusCode}');
+              debugPrint(
+                'Failed to download generated image: ${imageResponse.statusCode}',
+              );
             }
           } else {
             imageBytes = imageResponse.bodyBytes;
@@ -159,7 +160,9 @@ class ImageGenerationService {
             // Encrypt and store
             final user = SupabaseService.auth.currentUser;
             if (user != null && imageBytes.isNotEmpty) {
-              encryptedPath = await ImageStorageService.uploadEncryptedImage(imageBytes);
+              encryptedPath = await ImageStorageService.uploadEncryptedImage(
+                imageBytes,
+              );
               if (kDebugMode) {
                 debugPrint('Stored generated image at: $encryptedPath');
               }

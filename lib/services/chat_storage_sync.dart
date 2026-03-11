@@ -65,8 +65,14 @@ class ChatPayload {
 /// Deserialize chat payload in background isolate to avoid UI blocking
 Future<ChatPayload> deserializePayloadAsync(String json) async {
   final result = await compute(deserializePayloadIsolate, json);
-  // Convert maps to ChatMessage objects (fast, just object instantiation)
-  final messages = result.messages.map((m) => ChatMessage.fromJson(m)).toList();
+  const int yieldEvery = 120;
+  final messages = <ChatMessage>[];
+  for (int i = 0; i < result.messages.length; i++) {
+    messages.add(ChatMessage.fromJson(result.messages[i]));
+    if (i > 0 && i % yieldEvery == 0) {
+      await Future<void>.delayed(Duration.zero);
+    }
+  }
   return ChatPayload(messages, customName: result.customName);
 }
 

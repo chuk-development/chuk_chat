@@ -1,10 +1,13 @@
 // lib/platform_specific/root_wrapper_desktop.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 
 import 'package:chuk_chat/models/app_shell_config.dart';
+import 'package:chuk_chat/models/artifact.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_desktop.dart';
 import 'package:chuk_chat/platform_specific/sidebar_desktop.dart'; // UPDATED
@@ -12,6 +15,8 @@ import 'package:chuk_chat/pages/projects_page.dart';
 import 'package:chuk_chat/pages/media_manager_page.dart';
 import 'package:chuk_chat/pages/settings_page.dart';
 import 'package:chuk_chat/pages/coming_soon_page.dart';
+import 'package:chuk_chat/services/developer_options_service.dart';
+import 'package:chuk_chat/widgets/artifact_panel.dart';
 import 'package:chuk_chat/utils/debug_chat_formatter.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:flutter/foundation.dart';
@@ -31,8 +36,55 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   bool _isSidebarExpanded = false;
   String? _activeProjectId;
   String? _activePanel; // 'projects', 'media', or null
+  bool _developerOptionsEnabled = false;
+  ArtifactDocument? _activeArtifact;
 
   final GlobalKey<ChukChatUIDesktopState> _chatUIKey = GlobalKey();
+
+  @override
+  void initState() {
+    super.initState();
+    _developerOptionsEnabled = DeveloperOptionsService.enabledNotifier.value;
+    _activeArtifact = ArtifactStorageService.activeArtifactNotifier.value;
+    DeveloperOptionsService.enabledNotifier.addListener(_onDeveloperOptions);
+    ArtifactStorageService.activeArtifactNotifier.addListener(
+      _onArtifactChanged,
+    );
+    unawaited(
+      DeveloperOptionsService.initialize().then(
+        (_) => DeveloperOptionsService.syncFromSupabase(forceRefresh: true),
+      ),
+    );
+    unawaited(
+      ArtifactStorageService.setActiveChat(
+        ChatStorageService.selectedChatId,
+        forceRefresh: true,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    DeveloperOptionsService.enabledNotifier.removeListener(_onDeveloperOptions);
+    ArtifactStorageService.activeArtifactNotifier.removeListener(
+      _onArtifactChanged,
+    );
+    super.dispose();
+  }
+
+  void _onDeveloperOptions() {
+    if (!mounted) return;
+    setState(() {
+      _developerOptionsEnabled = DeveloperOptionsService.enabledNotifier.value;
+    });
+  }
+
+  void _onArtifactChanged() {
+    if (!mounted) return;
+    setState(() {
+      _activeArtifact = ArtifactStorageService.activeArtifactNotifier.value;
+    });
+  }
 
   void _openSettingsPage() {
     if (_isSidebarExpanded) _toggleSidebar();
@@ -59,6 +111,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       // Start a new chat for this project
       _chatUIKey.currentState?.newChat();
     });
+    unawaited(ArtifactStorageService.setActiveChat(null, forceRefresh: true));
   }
 
   void _exitProject() {
@@ -151,6 +204,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     setState(() {
       ChatStorageService.selectedChatId = chatId;
     });
+    unawaited(ArtifactStorageService.setActiveChat(chatId, forceRefresh: true));
     // On desktop, the sidebar typically remains open after selecting a chat.
     // if (_isSidebarExpanded) _toggleSidebar();
   }
@@ -186,6 +240,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     // tell the chat UI to start fresh and clear project context.
     _activeProjectId = null;
     _chatUIKey.currentState?.newChat();
+    unawaited(ArtifactStorageService.setActiveChat(null, forceRefresh: true));
     setState(() {});
   }
 
@@ -215,6 +270,9 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
         setState(() {
           ChatStorageService.selectedChatId = newId;
         });
+        unawaited(
+          ArtifactStorageService.setActiveChat(newId, forceRefresh: true),
+        );
       },
       isSidebarExpanded: _isSidebarExpanded,
       isCompactMode: isCompactMode,
@@ -238,7 +296,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       allowMarkdownToolCalls: widget.config.allowMarkdownToolCalls,
     );
 
-    // Panel width for Projects/Media - responsive based on screen width
+    // Right panel width for Projects/Media/Artifacts.
     // Minimum chat width of 300px required to show panel
     const double minChatWidth = 300.0;
     const double minPanelWidth = 320.0;
@@ -247,14 +305,17 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     final double panelWidth = availableForPanel >= minPanelWidth
         ? math.min(400.0, availableForPanel)
         : 0;
+    final bool hasArtifact = _activeArtifact != null;
+    final String? effectivePanel =
+        _activePanel ?? (hasArtifact ? 'artifact' : null);
     final bool showPanel =
-        _activePanel != null && !isCompactMode && panelWidth > 0;
+        effectivePanel != null && !isCompactMode && panelWidth > 0;
 
     // Debug: Log panel state when active
-    if (_activePanel != null) {
+    if (effectivePanel != null) {
       if (kDebugMode) {
         debugPrint(
-          '📐 Panel: screen=$screenWidth, sidebar=$sidebarWidth, available=$availableForPanel, panelWidth=$panelWidth, showPanel=$showPanel',
+          '📐 Panel: type=$effectivePanel, screen=$screenWidth, sidebar=$sidebarWidth, available=$availableForPanel, panelWidth=$panelWidth, showPanel=$showPanel',
         );
       }
     }
@@ -273,7 +334,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
             child: Offstage(offstage: !showContent, child: chatArea),
           ),
 
-          // Projects/Media Panel (right side)
+          // Right Panel (Projects/Media/Artifact)
           if (showPanel)
             Positioned(
               right: 0,
@@ -303,14 +364,20 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                       child: Row(
                         children: [
                           Icon(
-                            _activePanel == 'projects'
+                            effectivePanel == 'projects'
                                 ? Icons.folder_open
-                                : Icons.photo_library_outlined,
+                                : effectivePanel == 'media'
+                                ? Icons.photo_library_outlined
+                                : Icons.auto_fix_high,
                             color: iconFg,
                           ),
                           const SizedBox(width: 12),
                           Text(
-                            _activePanel == 'projects' ? 'Projects' : 'Media',
+                            effectivePanel == 'projects'
+                                ? 'Projects'
+                                : effectivePanel == 'media'
+                                ? 'Media'
+                                : 'Artifact',
                             style: TextStyle(
                               color: iconFg,
                               fontSize: 18,
@@ -318,22 +385,28 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                             ),
                           ),
                           const Spacer(),
-                          IconButton(
-                            icon: Icon(Icons.close, color: iconFg),
-                            onPressed: _closePanel,
-                            tooltip: 'Close',
-                          ),
+                          if (effectivePanel != 'artifact')
+                            IconButton(
+                              icon: Icon(Icons.close, color: iconFg),
+                              onPressed: _closePanel,
+                              tooltip: 'Close',
+                            ),
                         ],
                       ),
                     ),
                     // Panel content
                     Expanded(
-                      child: _activePanel == 'projects'
+                      child: effectivePanel == 'projects'
                           ? ProjectsPage(
                               onOpenProject: _openProject,
                               embedded: true,
                             )
-                          : const MediaManagerPage(embedded: true),
+                          : effectivePanel == 'media'
+                          ? const MediaManagerPage(embedded: true)
+                          : ArtifactPanel(
+                              artifact: _activeArtifact!,
+                              showHeader: false,
+                            ),
                     ),
                   ],
                 ),
@@ -431,6 +504,12 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                     return;
                   }
                   _chatUIKey.currentState?.newChat();
+                  unawaited(
+                    ArtifactStorageService.setActiveChat(
+                      null,
+                      forceRefresh: true,
+                    ),
+                  );
                   if (_isSidebarExpanded) _toggleSidebar();
                 },
                 borderRadius: BorderRadius.circular(8),
@@ -569,7 +648,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
             ),
 
           // Layer: Copy debug chat button (top-right of chat area)
-          if (showContent)
+          if (showContent && _developerOptionsEnabled)
             Positioned(
               top: kTopInitialSpacing,
               right: (showPanel ? panelWidth : 0) + 12,

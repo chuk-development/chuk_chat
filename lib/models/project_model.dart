@@ -42,24 +42,23 @@ class Project {
           : const [],
       files: json['files'] != null
           ? (json['files'] as List)
-              .map((f) => ProjectFile.fromJson(f as Map<String, dynamic>))
-              .toList()
+                .map((f) => ProjectFile.fromJson(f as Map<String, dynamic>))
+                .toList()
           : const [],
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        if (description != null) 'description': description,
-        if (customSystemPrompt != null)
-          'custom_system_prompt': customSystemPrompt,
-        'created_at': createdAt.toIso8601String(),
-        'updated_at': updatedAt.toIso8601String(),
-        'is_archived': isArchived,
-        'chatIds': chatIds,
-        'files': files.map((f) => f.toJson()).toList(),
-      };
+    'id': id,
+    'name': name,
+    if (description != null) 'description': description,
+    if (customSystemPrompt != null) 'custom_system_prompt': customSystemPrompt,
+    'created_at': createdAt.toIso8601String(),
+    'updated_at': updatedAt.toIso8601String(),
+    'is_archived': isArchived,
+    'chatIds': chatIds,
+    'files': files.map((f) => f.toJson()).toList(),
+  };
 
   Project copyWith({
     String? id,
@@ -96,11 +95,85 @@ class Project {
       customSystemPrompt != null && customSystemPrompt!.trim().isNotEmpty;
 
   /// Get total size of all files in bytes
-  int get totalFileSize =>
-      files.fold(0, (sum, file) => sum + file.fileSize);
+  int get totalFileSize => files.fold(0, (sum, file) => sum + file.fileSize);
 
   /// Get formatted total file size (e.g., "2.5 MB")
   String get totalFileSizeFormatted => _formatFileSize(totalFileSize);
+
+  /// Deterministic project color based on name hash
+  Color get projectColor {
+    final index = name.hashCode.abs() % kProjectColors.length;
+    return kProjectColors[index];
+  }
+
+  /// Deterministic project icon based on name hash
+  IconData get projectIcon {
+    final index = (name.hashCode.abs() ~/ 7) % kProjectIcons.length;
+    return kProjectIcons[index];
+  }
+
+  /// Get relative time string for updatedAt (e.g., "2h ago", "3d ago")
+  String get updatedAgo {
+    final now = DateTime.now();
+    final diff = now.difference(updatedAt);
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    if (diff.inDays < 30) return '${diff.inDays ~/ 7}w ago';
+    if (diff.inDays < 365) return '${diff.inDays ~/ 30}mo ago';
+    return '${diff.inDays ~/ 365}y ago';
+  }
+
+  /// Get the first letter(s) for avatar display
+  String get initials {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return '?';
+
+    final words = trimmed.split(RegExp(r'\s+'));
+    if (words.length >= 2) {
+      final first = words[0].characters.first;
+      final second = words[1].characters.first;
+      return '$first$second'.toUpperCase();
+    }
+    return trimmed.characters.take(2).toString().toUpperCase();
+  }
+
+  /// Predefined project colors - vibrant but balanced for both themes
+  static const List<Color> kProjectColors = [
+    Color(0xFF6366F1), // Indigo
+    Color(0xFF8B5CF6), // Violet
+    Color(0xFFEC4899), // Pink
+    Color(0xFFEF4444), // Red
+    Color(0xFFF97316), // Orange
+    Color(0xFFEAB308), // Yellow
+    Color(0xFF22C55E), // Green
+    Color(0xFF14B8A6), // Teal
+    Color(0xFF06B6D4), // Cyan
+    Color(0xFF3B82F6), // Blue
+    Color(0xFF8B5E3C), // Brown
+    Color(0xFF64748B), // Slate
+  ];
+
+  /// Predefined project icons
+  static const List<IconData> kProjectIcons = [
+    Icons.folder_outlined,
+    Icons.code,
+    Icons.science_outlined,
+    Icons.auto_stories_outlined,
+    Icons.palette_outlined,
+    Icons.build_outlined,
+    Icons.school_outlined,
+    Icons.work_outline,
+    Icons.language,
+    Icons.terminal,
+    Icons.data_object,
+    Icons.psychology_outlined,
+    Icons.lightbulb_outline,
+    Icons.rocket_launch_outlined,
+    Icons.auto_awesome_outlined,
+    Icons.hub_outlined,
+  ];
 
   static String _formatFileSize(int bytes) {
     if (bytes < 1024) return '$bytes B';
@@ -148,15 +221,15 @@ class ProjectFile {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'project_id': projectId,
-        'file_name': fileName,
-        'storage_path': storagePath,
-        'file_type': fileType,
-        'file_size': fileSize,
-        'uploaded_at': uploadedAt.toIso8601String(),
-        if (markdownSummary != null) 'markdown_summary': markdownSummary,
-      };
+    'id': id,
+    'project_id': projectId,
+    'file_name': fileName,
+    'storage_path': storagePath,
+    'file_type': fileType,
+    'file_size': fileSize,
+    'uploaded_at': uploadedAt.toIso8601String(),
+    if (markdownSummary != null) 'markdown_summary': markdownSummary,
+  };
 
   ProjectFile copyWith({
     String? id,
@@ -277,4 +350,29 @@ class ProjectFile {
 
   /// Check if file is a PDF
   bool get isPdf => extension == 'pdf';
+
+  /// Estimate how many tokens this file will consume in context.
+  /// Uses the same logic as ProjectMessageService._estimateContentLength
+  /// but converts chars to tokens (~4 chars per token).
+  int get estimatedTokens {
+    int chars;
+    if (hasMarkdownSummary) {
+      chars = markdownSummary!.length + 200; // +200 for headers
+    } else if (isPdf) {
+      chars = 150; // Just a note saying content unavailable
+    } else if (isImage) {
+      chars = 100;
+    } else {
+      chars = fileSize + 200; // +200 for code block markers
+    }
+    return (chars / 4).ceil();
+  }
+
+  /// Format estimated tokens for display (e.g. "2.5k tokens")
+  String get estimatedTokensFormatted {
+    final tokens = estimatedTokens;
+    if (tokens < 1000) return '$tokens tokens';
+    if (tokens < 10000) return '${(tokens / 1000).toStringAsFixed(1)}k tokens';
+    return '${(tokens / 1000).round()}k tokens';
+  }
 }

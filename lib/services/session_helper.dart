@@ -26,10 +26,7 @@ class SessionValidationResult {
   }
 
   factory SessionValidationResult.invalid(String message) {
-    return SessionValidationResult(
-      isValid: false,
-      errorMessage: message,
-    );
+    return SessionValidationResult(isValid: false, errorMessage: message);
   }
 }
 
@@ -56,10 +53,7 @@ class SessionHelper {
       // Fall back to current session if refresh didn't return a new one
       final currentSession = SupabaseService.auth.currentSession;
       if (currentSession != null) {
-        ServiceLogger.info(
-          'Using current session',
-          context: 'SessionHelper',
-        );
+        ServiceLogger.info('Using current session', context: 'SessionHelper');
         return currentSession;
       }
 
@@ -159,7 +153,10 @@ class SessionHelper {
 
     try {
       await SupabaseService.signOut();
-      ServiceLogger.success('Signed out successfully', context: 'SessionHelper');
+      ServiceLogger.success(
+        'Signed out successfully',
+        context: 'SessionHelper',
+      );
     } catch (e) {
       ServiceLogger.error(
         'Failed to sign out',
@@ -181,7 +178,8 @@ class SessionHelper {
 
     final validationResult = await validateAndGetToken();
     if (!validationResult.isValid) {
-      final error = validationResult.errorMessage ?? 'Session validation failed';
+      final error =
+          validationResult.errorMessage ?? 'Session validation failed';
       ServiceLogger.error(
         'Session validation failed for $operationName',
         context: 'SessionHelper',

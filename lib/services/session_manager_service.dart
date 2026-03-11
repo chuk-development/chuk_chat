@@ -6,17 +6,14 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/services/app_initialization_service.dart';
 import 'package:chuk_chat/services/app_theme_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_sync_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
-import 'package:chuk_chat/services/model_prefetch_service.dart';
 import 'package:chuk_chat/services/password_revision_service.dart';
 import 'package:chuk_chat/services/project_storage_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
-import 'package:chuk_chat/services/session_tracking_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
 /// Callback for session-related events
@@ -30,7 +27,6 @@ class SessionManagerService extends ChangeNotifier {
   static SessionManagerService get instance => _instance;
 
   /// Callbacks for session events
-  final List<SessionEventCallback> _onSessionRevokedCallbacks = [];
   final List<SessionEventCallback> _onPasswordMismatchCallbacks = [];
 
   StreamSubscription<AuthState>? _authSubscription;
@@ -40,15 +36,9 @@ class SessionManagerService extends ChangeNotifier {
   bool get isInitialized => _isInitialized;
 
   /// Initialize session management and listen to auth state changes
-  void initialize({
-    SessionEventCallback? onSessionRevoked,
-    SessionEventCallback? onPasswordMismatch,
-  }) {
+  void initialize({SessionEventCallback? onPasswordMismatch}) {
     if (_isInitialized) return;
 
-    if (onSessionRevoked != null) {
-      _onSessionRevokedCallbacks.add(onSessionRevoked);
-    }
     if (onPasswordMismatch != null) {
       _onPasswordMismatchCallbacks.add(onPasswordMismatch);
     }
@@ -99,12 +89,6 @@ class SessionManagerService extends ChangeNotifier {
       _sessionInitializedForUser = user.id;
       unawaited(_initializeUserSessionAsync(user));
     }
-
-    // Verify session is still valid (catches revoked tokens)
-    if (kFeatureSessionManagement) {
-      unawaited(verifySession());
-      unawaited(SessionTrackingService.registerSession());
-    }
   }
 
   /// Runs user session initialization with error handling.
@@ -114,7 +98,6 @@ class SessionManagerService extends ChangeNotifier {
       await Future.wait([
         AppInitializationService.instance.initializeUserSession(user),
         AppThemeService.instance.loadFromSupabaseAsync(),
-        if (kFeatureSessionManagement) ModelPrefetchService.prefetch(),
       ]);
     } catch (e) {
       if (kDebugMode) {
@@ -152,11 +135,6 @@ class SessionManagerService extends ChangeNotifier {
   Future<void> _handlePasswordRevisionMismatch(User user) async {
     if (kDebugMode) {
       debugPrint('🔐 [SessionManager] Password revision mismatch detected');
-    }
-
-    // Set remotely signed out flag
-    if (kFeatureSessionManagement) {
-      await SessionTrackingService.setRemotelySignedOut();
     }
 
     // Clear cached revision
@@ -202,41 +180,6 @@ class SessionManagerService extends ChangeNotifier {
     await AppThemeService.instance.loadFromPrefs();
   }
 
-  /// Verify the current session hasn't been revoked remotely
-  Future<bool> verifySession() async {
-    try {
-      final session = await SupabaseService.forceRefreshSession();
-      if (session == null && SupabaseService.auth.currentSession != null) {
-        // Token was revoked
-        if (kDebugMode) {
-          debugPrint('🔐 [SessionManager] Session revoked remotely');
-        }
-
-        if (kFeatureSessionManagement) {
-          await SessionTrackingService.setRemotelySignedOut();
-        }
-
-        await performFullLogout();
-
-        // Notify listeners
-        for (final callback in _onSessionRevokedCallbacks) {
-          callback();
-        }
-
-        return false;
-      }
-      return true;
-    } catch (e) {
-      // Network error - assume session is still valid
-      if (kDebugMode) {
-        debugPrint(
-          '📴 [SessionManager] Session verification failed (network): $e',
-        );
-      }
-      return true;
-    }
-  }
-
   /// Perform a full logout with cleanup
   Future<void> performFullLogout() async {
     try {
@@ -248,16 +191,6 @@ class SessionManagerService extends ChangeNotifier {
     }
 
     await _performLogoutCleanup();
-  }
-
-  /// Add callback for session revoked events
-  void addOnSessionRevokedCallback(SessionEventCallback callback) {
-    _onSessionRevokedCallbacks.add(callback);
-  }
-
-  /// Remove session revoked callback
-  void removeOnSessionRevokedCallback(SessionEventCallback callback) {
-    _onSessionRevokedCallbacks.remove(callback);
   }
 
   /// Add callback for password mismatch events
@@ -273,7 +206,6 @@ class SessionManagerService extends ChangeNotifier {
   @override
   void dispose() {
     _authSubscription?.cancel();
-    _onSessionRevokedCallbacks.clear();
     _onPasswordMismatchCallbacks.clear();
     _isInitialized = false;
     super.dispose();

@@ -13,10 +13,7 @@ class ProfileRecord {
   final String email;
   final String displayName;
 
-  ProfileRecord copyWith({
-    String? email,
-    String? displayName,
-  }) {
+  ProfileRecord copyWith({String? email, String? displayName}) {
     return ProfileRecord(
       id: id,
       email: email ?? this.email,
@@ -25,10 +22,7 @@ class ProfileRecord {
   }
 
   Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'display_name': displayName,
-    };
+    return {'id': id, 'display_name': displayName};
   }
 
   static ProfileRecord fromMap(

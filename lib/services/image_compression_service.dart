@@ -26,7 +26,11 @@ Future<Uint8List> _compressImageInBackground(_CompressionParams params) async {
   int currentMaxDimension = params.maxDimension;
 
   // Try compression with different quality levels and sizes
-  for (int quality = params.initialQuality; quality >= params.minQuality; quality -= 10) {
+  for (
+    int quality = params.initialQuality;
+    quality >= params.minQuality;
+    quality -= 10
+  ) {
     // Resize if needed (maintaining aspect ratio)
     img.Image resizedImage = image;
     if (image.width > currentMaxDimension ||
@@ -71,7 +75,10 @@ Future<Uint8List> _compressImageInBackground(_CompressionParams params) async {
       interpolation: img.Interpolation.linear,
     );
 
-    final compressedBytes = img.encodeJpg(smallerImage, quality: params.minQuality);
+    final compressedBytes = img.encodeJpg(
+      smallerImage,
+      quality: params.minQuality,
+    );
 
     if (compressedBytes.length <= params.targetFileSizeBytes) {
       return Uint8List.fromList(compressedBytes);
@@ -112,7 +119,8 @@ class ImageCompressionService {
   const ImageCompressionService._();
 
   static const int maxDimension = 1920; // Higher initial resolution
-  static const int targetFileSizeBytes = 2 * 1024 * 1024; // Target 2MB for optimal API performance
+  static const int targetFileSizeBytes =
+      2 * 1024 * 1024; // Target 2MB for optimal API performance
   static const int initialQuality = 85;
   static const int minQuality = 50;
 

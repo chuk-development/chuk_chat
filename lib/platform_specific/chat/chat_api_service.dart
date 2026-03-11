@@ -34,7 +34,7 @@ class ChatApiService {
     }
     if (kDebugMode) {
       debugPrint(
-      'API Configuration: ${ApiConfigService.configurationDescription}',
+        'API Configuration: ${ApiConfigService.configurationDescription}',
       );
     }
   }
@@ -64,7 +64,9 @@ class ChatApiService {
 
         onUploadStatusUpdate?.call(fileId, markdown, false, null);
         if (kDebugMode) {
-          debugPrint('Plain text file "$fileName" read directly (no API call).');
+          debugPrint(
+            'Plain text file "$fileName" read directly (no API call).',
+          );
         }
         return;
       }
@@ -80,7 +82,6 @@ class ChatApiService {
           false,
           'Session expired. Please sign in again before uploading.',
         );
-        await SupabaseService.signOut();
         return;
       }
       final String accessToken = session.accessToken;
@@ -91,15 +92,10 @@ class ChatApiService {
       );
 
       if (result['success'] == true) {
-        onUploadStatusUpdate?.call(
-          fileId,
-          result['markdown'],
-          false,
-          null,
-        );
+        onUploadStatusUpdate?.call(fileId, result['markdown'], false, null);
         if (kDebugMode) {
           debugPrint(
-          'File "$fileName" conversion successful. Markdown content received.',
+            'File "$fileName" conversion successful. Markdown content received.',
           );
         }
       } else {
@@ -158,10 +154,11 @@ class ChatApiService {
           SupabaseService.auth.currentSession;
       if (session == null || session.accessToken.isEmpty) {
         onUploadStatusUpdate?.call(
-          fileId, null, false,
+          fileId,
+          null,
+          false,
           'Session expired. Please sign in again before uploading.',
         );
-        await SupabaseService.signOut();
         return;
       }
 
@@ -178,15 +175,23 @@ class ChatApiService {
         }
       } else {
         final errorMessage = result['error'] ?? 'Unknown conversion error';
-        onUploadStatusUpdate?.call(fileId, null, false,
-          'Failed to convert "$fileName": $errorMessage');
+        onUploadStatusUpdate?.call(
+          fileId,
+          null,
+          false,
+          'Failed to convert "$fileName": $errorMessage',
+        );
       }
     } catch (e) {
       if (kDebugMode) {
         debugPrint('Unexpected error processing "$fileName": $e');
       }
-      onUploadStatusUpdate?.call(fileId, null, false,
-        'Error processing "$fileName": ${e.toString()}');
+      onUploadStatusUpdate?.call(
+        fileId,
+        null,
+        false,
+        'Error processing "$fileName": ${e.toString()}',
+      );
     }
   }
 
@@ -281,7 +286,11 @@ class ChatApiService {
         http.MultipartRequest('POST', endpoint)
           ..headers['Authorization'] = 'Bearer $accessToken'
           ..files.add(
-            http.MultipartFile.fromBytes('audio_file', bytes, filename: filename),
+            http.MultipartFile.fromBytes(
+              'audio_file',
+              bytes,
+              filename: filename,
+            ),
           );
 
     try {

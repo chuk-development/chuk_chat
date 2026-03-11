@@ -50,7 +50,9 @@ class UploadRateLimiter {
     final userHistory = _uploadHistory[userId] ?? [];
 
     // Count uploads in current window
-    final uploadsInWindow = userHistory.where((timestamp) => timestamp.isAfter(windowStart)).length;
+    final uploadsInWindow = userHistory
+        .where((timestamp) => timestamp.isAfter(windowStart))
+        .length;
 
     return maxUploadsPerWindow - uploadsInWindow;
   }
@@ -63,7 +65,9 @@ class UploadRateLimiter {
     final userHistory = _uploadHistory[userId] ?? [];
 
     // Remove old entries
-    final recentUploads = userHistory.where((timestamp) => timestamp.isAfter(windowStart)).toList();
+    final recentUploads = userHistory
+        .where((timestamp) => timestamp.isAfter(windowStart))
+        .toList();
 
     if (recentUploads.isEmpty || recentUploads.length < maxUploadsPerWindow) {
       return null; // No rate limit active

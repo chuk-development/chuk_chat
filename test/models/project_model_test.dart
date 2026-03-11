@@ -399,14 +399,98 @@ void main() {
 
   group('ProjectFile copyWith', () {
     test('changes specific fields', () {
-      final copy = testFile.copyWith(
-        fileName: 'updated.md',
-        fileSize: 4096,
-      );
+      final copy = testFile.copyWith(fileName: 'updated.md', fileSize: 4096);
       expect(copy.fileName, equals('updated.md'));
       expect(copy.fileSize, equals(4096));
       expect(copy.id, equals(testFile.id));
       expect(copy.projectId, equals(testFile.projectId));
+    });
+  });
+
+  group('ProjectFile estimatedTokens', () {
+    test('text file uses fileSize-based estimate', () {
+      final file = ProjectFile(
+        id: 'f',
+        projectId: 'p',
+        fileName: 'code.dart',
+        storagePath: 'path',
+        fileType: 'dart',
+        fileSize: 4000,
+        uploadedAt: testDate,
+      );
+      // (4000 + 200) / 4 = 1050
+      expect(file.estimatedTokens, equals(1050));
+    });
+
+    test('file with markdown summary uses summary length', () {
+      final file = ProjectFile(
+        id: 'f',
+        projectId: 'p',
+        fileName: 'doc.pdf',
+        storagePath: 'path',
+        fileType: 'pdf',
+        fileSize: 1000000,
+        uploadedAt: testDate,
+        markdownSummary: 'A' * 800,
+      );
+      // (800 + 200) / 4 = 250
+      expect(file.estimatedTokens, equals(250));
+    });
+
+    test('PDF without summary uses minimal estimate', () {
+      final file = ProjectFile(
+        id: 'f',
+        projectId: 'p',
+        fileName: 'doc.pdf',
+        storagePath: 'path',
+        fileType: 'pdf',
+        fileSize: 5000000,
+        uploadedAt: testDate,
+      );
+      // 150 / 4 = 38
+      expect(file.estimatedTokens, equals(38));
+    });
+
+    test('image uses minimal estimate', () {
+      final file = ProjectFile(
+        id: 'f',
+        projectId: 'p',
+        fileName: 'photo.png',
+        storagePath: 'path',
+        fileType: 'png',
+        fileSize: 2000000,
+        uploadedAt: testDate,
+      );
+      // 100 / 4 = 25
+      expect(file.estimatedTokens, equals(25));
+    });
+
+    test('estimatedTokensFormatted small', () {
+      final file = ProjectFile(
+        id: 'f',
+        projectId: 'p',
+        fileName: 'tiny.txt',
+        storagePath: 'path',
+        fileType: 'txt',
+        fileSize: 100,
+        uploadedAt: testDate,
+      );
+      // (100 + 200) / 4 = 75
+      expect(file.estimatedTokensFormatted, equals('75 tokens'));
+    });
+
+    test('estimatedTokensFormatted thousands', () {
+      final file = ProjectFile(
+        id: 'f',
+        projectId: 'p',
+        fileName: 'big.dart',
+        storagePath: 'path',
+        fileType: 'dart',
+        fileSize: 20000,
+        uploadedAt: testDate,
+      );
+      // (20000 + 200) / 4 = 5050
+      expect(file.estimatedTokensFormatted, equals('5.0k tokens'));
     });
   });
 }

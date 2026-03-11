@@ -34,6 +34,7 @@ import 'package:chuk_chat/platform_specific/chat/handlers/streaming_message_hand
 import 'package:chuk_chat/platform_specific/chat/widgets/mobile_chat_widgets.dart';
 import 'package:chuk_chat/services/project_storage_service.dart';
 import 'package:chuk_chat/services/project_message_service.dart';
+import 'package:chuk_chat/services/artifact_context_service.dart';
 import 'package:chuk_chat/pages/project_management_page.dart';
 
 class ChukChatUIMobile extends StatefulWidget {
@@ -2067,6 +2068,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       basePrompt = _systemPrompt;
     }
 
+    var resolvedPrompt = basePrompt;
+
     // If a project is active, prepend project context
     if (_selectedProjectId != null && kFeatureProjects) {
       try {
@@ -2075,10 +2078,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
               _selectedProjectId!,
             );
         // Combine project context with user's system prompt
-        if (basePrompt != null && basePrompt.isNotEmpty) {
-          return '$projectContext\n\n---\n\nAdditional User Instructions:\n$basePrompt';
+        if (resolvedPrompt != null && resolvedPrompt.isNotEmpty) {
+          resolvedPrompt =
+              '$projectContext\n\n---\n\nAdditional User Instructions:\n$resolvedPrompt';
+        } else {
+          resolvedPrompt = projectContext;
         }
-        return projectContext;
       } catch (error) {
         if (kDebugMode) {
           debugPrint('Error building project system message: $error');
@@ -2087,7 +2092,26 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       }
     }
 
-    return basePrompt;
+    final chatId = _activeChatId ?? ChatStorageService.selectedChatId;
+    if (chatId != null && chatId.isNotEmpty) {
+      try {
+        final artifactContext =
+            await ArtifactContextService.buildArtifactsSystemMessage(chatId);
+        if (artifactContext != null && artifactContext.isNotEmpty) {
+          if (resolvedPrompt != null && resolvedPrompt.isNotEmpty) {
+            resolvedPrompt = '$artifactContext\n\n---\n\n$resolvedPrompt';
+          } else {
+            resolvedPrompt = artifactContext;
+          }
+        }
+      } catch (error) {
+        if (kDebugMode) {
+          debugPrint('Error building artifact system message: $error');
+        }
+      }
+    }
+
+    return resolvedPrompt;
   }
 
   void _updateCancelledMessage() {

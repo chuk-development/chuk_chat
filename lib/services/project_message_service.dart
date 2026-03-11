@@ -2,6 +2,7 @@
 import 'package:chuk_chat/models/project_model.dart';
 import 'package:chuk_chat/services/project_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:flutter/foundation.dart';
 
 /// Service for composing AI messages with project context
@@ -9,6 +10,8 @@ class ProjectMessageService {
   // Maximum total content length to include in context (to avoid token limits)
   // This is for the actual text sent to LLM, not raw file sizes
   static const int maxTotalContentLength = 500000; // ~500KB of text content
+  static const int maxChatHistoryContentLength =
+      100000; // ~100KB for chat history
 
   /// Estimate how much content a file will add to the context
   static int _estimateContentLength(ProjectFile file) {
@@ -74,8 +77,8 @@ class ProjectMessageService {
         if (totalContentLength + estimatedLength > maxTotalContentLength) {
           if (kDebugMode) {
             debugPrint(
-            '⚠️ [ProjectMessage] Skipping file ${file.fileName} due to size limit '
-            '(estimated: $estimatedLength, total: $totalContentLength, max: $maxTotalContentLength)',
+              '⚠️ [ProjectMessage] Skipping file ${file.fileName} due to size limit '
+              '(estimated: $estimatedLength, total: $totalContentLength, max: $maxTotalContentLength)',
             );
           }
           continue;
@@ -96,16 +99,24 @@ class ProjectMessageService {
 
           // For PDFs and other binary files, prefer the AI-generated markdown summary
           if (file.hasMarkdownSummary) {
-            buffer.writeln('**Document Summary (AI-generated from ${file.fileType.toUpperCase()}):**');
+            buffer.writeln(
+              '**Document Summary (AI-generated from ${file.fileType.toUpperCase()}):**',
+            );
             buffer.writeln();
             buffer.writeln(file.markdownSummary!);
           } else if (file.isPdf) {
             // PDF without markdown summary - note that content isn't directly readable
-            buffer.writeln('*This is a PDF document. The markdown summary is not yet available.*');
-            buffer.writeln('*Consider re-uploading to generate an AI summary.*');
+            buffer.writeln(
+              '*This is a PDF document. The markdown summary is not yet available.*',
+            );
+            buffer.writeln(
+              '*Consider re-uploading to generate an AI summary.*',
+            );
           } else if (file.isImage) {
             // Image file - describe it
-            buffer.writeln('*This is an image file (${file.extension.toUpperCase()}).*');
+            buffer.writeln(
+              '*This is an image file (${file.extension.toUpperCase()}).*',
+            );
             if (file.hasMarkdownSummary) {
               buffer.writeln();
               buffer.writeln('**Image Analysis:**');
@@ -125,7 +136,9 @@ class ProjectMessageService {
           buffer.writeln();
         } catch (e) {
           if (kDebugMode) {
-            debugPrint('❌ [ProjectMessage] Failed to process file ${file.id}: $e');
+            debugPrint(
+              '❌ [ProjectMessage] Failed to process file ${file.id}: $e',
+            );
           }
           // Skip this file but continue with others
           buffer.writeln('File: ${file.fileName} (content unavailable)');
@@ -152,12 +165,13 @@ class ProjectMessageService {
 
       int chatContentLength = 0;
       int includedChats = 0;
-      final maxChatContentLength = 100000; // ~100KB for chat history (~25k tokens)
 
       for (final chatId in project.chatIds) {
-        if (chatContentLength >= maxChatContentLength) {
+        if (chatContentLength >= maxChatHistoryContentLength) {
           if (kDebugMode) {
-            debugPrint('⚠️ [ProjectMessage] Skipping remaining chats due to size limit');
+            debugPrint(
+              '⚠️ [ProjectMessage] Skipping remaining chats due to size limit',
+            );
           }
           break;
         }
@@ -167,12 +181,17 @@ class ProjectMessageService {
           if (chat == null) continue;
 
           // Build chat summary
-          final chatSummary = _buildChatSummary(chat, maxChatContentLength - chatContentLength);
+          final chatSummary = _buildChatSummary(
+            chat,
+            maxChatHistoryContentLength - chatContentLength,
+          );
           if (chatSummary.isEmpty) continue;
 
           final chatTitle = chat.customName ?? chat.previewText;
           buffer.writeln('### Chat: $chatTitle');
-          buffer.writeln('(${chat.messages.length} messages, ${_formatDate(chat.createdAt)})');
+          buffer.writeln(
+            '(${chat.messages.length} messages, ${_formatDate(chat.createdAt)})',
+          );
           buffer.writeln();
           buffer.writeln(chatSummary);
           buffer.writeln();
@@ -259,10 +278,7 @@ class ProjectMessageService {
       final projectSystemMessage = await buildProjectSystemMessage(projectId);
 
       // Create system message
-      final systemMessage = {
-        'role': 'system',
-        'text': projectSystemMessage,
-      };
+      final systemMessage = {'role': 'system', 'text': projectSystemMessage};
 
       // Prepend to messages
       return [systemMessage, ...messages];
@@ -284,11 +300,15 @@ class ProjectMessageService {
     }
 
     if (project.fileCount > 0) {
-      parts.add('${project.fileCount} file${project.fileCount == 1 ? '' : 's'}');
+      parts.add(
+        '${project.fileCount} file${project.fileCount == 1 ? '' : 's'}',
+      );
     }
 
     if (project.chatCount > 0) {
-      parts.add('${project.chatCount} chat${project.chatCount == 1 ? '' : 's'}');
+      parts.add(
+        '${project.chatCount} chat${project.chatCount == 1 ? '' : 's'}',
+      );
     }
 
     if (parts.isEmpty) {
@@ -300,6 +320,86 @@ class ProjectMessageService {
 
   /// Check if a project has meaningful context
   static bool hasContext(Project project) {
-    return project.hasCustomPrompt || project.fileCount > 0 || project.chatCount > 0;
+    return project.hasCustomPrompt ||
+        project.fileCount > 0 ||
+        project.chatCount > 0;
+  }
+
+  // ============ CONTEXT BUDGET ============
+
+  /// Estimate total tokens for all files in a project.
+  static int estimateTotalFileTokens(Project project) {
+    int total = 0;
+    for (final file in project.files) {
+      total += file.estimatedTokens;
+    }
+    return total;
+  }
+
+  /// Estimate total tokens used by the project context (files + chats + prompt).
+  /// This is an approximate upper bound of what buildProjectSystemMessage produces.
+  static int estimateProjectContextTokens(Project project) {
+    int total = 0;
+
+    // Project header (~50 tokens for name + description)
+    total += 50;
+
+    // Custom system prompt
+    if (project.hasCustomPrompt) {
+      total += (project.customSystemPrompt!.length / 4).ceil() + 10;
+    }
+
+    // Files
+    total += estimateTotalFileTokens(project);
+
+    // Chat history estimate aligned to actual prompt cap:
+    // up to ~100k chars (~25k tokens) total across linked chats.
+    final estimatedChatTokens = project.chatCount * 2000;
+    final chatTokenCap = maxChatHistoryContentLength ~/ 4;
+    total += estimatedChatTokens > chatTokenCap
+        ? chatTokenCap
+        : estimatedChatTokens;
+
+    return total;
+  }
+
+  /// Get the context window size for the currently selected model.
+  /// Returns null if unknown.
+  static int? getModelContextWindow(String? modelId) {
+    if (modelId == null || modelId.isEmpty) return null;
+    final limits = ModelSelectionDropdown.providerLimitsForModel(modelId);
+    return limits?.contextLength;
+  }
+
+  /// Calculate what % of the model's context window the project would use.
+  /// Returns null if model context window is unknown.
+  /// Value is 0.0 to 1.0+.
+  static double? contextUsageRatio(Project project, String? modelId) {
+    final contextWindow = getModelContextWindow(modelId);
+    if (contextWindow == null || contextWindow <= 0) return null;
+    final projectTokens = estimateProjectContextTokens(project);
+    return projectTokens / contextWindow;
+  }
+
+  /// Calculate what % of the model's context a single file would use.
+  /// Returns null if model context window is unknown.
+  static double? fileContextRatio(ProjectFile file, String? modelId) {
+    final contextWindow = getModelContextWindow(modelId);
+    if (contextWindow == null || contextWindow <= 0) return null;
+    return file.estimatedTokens / contextWindow;
+  }
+
+  /// Check whether adding [newFileTokens] additional tokens would exceed
+  /// a reasonable budget (e.g. 75% of context reserved for project files).
+  /// Returns remaining token capacity, or negative if over budget.
+  static int remainingFileTokenBudget(Project project, String? modelId) {
+    final contextWindow = getModelContextWindow(modelId);
+    if (contextWindow == null || contextWindow <= 0) {
+      // Unknown context window - use the service's hard limit
+      return maxTotalContentLength ~/ 4 - estimateTotalFileTokens(project);
+    }
+    // Reserve 25% of context for conversation + response
+    final fileBudget = (contextWindow * 0.75).round();
+    return fileBudget - estimateTotalFileTokens(project);
   }
 }

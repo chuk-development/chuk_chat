@@ -11,6 +11,9 @@ import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/app_initialization_service.dart';
 import 'package:chuk_chat/services/app_lifecycle_service.dart';
 import 'package:chuk_chat/services/app_theme_service.dart';
+import 'package:chuk_chat/services/diagnostics_log_service.dart';
+import 'package:chuk_chat/services/developer_options_service.dart';
+import 'package:chuk_chat/services/settings_sync_service.dart';
 import 'package:chuk_chat/services/session_manager_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart'
     show initChatStorageCache;
@@ -36,6 +39,22 @@ Future<void> main() async {
 
   // Pre-initialize SharedPreferences BEFORE runApp for instant cache access
   await initChatStorageCache();
+
+  // Initialize developer options cache (hidden settings gate).
+  await DeveloperOptionsService.initialize();
+
+  // Initialize optional diagnostics logger (release-safe, opt-in).
+  await DiagnosticsLogService.initialize();
+  unawaited(
+    DiagnosticsLogService.info(
+      'startup',
+      'App main() started',
+      data: {
+        'platform': defaultTargetPlatform.name,
+        'release_mode': kReleaseMode,
+      },
+    ),
+  );
 
   // Initialize desktop system tray behavior (no-op on unsupported platforms)
   await SystemTrayService.instance.initialize();
@@ -69,6 +88,7 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _lifecycleService.addOnResumeCallback(_syncSettingsInBackground);
 
     // Listen to theme changes
     _themeService.addListener(_onThemeChanged);
@@ -81,15 +101,6 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
     if (mounted) setState(() {});
   }
 
-  void _onSessionRevoked() {
-    if (mounted) {
-      // UI will automatically update via AuthGate
-      if (kDebugMode) {
-        debugPrint('🔐 [Main] Session revoked - UI updating');
-      }
-    }
-  }
-
   void _onPasswordMismatch() {
     if (mounted) {
       // UI will automatically update via AuthGate
@@ -97,6 +108,30 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
         debugPrint('🔐 [Main] Password mismatch - UI updating');
       }
     }
+  }
+
+  void _syncSettingsInBackground() {
+    unawaited(
+      SettingsSyncService.syncAllFromSupabase(forceRefresh: false).catchError((
+        error,
+      ) {
+        if (kDebugMode) {
+          debugPrint('⚠️ [Main] Settings background sync failed: $error');
+        }
+      }),
+    );
+  }
+
+  void _syncSettingsInBackgroundForce() {
+    unawaited(
+      SettingsSyncService.syncAllFromSupabase(forceRefresh: true).catchError((
+        error,
+      ) {
+        if (kDebugMode) {
+          debugPrint('⚠️ [Main] Forced settings sync failed: $error');
+        }
+      }),
+    );
   }
 
   Future<void> _initializeApp() async {
@@ -117,10 +152,10 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
     // Initialize session manager now that Supabase is ready and local
     // theme is loaded. This subscribes to onAuthStateChange and handles
     // user session initialization (chat loading, sync, theme from Supabase).
-    _sessionManager.initialize(
-      onSessionRevoked: _onSessionRevoked,
-      onPasswordMismatch: _onPasswordMismatch,
-    );
+    _sessionManager.initialize(onPasswordMismatch: _onPasswordMismatch);
+
+    // Prime identity cache from Supabase in background at startup.
+    _syncSettingsInBackgroundForce();
 
     // Check launch notification (depends on notification init above)
     await NotificationService.checkLaunchNotification();
@@ -129,6 +164,7 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _lifecycleService.removeOnResumeCallback(_syncSettingsInBackground);
     _themeService.removeListener(_onThemeChanged);
     _lifecycleService.dispose();
     _sessionManager.dispose();

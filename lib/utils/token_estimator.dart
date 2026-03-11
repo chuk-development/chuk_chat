@@ -37,7 +37,9 @@ class TokenEstimator {
         for (final block in content) {
           if (block is Map) {
             if (block['type'] == 'text') {
-              total += estimateTokens(block['text'] as String? ?? '') + _perMessageOverhead;
+              total +=
+                  estimateTokens(block['text'] as String? ?? '') +
+                  _perMessageOverhead;
             } else if (block['type'] == 'image_url') {
               total += 1000; // Rough estimate for image tokens
             }
