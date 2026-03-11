@@ -35,7 +35,13 @@ class ChatSyncService {
 
   /// How often to poll for changes (in seconds)
   static const int _pollIntervalSeconds = 30;
-  static const Duration _initialSyncDelay = Duration(seconds: 4);
+  static Duration get _initialSyncDelay {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.linux) {
+      // Startup on Linux is sensitive to early network + merge work.
+      return const Duration(seconds: 14);
+    }
+    return const Duration(seconds: 4);
+  }
 
   /// Start the sync service
   static void start() {

@@ -110,7 +110,7 @@ class SessionManagerService extends ChangeNotifier {
     Future<void> run() async {
       try {
         if (defaultTargetPlatform == TargetPlatform.linux) {
-          await Future<void>.delayed(const Duration(seconds: 3));
+          await Future<void>.delayed(const Duration(seconds: 12));
         }
 
         final activeUserId = SupabaseService.auth.currentUser?.id;
