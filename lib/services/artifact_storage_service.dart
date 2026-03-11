@@ -16,6 +16,9 @@ class ArtifactStorageService {
 
   static const String _artifactsTable = 'artifacts';
   static const String _versionsTable = 'artifact_versions';
+  static const String _missingSchemaMessage =
+      'Artifact storage is not configured on this server yet. '
+      'Please run the database migrations for artifacts.';
   static const int maxContentBytes = 500 * 1024; // 500 KB
   static final RegExp _artifactIdPattern = RegExp(r'^[A-Za-z0-9-]+$');
 
@@ -28,6 +31,8 @@ class ArtifactStorageService {
 
   static String? _activeChatId;
   static String? _cacheUserId;
+  static bool _artifactStorageAvailable = true;
+  static bool _missingSchemaLogged = false;
   static final Map<String, List<ArtifactDocument>> _cacheByChatId =
       <String, List<ArtifactDocument>>{};
   static final Map<String, List<ArtifactVersionSnapshot>> _versionCache =
@@ -58,6 +63,10 @@ class ArtifactStorageService {
     String chatId, {
     bool forceRefresh = false,
   }) async {
+    if (!_artifactStorageAvailable) {
+      return const <ArtifactDocument>[];
+    }
+
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
       return const <ArtifactDocument>[];
@@ -68,15 +77,26 @@ class ArtifactStorageService {
       return List<ArtifactDocument>.from(_cacheByChatId[chatId]!);
     }
 
-    final response = await SupabaseService.client
-        .from(_artifactsTable)
-        .select()
-        .eq('chat_id', chatId)
-        .eq('user_id', user.id)
-        .eq('is_active', true)
-        .order('updated_at', ascending: false);
+    final List response;
+    try {
+      response = await SupabaseService.client
+          .from(_artifactsTable)
+          .select()
+          .eq('chat_id', chatId)
+          .eq('user_id', user.id)
+          .eq('is_active', true)
+          .order('updated_at', ascending: false);
+    } on PostgrestException catch (error) {
+      if (_handleMissingArtifactSchema(
+        error,
+        operation: 'loadArtifactsForChat',
+      )) {
+        return const <ArtifactDocument>[];
+      }
+      rethrow;
+    }
 
-    final rows = (response as List)
+    final rows = response
         .map((row) => Map<String, dynamic>.from(row as Map))
         .toList(growable: false);
 
@@ -104,6 +124,8 @@ class ArtifactStorageService {
   }
 
   static Future<ArtifactDocument?> loadArtifactById(String artifactId) async {
+    if (!_artifactStorageAvailable) return null;
+
     final normalizedArtifactId = artifactId.trim();
     if (normalizedArtifactId.isEmpty) return null;
 
@@ -119,13 +141,25 @@ class ArtifactStorageService {
       }
     }
 
-    final row = await SupabaseService.client
-        .from(_artifactsTable)
-        .select()
-        .eq('id', normalizedArtifactId)
-        .eq('user_id', user.id)
-        .eq('is_active', true)
-        .maybeSingle();
+    final row = await (() async {
+      try {
+        return await SupabaseService.client
+            .from(_artifactsTable)
+            .select()
+            .eq('id', normalizedArtifactId)
+            .eq('user_id', user.id)
+            .eq('is_active', true)
+            .maybeSingle();
+      } on PostgrestException catch (error) {
+        if (_handleMissingArtifactSchema(
+          error,
+          operation: 'loadArtifactById',
+        )) {
+          return null;
+        }
+        rethrow;
+      }
+    })();
 
     if (row == null) return null;
     final map = Map<String, dynamic>.from(row as Map);
@@ -144,6 +178,10 @@ class ArtifactStorageService {
     String? language,
     String? messageId,
   }) async {
+    if (!_artifactStorageAvailable) {
+      throw StateError(_missingSchemaMessage);
+    }
+
     final normalizedArtifactId = artifactId.trim();
     final user = _requireUser();
     _validateArtifactId(normalizedArtifactId);
@@ -170,6 +208,9 @@ class ArtifactStorageService {
     try {
       await SupabaseService.client.from(_artifactsTable).insert(insertPayload);
     } on PostgrestException catch (error) {
+      if (_handleMissingArtifactSchema(error, operation: 'createArtifact')) {
+        throw StateError(_missingSchemaMessage);
+      }
       if (_isDuplicateArtifactError(error)) {
         throw StateError(
           'Artifact "$normalizedArtifactId" already exists. Use update or rewrite.',
@@ -260,6 +301,10 @@ class ArtifactStorageService {
     String? language,
     bool preserveMetadata = false,
   }) async {
+    if (!_artifactStorageAvailable) {
+      throw StateError(_missingSchemaMessage);
+    }
+
     final current = await loadArtifactById(artifactId);
     if (current == null) {
       throw StateError('Artifact "$artifactId" not found.');
@@ -284,19 +329,27 @@ class ArtifactStorageService {
               ? null
               : (language?.trim() ?? current.language));
 
-    final updateRows = await SupabaseService.client
-        .from(_artifactsTable)
-        .update({
-          'title': resolvedTitle,
-          'type': resolvedType.value,
-          'language': resolvedLanguage,
-          'content': encrypted,
-          'version': nextVersion,
-          'updated_at': now.toIso8601String(),
-        })
-        .eq('id', current.id)
-        .eq('user_id', current.userId)
-        .select('id');
+    final List updateRows;
+    try {
+      updateRows = await SupabaseService.client
+          .from(_artifactsTable)
+          .update({
+            'title': resolvedTitle,
+            'type': resolvedType.value,
+            'language': resolvedLanguage,
+            'content': encrypted,
+            'version': nextVersion,
+            'updated_at': now.toIso8601String(),
+          })
+          .eq('id', current.id)
+          .eq('user_id', current.userId)
+          .select('id');
+    } on PostgrestException catch (error) {
+      if (_handleMissingArtifactSchema(error, operation: 'rewriteArtifact')) {
+        throw StateError(_missingSchemaMessage);
+      }
+      rethrow;
+    }
 
     if (updateRows.isEmpty) {
       throw StateError(
@@ -368,6 +421,10 @@ class ArtifactStorageService {
     String artifactId, {
     bool forceRefresh = false,
   }) async {
+    if (!_artifactStorageAvailable) {
+      return const <ArtifactVersionSnapshot>[];
+    }
+
     if (!forceRefresh && _versionCache.containsKey(artifactId)) {
       return List<ArtifactVersionSnapshot>.from(_versionCache[artifactId]!);
     }
@@ -378,14 +435,25 @@ class ArtifactStorageService {
     }
     _ensureCacheForUser(user.id);
 
-    final response = await SupabaseService.client
-        .from(_versionsTable)
-        .select()
-        .eq('artifact_id', artifactId)
-        .eq('user_id', user.id)
-        .order('version', ascending: false);
+    final List response;
+    try {
+      response = await SupabaseService.client
+          .from(_versionsTable)
+          .select()
+          .eq('artifact_id', artifactId)
+          .eq('user_id', user.id)
+          .order('version', ascending: false);
+    } on PostgrestException catch (error) {
+      if (_handleMissingArtifactSchema(
+        error,
+        operation: 'loadVersionHistory',
+      )) {
+        return const <ArtifactVersionSnapshot>[];
+      }
+      rethrow;
+    }
 
-    final rows = (response as List)
+    final rows = response
         .map((row) => Map<String, dynamic>.from(row as Map))
         .toList(growable: false);
 
@@ -410,14 +478,21 @@ class ArtifactStorageService {
     required String encryptedContent,
     required DateTime createdAt,
   }) async {
-    await SupabaseService.client.from(_versionsTable).insert({
-      'artifact_id': artifactId,
-      'chat_id': chatId,
-      'user_id': userId,
-      'version': version,
-      'content': encryptedContent,
-      'created_at': createdAt.toIso8601String(),
-    });
+    try {
+      await SupabaseService.client.from(_versionsTable).insert({
+        'artifact_id': artifactId,
+        'chat_id': chatId,
+        'user_id': userId,
+        'version': version,
+        'content': encryptedContent,
+        'created_at': createdAt.toIso8601String(),
+      });
+    } on PostgrestException catch (error) {
+      if (_handleMissingArtifactSchema(error, operation: '_insertVersion')) {
+        throw StateError(_missingSchemaMessage);
+      }
+      rethrow;
+    }
   }
 
   static void _emitChange(String chatId, ArtifactDocument updated) {
@@ -483,6 +558,63 @@ class ArtifactStorageService {
     final code = error.code?.toLowerCase() ?? '';
     final message = error.message.toLowerCase();
     return code == '23505' || message.contains('duplicate key');
+  }
+
+  static bool _handleMissingArtifactSchema(
+    PostgrestException error, {
+    required String operation,
+  }) {
+    if (!_isMissingArtifactSchemaError(error)) return false;
+
+    _artifactStorageAvailable = false;
+    _cacheByChatId.clear();
+    _versionCache.clear();
+    if (activeArtifactNotifier.value != null) {
+      activeArtifactNotifier.value = null;
+    }
+
+    unawaited(
+      DiagnosticsLogService.warning(
+        'artifact',
+        'Artifact schema missing; disabling artifact features',
+        data: {
+          'operation': operation,
+          'code': error.code,
+          'message': error.message,
+          'hint': error.hint,
+        },
+      ),
+    );
+
+    if (kDebugMode && !_missingSchemaLogged) {
+      _missingSchemaLogged = true;
+      debugPrint(
+        'Artifact schema missing (operation: $operation). '
+        'Artifacts are now disabled for this app session.',
+      );
+    }
+
+    return true;
+  }
+
+  static bool _isMissingArtifactSchemaError(PostgrestException error) {
+    final code = (error.code ?? '').toUpperCase();
+    final message = error.message.toLowerCase();
+    final details = (error.details ?? '').toString().toLowerCase();
+    final hint = (error.hint ?? '').toString().toLowerCase();
+
+    if (code == 'PGRST205') return true;
+    final mentionsArtifacts =
+        message.contains('artifacts') ||
+        message.contains('artifact_versions') ||
+        details.contains('artifacts') ||
+        details.contains('artifact_versions') ||
+        hint.contains('artifacts') ||
+        hint.contains('artifact_versions');
+
+    if (!mentionsArtifacts) return false;
+    return message.contains('schema cache') ||
+        message.contains('could not find the table');
   }
 
   static Future<String> _encryptOrThrow(String content) async {

@@ -4,9 +4,10 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
+
+import 'package:chuk_chat/services/diagnostics_log_service.dart';
 
 /// Desktop system tray integration for Linux, Windows, and macOS.
 ///
@@ -23,7 +24,10 @@ class SystemTrayService with TrayListener, WindowListener {
   bool _isInitializing = false;
   bool _isWindowVisible = true;
   bool _isQuitting = false;
+  int _linuxRetryAttempts = 0;
   Timer? _retryTimer;
+  static const int _kMaxLinuxRetryAttempts = 3;
+  static const Duration _kLinuxRetryBaseDelay = Duration(seconds: 3);
 
   bool get _isDesktop {
     if (kIsWeb) return false;
@@ -52,7 +56,6 @@ class SystemTrayService with TrayListener, WindowListener {
       await windowManager.setPreventClose(true);
       windowManager.addListener(this);
 
-      await _resetTrayStateBeforeInit();
       final iconPath = await _setTrayIconWithFallback();
 
       if (_supportsTooltip) {
@@ -61,6 +64,7 @@ class SystemTrayService with TrayListener, WindowListener {
 
       trayManager.addListener(this);
       _isInitialized = true;
+      _linuxRetryAttempts = 0;
       _retryTimer?.cancel();
       _retryTimer = null;
 
@@ -95,30 +99,18 @@ class SystemTrayService with TrayListener, WindowListener {
   void _scheduleRetry() {
     if (defaultTargetPlatform != TargetPlatform.linux) return;
     if (_retryTimer != null || _isInitialized) return;
+    if (_linuxRetryAttempts >= _kMaxLinuxRetryAttempts) return;
 
-    _retryTimer = Timer(const Duration(seconds: 3), () {
+    _linuxRetryAttempts += 1;
+    final delay = Duration(
+      seconds: _kLinuxRetryBaseDelay.inSeconds * _linuxRetryAttempts,
+    );
+
+    _retryTimer = Timer(delay, () {
       _retryTimer = null;
       if (_isInitialized || _isInitializing) return;
       unawaited(initialize());
     });
-  }
-
-  Future<void> _resetTrayStateBeforeInit() async {
-    try {
-      trayManager.removeListener(this);
-    } catch (_) {
-      // Ignore missing-listener errors.
-    }
-
-    // Linux appindicator backends can keep stale tray state in-process.
-    // Destroying before re-init ensures exactly one active tray icon.
-    if (defaultTargetPlatform == TargetPlatform.linux) {
-      try {
-        await trayManager.destroy();
-      } catch (_) {
-        // Ignore when tray is not yet initialized.
-      }
-    }
   }
 
   Future<String> _setTrayIconWithFallback() async {
@@ -143,26 +135,26 @@ class SystemTrayService with TrayListener, WindowListener {
   }
 
   Future<List<String>> _resolveTrayIconCandidates() async {
-    final candidates = <String>[];
-
-    final bundledIcon = await _materializeBundledTrayIcon();
-    if (bundledIcon != null) {
-      candidates.add(bundledIcon);
-    }
-
     if (defaultTargetPlatform == TargetPlatform.linux) {
+      final candidates = <String>[];
       for (final candidate in _linuxTrayFallbackCandidates) {
         if (File(candidate).existsSync()) {
           candidates.add(candidate);
         }
       }
+
+      // Last resort: use icon theme name so Linux can resolve from hicolor.
+      if (candidates.isEmpty) {
+        return const <String>['chuk-chat', 'application-default-icon'];
+      }
+      return candidates.toSet().toList(growable: false);
     }
 
-    if (candidates.isEmpty) {
+    final bundledIcon = await _materializeBundledTrayIcon();
+    if (bundledIcon == null) {
       throw StateError('No tray icon candidates available');
     }
-
-    return candidates.toSet().toList(growable: false);
+    return <String>[bundledIcon];
   }
 
   Future<String?> _materializeBundledTrayIcon() async {
@@ -200,18 +192,16 @@ class SystemTrayService with TrayListener, WindowListener {
   }
 
   List<String> get _linuxTrayFallbackCandidates {
-    final candidates = <String>{
+    final executableDir = File(Platform.resolvedExecutable).parent.path;
+    return <String>[
+      '$executableDir${Platform.pathSeparator}data${Platform.pathSeparator}flutter_assets${Platform.pathSeparator}assets${Platform.pathSeparator}icons${Platform.pathSeparator}chuk_chat_tray_brand.png',
+      '$executableDir${Platform.pathSeparator}data${Platform.pathSeparator}flutter_assets${Platform.pathSeparator}web${Platform.pathSeparator}icons${Platform.pathSeparator}Icon-512.png',
+      '/opt/chuk-chat/data/flutter_assets/assets/icons/chuk_chat_tray_brand.png',
+      '/opt/chuk-chat/data/flutter_assets/web/icons/Icon-512.png',
+      '/usr/share/icons/hicolor/256x256/apps/chuk-chat.png',
       '/usr/share/icons/hicolor/512x512/apps/chuk-chat.png',
       '/usr/share/pixmaps/chuk-chat.png',
-      '/opt/chuk-chat/data/flutter_assets/web/icons/Icon-512.png',
-    };
-
-    final executableDir = File(Platform.resolvedExecutable).parent.path;
-    candidates.add(
-      '$executableDir${Platform.pathSeparator}data${Platform.pathSeparator}flutter_assets${Platform.pathSeparator}web${Platform.pathSeparator}icons${Platform.pathSeparator}Icon-512.png',
-    );
-
-    return candidates.toList(growable: false);
+    ];
   }
 
   Future<void> _syncWindowVisibility() async {

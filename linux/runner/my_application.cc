@@ -19,6 +19,7 @@ G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 
 namespace {
 int g_single_instance_lock_fd = -1;
+bool g_main_window_rendered = false;
 
 bool acquire_single_instance_lock() {
   if (g_single_instance_lock_fd != -1) {
@@ -62,6 +63,7 @@ void release_single_instance_lock() {
 // Called when first Flutter frame received.
 static void first_frame_cb(MyApplication* self, FlView *view)
 {
+  g_main_window_rendered = true;
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
 }
 
@@ -73,9 +75,23 @@ static void my_application_activate(GApplication* application) {
       gtk_application_get_windows(GTK_APPLICATION(application));
   if (existing_windows != nullptr) {
     GtkWindow* existing_window = GTK_WINDOW(existing_windows->data);
-    gtk_widget_show(GTK_WIDGET(existing_window));
-    gtk_window_deiconify(existing_window);
-    gtk_window_present(existing_window);
+    if (!g_main_window_rendered) {
+      // Ignore early duplicate activations during startup until first frame
+      // to avoid hiding the main window before tray initialization.
+      gtk_widget_show(GTK_WIDGET(existing_window));
+      gtk_window_deiconify(existing_window);
+      gtk_window_present(existing_window);
+      return;
+    }
+    const gboolean is_visible = gtk_widget_get_visible(GTK_WIDGET(existing_window));
+    if (is_visible) {
+      // Toggle behavior for repeated launcher/app-icon clicks.
+      gtk_widget_hide(GTK_WIDGET(existing_window));
+    } else {
+      gtk_widget_show(GTK_WIDGET(existing_window));
+      gtk_window_deiconify(existing_window);
+      gtk_window_present(existing_window);
+    }
     return;
   }
 
