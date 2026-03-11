@@ -98,10 +98,10 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
   DateTime? _linuxStartupOverlayShownAt;
   bool _showLinuxStartupOverlay = false;
   bool _linuxOverlaySessionArmed = false;
-  static const Duration _linuxStartupOverlayMinVisible = Duration(seconds: 4);
-  static const Duration _linuxStartupOverlayMaxVisible = Duration(seconds: 18);
+  static const Duration _linuxStartupOverlayMinVisible = Duration(seconds: 6);
+  static const Duration _linuxStartupOverlayMaxVisible = Duration(seconds: 22);
   static const Duration _linuxStartupOverlayPollInterval = Duration(
-    milliseconds: 250,
+    milliseconds: 450,
   );
 
   bool get _isLinuxDesktop =>
@@ -377,40 +377,44 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
     }
 
     final theme = Theme.of(context);
+    final accent = _themeService.accentColor;
+    final bg = _themeService.bgColor;
+    final iconFg = _themeService.iconFgColor;
     return Stack(
       children: [
         root,
         Positioned.fill(
           child: ColoredBox(
-            color: theme.colorScheme.surface.withValues(alpha: 0.48),
+            color: bg.withValues(alpha: 0.88),
             child: Center(
               child: Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
+                  horizontal: 18,
+                  vertical: 16,
                 ),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.surface.withValues(alpha: 0.95),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: theme.colorScheme.outline.withValues(alpha: 0.3),
-                  ),
+                  color: theme.colorScheme.surface.withValues(alpha: 0.98),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: accent.withValues(alpha: 0.35)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.15),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      width: 56,
-                      height: 56,
+                      width: 52,
+                      height: 52,
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(14),
-                        gradient: LinearGradient(
-                          colors: [
-                            theme.colorScheme.primary.withValues(alpha: 0.18),
-                            theme.colorScheme.secondary.withValues(alpha: 0.22),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+                        borderRadius: BorderRadius.circular(12),
+                        color: accent.withValues(alpha: 0.16),
+                        border: Border.all(
+                          color: accent.withValues(alpha: 0.35),
                         ),
                       ),
                       child: Padding(
@@ -418,7 +422,9 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
                         child: Image.asset(
                           'web/icons/Icon-512.png',
                           fit: BoxFit.contain,
-                          filterQuality: FilterQuality.high,
+                          cacheWidth: 96,
+                          cacheHeight: 96,
+                          filterQuality: FilterQuality.medium,
                         ),
                       ),
                     ),
@@ -432,30 +438,36 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
                           Text(
                             'Chuk Chat startet...',
                             style: theme.textTheme.bodyLarge?.copyWith(
-                              color: theme.colorScheme.onSurface,
+                              color: iconFg,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
                           const SizedBox(height: 6),
-                          SizedBox(
+                          Container(
                             width: 210,
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: LinearProgressIndicator(
-                                minHeight: 5,
-                                backgroundColor: theme.colorScheme.outline
-                                    .withValues(alpha: 0.2),
-                                color: theme.colorScheme.primary,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(999),
+                              color: accent.withValues(alpha: 0.22),
+                            ),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: FractionallySizedBox(
+                                widthFactor: 0.68,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(999),
+                                    color: accent.withValues(alpha: 0.9),
+                                  ),
+                                ),
                               ),
                             ),
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'Lade Daten und sichere Session...',
+                            'Bitte kurz warten...',
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurface.withValues(
-                                alpha: 0.78,
-                              ),
+                              color: iconFg.withValues(alpha: 0.78),
                             ),
                           ),
                         ],
