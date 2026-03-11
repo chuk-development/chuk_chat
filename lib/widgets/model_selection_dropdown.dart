@@ -169,6 +169,8 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
   Timer? _apiAvailabilityTimer;
   Map<String, String> _lastSavedPreferences = {};
   late final VoidCallback _selectedModelListener;
+  final ValueNotifier<bool> _isHovered = ValueNotifier<bool>(false);
+  double _lastStableMaxWidth = 220.0;
 
   double _menuWidth = 260.0;
   double _buttonWidth = 180.0;
@@ -698,26 +700,41 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       return 32.0;
     }
 
-    // Allow button to grow to fit full model name (no max cap)
-    double width = math.max(140.0, _buttonWidth);
-    if (maxAvailableWidth.isFinite) {
-      width = math.min(width, maxAvailableWidth);
+    if (maxAvailableWidth.isFinite && maxAvailableWidth > 48.0) {
+      _lastStableMaxWidth = maxAvailableWidth;
     }
+
+    final effectiveMaxWidth =
+        (maxAvailableWidth.isFinite && maxAvailableWidth > 48.0)
+        ? maxAvailableWidth
+        : _lastStableMaxWidth;
+
+    // Allow button to grow to fit full model name while preventing
+    // transient 0-width layouts from making the control disappear.
+    double width = math.max(140.0, _buttonWidth);
+    if (effectiveMaxWidth.isFinite) {
+      width = math.min(width, effectiveMaxWidth);
+    }
+    if (maxAvailableWidth.isFinite &&
+        maxAvailableWidth > 0 &&
+        maxAvailableWidth < 80.0) {
+      return maxAvailableWidth;
+    }
+    width = math.max(80.0, width);
     return width;
   }
 
   Widget _buildDropdownButtonContent(double buttonWidth) {
-    final ValueNotifier<bool> isHovered = ValueNotifier<bool>(false);
     final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
     final Color iconFgColor = Theme.of(context).resolvedIconColor;
 
     final double effectiveWidth = widget.isCompactMode ? 32.0 : buttonWidth;
 
     return MouseRegion(
-      onEnter: (_) => isHovered.value = true,
-      onExit: (_) => isHovered.value = false,
+      onEnter: (_) => _isHovered.value = true,
+      onExit: (_) => _isHovered.value = false,
       child: ValueListenableBuilder<bool>(
-        valueListenable: isHovered,
+        valueListenable: _isHovered,
         builder: (context, hovered, child) {
           // Compact mode: 32x32 circle matching icon buttons
           if (widget.isCompactMode) {
@@ -955,6 +972,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
 
   @override
   void dispose() {
+    _isHovered.dispose();
     ModelSelectionDropdown.selectedModelListenable.removeListener(
       _selectedModelListener,
     );
