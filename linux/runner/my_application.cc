@@ -1,9 +1,12 @@
 #include "my_application.h"
 
+#include <fcntl.h>
 #include <flutter_linux/flutter_linux.h>
 #ifdef GDK_WINDOWING_X11
 #include <gdk/gdkx.h>
 #endif
+#include <sys/file.h>
+#include <unistd.h>
 
 #include "flutter/generated_plugin_registrant.h"
 
@@ -13,6 +16,48 @@ struct _MyApplication {
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
+
+namespace {
+int g_single_instance_lock_fd = -1;
+
+bool acquire_single_instance_lock() {
+  if (g_single_instance_lock_fd != -1) {
+    return true;
+  }
+
+  const gchar* runtime_dir = g_get_user_runtime_dir();
+  const gchar* fallback_dir = g_get_tmp_dir();
+  const gchar* lock_dir =
+      (runtime_dir != nullptr && runtime_dir[0] != '\0') ? runtime_dir : fallback_dir;
+
+  g_autofree gchar* lock_path =
+      g_build_filename(lock_dir, "chuk_chat_single_instance.lock", nullptr);
+
+  const int fd = open(lock_path, O_RDWR | O_CREAT, 0666);
+  if (fd == -1) {
+    g_warning("Failed to open single-instance lock file: %s", lock_path);
+    return false;
+  }
+
+  if (flock(fd, LOCK_EX | LOCK_NB) != 0) {
+    close(fd);
+    return false;
+  }
+
+  g_single_instance_lock_fd = fd;
+  return true;
+}
+
+void release_single_instance_lock() {
+  if (g_single_instance_lock_fd == -1) {
+    return;
+  }
+
+  flock(g_single_instance_lock_fd, LOCK_UN);
+  close(g_single_instance_lock_fd);
+  g_single_instance_lock_fd = -1;
+}
+}  // namespace
 
 // Called when first Flutter frame received.
 static void first_frame_cb(MyApplication* self, FlView *view)
@@ -100,6 +145,21 @@ static gboolean my_application_local_command_line(GApplication* application, gch
      return TRUE;
   }
 
+  // Secondary launches should always activate the existing process.
+  if (g_application_get_is_remote(application)) {
+    g_application_activate(application);
+    *exit_status = 0;
+    return TRUE;
+  }
+
+  // If D-Bus activation is unavailable, guard with a process lock so we
+  // never spin up a second full app instance (and second tray icon).
+  if (!acquire_single_instance_lock()) {
+    g_warning("Another Chuk Chat instance is already running.");
+    *exit_status = 0;
+    return TRUE;
+  }
+
   g_application_activate(application);
   *exit_status = 0;
 
@@ -120,6 +180,7 @@ static void my_application_shutdown(GApplication* application) {
   //MyApplication* self = MY_APPLICATION(object);
 
   // Perform any actions required at application shutdown.
+  release_single_instance_lock();
 
   G_APPLICATION_CLASS(my_application_parent_class)->shutdown(application);
 }
