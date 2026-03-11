@@ -52,11 +52,18 @@ class _CustomizationPageState extends State<CustomizationPage> {
 
   Future<void> _loadAutoTitleSetting() async {
     final stopwatch = Stopwatch()..start();
-    await TitleGenerationService.syncSettingsFromSupabase(forceRefresh: false);
-    final enabled = await TitleGenerationService.isEnabled();
-    final prompt = await TitleGenerationService.getSystemPrompt();
-    final hasCustom = await TitleGenerationService.hasCustomSystemPrompt();
-    if (mounted) {
+    try {
+      // Load local cache first to keep page transitions smooth.
+      final values = await Future.wait<dynamic>([
+        TitleGenerationService.isEnabled(),
+        TitleGenerationService.getSystemPrompt(),
+      ]);
+      final enabled = values[0] as bool;
+      final prompt = values[1] as String;
+      final hasCustom =
+          prompt.trim() != TitleGenerationService.defaultSystemPrompt.trim();
+      if (!mounted) return;
+
       setState(() {
         _autoGenerateTitles = enabled;
         _hasCustomPrompt = hasCustom;
@@ -67,13 +74,77 @@ class _CustomizationPageState extends State<CustomizationPage> {
       unawaited(
         DiagnosticsLogService.timing(
           'settings',
-          'load_customization_page_title_settings',
+          'load_customization_page_title_settings_local',
           stopwatch.elapsedMilliseconds,
           data: {
             'platform': Theme.of(context).platform.name,
             'auto_generate_titles': enabled,
             'has_custom_prompt': hasCustom,
           },
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingTitleSetting = false;
+      });
+      unawaited(
+        DiagnosticsLogService.warning(
+          'settings',
+          'Failed to load customization title settings locally',
+          data: {'error': error.toString()},
+        ),
+      );
+    }
+
+    // Pull from remote after first paint so navigation remains responsive.
+    unawaited(_refreshAutoTitleSettingFromSupabase());
+  }
+
+  Future<void> _refreshAutoTitleSettingFromSupabase() async {
+    final stopwatch = Stopwatch()..start();
+    try {
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+      await TitleGenerationService.syncSettingsFromSupabase(
+        forceRefresh: false,
+      );
+      final values = await Future.wait<dynamic>([
+        TitleGenerationService.isEnabled(),
+        TitleGenerationService.getSystemPrompt(),
+      ]);
+      final enabled = values[0] as bool;
+      final prompt = values[1] as String;
+      final hasCustom =
+          prompt.trim() != TitleGenerationService.defaultSystemPrompt.trim();
+      if (!mounted) return;
+
+      setState(() {
+        _autoGenerateTitles = enabled;
+        _hasCustomPrompt = hasCustom;
+        // Avoid clobbering in-progress edits while the prompt editor is open.
+        if (!_isPromptExpanded) {
+          _promptController.text = prompt;
+        }
+      });
+
+      unawaited(
+        DiagnosticsLogService.timing(
+          'settings',
+          'refresh_customization_page_title_settings_remote',
+          stopwatch.elapsedMilliseconds,
+          data: {
+            'platform': Theme.of(context).platform.name,
+            'auto_generate_titles': enabled,
+            'has_custom_prompt': hasCustom,
+          },
+        ),
+      );
+    } catch (error) {
+      unawaited(
+        DiagnosticsLogService.warning(
+          'settings',
+          'Remote customization title settings refresh failed',
+          data: {'error': error.toString()},
         ),
       );
     }

@@ -1,4 +1,5 @@
 // lib/pages/settings_page.dart
+import 'dart:async';
 import 'dart:convert';
 import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:file_picker/file_picker.dart';
@@ -18,6 +19,7 @@ import 'package:chuk_chat/pages/pricing_page.dart';
 import 'package:chuk_chat/pages/system_prompt_page.dart';
 import 'package:chuk_chat/services/auth_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
@@ -39,7 +41,13 @@ class _SettingsPageState extends State<SettingsPage> {
     super.initState();
     _developerOptionsEnabled = DeveloperOptionsService.enabledNotifier.value;
     DeveloperOptionsService.enabledNotifier.addListener(_onDeveloperOptions);
-    _refreshDeveloperOptions();
+    // Delay remote sync a bit so push transition into sub-pages stays smooth.
+    unawaited(
+      Future<void>.delayed(const Duration(milliseconds: 300), () async {
+        if (!mounted) return;
+        await _refreshDeveloperOptions();
+      }),
+    );
   }
 
   @override
@@ -56,6 +64,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _refreshDeveloperOptions() async {
+    final stopwatch = Stopwatch()..start();
     try {
       await DeveloperOptionsService.initialize();
       await DeveloperOptionsService.syncFromSupabase(forceRefresh: false);
@@ -64,7 +73,22 @@ class _SettingsPageState extends State<SettingsPage> {
         _developerOptionsEnabled =
             DeveloperOptionsService.enabledNotifier.value;
       });
+      unawaited(
+        DiagnosticsLogService.timing(
+          'settings',
+          'load_settings_page_developer_options',
+          stopwatch.elapsedMilliseconds,
+          data: {'developer_options_enabled': _developerOptionsEnabled},
+        ),
+      );
     } catch (error) {
+      unawaited(
+        DiagnosticsLogService.warning(
+          'settings',
+          'Failed to refresh developer options',
+          data: {'error': error.toString()},
+        ),
+      );
       if (kDebugMode) {
         debugPrint('Failed to refresh developer options: $error');
       }
