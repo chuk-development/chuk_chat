@@ -113,7 +113,10 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
 
   Future<void> _initializeDesktopTrayInBackground() async {
     try {
-      await Future<void>.delayed(const Duration(milliseconds: 1200));
+      final delay = _isLinuxDesktop
+          ? const Duration(seconds: 5)
+          : const Duration(milliseconds: 1200);
+      await Future<void>.delayed(delay);
       if (!mounted) return;
       await SystemTrayService.instance.initialize();
     } catch (error) {
