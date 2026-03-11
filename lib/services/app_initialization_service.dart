@@ -34,7 +34,7 @@ class AppInitializationService {
   bool get _isLinuxDesktop =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
 
-  static const Duration _linuxDeferredKeySyncDelay = Duration(seconds: 8);
+  static const Duration _linuxDeferredKeySyncDelay = Duration(seconds: 1);
   static const Duration _linuxInitialKeyPreloadDelay = Duration(seconds: 20);
 
   // Gives startup/session init time to settle before background decrypt work.
@@ -210,8 +210,8 @@ class AppInitializationService {
   Future<void> _startSyncWhenKeyReady(Stopwatch stopwatch) async {
     final retryDelays = <Duration>[
       _linuxDeferredKeySyncDelay,
-      const Duration(seconds: 18),
-      const Duration(seconds: 35),
+      const Duration(seconds: 4),
+      const Duration(seconds: 12),
     ];
 
     for (var attempt = 0; attempt < retryDelays.length; attempt++) {

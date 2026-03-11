@@ -248,7 +248,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       // defer this when cache exists to keep startup interactions smooth.
       if (_isLinuxDesktop && _allModels.isNotEmpty) {
         unawaited(
-          Future<void>.delayed(const Duration(seconds: 8), () async {
+          Future<void>.delayed(const Duration(seconds: 2), () async {
             if (!mounted) return;
             await _fetchModels();
           }).catchError((e) {
