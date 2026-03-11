@@ -37,14 +37,24 @@ Future<void> main() async {
     debugPrint('[API] Using server: ${ApiConfigService.apiBaseUrl}');
   }
 
-  // Pre-initialize SharedPreferences BEFORE runApp for instant cache access
+  // Keep chat storage cache deterministic to avoid early access races.
   await initChatStorageCache();
 
-  // Initialize developer options cache (hidden settings gate).
-  await DeveloperOptionsService.initialize();
-
-  // Initialize optional diagnostics logger (release-safe, opt-in).
-  await DiagnosticsLogService.initialize();
+  // Non-critical startup work can run in background.
+  unawaited(
+    DeveloperOptionsService.initialize().catchError((error) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [Main] Developer options init failed: $error');
+      }
+    }),
+  );
+  unawaited(
+    DiagnosticsLogService.initialize().catchError((error) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [Main] Diagnostics init failed: $error');
+      }
+    }),
+  );
   unawaited(
     DiagnosticsLogService.info(
       'startup',
@@ -55,9 +65,6 @@ Future<void> main() async {
       },
     ),
   );
-
-  // Initialize desktop system tray behavior (no-op on unsupported platforms)
-  await SystemTrayService.instance.initialize();
 
   // Initialize core services (Supabase, etc.) in background
   unawaited(AppInitializationService.instance.initializeCoreServices());
@@ -95,6 +102,20 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
 
     // Initialize after first frame (session manager needs Supabase ready)
     WidgetsBinding.instance.addPostFrameCallback((_) => _initializeApp());
+    // Delay tray setup slightly to avoid contending with first paint/startup.
+    unawaited(_initializeDesktopTrayInBackground());
+  }
+
+  Future<void> _initializeDesktopTrayInBackground() async {
+    try {
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      if (!mounted) return;
+      await SystemTrayService.instance.initialize();
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [Main] System tray init failed: $error');
+      }
+    }
   }
 
   void _onThemeChanged() {
