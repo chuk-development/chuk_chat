@@ -98,6 +98,11 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
   DateTime? _linuxStartupOverlayShownAt;
   bool _showLinuxStartupOverlay = false;
   bool _linuxOverlaySessionArmed = false;
+  static const Duration _linuxStartupOverlayMinVisible = Duration(seconds: 4);
+  static const Duration _linuxStartupOverlayMaxVisible = Duration(seconds: 18);
+  static const Duration _linuxStartupOverlayPollInterval = Duration(
+    milliseconds: 250,
+  );
 
   bool get _isLinuxDesktop =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
@@ -230,13 +235,15 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
       setState(() => _showLinuxStartupOverlay = true);
     }
 
-    const minVisible = Duration(milliseconds: 900);
-    _linuxStartupOverlayTimeoutTimer = Timer(const Duration(seconds: 12), () {
-      _hideLinuxStartupOverlay();
-    });
+    _linuxStartupOverlayTimeoutTimer = Timer(
+      _linuxStartupOverlayMaxVisible,
+      () {
+        _hideLinuxStartupOverlay();
+      },
+    );
 
     _linuxStartupOverlayPollTimer = Timer.periodic(
-      const Duration(milliseconds: 250),
+      _linuxStartupOverlayPollInterval,
       (_) {
         if (!mounted || !_showLinuxStartupOverlay) return;
         if (SupabaseService.auth.currentSession == null) {
@@ -246,9 +253,15 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
 
         final shownAt = _linuxStartupOverlayShownAt ?? DateTime.now();
         final enoughTimeVisible =
-            DateTime.now().difference(shownAt) >= minVisible;
+            DateTime.now().difference(shownAt) >=
+            _linuxStartupOverlayMinVisible;
+        final sidebarReady =
+            ChatStorageState.cacheLoaded &&
+            ChatStorageState.initialSyncComplete;
+        final keyReady =
+            EncryptionService.hasKey || ChatStorageState.chatsById.isEmpty;
         final startupReady =
-            ChatStorageState.cacheLoaded && EncryptionService.hasKey;
+            sidebarReady && keyReady && !_initService.isInitializing;
         if (enoughTimeVisible && startupReady) {
           _hideLinuxStartupOverlay();
         }
@@ -386,20 +399,66 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.2,
-                        color: theme.colorScheme.primary,
+                    Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(14),
+                        gradient: LinearGradient(
+                          colors: [
+                            theme.colorScheme.primary.withValues(alpha: 0.18),
+                            theme.colorScheme.secondary.withValues(alpha: 0.22),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(9),
+                        child: Image.asset(
+                          'web/icons/Icon-512.png',
+                          fit: BoxFit.contain,
+                          filterQuality: FilterQuality.high,
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Text(
-                      'Starting Chuk Chat...',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurface,
-                        fontWeight: FontWeight.w600,
+                    const SizedBox(width: 14),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(minWidth: 210),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Chuk Chat startet...',
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              color: theme.colorScheme.onSurface,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          SizedBox(
+                            width: 210,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: LinearProgressIndicator(
+                                minHeight: 5,
+                                backgroundColor: theme.colorScheme.outline
+                                    .withValues(alpha: 0.2),
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Lade Daten und sichere Session...',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.78,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
