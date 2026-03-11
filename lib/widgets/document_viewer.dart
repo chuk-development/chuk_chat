@@ -55,10 +55,7 @@ class _DocumentViewerState extends State<DocumentViewer> {
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
-        title: Text(
-          widget.fileName,
-          style: TextStyle(color: iconColor),
-        ),
+        title: Text(widget.fileName, style: TextStyle(color: iconColor)),
         leading: IconButton(
           icon: Icon(Icons.close, color: iconColor),
           onPressed: () => Navigator.of(context).pop(),

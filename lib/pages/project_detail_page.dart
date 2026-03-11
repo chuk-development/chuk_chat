@@ -1,16 +1,27 @@
 // lib/pages/project_detail_page.dart
 import 'dart:async';
 
+import 'package:chuk_chat/constants/file_constants.dart';
 import 'package:chuk_chat/models/project_model.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/project_message_service.dart';
 import 'package:chuk_chat/services/project_storage_service.dart';
+import 'package:chuk_chat/services/user_preferences_service.dart';
+import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/project_file_viewer.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 class ProjectDetailPage extends StatefulWidget {
   final String projectId;
+  final Function(String? projectId)? onStartNewChat;
 
-  const ProjectDetailPage({super.key, required this.projectId});
+  const ProjectDetailPage({
+    super.key,
+    required this.projectId,
+    this.onStartNewChat,
+  });
 
   @override
   State<ProjectDetailPage> createState() => _ProjectDetailPageState();
@@ -24,21 +35,47 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
   StreamSubscription<void>? _projectUpdatesSub;
   bool _isLoading = true;
 
+  // Upload state
+  bool _isUploadingFile = false;
+  String? _uploadFileName;
+  String _uploadStatus = '';
+  double _uploadProgress = 0.0;
+
+  // Settings editing state
+  final _nameController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _systemPromptController = TextEditingController();
+  bool _hasSettingsChanges = false;
+
+  // Context budget
+  String? _selectedModelId;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _loadProject();
+    _loadModelId();
     _projectUpdatesSub = ProjectStorageService.changes.listen((_) {
       if (!mounted) return;
       _loadProject();
     });
   }
 
+  Future<void> _loadModelId() async {
+    final modelId = await UserPreferencesService.loadSelectedModel();
+    if (mounted) {
+      setState(() => _selectedModelId = modelId);
+    }
+  }
+
   @override
   void dispose() {
     _tabController.dispose();
     _projectUpdatesSub?.cancel();
+    _nameController.dispose();
+    _descriptionController.dispose();
+    _systemPromptController.dispose();
     super.dispose();
   }
 
@@ -49,47 +86,61 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
       if (project == null) {
         throw StateError('Project not found');
       }
-      final chats = await ProjectStorageService.getProjectChats(widget.projectId);
+      final chats = await ProjectStorageService.getProjectChats(
+        widget.projectId,
+      );
       if (mounted) {
         setState(() {
           _project = project;
           _projectChats = chats;
+          // Only update text controllers if not actively editing
+          if (!_hasSettingsChanges) {
+            _nameController.text = project.name;
+            _descriptionController.text = project.description ?? '';
+            _systemPromptController.text = project.customSystemPrompt ?? '';
+          }
           _isLoading = false;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load project: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to load project: $e')));
         Navigator.pop(context);
       }
     }
   }
 
-  Future<void> _updateProject({
-    String? name,
-    String? description,
-    String? systemPrompt,
-  }) async {
+  Future<void> _saveSettings() async {
+    if (_project == null) return;
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Project name cannot be empty')),
+      );
+      return;
+    }
+
     try {
       await ProjectStorageService.updateProject(
         widget.projectId,
         name: name,
-        description: description,
-        customSystemPrompt: systemPrompt,
+        description: _descriptionController.text.trim(),
+        customSystemPrompt: _systemPromptController.text.trim(),
       );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Project updated')),
-        );
+        setState(() => _hasSettingsChanges = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Settings saved')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update project: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to save: $e')));
       }
     }
   }
@@ -125,9 +176,9 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to add chat: $e')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Failed to add chat: $e')));
         }
       }
     }
@@ -135,7 +186,10 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
 
   Future<void> _removeChat(String chatId) async {
     try {
-      await ProjectStorageService.removeChatFromProject(widget.projectId, chatId);
+      await ProjectStorageService.removeChatFromProject(
+        widget.projectId,
+        chatId,
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Chat removed from project')),
@@ -143,9 +197,163 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
       }
     } catch (e) {
       if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to remove chat: $e')));
+      }
+    }
+  }
+
+  Future<void> _pickAndUploadFile() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: FileConstants.allowedExtensions,
+        allowMultiple: false,
+      );
+
+      if (result == null || result.files.isEmpty) return;
+
+      final file = result.files.first;
+      if (file.path == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('File upload is not supported on this platform.'),
+            ),
+          );
+        }
+        return;
+      }
+
+      final filePath = file.path!;
+      final fileName = file.name;
+      final fileType = fileName.split('.').last;
+
+      setState(() {
+        _isUploadingFile = true;
+        _uploadFileName = fileName;
+        _uploadStatus = 'uploading';
+        _uploadProgress = 0.0;
+      });
+
+      final fileBytes = await File(filePath).readAsBytes();
+
+      if (!mounted || _project == null) return;
+
+      // Check context budget before uploading
+      final estimatedNewTokens = (fileBytes.length / 4).ceil();
+      final remaining = ProjectMessageService.remainingFileTokenBudget(
+        _project!,
+        _selectedModelId,
+      );
+      if (remaining < estimatedNewTokens) {
+        if (mounted) {
+          final proceed = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Context Budget Warning'),
+              content: Text(
+                'This file (~${_formatTokenCount(estimatedNewTokens)} tokens) '
+                'would exceed the context budget for your current model. '
+                'The AI may not be able to use all project files.\n\n'
+                'Upload anyway?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Upload Anyway'),
+                ),
+              ],
+            ),
+          );
+          if (proceed != true) return;
+        }
+      }
+
+      if (!mounted || _project == null) return;
+
+      await ProjectStorageService.uploadFile(
+        widget.projectId,
+        fileName,
+        fileBytes,
+        fileType,
+        filePath: filePath,
+        generateMarkdown: true,
+        onUploadProgress: (progress) {
+          if (mounted) setState(() => _uploadProgress = progress);
+        },
+        onConversionStart: () {
+          if (mounted) setState(() => _uploadStatus = 'converting');
+        },
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Uploaded: $fileName')));
+      }
+    } catch (e) {
+      if (mounted) {
+        String errorMessage;
+        if (e is StateError) {
+          errorMessage = e.message;
+        } else {
+          errorMessage = e.toString();
+        }
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to remove chat: $e')),
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red[700],
+            duration: const Duration(seconds: 5),
+          ),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploadingFile = false;
+          _uploadFileName = null;
+          _uploadStatus = '';
+          _uploadProgress = 0.0;
+        });
+      }
+    }
+  }
+
+  Future<void> _deleteFile(ProjectFile file) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete File'),
+        content: Text('Delete "${file.fileName}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await ProjectStorageService.deleteFile(widget.projectId, file.id);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
+        }
       }
     }
   }
@@ -168,89 +376,541 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
       );
     }
 
+    final projectColor = _project!.projectColor;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(_project!.name),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                color: projectColor.withValues(alpha: isDark ? 0.2 : 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(_project!.projectIcon, color: projectColor, size: 16),
+            ),
+            const SizedBox(width: 10),
+            Flexible(
+              child: Text(_project!.name, overflow: TextOverflow.ellipsis),
+            ),
+          ],
+        ),
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: iconFg),
           onPressed: () => Navigator.pop(context),
         ),
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [
-            Tab(text: 'Chats', icon: Icon(Icons.chat)),
-            Tab(text: 'Files', icon: Icon(Icons.attach_file)),
-            Tab(text: 'Settings', icon: Icon(Icons.settings)),
+          indicatorColor: projectColor,
+          labelColor: projectColor,
+          tabs: [
+            Tab(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.description_outlined, size: 18),
+                  const SizedBox(width: 6),
+                  const Text('Files'),
+                  if (_project!.fileCount > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 6),
+                      child: _CountBadge(
+                        count: _project!.fileCount,
+                        color: projectColor,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Tab(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.chat_bubble_outline, size: 18),
+                  const SizedBox(width: 6),
+                  const Text('Chats'),
+                  if (_project!.chatCount > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 6),
+                      child: _CountBadge(
+                        count: _project!.chatCount,
+                        color: projectColor,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const Tab(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.settings_outlined, size: 18),
+                  SizedBox(width: 6),
+                  Text('Settings'),
+                ],
+              ),
+            ),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [
-          _buildChatsTab(),
-          _buildFilesTab(),
-          _buildSettingsTab(),
-        ],
+        children: [_buildFilesTab(), _buildChatsTab(), _buildSettingsTab()],
       ),
+      floatingActionButton: widget.onStartNewChat != null
+          ? FloatingActionButton.extended(
+              onPressed: () {
+                widget.onStartNewChat!(widget.projectId);
+                Navigator.pop(context);
+              },
+              icon: const Icon(Icons.add_comment),
+              label: const Text('New Chat'),
+              backgroundColor: projectColor,
+              foregroundColor: Colors.white,
+            )
+          : null,
     );
   }
 
-  Widget _buildChatsTab() {
+  // ============ FILES TAB ============
+
+  Widget _buildFilesTab() {
     final iconFg = Theme.of(context).resolvedIconColor;
+    final projectColor = _project!.projectColor;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Context budget calculations
+    final contextRatio = ProjectMessageService.contextUsageRatio(
+      _project!,
+      _selectedModelId,
+    );
+    final contextWindow = ProjectMessageService.getModelContextWindow(
+      _selectedModelId,
+    );
+    final totalFileTokens = ProjectMessageService.estimateTotalFileTokens(
+      _project!,
+    );
+    final remaining = ProjectMessageService.remainingFileTokenBudget(
+      _project!,
+      _selectedModelId,
+    );
+    final isOverBudget = remaining < 0;
 
     return Column(
       children: [
+        // Context usage bar (shown when files exist or model known)
+        if (_project!.files.isNotEmpty && contextRatio != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: _ContextUsageBar(
+              ratio: contextRatio,
+              totalTokens: totalFileTokens,
+              contextWindow: contextWindow ?? 0,
+              projectColor: projectColor,
+              isOverBudget: isOverBudget,
+            ),
+          ),
+
+        // Upload button
         Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: ElevatedButton.icon(
-            onPressed: _addChat,
-            icon: const Icon(Icons.add),
-            label: const Text('Add Chat to Project'),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _isUploadingFile ? null : _pickAndUploadFile,
+              icon: const Icon(Icons.upload_file),
+              label: Text(isOverBudget ? 'Context budget full' : 'Upload File'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                side: BorderSide(
+                  color: isOverBudget
+                      ? Colors.orange.withValues(alpha: 0.5)
+                      : projectColor.withValues(alpha: 0.5),
+                ),
+              ),
+            ),
           ),
         ),
+
+        // Upload progress
+        if (_isUploadingFile)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Card(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.insert_drive_file, color: projectColor),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _uploadFileName ?? 'File',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      _uploadStatus == 'uploading'
+                          ? 'Encrypting and uploading...'
+                          : 'Converting to markdown...',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: iconFg.withValues(alpha: 0.7),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: _uploadStatus == 'uploading'
+                          ? LinearProgressIndicator(
+                              value: _uploadProgress,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                projectColor,
+                              ),
+                            )
+                          : LinearProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                projectColor,
+                              ),
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+        // File list
+        Expanded(
+          child: _project!.files.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.folder_open,
+                        size: 56,
+                        color: iconFg.withValues(alpha: 0.2),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No files yet',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: iconFg.withValues(alpha: 0.5),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Upload PDFs, documents, or code files\nto reference in your chats',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: iconFg.withValues(alpha: 0.4),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: _project!.files.length,
+                  itemBuilder: (context, index) {
+                    final file = _project!.files[index];
+                    final fileRatio = ProjectMessageService.fileContextRatio(
+                      file,
+                      _selectedModelId,
+                    );
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: ListTile(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        leading: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: projectColor.withValues(
+                              alpha: isDark ? 0.15 : 0.1,
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            file.fileIcon,
+                            color: projectColor,
+                            size: 20,
+                          ),
+                        ),
+                        title: Text(
+                          file.fileName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                        subtitle: Row(
+                          children: [
+                            Text(
+                              file.fileSizeFormatted,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            const SizedBox(width: 8),
+                            // Context usage chip
+                            if (fileRatio != null)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 5,
+                                  vertical: 1,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _contextChipColor(
+                                    fileRatio,
+                                  ).withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  '${(fileRatio * 100).toStringAsFixed(1)}%',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: _contextChipColor(fileRatio),
+                                  ),
+                                ),
+                              )
+                            else
+                              Text(
+                                file.estimatedTokensFormatted,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: iconFg.withValues(alpha: 0.5),
+                                ),
+                              ),
+                            if (file.hasMarkdownSummary) ...[
+                              const SizedBox(width: 6),
+                              Icon(
+                                Icons.check_circle,
+                                size: 13,
+                                color: Colors.green[600],
+                              ),
+                            ],
+                          ],
+                        ),
+                        trailing: PopupMenuButton(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          itemBuilder: (context) => [
+                            PopupMenuItem(
+                              child: const Row(
+                                children: [
+                                  Icon(Icons.visibility, size: 18),
+                                  SizedBox(width: 10),
+                                  Text('View'),
+                                ],
+                              ),
+                              onTap: () {
+                                final currentContext = context;
+                                WidgetsBinding.instance.addPostFrameCallback((
+                                  _,
+                                ) {
+                                  if (!mounted) return;
+                                  ProjectFileViewer.show(
+                                    currentContext,
+                                    file,
+                                    widget.projectId,
+                                  );
+                                });
+                              },
+                            ),
+                            PopupMenuItem(
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.delete_outline,
+                                    color: Colors.red,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  const Text(
+                                    'Delete',
+                                    style: TextStyle(color: Colors.red),
+                                  ),
+                                ],
+                              ),
+                              onTap: () => Future.delayed(
+                                Duration.zero,
+                                () => _deleteFile(file),
+                              ),
+                            ),
+                          ],
+                        ),
+                        onTap: () => ProjectFileViewer.show(
+                          context,
+                          file,
+                          widget.projectId,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+
+        // Total size footer
+        if (_project!.files.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.storage_outlined,
+                  size: 14,
+                  color: iconFg.withValues(alpha: 0.4),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  '${_project!.files.length} file${_project!.files.length == 1 ? '' : 's'}'
+                  ' -- ${_project!.totalFileSizeFormatted} total'
+                  ' -- All encrypted',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: iconFg.withValues(alpha: 0.4),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  static String _formatTokenCount(int tokens) {
+    if (tokens < 1000) return '$tokens';
+    if (tokens < 10000) return '${(tokens / 1000).toStringAsFixed(1)}k';
+    return '${(tokens / 1000).round()}k';
+  }
+
+  Color _contextChipColor(double ratio) {
+    if (ratio > 0.20) return Colors.red;
+    if (ratio > 0.10) return Colors.orange;
+    return Colors.green;
+  }
+
+  // ============ CHATS TAB ============
+
+  Widget _buildChatsTab() {
+    final iconFg = Theme.of(context).resolvedIconColor;
+    final projectColor = _project!.projectColor;
+
+    return Column(
+      children: [
+        // Add chat button
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _addChat,
+              icon: const Icon(Icons.add),
+              label: const Text('Add Existing Chat'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                side: BorderSide(color: projectColor.withValues(alpha: 0.5)),
+              ),
+            ),
+          ),
+        ),
+
         Expanded(
           child: _projectChats.isEmpty
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.chat,
-                          size: 64, color: iconFg.withValues(alpha: 0.3)),
+                      Icon(
+                        Icons.chat_bubble_outline,
+                        size: 56,
+                        color: iconFg.withValues(alpha: 0.2),
+                      ),
                       const SizedBox(height: 16),
                       Text(
                         'No chats in this project',
-                        style: TextStyle(color: iconFg.withValues(alpha: 0.5)),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: iconFg.withValues(alpha: 0.5),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Add existing chats or start a new one\nwith the button below',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: iconFg.withValues(alpha: 0.4),
+                        ),
                       ),
                     ],
                   ),
                 )
               : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   itemCount: _projectChats.length,
                   itemBuilder: (context, index) {
                     final chat = _projectChats[index];
-                    return ListTile(
-                      leading: Icon(Icons.chat, color: iconFg),
-                      title: Text(
-                        chat.customName ?? chat.previewText,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      subtitle: Text(
-                        '${chat.messages.length} messages • ${chat.createdAt.toString().split(' ')[0]}',
-                      ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.close, color: Colors.red),
-                        onPressed: () => _removeChat(chat.id),
-                        tooltip: 'Remove from project',
-                      ),
-                      onTap: () {
-                        // TODO: Open chat in chat UI with project context
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Chat UI integration coming soon'),
+                      child: ListTile(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        leading: Icon(Icons.chat, color: iconFg),
+                        title: Text(
+                          chat.customName ?? chat.previewText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          '${chat.messages.length} messages'
+                          ' -- ${chat.createdAt.toString().split(' ')[0]}',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        trailing: IconButton(
+                          icon: Icon(
+                            Icons.remove_circle_outline,
+                            color: Colors.red.withValues(alpha: 0.7),
+                            size: 20,
                           ),
-                        );
-                      },
+                          onPressed: () => _removeChat(chat.id),
+                          tooltip: 'Remove from project',
+                        ),
+                      ),
                     );
                   },
                 ),
@@ -259,147 +919,526 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
     );
   }
 
-  Widget _buildFilesTab() {
-    final iconFg = Theme.of(context).resolvedIconColor;
-
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.attach_file, size: 64, color: iconFg.withValues(alpha: 0.3)),
-          const SizedBox(height: 16),
-          Text(
-            'File upload coming soon',
-            style: TextStyle(color: iconFg.withValues(alpha: 0.5)),
-          ),
-        ],
-      ),
-    );
-  }
+  // ============ SETTINGS TAB ============
 
   Widget _buildSettingsTab() {
+    final theme = Theme.of(context);
+    final iconFg = theme.resolvedIconColor;
+    final projectColor = _project!.projectColor;
+    final isDark = theme.brightness == Brightness.dark;
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Project Name',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          TextFormField(
-            initialValue: _project!.name,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              hintText: 'Project name',
+          // Project identity card
+          Card(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
             ),
-            onFieldSubmitted: (value) {
-              if (value.trim().isNotEmpty) {
-                _updateProject(name: value.trim());
-              }
-            },
-          ),
-          const SizedBox(height: 24),
-          const Text(
-            'Description',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          TextFormField(
-            initialValue: _project!.description ?? '',
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              hintText: 'Project description',
-            ),
-            maxLines: 3,
-            onFieldSubmitted: (value) {
-              _updateProject(description: value.trim());
-            },
-          ),
-          const SizedBox(height: 24),
-          const Text(
-            'Custom System Prompt',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          TextFormField(
-            initialValue: _project!.customSystemPrompt ?? '',
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              hintText: 'Special instructions for AI in this project',
-            ),
-            maxLines: 5,
-            onFieldSubmitted: (value) {
-              _updateProject(systemPrompt: value.trim());
-            },
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: () async {
-              final confirmed = await showDialog<bool>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Delete Project'),
-                  content: const Text(
-                    'Are you sure? This will not delete chats or files, just the project workspace.',
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Project avatar + stats header
+                  Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: projectColor.withValues(
+                            alpha: isDark ? 0.2 : 0.12,
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Icon(
+                          _project!.projectIcon,
+                          color: projectColor,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${_project!.chatCount} chats, ${_project!.fileCount} files',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: iconFg,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Updated ${_project!.updatedAgo}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: iconFg.withValues(alpha: 0.5),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: const Text('Cancel'),
+                  const SizedBox(height: 20),
+
+                  // Name
+                  Text(
+                    'Project Name',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                      color: iconFg.withValues(alpha: 0.7),
                     ),
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, true),
-                      style: TextButton.styleFrom(foregroundColor: Colors.red),
-                      child: const Text('Delete'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _nameController,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      hintText: 'Project name',
                     ),
-                  ],
-                ),
-              );
-              if (confirmed == true && mounted) {
-                await ProjectStorageService.deleteProject(widget.projectId);
-                if (mounted) Navigator.pop(context);
-              }
-            },
-            icon: const Icon(Icons.delete, color: Colors.red),
-            label: const Text('Delete Project'),
-            style: ElevatedButton.styleFrom(foregroundColor: Colors.red),
+                    onChanged: (_) =>
+                        setState(() => _hasSettingsChanges = true),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Description
+                  Text(
+                    'Description',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                      color: iconFg.withValues(alpha: 0.7),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _descriptionController,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      hintText: 'What is this project about?',
+                    ),
+                    maxLines: 3,
+                    onChanged: (_) =>
+                        setState(() => _hasSettingsChanges = true),
+                  ),
+                ],
+              ),
+            ),
           ),
+
+          const SizedBox(height: 16),
+
+          // System prompt card
+          Card(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.tune, color: projectColor, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Custom System Prompt',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                          color: iconFg,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'These instructions are sent to the AI at the start of '
+                    'every chat in this project.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: iconFg.withValues(alpha: 0.5),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _systemPromptController,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      hintText:
+                          'e.g., You are a senior developer helping with a '
+                          'Flutter project. Use Dart best practices...',
+                      hintMaxLines: 3,
+                    ),
+                    maxLines: 6,
+                    onChanged: (_) =>
+                        setState(() => _hasSettingsChanges = true),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Save button (only shown when changes exist)
+          if (_hasSettingsChanges) ...[
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _saveSettings,
+                icon: const Icon(Icons.save, size: 18),
+                label: const Text('Save Changes'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: projectColor,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 24),
+
+          // Danger zone
+          Card(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: Colors.red.withValues(alpha: 0.2)),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Danger Zone',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                      color: Colors.red[400],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'These actions cannot be undone.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: iconFg.withValues(alpha: 0.5),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        final confirmed = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Delete Project'),
+                            content: const Text(
+                              'Are you sure? This will remove the project '
+                              'workspace. Chats and files will not be deleted.',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: const Text('Cancel'),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Colors.red,
+                                ),
+                                child: const Text('Delete'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirmed == true && mounted) {
+                          try {
+                            await ProjectStorageService.deleteProject(
+                              widget.projectId,
+                            );
+                            if (mounted) Navigator.pop(context);
+                          } catch (e) {
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Failed to delete project: $e'),
+                              ),
+                            );
+                          }
+                        }
+                      },
+                      icon: const Icon(Icons.delete_outline, size: 18),
+                      label: const Text('Delete Project'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red,
+                        side: const BorderSide(color: Colors.red),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 32),
         ],
       ),
     );
   }
 }
 
-class _ChatSelectorDialog extends StatelessWidget {
+// ---------- Context Usage Bar ----------
+
+class _ContextUsageBar extends StatelessWidget {
+  final double ratio;
+  final int totalTokens;
+  final int contextWindow;
+  final Color projectColor;
+  final bool isOverBudget;
+
+  const _ContextUsageBar({
+    required this.ratio,
+    required this.totalTokens,
+    required this.contextWindow,
+    required this.projectColor,
+    required this.isOverBudget,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final iconFg = Theme.of(context).resolvedIconColor;
+    // We use 75% of context as the file budget
+    final budgetRatio = (ratio / 0.75).clamp(0.0, 1.0);
+    final pct = (ratio * 100).toStringAsFixed(1);
+
+    final barColor = isOverBudget
+        ? Colors.red
+        : ratio > 0.50
+        ? Colors.orange
+        : projectColor;
+
+    String tokenLabel;
+    if (totalTokens < 1000) {
+      tokenLabel = '$totalTokens';
+    } else if (totalTokens < 10000) {
+      tokenLabel = '${(totalTokens / 1000).toStringAsFixed(1)}k';
+    } else {
+      tokenLabel = '${(totalTokens / 1000).round()}k';
+    }
+
+    String windowLabel;
+    if (contextWindow < 1000) {
+      windowLabel = '$contextWindow';
+    } else {
+      windowLabel = '${(contextWindow / 1000).round()}k';
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: iconFg.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isOverBudget
+              ? Colors.red.withValues(alpha: 0.3)
+              : iconFg.withValues(alpha: 0.08),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.memory_outlined, size: 14, color: barColor),
+              const SizedBox(width: 6),
+              Text(
+                'Context Usage',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: iconFg.withValues(alpha: 0.7),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '$tokenLabel / $windowLabel tokens ($pct%)',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: barColor,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: budgetRatio,
+              minHeight: 6,
+              backgroundColor: iconFg.withValues(alpha: 0.08),
+              valueColor: AlwaysStoppedAnimation<Color>(barColor),
+            ),
+          ),
+          if (isOverBudget) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Files exceed 75% context budget. Some may be excluded from AI context.',
+              style: TextStyle(fontSize: 11, color: Colors.red[400]),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ---------- Count Badge ----------
+
+class _CountBadge extends StatelessWidget {
+  final int count;
+  final Color color;
+
+  const _CountBadge({required this.count, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        '$count',
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
+
+// ---------- Chat Selector Dialog ----------
+
+class _ChatSelectorDialog extends StatefulWidget {
   final List<StoredChat> chats;
 
   const _ChatSelectorDialog({required this.chats});
 
   @override
+  State<_ChatSelectorDialog> createState() => _ChatSelectorDialogState();
+}
+
+class _ChatSelectorDialogState extends State<_ChatSelectorDialog> {
+  final _searchController = TextEditingController();
+  late List<StoredChat> _filtered;
+
+  @override
+  void initState() {
+    super.initState();
+    _filtered = widget.chats;
+    _searchController.addListener(_filter);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _filter() {
+    final query = _searchController.text.toLowerCase();
+    setState(() {
+      if (query.isEmpty) {
+        _filtered = widget.chats;
+      } else {
+        _filtered = widget.chats.where((chat) {
+          final name = (chat.customName ?? chat.previewText).toLowerCase();
+          return name.contains(query);
+        }).toList();
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Select Chat'),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       content: SizedBox(
         width: double.maxFinite,
-        child: ListView.builder(
-          shrinkWrap: true,
-          itemCount: chats.length,
-          itemBuilder: (context, index) {
-            final chat = chats[index];
-            return ListTile(
-              title: Text(
-                chat.customName ?? chat.previewText,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (widget.chats.length > 5)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Search chats...',
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                  ),
+                ),
               ),
-              subtitle: Text(
-                '${chat.messages.length} messages',
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: _filtered.length,
+                itemBuilder: (context, index) {
+                  final chat = _filtered[index];
+                  return ListTile(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    title: Text(
+                      chat.customName ?? chat.previewText,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      '${chat.messages.length} messages',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    onTap: () => Navigator.pop(context, chat),
+                  );
+                },
               ),
-              onTap: () => Navigator.pop(context, chat),
-            );
-          },
+            ),
+          ],
         ),
       ),
       actions: [

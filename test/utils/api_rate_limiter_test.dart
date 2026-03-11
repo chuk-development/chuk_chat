@@ -12,18 +12,30 @@ void main() {
   group('RateLimitConfig', () {
     test('chat preset', () {
       expect(RateLimitConfig.chat.maxRequests, equals(30));
-      expect(RateLimitConfig.chat.timeWindow, equals(const Duration(minutes: 1)));
-      expect(RateLimitConfig.chat.minRequestInterval, equals(const Duration(milliseconds: 500)));
+      expect(
+        RateLimitConfig.chat.timeWindow,
+        equals(const Duration(minutes: 1)),
+      );
+      expect(
+        RateLimitConfig.chat.minRequestInterval,
+        equals(const Duration(milliseconds: 500)),
+      );
     });
 
     test('fileConversion preset', () {
       expect(RateLimitConfig.fileConversion.maxRequests, equals(10));
-      expect(RateLimitConfig.fileConversion.timeWindow, equals(const Duration(minutes: 5)));
+      expect(
+        RateLimitConfig.fileConversion.timeWindow,
+        equals(const Duration(minutes: 5)),
+      );
     });
 
     test('general preset', () {
       expect(RateLimitConfig.general.maxRequests, equals(60));
-      expect(RateLimitConfig.general.timeWindow, equals(const Duration(minutes: 1)));
+      expect(
+        RateLimitConfig.general.timeWindow,
+        equals(const Duration(minutes: 1)),
+      );
     });
 
     test('custom config', () {

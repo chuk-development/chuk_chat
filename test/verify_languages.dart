@@ -1,4 +1,3 @@
-
 import 'package:chuk_chat/utils/highlight_registry.dart';
 import 'package:flutter/foundation.dart';
 
@@ -17,4 +16,3 @@ void main() {
     debugPrint('Error verifying languages: $e');
   }
 }
-

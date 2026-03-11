@@ -7,8 +7,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:chuk_chat/model_selector_page.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
+import 'package:chuk_chat/services/developer_options_service.dart';
 import 'package:chuk_chat/pages/theme_page.dart';
 import 'package:chuk_chat/pages/customization_page.dart';
+import 'package:chuk_chat/pages/diagnostics_settings_page.dart';
 import 'package:chuk_chat/pages/tool_calling_settings_page.dart';
 import 'package:chuk_chat/pages/account_settings_page.dart';
 import 'package:chuk_chat/pages/about_page.dart';
@@ -20,10 +22,54 @@ import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 
-class SettingsPage extends StatelessWidget {
+class SettingsPage extends StatefulWidget {
   final AppShellConfig config;
 
   const SettingsPage({super.key, required this.config});
+
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  bool _developerOptionsEnabled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _developerOptionsEnabled = DeveloperOptionsService.enabledNotifier.value;
+    DeveloperOptionsService.enabledNotifier.addListener(_onDeveloperOptions);
+    _refreshDeveloperOptions();
+  }
+
+  @override
+  void dispose() {
+    DeveloperOptionsService.enabledNotifier.removeListener(_onDeveloperOptions);
+    super.dispose();
+  }
+
+  void _onDeveloperOptions() {
+    if (!mounted) return;
+    setState(() {
+      _developerOptionsEnabled = DeveloperOptionsService.enabledNotifier.value;
+    });
+  }
+
+  Future<void> _refreshDeveloperOptions() async {
+    try {
+      await DeveloperOptionsService.initialize();
+      await DeveloperOptionsService.syncFromSupabase(forceRefresh: true);
+      if (!mounted) return;
+      setState(() {
+        _developerOptionsEnabled =
+            DeveloperOptionsService.enabledNotifier.value;
+      });
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Failed to refresh developer options: $error');
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +99,9 @@ class SettingsPage extends StatelessWidget {
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => ThemePage(config: config)),
+                MaterialPageRoute(
+                  builder: (_) => ThemePage(config: widget.config),
+                ),
               );
             },
             accentColor: accent,
@@ -72,7 +120,7 @@ class SettingsPage extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => CustomizationPage(config: config),
+                  builder: (_) => CustomizationPage(config: widget.config),
                 ),
               );
             },
@@ -92,7 +140,8 @@ class SettingsPage extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => ToolCallingSettingsPage(config: config),
+                  builder: (_) =>
+                      ToolCallingSettingsPage(config: widget.config),
                 ),
               );
             },
@@ -101,6 +150,27 @@ class SettingsPage extends StatelessWidget {
             bgColor: scaffoldBg,
           ),
           const SizedBox(height: 16),
+
+          if (_developerOptionsEnabled) ...[
+            _buildSettingsCard(
+              context,
+              title: 'Developer Options',
+              subtitle: 'Diagnostics logs and debug tools',
+              icon: Icons.developer_mode,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const DeveloperOptionsPage(),
+                  ),
+                );
+              },
+              accentColor: accent,
+              iconFgColor: iconFg,
+              bgColor: scaffoldBg,
+            ),
+            const SizedBox(height: 16),
+          ],
 
           // Model Selection
           _buildSettingsCard(

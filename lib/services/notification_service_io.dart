@@ -63,7 +63,8 @@ class NotificationService {
 
     await _plugin
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.createNotificationChannel(channel);
   }
 
@@ -75,7 +76,9 @@ class NotificationService {
   }) async {
     if (!_isInitialized) {
       if (kDebugMode) {
-        debugPrint('[NotificationService] Not initialized, skipping notification');
+        debugPrint(
+          '[NotificationService] Not initialized, skipping notification',
+        );
       }
       return;
     }
@@ -114,7 +117,9 @@ class NotificationService {
       );
 
       if (kDebugMode) {
-        debugPrint('[NotificationService] Showed completion notification for chat $chatId');
+        debugPrint(
+          '[NotificationService] Showed completion notification for chat $chatId',
+        );
       }
     } catch (e) {
       if (kDebugMode) {
@@ -133,7 +138,9 @@ class NotificationService {
 
       if (chatId != null) {
         if (kDebugMode) {
-          debugPrint('[NotificationService] Notification tapped, navigating to chat $chatId');
+          debugPrint(
+            '[NotificationService] Notification tapped, navigating to chat $chatId',
+          );
         }
         // Update selected chat and navigate
         ChatStorageService.selectedChatId = chatId;
@@ -142,7 +149,9 @@ class NotificationService {
       }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('[NotificationService] Failed to parse notification payload: $e');
+        debugPrint(
+          '[NotificationService] Failed to parse notification payload: $e',
+        );
       }
     }
   }
@@ -161,7 +170,9 @@ class NotificationService {
       }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('[NotificationService] Failed to check launch notification: $e');
+        debugPrint(
+          '[NotificationService] Failed to check launch notification: $e',
+        );
       }
     }
   }
@@ -199,7 +210,8 @@ class NotificationService {
 
     final androidPlugin = _plugin
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
+          AndroidFlutterLocalNotificationsPlugin
+        >();
 
     if (androidPlugin == null) return false;
 

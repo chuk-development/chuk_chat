@@ -1,7 +1,11 @@
 // lib/pages/system_prompt_page.dart
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/tool_handlers/notes_tools.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
@@ -33,6 +37,58 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
   String _originalUserInfo = '';
   String _originalMemory = '';
 
+  bool get _isDesktopPlatform {
+    if (kIsWeb) return false;
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.linux => true,
+      TargetPlatform.windows => true,
+      TargetPlatform.macOS => true,
+      _ => false,
+    };
+  }
+
+  String _selectedTextOrAll(TextEditingValue value) {
+    final selection = value.selection;
+    if (selection.isValid && !selection.isCollapsed) {
+      return selection.textInside(value.text);
+    }
+    return value.text;
+  }
+
+  Widget _buildDesktopTextContextMenu(
+    BuildContext context,
+    EditableTextState editableTextState,
+  ) {
+    final buttonItems = List<ContextMenuButtonItem>.from(
+      editableTextState.contextMenuButtonItems,
+    );
+
+    final hasCopy = buttonItems.any(
+      (item) => item.type == ContextMenuButtonType.copy,
+    );
+
+    if (!hasCopy) {
+      buttonItems.insert(
+        0,
+        ContextMenuButtonItem(
+          type: ContextMenuButtonType.copy,
+          onPressed: () {
+            final text = _selectedTextOrAll(editableTextState.textEditingValue);
+            if (text.isNotEmpty) {
+              Clipboard.setData(ClipboardData(text: text));
+            }
+            ContextMenuController.removeAny();
+          },
+        ),
+      );
+    }
+
+    return AdaptiveTextSelectionToolbar.buttonItems(
+      anchors: editableTextState.contextMenuAnchors,
+      buttonItems: buttonItems,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -63,12 +119,16 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
   // ─── Loading ──────────────────────────────────────────────────────────
 
   Future<void> _loadAll() async {
+    final stopwatch = Stopwatch()..start();
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     try {
+      // Refresh only identity fields here to keep the page snappy.
+      await syncIdentityFromSupabase(forceRefresh: true);
+
       final results = await Future.wait([
         UserPreferencesService.loadSystemPrompt(),
         loadSoulText(),
@@ -94,6 +154,21 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
         _identityEnabled = identityOn;
         _isLoading = false;
       });
+
+      unawaited(
+        DiagnosticsLogService.timing(
+          'settings',
+          'load_ai_identity_page',
+          stopwatch.elapsedMilliseconds,
+          data: {
+            'platform': defaultTargetPlatform.name,
+            'soul_len': soul.length,
+            'user_len': userInfo.length,
+            'memory_len': memory.length,
+            'identity_enabled': identityOn,
+          },
+        ),
+      );
     } on StateError catch (error) {
       if (!mounted) return;
       setState(() {
@@ -102,12 +177,34 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
             'You may need to sign out and sign in again.';
         _isLoading = false;
       });
+      unawaited(
+        DiagnosticsLogService.error(
+          'settings',
+          'AI identity load failed with state error',
+          error: error,
+          data: {
+            'elapsed_ms': stopwatch.elapsedMilliseconds,
+            'platform': defaultTargetPlatform.name,
+          },
+        ),
+      );
     } catch (error) {
       if (!mounted) return;
       setState(() {
         _errorMessage = 'Failed to load: $error';
         _isLoading = false;
       });
+      unawaited(
+        DiagnosticsLogService.error(
+          'settings',
+          'AI identity load failed',
+          error: error,
+          data: {
+            'elapsed_ms': stopwatch.elapsedMilliseconds,
+            'platform': defaultTargetPlatform.name,
+          },
+        ),
+      );
     }
   }
 
@@ -292,6 +389,9 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
               TextField(
                 controller: pasteCtrl,
                 maxLines: 12,
+                contextMenuBuilder: _isDesktopPlatform
+                    ? _buildDesktopTextContextMenu
+                    : null,
                 style: theme.textTheme.bodySmall?.copyWith(
                   fontFamily: 'monospace',
                   height: 1.4,
@@ -508,6 +608,9 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                         TextField(
                           controller: _soulCtrl,
                           maxLines: 8,
+                          contextMenuBuilder: _isDesktopPlatform
+                              ? _buildDesktopTextContextMenu
+                              : null,
                           style: theme.textTheme.bodyMedium,
                           decoration: _fieldDecoration(
                             hintText:
@@ -546,6 +649,9 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                         TextField(
                           controller: _userInfoCtrl,
                           maxLines: 8,
+                          contextMenuBuilder: _isDesktopPlatform
+                              ? _buildDesktopTextContextMenu
+                              : null,
                           style: theme.textTheme.bodyMedium,
                           decoration: _fieldDecoration(
                             hintText:
@@ -584,6 +690,9 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                         TextField(
                           controller: _memoryCtrl,
                           maxLines: 8,
+                          contextMenuBuilder: _isDesktopPlatform
+                              ? _buildDesktopTextContextMenu
+                              : null,
                           style: theme.textTheme.bodyMedium,
                           decoration: _fieldDecoration(
                             hintText:
@@ -636,6 +745,9 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                 TextField(
                   controller: _systemPromptCtrl,
                   maxLines: 10,
+                  contextMenuBuilder: _isDesktopPlatform
+                      ? _buildDesktopTextContextMenu
+                      : null,
                   style: theme.textTheme.bodyMedium,
                   decoration: _fieldDecoration(
                     hintText:

@@ -56,11 +56,7 @@ void main() {
   Future<String> encryptBytes(Uint8List bytes, SecretKey key) async {
     final rng = Random.secure();
     final nonce = List<int>.generate(12, (_) => rng.nextInt(256));
-    final secretBox = await cipher.encrypt(
-      bytes,
-      secretKey: key,
-      nonce: nonce,
-    );
+    final secretBox = await cipher.encrypt(bytes, secretKey: key, nonce: nonce);
     return jsonEncode({
       'v': payloadVersion,
       'nonce': base64Encode(secretBox.nonce),
@@ -114,7 +110,8 @@ void main() {
     });
 
     test('special characters roundtrip', () async {
-      const original = r'<script>alert("xss")</script> \n\t\r NULL: \x00 "quotes" & ampersand';
+      const original =
+          r'<script>alert("xss")</script> \n\t\r NULL: \x00 "quotes" & ampersand';
       final encrypted = await encryptString(original, testKey);
       final decrypted = await decryptString(encrypted, testKey);
       expect(decrypted, equals(original));

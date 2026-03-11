@@ -6,12 +6,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 
-import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/services/chat_sync_service.dart';
+import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
-import 'package:chuk_chat/services/session_tracking_service.dart';
 import 'package:chuk_chat/services/streaming_manager.dart';
-import 'package:chuk_chat/services/supabase_service.dart';
 
 /// Callback when app state changes
 typedef AppStateCallback = void Function(AppLifecycleState state);
@@ -49,6 +47,14 @@ class AppLifecycleService extends ChangeNotifier {
 
   /// Handle app lifecycle state changes
   void handleLifecycleState(AppLifecycleState state) {
+    if (_isDesktopPlatform &&
+        (state == AppLifecycleState.inactive ||
+            state == AppLifecycleState.hidden)) {
+      // Desktop focus changes can emit inactive/hidden frequently.
+      // Ignore these to avoid sync churn and UI lag while alt-tabbing.
+      return;
+    }
+
     switch (state) {
       case AppLifecycleState.resumed:
         _handleResumed();
@@ -61,6 +67,11 @@ class AppLifecycleService extends ChangeNotifier {
   }
 
   void _handleResumed() {
+    DiagnosticsLogService.setAppInForeground(true);
+    unawaited(
+      DiagnosticsLogService.info('lifecycle', 'App resumed to foreground'),
+    );
+
     if (kDebugMode) {
       debugPrint('📱 [Lifecycle] App resumed');
     }
@@ -68,10 +79,15 @@ class AppLifecycleService extends ChangeNotifier {
     // Reset network failure count so we don't carry stale offline state
     NetworkStatusService.resetFailureCount();
 
-    // Check network FIRST, then resume sync once we know the actual status.
-    // This prevents ChatSyncService from seeing stale isOnline=false after
-    // the user turns off flight mode.
-    unawaited(_checkNetworkThenResume());
+    if (_isDesktopPlatform) {
+      // On desktop, avoid expensive network probing on every focus change.
+      ChatSyncService.resume();
+    } else {
+      // Check network FIRST, then resume sync once we know the actual status.
+      // This prevents ChatSyncService from seeing stale isOnline=false after
+      // the user turns off flight mode.
+      unawaited(_checkNetworkThenResume());
+    }
 
     // Notify listeners
     StreamingManager().onAppLifecycleChanged(isInBackground: false);
@@ -97,23 +113,23 @@ class AppLifecycleService extends ChangeNotifier {
 
     // Now that network status is up-to-date, resume sync
     ChatSyncService.resume();
-
-    // Validate session if online
-    if (kFeatureSessionManagement &&
-        isOnline &&
-        SupabaseService.auth.currentSession != null) {
-      unawaited(_validateSession());
-      unawaited(SessionTrackingService.updateLastSeen());
-    }
   }
 
   void _handlePaused() {
+    DiagnosticsLogService.setAppInForeground(false);
+    unawaited(
+      DiagnosticsLogService.info('lifecycle', 'App moved to background'),
+    );
+
     if (kDebugMode) {
       debugPrint('📱 [Lifecycle] App paused/backgrounded');
     }
 
-    // Pause sync to save battery
-    ChatSyncService.pause();
+    // Pause sync on mobile to save battery. Keep desktop sync alive so
+    // alt-tab/focus changes don't stall the app.
+    if (!_isDesktopPlatform) {
+      ChatSyncService.pause();
+    }
 
     // Notify listeners
     StreamingManager().onAppLifecycleChanged(isInBackground: true);
@@ -124,21 +140,6 @@ class AppLifecycleService extends ChangeNotifier {
     }
   }
 
-  Future<void> _validateSession() async {
-    try {
-      final session = await SupabaseService.forceRefreshSession();
-      if (session == null && SupabaseService.auth.currentSession != null) {
-        if (kDebugMode) {
-          debugPrint('🔐 [Lifecycle] Session revoked during validation');
-        }
-        // Note: Actual logout is handled by SessionManagerService
-        notifyListeners();
-      }
-    } catch (_) {
-      // Network error - session remains valid
-    }
-  }
-
   /// Dispose all resources
   @override
   void dispose() {
@@ -146,4 +147,10 @@ class AppLifecycleService extends ChangeNotifier {
     _onPauseCallbacks.clear();
     super.dispose();
   }
+
+  bool get _isDesktopPlatform =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.linux ||
+          defaultTargetPlatform == TargetPlatform.windows ||
+          defaultTargetPlatform == TargetPlatform.macOS);
 }

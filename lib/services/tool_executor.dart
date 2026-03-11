@@ -7,7 +7,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import 'package:chuk_chat/models/client_tool.dart';
+import 'package:chuk_chat/models/artifact.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
+import 'package:chuk_chat/services/artifact_storage_service.dart';
+import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/tool_registry.dart' as registry;
 import 'package:chuk_chat/tool_handlers/calculate_handler.dart' as calculate;
@@ -24,6 +27,7 @@ import 'package:chuk_chat/tool_handlers/chat_search_tools.dart'
     as chat_search_tools;
 import 'package:chuk_chat/tool_handlers/nextcloud_tools.dart'
     as nextcloud_tools;
+import 'package:chuk_chat/services/project_storage_service.dart';
 
 class ToolExecutionResult {
   const ToolExecutionResult({required this.output, required this.isError});
@@ -85,6 +89,8 @@ class ToolExecutor {
     'nextcloud',
     'device',
     'search_chats',
+    'artifact_manager',
+    'update_project',
   };
 
   static const Set<String> _defaultDisabledTools = {};
@@ -695,11 +701,180 @@ class ToolExecutor {
       case 'nextcloud':
         return _wrapOutput(await nextcloud_tools.executeNextcloud(args));
 
+      // -- Project management --
+      case 'artifact_manager':
+        return _wrapOutput(await _executeArtifactManager(args));
+      case 'update_project':
+        return _wrapOutput(await _executeUpdateProject(args));
+
       default:
         return ToolExecutionResult(
           output: 'Error: Unknown builtin tool: $name',
           isError: true,
         );
+    }
+  }
+
+  Future<String> _executeArtifactManager(Map<String, dynamic> args) async {
+    final action = (args['action'] as String? ?? '').trim().toLowerCase();
+    final chatId = ChatStorageService.selectedChatId;
+
+    if (chatId == null || chatId.isEmpty) {
+      return 'Error: No active chat. Start or select a chat first.';
+    }
+
+    if (action.isEmpty) {
+      return 'Error: "action" is required (create | update | rewrite).';
+    }
+
+    try {
+      switch (action) {
+        case 'create':
+          final artifactId = (args['artifact_id'] as String? ?? '').trim();
+          final title = (args['title'] as String? ?? '').trim();
+          final typeRaw = (args['type'] as String? ?? '').trim();
+          final content = args['content'] as String? ?? '';
+          final language = (args['language'] as String?)?.trim();
+          final messageId = (args['message_id'] as String?)?.trim();
+
+          if (artifactId.isEmpty || title.isEmpty || typeRaw.isEmpty) {
+            return 'Error: create requires artifact_id, title, and type.';
+          }
+          if (content.trim().isEmpty) {
+            return 'Error: create requires non-empty content.';
+          }
+
+          final type = ArtifactTypeX.fromValue(typeRaw);
+          final created = await ArtifactStorageService.createArtifact(
+            chatId: chatId,
+            artifactId: artifactId,
+            title: title,
+            type: type,
+            content: content,
+            language: language,
+            messageId: messageId,
+          );
+          return 'Artifact "${created.id}" created '
+              '(type: ${created.type.value}, version: ${created.version}).';
+
+        case 'update':
+          final artifactId = (args['artifact_id'] as String? ?? '').trim();
+          if (artifactId.isEmpty) {
+            return 'Error: update requires artifact_id.';
+          }
+
+          final rawEdits = args['edits'];
+          if (rawEdits is! List || rawEdits.isEmpty) {
+            return 'Error: update requires non-empty edits list.';
+          }
+
+          final edits = <ArtifactEdit>[];
+          for (final item in rawEdits) {
+            if (item is! Map) {
+              return 'Error: each edit must be an object with '
+                  'old_str/new_str.';
+            }
+
+            final mapped = <String, dynamic>{};
+            for (final entry in item.entries) {
+              final key = entry.key;
+              if (key is! String) {
+                return 'Error: edit object keys must be strings.';
+              }
+              mapped[key] = entry.value;
+            }
+
+            edits.add(ArtifactEdit.fromMap(mapped));
+          }
+
+          final updated = await ArtifactStorageService.updateArtifactWithEdits(
+            artifactId: artifactId,
+            edits: edits,
+          );
+          return 'Artifact "${updated.id}" updated to '
+              'version ${updated.version} (${edits.length} edit(s)).';
+
+        case 'rewrite':
+          final artifactId = (args['artifact_id'] as String? ?? '').trim();
+          final content = args['content'] as String? ?? '';
+          if (artifactId.isEmpty) {
+            return 'Error: rewrite requires artifact_id.';
+          }
+          if (content.trim().isEmpty) {
+            return 'Error: rewrite requires non-empty content.';
+          }
+
+          final title = (args['title'] as String?)?.trim();
+          final typeRaw = (args['type'] as String?)?.trim();
+          final language = (args['language'] as String?)?.trim();
+          final type = (typeRaw == null || typeRaw.isEmpty)
+              ? null
+              : ArtifactTypeX.fromValue(typeRaw);
+
+          final updated = await ArtifactStorageService.rewriteArtifact(
+            artifactId: artifactId,
+            content: content,
+            title: title,
+            type: type,
+            language: language,
+          );
+          return 'Artifact "${updated.id}" rewritten to '
+              'version ${updated.version}.';
+
+        default:
+          return 'Error: Unknown action "$action". '
+              'Use create, update, or rewrite.';
+      }
+    } catch (e) {
+      return 'Error: Artifact operation failed: $e';
+    }
+  }
+
+  /// Update the active project's instructions, name, or description.
+  Future<String> _executeUpdateProject(Map<String, dynamic> args) async {
+    final projectId = ProjectStorageService.selectedProjectId;
+    if (projectId == null) {
+      return 'Error: No project is currently active. '
+          'The user must select a project first.';
+    }
+
+    final instructions = (args['instructions'] as String?)?.trim();
+    final name = (args['name'] as String?)?.trim();
+    final description = (args['description'] as String?)?.trim();
+
+    if ((instructions == null || instructions.isEmpty) &&
+        (name == null || name.isEmpty) &&
+        (description == null || description.isEmpty)) {
+      return 'Error: At least one of "instructions", "name", or '
+          '"description" must be provided.';
+    }
+
+    try {
+      await ProjectStorageService.updateProject(
+        projectId,
+        name: (name != null && name.isNotEmpty) ? name : null,
+        description: (description != null && description.isNotEmpty)
+            ? description
+            : null,
+        customSystemPrompt: (instructions != null && instructions.isNotEmpty)
+            ? instructions
+            : null,
+      );
+
+      final parts = <String>[];
+      if (instructions != null && instructions.isNotEmpty) {
+        parts.add('instructions updated');
+      }
+      if (name != null && name.isNotEmpty) {
+        parts.add('name changed to "$name"');
+      }
+      if (description != null && description.isNotEmpty) {
+        parts.add('description updated');
+      }
+      return 'Project updated successfully: ${parts.join(', ')}. '
+          'Changes take effect in the next message.';
+    } catch (e) {
+      return 'Error: Failed to update project: $e';
     }
   }
 

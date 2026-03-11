@@ -69,11 +69,7 @@ class PasswordStrengthMeter extends StatelessWidget {
 
     return Text(
       label,
-      style: TextStyle(
-        fontSize: 12,
-        fontWeight: FontWeight.w500,
-        color: color,
-      ),
+      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: color),
     );
   }
 
@@ -88,7 +84,10 @@ class PasswordStrengthMeter extends StatelessWidget {
         _buildRequirement('Uppercase letter (A-Z)', result.hasUppercase),
         _buildRequirement('Lowercase letter (a-z)', result.hasLowercase),
         _buildRequirement('Number (0-9)', result.hasDigit),
-        _buildRequirement('Special character (!@#\$%^&*)', result.hasSpecialChar),
+        _buildRequirement(
+          'Special character (!@#\$%^&*)',
+          result.hasSpecialChar,
+        ),
       ],
     );
   }

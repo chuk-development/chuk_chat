@@ -157,14 +157,8 @@ void main() {
     });
 
     test('completed count increases', () async {
-      await queue.enqueue<void>(
-        id: 'stat-1',
-        operation: () async {},
-      );
-      await queue.enqueue<void>(
-        id: 'stat-2',
-        operation: () async {},
-      );
+      await queue.enqueue<void>(id: 'stat-1', operation: () async {});
+      await queue.enqueue<void>(id: 'stat-2', operation: () async {});
 
       final stats = queue.statistics;
       expect(stats['completed'], greaterThanOrEqualTo(2));
@@ -200,10 +194,7 @@ void main() {
       final blocker = Completer<void>();
 
       // Block the single slot
-      queue.enqueue<void>(
-        id: 'blocker',
-        operation: () => blocker.future,
-      );
+      queue.enqueue<void>(id: 'blocker', operation: () => blocker.future);
 
       // Queue a request that will be cancelled
       final pendingFuture = queue.enqueue<void>(

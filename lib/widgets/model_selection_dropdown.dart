@@ -508,7 +508,6 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
         _errorMessage = 'Session expired. Please sign in again.';
         _selectedModelName = 'Sign In Required';
       });
-      await SupabaseService.signOut();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

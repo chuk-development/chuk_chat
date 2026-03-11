@@ -11,7 +11,9 @@ void main() {
   group('isNetworkError', () {
     test('socketexception is network error', () {
       expect(
-        NetworkStatusService.isNetworkError('SocketException: Connection refused'),
+        NetworkStatusService.isNetworkError(
+          'SocketException: Connection refused',
+        ),
         isTrue,
       );
     });
@@ -31,10 +33,7 @@ void main() {
     });
 
     test('connection refused', () {
-      expect(
-        NetworkStatusService.isNetworkError('Connection refused'),
-        isTrue,
-      );
+      expect(NetworkStatusService.isNetworkError('Connection refused'), isTrue);
     });
 
     test('connection timed out', () {
@@ -45,10 +44,7 @@ void main() {
     });
 
     test('no route to host', () {
-      expect(
-        NetworkStatusService.isNetworkError('No route to host'),
-        isTrue,
-      );
+      expect(NetworkStatusService.isNetworkError('No route to host'), isTrue);
     });
 
     test('network error generic', () {
@@ -59,10 +55,7 @@ void main() {
     });
 
     test('timeout generic', () {
-      expect(
-        NetworkStatusService.isNetworkError('Request timeout'),
-        isTrue,
-      );
+      expect(NetworkStatusService.isNetworkError('Request timeout'), isTrue);
     });
 
     test('case insensitive', () {
@@ -73,17 +66,11 @@ void main() {
     });
 
     test('auth error is NOT network error', () {
-      expect(
-        NetworkStatusService.isNetworkError('401 Unauthorized'),
-        isFalse,
-      );
+      expect(NetworkStatusService.isNetworkError('401 Unauthorized'), isFalse);
     });
 
     test('permission error is NOT network error', () {
-      expect(
-        NetworkStatusService.isNetworkError('403 Forbidden'),
-        isFalse,
-      );
+      expect(NetworkStatusService.isNetworkError('403 Forbidden'), isFalse);
     });
 
     test('generic error is NOT network error', () {

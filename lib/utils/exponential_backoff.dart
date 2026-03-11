@@ -116,18 +116,16 @@ class ExponentialBackoff {
             debugPrint('   Total duration: ${duration.inMilliseconds}ms');
           }
 
-          return BackoffResult.failure(
-            error.toString(),
-            attempt,
-            duration,
-          );
+          return BackoffResult.failure(error.toString(), attempt, duration);
         }
 
         // Calculate backoff delay with jitter
         final delay = _calculateDelay(attempt, config);
 
         if (kDebugMode) {
-          debugPrint('⚠️  Attempt $attempt failed, retrying in ${delay.inMilliseconds}ms');
+          debugPrint(
+            '⚠️  Attempt $attempt failed, retrying in ${delay.inMilliseconds}ms',
+          );
           debugPrint('   Error: $error');
         }
 
@@ -141,17 +139,14 @@ class ExponentialBackoff {
 
     // Should never reach here, but handle it just in case
     final duration = DateTime.now().difference(startTime);
-    return BackoffResult.failure(
-      'Max retries exceeded',
-      attempt,
-      duration,
-    );
+    return BackoffResult.failure('Max retries exceeded', attempt, duration);
   }
 
   /// Calculate delay for a given attempt with exponential backoff and jitter.
   static Duration _calculateDelay(int attempt, BackoffConfig config) {
     // Calculate exponential delay
-    final exponentialDelay = config.initialDelay.inMilliseconds *
+    final exponentialDelay =
+        config.initialDelay.inMilliseconds *
         math.pow(config.multiplier, attempt - 1);
 
     // Apply max delay cap

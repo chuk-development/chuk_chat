@@ -9,8 +9,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:chuk_chat/services/chat_preload_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_sync_service.dart';
+import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/project_storage_service.dart';
+import 'package:chuk_chat/services/settings_sync_service.dart';
 import 'package:chuk_chat/services/streaming_foreground_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
@@ -27,6 +29,10 @@ class AppInitializationService {
 
   bool _isInitializing = false;
   bool _isSupabaseReady = false;
+  Timer? _deferredPreloadTimer;
+
+  // Gives startup/session init time to settle before background decrypt work.
+  static const Duration _deferredPreloadDelay = Duration(seconds: 45);
 
   bool get isInitializing => _isInitializing;
   bool get isSupabaseReady => _isSupabaseReady;
@@ -35,6 +41,11 @@ class AppInitializationService {
   Future<void> initializeCoreServices() async {
     if (_isInitializing) return;
     _isInitializing = true;
+    final stopwatch = Stopwatch()..start();
+
+    unawaited(
+      DiagnosticsLogService.info('startup', 'Initializing core services'),
+    );
 
     try {
       // Initialize foreground service (non-blocking, platform-specific)
@@ -50,7 +61,23 @@ class AppInitializationService {
       if (SupabaseService.auth.currentSession != null) {
         unawaited(_preloadEncryptionKey());
       }
+
+      unawaited(
+        DiagnosticsLogService.timing(
+          'startup',
+          'initialize_core_services',
+          stopwatch.elapsedMilliseconds,
+          data: {'supabase_ready': _isSupabaseReady},
+        ),
+      );
     } catch (error) {
+      unawaited(
+        DiagnosticsLogService.error(
+          'startup',
+          'Core service initialization failed',
+          error: error,
+        ),
+      );
       if (kDebugMode) {
         debugPrint('❌ [AppInit] Service initialization failed: $error');
       }
@@ -82,6 +109,14 @@ class AppInitializationService {
   Future<void> initializeUserSession(User user) async {
     final stopwatch = Stopwatch()..start();
 
+    unawaited(
+      DiagnosticsLogService.info(
+        'startup',
+        'Initializing user session',
+        data: {'user_id_len': user.id.length},
+      ),
+    );
+
     if (kDebugMode) {
       debugPrint('🚀 [AppInit] Starting user session init for ${user.id}...');
     }
@@ -99,12 +134,26 @@ class AppInitializationService {
       if (hasKey) {
         await _loadUserData(stopwatch);
       } else {
+        unawaited(
+          DiagnosticsLogService.warning(
+            'startup',
+            'Encryption key unavailable during user session init',
+          ),
+        );
         if (kDebugMode) {
           debugPrint('⚠️ [AppInit] Encryption key not available');
         }
         ChatSyncService.stop();
       }
     } catch (error, stackTrace) {
+      unawaited(
+        DiagnosticsLogService.error(
+          'startup',
+          'User session initialization failed',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
       if (kDebugMode) {
         debugPrint('❌ [AppInit] User session init failed: $error');
         debugPrint('$stackTrace');
@@ -126,9 +175,26 @@ class AppInitializationService {
       // Start sync after cache is loaded
       ChatSyncService.start();
 
-      // Preload all messages in background
-      unawaited(ChatPreloadService.startBackgroundPreload());
+      // Delay preload to keep startup/input smooth, then run in background.
+      _startDeferredPreload();
+
+      unawaited(
+        DiagnosticsLogService.timing(
+          'startup',
+          'load_sidebar_and_start_sync',
+          stopwatch.elapsedMilliseconds,
+          data: {'sidebar_chat_count': ChatStorageService.savedChats.length},
+        ),
+      );
     } catch (error, stackTrace) {
+      unawaited(
+        DiagnosticsLogService.error(
+          'startup',
+          'Loading user data failed',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
       if (kDebugMode) {
         debugPrint('⚠️ [AppInit] Chat loading failed: $error');
         debugPrint('$stackTrace');
@@ -143,6 +209,24 @@ class AppInitializationService {
         }
       }),
     );
+
+    // Keep cross-device settings synced in background.
+    unawaited(
+      SettingsSyncService.syncAllFromSupabase(forceRefresh: true).catchError((
+        error,
+      ) {
+        if (kDebugMode) {
+          debugPrint('⚠️ [AppInit] Settings sync failed: $error');
+        }
+      }),
+    );
+  }
+
+  void _startDeferredPreload() {
+    _deferredPreloadTimer?.cancel();
+    _deferredPreloadTimer = Timer(_deferredPreloadDelay, () {
+      unawaited(ChatPreloadService.startBackgroundPreload());
+    });
   }
 
   /// Wait for Supabase to be initialized
@@ -169,6 +253,8 @@ class AppInitializationService {
 
   /// Reset all services (call on logout)
   Future<void> resetServices() async {
+    _deferredPreloadTimer?.cancel();
+    _deferredPreloadTimer = null;
     ChatSyncService.stop();
     ChatPreloadService.reset();
     // Clear encryption key first, then reset storage services in parallel

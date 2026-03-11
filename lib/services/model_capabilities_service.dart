@@ -30,7 +30,9 @@ class ModelCapabilitiesService {
       }
       _isInitialized = true;
       if (kDebugMode) {
-        debugPrint('✅ [ModelCapabilities] Initialized with ${_visionSupportCache.length} models, ${_visionSupportCache.entries.where((e) => e.value).length} support vision');
+        debugPrint(
+          '✅ [ModelCapabilities] Initialized with ${_visionSupportCache.length} models, ${_visionSupportCache.entries.where((e) => e.value).length} support vision',
+        );
       }
     } catch (error) {
       // If initialization fails, cache stays empty (all models = no vision)
@@ -61,7 +63,9 @@ class ModelCapabilitiesService {
     final supports = _visionSupportCache[modelId] ?? false;
     if (!_isInitialized && modelId.isNotEmpty) {
       if (kDebugMode) {
-        debugPrint('⚠️ [ModelCapabilities] Checked $modelId before initialization');
+        debugPrint(
+          '⚠️ [ModelCapabilities] Checked $modelId before initialization',
+        );
       }
     }
     return supports;

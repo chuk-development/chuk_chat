@@ -20,10 +20,7 @@ class FreeMessageQuota {
     required this.remaining,
   });
 
-  const FreeMessageQuota.empty()
-      : total = 10,
-        used = 0,
-        remaining = 10;
+  const FreeMessageQuota.empty() : total = 10, used = 0, remaining = 10;
 
   final int total;
   final int used;
@@ -160,7 +157,8 @@ mixin _FreeMessageListenerMixin<T extends StatefulWidget> on State<T> {
           .eq('user_id', user.id)
           .single();
 
-      final int total = _parseToInt(profileResponse['free_messages_total']) ?? 10;
+      final int total =
+          _parseToInt(profileResponse['free_messages_total']) ?? 10;
       final int used = _parseToInt(profileResponse['free_messages_used']) ?? 0;
       final int remaining = (total - used).clamp(0, total);
 
@@ -240,9 +238,7 @@ class _FreeMessageDisplayState extends State<FreeMessageDisplay>
       return Card(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
-          child: Center(
-            child: CircularProgressIndicator(color: accent),
-          ),
+          child: Center(child: CircularProgressIndicator(color: accent)),
         ),
       );
     }
@@ -294,8 +290,8 @@ class _FreeMessageDisplayState extends State<FreeMessageDisplay>
                   percentage > 0.5
                       ? Colors.green
                       : percentage > 0.2
-                          ? Colors.orange
-                          : Colors.red,
+                      ? Colors.orange
+                      : Colors.red,
                 ),
               ),
             ),
@@ -329,8 +325,11 @@ class _FreeMessageDisplayState extends State<FreeMessageDisplay>
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.warning_amber_rounded,
-                        color: Colors.red, size: 20),
+                    const Icon(
+                      Icons.warning_amber_rounded,
+                      color: Colors.red,
+                      size: 20,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -393,19 +392,23 @@ class _FreeMessageBadgeState extends State<FreeMessageBadge>
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle resolvedTextStyle = widget.textStyle ??
-        Theme.of(context).textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-            ) ??
+    final TextStyle resolvedTextStyle =
+        widget.textStyle ??
+        Theme.of(
+          context,
+        ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600) ??
         const TextStyle(fontSize: 14, fontWeight: FontWeight.w600);
 
     final EdgeInsetsGeometry resolvedPadding =
-        widget.padding ?? const EdgeInsets.symmetric(horizontal: 8, vertical: 4);
+        widget.padding ??
+        const EdgeInsets.symmetric(horizontal: 8, vertical: 4);
 
     if (freeMessageLoading) {
-      final TextStyle placeholderStyle = widget.placeholderStyle ??
+      final TextStyle placeholderStyle =
+          widget.placeholderStyle ??
           resolvedTextStyle.copyWith(
-            color: resolvedTextStyle.color?.withValues(alpha: 0.6) ??
+            color:
+                resolvedTextStyle.color?.withValues(alpha: 0.6) ??
                 Theme.of(context).hintColor,
           );
 

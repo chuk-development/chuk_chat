@@ -312,7 +312,6 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
         _models = [];
         _selectedProviders.clear();
       });
-      await SupabaseService.signOut();
       _showSnackBar('Session expired. Please sign in again.');
     } catch (error) {
       rethrow;

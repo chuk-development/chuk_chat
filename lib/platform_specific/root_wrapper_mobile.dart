@@ -5,14 +5,18 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
+import 'package:chuk_chat/models/artifact.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/pages/projects_page.dart';
 import 'package:chuk_chat/pages/media_manager_page.dart';
 import 'package:chuk_chat/pages/settings_page.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_mobile.dart';
 import 'package:chuk_chat/platform_specific/sidebar_mobile.dart'; // UPDATED: Use mobile sidebar
+import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/developer_options_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/widgets/artifact_panel.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:chuk_chat/pages/coming_soon_page.dart';
 import 'package:chuk_chat/utils/debug_chat_formatter.dart';
@@ -33,6 +37,8 @@ class RootWrapperMobile extends StatefulWidget {
 class _RootWrapperMobileState extends State<RootWrapperMobile>
     with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   bool _isSidebarExpanded = false;
+  bool _developerOptionsEnabled = false;
+  ArtifactDocument? _activeArtifact;
   final GlobalKey<ChukChatUIMobileState> _chatUIMobileKey = GlobalKey();
   late AnimationController _sidebarAnimController;
   late Animation<double> _sidebarAnimation;
@@ -41,6 +47,23 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _developerOptionsEnabled = DeveloperOptionsService.enabledNotifier.value;
+    _activeArtifact = ArtifactStorageService.activeArtifactNotifier.value;
+    DeveloperOptionsService.enabledNotifier.addListener(_onDeveloperOptions);
+    ArtifactStorageService.activeArtifactNotifier.addListener(
+      _onArtifactChanged,
+    );
+    unawaited(
+      DeveloperOptionsService.initialize().then(
+        (_) => DeveloperOptionsService.syncFromSupabase(forceRefresh: true),
+      ),
+    );
+    unawaited(
+      ArtifactStorageService.setActiveChat(
+        ChatStorageService.selectedChatId,
+        forceRefresh: true,
+      ),
+    );
 
     // Initialize smooth sidebar animation
     _sidebarAnimController = AnimationController(
@@ -60,9 +83,27 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
 
   @override
   void dispose() {
+    DeveloperOptionsService.enabledNotifier.removeListener(_onDeveloperOptions);
+    ArtifactStorageService.activeArtifactNotifier.removeListener(
+      _onArtifactChanged,
+    );
     _sidebarAnimController.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  void _onDeveloperOptions() {
+    if (!mounted) return;
+    setState(() {
+      _developerOptionsEnabled = DeveloperOptionsService.enabledNotifier.value;
+    });
+  }
+
+  void _onArtifactChanged() {
+    if (!mounted) return;
+    setState(() {
+      _activeArtifact = ArtifactStorageService.activeArtifactNotifier.value;
+    });
   }
 
   @override
@@ -237,6 +278,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
         _sidebarAnimController.reverse();
       }
     });
+    unawaited(ArtifactStorageService.setActiveChat(chatId, forceRefresh: true));
   }
 
   Future<void> _handleChatDeleted(String deletedChatId) async {
@@ -247,6 +289,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     // If the deleted chat is the one currently displayed, start a new chat
     if (ChatStorageService.selectedChatId == deletedChatId) {
       _chatUIMobileKey.currentState?.newChat();
+      unawaited(ArtifactStorageService.setActiveChat(null, forceRefresh: true));
     }
     setState(() {});
   }
@@ -255,6 +298,19 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     // Hide keyboard when creating new chat
     FocusScope.of(context).unfocus();
     _chatUIMobileKey.currentState?.newChat();
+    unawaited(ArtifactStorageService.setActiveChat(null, forceRefresh: true));
+  }
+
+  void _openArtifactSheet() {
+    final artifact = _activeArtifact;
+    if (artifact == null) return;
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => ArtifactBottomSheet(artifact: artifact),
+    );
   }
 
   void _copyDebugChat() {
@@ -333,14 +389,24 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                 ),
               ),
               actions: [
-                Semantics(
-                  identifier: 'copy_debug_chat_button',
-                  child: IconButton(
-                    icon: Icon(Icons.copy_all, color: iconFg),
-                    onPressed: _copyDebugChat,
-                    tooltip: 'Copy full chat (debug)',
+                if (_developerOptionsEnabled)
+                  Semantics(
+                    identifier: 'copy_debug_chat_button',
+                    child: IconButton(
+                      icon: Icon(Icons.copy_all, color: iconFg),
+                      onPressed: _copyDebugChat,
+                      tooltip: 'Copy full chat (debug)',
+                    ),
                   ),
-                ),
+                if (_activeArtifact != null)
+                  Semantics(
+                    identifier: 'open_artifact_button',
+                    child: IconButton(
+                      icon: Icon(Icons.article_outlined, color: iconFg),
+                      onPressed: _openArtifactSheet,
+                      tooltip: 'Open artifact',
+                    ),
+                  ),
                 Padding(
                   padding: const EdgeInsets.only(right: 12),
                   child: Semantics(
@@ -365,6 +431,12 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                   setState(() {
                     ChatStorageService.selectedChatId = newId;
                   });
+                  unawaited(
+                    ArtifactStorageService.setActiveChat(
+                      newId,
+                      forceRefresh: true,
+                    ),
+                  );
                 },
                 isSidebarExpanded: _isSidebarExpanded,
                 showReasoningTokens: widget.config.showReasoningTokens,

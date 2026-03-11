@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -19,8 +20,10 @@ class SystemTrayService with TrayListener, WindowListener {
   static const String _kQuitKey = 'quit';
 
   bool _isInitialized = false;
+  bool _isInitializing = false;
   bool _isWindowVisible = true;
   bool _isQuitting = false;
+  Timer? _retryTimer;
 
   bool get _isDesktop {
     if (kIsWeb) return false;
@@ -35,9 +38,16 @@ class SystemTrayService with TrayListener, WindowListener {
   bool get _supportsTooltip => defaultTargetPlatform != TargetPlatform.linux;
 
   Future<void> initialize() async {
-    if (!_isDesktop || _isInitialized) return;
+    if (!_isDesktop || _isInitialized || _isInitializing) return;
+    _isInitializing = true;
 
     try {
+      await DiagnosticsLogService.info(
+        'tray',
+        'Initializing system tray',
+        data: {'platform': defaultTargetPlatform.name},
+      );
+
       await windowManager.ensureInitialized();
       await windowManager.setPreventClose(true);
       windowManager.addListener(this);
@@ -51,19 +61,46 @@ class SystemTrayService with TrayListener, WindowListener {
 
       trayManager.addListener(this);
       _isInitialized = true;
+      _retryTimer?.cancel();
+      _retryTimer = null;
 
       await _syncWindowVisibility();
       await _updateMenu();
+
+      await DiagnosticsLogService.info(
+        'tray',
+        'System tray initialized',
+        data: {'icon_path': iconPath},
+      );
 
       if (kDebugMode) {
         debugPrint('[SystemTrayService] Initialized');
       }
     } catch (error) {
+      await DiagnosticsLogService.error(
+        'tray',
+        'System tray initialization failed',
+        error: error,
+      );
       if (kDebugMode) {
         debugPrint('[SystemTrayService] Failed to initialize: $error');
       }
       await _rollbackInitialization();
+      _scheduleRetry();
+    } finally {
+      _isInitializing = false;
     }
+  }
+
+  void _scheduleRetry() {
+    if (defaultTargetPlatform != TargetPlatform.linux) return;
+    if (_retryTimer != null || _isInitialized) return;
+
+    _retryTimer = Timer(const Duration(seconds: 3), () {
+      _retryTimer = null;
+      if (_isInitialized || _isInitializing) return;
+      unawaited(initialize());
+    });
   }
 
   Future<String> _resolveTrayIconPath() async {
@@ -86,20 +123,46 @@ class SystemTrayService with TrayListener, WindowListener {
       await iconFile.writeAsBytes(bytes, flush: true);
       return iconFile.path;
     } catch (error) {
+      await DiagnosticsLogService.warning(
+        'tray',
+        'Primary tray icon asset load failed',
+        data: {'asset_path': assetPath, 'error': error.toString()},
+      );
+
       if (kDebugMode) {
         debugPrint('[SystemTrayService] Failed to load icon asset: $error');
       }
 
-      if (defaultTargetPlatform == TargetPlatform.linux) {
-        const fallbackIcon =
-            '/usr/share/icons/hicolor/512x512/apps/chuk-chat.png';
-        if (File(fallbackIcon).existsSync()) {
-          return fallbackIcon;
+      if (defaultTargetPlatform == TargetPlatform.linux &&
+          _linuxTrayFallbackCandidates.isNotEmpty) {
+        for (final candidate in _linuxTrayFallbackCandidates) {
+          if (File(candidate).existsSync()) {
+            await DiagnosticsLogService.info(
+              'tray',
+              'Using fallback tray icon path',
+              data: {'icon_path': candidate},
+            );
+            return candidate;
+          }
         }
       }
 
       rethrow;
     }
+  }
+
+  List<String> get _linuxTrayFallbackCandidates {
+    final candidates = <String>{
+      '/usr/share/icons/hicolor/512x512/apps/chuk-chat.png',
+      '/opt/chuk-chat/data/flutter_assets/web/icons/Icon-512.png',
+    };
+
+    final executableDir = File(Platform.resolvedExecutable).parent.path;
+    candidates.add(
+      '$executableDir${Platform.pathSeparator}data${Platform.pathSeparator}flutter_assets${Platform.pathSeparator}web${Platform.pathSeparator}icons${Platform.pathSeparator}Icon-512.png',
+    );
+
+    return candidates.toList(growable: false);
   }
 
   Future<void> _syncWindowVisibility() async {
@@ -182,6 +245,9 @@ class SystemTrayService with TrayListener, WindowListener {
   }
 
   Future<void> _rollbackInitialization() async {
+    _retryTimer?.cancel();
+    _retryTimer = null;
+
     try {
       trayManager.removeListener(this);
       await trayManager.destroy();
@@ -235,6 +301,9 @@ class SystemTrayService with TrayListener, WindowListener {
   }
 
   Future<void> dispose({bool resetQuitFlag = true}) async {
+    _retryTimer?.cancel();
+    _retryTimer = null;
+
     if (!_isInitialized) return;
 
     try {

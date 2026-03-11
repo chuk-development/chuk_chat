@@ -18,6 +18,7 @@ class MarkdownMessage extends StatefulWidget {
     required this.text,
     required this.textColor,
     required this.backgroundColor,
+    this.wrapWithSelectionArea = true,
     this.paragraphFontSize,
     this.paragraphHeight,
   });
@@ -25,6 +26,7 @@ class MarkdownMessage extends StatefulWidget {
   final String text;
   final Color textColor;
   final Color backgroundColor;
+  final bool wrapWithSelectionArea;
   final double? paragraphFontSize;
   final double? paragraphHeight;
 
@@ -89,13 +91,16 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
       _rebuildCache();
     }
 
-    return SelectionArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: _cachedContent!,
-      ),
+    final body = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: _cachedContent!,
     );
+
+    if (!widget.wrapWithSelectionArea) {
+      return body;
+    }
+    return SelectionArea(child: body);
   }
 
   void _rebuildCache() {

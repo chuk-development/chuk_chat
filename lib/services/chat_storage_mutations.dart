@@ -39,7 +39,9 @@ class ChatStorageMutations {
     final remoteStar = updatedRows.first['is_starred'] as bool;
     final existingChat = ChatStorageState.getChatById(chatId);
     if (existingChat != null) {
-      ChatStorageState.chatsById[chatId] = existingChat.copyWith(isStarred: remoteStar);
+      ChatStorageState.chatsById[chatId] = existingChat.copyWith(
+        isStarred: remoteStar,
+      );
       ChatStorageState.notifyChanges(chatId);
     }
 
@@ -59,7 +61,9 @@ class ChatStorageMutations {
     }
 
     if (!chat.isFullyLoaded) {
-      throw StateError('Chat must be fully loaded to rename. Call loadFullChat first.');
+      throw StateError(
+        'Chat must be fully loaded to rename. Call loadFullChat first.',
+      );
     }
 
     final updatedChat = chat.copyWith(customName: newName, title: newName);
@@ -81,7 +85,9 @@ class ChatStorageMutations {
         })
         .eq('id', chatId)
         .eq('user_id', user.id)
-        .select('id, encrypted_payload, created_at, is_starred, updated_at, encrypted_title');
+        .select(
+          'id, encrypted_payload, created_at, is_starred, updated_at, encrypted_title',
+        );
 
     if (updatedRows.isEmpty) {
       throw StateError('Chat was not found or access is denied.');
@@ -94,16 +100,23 @@ class ChatStorageMutations {
         : DateTime.now();
 
     // Update in-memory state with new title AND new timestamp
-    ChatStorageState.chatsById[chatId] = updatedChat.copyWith(updatedAt: newUpdatedAt);
+    ChatStorageState.chatsById[chatId] = updatedChat.copyWith(
+      updatedAt: newUpdatedAt,
+    );
     ChatStorageState.notifyChanges(chatId);
 
     // Update local caches (await to ensure consistency before title cache update)
     await LocalChatCacheService.upsert(user.id, updatedRow);
 
     // Also update the title cache for sidebar persistence
-    await saveTitlesToCache(user.id, ChatStorageState.chatsById.values.toList());
+    await saveTitlesToCache(
+      user.id,
+      ChatStorageState.chatsById.values.toList(),
+    );
     if (kDebugMode) {
-      debugPrint('✅ [ChatStorage] Renamed chat $chatId to "$newName" (updatedAt: $newUpdatedAt)');
+      debugPrint(
+        '✅ [ChatStorage] Renamed chat $chatId to "$newName" (updatedAt: $newUpdatedAt)',
+      );
     }
   }
 
@@ -166,7 +179,9 @@ class ChatStorageMutations {
 
     if (fullyLoadedChats.length < chats.length) {
       if (kDebugMode) {
-        debugPrint('⚠️ [Export] Only ${fullyLoadedChats.length}/${chats.length} chats fully loaded');
+        debugPrint(
+          '⚠️ [Export] Only ${fullyLoadedChats.length}/${chats.length} chats fully loaded',
+        );
       }
     }
 
@@ -199,17 +214,24 @@ Future<void> saveTitlesToCache(String userId, List<StoredChat> chats) async {
   final prefs = sharedPrefsInstance ?? await SharedPreferences.getInstance();
   final cacheKey = 'chat_titles_v1_$userId';
 
-  final data = chats.map((chat) => {
-    'id': chat.id,
-    'title': chat.title ?? chat.previewText,
-    'created_at': chat.createdAt.toIso8601String(),
-    'is_starred': chat.isStarred,
-    if (chat.updatedAt != null) 'updated_at': chat.updatedAt!.toIso8601String(),
-  }).toList();
+  final data = chats
+      .map(
+        (chat) => {
+          'id': chat.id,
+          'title': chat.title ?? chat.previewText,
+          'created_at': chat.createdAt.toIso8601String(),
+          'is_starred': chat.isStarred,
+          if (chat.updatedAt != null)
+            'updated_at': chat.updatedAt!.toIso8601String(),
+        },
+      )
+      .toList();
 
   await prefs.setString(cacheKey, jsonEncode(data));
   final withTimestamp = chats.where((c) => c.updatedAt != null).length;
   if (kDebugMode) {
-    debugPrint('💾 [ChatStorage] Saved ${chats.length} titles to cache ($withTimestamp with updatedAt)');
+    debugPrint(
+      '💾 [ChatStorage] Saved ${chats.length} titles to cache ($withTimestamp with updatedAt)',
+    );
   }
 }

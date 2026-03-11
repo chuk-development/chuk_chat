@@ -107,7 +107,9 @@ class SupabaseService {
         // Check if this is a network error - keep existing session
         if (NetworkStatusService.isNetworkError(error)) {
           if (kDebugMode) {
-            debugPrint('📴 Session refresh failed (network): ${error.message} - keeping session');
+            debugPrint(
+              '📴 Session refresh failed (network): ${error.message} - keeping session',
+            );
           }
           return auth.currentSession; // Keep existing session on network error
         }

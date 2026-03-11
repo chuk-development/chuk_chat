@@ -109,7 +109,9 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
           _hasLoadedOnce = true;
         });
         if (kDebugMode) {
-          debugPrint('📦 [CreditMixin] Loaded from cache: €$remaining / €$total');
+          debugPrint(
+            '📦 [CreditMixin] Loaded from cache: €$remaining / €$total',
+          );
         }
       } else {
         // No cache - keep loading state, server will provide value
@@ -202,7 +204,7 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
       unawaited(_saveCreditsToCache(totalCredits, remainingCredits));
       if (kDebugMode) {
         debugPrint(
-        '✅ [CreditMixin] Loaded from API: €$remainingCredits / €$totalCredits',
+          '✅ [CreditMixin] Loaded from API: €$remainingCredits / €$totalCredits',
         );
       }
     } catch (error) {
@@ -602,7 +604,7 @@ class _BalanceBadgeState extends State<BalanceBadge> {
       unawaited(_saveToCache());
       if (kDebugMode) {
         debugPrint(
-        '✅ [BalanceBadge] Loaded from API: €$_credits, $_freeMessagesRemaining/$_freeMessagesTotal free',
+          '✅ [BalanceBadge] Loaded from API: €$_credits, $_freeMessagesRemaining/$_freeMessagesTotal free',
         );
       }
     } catch (e) {

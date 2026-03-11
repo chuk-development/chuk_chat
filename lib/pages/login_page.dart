@@ -3,7 +3,6 @@ import 'package:flutter/gestures.dart';
 
 import 'package:chuk_chat/services/auth_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
-import 'package:chuk_chat/services/session_tracking_service.dart';
 import 'package:chuk_chat/supabase_config.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/input_validator.dart';
@@ -33,7 +32,6 @@ class _LoginPageState extends State<LoginPage> {
   bool _confirmedAge = false;
   String? _errorMessage;
   String _currentPassword = '';
-  bool _wasRemotelySignedOut = false;
 
   @override
   void initState() {
@@ -44,14 +42,6 @@ class _LoginPageState extends State<LoginPage> {
         _currentPassword = _passwordCtrl.text;
       });
     });
-    _checkRemoteSignOut();
-  }
-
-  Future<void> _checkRemoteSignOut() async {
-    final wasRemote = await SessionTrackingService.wasRemotelySignedOut();
-    if (wasRemote && mounted) {
-      setState(() => _wasRemotelySignedOut = true);
-    }
   }
 
   @override
@@ -251,37 +241,6 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    if (_wasRemotelySignedOut) ...[
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: Colors.orange.withValues(alpha: 0.5),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.info_outline,
-                              size: 18,
-                              color: Colors.orange.shade200,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'You were signed out from another device.',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: Colors.orange.shade200,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
                     if (SupabaseConfig.isUsingPlaceholderValues) ...[
                       const SizedBox(height: 12),
                       Container(

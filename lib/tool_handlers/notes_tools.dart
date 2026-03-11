@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/user_preferences_service.dart';
 
 const String _notesPrefsKey = 'tool_notes'; // legacy key-value store
 const String _memoryPrefsKey = 'identity_memory'; // new free-text store
@@ -17,6 +18,9 @@ const String _identitySoulColumn = 'identity_soul';
 const String _identityUserColumn = 'identity_user';
 const String _identityMemoryColumn = 'identity_memory';
 const String _identityEnabledColumn = 'identity_enabled';
+const String _legacyPreferencesColumn = 'preferences';
+const String _selectedModelColumn = 'selected_model_id';
+const String _fallbackSelectedModelId = 'moonshotai/kimi-k2.5';
 
 const Duration _identitySyncCacheTtl = Duration(minutes: 1);
 
@@ -46,18 +50,28 @@ void _resetIdentityCacheForUser(String? userId) {
     return;
   }
   _cachedIdentityUserId = userId;
+  _invalidateIdentityCache();
+}
+
+void _invalidateIdentityCache() {
   _cachedIdentityRow = null;
   _cachedIdentityFetchedAt = null;
   _identityRowInFlight = null;
 }
 
-Future<Map<String, dynamic>?> _loadIdentityRowFromSupabase() async {
+Future<Map<String, dynamic>?> _loadIdentityRowFromSupabase({
+  bool forceRefresh = false,
+}) async {
   final userId = _safeCurrentUserId();
   if (userId == null) {
     return null;
   }
 
   _resetIdentityCacheForUser(userId);
+
+  if (forceRefresh) {
+    _invalidateIdentityCache();
+  }
 
   final now = DateTime.now();
   if (_cachedIdentityRow != null &&
@@ -87,6 +101,20 @@ Future<Map<String, dynamic>?> _loadIdentityRowFromSupabase() async {
       return response == null
           ? <String, dynamic>{}
           : Map<String, dynamic>.from(response);
+    } on PostgrestException catch (error) {
+      if (_isMissingIdentityColumnsError(error)) {
+        final legacy = await _loadIdentityRowFromLegacyPreferences(userId);
+        if (legacy != null) {
+          _cachedIdentityFetchedAt = DateTime.now();
+          _cachedIdentityRow = Map<String, dynamic>.from(legacy);
+          return Map<String, dynamic>.from(legacy);
+        }
+      }
+
+      if (kDebugMode) {
+        debugPrint('Failed to load identity row from Supabase: $error');
+      }
+      return null;
     } catch (error) {
       if (kDebugMode) {
         debugPrint('Failed to load identity row from Supabase: $error');
@@ -125,15 +153,124 @@ Future<bool> _upsertIdentityFields(Map<String, dynamic> fields) async {
   final userId = session.user.id;
   final payload = <String, dynamic>{'user_id': userId, ...fields};
 
+  // user_preferences.selected_model_id is NOT NULL.
+  // Include it so identity upserts can also create missing rows reliably.
+  final selectedModelId = await _resolveSelectedModelIdForUpsert(userId);
+  if (selectedModelId != null && selectedModelId.isNotEmpty) {
+    payload[_selectedModelColumn] = selectedModelId;
+  }
+
   try {
     await SupabaseService.client
         .from('user_preferences')
         .upsert(payload, onConflict: 'user_id');
     _mergeIdentityCache(userId, fields);
     return true;
+  } on PostgrestException catch (error) {
+    if (_isMissingIdentityColumnsError(error)) {
+      return _upsertIdentityFieldsLegacy(userId, fields);
+    }
+
+    if (kDebugMode) {
+      debugPrint('Failed to sync identity fields to Supabase: $error');
+    }
+    return false;
   } catch (error) {
     if (kDebugMode) {
       debugPrint('Failed to sync identity fields to Supabase: $error');
+    }
+    return false;
+  }
+}
+
+Future<String?> _resolveSelectedModelIdForUpsert(String userId) async {
+  try {
+    final row = await SupabaseService.client
+        .from('user_preferences')
+        .select(_selectedModelColumn)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+    final existing = (row?[_selectedModelColumn] as String?)?.trim();
+    if (existing != null && existing.isNotEmpty) {
+      return existing;
+    }
+  } catch (_) {
+    // Fall through to local/default fallback.
+  }
+
+  try {
+    final local = (await UserPreferencesService.loadSelectedModel())?.trim();
+    if (local != null && local.isNotEmpty) {
+      return local;
+    }
+  } catch (_) {
+    // Fall through to default model.
+  }
+
+  return _fallbackSelectedModelId;
+}
+
+Future<bool> _upsertIdentityFieldsLegacy(
+  String userId,
+  Map<String, dynamic> fields,
+) async {
+  try {
+    final existing = await SupabaseService.client
+        .from('user_preferences')
+        .select(_legacyPreferencesColumn)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+    final preferences = _extractLegacyPreferencesMap(
+      existing?[_legacyPreferencesColumn],
+    );
+
+    for (final entry in fields.entries) {
+      switch (entry.key) {
+        case _identitySoulColumn:
+        case _identityUserColumn:
+        case _identityMemoryColumn:
+          final rawValue = entry.value?.toString();
+          final value = rawValue?.trim();
+          if (value == null || value.isEmpty) {
+            preferences.remove(entry.key);
+          } else {
+            preferences[entry.key] = value;
+          }
+          break;
+        case _identityEnabledColumn:
+          final parsed = _coerceIdentityEnabled(entry.value);
+          if (parsed == null) {
+            preferences.remove(entry.key);
+          } else {
+            preferences[entry.key] = parsed;
+          }
+          break;
+      }
+    }
+
+    await SupabaseService.client.from('user_preferences').upsert({
+      'user_id': userId,
+      _legacyPreferencesColumn: preferences,
+    }, onConflict: 'user_id');
+
+    _mergeIdentityCache(userId, fields);
+    return true;
+  } on PostgrestException catch (error) {
+    if (kDebugMode) {
+      if (_isMissingLegacyPreferencesError(error)) {
+        debugPrint(
+          'Legacy preferences fallback unavailable (missing column): $error',
+        );
+      } else {
+        debugPrint('Failed to sync identity fallback fields: $error');
+      }
+    }
+    return false;
+  } catch (error) {
+    if (kDebugMode) {
+      debugPrint('Failed to sync identity fallback fields: $error');
     }
     return false;
   }
@@ -150,6 +287,10 @@ Future<String?> _decryptIdentityValue(
   final raw = encryptedValue.toString();
   if (raw.trim().isEmpty) {
     return '';
+  }
+
+  if (!_looksLikeEncryptedPayload(raw)) {
+    return raw;
   }
 
   try {
@@ -173,12 +314,30 @@ Future<String> _loadIdentityText({
   final hasSyncedBefore = prefs.getBool(syncedMarkerKey) ?? false;
 
   final remoteRow = await _loadIdentityRowFromSupabase();
-  if (remoteRow == null || !remoteRow.containsKey(remoteColumn)) {
+  if (remoteRow == null) {
+    return localValue;
+  }
+
+  if (!remoteRow.containsKey(remoteColumn)) {
+    if (!hasSyncedBefore && localValue.isNotEmpty) {
+      await _saveIdentityText(
+        localKey: localKey,
+        remoteColumn: remoteColumn,
+        text: localValue,
+      );
+    }
     return localValue;
   }
 
   Future<String> handleRemoteEmpty() async {
     if (!hasSyncedBefore) {
+      if (localValue.isNotEmpty) {
+        await _saveIdentityText(
+          localKey: localKey,
+          remoteColumn: remoteColumn,
+          text: localValue,
+        );
+      }
       return localValue;
     }
 
@@ -217,6 +376,139 @@ Future<String> _loadIdentityText({
   return decryptedRemote;
 }
 
+bool _looksLikeEncryptedPayload(String raw) {
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map<String, dynamic>) {
+      return false;
+    }
+
+    return decoded['v'] != null &&
+        decoded['nonce'] != null &&
+        decoded['ciphertext'] != null &&
+        decoded['mac'] != null;
+  } catch (_) {
+    return false;
+  }
+}
+
+bool _isMissingIdentityColumnsError(PostgrestException error) {
+  final code = error.code?.toLowerCase() ?? '';
+  final message = error.message.toLowerCase();
+
+  final hasMissingColumnSignal =
+      code == '42703' || message.contains('does not exist');
+  if (!hasMissingColumnSignal) {
+    return false;
+  }
+
+  return message.contains(_identitySoulColumn) ||
+      message.contains(_identityUserColumn) ||
+      message.contains(_identityMemoryColumn) ||
+      message.contains(_identityEnabledColumn);
+}
+
+bool _isMissingLegacyPreferencesError(PostgrestException error) {
+  final code = error.code?.toLowerCase() ?? '';
+  final message = error.message.toLowerCase();
+
+  final hasMissingColumnSignal =
+      code == '42703' || message.contains('does not exist');
+  if (!hasMissingColumnSignal) {
+    return false;
+  }
+
+  return message.contains(_legacyPreferencesColumn);
+}
+
+Map<String, dynamic> _extractLegacyPreferencesMap(dynamic rawPreferences) {
+  if (rawPreferences is Map<String, dynamic>) {
+    return Map<String, dynamic>.from(rawPreferences);
+  }
+
+  if (rawPreferences is Map) {
+    return rawPreferences.map((key, value) => MapEntry(key.toString(), value));
+  }
+
+  if (rawPreferences is String && rawPreferences.trim().isNotEmpty) {
+    try {
+      final decoded = jsonDecode(rawPreferences);
+      if (decoded is Map<String, dynamic>) {
+        return Map<String, dynamic>.from(decoded);
+      }
+      if (decoded is Map) {
+        return decoded.map((key, value) => MapEntry(key.toString(), value));
+      }
+    } catch (_) {
+      return <String, dynamic>{};
+    }
+  }
+
+  return <String, dynamic>{};
+}
+
+bool? _coerceIdentityEnabled(dynamic raw) {
+  if (raw is bool) {
+    return raw;
+  }
+
+  if (raw is String) {
+    final normalized = raw.trim().toLowerCase();
+    if (normalized == 'true') {
+      return true;
+    }
+    if (normalized == 'false') {
+      return false;
+    }
+  }
+
+  return null;
+}
+
+Future<Map<String, dynamic>?> _loadIdentityRowFromLegacyPreferences(
+  String userId,
+) async {
+  try {
+    final response = await SupabaseService.client
+        .from('user_preferences')
+        .select(_legacyPreferencesColumn)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+    final preferences = _extractLegacyPreferencesMap(
+      response?[_legacyPreferencesColumn],
+    );
+
+    final row = <String, dynamic>{};
+    if (preferences.containsKey(_identitySoulColumn)) {
+      row[_identitySoulColumn] = preferences[_identitySoulColumn];
+    }
+    if (preferences.containsKey(_identityUserColumn)) {
+      row[_identityUserColumn] = preferences[_identityUserColumn];
+    }
+    if (preferences.containsKey(_identityMemoryColumn)) {
+      row[_identityMemoryColumn] = preferences[_identityMemoryColumn];
+    }
+
+    final enabled = _coerceIdentityEnabled(preferences[_identityEnabledColumn]);
+    if (enabled != null) {
+      row[_identityEnabledColumn] = enabled;
+    }
+
+    return row;
+  } on PostgrestException catch (error) {
+    if (kDebugMode && !_isMissingLegacyPreferencesError(error)) {
+      debugPrint('Failed to load legacy identity row from Supabase: $error');
+    }
+    return null;
+  } catch (error) {
+    if (kDebugMode) {
+      debugPrint('Failed to load legacy identity row from Supabase: $error');
+    }
+    return null;
+  }
+}
+
 Future<void> _saveIdentityText({
   required String localKey,
   required String remoteColumn,
@@ -227,27 +519,22 @@ Future<void> _saveIdentityText({
   final syncedMarkerKey = _identitySyncedMarkerKey(localKey);
 
   if (trimmed.isEmpty) {
-    await prefs.remove(localKey);
     final synced = await _upsertIdentityFields({remoteColumn: null});
-    if (synced) {
-      await prefs.setBool(syncedMarkerKey, true);
+    if (!synced) {
+      throw StateError('Failed to sync identity field "$remoteColumn"');
     }
+    await prefs.remove(localKey);
+    await prefs.setBool(syncedMarkerKey, true);
     return;
   }
 
-  await prefs.setString(localKey, trimmed);
-
-  try {
-    final encrypted = await EncryptionService.encrypt(trimmed);
-    final synced = await _upsertIdentityFields({remoteColumn: encrypted});
-    if (synced) {
-      await prefs.setBool(syncedMarkerKey, true);
-    }
-  } catch (error) {
-    if (kDebugMode) {
-      debugPrint('Failed to encrypt/sync $remoteColumn: $error');
-    }
+  final encrypted = await EncryptionService.encrypt(trimmed);
+  final synced = await _upsertIdentityFields({remoteColumn: encrypted});
+  if (!synced) {
+    throw StateError('Failed to sync identity field "$remoteColumn"');
   }
+  await prefs.setString(localKey, trimmed);
+  await prefs.setBool(syncedMarkerKey, true);
 }
 
 Future<String> _loadLocalMemoryText(SharedPreferences prefs) async {
@@ -293,8 +580,8 @@ Future<bool> isIdentityEnabled() async {
     return local;
   }
 
-  final remote = remoteRow[_identityEnabledColumn];
-  if (remote is! bool) {
+  final remote = _coerceIdentityEnabled(remoteRow[_identityEnabledColumn]);
+  if (remote == null) {
     return local;
   }
 
@@ -310,6 +597,30 @@ Future<void> setIdentityEnabled(bool value) async {
   final prefs = await SharedPreferences.getInstance();
   await prefs.setBool(_identityEnabledKey, value);
   await _upsertIdentityFields({_identityEnabledColumn: value});
+}
+
+/// Sync identity data (Soul/User/Memory/toggle) from Supabase into
+/// local SharedPreferences.
+///
+/// This keeps mobile and desktop in sync even if the identity settings page
+/// has not been opened yet.
+Future<void> syncIdentityFromSupabase({bool forceRefresh = false}) async {
+  if (forceRefresh) {
+    _invalidateIdentityCache();
+  }
+
+  try {
+    await Future.wait<void>([
+      loadSoulText().then((_) {}),
+      loadUserInfoText().then((_) {}),
+      loadMemoryText().then((_) {}),
+      isIdentityEnabled().then((_) {}),
+    ]);
+  } catch (error) {
+    if (kDebugMode) {
+      debugPrint('Failed to sync identity from Supabase: $error');
+    }
+  }
 }
 
 Future<String> executeNotes(Map<String, dynamic> args) async {

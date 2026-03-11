@@ -173,10 +173,7 @@ void main() {
     });
 
     test('fromJson handles missing optional fields', () {
-      final file = AttachedFile.fromJson({
-        'id': 'f1',
-        'fileName': 'doc.txt',
-      });
+      final file = AttachedFile.fromJson({'id': 'f1', 'fileName': 'doc.txt'});
       expect(file.isUploading, isFalse);
       expect(file.isImage, isFalse);
       expect(file.markdownContent, isNull);

@@ -9,11 +9,13 @@ class ServiceErrorHandler {
   /// Handle Dio exceptions and return user-friendly error messages
   static String handleDioException(DioException error, {String? context}) {
     if (kDebugMode) {
-      debugPrint('❌ DioException${context != null ? " ($context)" : ""}: ${error.type}');
+      debugPrint(
+        '❌ DioException${context != null ? " ($context)" : ""}: ${error.type}',
+      );
       debugPrint('   Message: ${error.message}');
       if (error.response != null) {
-          debugPrint('   Status: ${error.response?.statusCode}');
-          debugPrint('   Data: ${error.response?.data}');
+        debugPrint('   Status: ${error.response?.statusCode}');
+        debugPrint('   Data: ${error.response?.data}');
       }
     }
 
@@ -73,9 +75,11 @@ class ServiceErrorHandler {
         return 'Gateway timeout. The server took too long to respond.';
       default:
         if (statusCode >= 400 && statusCode < 500) {
-          return errorMessage ?? 'Client error ($statusCode). Please check your request.';
+          return errorMessage ??
+              'Client error ($statusCode). Please check your request.';
         } else if (statusCode >= 500) {
-          return errorMessage ?? 'Server error ($statusCode). Please try again later.';
+          return errorMessage ??
+              'Server error ($statusCode). Please try again later.';
         }
         return errorMessage ?? 'Error occurred ($statusCode).';
     }
@@ -83,10 +87,10 @@ class ServiceErrorHandler {
 
   /// Handle generic exceptions
   static String handleGenericException(Object error, {String? context}) {
-      debugPrint('❌ Exception${context != null ? " ($context)" : ""}: $error');
-      if (error is Error) {
-        debugPrint('   Stack trace: ${error.stackTrace}');
-      }
+    debugPrint('❌ Exception${context != null ? " ($context)" : ""}: $error');
+    if (error is Error) {
+      debugPrint('   Stack trace: ${error.stackTrace}');
+    }
 
     if (error is DioException) {
       return handleDioException(error, context: context);
@@ -128,8 +132,7 @@ class ServiceErrorHandler {
 
   /// Check if an error is due to authentication failure
   static bool isAuthError(Object error) {
-    if (error is DioException &&
-        error.type == DioExceptionType.badResponse) {
+    if (error is DioException && error.type == DioExceptionType.badResponse) {
       return error.response?.statusCode == 401 ||
           error.response?.statusCode == 403;
     }
@@ -138,8 +141,7 @@ class ServiceErrorHandler {
 
   /// Check if an error is due to rate limiting
   static bool isRateLimitError(Object error) {
-    if (error is DioException &&
-        error.type == DioExceptionType.badResponse) {
+    if (error is DioException && error.type == DioExceptionType.badResponse) {
       return error.response?.statusCode == 429;
     }
     return false;
@@ -147,8 +149,7 @@ class ServiceErrorHandler {
 
   /// Check if an error is a server error (5xx)
   static bool isServerError(Object error) {
-    if (error is DioException &&
-        error.type == DioExceptionType.badResponse) {
+    if (error is DioException && error.type == DioExceptionType.badResponse) {
       final statusCode = error.response?.statusCode;
       return statusCode != null && statusCode >= 500 && statusCode < 600;
     }

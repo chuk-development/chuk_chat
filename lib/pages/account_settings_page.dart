@@ -5,8 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'package:chuk_chat/pages/session_management_page.dart';
-import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/auth_service.dart';
 import 'package:chuk_chat/services/password_change_service.dart';
@@ -706,41 +704,6 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                         : const Text('Update password'),
                   ),
                 ),
-                if (kFeatureSessionManagement) ...[
-                  const SizedBox(height: 24),
-                  const Divider(height: 1),
-                  const SizedBox(height: 24),
-                  Text('Connected devices', style: theme.textTheme.titleMedium),
-                  const SizedBox(height: 4),
-                  Text(
-                    'See where your account is signed in and sign out other devices remotely.',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: iconFg.withValues(alpha: 0.7),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 44,
-                    child: OutlinedButton.icon(
-                      icon: const Icon(Icons.devices, size: 18),
-                      label: const Text('Manage devices'),
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const SessionManagementPage(),
-                          ),
-                        );
-                      },
-                      style: OutlinedButton.styleFrom(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
               ],
             ),
           ),

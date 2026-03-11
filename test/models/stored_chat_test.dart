@@ -172,9 +172,7 @@ void main() {
     test('falls back to first message if no user message', () {
       final chat = StoredChat(
         id: 'c1',
-        messages: [
-          ChatMessage(role: 'assistant', text: 'Welcome!'),
-        ],
+        messages: [ChatMessage(role: 'assistant', text: 'Welcome!')],
         createdAt: testDate,
         isStarred: false,
       );
@@ -223,39 +221,30 @@ void main() {
     });
 
     test('handles null updated_at', () {
-      final chat = StoredChat.fromRow(
-        {
-          'id': 'db-id',
-          'created_at': '2025-06-15T10:30:00.000Z',
-          'is_starred': false,
-        },
-        [],
-      );
+      final chat = StoredChat.fromRow({
+        'id': 'db-id',
+        'created_at': '2025-06-15T10:30:00.000Z',
+        'is_starred': false,
+      }, []);
       expect(chat.updatedAt, isNull);
     });
 
     test('handles null is_starred defaults to false', () {
-      final chat = StoredChat.fromRow(
-        {
-          'id': 'db-id',
-          'created_at': '2025-06-15T10:30:00.000Z',
-        },
-        [],
-      );
+      final chat = StoredChat.fromRow({
+        'id': 'db-id',
+        'created_at': '2025-06-15T10:30:00.000Z',
+      }, []);
       expect(chat.isStarred, isFalse);
     });
   });
 
   group('fromRowTitleOnly', () {
     test('creates sidebar chat from row', () {
-      final chat = StoredChat.fromRowTitleOnly(
-        {
-          'id': 'sidebar-id',
-          'created_at': '2025-06-15T10:30:00.000Z',
-          'is_starred': true,
-        },
-        title: 'Sidebar Title',
-      );
+      final chat = StoredChat.fromRowTitleOnly({
+        'id': 'sidebar-id',
+        'created_at': '2025-06-15T10:30:00.000Z',
+        'is_starred': true,
+      }, title: 'Sidebar Title');
       expect(chat.id, equals('sidebar-id'));
       expect(chat.isFullyLoaded, isFalse);
       expect(chat.title, equals('Sidebar Title'));
@@ -272,10 +261,7 @@ void main() {
         isStarred: false,
         title: 'Original',
       );
-      final copy = original.copyWith(
-        isStarred: true,
-        title: 'Updated',
-      );
+      final copy = original.copyWith(isStarred: true, title: 'Updated');
       expect(copy.id, equals('c1'));
       expect(copy.isStarred, isTrue);
       expect(copy.title, equals('Updated'));
@@ -320,10 +306,7 @@ void main() {
         createdAt: testDate,
         isStarred: false,
       );
-      final loaded = sidebar.withMessages(
-        testMessages,
-        customName: 'New Name',
-      );
+      final loaded = sidebar.withMessages(testMessages, customName: 'New Name');
       expect(loaded.customName, equals('New Name'));
     });
   });

@@ -102,7 +102,10 @@ void main() {
       ctx.controller.add(const ReasoningEvent('... more'));
       await Future.delayed(Duration.zero);
       expect(ctx.getReasoning(), equals('Let me think... more'));
-      expect(manager.getBufferedReasoning('chat-1'), equals('Let me think... more'));
+      expect(
+        manager.getBufferedReasoning('chat-1'),
+        equals('Let me think... more'),
+      );
 
       await ctx.controller.close();
       await Future.delayed(Duration.zero);
@@ -149,7 +152,10 @@ void main() {
       // But the completed stream data should still be available
       // (this is the core fix — previously this data was lost)
       expect(manager.hasCompletedStream('chat-1'), isTrue);
-      expect(manager.getBufferedContent('chat-1'), equals('Here is the answer.'));
+      expect(
+        manager.getBufferedContent('chat-1'),
+        equals('Here is the answer.'),
+      );
       expect(
         manager.getBufferedReasoning('chat-1'),
         equals('Thinking about the answer...'),
@@ -271,25 +277,28 @@ void main() {
   });
 
   group('error handling', () {
-    test('ErrorEvent cleans up stream immediately (no completed entry)', () async {
-      final ctx = await startTestStream();
+    test(
+      'ErrorEvent cleans up stream immediately (no completed entry)',
+      () async {
+        final ctx = await startTestStream();
 
-      ctx.controller.add(const ContentEvent('Partial'));
-      await Future.delayed(Duration.zero);
-      ctx.controller.add(const ErrorEvent('API rate limit exceeded'));
-      await Future.delayed(Duration.zero);
+        ctx.controller.add(const ContentEvent('Partial'));
+        await Future.delayed(Duration.zero);
+        ctx.controller.add(const ErrorEvent('API rate limit exceeded'));
+        await Future.delayed(Duration.zero);
 
-      // Error should clean up the stream entirely
-      expect(manager.isStreaming('chat-1'), isFalse);
-      expect(manager.hasCompletedStream('chat-1'), isFalse);
-      expect(manager.getBufferedContent('chat-1'), isNull);
+        // Error should clean up the stream entirely
+        expect(manager.isStreaming('chat-1'), isFalse);
+        expect(manager.hasCompletedStream('chat-1'), isFalse);
+        expect(manager.getBufferedContent('chat-1'), isNull);
 
-      // Error callback should have fired
-      expect(ctx.getError(), equals('API rate limit exceeded'));
+        // Error callback should have fired
+        expect(ctx.getError(), equals('API rate limit exceeded'));
 
-      await ctx.controller.close();
-      await Future.delayed(Duration.zero);
-    });
+        await ctx.controller.close();
+        await Future.delayed(Duration.zero);
+      },
+    );
 
     test('subscription error cleans up stream', () async {
       final ctx = await startTestStream();
@@ -408,37 +417,44 @@ void main() {
   });
 
   group('background messages', () {
-    test('store and retrieve background messages with content and reasoning', () async {
-      final ctx = await startTestStream(chatId: 'chat-1', messageIndex: 1);
+    test(
+      'store and retrieve background messages with content and reasoning',
+      () async {
+        final ctx = await startTestStream(chatId: 'chat-1', messageIndex: 1);
 
-      // Simulate some content and reasoning
-      ctx.controller.add(const ContentEvent('Hello'));
-      ctx.controller.add(const ReasoningEvent('Thinking...'));
-      await Future.delayed(Duration.zero);
+        // Simulate some content and reasoning
+        ctx.controller.add(const ContentEvent('Hello'));
+        ctx.controller.add(const ReasoningEvent('Thinking...'));
+        await Future.delayed(Duration.zero);
 
-      // Simulate user switching away — store current messages
-      final messages = [
-        {'role': 'user', 'text': 'Hi there'},
-        {'role': 'assistant', 'text': '', 'reasoning': ''},
-      ];
-      manager.setBackgroundMessages('chat-1', messages,
-          modelId: 'gpt-4', provider: 'openai');
+        // Simulate user switching away — store current messages
+        final messages = [
+          {'role': 'user', 'text': 'Hi there'},
+          {'role': 'assistant', 'text': '', 'reasoning': ''},
+        ];
+        manager.setBackgroundMessages(
+          'chat-1',
+          messages,
+          modelId: 'gpt-4',
+          provider: 'openai',
+        );
 
-      expect(manager.hasBackgroundMessages('chat-1'), isTrue);
+        expect(manager.hasBackgroundMessages('chat-1'), isTrue);
 
-      // More content arrives while in background
-      ctx.controller.add(const ContentEvent(' world!'));
-      await Future.delayed(Duration.zero);
+        // More content arrives while in background
+        ctx.controller.add(const ContentEvent(' world!'));
+        await Future.delayed(Duration.zero);
 
-      // Retrieve background messages — should have updated content and reasoning
-      final retrieved = manager.getBackgroundMessages('chat-1');
-      expect(retrieved, isNotNull);
-      expect(retrieved![1]['text'], equals('Hello world!'));
-      expect(retrieved[1]['reasoning'], equals('Thinking...'));
+        // Retrieve background messages — should have updated content and reasoning
+        final retrieved = manager.getBackgroundMessages('chat-1');
+        expect(retrieved, isNotNull);
+        expect(retrieved![1]['text'], equals('Hello world!'));
+        expect(retrieved[1]['reasoning'], equals('Thinking...'));
 
-      await ctx.controller.close();
-      await Future.delayed(Duration.zero);
-    });
+        await ctx.controller.close();
+        await Future.delayed(Duration.zero);
+      },
+    );
 
     test('background messages not available for completed streams', () async {
       final ctx = await startTestStream(chatId: 'chat-1', messageIndex: 1);
@@ -485,10 +501,7 @@ void main() {
     test('max completed streams limit is enforced', () async {
       // Create and complete more than _maxCompletedStreams (5) streams
       for (int i = 0; i < 7; i++) {
-        final ctx = await startTestStream(
-          chatId: 'evict-$i',
-          messageIndex: i,
-        );
+        final ctx = await startTestStream(chatId: 'evict-$i', messageIndex: i);
         ctx.controller.add(ContentEvent('Content $i'));
         await Future.delayed(Duration.zero);
         ctx.controller.add(const DoneEvent());

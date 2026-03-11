@@ -32,6 +32,8 @@ class ToolPromptBuilder {
     String? memoryText,
     Map<String, dynamic>? notesToolDef,
     Map<String, dynamic>? askUserToolDef,
+    Map<String, dynamic>? projectToolDef,
+    Map<String, dynamic>? artifactToolDef,
     bool includeMapVisualOutput = true,
     bool includeChartVisualOutput = true,
   }) {
@@ -81,6 +83,8 @@ class ToolPromptBuilder {
       final List<Map<String, dynamic>> alwaysAvailableTools = [
         if (notesToolDef != null) notesToolDef,
         if (askUserToolDef != null) askUserToolDef,
+        if (projectToolDef != null) projectToolDef,
+        if (artifactToolDef != null) artifactToolDef,
       ];
 
       if (discoveryMode && hasDiscoveredTools) {
@@ -316,6 +320,9 @@ ${_buildAlwaysAvailableSection(alwaysAvailableTools)}''';
     required bool includeMapVisualOutput,
     required bool includeChartVisualOutput,
   }) {
+    final hasArtifactTool = tools.any(
+      (tool) => (tool['name']?.toString() ?? '') == 'artifact_manager',
+    );
     final toolDocs = <String>[];
 
     for (final tool in tools) {
@@ -396,7 +403,31 @@ Do NOT give shallow one-search answers. For any factual question:
 3) If gaps remain, do another web_search from a different angle
 4) Compile final answer from crawled content, not just search snippets
 
+${hasArtifactTool ? _artifactToolProtocol() : ''}
+
 ${_visualOutputProtocol(includeMaps: includeMapVisualOutput, includeCharts: includeChartVisualOutput)}''';
+  }
+
+  String _artifactToolProtocol() {
+    return '''
+## ARTIFACTS
+
+Use artifact_manager for substantial outputs such as:
+- code blocks longer than about 15 lines
+- full markdown documents/specs
+- HTML apps/pages
+- Mermaid diagrams
+- SVG content
+
+Do NOT use artifacts for short snippets or quick conversational replies.
+
+Artifact rules:
+1. Prefer action="update" over action="rewrite" for targeted changes.
+2. In update edits, each old_str MUST match exactly once in current content.
+3. Keep update edits small (max ~5 edits). If many structural changes are needed, use rewrite.
+4. Create at most ONE artifact per assistant response.
+5. Reuse the same artifact_id across follow-up edits so version history stays intact.
+''';
   }
 
   /// Chart and map rendering protocol — these are output formats, not tools.

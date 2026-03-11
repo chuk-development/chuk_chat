@@ -27,6 +27,7 @@ class ProjectSelectionDropdown extends StatefulWidget {
 class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
   List<Project> _projects = [];
   StreamSubscription<void>? _projectChangesSubscription;
+  final ValueNotifier<bool> _isHovered = ValueNotifier<bool>(false);
 
   @override
   void initState() {
@@ -41,6 +42,7 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
   @override
   void dispose() {
     _projectChangesSubscription?.cancel();
+    _isHovered.dispose();
     super.dispose();
   }
 
@@ -52,42 +54,39 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
     }
   }
 
-  String get _selectedProjectName {
-    if (widget.selectedProjectId == null) return '';
-    final project = _projects.firstWhere(
-      (p) => p.id == widget.selectedProjectId,
-      orElse: () => Project(
-        id: '',
-        name: '?',
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      ),
-    );
-    return project.name;
+  Project? get _selectedProject {
+    if (widget.selectedProjectId == null) return null;
+    try {
+      return _projects.firstWhere((p) => p.id == widget.selectedProjectId);
+    } catch (_) {
+      return null;
+    }
   }
 
-  bool get _hasProject => widget.selectedProjectId != null;
+  bool get _hasProject => _selectedProject != null;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final iconFgColor = theme.resolvedIconColor;
     final bgColor = theme.scaffoldBackgroundColor;
+    final selectedProject = _selectedProject;
+    final projectColor = selectedProject?.projectColor;
 
-    final ValueNotifier<bool> isHovered = ValueNotifier<bool>(false);
-
-    // When project is active: invert colors (like other active buttons)
-    final Color effectiveBgColor = _hasProject ? iconFgColor : bgColor;
-    final Color effectiveIconColor = _hasProject ? bgColor : iconFgColor;
+    // When project is active: use project color for styling
+    final Color effectiveBgColor = _hasProject
+        ? (projectColor ?? iconFgColor)
+        : bgColor;
+    final Color effectiveIconColor = _hasProject ? Colors.white : iconFgColor;
 
     final buttonContent = MouseRegion(
-      onEnter: (_) => isHovered.value = true,
-      onExit: (_) => isHovered.value = false,
+      onEnter: (_) => _isHovered.value = true,
+      onExit: (_) => _isHovered.value = false,
       child: ValueListenableBuilder<bool>(
-        valueListenable: isHovered,
+        valueListenable: _isHovered,
         builder: (context, hovered, child) {
           final Color borderColor = _hasProject
-              ? iconFgColor.withValues(alpha: 0.6)
+              ? (projectColor ?? iconFgColor).withValues(alpha: 0.8)
               : hovered
               ? iconFgColor
               : iconFgColor.withValues(alpha: 0.3);
@@ -107,12 +106,16 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
                 ? Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.folder, color: effectiveIconColor, size: 20),
+                      Icon(
+                        selectedProject?.projectIcon ?? Icons.folder,
+                        color: effectiveIconColor,
+                        size: 18,
+                      ),
                       const SizedBox(width: 6),
                       ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 80),
                         child: Text(
-                          _selectedProjectName,
+                          selectedProject?.name ?? '?',
                           style: TextStyle(
                             color: effectiveIconColor,
                             fontSize: 13,
@@ -146,15 +149,15 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
 
     return PopupMenuButton<String?>(
       color: bgColor,
-      constraints: const BoxConstraints(minWidth: 180, maxWidth: 260),
+      constraints: const BoxConstraints(minWidth: 200, maxWidth: 280),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: BorderSide(color: iconFgColor.withValues(alpha: 0.3), width: 2),
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: iconFgColor.withValues(alpha: 0.2), width: 1.5),
       ),
       onCanceled: () => widget.textFieldFocusNode.requestFocus(),
       onSelected: (value) {
         if (kDebugMode) {
-          debugPrint('📁 Project dropdown selected: $value');
+          debugPrint('[ProjectDropdown] Selected: $value');
         }
         widget.textFieldFocusNode.requestFocus();
         // Convert empty string back to null for "No Project"
@@ -168,13 +171,13 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
         items.add(
           PopupMenuItem<String?>(
             value: '',
-            height: 40,
+            height: 44,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
                 Icon(
                   Icons.folder_off_outlined,
-                  color: iconFgColor.withValues(alpha: 0.6),
+                  color: iconFgColor.withValues(alpha: 0.5),
                   size: 18,
                 ),
                 const SizedBox(width: 12),
@@ -184,7 +187,7 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
                     style: TextStyle(
                       color: !_hasProject
                           ? iconFgColor
-                          : iconFgColor.withValues(alpha: 0.8),
+                          : iconFgColor.withValues(alpha: 0.7),
                       fontStyle: FontStyle.italic,
                     ),
                   ),
@@ -202,34 +205,51 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
           // Project options
           for (final project in _projects) {
             final isSelected = widget.selectedProjectId == project.id;
+            final pColor = project.projectColor;
             items.add(
               PopupMenuItem<String?>(
                 value: project.id,
-                height: 40,
+                height: 48,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
                   children: [
-                    Icon(
-                      Icons.folder,
-                      color: isSelected
-                          ? iconFgColor
-                          : iconFgColor.withValues(alpha: 0.6),
-                      size: 18,
+                    // Color dot
+                    Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: pColor.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(7),
+                      ),
+                      child: Icon(project.projectIcon, size: 14, color: pColor),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Text(
-                        project.name,
-                        style: TextStyle(
-                          color: isSelected
-                              ? iconFgColor
-                              : iconFgColor.withValues(alpha: 0.8),
-                        ),
-                        overflow: TextOverflow.ellipsis,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            project.name,
+                            style: TextStyle(
+                              color: isSelected
+                                  ? iconFgColor
+                                  : iconFgColor.withValues(alpha: 0.8),
+                              fontSize: 14,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            '${project.fileCount} files, ${project.chatCount} chats',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: iconFgColor.withValues(alpha: 0.4),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    if (isSelected)
-                      Icon(Icons.check, color: iconFgColor, size: 18),
+                    if (isSelected) Icon(Icons.check, color: pColor, size: 18),
                   ],
                 ),
               ),
@@ -240,7 +260,7 @@ class _ProjectSelectionDropdownState extends State<ProjectSelectionDropdown> {
           items.add(
             PopupMenuItem<String?>(
               enabled: false,
-              height: 40,
+              height: 44,
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
                 'No projects yet',

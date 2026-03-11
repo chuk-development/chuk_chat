@@ -13,7 +13,9 @@ class StoredChat {
     this.title,
     this.customName,
     this.updatedAt,
-  }) : _messages = messages != null ? List<ChatMessage>.unmodifiable(messages) : null;
+  }) : _messages = messages != null
+           ? List<ChatMessage>.unmodifiable(messages)
+           : null;
 
   /// Create a lightweight chat for sidebar (title only, no messages)
   factory StoredChat.forSidebar({
@@ -48,7 +50,9 @@ class StoredChat {
   /// Get messages - throws if not fully loaded
   List<ChatMessage> get messages {
     if (_messages == null) {
-      throw StateError('Chat messages not loaded. Call ChatStorageService.loadFullChat first.');
+      throw StateError(
+        'Chat messages not loaded. Call ChatStorageService.loadFullChat first.',
+      );
     }
     return _messages;
   }

@@ -49,6 +49,8 @@ const Map<String, ToolCategory> toolCategoryMap = {
   'nextcloud': ToolCategory.nextcloud,
   'device': ToolCategory.device,
   'search_chats': ToolCategory.basic,
+  'artifact_manager': ToolCategory.basic,
+  'update_project': ToolCategory.basic,
 };
 
 /// Discovery catalog: category labels -> human-readable descriptions.
@@ -870,6 +872,74 @@ final List<ClientTool> builtinTools = [
       'wind',
       'sun',
       'sonne',
+    ],
+  ),
+
+  // ── Project management ─────────────────────────────────────────────
+  ClientTool(
+    name: 'artifact_manager',
+    description:
+        'Create and update rich chat artifacts (code, markdown docs, HTML, '
+        'Mermaid diagrams, SVG). Actions: create, update (old_str/new_str '
+        'edits), rewrite (full content replace). Use for substantial outputs '
+        'that should stay editable across messages.',
+    parameters: {
+      'action': 'string (required: create | update | rewrite)',
+      'artifact_id':
+          'string (required: stable artifact id, letters/numbers/hyphens only)',
+      'title': 'string (required for create, optional for rewrite)',
+      'type':
+          'string (required for create; optional for rewrite: code|markdown|html|mermaid|svg)',
+      'language':
+          'string (optional for code artifacts, e.g. dart, python, ts, rust)',
+      'content':
+          'string (required for create/rewrite; full artifact content, max ~500KB)',
+      'message_id':
+          'string (optional: message identifier if you want to associate artifact with a message)',
+      'edits':
+          'array (required for update): list of {old_str,new_str} replacements; each old_str must be unique in current content',
+    },
+    type: ToolType.builtin,
+    tags: [
+      'artifact',
+      'document',
+      'code file',
+      'markdown',
+      'html',
+      'mermaid',
+      'svg',
+      'rewrite',
+      'edit',
+      'replace',
+      'version',
+      'panel',
+      'workspace',
+    ],
+  ),
+
+  ClientTool(
+    name: 'update_project',
+    description:
+        'Update the active project\'s custom instructions/system prompt. '
+        'Use this to save new or revised instructions that will apply to '
+        'all future chats in this project. Can also update the project '
+        'name and description. At least one of instructions, name, or '
+        'description must be provided.',
+    parameters: {
+      'instructions':
+          'string (optional: new custom system prompt / instructions for the project)',
+      'name': 'string (optional: new project name)',
+      'description': 'string (optional: new project description)',
+    },
+    type: ToolType.builtin,
+    tags: [
+      'project',
+      'instructions',
+      'system prompt',
+      'update',
+      'settings',
+      'projekt',
+      'anweisungen',
     ],
   ),
 ];

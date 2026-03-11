@@ -1,7 +1,7 @@
 // lib/widgets/project_panel.dart
 import 'dart:async';
-import 'package:chuk_chat/utils/io_helper.dart';
 
+import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/constants/file_constants.dart';
@@ -15,11 +15,7 @@ class ProjectPanel extends StatefulWidget {
   final String projectId;
   final VoidCallback? onClose;
 
-  const ProjectPanel({
-    super.key,
-    required this.projectId,
-    this.onClose,
-  });
+  const ProjectPanel({super.key, required this.projectId, this.onClose});
 
   @override
   State<ProjectPanel> createState() => _ProjectPanelState();
@@ -78,17 +74,15 @@ class _ProjectPanelState extends State<ProjectPanel> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to save: $e')));
       }
     }
   }
 
   Future<void> _pickAndUploadFile() async {
     try {
-      // Use shared FileConstants for consistent file type support
-      // between normal chats and project chats
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: FileConstants.allowedExtensions,
@@ -135,9 +129,9 @@ class _ProjectPanelState extends State<ProjectPanel> {
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Uploaded: $fileName')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Uploaded: $fileName')));
       }
     } catch (e) {
       if (mounted) {
@@ -193,9 +187,9 @@ class _ProjectPanelState extends State<ProjectPanel> {
         await ProjectStorageService.deleteFile(widget.projectId, file.id);
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Delete failed: $e')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
         }
       }
     }
@@ -206,6 +200,7 @@ class _ProjectPanelState extends State<ProjectPanel> {
     final iconFg = Theme.of(context).resolvedIconColor;
     final borderColor = iconFg.withAlpha(30);
     final bgColor = Theme.of(context).scaffoldBackgroundColor;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     if (_project == null) {
       return Container(
@@ -218,6 +213,8 @@ class _ProjectPanelState extends State<ProjectPanel> {
       );
     }
 
+    final projectColor = _project!.projectColor;
+
     return Container(
       width: 300,
       decoration: BoxDecoration(
@@ -227,17 +224,35 @@ class _ProjectPanelState extends State<ProjectPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
-          Padding(
+          // Header with project color accent
+          Container(
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: projectColor, width: 3)),
+            ),
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
+                // Project avatar
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: projectColor.withValues(alpha: isDark ? 0.2 : 0.12),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Icon(
+                    _project!.projectIcon,
+                    color: projectColor,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     _project!.name,
                     style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
                       color: iconFg,
                     ),
                     maxLines: 1,
@@ -268,14 +283,16 @@ class _ProjectPanelState extends State<ProjectPanel> {
                     title: 'Instructions',
                     subtitle: 'Add instructions to tailor AI responses',
                     isExpanded: _isInstructionsExpanded,
-                    onToggle: () => setState(() =>
-                      _isInstructionsExpanded = !_isInstructionsExpanded),
+                    onToggle: () => setState(
+                      () => _isInstructionsExpanded = !_isInstructionsExpanded,
+                    ),
                     onAdd: () => setState(() {
                       _isInstructionsExpanded = true;
                       _isEditingInstructions = true;
                     }),
                     hasContent: _project!.hasCustomPrompt,
                     child: _buildInstructionsContent(),
+                    accentColor: projectColor,
                   ),
 
                   const SizedBox(height: 16),
@@ -285,14 +302,41 @@ class _ProjectPanelState extends State<ProjectPanel> {
                     title: 'Files',
                     subtitle: 'Add documents to reference in this project',
                     isExpanded: _isFilesExpanded,
-                    onToggle: () => setState(() =>
-                      _isFilesExpanded = !_isFilesExpanded),
+                    onToggle: () =>
+                        setState(() => _isFilesExpanded = !_isFilesExpanded),
                     onAdd: _isUploadingFile ? null : _pickAndUploadFile,
                     hasContent: _project!.files.isNotEmpty,
                     child: _buildFilesContent(),
+                    accentColor: projectColor,
+                    badge: _project!.fileCount > 0
+                        ? '${_project!.fileCount}'
+                        : null,
                   ),
                 ],
               ),
+            ),
+          ),
+
+          // Footer with encryption indicator
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: borderColor)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.lock_outlined,
+                  size: 12,
+                  color: iconFg.withAlpha(80),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'End-to-end encrypted',
+                  style: TextStyle(fontSize: 11, color: iconFg.withAlpha(80)),
+                ),
+              ],
             ),
           ),
         ],
@@ -308,6 +352,8 @@ class _ProjectPanelState extends State<ProjectPanel> {
     required VoidCallback? onAdd,
     required bool hasContent,
     required Widget child,
+    required Color accentColor,
+    String? badge,
   }) {
     final iconFg = Theme.of(context).resolvedIconColor;
     final borderColor = iconFg.withAlpha(30);
@@ -324,31 +370,60 @@ class _ProjectPanelState extends State<ProjectPanel> {
             child: Row(
               children: [
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
                     children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: iconFg,
-                        ),
-                      ),
-                      if (!hasContent && !isExpanded)
-                        Text(
-                          subtitle,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: iconFg.withAlpha(150),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                title,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: iconFg,
+                                ),
+                              ),
+                              if (badge != null) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 1,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: accentColor.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    badge,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: accentColor,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
-                        ),
+                          if (!hasContent && !isExpanded)
+                            Text(
+                              subtitle,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: iconFg.withAlpha(150),
+                              ),
+                            ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
                 if (onAdd != null)
                   IconButton(
-                    icon: Icon(Icons.add, color: iconFg, size: 20),
+                    icon: Icon(Icons.add, color: accentColor, size: 20),
                     onPressed: onAdd,
                     tooltip: 'Add',
                     padding: EdgeInsets.zero,
@@ -370,7 +445,7 @@ class _ProjectPanelState extends State<ProjectPanel> {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: iconFg.withAlpha(10),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(10),
               border: Border.all(color: borderColor),
             ),
             child: child,
@@ -403,14 +478,25 @@ class _ProjectPanelState extends State<ProjectPanel> {
             children: [
               TextButton(
                 onPressed: () {
-                  _instructionsController.text = _project?.customSystemPrompt ?? '';
+                  _instructionsController.text =
+                      _project?.customSystemPrompt ?? '';
                   setState(() => _isEditingInstructions = false);
                 },
                 child: const Text('Cancel'),
               ),
               const SizedBox(width: 8),
-              ElevatedButton(
+              FilledButton(
                 onPressed: _saveInstructions,
+                style: FilledButton.styleFrom(
+                  backgroundColor: _project!.projectColor,
+                  foregroundColor:
+                      ThemeData.estimateBrightnessForColor(
+                            _project!.projectColor,
+                          ) ==
+                          Brightness.dark
+                      ? Colors.white
+                      : Colors.black,
+                ),
                 child: const Text('Save'),
               ),
             ],
@@ -446,7 +532,8 @@ class _ProjectPanelState extends State<ProjectPanel> {
 
   Widget _buildFilesContent() {
     final iconFg = Theme.of(context).resolvedIconColor;
-    final accentColor = Theme.of(context).colorScheme.primary;
+    final accentColor = _project!.projectColor;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     if (_isUploadingFile) {
       return Padding(
@@ -474,14 +561,11 @@ class _ProjectPanelState extends State<ProjectPanel> {
             // Status text
             Text(
               _uploadStatus == 'uploading'
-                  ? 'Uploading...'
+                  ? 'Encrypting and uploading...'
                   : _uploadStatus == 'converting'
-                      ? 'Converting to markdown...'
-                      : 'Processing...',
-              style: TextStyle(
-                fontSize: 11,
-                color: iconFg.withAlpha(150),
-              ),
+                  ? 'Converting to markdown...'
+                  : 'Processing...',
+              style: TextStyle(fontSize: 11, color: iconFg.withAlpha(150)),
             ),
             const SizedBox(height: 8),
 
@@ -540,19 +624,12 @@ class _ProjectPanelState extends State<ProjectPanel> {
         onTap: _pickAndUploadFile,
         child: Column(
           children: [
-            Icon(
-              Icons.upload_file,
-              size: 40,
-              color: iconFg.withAlpha(100),
-            ),
+            Icon(Icons.upload_file, size: 40, color: iconFg.withAlpha(100)),
             const SizedBox(height: 8),
             Text(
               'Add PDFs, documents, or other text\nto reference in this project.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
-                color: iconFg.withAlpha(150),
-              ),
+              style: TextStyle(fontSize: 12, color: iconFg.withAlpha(150)),
             ),
           ],
         ),
@@ -561,7 +638,7 @@ class _ProjectPanelState extends State<ProjectPanel> {
 
     return Column(
       children: [
-        ..._project!.files.map((file) => _buildFileItem(file)),
+        ..._project!.files.map((file) => _buildFileItem(file, isDark)),
         const SizedBox(height: 8),
         InkWell(
           onTap: _pickAndUploadFile,
@@ -571,13 +648,13 @@ class _ProjectPanelState extends State<ProjectPanel> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.add, size: 16, color: iconFg.withAlpha(150)),
+                Icon(Icons.add, size: 16, color: accentColor.withAlpha(180)),
                 const SizedBox(width: 4),
                 Text(
                   'Add more files',
                   style: TextStyle(
                     fontSize: 12,
-                    color: iconFg.withAlpha(150),
+                    color: accentColor.withAlpha(180),
                   ),
                 ),
               ],
@@ -592,18 +669,26 @@ class _ProjectPanelState extends State<ProjectPanel> {
     ProjectFileViewer.show(context, file, widget.projectId);
   }
 
-  Widget _buildFileItem(ProjectFile file) {
+  Widget _buildFileItem(ProjectFile file, bool isDark) {
     final iconFg = Theme.of(context).resolvedIconColor;
-    final accentColor = Theme.of(context).colorScheme.primary;
+    final accentColor = _project!.projectColor;
 
     return InkWell(
       onTap: () => _openFileViewer(file),
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(8),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
         child: Row(
           children: [
-            Icon(file.fileIcon, size: 20, color: accentColor),
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: accentColor.withValues(alpha: isDark ? 0.15 : 0.1),
+                borderRadius: BorderRadius.circular(7),
+              ),
+              child: Icon(file.fileIcon, size: 16, color: accentColor),
+            ),
             const SizedBox(width: 8),
             Expanded(
               child: Column(
@@ -627,17 +712,9 @@ class _ProjectPanelState extends State<ProjectPanel> {
                       if (file.hasMarkdownSummary) ...[
                         const SizedBox(width: 8),
                         Icon(
-                          Icons.description,
+                          Icons.check_circle,
                           size: 12,
-                          color: accentColor.withAlpha(180),
-                        ),
-                        const SizedBox(width: 2),
-                        Text(
-                          'Summary',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: accentColor.withAlpha(180),
-                          ),
+                          color: Colors.green[600],
                         ),
                       ],
                     ],

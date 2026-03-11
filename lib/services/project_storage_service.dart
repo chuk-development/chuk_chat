@@ -108,7 +108,9 @@ class ProjectStorageService {
           _projectsById[project.id] = project;
         }
         if (kDebugMode) {
-          debugPrint('✅ [ProjectStorage] Loaded ${_projectsById.length} projects from cache');
+          debugPrint(
+            '✅ [ProjectStorage] Loaded ${_projectsById.length} projects from cache',
+          );
         }
         _cacheLoaded = true;
         // Use immediate notify for cache load - don't auto-save (we just loaded!)
@@ -128,7 +130,9 @@ class ProjectStorageService {
       final jsonList = _projectsById.values.map((p) => p.toJson()).toList();
       await prefs.setString(_cacheKey, jsonEncode(jsonList));
       if (kDebugMode) {
-        debugPrint('✅ [ProjectStorage] Saved ${jsonList.length} projects to cache');
+        debugPrint(
+          '✅ [ProjectStorage] Saved ${jsonList.length} projects to cache',
+        );
       }
     } catch (e) {
       if (kDebugMode) {
@@ -176,7 +180,9 @@ class ProjectStorageService {
           .order('created_at', ascending: false);
 
       if (kDebugMode) {
-        debugPrint('✅ [ProjectStorage] Loaded ${projectRows.length} projects from server');
+        debugPrint(
+          '✅ [ProjectStorage] Loaded ${projectRows.length} projects from server',
+        );
       }
 
       // Skip network fetch work if no projects
@@ -227,8 +233,8 @@ class ProjectStorageService {
         final project = Project.fromJson({
           ...row,
           'chatIds': chatIdsByProject[projectId] ?? [],
-          'files': filesByProject[projectId]?.map((f) => f.toJson()).toList() ??
-              [],
+          'files':
+              filesByProject[projectId]?.map((f) => f.toJson()).toList() ?? [],
         });
         _projectsById[projectId] = project;
       }
@@ -394,13 +400,15 @@ class ProjectStorageService {
 
       final existingProject = _projectsById[projectId];
       if (existingProject != null) {
-        _projectsById[projectId] = existingProject.copyWith(isArchived: archived);
+        _projectsById[projectId] = existingProject.copyWith(
+          isArchived: archived,
+        );
         _notifyChanges();
       }
 
       if (kDebugMode) {
         debugPrint(
-        '📦 [ProjectStorage] ${archived ? 'Archived' : 'Unarchived'} project: $projectId',
+          '📦 [ProjectStorage] ${archived ? 'Archived' : 'Unarchived'} project: $projectId',
         );
       }
     } catch (e, st) {
@@ -440,7 +448,9 @@ class ProjectStorageService {
       }
 
       if (kDebugMode) {
-        debugPrint('✅ [ProjectStorage] Added chat $chatId to project $projectId');
+        debugPrint(
+          '✅ [ProjectStorage] Added chat $chatId to project $projectId',
+        );
       }
     } catch (e, st) {
       // Ignore unique constraint violations (chat already in project)
@@ -484,13 +494,13 @@ class ProjectStorageService {
 
       if (kDebugMode) {
         debugPrint(
-        '✅ [ProjectStorage] Removed chat $chatId from project $projectId',
+          '✅ [ProjectStorage] Removed chat $chatId from project $projectId',
         );
       }
     } catch (e, st) {
       if (kDebugMode) {
         debugPrint(
-        '❌ [ProjectStorage] Failed to remove chat from project: $e\n$st',
+          '❌ [ProjectStorage] Failed to remove chat from project: $e\n$st',
         );
       }
       rethrow;
@@ -504,9 +514,7 @@ class ProjectStorageService {
 
     // Get chats from ChatStorageService
     final allChats = ChatStorageService.savedChats;
-    return allChats
-        .where((chat) => project.chatIds.contains(chat.id))
-        .toList();
+    return allChats.where((chat) => project.chatIds.contains(chat.id)).toList();
   }
 
   /// Get all projects that contain a specific chat
@@ -564,7 +572,9 @@ class ProjectStorageService {
 
       // Simulate upload progress in chunks
       onUploadProgress?.call(0.30);
-      await SupabaseService.client.storage.from(bucketName).uploadBinary(
+      await SupabaseService.client.storage
+          .from(bucketName)
+          .uploadBinary(
             storagePath,
             encryptedBytes,
             fileOptions: const FileOptions(
@@ -595,16 +605,22 @@ class ProjectStorageService {
             );
           }
 
-          markdownSummary = '**File: $fileName**\n\n```$extension\n$content\n```';
+          markdownSummary =
+              '**File: $fileName**\n\n```$extension\n$content\n```';
           if (kDebugMode) {
-            debugPrint('📝 [ProjectStorage] Plain text file read directly: $fileName');
+            debugPrint(
+              '📝 [ProjectStorage] Plain text file read directly: $fileName',
+            );
           }
-        } else if (filePath != null && FileConstants.requiresConversion(extension)) {
+        } else if (filePath != null &&
+            FileConstants.requiresConversion(extension)) {
           // Binary file: use convert-file API - notify UI
           onConversionStart?.call();
           try {
             if (kDebugMode) {
-              debugPrint('📝 [ProjectStorage] Generating markdown via API for: $fileName');
+              debugPrint(
+                '📝 [ProjectStorage] Generating markdown via API for: $fileName',
+              );
             }
             final result = await FileConversionService.convertFile(
               filePath: filePath,
@@ -614,7 +630,9 @@ class ProjectStorageService {
             if (result['success'] == true && result['markdown'] != null) {
               markdownSummary = result['markdown'] as String;
               if (kDebugMode) {
-                debugPrint('✅ [ProjectStorage] Markdown generated successfully');
+                debugPrint(
+                  '✅ [ProjectStorage] Markdown generated successfully',
+                );
               }
             } else {
               // Propagate the error to the UI instead of silently continuing
@@ -624,7 +642,9 @@ class ProjectStorageService {
                 throw StateError(error);
               }
               if (kDebugMode) {
-                debugPrint('⚠️ [ProjectStorage] Markdown generation failed: $error');
+                debugPrint(
+                  '⚠️ [ProjectStorage] Markdown generation failed: $error',
+                );
               }
             }
           } catch (e) {
@@ -702,12 +722,14 @@ class ProjectStorageService {
       // Delete from storage
       if (file != null) {
         try {
-          await SupabaseService.client.storage
-              .from(bucketName)
-              .remove([file.storagePath]);
+          await SupabaseService.client.storage.from(bucketName).remove([
+            file.storagePath,
+          ]);
         } catch (e) {
           if (kDebugMode) {
-            debugPrint('⚠️ [ProjectStorage] Failed to delete file from storage: $e');
+            debugPrint(
+              '⚠️ [ProjectStorage] Failed to delete file from storage: $e',
+            );
           }
           // Continue even if storage deletion fails
         }
@@ -782,7 +804,9 @@ class ProjectStorageService {
       return decryptedContent;
     } catch (e, st) {
       if (kDebugMode) {
-        debugPrint('❌ [ProjectStorage] Failed to download/decrypt file: $e\n$st');
+        debugPrint(
+          '❌ [ProjectStorage] Failed to download/decrypt file: $e\n$st',
+        );
       }
       rethrow;
     }
@@ -865,7 +889,9 @@ class ProjectStorageService {
       final encryptedBytes = Uint8List.fromList(utf8.encode(encryptedJson));
 
       // Upload to storage (upsert to replace existing)
-      await SupabaseService.client.storage.from(bucketName).uploadBinary(
+      await SupabaseService.client.storage
+          .from(bucketName)
+          .uploadBinary(
             file.storagePath,
             encryptedBytes,
             fileOptions: const FileOptions(

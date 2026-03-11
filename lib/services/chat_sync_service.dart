@@ -5,6 +5,7 @@ import 'package:chuk_chat/services/chat_preload_service.dart';
 import 'package:chuk_chat/services/chat_storage_mutations.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
+import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -194,6 +195,11 @@ class ChatSyncService {
     if (!EncryptionService.hasKey) return;
 
     _isSyncing = true;
+    final stopwatch = Stopwatch()..start();
+    int fetchedCount = 0;
+    int deletedCount = 0;
+    int updatedCount = 0;
+    int newCount = 0;
 
     try {
       // On first sync after startup, sync titles from network
@@ -236,6 +242,8 @@ class ChatSyncService {
       final Set<String> newChatIds = cloudIds.difference(localIds);
       final Set<String> deletedChatIds = localIds.difference(cloudIds);
       final Set<String> potentiallyUpdatedIds = cloudIds.intersection(localIds);
+      newCount = newChatIds.length;
+      deletedCount = deletedChatIds.length;
 
       // Check for updated chats by comparing timestamps
       final localTimestamps = ChatStorageService.getChatTimestamps();
@@ -249,9 +257,11 @@ class ChatSyncService {
           updatedChatIds.add(id);
         }
       }
+      updatedCount = updatedChatIds.length;
 
       // Step 2: Fetch full payload for new and updated chats
       final idsToFetch = {...newChatIds, ...updatedChatIds};
+      fetchedCount = idsToFetch.length;
 
       if (idsToFetch.isNotEmpty) {
         if (kDebugMode) {
@@ -305,7 +315,37 @@ class ChatSyncService {
           unawaited(ChatPreloadService.preloadNewChats());
         }
       }
+
+      unawaited(
+        DiagnosticsLogService.timing(
+          'chat_sync',
+          'sync_cycle',
+          stopwatch.elapsedMilliseconds,
+          data: {
+            'cloud_total': cloudIds.length,
+            'local_total': localIds.length,
+            'fetched': fetchedCount,
+            'new': newCount,
+            'updated': updatedCount,
+            'deleted': deletedCount,
+          },
+        ),
+      );
     } catch (e) {
+      unawaited(
+        DiagnosticsLogService.error(
+          'chat_sync',
+          'Sync cycle failed',
+          error: e,
+          data: {
+            'elapsed_ms': stopwatch.elapsedMilliseconds,
+            'fetched': fetchedCount,
+            'new': newCount,
+            'updated': updatedCount,
+            'deleted': deletedCount,
+          },
+        ),
+      );
       if (kDebugMode) {
         debugPrint('❌ [ChatSync] Sync failed: $e');
       }
