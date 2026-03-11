@@ -171,6 +171,132 @@ class DiagnosticsLogService {
     }
   }
 
+  /// Returns a compact, focused report for the Linux model-menu flicker/jank
+  /// issue, so users can share useful diagnostics without huge log dumps.
+  static Future<String> readModelMenuDebugReport({
+    int lookbackMinutes = 25,
+    int maxEventsPerSection = 45,
+  }) async {
+    await initialize();
+    await _ensureLogFile();
+    final file = _logFile;
+    if (file == null || !await file.exists()) {
+      return '';
+    }
+
+    try {
+      final cutoff = DateTime.now().toUtc().subtract(
+        Duration(minutes: lookbackMinutes),
+      );
+      final lines = (await file.readAsLines()).where((line) => line.isNotEmpty);
+
+      final List<Map<String, Object?>> parsed = <Map<String, Object?>>[];
+      for (final line in lines) {
+        final item = _parseLogLine(line);
+        if (item == null) continue;
+        final ts = _parseTimestamp(item['ts']);
+        if (ts == null || ts.isBefore(cutoff)) continue;
+        parsed.add(item);
+      }
+
+      if (parsed.isEmpty) {
+        return 'No diagnostics entries in the last $lookbackMinutes minutes.';
+      }
+
+      const trackedAreas = <String>{
+        'model_menu',
+        'chat_ui',
+        'performance',
+        'startup',
+        'tray',
+      };
+
+      final countsByArea = <String, int>{};
+      int warnOrErrorCount = 0;
+      final List<Map<String, Object?>> warnOrError = <Map<String, Object?>>[];
+      final List<Map<String, Object?>> modelMenuEvents =
+          <Map<String, Object?>>[];
+      final List<Map<String, Object?>> uiEvents = <Map<String, Object?>>[];
+      final List<Map<String, Object?>> perfEvents = <Map<String, Object?>>[];
+
+      for (final entry in parsed) {
+        final area = (entry['area'] ?? '').toString();
+        if (!trackedAreas.contains(area)) continue;
+
+        countsByArea[area] = (countsByArea[area] ?? 0) + 1;
+
+        final level = (entry['level'] ?? '').toString();
+        if (level == 'WARN' || level == 'ERROR') {
+          warnOrErrorCount++;
+          warnOrError.add(entry);
+        }
+
+        if (area == 'model_menu') {
+          modelMenuEvents.add(entry);
+        } else if (area == 'chat_ui' || area == 'tray' || area == 'startup') {
+          uiEvents.add(entry);
+        } else if (area == 'performance') {
+          perfEvents.add(entry);
+        }
+      }
+
+      List<Map<String, Object?>> tail(
+        List<Map<String, Object?>> list,
+        int maxEntries,
+      ) {
+        if (list.length <= maxEntries) return list;
+        return list.sublist(list.length - maxEntries);
+      }
+
+      final sb = StringBuffer();
+      sb.writeln('=== Chuk Chat Focused Debug Report (Model Menu) ===');
+      sb.writeln(
+        'generated_utc=${DateTime.now().toUtc().toIso8601String()} lookback_minutes=$lookbackMinutes',
+      );
+      sb.writeln(
+        'entries_total=${parsed.length} warn_or_error=$warnOrErrorCount',
+      );
+
+      if (countsByArea.isNotEmpty) {
+        final areaSummary = countsByArea.entries.toList()
+          ..sort((a, b) => a.key.compareTo(b.key));
+        sb.writeln(
+          'areas=${areaSummary.map((e) => '${e.key}:${e.value}').join(', ')}',
+        );
+      }
+
+      void writeSection(String title, List<Map<String, Object?>> entries) {
+        sb.writeln();
+        sb.writeln('[$title]');
+        if (entries.isEmpty) {
+          sb.writeln('(none)');
+          return;
+        }
+        for (final item in entries) {
+          sb.writeln(_formatCompactEntry(item));
+        }
+      }
+
+      writeSection('WARN/ERROR (recent)', tail(warnOrError, 25));
+      writeSection(
+        'Model Menu Events (recent)',
+        tail(modelMenuEvents, maxEventsPerSection),
+      );
+      writeSection(
+        'Chat/Startup/Tray Events (recent)',
+        tail(uiEvents, maxEventsPerSection),
+      );
+      writeSection(
+        'Performance Events (recent)',
+        tail(perfEvents, maxEventsPerSection),
+      );
+
+      return sb.toString().trimRight();
+    } catch (_) {
+      return '';
+    }
+  }
+
   static Future<void> clearLogs() async {
     await initialize();
     await _ensureLogFile();
@@ -181,6 +307,59 @@ class DiagnosticsLogService {
     } catch (_) {
       // Ignore clear failures.
     }
+  }
+
+  static Map<String, Object?>? _parseLogLine(String line) {
+    try {
+      final decoded = jsonDecode(line);
+      if (decoded is Map<String, dynamic>) {
+        return Map<String, Object?>.from(decoded);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  static DateTime? _parseTimestamp(Object? raw) {
+    if (raw is! String || raw.isEmpty) return null;
+    return DateTime.tryParse(raw)?.toUtc();
+  }
+
+  static String _formatCompactEntry(Map<String, Object?> entry) {
+    final ts = _parseTimestamp(entry['ts']);
+    final tsText = ts == null
+        ? '--:--:--'
+        : '${ts.hour.toString().padLeft(2, '0')}:${ts.minute.toString().padLeft(2, '0')}:${ts.second.toString().padLeft(2, '0')}';
+    final level = (entry['level'] ?? '').toString();
+    final area = (entry['area'] ?? '').toString();
+    final msg = (entry['msg'] ?? '').toString();
+    final data = entry['data'];
+
+    if (data is Map) {
+      final compact = <String>[];
+      const preferredKeys = <String>[
+        'operation',
+        'elapsed_ms',
+        'show_scroll_button',
+        'max_width',
+        'last_stable_width',
+        'total_ms',
+        'build_ms',
+        'raster_ms',
+        'status_code',
+        'models',
+        'icon_path',
+        'error',
+      ];
+      for (final key in preferredKeys) {
+        if (!data.containsKey(key)) continue;
+        compact.add('$key=${data[key]}');
+        if (compact.length >= 5) break;
+      }
+      final suffix = compact.isEmpty ? '' : ' ${compact.join(' ')}';
+      return '$tsText $level $area $msg$suffix';
+    }
+
+    return '$tsText $level $area $msg';
   }
 
   static Future<void> _write(

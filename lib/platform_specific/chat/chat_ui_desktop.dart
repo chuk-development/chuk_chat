@@ -15,6 +15,7 @@ import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/core/model_selection_events.dart';
+import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/message_composition_service.dart';
 import 'package:chuk_chat/services/tool_call_handler.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart'
@@ -3808,9 +3809,21 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     final position = _scrollController.position;
     final isNearBottom = position.maxScrollExtent - position.pixels < 200;
     if (_showScrollToBottom == isNearBottom) {
+      final nextShowScrollButton = !isNearBottom;
       setState(() {
-        _showScrollToBottom = !isNearBottom;
+        _showScrollToBottom = nextShowScrollButton;
       });
+      unawaited(
+        DiagnosticsLogService.info(
+          'chat_ui',
+          'Scroll threshold toggled',
+          data: {
+            'show_scroll_button': nextShowScrollButton,
+            'pixels': position.pixels.round(),
+            'max_scroll_extent': position.maxScrollExtent.round(),
+          },
+        ),
+      );
     }
   }
 
@@ -4231,6 +4244,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                       // Loading indicator when switching chats
                       if (_isLoadingChat)
                         Positioned.fill(
+                          key: const ValueKey<String>(
+                            'desktop-chat-loading-overlay',
+                          ),
                           child: Container(
                             color: bg.withValues(alpha: 0.7),
                             child: Center(
@@ -4243,6 +4259,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                         ),
                       if (!isChatEmpty)
                         Positioned(
+                          key: const ValueKey<String>(
+                            'desktop-chat-message-list',
+                          ),
                           top: 0,
                           bottom: inputAreaTotalHeight,
                           left: 0,
@@ -4371,6 +4390,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                       // Scroll-to-bottom button (centered above input)
                       if (_showScrollToBottom && !isChatEmpty)
                         Positioned(
+                          key: const ValueKey<String>(
+                            'desktop-chat-scroll-to-bottom',
+                          ),
                           bottom: inputAreaTotalHeight + 12,
                           left: 0,
                           right: 0,
@@ -4401,6 +4423,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                           ),
                         ),
                       Positioned(
+                        key: const ValueKey<String>('desktop-chat-input-area'),
                         left: 0,
                         right: 0,
                         // Position at the bottom if not empty, otherwise calculate center position
@@ -4681,6 +4704,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                               child: Align(
                                 alignment: Alignment.centerRight,
                                 child: ModelSelectionDropdown(
+                                  key: const ValueKey<String>(
+                                    'desktop-model-selection-dropdown',
+                                  ),
                                   initialSelectedModelId: _selectedModelId,
                                   onModelSelected: (newModelId) {
                                     setState(() {
