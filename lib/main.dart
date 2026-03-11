@@ -15,7 +15,6 @@ import 'package:chuk_chat/services/app_theme_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/developer_options_service.dart';
-import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/settings_sync_service.dart';
 import 'package:chuk_chat/services/session_manager_service.dart';
 import 'package:chuk_chat/services/notification_service.dart';
@@ -100,10 +99,12 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
   DateTime? _lastResumeSettingsSyncAt;
   bool _showLinuxStartupOverlay = false;
   bool _linuxOverlaySessionArmed = false;
-  static const Duration _linuxStartupOverlayMinVisible = Duration(seconds: 6);
-  static const Duration _linuxStartupOverlayMaxVisible = Duration(seconds: 22);
+  static const Duration _linuxStartupOverlayMinVisible = Duration(
+    milliseconds: 1200,
+  );
+  static const Duration _linuxStartupOverlayMaxVisible = Duration(seconds: 12);
   static const Duration _linuxStartupOverlayPollInterval = Duration(
-    milliseconds: 450,
+    milliseconds: 250,
   );
   static const Duration _linuxResumeSyncCooldown = Duration(seconds: 90);
   static const Duration _linuxResumeSyncDelay = Duration(seconds: 2);
@@ -132,10 +133,15 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
       if (_isLinuxDesktop && !kFeatureLinuxTray) {
         return;
       }
-      final delay = _isLinuxDesktop
-          ? const Duration(seconds: 3)
-          : const Duration(milliseconds: 1200);
-      await Future<void>.delayed(delay);
+      if (_isLinuxDesktop) {
+        await Future<void>.delayed(const Duration(seconds: 9));
+        // Avoid tray setup while early startup work is still settling.
+        while (mounted && _showLinuxStartupOverlay) {
+          await Future<void>.delayed(const Duration(milliseconds: 350));
+        }
+      } else {
+        await Future<void>.delayed(const Duration(milliseconds: 1200));
+      }
       if (!mounted) return;
       await SystemTrayService.instance.initialize();
     } catch (error) {
@@ -284,10 +290,7 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
         final sidebarReady =
             ChatStorageState.cacheLoaded &&
             ChatStorageState.initialSyncComplete;
-        final keyReady =
-            EncryptionService.hasKey || ChatStorageState.chatsById.isEmpty;
-        final startupReady =
-            sidebarReady && keyReady && !_initService.isInitializing;
+        final startupReady = sidebarReady && !_initService.isInitializing;
         if (enoughTimeVisible && startupReady) {
           _hideLinuxStartupOverlay();
         }
