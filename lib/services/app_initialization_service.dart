@@ -32,7 +32,14 @@ class AppInitializationService {
   Timer? _deferredPreloadTimer;
 
   // Gives startup/session init time to settle before background decrypt work.
-  static const Duration _deferredPreloadDelay = Duration(seconds: 45);
+  static Duration get _deferredPreloadDelay {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.linux) {
+      // Linux desktop users are frequently interacting immediately after launch.
+      // Push preload further back to avoid random UI hitches during early use.
+      return const Duration(minutes: 3);
+    }
+    return const Duration(seconds: 45);
+  }
 
   bool get isInitializing => _isInitializing;
   bool get isSupabaseReady => _isSupabaseReady;
@@ -236,6 +243,14 @@ class AppInitializationService {
   }
 
   void _startDeferredPreload() {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.linux) {
+      // Linux desktop should stay interactive; full-history preload is heavy
+      // and can run on-demand (e.g. export/search) via awaitPreload().
+      if (kDebugMode) {
+        debugPrint('⏭️ [AppInit] Skipping automatic preload on Linux');
+      }
+      return;
+    }
     _deferredPreloadTimer?.cancel();
     _deferredPreloadTimer = Timer(_deferredPreloadDelay, () {
       unawaited(ChatPreloadService.startBackgroundPreload());
