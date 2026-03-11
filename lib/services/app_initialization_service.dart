@@ -34,7 +34,8 @@ class AppInitializationService {
   bool get _isLinuxDesktop =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
 
-  static const Duration _linuxDeferredKeySyncDelay = Duration(seconds: 4);
+  static const Duration _linuxDeferredKeySyncDelay = Duration(seconds: 8);
+  static const Duration _linuxInitialKeyPreloadDelay = Duration(seconds: 20);
 
   // Gives startup/session init time to settle before background decrypt work.
   static Duration get _deferredPreloadDelay {
@@ -72,9 +73,10 @@ class AppInitializationService {
       // by SessionManagerService once it receives the auth state event.
       if (SupabaseService.auth.currentSession != null) {
         if (_isLinuxDesktop) {
-          // Linux secure storage can briefly stall startup. Preload later.
+          // Linux secure storage can briefly stall startup. Keep this deferred
+          // so first interaction is not blocked.
           unawaited(
-            Future<void>.delayed(const Duration(seconds: 6), () async {
+            Future<void>.delayed(_linuxInitialKeyPreloadDelay, () async {
               if (SupabaseService.auth.currentSession == null) return;
               await _preloadEncryptionKey();
             }),
@@ -148,15 +150,21 @@ class AppInitializationService {
       // secure storage takes time on Linux.
       await _loadUserData(stopwatch, startSync: false);
 
-      if (EncryptionService.hasKey) {
-        _startSyncAfterKey(stopwatch);
+      if (_isLinuxDesktop) {
+        final hasKey = EncryptionService.hasKey;
+        _startSyncAfterSidebarLoad(stopwatch, keyReady: hasKey);
+        if (hasKey) {
+          unawaited(ChatSyncService.syncNow());
+        } else {
+          // Keep key probing away from first interactions; Linux secure storage
+          // can stall the GTK main thread even with async Dart code.
+          unawaited(_startSyncWhenKeyReady(stopwatch));
+        }
         return;
       }
 
-      if (_isLinuxDesktop) {
-        // Keep Linux startup responsive: defer secure-storage key load and
-        // start sync shortly after first user interaction window.
-        unawaited(_startSyncWhenKeyReady(stopwatch));
+      if (EncryptionService.hasKey) {
+        _startSyncAfterKey(stopwatch);
         return;
       }
 
@@ -202,8 +210,8 @@ class AppInitializationService {
   Future<void> _startSyncWhenKeyReady(Stopwatch stopwatch) async {
     final retryDelays = <Duration>[
       _linuxDeferredKeySyncDelay,
-      const Duration(seconds: 8),
-      const Duration(seconds: 12),
+      const Duration(seconds: 18),
+      const Duration(seconds: 35),
     ];
 
     for (var attempt = 0; attempt < retryDelays.length; attempt++) {
@@ -211,18 +219,15 @@ class AppInitializationService {
       if (SupabaseService.auth.currentUser == null) return;
 
       if (EncryptionService.hasKey) {
-        _startSyncAfterKey(stopwatch);
+        _onLinuxKeyReady(stopwatch);
         return;
       }
 
-      final hasKey = await EncryptionService.tryLoadKey().catchError((
-        error,
-        stackTrace,
-      ) {
-        return false;
-      });
+      final hasKey = await _tryLoadKeyWithTimeout(
+        const Duration(milliseconds: 1200),
+      );
       if (hasKey) {
-        _startSyncAfterKey(stopwatch);
+        _onLinuxKeyReady(stopwatch);
         return;
       }
     }
@@ -230,10 +235,22 @@ class AppInitializationService {
     unawaited(
       DiagnosticsLogService.warning(
         'startup',
-        'Deferred key loading failed on Linux; sync remains paused',
+        'Deferred key loading failed on Linux; continuing with cache-only mode',
       ),
     );
-    ChatSyncService.stop();
+  }
+
+  Future<bool> _tryLoadKeyWithTimeout(Duration timeout) async {
+    if (EncryptionService.hasKey) return true;
+
+    try {
+      return await EncryptionService.tryLoadKey().timeout(
+        timeout,
+        onTimeout: () => false,
+      );
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> _loadUserData(
@@ -301,9 +318,45 @@ class AppInitializationService {
         'startup',
         'load_sidebar_and_start_sync',
         stopwatch.elapsedMilliseconds,
-        data: {'sidebar_chat_count': ChatStorageService.savedChats.length},
+        data: {
+          'sidebar_chat_count': ChatStorageService.savedChats.length,
+          'key_ready': true,
+        },
       ),
     );
+  }
+
+  void _startSyncAfterSidebarLoad(
+    Stopwatch stopwatch, {
+    required bool keyReady,
+  }) {
+    // Start sync timer immediately after sidebar cache is ready on Linux.
+    ChatSyncService.start();
+    _startDeferredPreload();
+
+    unawaited(
+      DiagnosticsLogService.timing(
+        'startup',
+        'load_sidebar_and_start_sync',
+        stopwatch.elapsedMilliseconds,
+        data: {
+          'sidebar_chat_count': ChatStorageService.savedChats.length,
+          'key_ready': keyReady,
+        },
+      ),
+    );
+  }
+
+  void _onLinuxKeyReady(Stopwatch stopwatch) {
+    unawaited(
+      DiagnosticsLogService.timing(
+        'startup',
+        'encryption_key_ready_for_sync',
+        stopwatch.elapsedMilliseconds,
+      ),
+    );
+    // Trigger a sync cycle now that encryption/decryption is available.
+    unawaited(ChatSyncService.syncNow());
   }
 
   void _startDeferredPreload() {
