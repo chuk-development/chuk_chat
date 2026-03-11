@@ -3978,6 +3978,129 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     return normalizedModel;
   }
 
+  _MessageRenderData _buildMessageRenderData(int index) {
+    final Map<String, String> raw = _messages[index];
+    final String sender = raw['sender'] ?? 'ai';
+    final String displayText = (raw['text'] ?? '').trimRight();
+    final String reasoning = raw['reasoning'] ?? '';
+    final bool isAiMessage = sender != 'user';
+    final bool isStreamingMessage =
+        _isStreaming && index == _messages.length - 1 && isAiMessage;
+    final bool hasReasoning = reasoning.isNotEmpty;
+    final String? modelLabel = isAiMessage
+        ? _formatModelInfo(raw['modelId'], raw['provider'])
+        : null;
+    final String? modelProvider = isAiMessage
+        ? (raw['provider'] ?? '').trim()
+        : null;
+
+    List<String>? images;
+    final String? imagesJson = raw['images'];
+    if (imagesJson != null && imagesJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(imagesJson);
+        if (decoded is List) {
+          images = decoded.cast<String>();
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('Failed to decode images JSON: $e');
+        }
+      }
+    }
+
+    List<DocumentAttachment>? attachments;
+    final String? attachmentsJson = raw['attachments'];
+    if (attachmentsJson != null && attachmentsJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(attachmentsJson);
+        if (decoded is List) {
+          attachments = decoded
+              .map(
+                (item) =>
+                    DocumentAttachment.fromJson(item as Map<String, dynamic>),
+              )
+              .toList();
+          if (kDebugMode) {
+            debugPrint(
+              '📄 [AttachmentDebug] Extracted ${attachments.length} attachments from message $index',
+            );
+          }
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint(
+            '📄 [AttachmentDebug] Failed to decode attachments JSON: $e',
+          );
+        }
+      }
+    }
+
+    final tpsStr = raw['tps'];
+    final double? tps = (tpsStr != null && tpsStr.isNotEmpty)
+        ? double.tryParse(tpsStr)
+        : null;
+
+    List<ToolCall>? toolCalls;
+    final String? toolCallsJson = raw['toolCalls'];
+    if (toolCallsJson != null && toolCallsJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(toolCallsJson);
+        if (decoded is List) {
+          toolCalls = decoded
+              .whereType<Map>()
+              .map((item) => ToolCall.fromJson(Map<String, dynamic>.from(item)))
+              .toList();
+        }
+      } catch (_) {}
+    }
+
+    List<ContentBlock>? parsedContentBlocks;
+    final String? contentBlocksJson = raw['contentBlocks'];
+    if (contentBlocksJson != null && contentBlocksJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(contentBlocksJson);
+        if (decoded is List) {
+          parsedContentBlocks = decoded
+              .whereType<Map>()
+              .map(
+                (item) =>
+                    ContentBlock.fromJson(Map<String, dynamic>.from(item)),
+              )
+              .toList();
+        }
+      } catch (_) {}
+    }
+
+    final String? imageCostStr = raw['imageCostEur'];
+    final double? imageCostEur = imageCostStr != null && imageCostStr.isNotEmpty
+        ? double.tryParse(imageCostStr)
+        : null;
+    final String? imageGeneratedAtStr = raw['imageGeneratedAt'];
+    final DateTime? imageGeneratedAt =
+        imageGeneratedAtStr != null && imageGeneratedAtStr.isNotEmpty
+        ? DateTime.tryParse(imageGeneratedAtStr)
+        : null;
+
+    return _MessageRenderData(
+      sender: sender,
+      displayText: displayText,
+      reasoning: reasoning,
+      isReasoningStreaming:
+          isStreamingMessage && (hasReasoning || displayText.isNotEmpty),
+      modelLabel: modelLabel,
+      modelProvider: modelProvider,
+      tps: tps,
+      images: images,
+      imageCostEur: imageCostEur,
+      imageGeneratedAt: imageGeneratedAt,
+      attachments: attachments,
+      toolCalls: toolCalls,
+      contentBlocks: parsedContentBlocks,
+      isStreamingMessage: isStreamingMessage,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
@@ -4022,142 +4145,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     final double targetInputWidth = showInputAreaCentered
         ? centeredInputWidth
         : expandedInputWidth;
-
-    final List<_MessageRenderData>
-    renderMessages = List<_MessageRenderData>.generate(_messages.length, (
-      int index,
-    ) {
-      final Map<String, String> raw = _messages[index];
-      final String sender = raw['sender'] ?? 'ai';
-      final String displayText = (raw['text'] ?? '').trimRight();
-      final String reasoning = raw['reasoning'] ?? '';
-      final bool isAiMessage = sender != 'user';
-      final bool isStreamingMessage =
-          _isStreaming && index == _messages.length - 1 && isAiMessage;
-      // Check if reasoning has content (meaning reasoning exists)
-      final bool hasReasoning = reasoning.isNotEmpty;
-      final String? modelLabel = isAiMessage
-          ? _formatModelInfo(raw['modelId'], raw['provider'])
-          : null;
-      final String? modelProvider = isAiMessage
-          ? (raw['provider'] ?? '').trim()
-          : null;
-
-      // Extract images if present (stored as JSON string)
-      List<String>? images;
-      final String? imagesJson = raw['images'];
-      if (imagesJson != null && imagesJson.isNotEmpty) {
-        try {
-          final decoded = jsonDecode(imagesJson);
-          if (decoded is List) {
-            images = decoded.cast<String>();
-          }
-        } catch (e) {
-          if (kDebugMode) {
-            debugPrint('Failed to decode images JSON: $e');
-          }
-        }
-      }
-
-      // Extract attachments if present (stored as JSON string)
-      List<DocumentAttachment>? attachments;
-      final String? attachmentsJson = raw['attachments'];
-      if (attachmentsJson != null && attachmentsJson.isNotEmpty) {
-        try {
-          final decoded = jsonDecode(attachmentsJson);
-          if (decoded is List) {
-            attachments = decoded
-                .map(
-                  (item) =>
-                      DocumentAttachment.fromJson(item as Map<String, dynamic>),
-                )
-                .toList();
-            if (kDebugMode) {
-              debugPrint(
-                '📄 [AttachmentDebug] Extracted ${attachments.length} attachments from message $index',
-              );
-            }
-          }
-        } catch (e) {
-          if (kDebugMode) {
-            debugPrint(
-              '📄 [AttachmentDebug] Failed to decode attachments JSON: $e',
-            );
-          }
-        }
-      }
-
-      // Parse TPS value from message
-      final tpsStr = raw['tps'];
-      double? tps;
-      if (tpsStr != null && tpsStr.isNotEmpty) {
-        tps = double.tryParse(tpsStr);
-      }
-
-      List<ToolCall>? toolCalls;
-      final String? toolCallsJson = raw['toolCalls'];
-      if (toolCallsJson != null && toolCallsJson.isNotEmpty) {
-        try {
-          final decoded = jsonDecode(toolCallsJson);
-          if (decoded is List) {
-            toolCalls = decoded
-                .whereType<Map>()
-                .map(
-                  (item) => ToolCall.fromJson(Map<String, dynamic>.from(item)),
-                )
-                .toList();
-          }
-        } catch (_) {}
-      }
-
-      // Parse content blocks for interleaved tool call / text display.
-      List<ContentBlock>? parsedContentBlocks;
-      final String? contentBlocksJson = raw['contentBlocks'];
-      if (contentBlocksJson != null && contentBlocksJson.isNotEmpty) {
-        try {
-          final decoded = jsonDecode(contentBlocksJson);
-          if (decoded is List) {
-            parsedContentBlocks = decoded
-                .whereType<Map>()
-                .map(
-                  (item) =>
-                      ContentBlock.fromJson(Map<String, dynamic>.from(item)),
-                )
-                .toList();
-          }
-        } catch (_) {}
-      }
-
-      final String? imageCostStr = raw['imageCostEur'];
-      final double? imageCostEur =
-          imageCostStr != null && imageCostStr.isNotEmpty
-          ? double.tryParse(imageCostStr)
-          : null;
-      final String? imageGeneratedAtStr = raw['imageGeneratedAt'];
-      final DateTime? imageGeneratedAt =
-          imageGeneratedAtStr != null && imageGeneratedAtStr.isNotEmpty
-          ? DateTime.tryParse(imageGeneratedAtStr)
-          : null;
-
-      return _MessageRenderData(
-        sender: sender,
-        displayText: displayText,
-        reasoning: reasoning,
-        // Show loading icon if: streaming AND (has reasoning OR might get reasoning)
-        isReasoningStreaming:
-            isStreamingMessage && (hasReasoning || displayText.isNotEmpty),
-        modelLabel: modelLabel,
-        modelProvider: modelProvider,
-        tps: tps,
-        images: images,
-        imageCostEur: imageCostEur,
-        imageGeneratedAt: imageGeneratedAt,
-        attachments: attachments,
-        toolCalls: toolCalls,
-        contentBlocks: parsedContentBlocks,
-        isStreamingMessage: isStreamingMessage,
-      );
-    });
 
     // Check if we're in project mode
     final bool isProjectMode = widget.projectId != null;
@@ -4283,7 +4270,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                         horizontal: effectiveHorizontalPadding,
                                         vertical: 10,
                                       ),
-                                      itemCount: renderMessages.length,
+                                      itemCount: _messages.length,
                                       addAutomaticKeepAlives:
                                           true, // Keep message widgets alive
                                       addRepaintBoundaries: true,
@@ -4291,19 +4278,28 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                           2000.0, // Increase cache to keep more messages in memory
                                       itemBuilder: (_, int i) {
                                         final _MessageRenderData data =
-                                            renderMessages[i];
+                                            _buildMessageRenderData(i);
                                         final String? reasoningText =
                                             data.reasoning.trim().isEmpty
                                             ? null
                                             : data.reasoning;
+                                        final bool previousIsUser = i == 0
+                                            ? data.isUser
+                                            : (_messages[i - 1]['sender'] ??
+                                                      'ai') ==
+                                                  'user';
+                                        final bool nextIsUser =
+                                            i == _messages.length - 1
+                                            ? data.isUser
+                                            : (_messages[i + 1]['sender'] ??
+                                                      'ai') ==
+                                                  'user';
                                         final bool startsNewGroup =
                                             i == 0 ||
-                                            (renderMessages[i - 1].isUser !=
-                                                data.isUser);
+                                            previousIsUser != data.isUser;
                                         final bool endsGroup =
-                                            i == renderMessages.length - 1 ||
-                                            (renderMessages[i + 1].isUser !=
-                                                data.isUser);
+                                            i == _messages.length - 1 ||
+                                            nextIsUser != data.isUser;
                                         final bool isBeingEdited =
                                             _editingMessageIndex == i;
                                         return RepaintBoundary(
