@@ -209,6 +209,7 @@ class DiagnosticsLogService {
         'performance',
         'startup',
         'tray',
+        'settings',
       };
 
       final countsByArea = <String, int>{};
@@ -233,7 +234,10 @@ class DiagnosticsLogService {
 
         if (area == 'model_menu') {
           modelMenuEvents.add(entry);
-        } else if (area == 'chat_ui' || area == 'tray' || area == 'startup') {
+        } else if (area == 'chat_ui' ||
+            area == 'tray' ||
+            area == 'startup' ||
+            area == 'settings') {
           uiEvents.add(entry);
         } else if (area == 'performance') {
           perfEvents.add(entry);
@@ -283,7 +287,7 @@ class DiagnosticsLogService {
         tail(modelMenuEvents, maxEventsPerSection),
       );
       writeSection(
-        'Chat/Startup/Tray Events (recent)',
+        'Chat/Startup/Tray/Settings Events (recent)',
         tail(uiEvents, maxEventsPerSection),
       );
       writeSection(

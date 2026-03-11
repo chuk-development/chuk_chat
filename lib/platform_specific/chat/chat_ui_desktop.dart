@@ -203,6 +203,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       8.0; // Margin between attachment bar and search bar
   static const double _kHorizontalPaddingLarge = 16.0;
   static const double _kHorizontalPaddingSmall = 8.0;
+  static const double _kShowScrollButtonDistance = 260.0;
+  static const double _kHideScrollButtonDistance = 140.0;
 
   String _selectedTextOrAll(TextEditingValue value) {
     final selection = value.selection;
@@ -3807,24 +3809,35 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   void _onScrollChanged() {
     if (!_scrollController.hasClients) return;
     final position = _scrollController.position;
-    final isNearBottom = position.maxScrollExtent - position.pixels < 200;
-    if (_showScrollToBottom == isNearBottom) {
-      final nextShowScrollButton = !isNearBottom;
-      setState(() {
-        _showScrollToBottom = nextShowScrollButton;
-      });
-      unawaited(
-        DiagnosticsLogService.info(
-          'chat_ui',
-          'Scroll threshold toggled',
-          data: {
-            'show_scroll_button': nextShowScrollButton,
-            'pixels': position.pixels.round(),
-            'max_scroll_extent': position.maxScrollExtent.round(),
-          },
-        ),
-      );
+    final distanceToBottom = position.maxScrollExtent - position.pixels;
+
+    bool nextShowScrollButton = _showScrollToBottom;
+    if (!_showScrollToBottom && distanceToBottom > _kShowScrollButtonDistance) {
+      nextShowScrollButton = true;
+    } else if (_showScrollToBottom &&
+        distanceToBottom < _kHideScrollButtonDistance) {
+      nextShowScrollButton = false;
     }
+
+    if (nextShowScrollButton == _showScrollToBottom) return;
+
+    setState(() {
+      _showScrollToBottom = nextShowScrollButton;
+    });
+    unawaited(
+      DiagnosticsLogService.info(
+        'chat_ui',
+        'Scroll threshold toggled',
+        data: {
+          'show_scroll_button': nextShowScrollButton,
+          'distance_to_bottom': distanceToBottom.round(),
+          'pixels': position.pixels.round(),
+          'max_scroll_extent': position.maxScrollExtent.round(),
+          'show_threshold': _kShowScrollButtonDistance.round(),
+          'hide_threshold': _kHideScrollButtonDistance.round(),
+        },
+      ),
+    );
   }
 
   void _scrollChatToBottom({bool animate = true, bool force = false}) {

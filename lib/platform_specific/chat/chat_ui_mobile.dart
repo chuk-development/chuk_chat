@@ -140,6 +140,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   static const double _kMaxChatContentWidth = 760.0;
   static const double _kAttachmentBarMarginBottom = 8.0;
   static const double _kHorizontalPaddingSmall = 8.0;
+  static const double _kShowScrollButtonDistance = 260.0;
+  static const double _kHideScrollButtonDistance = 140.0;
 
   @override
   void initState() {
@@ -2592,12 +2594,20 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   void _onScrollChanged() {
     if (!_scrollController.hasClients) return;
     final position = _scrollController.position;
-    final isNearBottom = position.maxScrollExtent - position.pixels < 200;
-    if (_showScrollToBottom == isNearBottom) {
-      setState(() {
-        _showScrollToBottom = !isNearBottom;
-      });
+    final distanceToBottom = position.maxScrollExtent - position.pixels;
+
+    bool nextShowScrollButton = _showScrollToBottom;
+    if (!_showScrollToBottom && distanceToBottom > _kShowScrollButtonDistance) {
+      nextShowScrollButton = true;
+    } else if (_showScrollToBottom &&
+        distanceToBottom < _kHideScrollButtonDistance) {
+      nextShowScrollButton = false;
     }
+
+    if (nextShowScrollButton == _showScrollToBottom) return;
+    setState(() {
+      _showScrollToBottom = nextShowScrollButton;
+    });
   }
 
   void _scrollChatToBottom({bool force = false}) {

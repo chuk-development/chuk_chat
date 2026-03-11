@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/models/client_tool.dart';
+import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/tool_call_handler.dart';
 import 'package:chuk_chat/services/tool_executor.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
@@ -87,19 +88,55 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
     _showToolCalls = widget.config.showToolCalls;
     _allowMarkdownToolCalls = widget.config.allowMarkdownToolCalls;
     _toolExecutor = ToolCallHandler().toolExecutor;
-    unawaited(_loadToolPreferences());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // Keep route transition smooth, then hydrate tool prefs.
+      unawaited(
+        Future<void>.delayed(const Duration(milliseconds: 250), () async {
+          if (!mounted) return;
+          await _loadToolPreferences();
+        }),
+      );
+    });
   }
 
   Future<void> _loadToolPreferences() async {
-    await _toolExecutor.loadPreferences();
-    if (!mounted) {
-      return;
+    final stopwatch = Stopwatch()..start();
+    try {
+      await _toolExecutor.loadPreferences();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _mapVisualOutputEnabled = _toolExecutor.mapVisualOutputEnabled;
+        _chartVisualOutputEnabled = _toolExecutor.chartVisualOutputEnabled;
+        _isLoadingToolPreferences = false;
+      });
+      unawaited(
+        DiagnosticsLogService.timing(
+          'settings',
+          'load_tool_calling_preferences',
+          stopwatch.elapsedMilliseconds,
+          data: {
+            'tool_count': _toolExecutor.allRegisteredTools.length,
+            'map_visual': _mapVisualOutputEnabled,
+            'chart_visual': _chartVisualOutputEnabled,
+          },
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingToolPreferences = false;
+      });
+      unawaited(
+        DiagnosticsLogService.warning(
+          'settings',
+          'Failed to load tool calling preferences',
+          data: {'error': error.toString()},
+        ),
+      );
     }
-    setState(() {
-      _mapVisualOutputEnabled = _toolExecutor.mapVisualOutputEnabled;
-      _chartVisualOutputEnabled = _toolExecutor.chartVisualOutputEnabled;
-      _isLoadingToolPreferences = false;
-    });
   }
 
   int _categoryOrder(ToolCategory category) {
