@@ -90,10 +90,15 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
   final SessionManagerService _sessionManager = SessionManagerService.instance;
   final AppInitializationService _initService =
       AppInitializationService.instance;
+  late final DateTime _appStartedAt;
+
+  bool get _isLinuxDesktop =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
 
   @override
   void initState() {
     super.initState();
+    _appStartedAt = DateTime.now();
     WidgetsBinding.instance.addObserver(this);
     _lifecycleService.addOnResumeCallback(_syncSettingsInBackground);
 
@@ -132,6 +137,14 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
   }
 
   void _syncSettingsInBackground() {
+    if (_isLinuxDesktop) {
+      final uptime = DateTime.now().difference(_appStartedAt);
+      // Avoid heavy settings pull during Linux startup warmup.
+      if (uptime < const Duration(seconds: 20)) {
+        return;
+      }
+    }
+
     unawaited(
       SettingsSyncService.syncAllFromSupabase(forceRefresh: false).catchError((
         error,
@@ -157,6 +170,13 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
   }
 
   void _initializeNotificationsInBackground() {
+    // Completion notifications are used on Android/iOS only.
+    if (kIsWeb ||
+        (defaultTargetPlatform != TargetPlatform.android &&
+            defaultTargetPlatform != TargetPlatform.iOS)) {
+      return;
+    }
+
     unawaited(
       Future<void>.delayed(const Duration(seconds: 2), () async {
         if (!mounted) return;

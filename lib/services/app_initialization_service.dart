@@ -31,6 +31,11 @@ class AppInitializationService {
   bool _isSupabaseReady = false;
   Timer? _deferredPreloadTimer;
 
+  bool get _isLinuxDesktop =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
+
+  static const Duration _linuxDeferredKeySyncDelay = Duration(seconds: 8);
+
   // Gives startup/session init time to settle before background decrypt work.
   static Duration get _deferredPreloadDelay {
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.linux) {
@@ -66,7 +71,17 @@ class AppInitializationService {
       // Full session init (chat loading, sync, model prefetch) is handled
       // by SessionManagerService once it receives the auth state event.
       if (SupabaseService.auth.currentSession != null) {
-        unawaited(_preloadEncryptionKey());
+        if (_isLinuxDesktop) {
+          // Linux secure storage can briefly stall startup. Preload later.
+          unawaited(
+            Future<void>.delayed(const Duration(seconds: 12), () async {
+              if (SupabaseService.auth.currentSession == null) return;
+              await _preloadEncryptionKey();
+            }),
+          );
+        } else {
+          unawaited(_preloadEncryptionKey());
+        }
       }
 
       unawaited(
@@ -133,6 +148,18 @@ class AppInitializationService {
       // secure storage takes time on Linux.
       await _loadUserData(stopwatch, startSync: false);
 
+      if (EncryptionService.hasKey) {
+        _startSyncAfterKey(stopwatch);
+        return;
+      }
+
+      if (_isLinuxDesktop) {
+        // Keep Linux startup responsive: defer secure-storage key load and
+        // start sync shortly after first user interaction window.
+        unawaited(_startSyncWhenKeyReady(stopwatch));
+        return;
+      }
+
       // Ensure encryption key is loaded before starting network sync.
       final hasKey = await EncryptionService.tryLoadKey();
       if (kDebugMode) {
@@ -170,6 +197,43 @@ class AppInitializationService {
       }
       ChatSyncService.stop();
     }
+  }
+
+  Future<void> _startSyncWhenKeyReady(Stopwatch stopwatch) async {
+    final retryDelays = <Duration>[
+      _linuxDeferredKeySyncDelay,
+      const Duration(seconds: 10),
+      const Duration(seconds: 14),
+    ];
+
+    for (var attempt = 0; attempt < retryDelays.length; attempt++) {
+      await Future<void>.delayed(retryDelays[attempt]);
+      if (SupabaseService.auth.currentUser == null) return;
+
+      if (EncryptionService.hasKey) {
+        _startSyncAfterKey(stopwatch);
+        return;
+      }
+
+      final hasKey = await EncryptionService.tryLoadKey().catchError((
+        error,
+        stackTrace,
+      ) {
+        return false;
+      });
+      if (hasKey) {
+        _startSyncAfterKey(stopwatch);
+        return;
+      }
+    }
+
+    unawaited(
+      DiagnosticsLogService.warning(
+        'startup',
+        'Deferred key loading failed on Linux; sync remains paused',
+      ),
+    );
+    ChatSyncService.stop();
   }
 
   Future<void> _loadUserData(
