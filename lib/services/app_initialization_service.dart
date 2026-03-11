@@ -122,9 +122,12 @@ class AppInitializationService {
     }
 
     try {
-      // Ensure encryption key is loaded
-      final hasKey = await EncryptionService.tryLoadKey();
+      // Load cached sidebar data first so startup UI is responsive even if
+      // secure storage takes time on Linux.
+      await _loadUserData(stopwatch, startSync: false);
 
+      // Ensure encryption key is loaded before starting network sync.
+      final hasKey = await EncryptionService.tryLoadKey();
       if (kDebugMode) {
         debugPrint(
           '🔑 [AppInit] Encryption key loaded in ${stopwatch.elapsedMilliseconds}ms',
@@ -132,7 +135,7 @@ class AppInitializationService {
       }
 
       if (hasKey) {
-        await _loadUserData(stopwatch);
+        _startSyncAfterKey(stopwatch);
       } else {
         unawaited(
           DiagnosticsLogService.warning(
@@ -162,7 +165,10 @@ class AppInitializationService {
     }
   }
 
-  Future<void> _loadUserData(Stopwatch stopwatch) async {
+  Future<void> _loadUserData(
+    Stopwatch stopwatch, {
+    required bool startSync,
+  }) async {
     // Load chats from cache first (fast)
     try {
       await ChatStorageService.loadSavedChatsForSidebar();
@@ -172,20 +178,9 @@ class AppInitializationService {
         );
       }
 
-      // Start sync after cache is loaded
-      ChatSyncService.start();
-
-      // Delay preload to keep startup/input smooth, then run in background.
-      _startDeferredPreload();
-
-      unawaited(
-        DiagnosticsLogService.timing(
-          'startup',
-          'load_sidebar_and_start_sync',
-          stopwatch.elapsedMilliseconds,
-          data: {'sidebar_chat_count': ChatStorageService.savedChats.length},
-        ),
-      );
+      if (startSync) {
+        _startSyncAfterKey(stopwatch);
+      }
     } catch (error, stackTrace) {
       unawaited(
         DiagnosticsLogService.error(
@@ -210,15 +205,33 @@ class AppInitializationService {
       }),
     );
 
-    // Keep cross-device settings synced in background.
+    // Keep cross-device settings synced in background, but avoid competing
+    // with startup rendering and chat hydration.
     unawaited(
-      SettingsSyncService.syncAllFromSupabase(forceRefresh: true).catchError((
-        error,
-      ) {
+      Future<void>.delayed(const Duration(seconds: 10), () async {
+        await SettingsSyncService.syncAllFromSupabase(forceRefresh: false);
+      }).catchError((error) {
         if (kDebugMode) {
           debugPrint('⚠️ [AppInit] Settings sync failed: $error');
         }
       }),
+    );
+  }
+
+  void _startSyncAfterKey(Stopwatch stopwatch) {
+    // Start sync after cache and encryption key are ready.
+    ChatSyncService.start();
+
+    // Delay preload to keep startup/input smooth, then run in background.
+    _startDeferredPreload();
+
+    unawaited(
+      DiagnosticsLogService.timing(
+        'startup',
+        'load_sidebar_and_start_sync',
+        stopwatch.elapsedMilliseconds,
+        data: {'sidebar_chat_count': ChatStorageService.savedChats.length},
+      ),
     );
   }
 

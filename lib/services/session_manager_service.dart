@@ -32,6 +32,8 @@ class SessionManagerService extends ChangeNotifier {
   StreamSubscription<AuthState>? _authSubscription;
   bool _isInitialized = false;
   String? _sessionInitializedForUser;
+  String? _revisionCheckedForUser;
+  Future<void>? _revisionCheckInFlight;
 
   bool get isInitialized => _isInitialized;
 
@@ -63,24 +65,6 @@ class SessionManagerService extends ChangeNotifier {
       debugPrint('🔐 [SessionManager] Session active for user: ${user.id}');
     }
 
-    // Check for password revision mismatch
-    try {
-      final hasMismatch = await PasswordRevisionService.hasRevisionMismatch(
-        user,
-      );
-      if (hasMismatch) {
-        await _handlePasswordRevisionMismatch(user);
-        return;
-      }
-
-      // Ensure revision is seeded for new sessions
-      await PasswordRevisionService.ensureRevisionSeeded(user);
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('⚠️ [SessionManager] Password revision check failed: $e');
-      }
-    }
-
     // Initialize user session (chat loading, sync, theme) — but only once
     // per user. Token refreshes re-trigger onAuthStateChange, so we guard
     // against redundant initialization. On failure, the guard is reset so
@@ -89,16 +73,25 @@ class SessionManagerService extends ChangeNotifier {
       _sessionInitializedForUser = user.id;
       unawaited(_initializeUserSessionAsync(user));
     }
+
+    // Run password revision checks in background so startup remains responsive.
+    // flutter_secure_storage can stall Linux startup when awaited inline.
+    unawaited(_verifyPasswordRevisionInBackground(user));
   }
 
   /// Runs user session initialization with error handling.
   /// Resets the guard on failure so the next auth event retries.
   Future<void> _initializeUserSessionAsync(User user) async {
     try {
-      await Future.wait([
-        AppInitializationService.instance.initializeUserSession(user),
-        AppThemeService.instance.loadFromSupabaseAsync(),
-      ]);
+      await AppInitializationService.instance.initializeUserSession(user);
+      unawaited(
+        Future<void>.delayed(const Duration(seconds: 4), () async {
+          if (SupabaseService.auth.currentUser?.id != user.id) return;
+          await AppThemeService.instance.loadFromSupabaseAsync(
+            forceRefresh: false,
+          );
+        }),
+      );
     } catch (e) {
       if (kDebugMode) {
         debugPrint('⚠️ [SessionManager] User session init failed: $e');
@@ -108,6 +101,48 @@ class SessionManagerService extends ChangeNotifier {
         _sessionInitializedForUser = null;
       }
     }
+  }
+
+  Future<void> _verifyPasswordRevisionInBackground(User user) async {
+    if (_revisionCheckedForUser == user.id) return;
+    if (_revisionCheckInFlight != null) return;
+
+    Future<void> run() async {
+      try {
+        if (defaultTargetPlatform == TargetPlatform.linux) {
+          await Future<void>.delayed(const Duration(seconds: 3));
+        }
+
+        final activeUserId = SupabaseService.auth.currentUser?.id;
+        if (activeUserId != user.id) return;
+
+        final hasMismatch = await PasswordRevisionService.hasRevisionMismatch(
+          user,
+        );
+        if (hasMismatch) {
+          if (SupabaseService.auth.currentUser?.id == user.id) {
+            await _handlePasswordRevisionMismatch(user);
+          }
+          return;
+        }
+
+        if (SupabaseService.auth.currentUser?.id != user.id) return;
+        await PasswordRevisionService.ensureRevisionSeeded(user);
+        _revisionCheckedForUser = user.id;
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('⚠️ [SessionManager] Password revision check failed: $e');
+        }
+      }
+    }
+
+    final inFlight = run();
+    _revisionCheckInFlight = inFlight;
+    await inFlight.whenComplete(() {
+      if (identical(_revisionCheckInFlight, inFlight)) {
+        _revisionCheckInFlight = null;
+      }
+    });
   }
 
   Future<void> _handleSessionInactive() async {
@@ -167,6 +202,7 @@ class SessionManagerService extends ChangeNotifier {
 
     // Reset session guard so next login re-initializes
     _sessionInitializedForUser = null;
+    _revisionCheckedForUser = null;
 
     ChatSyncService.stop();
 
@@ -208,6 +244,9 @@ class SessionManagerService extends ChangeNotifier {
     _authSubscription?.cancel();
     _onPasswordMismatchCallbacks.clear();
     _isInitialized = false;
+    _sessionInitializedForUser = null;
+    _revisionCheckedForUser = null;
+    _revisionCheckInFlight = null;
     super.dispose();
   }
 }

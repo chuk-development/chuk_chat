@@ -194,10 +194,10 @@ class SystemTrayService with TrayListener, WindowListener {
   List<String> get _linuxTrayFallbackCandidates {
     final executableDir = File(Platform.resolvedExecutable).parent.path;
     return <String>[
-      '$executableDir${Platform.pathSeparator}data${Platform.pathSeparator}flutter_assets${Platform.pathSeparator}assets${Platform.pathSeparator}icons${Platform.pathSeparator}chuk_chat_tray_brand.png',
       '$executableDir${Platform.pathSeparator}data${Platform.pathSeparator}flutter_assets${Platform.pathSeparator}web${Platform.pathSeparator}icons${Platform.pathSeparator}Icon-512.png',
-      '/opt/chuk-chat/data/flutter_assets/assets/icons/chuk_chat_tray_brand.png',
+      '$executableDir${Platform.pathSeparator}data${Platform.pathSeparator}flutter_assets${Platform.pathSeparator}assets${Platform.pathSeparator}icons${Platform.pathSeparator}chuk_chat_tray_brand.png',
       '/opt/chuk-chat/data/flutter_assets/web/icons/Icon-512.png',
+      '/opt/chuk-chat/data/flutter_assets/assets/icons/chuk_chat_tray_brand.png',
       '/usr/share/icons/hicolor/256x256/apps/chuk-chat.png',
       '/usr/share/icons/hicolor/512x512/apps/chuk-chat.png',
       '/usr/share/pixmaps/chuk-chat.png',
@@ -308,11 +308,6 @@ class SystemTrayService with TrayListener, WindowListener {
   @override
   void onTrayIconMouseDown() {
     if (!_isInitialized) return;
-    if (defaultTargetPlatform == TargetPlatform.linux) {
-      // Linux AppIndicator shells often map left click to menu behavior.
-      // Keep hide/show controlled via the explicit tray menu item.
-      return;
-    }
     unawaited(_toggleWindowVisibility());
   }
 

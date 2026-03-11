@@ -88,6 +88,9 @@ class AppThemeService extends ChangeNotifier {
   Timer? _syncDebounce;
   ThemeData? _cachedThemeData;
   bool _hasAppliedSupabaseTheme = false;
+  Future<void>? _supabaseLoadInFlight;
+  DateTime? _lastSupabaseLoadAt;
+  static const Duration _supabaseLoadTtl = Duration(seconds: 20);
 
   // Getters
   Brightness get themeMode => _themeMode;
@@ -173,14 +176,33 @@ class AppThemeService extends ChangeNotifier {
   }
 
   /// Load theme from Supabase in background
-  Future<void> loadFromSupabaseAsync() async {
-    try {
-      await _loadFromSupabase();
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('Theme load from Supabase failed: $e');
+  Future<void> loadFromSupabaseAsync({bool forceRefresh = false}) async {
+    final now = DateTime.now();
+    if (!forceRefresh &&
+        _lastSupabaseLoadAt != null &&
+        now.difference(_lastSupabaseLoadAt!) < _supabaseLoadTtl) {
+      return;
+    }
+
+    if (_supabaseLoadInFlight != null) {
+      return _supabaseLoadInFlight!;
+    }
+
+    Future<void> run() async {
+      try {
+        await _loadFromSupabase();
+        _lastSupabaseLoadAt = DateTime.now();
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('Theme load from Supabase failed: $e');
+        }
       }
     }
+
+    _supabaseLoadInFlight = run();
+    await _supabaseLoadInFlight!.whenComplete(() {
+      _supabaseLoadInFlight = null;
+    });
   }
 
   Future<void> _loadFromSupabase() async {
