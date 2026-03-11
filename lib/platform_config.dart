@@ -64,3 +64,10 @@ const bool kFeatureServerTools = bool.fromEnvironment(
   'FEATURE_SERVER_TOOLS',
   defaultValue: false,
 );
+
+/// Linux system tray integration.
+/// Disabled by default until tray stability is proven on target distros.
+const bool kFeatureLinuxTray = bool.fromEnvironment(
+  'FEATURE_LINUX_TRAY',
+  defaultValue: false,
+);
