@@ -143,13 +143,28 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
     );
   }
 
-  void _syncSettingsInBackgroundForce() {
+  void _scheduleStartupSettingsSync() {
     unawaited(
-      SettingsSyncService.syncAllFromSupabase(forceRefresh: true).catchError((
-        error,
-      ) {
+      Future<void>.delayed(const Duration(seconds: 12), () async {
+        if (!mounted) return;
+        await SettingsSyncService.syncAllFromSupabase(forceRefresh: false);
+      }).catchError((error) {
         if (kDebugMode) {
-          debugPrint('⚠️ [Main] Forced settings sync failed: $error');
+          debugPrint('⚠️ [Main] Startup settings sync failed: $error');
+        }
+      }),
+    );
+  }
+
+  void _initializeNotificationsInBackground() {
+    unawaited(
+      Future<void>.delayed(const Duration(seconds: 2), () async {
+        if (!mounted) return;
+        await NotificationService.initialize(navigatorKey);
+        await NotificationService.checkLaunchNotification();
+      }).catchError((error) {
+        if (kDebugMode) {
+          debugPrint('⚠️ [Main] Notification init failed: $error');
         }
       }),
     );
@@ -164,10 +179,7 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
     // This must complete BEFORE SessionManager subscribes to auth events,
     // because the initial auth event fires synchronously and triggers
     // loadFromSupabaseAsync() — which would race with loadFromPrefs().
-    await Future.wait([
-      NotificationService.initialize(navigatorKey),
-      _themeService.loadFromPrefs(),
-    ]);
+    await _themeService.loadFromPrefs();
     if (!mounted) return;
 
     // Initialize session manager now that Supabase is ready and local
@@ -175,11 +187,9 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
     // user session initialization (chat loading, sync, theme from Supabase).
     _sessionManager.initialize(onPasswordMismatch: _onPasswordMismatch);
 
-    // Prime identity cache from Supabase in background at startup.
-    _syncSettingsInBackgroundForce();
-
-    // Check launch notification (depends on notification init above)
-    await NotificationService.checkLaunchNotification();
+    // Defer non-critical startup work so first interaction stays responsive.
+    _scheduleStartupSettingsSync();
+    _initializeNotificationsInBackground();
   }
 
   @override

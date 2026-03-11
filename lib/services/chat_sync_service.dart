@@ -34,7 +34,8 @@ class ChatSyncService {
   }
 
   /// How often to poll for changes (in seconds)
-  static const int _pollIntervalSeconds = 5;
+  static const int _pollIntervalSeconds = 15;
+  static const Duration _initialSyncDelay = Duration(seconds: 4);
 
   /// Start the sync service
   static void start() {
@@ -46,8 +47,8 @@ class ChatSyncService {
       );
     }
 
-    // Initial sync after short delay
-    Future.delayed(const Duration(seconds: 1), () {
+    // Initial sync after startup settles so first paint/input stays smooth.
+    Future.delayed(_initialSyncDelay, () {
       if (_isEnabled) _performSync();
     });
 

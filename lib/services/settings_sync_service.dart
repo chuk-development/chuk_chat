@@ -45,7 +45,9 @@ class SettingsSyncService {
         TitleGenerationService.syncSettingsFromSupabase(
           forceRefresh: forceRefresh,
         ),
-        AppThemeService.instance.loadFromSupabaseAsync(),
+        AppThemeService.instance.loadFromSupabaseAsync(
+          forceRefresh: forceRefresh,
+        ),
       ]);
       _lastSyncAt = DateTime.now();
 

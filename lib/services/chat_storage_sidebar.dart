@@ -12,6 +12,32 @@ import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+const int _kSidebarApplyChunkSize = 250;
+const int _kSidebarIsolateParseThresholdChars = 12000;
+
+/// Parse cached sidebar title JSON into a typed list.
+/// Top-level for [compute] isolate usage.
+List<Map<String, Object?>> _parseSidebarTitleCache(String raw) {
+  final decoded = jsonDecode(raw);
+  if (decoded is! List) return const <Map<String, Object?>>[];
+
+  final parsed = <Map<String, Object?>>[];
+  for (final item in decoded) {
+    if (item is! Map) continue;
+    final id = item['id'];
+    if (id is! String || id.isEmpty) continue;
+
+    parsed.add(<String, Object?>{
+      'id': id,
+      'created_at': item['created_at'] is String ? item['created_at'] : null,
+      'is_starred': item['is_starred'] == true,
+      'title': item['title'] is String ? item['title'] : null,
+      'updated_at': item['updated_at'] is String ? item['updated_at'] : null,
+    });
+  }
+  return parsed;
+}
+
 /// Handles sidebar-specific chat loading and title caching.
 /// Optimized for fast sidebar display with lazy loading of full chat content.
 class ChatStorageSidebar {
@@ -111,11 +137,13 @@ class ChatStorageSidebar {
     }
 
     try {
-      final decoded = jsonDecode(raw) as List<dynamic>;
+      final decoded = raw.length < _kSidebarIsolateParseThresholdChars
+          ? _parseSidebarTitleCache(raw)
+          : await compute(_parseSidebarTitleCache, raw);
       final parseTime = stopwatch.elapsedMilliseconds;
+      var applied = 0;
 
       for (final item in decoded) {
-        if (item is! Map<String, dynamic>) continue;
         final id = item['id'] as String?;
         if (id == null) continue;
 
@@ -134,6 +162,11 @@ class ChatStorageSidebar {
               ? DateTime.tryParse(item['updated_at'] as String)
               : null,
         );
+
+        applied += 1;
+        if (applied % _kSidebarApplyChunkSize == 0) {
+          await Future<void>.delayed(Duration.zero);
+        }
       }
       stopwatch.stop();
       if (kDebugMode) {

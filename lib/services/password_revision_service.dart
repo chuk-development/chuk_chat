@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
@@ -15,6 +17,7 @@ class PasswordRevisionService {
   static final _uuid = Uuid();
 
   static String? _lastCachedUserId;
+  static SharedPreferences? _prefsCache;
 
   /// Returns true when the cached revision does not match the remote one.
   /// When this happens the caller should sign the user out locally.
@@ -29,7 +32,7 @@ class PasswordRevisionService {
 
       if (remote == null || remote.isEmpty) {
         try {
-          await _storage.delete(key: storageKey);
+          await _deleteLocalValue(storageKey);
         } catch (_) {
           // Ignore storage errors during cleanup
         }
@@ -38,7 +41,7 @@ class PasswordRevisionService {
 
       String? local;
       try {
-        local = await _storage.read(key: storageKey);
+        local = await _readLocalValue(storageKey);
       } catch (e) {
         // If we can't read local storage, don't force logout
         // This prevents random logouts due to storage issues
@@ -47,7 +50,7 @@ class PasswordRevisionService {
 
       if (local == null) {
         try {
-          await _storage.write(key: storageKey, value: remote);
+          await _writeLocalValue(storageKey, remote);
         } catch (_) {
           // Ignore write errors - we'll try again next time
         }
@@ -87,7 +90,7 @@ class PasswordRevisionService {
     final remote = _readRemoteRevision(user);
     _lastCachedUserId = user.id;
     if (remote == null || remote.isEmpty) {
-      await _storage.delete(key: _storageKey(user.id));
+      await _deleteLocalValue(_storageKey(user.id));
       return;
     }
     await _cacheRevision(user.id, remote);
@@ -99,7 +102,7 @@ class PasswordRevisionService {
     if (targetId == null) {
       return;
     }
-    await _storage.delete(key: _storageKey(targetId));
+    await _deleteLocalValue(_storageKey(targetId));
     if (userId == null || userId == _lastCachedUserId) {
       _lastCachedUserId = null;
     }
@@ -128,8 +131,48 @@ class PasswordRevisionService {
   }
 
   static Future<void> _cacheRevision(String userId, String revision) async {
-    await _storage.write(key: _storageKey(userId), value: revision);
+    await _writeLocalValue(_storageKey(userId), revision);
   }
 
   static String _storageKey(String userId) => '$_storageRevisionPrefix$userId';
+
+  // Linux fallback: store password-revision UUID marker in SharedPreferences.
+  // This value is not a credential (only used for mismatch detection), so the
+  // plaintext-at-rest trade-off is acceptable to avoid libsecret startup stalls.
+  // Known limitation: secure-at-rest on Linux requires flutter_secure_storage
+  // backed by a working Secret Service/libsecret keyring.
+  // TODO: Prefer secure storage on Linux when keyring support is available.
+  static bool get _usePrefsBackend =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
+
+  static Future<SharedPreferences> _prefs() async {
+    _prefsCache ??= await SharedPreferences.getInstance();
+    return _prefsCache!;
+  }
+
+  static Future<String?> _readLocalValue(String key) async {
+    if (_usePrefsBackend) {
+      final prefs = await _prefs();
+      return prefs.getString(key);
+    }
+    return _storage.read(key: key);
+  }
+
+  static Future<void> _writeLocalValue(String key, String value) async {
+    if (_usePrefsBackend) {
+      final prefs = await _prefs();
+      await prefs.setString(key, value);
+      return;
+    }
+    await _storage.write(key: key, value: value);
+  }
+
+  static Future<void> _deleteLocalValue(String key) async {
+    if (_usePrefsBackend) {
+      final prefs = await _prefs();
+      await prefs.remove(key);
+      return;
+    }
+    await _storage.delete(key: key);
+  }
 }
