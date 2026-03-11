@@ -36,7 +36,6 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   bool _isSidebarExpanded = false;
   String? _activeProjectId;
   String? _activePanel; // 'projects', 'media', or null
-  bool _developerOptionsEnabled = false;
   ArtifactDocument? _activeArtifact;
 
   final GlobalKey<ChukChatUIDesktopState> _chatUIKey = GlobalKey();
@@ -44,39 +43,51 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   @override
   void initState() {
     super.initState();
-    _developerOptionsEnabled = DeveloperOptionsService.enabledNotifier.value;
     _activeArtifact = ArtifactStorageService.activeArtifactNotifier.value;
-    DeveloperOptionsService.enabledNotifier.addListener(_onDeveloperOptions);
     ArtifactStorageService.activeArtifactNotifier.addListener(
       _onArtifactChanged,
     );
+    // Defer non-critical startup work to keep first interactions responsive.
     unawaited(
-      DeveloperOptionsService.initialize().then(
-        (_) => DeveloperOptionsService.syncFromSupabase(forceRefresh: true),
-      ),
+      Future<void>.delayed(const Duration(seconds: 8), () async {
+        if (!mounted) return;
+        try {
+          await DeveloperOptionsService.initialize();
+          await DeveloperOptionsService.syncFromSupabase(forceRefresh: false);
+        } catch (error) {
+          if (kDebugMode) {
+            debugPrint(
+              '⚠️ [RootDesktop] Deferred dev options init failed: $error',
+            );
+          }
+        }
+      }),
     );
     unawaited(
-      ArtifactStorageService.setActiveChat(
-        ChatStorageService.selectedChatId,
-        forceRefresh: true,
-      ),
+      Future<void>.delayed(const Duration(seconds: 2), () async {
+        if (!mounted) return;
+        try {
+          await ArtifactStorageService.setActiveChat(
+            ChatStorageService.selectedChatId,
+            forceRefresh: false,
+          );
+        } catch (error) {
+          if (kDebugMode) {
+            debugPrint(
+              '⚠️ [RootDesktop] Deferred artifact activation failed: $error',
+            );
+          }
+        }
+      }),
     );
   }
 
   @override
   void dispose() {
-    DeveloperOptionsService.enabledNotifier.removeListener(_onDeveloperOptions);
     ArtifactStorageService.activeArtifactNotifier.removeListener(
       _onArtifactChanged,
     );
     super.dispose();
-  }
-
-  void _onDeveloperOptions() {
-    if (!mounted) return;
-    setState(() {
-      _developerOptionsEnabled = DeveloperOptionsService.enabledNotifier.value;
-    });
   }
 
   void _onArtifactChanged() {
@@ -204,7 +215,9 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     setState(() {
       ChatStorageService.selectedChatId = chatId;
     });
-    unawaited(ArtifactStorageService.setActiveChat(chatId, forceRefresh: true));
+    unawaited(
+      ArtifactStorageService.setActiveChat(chatId, forceRefresh: false),
+    );
     // On desktop, the sidebar typically remains open after selecting a chat.
     // if (_isSidebarExpanded) _toggleSidebar();
   }
@@ -271,7 +284,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
           ChatStorageService.selectedChatId = newId;
         });
         unawaited(
-          ArtifactStorageService.setActiveChat(newId, forceRefresh: true),
+          ArtifactStorageService.setActiveChat(newId, forceRefresh: false),
         );
       },
       isSidebarExpanded: _isSidebarExpanded,
@@ -647,15 +660,15 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
               ),
             ),
 
-          // Layer: Copy debug chat button (top-right of chat area)
-          if (showContent && _developerOptionsEnabled)
+          // Layer: Copy full chat button (top-right of chat area)
+          if (showContent)
             Positioned(
               top: kTopInitialSpacing,
               right: (showPanel ? panelWidth : 0) + 12,
               child: IconButton(
                 icon: Icon(Icons.copy_all, color: iconFg, size: 20),
                 onPressed: _copyDebugChat,
-                tooltip: 'Copy full chat (debug)',
+                tooltip: 'Copy full chat',
               ),
             ),
 

@@ -34,7 +34,7 @@ class ChatSyncService {
   }
 
   /// How often to poll for changes (in seconds)
-  static const int _pollIntervalSeconds = 15;
+  static const int _pollIntervalSeconds = 30;
   static const Duration _initialSyncDelay = Duration(seconds: 4);
 
   /// Start the sync service

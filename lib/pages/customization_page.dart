@@ -52,7 +52,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
 
   Future<void> _loadAutoTitleSetting() async {
     final stopwatch = Stopwatch()..start();
-    await TitleGenerationService.syncSettingsFromSupabase(forceRefresh: true);
+    await TitleGenerationService.syncSettingsFromSupabase(forceRefresh: false);
     final enabled = await TitleGenerationService.isEnabled();
     final prompt = await TitleGenerationService.getSystemPrompt();
     final hasCustom = await TitleGenerationService.hasCustomSystemPrompt();

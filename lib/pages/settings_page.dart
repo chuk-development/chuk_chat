@@ -58,7 +58,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _refreshDeveloperOptions() async {
     try {
       await DeveloperOptionsService.initialize();
-      await DeveloperOptionsService.syncFromSupabase(forceRefresh: true);
+      await DeveloperOptionsService.syncFromSupabase(forceRefresh: false);
       if (!mounted) return;
       setState(() {
         _developerOptionsEnabled =
