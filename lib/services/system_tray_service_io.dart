@@ -308,6 +308,11 @@ class SystemTrayService with TrayListener, WindowListener {
   @override
   void onTrayIconMouseDown() {
     if (!_isInitialized) return;
+    if (defaultTargetPlatform == TargetPlatform.linux) {
+      // Linux AppIndicator shells often map left click to menu behavior.
+      // Keep hide/show controlled via the explicit tray menu item.
+      return;
+    }
     unawaited(_toggleWindowVisibility());
   }
 
