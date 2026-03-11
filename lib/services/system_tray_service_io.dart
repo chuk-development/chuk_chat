@@ -169,17 +169,14 @@ class SystemTrayService with TrayListener, WindowListener {
     final isWindows = defaultTargetPlatform == TargetPlatform.windows;
     final assetPath = isWindows
         ? 'windows/runner/resources/app_icon.ico'
-        : 'assets/icons/chuk_chat_tray_brand.png';
-    final fileName = isWindows ? 'chuk_chat_tray.ico' : 'chuk_chat_tray.png';
+        : 'web/icons/Icon-512.png';
+    final fileName = isWindows
+        ? 'chuk_chat_tray.ico'
+        : 'chuk_chat_tray_color.png';
 
     try {
       ByteData iconBytes;
-      try {
-        iconBytes = await rootBundle.load(assetPath);
-      } catch (_) {
-        // Keep Linux tray resilient if dedicated tray asset is missing.
-        iconBytes = await rootBundle.load('web/icons/Icon-512.png');
-      }
+      iconBytes = await rootBundle.load(assetPath);
       final bytes = iconBytes.buffer.asUint8List(
         iconBytes.offsetInBytes,
         iconBytes.lengthInBytes,
@@ -208,10 +205,10 @@ class SystemTrayService with TrayListener, WindowListener {
   List<String> get _linuxTrayFallbackCandidates {
     final executableDir = File(Platform.resolvedExecutable).parent.path;
     return <String>[
-      '$executableDir${Platform.pathSeparator}data${Platform.pathSeparator}flutter_assets${Platform.pathSeparator}assets${Platform.pathSeparator}icons${Platform.pathSeparator}chuk_chat_tray_brand.png',
-      '/opt/chuk-chat/data/flutter_assets/assets/icons/chuk_chat_tray_brand.png',
       '$executableDir${Platform.pathSeparator}data${Platform.pathSeparator}flutter_assets${Platform.pathSeparator}web${Platform.pathSeparator}icons${Platform.pathSeparator}Icon-512.png',
       '/opt/chuk-chat/data/flutter_assets/web/icons/Icon-512.png',
+      '$executableDir${Platform.pathSeparator}data${Platform.pathSeparator}flutter_assets${Platform.pathSeparator}assets${Platform.pathSeparator}icons${Platform.pathSeparator}chuk_chat_tray_brand.png',
+      '/opt/chuk-chat/data/flutter_assets/assets/icons/chuk_chat_tray_brand.png',
       '/usr/share/icons/hicolor/256x256/apps/chuk-chat.png',
       '/usr/share/icons/hicolor/512x512/apps/chuk-chat.png',
       '/usr/share/pixmaps/chuk-chat.png',

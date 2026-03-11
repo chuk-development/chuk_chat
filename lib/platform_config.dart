@@ -66,8 +66,8 @@ const bool kFeatureServerTools = bool.fromEnvironment(
 );
 
 /// Linux system tray integration.
-/// Disabled by default until tray stability is proven on target distros.
+/// Enabled by default, can still be disabled via --dart-define.
 const bool kFeatureLinuxTray = bool.fromEnvironment(
   'FEATURE_LINUX_TRAY',
-  defaultValue: false,
+  defaultValue: true,
 );
