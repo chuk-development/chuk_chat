@@ -43,5 +43,10 @@ class DiagnosticsLogService {
 
   static Future<String> readRecentLogs({int maxLines = 250}) async => '';
 
+  static Future<String> readModelMenuDebugReport({
+    int lookbackMinutes = 25,
+    int maxEventsPerSection = 45,
+  }) async => '';
+
   static Future<void> clearLogs() async {}
 }

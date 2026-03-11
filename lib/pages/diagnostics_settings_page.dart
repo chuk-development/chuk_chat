@@ -112,6 +112,43 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
     );
   }
 
+  Future<void> _copyFocusedModelMenuDebug() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final report = await DiagnosticsLogService.readModelMenuDebugReport();
+      if (!mounted) return;
+      if (report.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No focused debug data available yet'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        setState(() => _busy = false);
+        return;
+      }
+      await Clipboard.setData(ClipboardData(text: report));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Copied focused model-menu debug report'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      setState(() => _busy = false);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to create focused debug report: $error'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   Future<void> _shareLogFile() async {
     final path = await DiagnosticsLogService.getLogFilePath();
     if (path == null) {
@@ -279,6 +316,16 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
                                   : _copyRecentLogs,
                               icon: const Icon(Icons.copy, size: 18),
                               label: const Text('Copy Recent'),
+                            ),
+                            OutlinedButton.icon(
+                              onPressed: _busy || !_developerOptionsEnabled
+                                  ? null
+                                  : _copyFocusedModelMenuDebug,
+                              icon: const Icon(
+                                Icons.bug_report_outlined,
+                                size: 18,
+                              ),
+                              label: const Text('Copy Focused Debug'),
                             ),
                             OutlinedButton.icon(
                               onPressed: _busy || !_developerOptionsEnabled

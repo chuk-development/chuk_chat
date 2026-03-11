@@ -15,6 +15,7 @@ import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/api_status_service.dart';
+import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 
@@ -171,6 +172,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
   late final VoidCallback _selectedModelListener;
   final ValueNotifier<bool> _isHovered = ValueNotifier<bool>(false);
   double _lastStableMaxWidth = 220.0;
+  DateTime? _lastConstraintWarningAt;
 
   double _menuWidth = 260.0;
   double _buttonWidth = 180.0;
@@ -186,6 +188,13 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
     _selectedModelListener = _handleSelectedModelNotifierChange;
     ModelSelectionDropdown.selectedModelListenable.addListener(
       _selectedModelListener,
+    );
+    unawaited(
+      DiagnosticsLogService.info(
+        'model_menu',
+        'Dropdown initialized',
+        data: {'initial_model_id_len': _selectedModelId.length},
+      ),
     );
     _initializeModelSelection();
   }
@@ -214,6 +223,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
   }
 
   Future<void> _initializeModelSelection() async {
+    final stopwatch = Stopwatch()..start();
     setState(() {
       _isLoadingModels = _allModels.isEmpty;
       _errorMessage = '';
@@ -245,6 +255,13 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
     } catch (error) {
       _errorMessage = 'Error initializing model selection: $error';
       _selectedModelName = 'Error Loading';
+      unawaited(
+        DiagnosticsLogService.error(
+          'model_menu',
+          'Dropdown initialize failed',
+          error: error,
+        ),
+      );
       if (kDebugMode) {
         debugPrint('Error initializing model selection: $error');
       }
@@ -252,6 +269,17 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       if (mounted && _isLoadingModels) {
         setState(() => _isLoadingModels = false);
       }
+      unawaited(
+        DiagnosticsLogService.timing(
+          'model_menu',
+          'initialize_dropdown',
+          stopwatch.elapsedMilliseconds,
+          data: {
+            'models': _allModels.length,
+            'has_error': _errorMessage.isNotEmpty,
+          },
+        ),
+      );
     }
   }
 
@@ -411,6 +439,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
   }
 
   Future<void> _fetchModels() async {
+    final stopwatch = Stopwatch()..start();
     try {
       final session =
           await SupabaseService.refreshSession() ??
@@ -495,6 +524,17 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
           providerLimits: result.providerLimits,
           savedPreferences: _lastSavedPreferences,
         );
+        unawaited(
+          DiagnosticsLogService.timing(
+            'model_menu',
+            'fetch_models',
+            stopwatch.elapsedMilliseconds,
+            data: {
+              'models': result.models.length,
+              'status_code': response.statusCode,
+            },
+          ),
+        );
       } else if (response.statusCode == 401) {
         throw const _AuthRequiredException();
       } else {
@@ -527,8 +567,21 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
           dismissDirection: DismissDirection.horizontal,
         ),
       );
+      unawaited(
+        DiagnosticsLogService.warning(
+          'model_menu',
+          'Model fetch requires authentication',
+        ),
+      );
     } catch (error) {
       await _handleApiUnavailable(debugDetails: '$error');
+      unawaited(
+        DiagnosticsLogService.warning(
+          'model_menu',
+          'Model fetch unavailable',
+          data: {'error': error.toString()},
+        ),
+      );
     }
   }
 
@@ -708,6 +761,28 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
         (maxAvailableWidth.isFinite && maxAvailableWidth > 48.0)
         ? maxAvailableWidth
         : _lastStableMaxWidth;
+
+    if ((maxAvailableWidth.isFinite && maxAvailableWidth <= 48.0) ||
+        maxAvailableWidth.isNaN) {
+      final now = DateTime.now();
+      if (_lastConstraintWarningAt == null ||
+          now.difference(_lastConstraintWarningAt!) >=
+              const Duration(seconds: 2)) {
+        _lastConstraintWarningAt = now;
+        unawaited(
+          DiagnosticsLogService.warning(
+            'model_menu',
+            'Unstable dropdown width constraints',
+            data: {
+              'max_width': maxAvailableWidth.isFinite
+                  ? maxAvailableWidth.toStringAsFixed(2)
+                  : 'non_finite',
+              'last_stable_width': _lastStableMaxWidth.toStringAsFixed(2),
+            },
+          ),
+        );
+      }
+    }
 
     // Allow button to grow to fit full model name while preventing
     // transient 0-width layouts from making the control disappear.
@@ -972,6 +1047,13 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
 
   @override
   void dispose() {
+    unawaited(
+      DiagnosticsLogService.info(
+        'model_menu',
+        'Dropdown disposed',
+        data: {'selected_model_id_len': _selectedModelId.length},
+      ),
+    );
     _isHovered.dispose();
     ModelSelectionDropdown.selectedModelListenable.removeListener(
       _selectedModelListener,
