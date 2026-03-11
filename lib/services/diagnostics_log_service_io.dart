@@ -419,7 +419,8 @@ class DiagnosticsLogService {
       await currentFile.writeAsString(
         '$line\n',
         mode: FileMode.append,
-        flush: true,
+        // Avoid fsync on every line; this can cause UI stalls on Linux.
+        flush: false,
       );
     });
 

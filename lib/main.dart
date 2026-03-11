@@ -114,7 +114,7 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
   Future<void> _initializeDesktopTrayInBackground() async {
     try {
       final delay = _isLinuxDesktop
-          ? const Duration(seconds: 5)
+          ? const Duration(seconds: 12)
           : const Duration(milliseconds: 1200);
       await Future<void>.delayed(delay);
       if (!mounted) return;
@@ -242,7 +242,8 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
       theme: _themeService.buildTheme(),
       builder: (context, child) {
         if (child == null) return const SizedBox.shrink();
-        if (!_themeService.grainEnabled) return child;
+        // Linux: skip film-grain overlay to avoid startup and interaction jank.
+        if (!_themeService.grainEnabled || _isLinuxDesktop) return child;
 
         return Stack(
           children: [
