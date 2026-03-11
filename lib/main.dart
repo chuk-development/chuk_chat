@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 
 import 'package:chuk_chat/models/app_shell_config.dart';
+import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/utils/certificate_pinning_register.dart'
     as cert_register;
 import 'package:chuk_chat/services/api_config_service.dart';
@@ -113,6 +114,9 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
 
   Future<void> _initializeDesktopTrayInBackground() async {
     try {
+      if (_isLinuxDesktop && !kFeatureLinuxTray) {
+        return;
+      }
       final delay = _isLinuxDesktop
           ? const Duration(seconds: 12)
           : const Duration(milliseconds: 1200);

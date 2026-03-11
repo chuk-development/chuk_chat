@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 
 /// Desktop system tray integration for Linux, Windows, and macOS.
@@ -42,6 +43,9 @@ class SystemTrayService with TrayListener, WindowListener {
   bool get _supportsTooltip => defaultTargetPlatform != TargetPlatform.linux;
 
   Future<void> initialize() async {
+    if (defaultTargetPlatform == TargetPlatform.linux && !kFeatureLinuxTray) {
+      return;
+    }
     if (!_isDesktop || _isInitialized || _isInitializing) return;
     _isInitializing = true;
 
