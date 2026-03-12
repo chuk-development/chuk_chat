@@ -64,8 +64,9 @@ flutter build web --release --dart-define-from-file=.env
 
 1. Bump version in `pubspec.yaml` (e.g. `1.0.26` → `1.0.27` — **no** `+buildnumber` suffix)
 2. Commit: `git commit -am "chore: bump version to 1.0.27"`
-3. Push: `git push origin master`
-4. Trigger the cross-platform build (**always include all platforms except iOS**):
+3. Tag: `git tag v1.0.27`
+4. Push commit and tag: `git push origin master && git push origin v1.0.27`
+5. Trigger the cross-platform build (**always include all platforms except iOS**):
    ```bash
    gh workflow run build-cross-platform.yml \
      --field build_android=true \
@@ -76,11 +77,11 @@ flutter build web --release --dart-define-from-file=.env
       --field build_ios=false \
      --field enable_signing=true
    ```
-5. Verify the workflow started: `gh run list --limit 3`
-6. CI reads the version from `pubspec.yaml`, builds all platforms, and creates the GitHub Release automatically
-7. Web deploys automatically via Dokploy on push to master
+6. Verify the workflow started: `gh run list --limit 3`
+7. CI reads the version from `pubspec.yaml`, builds all platforms, and creates the GitHub Release automatically. The version-bump job also creates and pushes a git tag (belt and suspenders with the local tag).
+8. Web deploys automatically via Dokploy, triggered by the tag push (`deploy-web.yml` workflow calls the Dokploy webhook on `v*` tags)
 
-**Important:** Do NOT rely on git tags to trigger builds. The `Cross-Platform Build & Release` workflow is triggered by `workflow_dispatch` only. The separate `Release - macOS` and `Release - Windows` tag-triggered workflows are legacy and may fail.
+**Important:** The `Cross-Platform Build & Release` workflow is triggered by `workflow_dispatch` only. The `Deploy Web` workflow is triggered automatically by tag pushes (`v*`). The separate `Release - macOS` and `Release - Windows` tag-triggered workflows are legacy and may fail.
 
 ### Mandatory Post-Task Workflow
 
