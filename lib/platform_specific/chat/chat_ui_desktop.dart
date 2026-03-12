@@ -195,6 +195,17 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   final List<AttachedFile> _attachedFiles = [];
   final Uuid _uuid = Uuid();
+  bool get _isLinuxDesktop =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
+
+  final Map<String, List<String>?> _decodedImagesCache =
+      <String, List<String>?>{};
+  final Map<String, List<DocumentAttachment>?> _decodedAttachmentsCache =
+      <String, List<DocumentAttachment>?>{};
+  final Map<String, List<ToolCall>?> _decodedToolCallsCache =
+      <String, List<ToolCall>?>{};
+  final Map<String, List<ContentBlock>?> _decodedContentBlocksCache =
+      <String, List<ContentBlock>?>{};
 
   static const double _kMaxChatContentWidth = 760.0;
   static const double _kSearchBarContentHeight = 135.0;
@@ -492,6 +503,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     setState(() {
       _isLoadingChat = true;
     });
+    _clearMessageDecodeCaches();
 
     // Use async function to handle lazy loading
     _loadChatByIdAsync(chatId);
@@ -499,6 +511,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   Future<void> _loadChatByIdAsync(String? chatId) async {
     if (!mounted) return;
+    final stopwatch = Stopwatch()..start();
+    var lazyLoaded = false;
+    var lazyLoadMs = 0;
+    var mapMs = 0;
 
     // CRITICAL: Check for stale load - if user switched to another chat
     // while waiting, abort this load
@@ -536,7 +552,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               '│ 📂 [LOAD-CHAT-DESKTOP] Chat $chatId not fully loaded, fetching...',
             );
           }
+          final lazyStopwatch = Stopwatch()..start();
           storedChat = await ChatStorageService.loadFullChat(chatId);
+          lazyStopwatch.stop();
+          lazyLoadMs = lazyStopwatch.elapsedMilliseconds;
+          lazyLoaded = true;
 
           // Check for stale load again after async operation
           if (!mounted || _activeChatId != chatId) {
@@ -556,59 +576,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             );
           }
 
-          _messages
-            ..clear()
-            ..addAll(
-              storedChat.messages.map((message) {
-                final map = <String, String>{
-                  'sender': message.sender,
-                  'text': message.text,
-                  'reasoning': message.reasoning ?? '',
-                };
-                if (message.modelId != null && message.modelId!.isNotEmpty) {
-                  map['modelId'] = message.modelId!;
-                }
-                if (message.provider != null && message.provider!.isNotEmpty) {
-                  map['provider'] = message.provider!;
-                }
-                // Include images if present
-                if (message.images != null && message.images!.isNotEmpty) {
-                  map['images'] = message.images!;
-                }
-                if (message.imageCostEur != null &&
-                    message.imageCostEur!.isNotEmpty) {
-                  map['imageCostEur'] = message.imageCostEur!;
-                }
-                if (message.imageGeneratedAt != null &&
-                    message.imageGeneratedAt!.isNotEmpty) {
-                  map['imageGeneratedAt'] = message.imageGeneratedAt!;
-                }
-                // Include attachments if present
-                if (message.attachments != null &&
-                    message.attachments!.isNotEmpty) {
-                  map['attachments'] = message.attachments!;
-                  if (kDebugMode) {
-                    debugPrint(
-                      '📄 [AttachmentDebug] Loading message with attachments field',
-                    );
-                  }
-                }
-                // Include attachedFilesJson for retry/resend support
-                if (message.attachedFilesJson != null &&
-                    message.attachedFilesJson!.isNotEmpty) {
-                  map['attachedFilesJson'] = message.attachedFilesJson!;
-                }
-                if (message.toolCalls != null &&
-                    message.toolCalls!.isNotEmpty) {
-                  map['toolCalls'] = message.toolCalls!;
-                }
-                if (message.contentBlocks != null &&
-                    message.contentBlocks!.isNotEmpty) {
-                  map['contentBlocks'] = message.contentBlocks!;
-                }
-                return map;
-              }),
-            );
+          final mapStopwatch = Stopwatch()..start();
+          final bool applied = await _populateMessagesFromStoredChat(
+            storedChat,
+            chatId,
+          );
+          mapStopwatch.stop();
+          mapMs = mapStopwatch.elapsedMilliseconds;
+          if (!applied) return;
           // Instant visibility
           _animCtrl.value = 1.0;
         } else {
@@ -686,6 +661,82 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     });
     _scrollChatToBottom(animate: false, force: true);
     Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+    stopwatch.stop();
+    unawaited(
+      DiagnosticsLogService.timing(
+        'chat_ui',
+        'load_chat_ui',
+        stopwatch.elapsedMilliseconds,
+        data: {
+          'messages': _messages.length,
+          'lazy_loaded': lazyLoaded,
+          'lazy_load_ms': lazyLoadMs,
+          'map_ms': mapMs,
+        },
+      ),
+    );
+  }
+
+  Future<bool> _populateMessagesFromStoredChat(
+    StoredChat storedChat,
+    String chatId,
+  ) async {
+    const int yieldEvery = 40;
+    final mappedMessages = <Map<String, String>>[];
+    for (int i = 0; i < storedChat.messages.length; i++) {
+      if (!mounted || _activeChatId != chatId) {
+        return false;
+      }
+      mappedMessages.add(_messageToRawMap(storedChat.messages[i]));
+      if (i > 0 && i % yieldEvery == 0) {
+        await Future<void>.delayed(Duration.zero);
+      }
+    }
+    if (!mounted || _activeChatId != chatId) {
+      return false;
+    }
+    _messages
+      ..clear()
+      ..addAll(mappedMessages);
+    return true;
+  }
+
+  Map<String, String> _messageToRawMap(ChatMessage message) {
+    final map = <String, String>{
+      'sender': message.sender,
+      'text': message.text,
+      'reasoning': message.reasoning ?? '',
+    };
+    if (message.modelId != null && message.modelId!.isNotEmpty) {
+      map['modelId'] = message.modelId!;
+    }
+    if (message.provider != null && message.provider!.isNotEmpty) {
+      map['provider'] = message.provider!;
+    }
+    if (message.images != null && message.images!.isNotEmpty) {
+      map['images'] = message.images!;
+    }
+    if (message.imageCostEur != null && message.imageCostEur!.isNotEmpty) {
+      map['imageCostEur'] = message.imageCostEur!;
+    }
+    if (message.imageGeneratedAt != null &&
+        message.imageGeneratedAt!.isNotEmpty) {
+      map['imageGeneratedAt'] = message.imageGeneratedAt!;
+    }
+    if (message.attachments != null && message.attachments!.isNotEmpty) {
+      map['attachments'] = message.attachments!;
+    }
+    if (message.attachedFilesJson != null &&
+        message.attachedFilesJson!.isNotEmpty) {
+      map['attachedFilesJson'] = message.attachedFilesJson!;
+    }
+    if (message.toolCalls != null && message.toolCalls!.isNotEmpty) {
+      map['toolCalls'] = message.toolCalls!;
+    }
+    if (message.contentBlocks != null && message.contentBlocks!.isNotEmpty) {
+      map['contentBlocks'] = message.contentBlocks!;
+    }
+    return map;
   }
 
   /// Returns the current messages list for debug export.
@@ -4033,43 +4084,13 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     List<String>? images;
     final String? imagesJson = raw['images'];
     if (imagesJson != null && imagesJson.isNotEmpty) {
-      try {
-        final decoded = jsonDecode(imagesJson);
-        if (decoded is List) {
-          images = decoded.cast<String>();
-        }
-      } catch (e) {
-        if (kDebugMode) {
-          debugPrint('Failed to decode images JSON: $e');
-        }
-      }
+      images = _decodeImages(imagesJson);
     }
 
     List<DocumentAttachment>? attachments;
     final String? attachmentsJson = raw['attachments'];
     if (attachmentsJson != null && attachmentsJson.isNotEmpty) {
-      try {
-        final decoded = jsonDecode(attachmentsJson);
-        if (decoded is List) {
-          attachments = decoded
-              .map(
-                (item) =>
-                    DocumentAttachment.fromJson(item as Map<String, dynamic>),
-              )
-              .toList();
-          if (kDebugMode) {
-            debugPrint(
-              '📄 [AttachmentDebug] Extracted ${attachments.length} attachments from message $index',
-            );
-          }
-        }
-      } catch (e) {
-        if (kDebugMode) {
-          debugPrint(
-            '📄 [AttachmentDebug] Failed to decode attachments JSON: $e',
-          );
-        }
-      }
+      attachments = _decodeAttachments(attachmentsJson);
     }
 
     final tpsStr = raw['tps'];
@@ -4080,32 +4101,13 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     List<ToolCall>? toolCalls;
     final String? toolCallsJson = raw['toolCalls'];
     if (toolCallsJson != null && toolCallsJson.isNotEmpty) {
-      try {
-        final decoded = jsonDecode(toolCallsJson);
-        if (decoded is List) {
-          toolCalls = decoded
-              .whereType<Map>()
-              .map((item) => ToolCall.fromJson(Map<String, dynamic>.from(item)))
-              .toList();
-        }
-      } catch (_) {}
+      toolCalls = _decodeToolCalls(toolCallsJson);
     }
 
     List<ContentBlock>? parsedContentBlocks;
     final String? contentBlocksJson = raw['contentBlocks'];
     if (contentBlocksJson != null && contentBlocksJson.isNotEmpty) {
-      try {
-        final decoded = jsonDecode(contentBlocksJson);
-        if (decoded is List) {
-          parsedContentBlocks = decoded
-              .whereType<Map>()
-              .map(
-                (item) =>
-                    ContentBlock.fromJson(Map<String, dynamic>.from(item)),
-              )
-              .toList();
-        }
-      } catch (_) {}
+      parsedContentBlocks = _decodeContentBlocks(contentBlocksJson);
     }
 
     final String? imageCostStr = raw['imageCostEur'];
@@ -4135,6 +4137,107 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       contentBlocks: parsedContentBlocks,
       isStreamingMessage: isStreamingMessage,
     );
+  }
+
+  void _clearMessageDecodeCaches() {
+    _decodedImagesCache.clear();
+    _decodedAttachmentsCache.clear();
+    _decodedToolCallsCache.clear();
+    _decodedContentBlocksCache.clear();
+  }
+
+  void _trimMessageDecodeCachesIfNeeded() {
+    const int maxEntriesPerCache = 240;
+    if (_decodedImagesCache.length > maxEntriesPerCache) {
+      _decodedImagesCache.clear();
+    }
+    if (_decodedAttachmentsCache.length > maxEntriesPerCache) {
+      _decodedAttachmentsCache.clear();
+    }
+    if (_decodedToolCallsCache.length > maxEntriesPerCache) {
+      _decodedToolCallsCache.clear();
+    }
+    if (_decodedContentBlocksCache.length > maxEntriesPerCache) {
+      _decodedContentBlocksCache.clear();
+    }
+  }
+
+  List<String>? _decodeImages(String json) {
+    if (_decodedImagesCache.containsKey(json)) {
+      return _decodedImagesCache[json];
+    }
+    List<String>? parsed;
+    try {
+      final decoded = jsonDecode(json);
+      if (decoded is List) {
+        parsed = decoded.cast<String>();
+      }
+    } catch (_) {}
+    _decodedImagesCache[json] = parsed;
+    _trimMessageDecodeCachesIfNeeded();
+    return parsed;
+  }
+
+  List<DocumentAttachment>? _decodeAttachments(String json) {
+    if (_decodedAttachmentsCache.containsKey(json)) {
+      return _decodedAttachmentsCache[json];
+    }
+    List<DocumentAttachment>? parsed;
+    try {
+      final decoded = jsonDecode(json);
+      if (decoded is List) {
+        parsed = decoded
+            .whereType<Map>()
+            .map(
+              (item) =>
+                  DocumentAttachment.fromJson(Map<String, dynamic>.from(item)),
+            )
+            .toList();
+      }
+    } catch (_) {}
+    _decodedAttachmentsCache[json] = parsed;
+    _trimMessageDecodeCachesIfNeeded();
+    return parsed;
+  }
+
+  List<ToolCall>? _decodeToolCalls(String json) {
+    if (_decodedToolCallsCache.containsKey(json)) {
+      return _decodedToolCallsCache[json];
+    }
+    List<ToolCall>? parsed;
+    try {
+      final decoded = jsonDecode(json);
+      if (decoded is List) {
+        parsed = decoded
+            .whereType<Map>()
+            .map((item) => ToolCall.fromJson(Map<String, dynamic>.from(item)))
+            .toList();
+      }
+    } catch (_) {}
+    _decodedToolCallsCache[json] = parsed;
+    _trimMessageDecodeCachesIfNeeded();
+    return parsed;
+  }
+
+  List<ContentBlock>? _decodeContentBlocks(String json) {
+    if (_decodedContentBlocksCache.containsKey(json)) {
+      return _decodedContentBlocksCache[json];
+    }
+    List<ContentBlock>? parsed;
+    try {
+      final decoded = jsonDecode(json);
+      if (decoded is List) {
+        parsed = decoded
+            .whereType<Map>()
+            .map(
+              (item) => ContentBlock.fromJson(Map<String, dynamic>.from(item)),
+            )
+            .toList();
+      }
+    } catch (_) {}
+    _decodedContentBlocksCache[json] = parsed;
+    _trimMessageDecodeCachesIfNeeded();
+    return parsed;
   }
 
   @override
@@ -4316,8 +4419,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                       addAutomaticKeepAlives:
                                           true, // Keep message widgets alive
                                       addRepaintBoundaries: true,
-                                      cacheExtent:
-                                          2000.0, // Increase cache to keep more messages in memory
+                                      cacheExtent: _isLinuxDesktop
+                                          ? 360.0
+                                          : 1200.0, // Lower Linux cache to reduce jank spikes
                                       itemBuilder: (_, int i) {
                                         final _MessageRenderData data =
                                             _buildMessageRenderData(i);
