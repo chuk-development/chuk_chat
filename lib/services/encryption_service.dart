@@ -5,8 +5,10 @@ import 'dart:math';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
 /// Parameters for background encryption
@@ -196,9 +198,48 @@ class EncryptionService {
 
   static SecretKey? _cachedKey;
   static String? _cachedUserId;
+  static SharedPreferences? _prefsCache;
   static Future<void> _lock = Future<void>.value();
 
   static bool get hasKey => _cachedKey != null;
+
+  // Linux fallback for environments where keyring/libsecret causes
+  // noticeable startup stalls. This is opt-in via dart-define.
+  static bool get _usePrefsBackend =>
+      !kIsWeb &&
+      defaultTargetPlatform == TargetPlatform.linux &&
+      !kFeatureLinuxKeyring;
+
+  static Future<SharedPreferences> _prefs() async {
+    _prefsCache ??= await SharedPreferences.getInstance();
+    return _prefsCache!;
+  }
+
+  static Future<String?> _readLocalSecret(String key) async {
+    if (_usePrefsBackend) {
+      final prefs = await _prefs();
+      return prefs.getString(key);
+    }
+    return _storage.read(key: key);
+  }
+
+  static Future<void> _writeLocalSecret(String key, String value) async {
+    if (_usePrefsBackend) {
+      final prefs = await _prefs();
+      await prefs.setString(key, value);
+      return;
+    }
+    await _storage.write(key: key, value: value);
+  }
+
+  static Future<void> _deleteLocalSecret(String key) async {
+    if (_usePrefsBackend) {
+      final prefs = await _prefs();
+      await prefs.remove(key);
+      return;
+    }
+    await _storage.delete(key: key);
+  }
 
   static Future<void> initializeForPassword(String password) async {
     await _runExclusive(() async {
@@ -209,8 +250,8 @@ class EncryptionService {
       final versionKey = '$_storageVersionPrefix$userId';
       // Parallelize storage reads for better performance
       final storageResults = await Future.wait([
-        _storage.read(key: saltKey),
-        _storage.read(key: keyKey),
+        _readLocalSecret(saltKey),
+        _readLocalSecret(keyKey),
       ]);
       final storedSaltBase64 = storageResults[0];
       final storedKeyBase64 = storageResults[1];
@@ -259,10 +300,10 @@ class EncryptionService {
           throw StateError('Incorrect password provided.');
         }
       } else {
-        await _storage.write(key: keyKey, value: base64Encode(derivedKeyBytes));
+        await _writeLocalSecret(keyKey, base64Encode(derivedKeyBytes));
       }
 
-      await _storage.write(key: versionKey, value: _payloadVersion);
+      await _writeLocalSecret(versionKey, _payloadVersion);
       _cachedKey = SecretKey(derivedKeyBytes);
       _cachedUserId = user.id;
     });
@@ -285,7 +326,7 @@ class EncryptionService {
       final versionKey = '$_storageVersionPrefix$userId';
 
       // Load key from secure storage (fast, local operation)
-      final encoded = await _storage.read(key: keyKey);
+      final encoded = await _readLocalSecret(keyKey);
       if (encoded == null) {
         _cachedKey = null;
         _cachedUserId = null;
@@ -317,8 +358,8 @@ class EncryptionService {
     try {
       // Parallelize storage reads to reduce blocking time
       final readResults = await Future.wait([
-        _storage.read(key: saltKey),
-        _storage.read(key: versionKey),
+        _readLocalSecret(saltKey),
+        _readLocalSecret(versionKey),
       ]);
       final saltBase64 = readResults[0];
       final version = readResults[1];
@@ -333,7 +374,7 @@ class EncryptionService {
           metadataUpdates[_metadataSaltKey] = saltBase64;
         }
       } else if (remoteSaltBase64 != null) {
-        await _storage.write(key: saltKey, value: remoteSaltBase64);
+        await _writeLocalSecret(saltKey, remoteSaltBase64);
       }
 
       if (remoteVersion != _payloadVersion) {
@@ -345,7 +386,7 @@ class EncryptionService {
       }
 
       if (version == null) {
-        await _storage.write(key: versionKey, value: _payloadVersion);
+        await _writeLocalSecret(versionKey, _payloadVersion);
       }
     } catch (e) {
       // Ignore metadata sync failures - not critical for key loading
@@ -370,8 +411,8 @@ class EncryptionService {
 
       // Parallelize storage reads for better performance
       final readResults = await Future.wait([
-        _storage.read(key: saltStorageKey),
-        _storage.read(key: keyStorageKey),
+        _readLocalSecret(saltStorageKey),
+        _readLocalSecret(keyStorageKey),
       ]);
       final storedSaltBase64 = readResults[0];
       final storedKeyBase64 = readResults[1];
@@ -428,9 +469,9 @@ class EncryptionService {
       try {
         // Parallelize storage writes for better performance
         await Future.wait([
-          _storage.write(key: keyStorageKey, value: newKeyBase64),
-          _storage.write(key: saltStorageKey, value: newSaltBase64),
-          _storage.write(key: versionStorageKey, value: _payloadVersion),
+          _writeLocalSecret(keyStorageKey, newKeyBase64),
+          _writeLocalSecret(saltStorageKey, newSaltBase64),
+          _writeLocalSecret(versionStorageKey, _payloadVersion),
         ]);
         final metadataUpdates = <String, dynamic>{
           _metadataSaltKey: newSaltBase64,
@@ -450,9 +491,9 @@ class EncryptionService {
         }
         // Parallelize storage writes for better performance
         await Future.wait([
-          _storage.write(key: keyStorageKey, value: storedKeyBase64),
-          _storage.write(key: saltStorageKey, value: storedSaltBase64),
-          _storage.write(key: versionStorageKey, value: _payloadVersion),
+          _writeLocalSecret(keyStorageKey, storedKeyBase64),
+          _writeLocalSecret(saltStorageKey, storedSaltBase64),
+          _writeLocalSecret(versionStorageKey, _payloadVersion),
         ]);
         _cachedKey = previousCachedKey ?? oldKey;
         _cachedUserId = previousCachedUserId ?? userId;
@@ -470,9 +511,9 @@ class EncryptionService {
       if (userId != null) {
         // Parallelize storage deletes to avoid sequential blocking
         await Future.wait([
-          _storage.delete(key: '$_storagePrefix$userId'),
-          _storage.delete(key: '$_storageSaltPrefix$userId'),
-          _storage.delete(key: '$_storageVersionPrefix$userId'),
+          _deleteLocalSecret('$_storagePrefix$userId'),
+          _deleteLocalSecret('$_storageSaltPrefix$userId'),
+          _deleteLocalSecret('$_storageVersionPrefix$userId'),
         ]);
       }
       _cachedKey = null;
@@ -690,7 +731,7 @@ class EncryptionService {
         );
         final derivedWithRemote = await _deriveKey(password, remoteSaltBytes);
         if (_constantTimeEquals(derivedWithRemote, storedKeyBytes)) {
-          await _storage.write(key: saltKey, value: remoteSaltBase64);
+          await _writeLocalSecret(saltKey, remoteSaltBase64);
           metadataUpdates[_metadataSaltKey] = remoteSaltBase64;
           return remoteSaltBase64;
         }
@@ -710,13 +751,13 @@ class EncryptionService {
         );
       }
 
-      await _storage.write(key: saltKey, value: remoteSaltBase64);
+      await _writeLocalSecret(saltKey, remoteSaltBase64);
       metadataUpdates[_metadataSaltKey] = remoteSaltBase64;
       return remoteSaltBase64;
     }
 
     if (remoteSaltBase64 != null) {
-      await _storage.write(key: saltKey, value: remoteSaltBase64);
+      await _writeLocalSecret(saltKey, remoteSaltBase64);
       return remoteSaltBase64;
     }
 
@@ -726,7 +767,7 @@ class EncryptionService {
     }
 
     final generatedSalt = base64Encode(_randomNonce(_saltLength));
-    await _storage.write(key: saltKey, value: generatedSalt);
+    await _writeLocalSecret(saltKey, generatedSalt);
     metadataUpdates[_metadataSaltKey] = generatedSalt;
     return generatedSalt;
   }

@@ -178,6 +178,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
   double _buttonWidth = 180.0;
 
   static const Duration _apiPollInterval = Duration(seconds: 8);
+  static const Duration _linuxBackgroundFetchDelay = Duration(seconds: 8);
   String get _apiBaseUrl => ApiConfigService.apiBaseUrl;
 
   @override
@@ -196,7 +197,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
         data: {'initial_model_id_len': _selectedModelId.length},
       ),
     );
-    _initializeModelSelection();
+    unawaited(_initializeModelSelection());
   }
 
   void _handleSelectedModelNotifierChange() {
@@ -248,7 +249,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       // defer this when cache exists to keep startup interactions smooth.
       if (_isLinuxDesktop && _allModels.isNotEmpty) {
         unawaited(
-          Future<void>.delayed(const Duration(seconds: 2), () async {
+          Future<void>.delayed(_linuxBackgroundFetchDelay, () async {
             if (!mounted) return;
             await _fetchModels();
           }).catchError((e) {

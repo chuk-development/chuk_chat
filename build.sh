@@ -50,23 +50,27 @@ load_env() {
 
 # Common dart-define flags for all builds
 dart_defines_desktop() {
+    local linux_keyring="${FEATURE_LINUX_KEYRING:-true}"
     echo "--dart-define=SUPABASE_URL=$SUPABASE_URL \
         --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
         --dart-define=PLATFORM_DESKTOP=true \
         --dart-define=FEATURE_PROJECTS=false \
         --dart-define=FEATURE_IMAGE_GEN=true \
         --dart-define=FEATURE_VOICE_MODE=false \
-        --dart-define=FEATURE_SERVER_TOOLS=false"
+        --dart-define=FEATURE_SERVER_TOOLS=false \
+        --dart-define=FEATURE_LINUX_KEYRING=$linux_keyring"
 }
 
 dart_defines_mobile() {
+    local linux_keyring="${FEATURE_LINUX_KEYRING:-true}"
     echo "--dart-define=SUPABASE_URL=$SUPABASE_URL \
         --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
         --dart-define=PLATFORM_MOBILE=true \
         --dart-define=FEATURE_PROJECTS=false \
         --dart-define=FEATURE_IMAGE_GEN=true \
         --dart-define=FEATURE_VOICE_MODE=false \
-        --dart-define=FEATURE_SERVER_TOOLS=false"
+        --dart-define=FEATURE_SERVER_TOOLS=false \
+        --dart-define=FEATURE_LINUX_KEYRING=$linux_keyring"
 }
 
 # Extract app information

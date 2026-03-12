@@ -71,3 +71,10 @@ const bool kFeatureLinuxTray = bool.fromEnvironment(
   'FEATURE_LINUX_TRAY',
   defaultValue: true,
 );
+
+/// Linux secure storage backend for encryption keys.
+/// When disabled, Linux falls back to SharedPreferences instead of keyring.
+const bool kFeatureLinuxKeyring = bool.fromEnvironment(
+  'FEATURE_LINUX_KEYRING',
+  defaultValue: true,
+);

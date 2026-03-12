@@ -276,8 +276,18 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
-      unawaited(_loadSavedModelPreference());
-      unawaited(_loadSystemPrompt());
+      unawaited(
+        Future<void>.delayed(Duration.zero, () async {
+          if (!mounted) return;
+          await _loadSavedModelPreference();
+        }),
+      );
+      unawaited(
+        Future<void>.delayed(Duration.zero, () async {
+          if (!mounted) return;
+          await _loadSystemPrompt();
+        }),
+      );
     });
 
     _modelSelectionListener = () {
