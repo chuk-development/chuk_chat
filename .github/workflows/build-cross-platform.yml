@@ -100,6 +100,21 @@ jobs:
           echo "tag=v$VER" >> $GITHUB_OUTPUT
           echo "Using version: $VER"
 
+      - name: Create and push git tag
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_PAT }}
+        run: |
+          TAG=${{ steps.bump.outputs.tag }}
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists — skipping."
+          else
+            git tag "$TAG"
+            git push origin "$TAG"
+            echo "Created and pushed tag $TAG"
+          fi
+
       - name: Create draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

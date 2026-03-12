@@ -32,11 +32,18 @@ Der Workflow führt **automatisch** folgende Schritte aus:
    - Mit optionalen Feature Flags
    - Mit/ohne Android Signing
 
-4. ✅ **GitHub Release erstellen**
+4. ✅ **Git Tag erstellen & pushen**
    - Tag: `v1.0.7` (ohne Build-Nummer)
-   - Release mit allen Artifacts
+   - Wird mit `RELEASES_PAT` gepusht (triggert `deploy-web.yml`)
+
+5. ✅ **GitHub Release erstellen**
+   - Draft Release mit allen Artifacts
    - Automatische Release Notes
    - Download-Links für alle Plattformen
+
+6. ✅ **Web-Deployment triggern**
+   - `deploy-web.yml` wird durch den Tag-Push automatisch gestartet
+   - Ruft den Dokploy Webhook auf → Web-Version wird neu gebaut
 
 ### 📋 Workflow Starten
 
