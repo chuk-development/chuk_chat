@@ -216,6 +216,32 @@ class AppThemeService extends ChangeNotifier {
     ]);
     final settings = results[0] as ThemeSettings;
     final customizationPrefs = results[1] as CustomizationPreferences;
+    final bool hasVisualOrBehaviorChange =
+        _themeMode != settings.themeMode ||
+        _accentColor != settings.accentColor ||
+        _iconFgColor != settings.iconColor ||
+        _bgColor != settings.backgroundColor ||
+        _grainEnabled != settings.grainEnabled ||
+        _showReasoningTokens != customizationPrefs.showReasoningTokens ||
+        _showModelInfo != customizationPrefs.showModelInfo ||
+        _showTps != customizationPrefs.showTps ||
+        _autoSendVoiceTranscription !=
+            customizationPrefs.autoSendVoiceTranscription ||
+        _imageGenEnabled != customizationPrefs.imageGenEnabled ||
+        _imageGenDefaultSize != customizationPrefs.imageGenDefaultSize ||
+        _imageGenCustomWidth != customizationPrefs.imageGenCustomWidth ||
+        _imageGenCustomHeight != customizationPrefs.imageGenCustomHeight ||
+        _imageGenUseCustomSize != customizationPrefs.imageGenUseCustomSize ||
+        _includeRecentImagesInHistory !=
+            customizationPrefs.includeRecentImagesInHistory ||
+        _includeAllImagesInHistory !=
+            customizationPrefs.includeAllImagesInHistory ||
+        _includeReasoningInHistory !=
+            customizationPrefs.includeReasoningInHistory ||
+        _toolCallingEnabled != customizationPrefs.toolCallingEnabled ||
+        _toolDiscoveryMode != customizationPrefs.toolDiscoveryMode ||
+        _showToolCalls != customizationPrefs.showToolCalls ||
+        _allowMarkdownToolCalls != customizationPrefs.allowMarkdownToolCalls;
 
     _themeMode = settings.themeMode;
     _accentColor = settings.accentColor;
@@ -242,10 +268,11 @@ class AppThemeService extends ChangeNotifier {
     _hasAppliedSupabaseTheme = true;
     _cachedThemeData = null;
 
-    notifyListeners();
-
-    // Persist to prefs in background
-    unawaited(_persistToPrefs());
+    if (hasVisualOrBehaviorChange) {
+      notifyListeners();
+      // Persist to prefs in background only if state changed.
+      unawaited(_persistToPrefs());
+    }
   }
 
   Future<void> _persistToPrefs() async {

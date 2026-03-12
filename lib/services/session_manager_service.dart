@@ -34,6 +34,8 @@ class SessionManagerService extends ChangeNotifier {
   String? _sessionInitializedForUser;
   String? _revisionCheckedForUser;
   Future<void>? _revisionCheckInFlight;
+  static const Duration _defaultThemeRefreshDelay = Duration(seconds: 4);
+  static const Duration _linuxThemeRefreshDelay = Duration(seconds: 18);
 
   bool get isInitialized => _isInitialized;
 
@@ -84,8 +86,11 @@ class SessionManagerService extends ChangeNotifier {
   Future<void> _initializeUserSessionAsync(User user) async {
     try {
       await AppInitializationService.instance.initializeUserSession(user);
+      final Duration themeDelay = defaultTargetPlatform == TargetPlatform.linux
+          ? _linuxThemeRefreshDelay
+          : _defaultThemeRefreshDelay;
       unawaited(
-        Future<void>.delayed(const Duration(seconds: 4), () async {
+        Future<void>.delayed(themeDelay, () async {
           if (SupabaseService.auth.currentUser?.id != user.id) return;
           await AppThemeService.instance.loadFromSupabaseAsync(
             forceRefresh: false,
