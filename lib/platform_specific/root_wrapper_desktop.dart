@@ -34,6 +34,7 @@ class RootWrapperDesktop extends StatefulWidget {
 
 class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   bool _isSidebarExpanded = false;
+  bool _hasOpenedSidebar = false;
   String? _activeProjectId;
   String? _activePanel; // 'projects', 'media', or null
   ArtifactDocument? _activeArtifact;
@@ -225,6 +226,9 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   void _toggleSidebar() {
     // Allow opening sidebar even while streaming - streams continue in background
     setState(() {
+      if (!_isSidebarExpanded) {
+        _hasOpenedSidebar = true;
+      }
       _isSidebarExpanded = !_isSidebarExpanded;
     });
   }
@@ -426,30 +430,31 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
               ),
             ),
 
-          // Always build sidebar to preserve state, but hide it when collapsed
-          Positioned(
-            left: _isSidebarExpanded ? 0 : -effectiveSidebarWidth,
-            top: 0,
-            bottom: 0,
-            width: effectiveSidebarWidth,
-            child: AnimatedOpacity(
-              opacity: _isSidebarExpanded ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 200),
-              child: IgnorePointer(
-                ignoring: !_isSidebarExpanded,
-                child: SidebarDesktop(
-                  onChatSelected: _handleChatSelected,
-                  onSettingsTapped: _openSettingsPage,
-                  onProjectsTapped: _openProjectsPage,
-                  onMediaTapped: _openMediaPage,
-                  onChatDeleted: _handleChatDeleted,
-                  selectedChatId: ChatStorageService.selectedChatId,
-                  isCompactMode: isCompactMode,
-                  showAssistantsButton: !isCompactMode || _isSidebarExpanded,
+          // Lazy-mount sidebar to keep startup frame light.
+          if (_isSidebarExpanded || _hasOpenedSidebar)
+            Positioned(
+              left: _isSidebarExpanded ? 0 : -effectiveSidebarWidth,
+              top: 0,
+              bottom: 0,
+              width: effectiveSidebarWidth,
+              child: AnimatedOpacity(
+                opacity: _isSidebarExpanded ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 200),
+                child: IgnorePointer(
+                  ignoring: !_isSidebarExpanded,
+                  child: SidebarDesktop(
+                    onChatSelected: _handleChatSelected,
+                    onSettingsTapped: _openSettingsPage,
+                    onProjectsTapped: _openProjectsPage,
+                    onMediaTapped: _openMediaPage,
+                    onChatDeleted: _handleChatDeleted,
+                    selectedChatId: ChatStorageService.selectedChatId,
+                    isCompactMode: isCompactMode,
+                    showAssistantsButton: !isCompactMode || _isSidebarExpanded,
+                  ),
                 ),
               ),
             ),
-          ),
 
           // Layer 3: Hamburger-Menü
           Positioned(
