@@ -73,7 +73,9 @@ class SystemTrayService with TrayListener, WindowListener {
       _retryTimer = null;
 
       await _syncWindowVisibility();
-      await _updateMenu();
+      if (defaultTargetPlatform != TargetPlatform.linux) {
+        await _updateMenu();
+      }
 
       await DiagnosticsLogService.info(
         'tray',
@@ -225,6 +227,7 @@ class SystemTrayService with TrayListener, WindowListener {
 
   Future<void> _updateMenu() async {
     if (!_isInitialized) return;
+    if (defaultTargetPlatform == TargetPlatform.linux) return;
 
     await _syncWindowVisibility();
 
