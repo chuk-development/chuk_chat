@@ -18,7 +18,6 @@ import 'package:chuk_chat/services/developer_options_service.dart';
 import 'package:chuk_chat/services/settings_sync_service.dart';
 import 'package:chuk_chat/services/session_manager_service.dart';
 import 'package:chuk_chat/services/notification_service.dart';
-import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/system_tray_service.dart';
 import 'package:chuk_chat/platform_specific/root_wrapper.dart';
 import 'package:chuk_chat/utils/grain_overlay.dart';
@@ -92,20 +91,8 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
   final AppInitializationService _initService =
       AppInitializationService.instance;
   late final DateTime _appStartedAt;
-  Timer? _linuxStartupOverlayPollTimer;
-  Timer? _linuxStartupOverlayTimeoutTimer;
   Timer? _resumeSettingsSyncTimer;
-  DateTime? _linuxStartupOverlayShownAt;
   DateTime? _lastResumeSettingsSyncAt;
-  bool _showLinuxStartupOverlay = false;
-  bool _linuxOverlaySessionArmed = false;
-  static const Duration _linuxStartupOverlayMinVisible = Duration(
-    milliseconds: 1200,
-  );
-  static const Duration _linuxStartupOverlayMaxVisible = Duration(seconds: 12);
-  static const Duration _linuxStartupOverlayPollInterval = Duration(
-    milliseconds: 250,
-  );
   static const Duration _linuxResumeSyncCooldown = Duration(seconds: 90);
   static const Duration _linuxResumeSyncDelay = Duration(seconds: 2);
 
@@ -134,11 +121,7 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
         return;
       }
       if (_isLinuxDesktop) {
-        await Future<void>.delayed(const Duration(seconds: 9));
-        // Avoid tray setup while early startup work is still settling.
-        while (mounted && _showLinuxStartupOverlay) {
-          await Future<void>.delayed(const Duration(milliseconds: 350));
-        }
+        await Future<void>.delayed(const Duration(milliseconds: 1500));
       } else {
         await Future<void>.delayed(const Duration(milliseconds: 1200));
       }
@@ -240,75 +223,6 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
     );
   }
 
-  void _armLinuxStartupOverlayForSignedInSession() {
-    if (!_isLinuxDesktop || _linuxOverlaySessionArmed) return;
-    _linuxOverlaySessionArmed = true;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _startLinuxStartupOverlay();
-    });
-  }
-
-  void _resetLinuxStartupOverlayForSignedOutSession() {
-    _linuxOverlaySessionArmed = false;
-    _hideLinuxStartupOverlay();
-  }
-
-  void _startLinuxStartupOverlay() {
-    if (!_isLinuxDesktop) return;
-    if (SupabaseService.auth.currentSession == null) return;
-
-    _linuxStartupOverlayPollTimer?.cancel();
-    _linuxStartupOverlayTimeoutTimer?.cancel();
-    _linuxStartupOverlayShownAt = DateTime.now();
-
-    if (!_showLinuxStartupOverlay && mounted) {
-      setState(() => _showLinuxStartupOverlay = true);
-    }
-
-    _linuxStartupOverlayTimeoutTimer = Timer(
-      _linuxStartupOverlayMaxVisible,
-      () {
-        _hideLinuxStartupOverlay();
-      },
-    );
-
-    _linuxStartupOverlayPollTimer = Timer.periodic(
-      _linuxStartupOverlayPollInterval,
-      (_) {
-        if (!mounted || !_showLinuxStartupOverlay) return;
-        if (SupabaseService.auth.currentSession == null) {
-          _hideLinuxStartupOverlay();
-          return;
-        }
-
-        final shownAt = _linuxStartupOverlayShownAt ?? DateTime.now();
-        final enoughTimeVisible =
-            DateTime.now().difference(shownAt) >=
-            _linuxStartupOverlayMinVisible;
-        final sidebarReady =
-            ChatStorageState.cacheLoaded &&
-            ChatStorageState.initialSyncComplete;
-        final startupReady = sidebarReady && !_initService.isInitializing;
-        if (enoughTimeVisible && startupReady) {
-          _hideLinuxStartupOverlay();
-        }
-      },
-    );
-  }
-
-  void _hideLinuxStartupOverlay() {
-    _linuxStartupOverlayPollTimer?.cancel();
-    _linuxStartupOverlayPollTimer = null;
-    _linuxStartupOverlayTimeoutTimer?.cancel();
-    _linuxStartupOverlayTimeoutTimer = null;
-
-    if (_showLinuxStartupOverlay && mounted) {
-      setState(() => _showLinuxStartupOverlay = false);
-    }
-  }
-
   Future<void> _initializeApp() async {
     // Wait for Supabase to be ready
     await _initService.waitForSupabase();
@@ -333,8 +247,6 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
 
   @override
   void dispose() {
-    _linuxStartupOverlayPollTimer?.cancel();
-    _linuxStartupOverlayTimeoutTimer?.cancel();
     _resumeSettingsSyncTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _lifecycleService.removeOnResumeCallback(_syncSettingsInBackground);
@@ -383,52 +295,9 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
       home: AuthGate(
         loadingBuilder: (context) =>
             const Scaffold(body: Center(child: CircularProgressIndicator())),
-        signedOutBuilder: (context) {
-          if (_linuxOverlaySessionArmed || _showLinuxStartupOverlay) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (!mounted) return;
-              _resetLinuxStartupOverlayForSignedOutSession();
-            });
-          }
-          return const LoginPage();
-        },
-        signedInBuilder: (context) {
-          _armLinuxStartupOverlayForSignedInSession();
-          return _buildSignedInShell();
-        },
+        signedOutBuilder: (context) => const LoginPage(),
+        signedInBuilder: (context) => _buildRootWrapper(),
       ),
-    );
-  }
-
-  Widget _buildSignedInShell() {
-    final root = _buildRootWrapper();
-    if (!_isLinuxDesktop || !_showLinuxStartupOverlay) {
-      return root;
-    }
-
-    final theme = Theme.of(context);
-    final overlayColor = theme.colorScheme.surface.withValues(alpha: 0.56);
-    return Stack(
-      children: [
-        root,
-        Positioned.fill(
-          child: IgnorePointer(
-            child: ColoredBox(
-              color: overlayColor,
-              child: Center(
-                child: SizedBox(
-                  width: 36,
-                  height: 36,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 3,
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 
