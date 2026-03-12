@@ -119,11 +119,18 @@ class DeviceServices {
         };
       }
 
+      final LocationSettings locationSettings = Platform.isAndroid
+          ? AndroidSettings(
+              accuracy: LocationAccuracy.high,
+              timeLimit: const Duration(seconds: 15),
+              forceLocationManager: true,
+            )
+          : const LocationSettings(
+              accuracy: LocationAccuracy.high,
+              timeLimit: Duration(seconds: 15),
+            );
       final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 15),
-        ),
+        locationSettings: locationSettings,
       );
 
       return {
