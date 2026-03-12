@@ -79,9 +79,9 @@ flutter build web --release --dart-define-from-file=.env
    ```
 6. Verify the workflow started: `gh run list --limit 3`
 7. CI reads the version from `pubspec.yaml`, builds all platforms, and creates the GitHub Release automatically. The version-bump job also creates and pushes a git tag (belt and suspenders with the local tag).
-8. Web deploys automatically via Dokploy, triggered by the tag push (`deploy-web.yml` workflow calls the Dokploy webhook on `v*` tags)
+8. Web deploys automatically via Dokploy, triggered by the tag push (Dokploy watches for `v*` tags and rebuilds automatically)
 
-**Important:** The `Cross-Platform Build & Release` workflow is triggered by `workflow_dispatch` only. The `Deploy Web` workflow is triggered automatically by tag pushes (`v*`). The separate `Release - macOS` and `Release - Windows` tag-triggered workflows are legacy and may fail.
+**Important:** The `Cross-Platform Build & Release` workflow is triggered by `workflow_dispatch` only. Web deploys automatically via Dokploy on tag push. The separate `Release - macOS` and `Release - Windows` tag-triggered workflows are legacy and may fail.
 
 ### Mandatory Post-Task Workflow
 

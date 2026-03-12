@@ -41,9 +41,8 @@ Der Workflow führt **automatisch** folgende Schritte aus:
    - Automatische Release Notes
    - Download-Links für alle Plattformen
 
-6. ✅ **Web-Deployment triggern**
-   - `deploy-web.yml` wird durch den Tag-Push automatisch gestartet
-   - Ruft den Dokploy Webhook auf → Web-Version wird neu gebaut
+6. ✅ **Web-Deployment**
+   - Dokploy erkennt den Tag-Push automatisch und baut die Web-Version neu
 
 ### 📋 Workflow Starten
 
