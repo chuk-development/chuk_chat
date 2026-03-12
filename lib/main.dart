@@ -121,7 +121,7 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
         return;
       }
       if (_isLinuxDesktop) {
-        await Future<void>.delayed(const Duration(milliseconds: 1500));
+        await Future<void>.delayed(const Duration(seconds: 6));
       } else {
         await Future<void>.delayed(const Duration(milliseconds: 1200));
       }
