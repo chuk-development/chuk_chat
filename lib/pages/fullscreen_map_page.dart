@@ -746,11 +746,19 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
         return null;
       }
 
+      final LocationSettings locationSettings =
+          defaultTargetPlatform == TargetPlatform.android
+          ? AndroidSettings(
+              accuracy: LocationAccuracy.high,
+              timeLimit: const Duration(seconds: 15),
+              forceLocationManager: true,
+            )
+          : const LocationSettings(
+              accuracy: LocationAccuracy.high,
+              timeLimit: Duration(seconds: 15),
+            );
       final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 15),
-        ),
+        locationSettings: locationSettings,
       );
 
       final current = LatLng(position.latitude, position.longitude);
