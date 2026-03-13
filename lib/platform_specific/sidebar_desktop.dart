@@ -1,5 +1,6 @@
 // lib/platform_specific/sidebar_desktop.dart
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/constants.dart';
@@ -49,9 +50,12 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
       24.0; // Standard icon width for alignment
   static const double _iconTextSpacing = 16.0; // Spacing between icon and text
 
+  static const int _kPageSize = 20;
+
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   List<StoredChat> _filteredRecentChats = [];
+  int _displayLimit = _kPageSize;
   ProfileRecord? _profile;
   StreamSubscription<String?>? _chatUpdatesSub;
   Timer? _deleteNotificationTimer;
@@ -101,6 +105,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
   void _onSearchChanged() {
     setState(() {
       _searchQuery = _searchController.text;
+      _displayLimit = _kPageSize;
       _filterRecentChats();
     });
   }
@@ -479,7 +484,10 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
                   addAutomaticKeepAlives: false,
                   addRepaintBoundaries: false,
                   cacheExtent: 200.0,
-                  itemCount: _filteredRecentChats.length + 2,
+                  itemCount:
+                      math.min(_filteredRecentChats.length, _displayLimit) +
+                      2 +
+                      (_filteredRecentChats.length > _displayLimit ? 1 : 0),
                   itemBuilder: (context, index) {
                     if (index == 0) {
                       return _buildSectionHeader('Recents', iconFg: iconFg);
@@ -515,9 +523,38 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
                         );
                       }
                     }
+                    final visibleCount = math.min(
+                      _filteredRecentChats.length,
+                      _displayLimit,
+                    );
+                    // "Show more" button at the end
+                    if (index == visibleCount + 2 &&
+                        _filteredRecentChats.length > _displayLimit) {
+                      final remaining =
+                          _filteredRecentChats.length - _displayLimit;
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: _sidebarHorizontalPadding,
+                          vertical: 8.0,
+                        ),
+                        child: TextButton(
+                          onPressed: () {
+                            setState(() {
+                              _displayLimit += _kPageSize;
+                            });
+                          },
+                          child: Text(
+                            'Show more ($remaining remaining)',
+                            style: TextStyle(
+                              color: iconFg.withValues(alpha: 0.7),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      );
+                    }
                     final chatIndex = index - 1;
-                    if (chatIndex < 0 ||
-                        chatIndex >= _filteredRecentChats.length) {
+                    if (chatIndex < 0 || chatIndex >= visibleCount) {
                       return const SizedBox(height: 10);
                     }
                     final storedChat = _filteredRecentChats[chatIndex];

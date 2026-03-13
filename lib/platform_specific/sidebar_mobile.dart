@@ -50,10 +50,12 @@ class _SidebarMobileState extends State<SidebarMobile> {
   static const double _iconTextSpacing = 16.0;
   static const Duration _searchDebounceDuration = Duration(milliseconds: 300);
   static const int _searchMessageLimit = 50;
+  static const int _kPageSize = 20;
 
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   List<StoredChat> _filteredRecentChats = [];
+  int _displayLimit = _kPageSize;
   ProfileRecord? _profile;
   Future<void>? _refreshInFlight;
   bool _refreshPending = false;
@@ -104,6 +106,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
 
   void _onSearchChanged() {
     _searchDebounce?.cancel();
+    _displayLimit = _kPageSize;
     _searchDebounce = Timer(_searchDebounceDuration, () {
       if (!mounted) return;
       unawaited(_filterRecentChats());
@@ -733,7 +736,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
                           ),
                         ),
                       ),
-                    ..._filteredRecentChats.map((storedChat) {
+                    ..._filteredRecentChats.take(_displayLimit).map((
+                      storedChat,
+                    ) {
                       return _buildRecentItem(
                         storedChat,
                         onTap: () {
@@ -773,6 +778,27 @@ class _SidebarMobileState extends State<SidebarMobile> {
                         textColor: textColorDefault,
                       );
                     }),
+                    if (_filteredRecentChats.length > _displayLimit)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: _sidebarHorizontalPadding,
+                          vertical: 8.0,
+                        ),
+                        child: TextButton(
+                          onPressed: () {
+                            setState(() {
+                              _displayLimit += _kPageSize;
+                            });
+                          },
+                          child: Text(
+                            'Show more (${_filteredRecentChats.length - _displayLimit} remaining)',
+                            style: TextStyle(
+                              color: iconColorDefault.withValues(alpha: 0.7),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
                     const SizedBox(height: 10),
                   ],
                 ),

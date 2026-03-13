@@ -3,8 +3,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:chuk_chat/utils/io_helper.dart';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:pdfx/pdfx.dart';
 
 import 'package:chuk_chat/constants/file_constants.dart';
 import 'package:chuk_chat/models/chat_model.dart';
@@ -13,32 +15,57 @@ import 'package:chuk_chat/widgets/image_viewer.dart';
 
 typedef AttachmentRemoveCallback = void Function(String fileId);
 typedef AttachmentCopyCallback = Future<void> Function(AttachedFile file);
+typedef AttachmentContentChangedCallback =
+    void Function(String fileId, String newContent);
 
-const int _kMaxPlainTextCharacters = 20000;
 const int _kMaxExtensionChars = 3;
 
 // Image card dimensions
 const double _kImageCardSize = 72.0;
 const double _kImageCardBorderWidth = 2.0;
 
-// Document chip thumbnail
-const double _kDocThumbnailSize = 30.0;
-
-class AttachmentPreviewBar extends StatelessWidget {
+class AttachmentPreviewBar extends StatefulWidget {
   const AttachmentPreviewBar({
     super.key,
     required this.files,
     required this.onRemove,
     this.onCopy,
+    this.onContentChanged,
   });
 
   final List<AttachedFile> files;
   final AttachmentRemoveCallback onRemove;
   final AttachmentCopyCallback? onCopy;
+  final AttachmentContentChangedCallback? onContentChanged;
+
+  @override
+  State<AttachmentPreviewBar> createState() => _AttachmentPreviewBarState();
+}
+
+class _AttachmentPreviewBarState extends State<AttachmentPreviewBar> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  /// Convert vertical mouse-wheel events into horizontal scrolling.
+  void _onPointerSignal(PointerSignalEvent event) {
+    if (event is PointerScrollEvent) {
+      final double delta = event.scrollDelta.dy;
+      final double target = (_scrollController.offset + delta).clamp(
+        0.0,
+        _scrollController.position.maxScrollExtent,
+      );
+      _scrollController.jumpTo(target);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (files.isEmpty) return const SizedBox.shrink();
+    if (widget.files.isEmpty) return const SizedBox.shrink();
 
     final theme = Theme.of(context);
     final Color baseTextColor =
@@ -46,24 +73,32 @@ class AttachmentPreviewBar extends StatelessWidget {
 
     return Align(
       alignment: Alignment.centerLeft,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(
-          children: files.map((file) {
-            final bool isImage = _isImageFile(file.fileName);
-            if (isImage) {
-              return _ImageAttachmentCard(file: file, onRemove: onRemove);
-            }
-            return _DocumentAttachmentTile(
-              file: file,
-              onRemove: onRemove,
-              onCopy: onCopy,
-              textColor: baseTextColor,
-              accentColor: theme.colorScheme.primary,
-              cardColor: theme.colorScheme.surface.withValues(alpha: 0.9),
-            );
-          }).toList(),
+      child: Listener(
+        onPointerSignal: _onPointerSignal,
+        child: SingleChildScrollView(
+          controller: _scrollController,
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(
+            children: widget.files.map((file) {
+              final bool isImage = _isImageFile(file.fileName);
+              if (isImage) {
+                return _ImageAttachmentCard(
+                  file: file,
+                  onRemove: widget.onRemove,
+                );
+              }
+              return _DocumentAttachmentTile(
+                file: file,
+                onRemove: widget.onRemove,
+                onCopy: widget.onCopy,
+                onContentChanged: widget.onContentChanged,
+                textColor: baseTextColor,
+                accentColor: theme.colorScheme.primary,
+                cardColor: theme.colorScheme.surface.withValues(alpha: 0.9),
+              );
+            }).toList(),
+          ),
         ),
       ),
     );
@@ -271,7 +306,7 @@ class _RemoveButton extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Document / non-image attachment tile — clean chip style
+// Document / non-image attachment card — matches image card style (72px square)
 // ---------------------------------------------------------------------------
 
 class _DocumentAttachmentTile extends StatelessWidget {
@@ -279,6 +314,7 @@ class _DocumentAttachmentTile extends StatelessWidget {
     required this.file,
     required this.onRemove,
     required this.onCopy,
+    this.onContentChanged,
     required this.textColor,
     required this.accentColor,
     required this.cardColor,
@@ -287,130 +323,124 @@ class _DocumentAttachmentTile extends StatelessWidget {
   final AttachedFile file;
   final AttachmentRemoveCallback onRemove;
   final AttachmentCopyCallback? onCopy;
+  final AttachmentContentChangedCallback? onContentChanged;
   final Color textColor;
   final Color accentColor;
   final Color cardColor;
 
   @override
   Widget build(BuildContext context) {
-    final BorderRadius cardRadius = BorderRadius.circular(12);
     final bool isUploading = file.isUploading;
-    final Color metaTextColor = textColor.withValues(
-      alpha: isUploading ? 0.5 : 0.65,
-    );
+    const double innerSize = _kImageCardSize - _kImageCardBorderWidth * 2;
+    final BorderRadius outerRadius = BorderRadius.circular(16);
+    final BorderRadius innerRadius = BorderRadius.circular(14);
+    final String extLabel = _extensionLabel(file.fileName);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: cardRadius,
-          onTap: isUploading
-              ? null
-              : () => _showDocumentPreview(context, file, textColor),
+      padding: const EdgeInsets.only(right: 8),
+      child: GestureDetector(
+        onTap: isUploading
+            ? null
+            : () => _showDocumentPreview(
+                context,
+                file,
+                textColor,
+                onContentChanged: onContentChanged,
+              ),
+        child: Tooltip(
+          message: file.fileName,
           child: Container(
-            constraints: const BoxConstraints(minHeight: 32, maxWidth: 200),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            width: _kImageCardSize,
+            height: _kImageCardSize,
+            padding: const EdgeInsets.all(_kImageCardBorderWidth),
             decoration: BoxDecoration(
-              color: cardColor,
-              borderRadius: cardRadius,
-              border: Border.all(color: textColor.withValues(alpha: 0.1)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _DocumentThumbnail(file: file, accentColor: accentColor),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Tooltip(
-                        message: file.fileName,
-                        child: Text(
-                          file.fileName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: textColor,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                      if (isUploading || file.fileSizeBytes != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (isUploading)
-                                SizedBox(
-                                  width: 14,
-                                  height: 14,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation(
-                                      accentColor,
-                                    ),
-                                  ),
-                                ),
-                              if (isUploading && file.fileSizeBytes != null)
-                                const SizedBox(width: 6),
-                              if (file.fileSizeBytes != null)
-                                Text(
-                                  _formatBytes(file.fileSizeBytes!),
-                                  style: TextStyle(
-                                    color: metaTextColor,
-                                    fontSize: 10,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 4),
-                if (onCopy != null) ...[
-                  IconButton(
-                    iconSize: 16,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints.tightFor(
-                      width: 28,
-                      height: 28,
-                    ),
-                    splashRadius: 18,
-                    icon: Icon(
-                      Icons.copy,
-                      color: textColor.withValues(
-                        alpha: isUploading ? 0.25 : 0.7,
-                      ),
-                    ),
-                    tooltip: 'Copy ${file.fileName}',
-                    onPressed: isUploading ? null : () => onCopy?.call(file),
-                  ),
-                  const SizedBox(width: 4),
+              borderRadius: outerRadius,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  accentColor.withValues(alpha: 0.6),
+                  accentColor.withValues(alpha: 0.1),
                 ],
-                IconButton(
-                  iconSize: 16,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints.tightFor(
-                    width: 28,
-                    height: 28,
-                  ),
-                  splashRadius: 18,
-                  icon: Icon(
-                    Icons.close,
-                    color: textColor.withValues(
-                      alpha: isUploading ? 0.25 : 0.7,
+              ),
+            ),
+            child: ClipRRect(
+              borderRadius: innerRadius,
+              child: SizedBox(
+                width: innerSize,
+                height: innerSize,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // Background with extension label
+                    Container(
+                      color: cardColor,
+                      child: Center(
+                        child: Text(
+                          extLabel.isNotEmpty ? extLabel : '?',
+                          style: TextStyle(
+                            color: accentColor,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                  tooltip: 'Remove ${file.fileName}',
-                  onPressed: isUploading ? null : () => onRemove(file.id),
+
+                    // Upload progress overlay
+                    if (isUploading)
+                      Container(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        child: Center(
+                          child: SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              valueColor: AlwaysStoppedAnimation(accentColor),
+                            ),
+                          ),
+                        ),
+                      ),
+
+                    // Size badge (bottom-left)
+                    if (!isUploading && file.fileSizeBytes != null)
+                      Positioned(
+                        left: 4,
+                        bottom: 4,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 5,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.6),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            _formatBytes(file.fileSizeBytes!),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 8,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                    // Remove button (top-right)
+                    Positioned(
+                      top: 3,
+                      right: 3,
+                      child: _RemoveButton(
+                        onTap: isUploading ? null : () => onRemove(file.id),
+                        tooltip: 'Remove ${file.fileName}',
+                        size: 18,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -420,230 +450,493 @@ class _DocumentAttachmentTile extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Document thumbnail (extension badge)
-// ---------------------------------------------------------------------------
-
-class _DocumentThumbnail extends StatelessWidget {
-  const _DocumentThumbnail({required this.file, required this.accentColor});
-
-  final AttachedFile file;
-  final Color accentColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final String label = _extensionLabel(file.fileName);
-    return Container(
-      width: _kDocThumbnailSize,
-      height: _kDocThumbnailSize,
-      decoration: BoxDecoration(
-        color: accentColor.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      alignment: Alignment.center,
-      child: label.isNotEmpty
-          ? Text(
-              label,
-              style: TextStyle(
-                color: accentColor,
-                fontWeight: FontWeight.w700,
-                fontSize: 10,
-              ),
-            )
-          : Icon(Icons.insert_drive_file, color: accentColor, size: 18),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Document preview dialog (plain text / markdown / unsupported)
+// Document preview dialog — themed, editable for plain text files
 // ---------------------------------------------------------------------------
 
 void _showDocumentPreview(
   BuildContext context,
   AttachedFile file,
-  Color textColor,
-) {
-  final bool isPlainText = _isPlainTextFile(file.fileName);
-  final bool hasMarkdown =
-      file.markdownContent != null && file.markdownContent!.isNotEmpty;
-
+  Color textColor, {
+  AttachmentContentChangedCallback? onContentChanged,
+}) {
   showDialog<void>(
     context: context,
-    barrierColor: Colors.black.withValues(alpha: 0.6),
-    builder: (context) {
-      final theme = Theme.of(context);
-
-      return Dialog(
-        backgroundColor: theme.colorScheme.surface,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 560, maxHeight: 620),
-          child: Column(
-            mainAxisSize: MainAxisSize.max,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 20,
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            file.fileName,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              color: textColor,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          if (file.fileSizeBytes != null)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4),
-                              child: Text(
-                                _formatBytes(file.fileSizeBytes!),
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: textColor.withValues(alpha: 0.7),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      tooltip: 'Close preview',
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: isPlainText
-                      ? _PlainTextPreview(file: file)
-                      : hasMarkdown
-                      ? _MarkdownPreview(file: file)
-                      : _buildNoPreviewMessage(context),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    },
+    barrierColor: Colors.black.withValues(alpha: 0.7),
+    builder: (context) =>
+        _DocumentPreviewDialog(file: file, onContentChanged: onContentChanged),
   );
 }
 
-// ---------------------------------------------------------------------------
-// Text / Markdown preview widgets
-// ---------------------------------------------------------------------------
-
-class _PlainTextPreview extends StatelessWidget {
-  const _PlainTextPreview({required this.file});
+class _DocumentPreviewDialog extends StatefulWidget {
+  const _DocumentPreviewDialog({required this.file, this.onContentChanged});
 
   final AttachedFile file;
+  final AttachmentContentChangedCallback? onContentChanged;
+
+  @override
+  State<_DocumentPreviewDialog> createState() => _DocumentPreviewDialogState();
+}
+
+class _DocumentPreviewDialogState extends State<_DocumentPreviewDialog> {
+  // File type flags
+  late final bool _isPlainText;
+  late final bool _isPdf;
+
+  // Plain-text state
+  bool _isEditing = false;
+  bool _isLoading = true;
+  String? _content;
+  late TextEditingController _editController;
+  final ScrollController _scrollController = ScrollController();
+
+  // PDF state
+  PdfController? _pdfController;
+  bool _pdfError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _isPlainText = _isPlainTextFile(widget.file.fileName);
+    _isPdf = _isPdfFile(widget.file.fileName);
+    _editController = TextEditingController();
+
+    if (_isPlainText) {
+      _loadTextContent();
+    } else if (_isPdf) {
+      _loadPdfContent();
+    } else {
+      // No preview available — stop loading immediately
+      _isLoading = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _editController.dispose();
+    _scrollController.dispose();
+    _pdfController?.dispose();
+    super.dispose();
+  }
+
+  // -- Plain text loading ------------------------------------------------
+
+  Future<void> _loadTextContent() async {
+    final text = await _loadPlainTextContent(widget.file);
+    if (!mounted) return;
+    setState(() {
+      _content = text ?? widget.file.markdownContent;
+      _isLoading = false;
+    });
+  }
+
+  // -- PDF loading -------------------------------------------------------
+
+  Future<void> _loadPdfContent() async {
+    final String? localPath = widget.file.localPath;
+    if (localPath == null) {
+      if (mounted) {
+        setState(() {
+          _pdfError = true;
+          _isLoading = false;
+        });
+      }
+      return;
+    }
+    try {
+      final localFile = File(localPath);
+      if (!await localFile.exists()) {
+        if (mounted) {
+          setState(() {
+            _pdfError = true;
+            _isLoading = false;
+          });
+        }
+        return;
+      }
+      final bytes = await localFile.readAsBytes();
+      final doc = await PdfDocument.openData(bytes);
+      if (!mounted) return;
+      setState(() {
+        _pdfController = PdfController(document: Future.value(doc));
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('PDF load error: $e');
+      }
+      if (mounted) {
+        setState(() {
+          _pdfError = true;
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  // -- Editing helpers ---------------------------------------------------
+
+  void _startEditing() {
+    setState(() {
+      _editController.text = _content ?? '';
+      _isEditing = true;
+    });
+  }
+
+  Future<void> _saveEdits() async {
+    final newContent = _editController.text;
+
+    // Write to local file if available
+    final localPath = widget.file.localPath;
+    if (localPath != null) {
+      try {
+        await File(localPath).writeAsString(newContent);
+      } catch (_) {
+        // Ignore write errors
+      }
+    }
+
+    // Notify parent to update the AttachedFile
+    widget.onContentChanged?.call(widget.file.id, newContent);
+
+    if (!mounted) return;
+    setState(() {
+      _content = newContent;
+      _isEditing = false;
+    });
+  }
+
+  void _cancelEditing() {
+    setState(() => _isEditing = false);
+  }
+
+  // -- Build -------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return FutureBuilder<String?>(
-      future: _loadPlainTextContent(file),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        final String? rawText = snapshot.data;
-        if (rawText == null || rawText.isEmpty) {
-          return _buildNoPreviewMessage(
-            context,
-            message: 'Preview not available for this file.',
-          );
-        }
-        final String text = _truncateForPreview(rawText);
-        return Scrollbar(
-          thumbVisibility: true,
-          child: SingleChildScrollView(
-            child: SelectableText(
-              text,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontFamily: 'monospace',
-                height: 1.4,
+    final Color bg = theme.scaffoldBackgroundColor;
+    final Color accent = theme.colorScheme.primary;
+    final Color textColor =
+        theme.iconTheme.color ?? theme.colorScheme.onSurface;
+    final String extLabel = _extensionLabel(widget.file.fileName);
+
+    return Dialog(
+      backgroundColor: bg,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: textColor.withValues(alpha: 0.3), width: 2),
+      ),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 620, maxHeight: 680),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 12, 12),
+              child: Row(
+                children: [
+                  // Extension badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: accent.withValues(alpha: 0.3)),
+                    ),
+                    child: Text(
+                      extLabel.isNotEmpty ? extLabel : 'FILE',
+                      style: TextStyle(
+                        color: accent,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Filename + size
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          widget.file.fileName,
+                          style: TextStyle(
+                            color: textColor,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (widget.file.fileSizeBytes != null)
+                          Text(
+                            _formatBytes(widget.file.fileSizeBytes!),
+                            style: TextStyle(
+                              color: textColor.withValues(alpha: 0.5),
+                              fontSize: 11,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  // Edit / Save / Cancel buttons (plain text only)
+                  if (_isPlainText && !_isLoading) ...[
+                    if (_isEditing) ...[
+                      IconButton(
+                        icon: Icon(Icons.check_rounded, color: accent),
+                        tooltip: 'Save',
+                        onPressed: _saveEdits,
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          Icons.close_rounded,
+                          color: textColor.withValues(alpha: 0.5),
+                        ),
+                        tooltip: 'Cancel',
+                        onPressed: _cancelEditing,
+                      ),
+                    ] else
+                      IconButton(
+                        icon: Icon(
+                          Icons.edit_rounded,
+                          color: textColor.withValues(alpha: 0.7),
+                        ),
+                        tooltip: 'Edit',
+                        onPressed: _startEditing,
+                      ),
+                  ],
+                  // Close button
+                  IconButton(
+                    icon: Icon(
+                      Icons.close,
+                      color: textColor.withValues(alpha: 0.7),
+                    ),
+                    tooltip: 'Close',
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1, color: textColor.withValues(alpha: 0.15)),
+            // Content area
+            Expanded(child: _buildContent(textColor, accent)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContent(Color textColor, Color accent) {
+    if (_isLoading) {
+      return Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation(accent),
+        ),
+      );
+    }
+
+    // PDF viewer
+    if (_isPdf) {
+      return _buildPdfViewer(textColor, accent);
+    }
+
+    // Plain text viewer / editor
+    if (_isPlainText) {
+      if (_content == null || _content!.isEmpty) {
+        return _buildEmptyState(textColor, accent, 'File is empty.');
+      }
+      return _isEditing
+          ? _buildEditor(textColor, accent)
+          : _buildTextViewer(textColor);
+    }
+
+    // Everything else — no preview
+    return _buildEmptyState(
+      textColor,
+      accent,
+      'Preview not available for this file type.',
+    );
+  }
+
+  // -- PDF viewer --------------------------------------------------------
+
+  Widget _buildPdfViewer(Color textColor, Color accent) {
+    if (_pdfError || _pdfController == null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.picture_as_pdf,
+              size: 48,
+              color: accent.withValues(alpha: 0.5),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'PDF preview not available on this platform.',
+              style: TextStyle(
+                color: textColor.withValues(alpha: 0.5),
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        // Page indicator
+        Padding(
+          padding: const EdgeInsets.only(top: 8, bottom: 4),
+          child: PdfPageNumber(
+            controller: _pdfController!,
+            builder: (_, loadingState, page, pagesCount) => Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+              decoration: BoxDecoration(
+                color: textColor.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                loadingState == PdfLoadingState.loading
+                    ? 'Loading...'
+                    : 'Page $page of $pagesCount',
+                style: TextStyle(
+                  color: textColor.withValues(alpha: 0.7),
+                  fontSize: 12,
+                ),
               ),
             ),
           ),
-        );
-      },
+        ),
+        // PDF pages
+        Expanded(
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            decoration: BoxDecoration(
+              color: textColor.withValues(alpha: 0.04),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: textColor.withValues(alpha: 0.12)),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: PdfView(
+                controller: _pdfController!,
+                builders: PdfViewBuilders<DefaultBuilderOptions>(
+                  options: const DefaultBuilderOptions(),
+                  documentLoaderBuilder: (_) => Center(
+                    child: CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation(accent),
+                    ),
+                  ),
+                  pageLoaderBuilder: (_) => Center(
+                    child: CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation(accent),
+                    ),
+                  ),
+                  errorBuilder: (_, error) => Center(
+                    child: Text(
+                      'Error: $error',
+                      style: const TextStyle(color: Colors.red),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
-}
 
-class _MarkdownPreview extends StatelessWidget {
-  const _MarkdownPreview({required this.file});
+  // -- Text viewer / editor ----------------------------------------------
 
-  final AttachedFile file;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final String? content = file.markdownContent;
-    if (content == null || content.trim().isEmpty) {
-      return _buildNoPreviewMessage(context);
-    }
-    final String display = _truncateForPreview(content);
+  Widget _buildTextViewer(Color textColor) {
     return Scrollbar(
+      controller: _scrollController,
       thumbVisibility: true,
       child: SingleChildScrollView(
+        controller: _scrollController,
+        padding: const EdgeInsets.all(20),
         child: SelectableText(
-          display,
-          style: theme.textTheme.bodyMedium?.copyWith(
+          _content!,
+          style: TextStyle(
+            color: textColor.withValues(alpha: 0.9),
             fontFamily: 'monospace',
-            height: 1.4,
+            fontSize: 13,
+            height: 1.5,
           ),
         ),
       ),
     );
   }
-}
 
-// ---------------------------------------------------------------------------
-// Shared helpers
-// ---------------------------------------------------------------------------
+  Widget _buildEditor(Color textColor, Color accent) {
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: TextField(
+        controller: _editController,
+        maxLines: null,
+        expands: true,
+        textAlignVertical: TextAlignVertical.top,
+        style: TextStyle(
+          color: textColor.withValues(alpha: 0.9),
+          fontFamily: 'monospace',
+          fontSize: 13,
+          height: 1.5,
+        ),
+        decoration: InputDecoration(
+          filled: true,
+          fillColor: textColor.withValues(alpha: 0.04),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: accent.withValues(alpha: 0.3)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: textColor.withValues(alpha: 0.1)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: accent, width: 1.5),
+          ),
+          contentPadding: const EdgeInsets.all(16),
+        ),
+        cursorColor: accent,
+      ),
+    );
+  }
 
-Widget _buildNoPreviewMessage(BuildContext context, {String? message}) {
-  final theme = Theme.of(context);
-  return Container(
-    width: double.infinity,
-    padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
-    decoration: BoxDecoration(
-      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-      borderRadius: BorderRadius.circular(12),
-    ),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          Icons.insert_drive_file,
-          size: 56,
-          color: theme.colorScheme.primary,
-        ),
-        const SizedBox(height: 12),
-        Text(
-          message ?? 'Preview not available for this file type.',
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodyMedium,
-        ),
-      ],
-    ),
-  );
+  // -- Empty / no-preview state ------------------------------------------
+
+  Widget _buildEmptyState(Color textColor, Color accent, String message) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.insert_drive_file_outlined,
+            size: 48,
+            color: accent.withValues(alpha: 0.5),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            message,
+            style: TextStyle(
+              color: textColor.withValues(alpha: 0.5),
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 Future<String?> _loadPlainTextContent(AttachedFile file) async {
@@ -670,16 +963,14 @@ Future<String?> _loadPlainTextContent(AttachedFile file) async {
   return null;
 }
 
-String _truncateForPreview(String text) {
-  if (text.length <= _kMaxPlainTextCharacters) return text;
-  final truncated = text.substring(0, _kMaxPlainTextCharacters);
-  return '$truncated\n… preview truncated to $_kMaxPlainTextCharacters characters.';
-}
-
 // Use FileConstants for consistent file type detection across the app
 bool _isImageFile(String fileName) {
   final String ext = _extractExtension(fileName);
   return FileConstants.isImage(ext);
+}
+
+bool _isPdfFile(String fileName) {
+  return _extractExtension(fileName) == 'pdf';
 }
 
 bool _isPlainTextFile(String fileName) {

@@ -282,13 +282,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       onKeyEvent: (node, event) {
         if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
-        // Ctrl+V / Cmd+V: clipboard image paste
+        // Ctrl+V / Cmd+V: handle paste (images, text, long text → attachment)
         if (event.logicalKey == LogicalKeyboardKey.keyV &&
             (HardwareKeyboard.instance.isControlPressed ||
                 HardwareKeyboard.instance.isMetaPressed)) {
-          unawaited(_handleClipboardPaste());
-          // Don't consume — let normal text paste also happen
-          return KeyEventResult.ignored;
+          unawaited(_handleSmartPaste());
+          return KeyEventResult.handled;
         }
 
         if (event.logicalKey != LogicalKeyboardKey.enter) {
@@ -1012,10 +1011,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   bool get _modelSupportsImageInput =>
       ModelCapabilitiesService.supportsImageInputSync(_selectedModelId);
-
-  bool _isImageExtension(String extension) {
-    return FileConstants.imageExtensions.contains(extension);
-  }
 
   // State for drag and drop
   bool _isDraggingFiles = false;
@@ -3541,16 +3536,125 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   /// Processes a list of file paths (from drag and drop or file picker)
   Future<void> _processFilePaths(List<String> filePaths) async {
     const int maxFileSize = 10 * 1024 * 1024; // 10MB
-    const int maxConcurrentUploads = 5;
 
-    if (_attachedFiles.where((f) => f.isUploading).length >=
-        maxConcurrentUploads) {
-      if (mounted) {
+    // Separate images from non-images and validate all files first
+    final List<_ValidatedFile> validImages = [];
+    final List<_ValidatedFile> validDocuments = [];
+
+    for (String filePath in filePaths) {
+      final File file = File(filePath);
+      if (!await file.exists()) continue;
+
+      final int fileSize = await file.length();
+      final String fileName = file.path.split(Platform.pathSeparator).last;
+      final String fileExtension = fileName.split('.').last.toLowerCase();
+      final bool isImage = FileConstants.imageExtensions.contains(
+        fileExtension,
+      );
+
+      // Validate extension
+      if (!FileConstants.allowedExtensions.contains(fileExtension)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Unsupported file type: .$fileExtension',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              duration: const Duration(seconds: 2),
+              dismissDirection: DismissDirection.horizontal,
+            ),
+          );
+        }
+        continue;
+      }
+
+      // Check file size (skip for images — they'll be compressed)
+      if (!isImage && fileSize > maxFileSize) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '"$fileName" exceeds 10 MB limit',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              duration: const Duration(seconds: 2),
+              dismissDirection: DismissDirection.horizontal,
+            ),
+          );
+        }
+        continue;
+      }
+
+      if (isImage && !_modelSupportsImageInput) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text(
+                'Image uploads are not supported by the selected model.',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              ),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              duration: const Duration(seconds: 2),
+              dismissDirection: DismissDirection.horizontal,
+            ),
+          );
+        }
+        break; // No point checking more images
+      }
+
+      final validated = _ValidatedFile(
+        file: file,
+        fileName: fileName,
+        fileSize: fileSize,
+        isImage: isImage,
+      );
+
+      if (isImage) {
+        validImages.add(validated);
+      } else {
+        validDocuments.add(validated);
+      }
+    }
+
+    // Enforce max image limit (count existing images + new ones)
+    final int existingImages = _attachedFiles.where((f) => f.isImage).length;
+    final int slotsLeft = FileConstants.maxImageAttachments - existingImages;
+    if (validImages.length > slotsLeft) {
+      final int dropped = validImages.length - slotsLeft;
+      validImages.removeRange(
+        slotsLeft.clamp(0, validImages.length),
+        validImages.length,
+      );
+      if (mounted && dropped > 0) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text(
-              'Please wait for current uploads to complete',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            content: Text(
+              'Maximum ${FileConstants.maxImageAttachments} images allowed — $dropped image${dropped > 1 ? 's' : ''} skipped.',
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
             ),
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -3558,179 +3662,40 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               borderRadius: BorderRadius.circular(12),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            duration: const Duration(seconds: 2),
+            duration: const Duration(seconds: 3),
             dismissDirection: DismissDirection.horizontal,
           ),
         );
       }
-      return;
     }
 
-    for (String filePath in filePaths) {
-      final File file = File(filePath);
-
-      // Check if file exists
-      if (!await file.exists()) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'File not found: ${file.path}',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              duration: const Duration(seconds: 2),
-              dismissDirection: DismissDirection.horizontal,
-            ),
-          );
-        }
-        continue;
-      }
-
-      // Get file size
-      final int fileSize = await file.length();
-      final String fileName = file.path.split(Platform.pathSeparator).last;
-      final String fileExtension = fileName.split('.').last.toLowerCase();
-
-      // Check if it's an image
-      final isImage = FileConstants.imageExtensions.contains(fileExtension);
-
-      // Check file size (skip for images - they'll be compressed automatically with no size limit)
-      if (!isImage && fileSize > maxFileSize) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'File "$fileName" exceeds 10MB limit',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              duration: const Duration(seconds: 2),
-              dismissDirection: DismissDirection.horizontal,
-            ),
-          );
-        }
-        continue; // Skip this file and go to the next
-      }
-
-      String fileId = _uuid.v4();
-
-      if (!FileConstants.allowedExtensions.contains(fileExtension)) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Unsupported file type for "$fileName": .$fileExtension',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              duration: const Duration(seconds: 2),
-              dismissDirection: DismissDirection.horizontal,
-            ),
-          );
-        }
-        continue;
-      }
-
-      if (_isImageExtension(fileExtension) && !_modelSupportsImageInput) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Image uploads are not supported by the selected model.',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              duration: const Duration(seconds: 2),
-              dismissDirection: DismissDirection.horizontal,
-            ),
-          );
-        }
-        continue;
-      }
-
-      // Check concurrent upload limit again before adding to UI and starting upload
-      // This handles cases where user quickly picks many files, or files picked while others finish
-      if (_attachedFiles.where((f) => f.isUploading).length >=
-          maxConcurrentUploads) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Skipping "$fileName": too many concurrent uploads. Try again soon.',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              duration: const Duration(seconds: 2),
-              dismissDirection: DismissDirection.horizontal,
-            ),
-          );
-        }
-        continue;
-      }
-
+    // Add all valid files to the UI immediately (showing upload spinners)
+    for (final vf in [...validImages, ...validDocuments]) {
+      final String fileId = _uuid.v4();
+      vf.id = fileId;
       setState(() {
         _attachedFiles.add(
           AttachedFile(
             id: fileId,
-            fileName: fileName,
+            fileName: vf.fileName,
             isUploading: true,
-            localPath: file.path,
-            fileSizeBytes: fileSize,
-            isImage: isImage,
+            localPath: vf.file.path,
+            fileSizeBytes: vf.fileSize,
+            isImage: vf.isImage,
           ),
         );
       });
-      _scrollChatToBottom(
-        force: true,
-      ); // Scroll to ensure attachment bar is visible
+    }
+    _scrollChatToBottom(force: true);
 
-      // Handle images differently - compress, encrypt, and upload to storage
-      if (isImage) {
-        _uploadEncryptedImage(file, fileName, fileId);
-      } else {
-        _chatApiService.performFileUpload(file, fileName, fileId);
-      }
+    // Upload non-image documents concurrently (they go through the API)
+    for (final vf in validDocuments) {
+      _chatApiService.performFileUpload(vf.file, vf.fileName, vf.id);
+    }
+
+    // Upload images sequentially to avoid rate limits
+    for (final vf in validImages) {
+      await _uploadEncryptedImage(vf.file, vf.fileName, vf.id);
     }
   }
 
@@ -4027,23 +3992,55 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   }
 
   /// Handles Ctrl+V paste of clipboard images
-  Future<bool> _handleClipboardPaste() async {
+  /// Threshold (characters) above which pasted text is auto-converted to an
+  /// attached .txt file instead of being inserted into the composer.
+  static const int _kLongPasteThreshold = 500;
+
+  Future<void> _handleSmartPaste() async {
+    // 1. Try image paste first
     try {
       final Uint8List? imageBytes = await Pasteboard.image;
-      if (imageBytes == null || imageBytes.isEmpty) return false;
+      if (imageBytes != null && imageBytes.isNotEmpty) {
+        final tempDir = await getTemporaryDirectory();
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        final tempFile = File('${tempDir.path}/paste_$timestamp.png');
+        await tempFile.writeAsBytes(imageBytes);
+        await _processFilePaths([tempFile.path]);
+        return;
+      }
+    } catch (_) {
+      // No image on clipboard — fall through to text handling.
+    }
 
-      final tempDir = await getTemporaryDirectory();
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final tempFile = File('${tempDir.path}/paste_$timestamp.png');
-      await tempFile.writeAsBytes(imageBytes);
+    // 2. Handle text paste
+    try {
+      final clipData = await Clipboard.getData(Clipboard.kTextPlain);
+      final String? text = clipData?.text;
+      if (text == null || text.isEmpty) return;
 
-      await _processFilePaths([tempFile.path]);
-      return true;
+      if (text.length > _kLongPasteThreshold) {
+        // Long text → create an attached .txt file
+        final tempDir = await getTemporaryDirectory();
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        final tempFile = File('${tempDir.path}/pasted_text_$timestamp.txt');
+        await tempFile.writeAsString(text);
+        await _processFilePaths([tempFile.path]);
+      } else {
+        // Short text → insert at cursor position normally
+        final currentText = _controller.text;
+        final sel = _controller.selection;
+        final start = sel.isValid ? sel.start : currentText.length;
+        final end = sel.isValid ? sel.end : currentText.length;
+        final newText = currentText.replaceRange(start, end, text);
+        _controller.value = TextEditingValue(
+          text: newText,
+          selection: TextSelection.collapsed(offset: start + text.length),
+        );
+      }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('Clipboard paste error: $e');
+        debugPrint('Clipboard text paste error: $e');
       }
-      return false;
     }
   }
 
@@ -4818,10 +4815,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           Column(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Attachment previews inside the textbox
+              // Attachment previews inside the textbox (right-padded so cards don't go under send button)
               if (_attachedFiles.isNotEmpty)
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 14, left: 2),
+                  padding: EdgeInsets.only(
+                    bottom: 14,
+                    left: 2,
+                    right: btnW + 8,
+                  ),
                   child: AttachmentPreviewBar(
                     files: _attachedFiles,
                     onRemove: _removeAttachedFile,
@@ -4880,6 +4881,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                   ),
                 ),
               ),
+              // Extra breathing room between text field and toolbar when attachments push content down
+              if (hasAttachments) const SizedBox(height: 8),
               Row(
                 children: <Widget>[
                   Expanded(
@@ -4902,7 +4905,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                   icon: Icons.add_rounded,
                                   iconSize: 24,
                                   onTap: _uploadFiles,
-                                  isActive: hasAttachments,
+                                  isActive: false,
                                   debugLabel: 'Add button',
                                 ),
                                 // Project Selection Dropdown (only when feature enabled)
@@ -5126,4 +5129,20 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       ),
     );
   }
+}
+
+/// Temporary container for validated files before upload.
+class _ValidatedFile {
+  _ValidatedFile({
+    required this.file,
+    required this.fileName,
+    required this.fileSize,
+    required this.isImage,
+  });
+
+  final File file;
+  final String fileName;
+  final int fileSize;
+  final bool isImage;
+  late String id;
 }

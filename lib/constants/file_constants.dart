@@ -7,11 +7,14 @@ class FileConstants {
   FileConstants._();
 
   /// Maximum file size allowed for non-image uploads (10MB)
-  /// Note: Images have no size limit - they are automatically compressed to WebP format
+  /// Note: Images have no size limit - they are automatically compressed to JPEG format
   static const int maxFileSizeBytes = 10 * 1024 * 1024;
 
   /// Maximum number of concurrent file uploads
   static const int maxConcurrentUploads = 5;
+
+  /// Maximum number of images that can be attached at once
+  static const int maxImageAttachments = 20;
 
   /// List of allowed file extensions for uploads.
   /// This includes various document types, media files, code files, and more.
@@ -23,8 +26,6 @@ class FileConstants {
     'aac',
     'flac',
     'ogg',
-    // Video
-    'mp4',
     // Documents (PDF, Word, PowerPoint, Excel, OpenDocument)
     'pdf',
     'doc',
