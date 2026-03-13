@@ -338,8 +338,17 @@ class FileAttachmentHandler {
     }
   }
 
-  /// Remove an attached file
+  /// Remove an attached file.
+  /// If the file was an uploaded image, silently deletes it from Supabase Storage.
   void removeFile(String fileId) {
+    final file = _attachedFiles.where((f) => f.id == fileId).firstOrNull;
+    if (file != null && file.encryptedImagePath != null) {
+      ImageStorageService.deleteEncryptedImage(
+        file.encryptedImagePath!,
+      ).catchError((_) {
+        // Silently ignore — user chose to remove it
+      });
+    }
     _attachedFiles.removeWhere((f) => f.id == fileId);
     onUpdate?.call();
   }
