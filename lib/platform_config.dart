@@ -51,6 +51,12 @@ const bool kFeatureAssistants = bool.fromEnvironment(
   defaultValue: false,
 );
 
+/// Artifacts - editable code/markdown/HTML panels alongside chat
+const bool kFeatureArtifacts = bool.fromEnvironment(
+  'FEATURE_ARTIFACTS',
+  defaultValue: false,
+);
+
 /// Image Generation - AI image creation via Z-Image Turbo
 /// Always enabled - no feature flag needed (Image Generation is production-ready)
 const bool kFeatureImageGen = true;

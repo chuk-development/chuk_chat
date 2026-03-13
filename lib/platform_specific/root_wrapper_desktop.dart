@@ -44,10 +44,12 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   @override
   void initState() {
     super.initState();
-    _activeArtifact = ArtifactStorageService.activeArtifactNotifier.value;
-    ArtifactStorageService.activeArtifactNotifier.addListener(
-      _onArtifactChanged,
-    );
+    if (kFeatureArtifacts) {
+      _activeArtifact = ArtifactStorageService.activeArtifactNotifier.value;
+      ArtifactStorageService.activeArtifactNotifier.addListener(
+        _onArtifactChanged,
+      );
+    }
     // Defer non-critical startup work to keep first interactions responsive.
     unawaited(
       Future<void>.delayed(const Duration(seconds: 8), () async {
@@ -64,30 +66,34 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
         }
       }),
     );
-    unawaited(
-      Future<void>.delayed(const Duration(seconds: 2), () async {
-        if (!mounted) return;
-        try {
-          await ArtifactStorageService.setActiveChat(
-            ChatStorageService.selectedChatId,
-            forceRefresh: false,
-          );
-        } catch (error) {
-          if (kDebugMode) {
-            debugPrint(
-              '⚠️ [RootDesktop] Deferred artifact activation failed: $error',
+    if (kFeatureArtifacts) {
+      unawaited(
+        Future<void>.delayed(const Duration(seconds: 2), () async {
+          if (!mounted) return;
+          try {
+            await ArtifactStorageService.setActiveChat(
+              ChatStorageService.selectedChatId,
+              forceRefresh: false,
             );
+          } catch (error) {
+            if (kDebugMode) {
+              debugPrint(
+                '⚠️ [RootDesktop] Deferred artifact activation failed: $error',
+              );
+            }
           }
-        }
-      }),
-    );
+        }),
+      );
+    }
   }
 
   @override
   void dispose() {
-    ArtifactStorageService.activeArtifactNotifier.removeListener(
-      _onArtifactChanged,
-    );
+    if (kFeatureArtifacts) {
+      ArtifactStorageService.activeArtifactNotifier.removeListener(
+        _onArtifactChanged,
+      );
+    }
     super.dispose();
   }
 
@@ -123,7 +129,9 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       // Start a new chat for this project
       _chatUIKey.currentState?.newChat();
     });
-    unawaited(ArtifactStorageService.setActiveChat(null, forceRefresh: true));
+    if (kFeatureArtifacts) {
+      unawaited(ArtifactStorageService.setActiveChat(null, forceRefresh: true));
+    }
   }
 
   void _exitProject() {
@@ -216,9 +224,11 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     setState(() {
       ChatStorageService.selectedChatId = chatId;
     });
-    unawaited(
-      ArtifactStorageService.setActiveChat(chatId, forceRefresh: false),
-    );
+    if (kFeatureArtifacts) {
+      unawaited(
+        ArtifactStorageService.setActiveChat(chatId, forceRefresh: false),
+      );
+    }
     // On desktop, the sidebar typically remains open after selecting a chat.
     // if (_isSidebarExpanded) _toggleSidebar();
   }
@@ -257,7 +267,9 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     // tell the chat UI to start fresh and clear project context.
     _activeProjectId = null;
     _chatUIKey.currentState?.newChat();
-    unawaited(ArtifactStorageService.setActiveChat(null, forceRefresh: true));
+    if (kFeatureArtifacts) {
+      unawaited(ArtifactStorageService.setActiveChat(null, forceRefresh: true));
+    }
     setState(() {});
   }
 
@@ -287,9 +299,11 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
         setState(() {
           ChatStorageService.selectedChatId = newId;
         });
-        unawaited(
-          ArtifactStorageService.setActiveChat(newId, forceRefresh: false),
-        );
+        if (kFeatureArtifacts) {
+          unawaited(
+            ArtifactStorageService.setActiveChat(newId, forceRefresh: false),
+          );
+        }
       },
       isSidebarExpanded: _isSidebarExpanded,
       isCompactMode: isCompactMode,
@@ -322,7 +336,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     final double panelWidth = availableForPanel >= minPanelWidth
         ? math.min(400.0, availableForPanel)
         : 0;
-    final bool hasArtifact = _activeArtifact != null;
+    final bool hasArtifact = kFeatureArtifacts && _activeArtifact != null;
     final String? effectivePanel =
         _activePanel ?? (hasArtifact ? 'artifact' : null);
     final bool showPanel =
@@ -522,12 +536,14 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                     return;
                   }
                   _chatUIKey.currentState?.newChat();
-                  unawaited(
-                    ArtifactStorageService.setActiveChat(
-                      null,
-                      forceRefresh: true,
-                    ),
-                  );
+                  if (kFeatureArtifacts) {
+                    unawaited(
+                      ArtifactStorageService.setActiveChat(
+                        null,
+                        forceRefresh: true,
+                      ),
+                    );
+                  }
                   if (_isSidebarExpanded) _toggleSidebar();
                 },
                 borderRadius: BorderRadius.circular(8),
