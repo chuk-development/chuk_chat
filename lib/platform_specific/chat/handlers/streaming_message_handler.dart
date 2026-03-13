@@ -336,13 +336,32 @@ class StreamingMessageHandler {
 
                 // Add per-round content blocks so the UI shows the flow:
                 // reasoning → tool calls → interim text for each round.
-                if (finalReasoning.isNotEmpty) {
-                  contentBlocks.add(ContentBlock.reasoning(finalReasoning));
+                //
+                // Reasoning source priority:
+                //  1. Provider reasoning tokens (finalReasoning).
+                //  2. roundThinking on the first new tool call (captures
+                //     pre-tool text from the content stream for models
+                //     that embed thinking inline).
+                final bool hasProviderReasoning = finalReasoning
+                    .trim()
+                    .isNotEmpty;
+                String roundReasoning = hasProviderReasoning
+                    ? finalReasoning.trim()
+                    : (newToolCalls.isNotEmpty
+                          ? (newToolCalls.first.roundThinking?.trim() ?? '')
+                          : '');
+                if (roundReasoning.isNotEmpty) {
+                  contentBlocks.add(ContentBlock.reasoning(roundReasoning));
                 }
                 if (newToolCalls.isNotEmpty) {
                   contentBlocks.add(ContentBlock.toolCalls(newToolCalls));
                 }
-                if (interimText.isNotEmpty) {
+                // When provider reasoning tokens were available the
+                // interim text is distinct visible content. When
+                // reasoning came from the content stream, interimText
+                // overlaps with roundReasoning — skip to avoid showing
+                // the same text twice.
+                if (interimText.isNotEmpty && hasProviderReasoning) {
                   contentBlocks.add(ContentBlock.text(interimText));
                 }
 
