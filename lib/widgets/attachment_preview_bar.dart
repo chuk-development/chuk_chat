@@ -18,8 +18,8 @@ const int _kMaxPlainTextCharacters = 20000;
 const int _kMaxExtensionChars = 3;
 
 // Image card dimensions
-const double _kImageCardHeight = 96.0;
-const double _kImageCardWidth = 96.0;
+const double _kImageCardSize = 72.0;
+const double _kImageCardBorderWidth = 2.0;
 
 // Document chip thumbnail
 const double _kDocThumbnailSize = 30.0;
@@ -44,24 +44,27 @@ class AttachmentPreviewBar extends StatelessWidget {
     final Color baseTextColor =
         theme.iconTheme.color ?? theme.colorScheme.onSurface;
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-      child: Row(
-        children: files.map((file) {
-          final bool isImage = _isImageFile(file.fileName);
-          if (isImage) {
-            return _ImageAttachmentCard(file: file, onRemove: onRemove);
-          }
-          return _DocumentAttachmentTile(
-            file: file,
-            onRemove: onRemove,
-            onCopy: onCopy,
-            textColor: baseTextColor,
-            accentColor: theme.colorScheme.primary,
-            cardColor: theme.colorScheme.surface.withValues(alpha: 0.9),
-          );
-        }).toList(),
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          children: files.map((file) {
+            final bool isImage = _isImageFile(file.fileName);
+            if (isImage) {
+              return _ImageAttachmentCard(file: file, onRemove: onRemove);
+            }
+            return _DocumentAttachmentTile(
+              file: file,
+              onRemove: onRemove,
+              onCopy: onCopy,
+              textColor: baseTextColor,
+              accentColor: theme.colorScheme.primary,
+              cardColor: theme.colorScheme.surface.withValues(alpha: 0.9),
+            );
+          }).toList(),
+        ),
       ),
     );
   }
@@ -81,102 +84,94 @@ class _ImageAttachmentCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final bool isUploading = file.isUploading;
-    final BorderRadius radius = BorderRadius.circular(12);
+    final accent = theme.colorScheme.primary;
+    const double innerSize = _kImageCardSize - _kImageCardBorderWidth * 2;
+    final BorderRadius outerRadius = BorderRadius.circular(16);
+    final BorderRadius innerRadius = BorderRadius.circular(14);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.only(right: 8),
       child: GestureDetector(
         onTap: isUploading ? null : () => _openImageViewer(context),
         child: Container(
-          width: _kImageCardWidth,
-          height: _kImageCardHeight,
+          width: _kImageCardSize,
+          height: _kImageCardSize,
+          padding: const EdgeInsets.all(_kImageCardBorderWidth),
           decoration: BoxDecoration(
-            borderRadius: radius,
-            border: Border.all(
-              color: theme.dividerColor.withValues(alpha: 0.3),
+            borderRadius: outerRadius,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                accent.withValues(alpha: 0.6),
+                accent.withValues(alpha: 0.1),
+              ],
             ),
           ),
           child: ClipRRect(
-            borderRadius: radius,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                // Thumbnail image
-                _buildThumbnail(theme),
+            borderRadius: innerRadius,
+            child: SizedBox(
+              width: innerSize,
+              height: innerSize,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // Thumbnail image
+                  _buildThumbnail(theme),
 
-                // Upload progress overlay
-                if (isUploading)
-                  Container(
-                    color: Colors.black.withValues(alpha: 0.5),
-                    child: Center(
-                      child: SizedBox(
-                        width: 28,
-                        height: 28,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          valueColor: AlwaysStoppedAnimation(
-                            theme.colorScheme.primary,
+                  // Upload progress overlay
+                  if (isUploading)
+                    Container(
+                      color: Colors.black.withValues(alpha: 0.5),
+                      child: Center(
+                        child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            valueColor: AlwaysStoppedAnimation(accent),
                           ),
                         ),
                       ),
                     ),
-                  ),
 
-                // Bottom gradient overlay with filename + size
-                if (!isUploading)
+                  // Size badge (bottom-left)
+                  if (!isUploading && file.fileSizeBytes != null)
+                    Positioned(
+                      left: 4,
+                      bottom: 4,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 5,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          _formatBytes(file.fileSizeBytes!),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 8,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                  // Remove button (top-right)
                   Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    child: Container(
-                      padding: const EdgeInsets.fromLTRB(8, 16, 8, 6),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.transparent,
-                            Colors.black.withValues(alpha: 0.7),
-                          ],
-                        ),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            file.fileName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          if (file.fileSizeBytes != null)
-                            Text(
-                              _formatBytes(file.fileSizeBytes!),
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.7),
-                                fontSize: 9,
-                              ),
-                            ),
-                        ],
-                      ),
+                    top: 3,
+                    right: 3,
+                    child: _RemoveButton(
+                      onTap: isUploading ? null : () => onRemove(file.id),
+                      tooltip: 'Remove ${file.fileName}',
+                      size: 18,
                     ),
                   ),
-
-                // Remove button (top-right)
-                Positioned(
-                  top: 4,
-                  right: 4,
-                  child: _RemoveButton(
-                    onTap: isUploading ? null : () => onRemove(file.id),
-                    tooltip: 'Remove ${file.fileName}',
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -200,8 +195,8 @@ class _ImageAttachmentCard extends StatelessWidget {
         return Image.memory(
           localFile.readAsBytesSync(),
           fit: BoxFit.cover,
-          cacheWidth: (_kImageCardWidth * 2).toInt(),
-          cacheHeight: (_kImageCardHeight * 2).toInt(),
+          cacheWidth: (_kImageCardSize * 2).toInt(),
+          cacheHeight: (_kImageCardSize * 2).toInt(),
         );
       }
     }
@@ -249,10 +244,11 @@ class _ImageAttachmentCard extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _RemoveButton extends StatelessWidget {
-  const _RemoveButton({required this.onTap, this.tooltip});
+  const _RemoveButton({required this.onTap, this.tooltip, this.size = 22});
 
   final VoidCallback? onTap;
   final String? tooltip;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
@@ -264,9 +260,9 @@ class _RemoveButton extends StatelessWidget {
         onTap: onTap,
         child: Tooltip(
           message: tooltip ?? 'Remove',
-          child: const Padding(
-            padding: EdgeInsets.all(4),
-            child: Icon(Icons.close, size: 14, color: Colors.white),
+          child: Padding(
+            padding: EdgeInsets.all(size * 0.18),
+            child: Icon(Icons.close, size: size * 0.6, color: Colors.white),
           ),
         ),
       ),
