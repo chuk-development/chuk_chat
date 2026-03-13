@@ -1752,6 +1752,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         widget.includeRecentImagesInHistory || widget.includeAllImagesInHistory;
     final int imgWindow = widget.includeAllImagesInHistory ? index : 6;
     final Set<int> imgEligible = {};
+    var remainingHistoryImageCount = 2;
+    var remainingHistoryImageChars = 350000;
     if (shouldIncludeImages) {
       int uCount = 0;
       for (int j = index - 1; j >= 0; j--) {
@@ -1772,10 +1774,25 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           final content = <Map<String, dynamic>>[];
           if (text.isNotEmpty) content.add({'type': 'text', 'text': text});
           final urls = await _resolveHistoryImages(msg['images']!);
+          var addedHistoryImages = 0;
           for (final u in urls) {
+            if (remainingHistoryImageCount <= 0) break;
+            final urlChars = u.length;
+            if (urlChars > remainingHistoryImageChars) break;
             content.add({
               'type': 'image_url',
               'image_url': {'url': u},
+            });
+            remainingHistoryImageCount--;
+            remainingHistoryImageChars -= urlChars;
+            addedHistoryImages++;
+          }
+          final skippedImages = urls.length - addedHistoryImages;
+          if (skippedImages > 0) {
+            content.add({
+              'type': 'text',
+              'text':
+                  '[$skippedImages image(s) omitted from history due request size limits.]',
             });
           }
           if (content.isNotEmpty) {
@@ -1837,7 +1854,23 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       required List<Map<String, dynamic>> history,
       required String? passSystemPrompt,
       List<String>? passImages,
+      int currentPass = 0,
     }) async {
+      final requestPayload = <String, dynamic>{
+        'pass': currentPass + 1,
+        'message': message,
+        'history_count': history.length,
+        'history': history,
+        if (passSystemPrompt != null && passSystemPrompt.trim().isNotEmpty)
+          'system_prompt': passSystemPrompt,
+        if (passImages != null && passImages.isNotEmpty) 'images': passImages,
+      };
+      _appendDebugRequestForMessage(
+        placeholderIndex,
+        jsonEncode(requestPayload),
+        chatIdForStream,
+      );
+
       final eventStream = WebSocketChatService.sendStreamingChat(
         accessToken: accessToken,
         message: message,
@@ -1912,24 +1945,29 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                   : (newToolCalls.isNotEmpty
                         ? (newToolCalls.first.roundThinking?.trim() ?? '')
                         : '');
+              var interimOutputText = interimText;
+              if (!hasProviderReasoning && roundReasoning.isNotEmpty) {
+                if (interimOutputText == roundReasoning) {
+                  interimOutputText = '';
+                } else if (interimOutputText.startsWith(roundReasoning)) {
+                  interimOutputText = interimOutputText
+                      .substring(roundReasoning.length)
+                      .trim();
+                }
+              }
               if (roundReasoning.isNotEmpty) {
                 contentBlocks.add(ContentBlock.reasoning(roundReasoning));
               }
               if (newToolCalls.isNotEmpty) {
                 contentBlocks.add(ContentBlock.toolCalls(newToolCalls));
               }
-              // When provider reasoning tokens were available the
-              // interim text is distinct visible content. When
-              // reasoning came from the content stream, interimText
-              // overlaps with roundReasoning — skip to avoid showing
-              // the same text twice.
-              if (interimText.isNotEmpty && hasProviderReasoning) {
-                contentBlocks.add(ContentBlock.text(interimText));
+              if (interimOutputText.isNotEmpty) {
+                contentBlocks.add(ContentBlock.text(interimOutputText));
               }
 
               // Accumulate text for backward-compat message field.
-              if (interimText.isNotEmpty) {
-                accumulatedText.write(interimText);
+              if (interimOutputText.isNotEmpty) {
+                accumulatedText.write(interimOutputText);
                 accumulatedText.write('\n\n');
               }
 
@@ -1975,6 +2013,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 message: next.message,
                 history: next.history,
                 passSystemPrompt: next.systemPrompt,
+                passImages: imagesForResend,
+                currentPass: currentPass + 1,
               );
               return;
             }
@@ -2022,6 +2062,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 message: originalUserInput,
                 history: conversationHistory,
                 passSystemPrompt: retryPrompt,
+                passImages: imagesForResend,
+                currentPass: currentPass + 1,
               );
               return;
             }
@@ -2851,7 +2893,23 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       required List<Map<String, dynamic>> history,
       required String? passSystemPrompt,
       List<String>? passImages,
+      int currentPass = 0,
     }) async {
+      final requestPayload = <String, dynamic>{
+        'pass': currentPass + 1,
+        'message': message,
+        'history_count': history.length,
+        'history': history,
+        if (passSystemPrompt != null && passSystemPrompt.trim().isNotEmpty)
+          'system_prompt': passSystemPrompt,
+        if (passImages != null && passImages.isNotEmpty) 'images': passImages,
+      };
+      _appendDebugRequestForMessage(
+        placeholderIndex,
+        jsonEncode(requestPayload),
+        chatIdForStream,
+      );
+
       final stream = WebSocketChatService.sendStreamingChat(
         accessToken: accessToken,
         message: message,
@@ -2910,25 +2968,46 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                     : <ToolCall>[];
                 previousToolCallCount2 = allToolCalls.length;
 
-                // Merge tool calls into a single block across passes.
-                // Intermediate text is accumulated for the final text block.
-                if (newToolCalls.isNotEmpty) {
-                  if (contentBlocks2.isNotEmpty &&
-                      contentBlocks2.last.type == ContentBlockType.toolCalls) {
-                    final merged = [
-                      ...contentBlocks2.last.toolCalls!,
-                      ...newToolCalls,
-                    ];
-                    contentBlocks2[contentBlocks2.length - 1] =
-                        ContentBlock.toolCalls(merged);
-                  } else {
-                    contentBlocks2.add(ContentBlock.toolCalls(newToolCalls));
+                // Add per-round content blocks so the UI shows the flow:
+                // reasoning → tool calls → interim text for each round.
+                //
+                // Reasoning source priority:
+                //  1. Provider reasoning tokens (finalReasoning).
+                //  2. roundThinking on the first new tool call (captures
+                //     pre-tool text from the content stream for models
+                //     that embed thinking inline).
+                final bool hasProviderReasoning = finalReasoning
+                    .trim()
+                    .isNotEmpty;
+                String roundReasoning = hasProviderReasoning
+                    ? finalReasoning.trim()
+                    : (newToolCalls.isNotEmpty
+                          ? (newToolCalls.first.roundThinking?.trim() ?? '')
+                          : '');
+                var interimOutputText = interimText;
+                if (!hasProviderReasoning && roundReasoning.isNotEmpty) {
+                  if (interimOutputText == roundReasoning) {
+                    interimOutputText = '';
+                  } else if (interimOutputText.startsWith(roundReasoning)) {
+                    interimOutputText = interimOutputText
+                        .substring(roundReasoning.length)
+                        .trim();
                   }
                 }
 
+                if (roundReasoning.isNotEmpty) {
+                  contentBlocks2.add(ContentBlock.reasoning(roundReasoning));
+                }
+                if (newToolCalls.isNotEmpty) {
+                  contentBlocks2.add(ContentBlock.toolCalls(newToolCalls));
+                }
+                if (interimOutputText.isNotEmpty) {
+                  contentBlocks2.add(ContentBlock.text(interimOutputText));
+                }
+
                 // Accumulate text for backward-compat message field.
-                if (interimText.isNotEmpty) {
-                  accumulatedText2.write(interimText);
+                if (interimOutputText.isNotEmpty) {
+                  accumulatedText2.write(interimOutputText);
                   accumulatedText2.write('\n\n');
                 }
 
@@ -2971,6 +3050,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                   message: next.message,
                   history: next.history,
                   passSystemPrompt: next.systemPrompt,
+                  passImages: imageDataUrls,
+                  currentPass: currentPass + 1,
                 );
                 return;
               }
@@ -3024,6 +3105,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                   message: aiPromptContent,
                   history: apiHistory,
                   passSystemPrompt: retryPrompt,
+                  passImages: imageDataUrls,
+                  currentPass: currentPass + 1,
                 );
                 return;
               }
@@ -3056,10 +3139,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
               // Build final content blocks.
               if (contentBlocks2.isNotEmpty) {
-                // Use the full accumulated text (all passes) for the
-                // single text block shown below the tool calls bar.
+                // Only use the final pass's text for the text block —
+                // interim text from earlier passes is already in content
+                // blocks.
                 final finalText = stripToolCallBlocksForDisplay(
-                  effectiveContent,
+                  rawContent,
                 ).trim();
                 if (resolvedReasoning.isNotEmpty) {
                   contentBlocks2.add(ContentBlock.reasoning(resolvedReasoning));
@@ -3293,6 +3377,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     final int imageWindow = widget.includeAllImagesInHistory
         ? _messages.length
         : 6;
+    var remainingHistoryImageCount = 2;
+    var remainingHistoryImageChars = 350000;
 
     // Determine which user messages are within the image window
     final Set<int> imageEligibleIndices = {};
@@ -3327,10 +3413,25 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             content.add({'type': 'text', 'text': text});
           }
           final imageDataUrls = await _resolveHistoryImages(message['images']!);
+          var addedHistoryImages = 0;
           for (final dataUrl in imageDataUrls) {
+            if (remainingHistoryImageCount <= 0) break;
+            final urlChars = dataUrl.length;
+            if (urlChars > remainingHistoryImageChars) break;
             content.add({
               'type': 'image_url',
               'image_url': {'url': dataUrl},
+            });
+            remainingHistoryImageCount--;
+            remainingHistoryImageChars -= urlChars;
+            addedHistoryImages++;
+          }
+          final skippedImages = imageDataUrls.length - addedHistoryImages;
+          if (skippedImages > 0) {
+            content.add({
+              'type': 'text',
+              'text':
+                  '[$skippedImages image(s) omitted from history due request size limits.]',
             });
           }
           if (content.isNotEmpty) {
@@ -3441,6 +3542,52 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     final backgroundMsgs = _streamingManager.getBackgroundMessages(chatId);
     if (backgroundMsgs != null && index >= 0 && index < backgroundMsgs.length) {
       backgroundMsgs[index]['toolCalls'] = toolCallsJson;
+      _persistChatWithIdAndMessages(chatId, backgroundMsgs);
+    }
+  }
+
+  void _appendDebugRequestForMessage(
+    int index,
+    String requestPayloadJson,
+    String chatId,
+  ) {
+    final bool isActiveChat = _activeChatId == chatId;
+
+    void appendPayload(Map<String, String> message) {
+      final passPayloads = <dynamic>[];
+      final existing = message['debugRequests'];
+      if (existing != null && existing.trim().isNotEmpty) {
+        try {
+          final decoded = jsonDecode(existing);
+          if (decoded is List) {
+            passPayloads.addAll(decoded);
+          }
+        } catch (_) {}
+      }
+
+      try {
+        passPayloads.add(jsonDecode(requestPayloadJson));
+      } catch (_) {
+        passPayloads.add({'raw': requestPayloadJson});
+      }
+
+      message['debugRequests'] = jsonEncode(passPayloads);
+    }
+
+    if (mounted && isActiveChat && index >= 0 && index < _messages.length) {
+      setState(() {
+        final message = Map<String, String>.from(_messages[index]);
+        appendPayload(message);
+        _messages[index] = message;
+      });
+      return;
+    }
+
+    final backgroundMsgs = _streamingManager.getBackgroundMessages(chatId);
+    if (backgroundMsgs != null && index >= 0 && index < backgroundMsgs.length) {
+      final message = Map<String, String>.from(backgroundMsgs[index]);
+      appendPayload(message);
+      backgroundMsgs[index] = message;
       _persistChatWithIdAndMessages(chatId, backgroundMsgs);
     }
   }

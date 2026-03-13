@@ -192,11 +192,15 @@ class ToolCallHandler {
       );
     }
 
-    _appendRoundToHistory(session, assistantContent: cleanedContent);
-
     final roundThinking = _extractRoundThinking(
       content: cleanedContent,
       reasoning: reasoning,
+    );
+
+    _appendRoundToHistory(
+      session,
+      assistantContent: cleanedContent,
+      assistantReasoning: roundThinking,
     );
 
     final parsedCalls = parseToolCalls(
@@ -382,15 +386,29 @@ class ToolCallHandler {
   void _appendRoundToHistory(
     ToolLoopSession session, {
     required String assistantContent,
+    String? assistantReasoning,
   }) {
     final userText = session.latestUserMessage.trim();
     if (userText.isNotEmpty) {
       session.history.add({'role': 'user', 'content': userText});
     }
 
-    final assistantText = assistantContent.trim();
-    if (assistantText.isNotEmpty) {
+    final reasoningText = assistantReasoning?.trim() ?? '';
+    var assistantText = assistantContent.trim();
+    if (reasoningText.isNotEmpty && assistantText.startsWith(reasoningText)) {
+      assistantText = assistantText.substring(reasoningText.length).trim();
+    }
+
+    if (reasoningText.isEmpty && assistantText.isNotEmpty) {
       session.history.add({'role': 'assistant', 'content': assistantText});
+      return;
+    }
+
+    if (reasoningText.isNotEmpty) {
+      final withThinking = assistantText.isEmpty
+          ? '<thinking>\n$reasoningText\n</thinking>'
+          : '<thinking>\n$reasoningText\n</thinking>\n\n$assistantText';
+      session.history.add({'role': 'assistant', 'content': withThinking});
     }
   }
 

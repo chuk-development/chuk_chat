@@ -18,6 +18,9 @@ Tip:
   ./run.sh android resolves to connected android-x64 first.
   Set ANDROID_AVD_NAME to choose a default emulator:
   ANDROID_AVD_NAME=Pixel_7_API_31 ./run.sh android-vm
+  Set ANDROID_VM_GPU_MODE to override emulator rendering mode
+  (Linux defaults to swiftshader_indirect for stability):
+  ANDROID_VM_GPU_MODE=host ./run.sh android-vm
 EOF
 }
 
@@ -39,6 +42,9 @@ resolve_android_tool() {
     case "$tool_name" in
       adb)
         tool_path="$sdk_path/platform-tools/adb"
+        ;;
+      emulator)
+        tool_path="$sdk_path/emulator/emulator"
         ;;
       *)
         return 1
@@ -212,6 +218,11 @@ configure_android_local_api_access() {
 start_android_vm() {
   local avd_name="${1:-${ANDROID_AVD_NAME:-}}"
   local adb_bin=""
+  local emulator_bin=""
+  local emulator_gpu_mode=""
+  local launch_log=""
+  local launch_pid=""
+  local emulator_args=()
   local emulators_output=""
   local emulator_line=""
   local emulator_candidate=""
@@ -281,15 +292,44 @@ start_android_vm() {
     exit 1
   fi
 
-  echo "Starting Android VM (cold boot): $avd_name" >&2
-  if ! flutter emulators --launch "$avd_name" --cold >/dev/null; then
-    echo "Error: failed to launch Android VM '$avd_name'." >&2
-    echo "Try: flutter emulators (list IDs), then rerun with ./run.sh android-vm <id>" >&2
-    exit 1
+  emulator_gpu_mode="${ANDROID_VM_GPU_MODE:-}"
+  if [ -z "$emulator_gpu_mode" ] && [ "$(uname -s)" = "Linux" ]; then
+    emulator_gpu_mode="swiftshader_indirect"
+  fi
+
+  if emulator_bin="$(resolve_android_tool emulator)"; then
+    launch_log="${ANDROID_EMULATOR_LOG_PATH:-/tmp/android-emulator-${avd_name}.log}"
+    echo "Starting Android VM (cold boot): $avd_name${emulator_gpu_mode:+ (gpu: $emulator_gpu_mode)}" >&2
+
+    emulator_args=("$emulator_bin" -avd "$avd_name" -no-snapshot-load)
+    if [ -n "$emulator_gpu_mode" ]; then
+      emulator_args+=(-gpu "$emulator_gpu_mode")
+    fi
+
+    nohup "${emulator_args[@]}" >"$launch_log" 2>&1 &
+    launch_pid="$!"
+  else
+    echo "Starting Android VM (cold boot): $avd_name" >&2
+    if ! flutter emulators --launch "$avd_name" --cold >/dev/null; then
+      echo "Error: failed to launch Android VM '$avd_name'." >&2
+      echo "Try: flutter emulators (list IDs), then rerun with ./run.sh android-vm <id>" >&2
+      exit 1
+    fi
   fi
 
   echo "Waiting for Android VM to boot..." >&2
   while [ "$elapsed" -lt "$max_wait_seconds" ]; do
+    if [ -n "$launch_pid" ] && ! kill -0 "$launch_pid" 2>/dev/null; then
+      echo "Error: Android VM exited before it finished booting." >&2
+      if [ -n "$launch_log" ]; then
+        echo "Emulator log: $launch_log" >&2
+      fi
+      if [ "$emulator_gpu_mode" != "swiftshader_indirect" ]; then
+        echo "Tip: ANDROID_VM_GPU_MODE=swiftshader_indirect ./run.sh android-vm $avd_name" >&2
+      fi
+      exit 1
+    fi
+
     emulator_id=$("$adb_bin" devices | awk '/^emulator-[0-9]+[[:space:]]+device$/ {print $1; exit}')
 
     if [ -n "$emulator_id" ] && is_android_vm_booted "$adb_bin" "$emulator_id"; then

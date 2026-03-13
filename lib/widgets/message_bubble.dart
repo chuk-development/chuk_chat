@@ -659,8 +659,22 @@ class _MessageBubbleState extends State<MessageBubble>
       }
     }
 
+    final textBlockIndexes = <int>[];
+    for (int i = 0; i < blocks.length; i++) {
+      final block = blocks[i];
+      if (block.type == ContentBlockType.text &&
+          block.text != null &&
+          block.text!.trim().isNotEmpty) {
+        textBlockIndexes.add(i);
+      }
+    }
+    final lastTextBlockIndex = textBlockIndexes.isEmpty
+        ? -1
+        : textBlockIndexes.last;
+
     // Render each content block in order
-    for (final block in blocks) {
+    for (int i = 0; i < blocks.length; i++) {
+      final block = blocks[i];
       switch (block.type) {
         case ContentBlockType.text:
           if (block.text != null && block.text!.trim().isNotEmpty) {
@@ -669,7 +683,12 @@ class _MessageBubbleState extends State<MessageBubble>
               children.add(const SizedBox(height: 8));
               insertedQrImage = true;
             }
-            children.add(_buildBlockText(block.text!, iconFgColor, bgColor));
+            final isInterimTextBlock = i != lastTextBlockIndex;
+            children.add(
+              isInterimTextBlock
+                  ? _buildBlockInterimText(block.text!, accentColor)
+                  : _buildBlockText(block.text!, iconFgColor, bgColor),
+            );
           }
         case ContentBlockType.toolCalls:
           if (block.toolCalls != null &&
@@ -888,6 +907,18 @@ class _MessageBubbleState extends State<MessageBubble>
         textColor: textColor,
         backgroundColor: bgColor,
       ),
+    );
+  }
+
+  /// Renders an interim between-tool output block.
+  Widget _buildBlockInterimText(String text, Color accentColor) {
+    return _buildExpandableCard(
+      key: 'block_interim_${text.hashCode}',
+      icon: Icons.chat_bubble_outline,
+      label: 'Interim Output',
+      preview: text,
+      expandedContent: text,
+      accentColor: accentColor.withValues(alpha: 0.8),
     );
   }
 

@@ -51,6 +51,11 @@ class StreamingMessageHandler {
   Function(int index, String contentBlocksJson, String chatId)?
   onContentBlocksUpdate;
 
+  /// Called when an outbound request payload is prepared for a streaming pass.
+  /// Used by debug export to inspect exactly what was sent.
+  Function(int index, String requestPayloadJson, String chatId)?
+  onRequestPayloadUpdate;
+
   Function(String chatId, int index, String content, String reasoning)?
   onBackgroundUpdate;
   Function()? onPaymentRequired;
@@ -68,6 +73,8 @@ class StreamingMessageHandler {
   // In-memory cache for resolved Base64 images (storage path -> data URL)
   static final Map<String, String> _imageBase64Cache = {};
   static const int _maxCacheSize = 10;
+  static const int _maxHistoryImageCount = 2;
+  static const int _maxHistoryImageDataChars = 350000;
 
   /// Send a message with streaming response
   Future<void> sendMessage({
@@ -260,6 +267,23 @@ class StreamingMessageHandler {
         return;
       }
 
+      if (onRequestPayloadUpdate != null) {
+        final requestPayload = <String, dynamic>{
+          'pass': currentPass + 1,
+          'message': message,
+          'history_count': history.length,
+          'history': history,
+          if (systemPrompt != null && systemPrompt.trim().isNotEmpty)
+            'system_prompt': systemPrompt,
+          if (passImages != null && passImages.isNotEmpty) 'images': passImages,
+        };
+        onRequestPayloadUpdate!(
+          placeholderIndex,
+          jsonEncode(requestPayload),
+          chatId,
+        );
+      }
+
       final stream = WebSocketChatService.sendStreamingChat(
         accessToken: accessToken,
         message: message,
@@ -350,19 +374,24 @@ class StreamingMessageHandler {
                     : (newToolCalls.isNotEmpty
                           ? (newToolCalls.first.roundThinking?.trim() ?? '')
                           : '');
+                var interimOutputText = interimText;
+                if (!hasProviderReasoning && roundReasoning.isNotEmpty) {
+                  if (interimOutputText == roundReasoning) {
+                    interimOutputText = '';
+                  } else if (interimOutputText.startsWith(roundReasoning)) {
+                    interimOutputText = interimOutputText
+                        .substring(roundReasoning.length)
+                        .trim();
+                  }
+                }
                 if (roundReasoning.isNotEmpty) {
                   contentBlocks.add(ContentBlock.reasoning(roundReasoning));
                 }
                 if (newToolCalls.isNotEmpty) {
                   contentBlocks.add(ContentBlock.toolCalls(newToolCalls));
                 }
-                // When provider reasoning tokens were available the
-                // interim text is distinct visible content. When
-                // reasoning came from the content stream, interimText
-                // overlaps with roundReasoning — skip to avoid showing
-                // the same text twice.
-                if (interimText.isNotEmpty && hasProviderReasoning) {
-                  contentBlocks.add(ContentBlock.text(interimText));
+                if (interimOutputText.isNotEmpty) {
+                  contentBlocks.add(ContentBlock.text(interimOutputText));
                 }
 
                 // Fire content blocks update so the UI can render them.
@@ -373,8 +402,8 @@ class StreamingMessageHandler {
                 );
 
                 // Accumulate text for backward-compat message field.
-                if (interimText.isNotEmpty) {
-                  accumulatedText.write(interimText);
+                if (interimOutputText.isNotEmpty) {
+                  accumulatedText.write(interimOutputText);
                   accumulatedText.write('\n\n');
                 }
 
@@ -411,6 +440,7 @@ class StreamingMessageHandler {
                   message: next.message,
                   history: next.history,
                   systemPrompt: next.systemPrompt,
+                  passImages: images,
                   currentPass: currentPass + 1,
                 );
                 return;
@@ -492,6 +522,7 @@ class StreamingMessageHandler {
                   message: aiPromptContent,
                   history: apiHistory,
                   systemPrompt: retryPrompt,
+                  passImages: images,
                   currentPass: currentPass + 1,
                 );
                 return;
@@ -824,6 +855,8 @@ class StreamingMessageHandler {
 
     // Find which user messages (by index) are within the image window
     final Set<int> imageEligibleIndices = {};
+    var remainingHistoryImageCount = _maxHistoryImageCount;
+    var remainingHistoryImageChars = _maxHistoryImageDataChars;
     if (shouldIncludeImages) {
       int userMsgCount = 0;
       for (int i = messages.length - 1; i >= 0; i--) {
@@ -857,10 +890,25 @@ class StreamingMessageHandler {
           }
           // Resolve image storage paths to Base64
           final imageDataUrls = await _resolveHistoryImages(message['images']!);
+          var addedHistoryImages = 0;
           for (final dataUrl in imageDataUrls) {
+            if (remainingHistoryImageCount <= 0) break;
+            final dataUrlChars = dataUrl.length;
+            if (dataUrlChars > remainingHistoryImageChars) break;
             content.add({
               'type': 'image_url',
               'image_url': {'url': dataUrl},
+            });
+            remainingHistoryImageCount--;
+            remainingHistoryImageChars -= dataUrlChars;
+            addedHistoryImages++;
+          }
+          final skippedImages = imageDataUrls.length - addedHistoryImages;
+          if (skippedImages > 0) {
+            content.add({
+              'type': 'text',
+              'text':
+                  '[$skippedImages image(s) omitted from history due request size limits.]',
             });
           }
           if (content.isNotEmpty) {
