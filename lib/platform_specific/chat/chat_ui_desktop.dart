@@ -4045,6 +4045,18 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   }
 
   void _removeAttachedFile(String fileId) {
+    // If this was an uploaded image, delete it from Supabase Storage
+    final file = _attachedFiles.where((f) => f.id == fileId).firstOrNull;
+    if (file != null && file.encryptedImagePath != null) {
+      unawaited(
+        ImageStorageService.deleteEncryptedImage(
+          file.encryptedImagePath!,
+        ).catchError((_) {
+          // Silently ignore — the user chose to remove it
+        }),
+      );
+    }
+
     setState(() {
       _attachedFiles.removeWhere((f) => f.id == fileId);
     });
