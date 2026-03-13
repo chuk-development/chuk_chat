@@ -33,6 +33,8 @@ class DebugChatFormatter {
       final imageGeneratedAt = m['imageGeneratedAt'] ?? '';
       final attachments = m['attachments'] ?? '';
       final attachedFilesJson = m['attachedFilesJson'] ?? '';
+      final contentBlocksJson = m['contentBlocks'] ?? '';
+      final debugRequestsJson = m['debugRequests'] ?? '';
 
       buf.writeln('--- Message ${i + 1} [$role] ---');
 
@@ -94,6 +96,44 @@ class DebugChatFormatter {
         } catch (_) {
           // Not valid JSON — dump raw
           buf.writeln('  (raw): $toolCallsJson');
+        }
+        buf.writeln();
+      }
+
+      // Content blocks
+      if (contentBlocksJson.isNotEmpty) {
+        buf.writeln('Content Blocks:');
+        try {
+          final List<dynamic> blocks = jsonDecode(contentBlocksJson) as List;
+          for (var bi = 0; bi < blocks.length; bi++) {
+            final block = blocks[bi];
+            if (block is! Map) continue;
+            final type = (block['type'] ?? 'text').toString();
+            buf.writeln('  [$bi] type=$type');
+            final textValue = block['text']?.toString() ?? '';
+            if (textValue.trim().isNotEmpty) {
+              buf.writeln('    text: ${textValue.trim()}');
+            }
+            final rawCalls = block['toolCalls'];
+            if (rawCalls is List && rawCalls.isNotEmpty) {
+              buf.writeln('    toolCalls: ${rawCalls.length}');
+            }
+          }
+        } catch (_) {
+          buf.writeln('  (raw): $contentBlocksJson');
+        }
+        buf.writeln();
+      }
+
+      // Raw request payloads sent during streaming passes
+      if (debugRequestsJson.isNotEmpty) {
+        buf.writeln('Request Payloads Sent:');
+        try {
+          final decoded = jsonDecode(debugRequestsJson);
+          final pretty = const JsonEncoder.withIndent('  ').convert(decoded);
+          buf.writeln(pretty);
+        } catch (_) {
+          buf.writeln(debugRequestsJson);
         }
         buf.writeln();
       }

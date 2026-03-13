@@ -133,7 +133,7 @@ void main() {
       expect(updated.encryptedImagePath, equals('user/img.enc'));
     });
 
-    test('toJson includes all fields', () {
+    test('toJson omits sensitive localPath field', () {
       final file = AttachedFile(
         id: 'f1',
         fileName: 'doc.pdf',
@@ -149,7 +149,7 @@ void main() {
       expect(json['fileName'], equals('doc.pdf'));
       expect(json['markdownContent'], equals('# Content'));
       expect(json['isUploading'], isFalse);
-      expect(json['localPath'], equals('/tmp/doc.pdf'));
+      expect(json.containsKey('localPath'), isFalse);
       expect(json['fileSizeBytes'], equals(2048));
       expect(json['encryptedImagePath'], isNull);
       expect(json['isImage'], isFalse);
@@ -170,6 +170,7 @@ void main() {
       expect(file.fileName, equals('photo.jpg'));
       expect(file.isImage, isTrue);
       expect(file.encryptedImagePath, equals('user/img.enc'));
+      expect(file.localPath, isNull);
     });
 
     test('fromJson handles missing optional fields', () {
@@ -195,7 +196,7 @@ void main() {
       expect(restored.fileName, equals(original.fileName));
       expect(restored.markdownContent, equals(original.markdownContent));
       expect(restored.isUploading, equals(original.isUploading));
-      expect(restored.localPath, equals(original.localPath));
+      expect(restored.localPath, isNull);
       expect(restored.fileSizeBytes, equals(original.fileSizeBytes));
       expect(restored.encryptedImagePath, equals(original.encryptedImagePath));
       expect(restored.isImage, equals(original.isImage));

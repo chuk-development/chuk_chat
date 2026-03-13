@@ -90,7 +90,6 @@ class AttachedFile {
       'fileName': fileName,
       'markdownContent': markdownContent,
       'isUploading': isUploading,
-      'localPath': localPath,
       'fileSizeBytes': fileSizeBytes,
       'encryptedImagePath': encryptedImagePath,
       'isImage': isImage,
@@ -104,7 +103,8 @@ class AttachedFile {
       fileName: json['fileName'] as String,
       markdownContent: json['markdownContent'] as String?,
       isUploading: json['isUploading'] as bool? ?? false,
-      localPath: json['localPath'] as String?,
+      // Privacy: never restore/persist local filesystem paths from storage.
+      localPath: null,
       fileSizeBytes: json['fileSizeBytes'] as int?,
       encryptedImagePath: json['encryptedImagePath'] as String?,
       isImage: json['isImage'] as bool? ?? false,

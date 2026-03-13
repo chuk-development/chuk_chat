@@ -187,6 +187,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       ..onToolCallsUpdate = _updateToolCallsForMessage
       ..onToolImagesProcessed = _handleToolImagesProcessed
       ..onContentBlocksUpdate = _updateContentBlocksForMessage
+      ..onRequestPayloadUpdate = _updateRequestPayloadForMessage
       ..onBackgroundUpdate = (chatId, index, content, reasoning) {
         if (_activeChatId != chatId) {
           unawaited(
@@ -1637,6 +1638,41 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         ),
       );
     }
+  }
+
+  void _updateRequestPayloadForMessage(
+    int index,
+    String requestPayloadJson,
+    String chatId,
+  ) {
+    final bool isActiveChat = _activeChatId == chatId;
+    if (!(mounted && isActiveChat && index >= 0 && index < _messages.length)) {
+      return;
+    }
+
+    setState(() {
+      final message = Map<String, String>.from(_messages[index]);
+      final passPayloads = <dynamic>[];
+
+      final existing = message['debugRequests'];
+      if (existing != null && existing.trim().isNotEmpty) {
+        try {
+          final decoded = jsonDecode(existing);
+          if (decoded is List) {
+            passPayloads.addAll(decoded);
+          }
+        } catch (_) {}
+      }
+
+      try {
+        passPayloads.add(jsonDecode(requestPayloadJson));
+      } catch (_) {
+        passPayloads.add({'raw': requestPayloadJson});
+      }
+
+      message['debugRequests'] = jsonEncode(passPayloads);
+      _messages[index] = message;
+    });
   }
 
   Future<void> _finalizeAiMessage(
