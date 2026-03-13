@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/models/artifact.dart';
+import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/pages/projects_page.dart';
 import 'package:chuk_chat/pages/media_manager_page.dart';
@@ -46,10 +47,12 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _activeArtifact = ArtifactStorageService.activeArtifactNotifier.value;
-    ArtifactStorageService.activeArtifactNotifier.addListener(
-      _onArtifactChanged,
-    );
+    if (kFeatureArtifacts) {
+      _activeArtifact = ArtifactStorageService.activeArtifactNotifier.value;
+      ArtifactStorageService.activeArtifactNotifier.addListener(
+        _onArtifactChanged,
+      );
+    }
     // Defer non-critical startup work to keep first interactions responsive.
     unawaited(
       Future<void>.delayed(const Duration(seconds: 8), () async {
@@ -66,23 +69,25 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
         }
       }),
     );
-    unawaited(
-      Future<void>.delayed(const Duration(seconds: 2), () async {
-        if (!mounted) return;
-        try {
-          await ArtifactStorageService.setActiveChat(
-            ChatStorageService.selectedChatId,
-            forceRefresh: false,
-          );
-        } catch (error) {
-          if (kDebugMode) {
-            debugPrint(
-              '⚠️ [RootMobile] Deferred artifact activation failed: $error',
+    if (kFeatureArtifacts) {
+      unawaited(
+        Future<void>.delayed(const Duration(seconds: 2), () async {
+          if (!mounted) return;
+          try {
+            await ArtifactStorageService.setActiveChat(
+              ChatStorageService.selectedChatId,
+              forceRefresh: false,
             );
+          } catch (error) {
+            if (kDebugMode) {
+              debugPrint(
+                '⚠️ [RootMobile] Deferred artifact activation failed: $error',
+              );
+            }
           }
-        }
-      }),
-    );
+        }),
+      );
+    }
 
     // Initialize smooth sidebar animation
     _sidebarAnimController = AnimationController(
@@ -102,9 +107,11 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
 
   @override
   void dispose() {
-    ArtifactStorageService.activeArtifactNotifier.removeListener(
-      _onArtifactChanged,
-    );
+    if (kFeatureArtifacts) {
+      ArtifactStorageService.activeArtifactNotifier.removeListener(
+        _onArtifactChanged,
+      );
+    }
     _sidebarAnimController.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -289,9 +296,11 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
         _sidebarAnimController.reverse();
       }
     });
-    unawaited(
-      ArtifactStorageService.setActiveChat(chatId, forceRefresh: false),
-    );
+    if (kFeatureArtifacts) {
+      unawaited(
+        ArtifactStorageService.setActiveChat(chatId, forceRefresh: false),
+      );
+    }
   }
 
   Future<void> _handleChatDeleted(String deletedChatId) async {
@@ -302,7 +311,11 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     // If the deleted chat is the one currently displayed, start a new chat
     if (ChatStorageService.selectedChatId == deletedChatId) {
       _chatUIMobileKey.currentState?.newChat();
-      unawaited(ArtifactStorageService.setActiveChat(null, forceRefresh: true));
+      if (kFeatureArtifacts) {
+        unawaited(
+          ArtifactStorageService.setActiveChat(null, forceRefresh: true),
+        );
+      }
     }
     setState(() {});
   }
@@ -311,7 +324,9 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     // Hide keyboard when creating new chat
     FocusScope.of(context).unfocus();
     _chatUIMobileKey.currentState?.newChat();
-    unawaited(ArtifactStorageService.setActiveChat(null, forceRefresh: true));
+    if (kFeatureArtifacts) {
+      unawaited(ArtifactStorageService.setActiveChat(null, forceRefresh: true));
+    }
   }
 
   void _openArtifactSheet() {
@@ -410,7 +425,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                     tooltip: 'Copy full chat',
                   ),
                 ),
-                if (_activeArtifact != null)
+                if (kFeatureArtifacts && _activeArtifact != null)
                   Semantics(
                     identifier: 'open_artifact_button',
                     child: IconButton(
@@ -443,12 +458,14 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                   setState(() {
                     ChatStorageService.selectedChatId = newId;
                   });
-                  unawaited(
-                    ArtifactStorageService.setActiveChat(
-                      newId,
-                      forceRefresh: false,
-                    ),
-                  );
+                  if (kFeatureArtifacts) {
+                    unawaited(
+                      ArtifactStorageService.setActiveChat(
+                        newId,
+                        forceRefresh: false,
+                      ),
+                    );
+                  }
                 },
                 isSidebarExpanded: _isSidebarExpanded,
                 showReasoningTokens: widget.config.showReasoningTokens,

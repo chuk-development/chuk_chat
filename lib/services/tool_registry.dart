@@ -950,6 +950,9 @@ void registerBuiltinTools(ToolExecutor executor) {
     if (!kFeatureServerTools && _serverBackedToolNames.contains(tool.name)) {
       continue;
     }
+    if (!kFeatureArtifacts && tool.name == 'artifact_manager') {
+      continue;
+    }
     executor.registerTool(tool);
   }
 }

@@ -2106,21 +2106,23 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       }
     }
 
-    final chatId = _activeChatId ?? ChatStorageService.selectedChatId;
-    if (chatId != null && chatId.isNotEmpty) {
-      try {
-        final artifactContext =
-            await ArtifactContextService.buildArtifactsSystemMessage(chatId);
-        if (artifactContext != null && artifactContext.isNotEmpty) {
-          if (resolvedPrompt != null && resolvedPrompt.isNotEmpty) {
-            resolvedPrompt = '$artifactContext\n\n---\n\n$resolvedPrompt';
-          } else {
-            resolvedPrompt = artifactContext;
+    if (kFeatureArtifacts) {
+      final chatId = _activeChatId ?? ChatStorageService.selectedChatId;
+      if (chatId != null && chatId.isNotEmpty) {
+        try {
+          final artifactContext =
+              await ArtifactContextService.buildArtifactsSystemMessage(chatId);
+          if (artifactContext != null && artifactContext.isNotEmpty) {
+            if (resolvedPrompt != null && resolvedPrompt.isNotEmpty) {
+              resolvedPrompt = '$artifactContext\n\n---\n\n$resolvedPrompt';
+            } else {
+              resolvedPrompt = artifactContext;
+            }
           }
-        }
-      } catch (error) {
-        if (kDebugMode) {
-          debugPrint('Error building artifact system message: $error');
+        } catch (error) {
+          if (kDebugMode) {
+            debugPrint('Error building artifact system message: $error');
+          }
         }
       }
     }
