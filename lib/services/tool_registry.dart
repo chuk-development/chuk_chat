@@ -1,6 +1,7 @@
 import 'package:chuk_chat/models/client_tool.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/services/tool_executor.dart' show ToolExecutor;
+import 'package:chuk_chat/utils/io_helper.dart' show Platform;
 
 const Set<String> _serverBackedToolNames = {
   'spotify_control',
@@ -944,13 +945,34 @@ final List<ClientTool> builtinTools = [
   ),
 ];
 
+/// Whether the current platform is a mobile device (Android/iOS).
+///
+/// Uses the compile-time [kPlatformMobile] flag first, then falls back to
+/// runtime detection via `dart:io` [Platform].
+bool _isMobileRuntime() {
+  if (kPlatformMobile) return true;
+  if (kPlatformDesktop) return false;
+  // Auto-detect at runtime.
+  return Platform.isAndroid || Platform.isIOS;
+}
+
 /// Register all built-in tools from [builtinTools] into a [ToolExecutor].
 void registerBuiltinTools(ToolExecutor executor) {
+  final bool isMobile = _isMobileRuntime();
+
   for (final tool in builtinTools) {
     if (!kFeatureServerTools && _serverBackedToolNames.contains(tool.name)) {
       continue;
     }
     if (!kFeatureArtifacts && tool.name == 'artifact_manager') {
+      continue;
+    }
+    // Device tool (GPS, alarms, SMS) is mobile-only.
+    if (!isMobile && tool.name == 'device') {
+      continue;
+    }
+    // Bash sandbox is desktop-only.
+    if (isMobile && tool.name == 'bash') {
       continue;
     }
     executor.registerTool(tool);

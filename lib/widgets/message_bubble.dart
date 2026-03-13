@@ -1307,7 +1307,11 @@ class _MessageBubbleState extends State<MessageBubble>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   for (int i = 0; i < toolCalls.length; i++) ...[
-                    if (toolCalls[i].roundThinking != null &&
+                    // In content-block mode, reasoning is rendered as a
+                    // separate block above the tool calls bar, so skip
+                    // the per-tool roundThinking to avoid duplication.
+                    if (!isContentBlock &&
+                        toolCalls[i].roundThinking != null &&
                         toolCalls[i].roundThinking!.trim().isNotEmpty)
                       _buildExpandableCard(
                         key: 'thinking_round_${toolCalls[i].id}_$i',

@@ -1867,20 +1867,16 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                   : <ToolCall>[];
               previousToolCallCount = allToolCalls.length;
 
-              // Merge tool calls into a single block across passes.
-              // Intermediate text is accumulated for the final text block.
+              // Add per-round content blocks so the UI shows the flow:
+              // reasoning → tool calls → interim text for each round.
+              if (finalReasoning.isNotEmpty) {
+                contentBlocks.add(ContentBlock.reasoning(finalReasoning));
+              }
               if (newToolCalls.isNotEmpty) {
-                if (contentBlocks.isNotEmpty &&
-                    contentBlocks.last.type == ContentBlockType.toolCalls) {
-                  final merged = [
-                    ...contentBlocks.last.toolCalls!,
-                    ...newToolCalls,
-                  ];
-                  contentBlocks[contentBlocks.length - 1] =
-                      ContentBlock.toolCalls(merged);
-                } else {
-                  contentBlocks.add(ContentBlock.toolCalls(newToolCalls));
-                }
+                contentBlocks.add(ContentBlock.toolCalls(newToolCalls));
+              }
+              if (interimText.isNotEmpty) {
+                contentBlocks.add(ContentBlock.text(interimText));
               }
 
               // Accumulate text for backward-compat message field.
@@ -2015,10 +2011,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
             // Build final content blocks.
             if (contentBlocks.isNotEmpty) {
-              // Use the full accumulated text (all passes) for the
-              // single text block shown below the tool calls bar.
+              // Only use the final pass's text for the text block —
+              // interim text from earlier passes is already in content
+              // blocks.
               final finalText = stripToolCallBlocksForDisplay(
-                effectiveContent,
+                rawContent,
               ).trim();
               if (resolvedReasoning.isNotEmpty) {
                 contentBlocks.add(ContentBlock.reasoning(resolvedReasoning));
