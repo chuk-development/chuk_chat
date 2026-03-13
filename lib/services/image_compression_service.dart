@@ -37,7 +37,7 @@ Future<Uint8List> _compressImageInBackground(_CompressionParams params) async {
         image.height > currentMaxDimension) {
       resizedImage = img.copyResize(
         image,
-        width: image.width > image.height ? currentMaxDimension : null,
+        width: image.width >= image.height ? currentMaxDimension : null,
         height: image.height > image.width ? currentMaxDimension : null,
         interpolation: img.Interpolation.linear,
       );
@@ -70,7 +70,7 @@ Future<Uint8List> _compressImageInBackground(_CompressionParams params) async {
 
     final smallerImage = img.copyResize(
       image,
-      width: image.width > image.height ? currentMaxDimension : null,
+      width: image.width >= image.height ? currentMaxDimension : null,
       height: image.height > image.width ? currentMaxDimension : null,
       interpolation: img.Interpolation.linear,
     );
@@ -88,7 +88,7 @@ Future<Uint8List> _compressImageInBackground(_CompressionParams params) async {
   // Final fallback: 640px at minimum quality
   final smallImage = img.copyResize(
     image,
-    width: image.width > image.height ? 640 : null,
+    width: image.width >= image.height ? 640 : null,
     height: image.height > image.width ? 640 : null,
     interpolation: img.Interpolation.linear,
   );
