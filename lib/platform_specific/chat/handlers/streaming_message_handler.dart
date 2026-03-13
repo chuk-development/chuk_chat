@@ -13,6 +13,7 @@ import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/services/streaming_foreground_service.dart';
+import 'package:chuk_chat/services/round_content_block_service.dart';
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
 
@@ -358,41 +359,14 @@ class StreamingMessageHandler {
                     : <ToolCall>[];
                 previousToolCallCount = allToolCalls.length;
 
-                // Add per-round content blocks so the UI shows the flow:
-                // reasoning → tool calls → interim text for each round.
-                //
-                // Reasoning source priority:
-                //  1. Provider reasoning tokens (finalReasoning).
-                //  2. roundThinking on the first new tool call (captures
-                //     pre-tool text from the content stream for models
-                //     that embed thinking inline).
-                final bool hasProviderReasoning = finalReasoning
-                    .trim()
-                    .isNotEmpty;
-                String roundReasoning = hasProviderReasoning
-                    ? finalReasoning.trim()
-                    : (newToolCalls.isNotEmpty
-                          ? (newToolCalls.first.roundThinking?.trim() ?? '')
-                          : '');
-                var interimOutputText = interimText;
-                if (!hasProviderReasoning && roundReasoning.isNotEmpty) {
-                  if (interimOutputText == roundReasoning) {
-                    interimOutputText = '';
-                  } else if (interimOutputText.startsWith(roundReasoning)) {
-                    interimOutputText = interimOutputText
-                        .substring(roundReasoning.length)
-                        .trim();
-                  }
-                }
-                if (roundReasoning.isNotEmpty) {
-                  contentBlocks.add(ContentBlock.reasoning(roundReasoning));
-                }
-                if (newToolCalls.isNotEmpty) {
-                  contentBlocks.add(ContentBlock.toolCalls(newToolCalls));
-                }
-                if (interimOutputText.isNotEmpty) {
-                  contentBlocks.add(ContentBlock.text(interimOutputText));
-                }
+                final roundResult = RoundContentBlockService.buildRoundBlocks(
+                  interimText: interimText,
+                  providerReasoning: finalReasoning,
+                  newToolCalls: newToolCalls,
+                  interimBeforeToolCalls: loopResult.interimBeforeToolCalls,
+                );
+                contentBlocks.addAll(roundResult.blocks);
+                final interimOutputText = roundResult.interimOutputText;
 
                 // Fire content blocks update so the UI can render them.
                 onContentBlocksUpdate?.call(
@@ -548,9 +522,6 @@ class StreamingMessageHandler {
                 final finalText = stripToolCallBlocksForDisplay(
                   rawContent,
                 ).trim();
-                if (effectiveReasoning.isNotEmpty) {
-                  contentBlocks.add(ContentBlock.reasoning(effectiveReasoning));
-                }
                 if (finalText.isNotEmpty) {
                   contentBlocks.add(ContentBlock.text(finalText));
                 }

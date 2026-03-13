@@ -2222,7 +2222,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     }
   }
 
-  Future<void> _submitEditedMessage(int index, String newText) async {
+  Future<void> _submitEditedMessage(
+    int index,
+    String newText, {
+    bool removeFollowingAssistant = true,
+    bool clearMessagesBelow = false,
+  }) async {
     if (index < 0 || index >= _messages.length) return;
     if (_streamingHandler.isStreaming || _streamingHandler.isSending) {
       _showSnackBar('Please wait');
@@ -2233,7 +2238,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       _messages[index]['text'] = newText;
     });
 
-    if (index + 1 < _messages.length &&
+    if (clearMessagesBelow && index + 1 < _messages.length) {
+      setState(() {
+        _messages.removeRange(index + 1, _messages.length);
+      });
+    } else if (removeFollowingAssistant &&
+        index + 1 < _messages.length &&
         _messages[index + 1]['sender'] == 'ai') {
       setState(() {
         _messages.removeAt(index + 1);
@@ -2345,7 +2355,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       _showSnackBar('Nothing to resend');
       return;
     }
-    await _submitEditedMessage(sourceIndex, text);
+    await _submitEditedMessage(
+      sourceIndex,
+      text,
+      removeFollowingAssistant: false,
+      clearMessagesBelow: true,
+    );
   }
 
   // --- FULLSCREEN EDITOR ---

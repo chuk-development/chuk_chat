@@ -62,18 +62,21 @@ class ToolLoopResult {
     this.finalContent,
     this.finalReasoning,
     this.interimContent,
+    this.interimBeforeToolCalls = false,
     this.toolCalls = const [],
   });
 
   factory ToolLoopResult.continueWith({
     required ToolLoopStep nextStep,
     String? interimContent,
+    bool interimBeforeToolCalls = false,
     List<ToolCall> toolCalls = const [],
   }) {
     return ToolLoopResult._(
       shouldContinue: true,
       nextStep: nextStep,
       interimContent: interimContent,
+      interimBeforeToolCalls: interimBeforeToolCalls,
       toolCalls: toolCalls,
     );
   }
@@ -96,6 +99,7 @@ class ToolLoopResult {
   final String? finalContent;
   final String? finalReasoning;
   final String? interimContent;
+  final bool interimBeforeToolCalls;
   final List<ToolCall> toolCalls;
 }
 
@@ -306,6 +310,7 @@ class ToolCallHandler {
           ),
         ),
         interimContent: _stripToolCallBlocks(cleanedContent),
+        interimBeforeToolCalls: _hasInterimTextBeforeToolCalls(cleanedContent),
         toolCalls: _cloneToolCalls(session.toolCalls),
       );
     }
@@ -379,6 +384,7 @@ class ToolCallHandler {
       // Preserve all non-tool text from this pass (before/after tool blocks)
       // so assistant text is never lost across multi-pass tool loops.
       interimContent: _stripToolCallBlocks(cleanedContent),
+      interimBeforeToolCalls: _hasInterimTextBeforeToolCalls(cleanedContent),
       toolCalls: _cloneToolCalls(session.toolCalls),
     );
   }
@@ -572,6 +578,27 @@ class ToolCallHandler {
     if (xmlIndex == -1) return markdownIndex;
     if (markdownIndex == -1) return xmlIndex;
     return xmlIndex < markdownIndex ? xmlIndex : markdownIndex;
+  }
+
+  bool _hasInterimTextBeforeToolCalls(String content) {
+    final firstToolCallIndex = _indexOfFirstToolCallBlock(content);
+    if (firstToolCallIndex == -1) {
+      return false;
+    }
+
+    final preToolText = content.substring(0, firstToolCallIndex).trim();
+    if (preToolText.isEmpty) {
+      return false;
+    }
+
+    final withoutThinkingBlocks = preToolText
+        .replaceAll(
+          RegExp(r'<thinking>[\s\S]*?</thinking>', caseSensitive: false),
+          '',
+        )
+        .trim();
+
+    return withoutThinkingBlocks.isNotEmpty;
   }
 
   List<Map<String, dynamic>> _cloneHistory(List<Map<String, dynamic>> history) {

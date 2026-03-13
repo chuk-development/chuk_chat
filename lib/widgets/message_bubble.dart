@@ -659,71 +659,95 @@ class _MessageBubbleState extends State<MessageBubble>
       }
     }
 
-    final textBlockIndexes = <int>[];
-    for (int i = 0; i < blocks.length; i++) {
-      final block = blocks[i];
-      if (block.type == ContentBlockType.text &&
-          block.text != null &&
-          block.text!.trim().isNotEmpty) {
-        textBlockIndexes.add(i);
-      }
-    }
-    final lastTextBlockIndex = textBlockIndexes.isEmpty
-        ? -1
-        : textBlockIndexes.last;
+    final finalizedTextPrefix = blocks
+        .where(
+          (block) =>
+              block.type == ContentBlockType.text &&
+              block.text != null &&
+              block.text!.trim().isNotEmpty,
+        )
+        .map((block) => block.text!.trim())
+        .join('\n\n')
+        .trim();
 
-    // Render each content block in order
-    for (int i = 0; i < blocks.length; i++) {
-      final block = blocks[i];
+    // Group contiguous reasoning/tool-call rounds into one parent block.
+    // A plain text block ends the current reasoning block and starts a new one
+    // below that text.
+    final groupedReasonings = <String>[];
+    final groupedToolCalls = <ToolCall>[];
+
+    void flushGroupedReasoningTools() {
+      if (groupedReasonings.isEmpty && groupedToolCalls.isEmpty) {
+        return;
+      }
+
+      if (widget.showToolCalls && groupedToolCalls.isNotEmpty) {
+        children.add(
+          _buildToolCallsBar(
+            List<ToolCall>.from(groupedToolCalls),
+            isContentBlock: true,
+            contentBlockReasonings: List<String>.from(groupedReasonings),
+          ),
+        );
+        children.add(const SizedBox(height: 8));
+      } else if (groupedReasonings.isNotEmpty) {
+        final mergedReasoning = groupedReasonings.join('\n\n').trim();
+        if (mergedReasoning.isNotEmpty) {
+          children.add(_buildBlockReasoning(mergedReasoning, accentColor));
+        }
+      }
+
+      groupedReasonings.clear();
+      groupedToolCalls.clear();
+    }
+
+    // Render grouped reasoning/tool-call blocks. Text blocks break groups.
+    for (final block in blocks) {
       switch (block.type) {
+        case ContentBlockType.reasoning:
+          final reasoningText = block.text?.trim() ?? '';
+          if (reasoningText.isNotEmpty) {
+            groupedReasonings.add(reasoningText);
+          }
+        case ContentBlockType.toolCalls:
+          if (block.toolCalls != null && block.toolCalls!.isNotEmpty) {
+            groupedToolCalls.addAll(block.toolCalls!);
+          }
         case ContentBlockType.text:
+          flushGroupedReasoningTools();
           if (block.text != null && block.text!.trim().isNotEmpty) {
             if (placeQrImageAboveResponse && !insertedQrImage) {
               children.add(_buildImagesGrid(widget.images!));
               children.add(const SizedBox(height: 8));
               insertedQrImage = true;
             }
-            final isInterimTextBlock = i != lastTextBlockIndex;
-            children.add(
-              isInterimTextBlock
-                  ? _buildBlockInterimText(block.text!, accentColor)
-                  : _buildBlockText(block.text!, iconFgColor, bgColor),
-            );
+            children.add(_buildBlockText(block.text!, iconFgColor, bgColor));
           }
-        case ContentBlockType.toolCalls:
-          if (block.toolCalls != null &&
-              block.toolCalls!.isNotEmpty &&
-              widget.showToolCalls) {
-            children.add(
-              _buildToolCallsBar(block.toolCalls!, isContentBlock: true),
-            );
-            children.add(const SizedBox(height: 8));
-          }
-        case ContentBlockType.reasoning:
-          if (block.text != null && block.text!.trim().isNotEmpty) {
-            children.add(_buildBlockReasoning(block.text!, accentColor));
-          }
-      }
-    }
-
-    // Live tool calls: any tool calls NOT yet in a content block
-    // (from the currently-running pass).
-    if (widget.showToolCalls &&
-        widget.toolCalls != null &&
-        widget.toolCalls!.isNotEmpty) {
-      final liveToolCalls = widget.toolCalls!
-          .where((tc) => !blockToolCallIds.contains(tc.id))
-          .toList();
-      if (liveToolCalls.isNotEmpty) {
-        children.add(_buildToolCallsBar(liveToolCalls));
-        children.add(const SizedBox(height: 8));
       }
     }
 
     // Trailing streaming text from the current pass (only while streaming).
     // When finalized, all text is already in content blocks.
+    var trailingText = '';
     if (widget.isStreamingMessage) {
-      final trailingText = stripToolCallBlocksForDisplay(widget.message).trim();
+      trailingText = stripToolCallBlocksForDisplay(widget.message).trim();
+
+      // Avoid duplicating finalized text blocks while a newer pass streams.
+      if (trailingText.isNotEmpty && finalizedTextPrefix.isNotEmpty) {
+        if (trailingText == finalizedTextPrefix) {
+          trailingText = '';
+        } else if (trailingText.startsWith('$finalizedTextPrefix\n\n')) {
+          trailingText = trailingText
+              .substring(finalizedTextPrefix.length)
+              .trim();
+        }
+      }
+
+      // Keep one reasoning/tool block open until we actually show text.
+      if (trailingText.isNotEmpty) {
+        flushGroupedReasoningTools();
+      }
+
       if (trailingText.isNotEmpty) {
         if (placeQrImageAboveResponse && !insertedQrImage) {
           children.add(_buildImagesGrid(widget.images!));
@@ -741,6 +765,30 @@ class _MessageBubbleState extends State<MessageBubble>
           ),
         );
       }
+    }
+
+    // Live tool calls: any tool calls NOT yet in a content block
+    // (from the currently-running pass).
+    var liveToolCalls = <ToolCall>[];
+    if (widget.showToolCalls &&
+        widget.toolCalls != null &&
+        widget.toolCalls!.isNotEmpty) {
+      liveToolCalls = widget.toolCalls!
+          .where((tc) => !blockToolCallIds.contains(tc.id))
+          .toList();
+    }
+
+    if (trailingText.isEmpty && liveToolCalls.isNotEmpty) {
+      groupedToolCalls.addAll(liveToolCalls);
+    }
+
+    // Flush any still-open reasoning/tool-call group now.
+    flushGroupedReasoningTools();
+
+    // If we already showed trailing text, live tool calls belong to a new block.
+    if (trailingText.isNotEmpty && liveToolCalls.isNotEmpty) {
+      children.add(_buildToolCallsBar(liveToolCalls));
+      children.add(const SizedBox(height: 8));
     }
 
     if (placeQrImageAboveResponse && !insertedQrImage) {
@@ -907,18 +955,6 @@ class _MessageBubbleState extends State<MessageBubble>
         textColor: textColor,
         backgroundColor: bgColor,
       ),
-    );
-  }
-
-  /// Renders an interim between-tool output block.
-  Widget _buildBlockInterimText(String text, Color accentColor) {
-    return _buildExpandableCard(
-      key: 'block_interim_${text.hashCode}',
-      icon: Icons.chat_bubble_outline,
-      label: 'Interim Output',
-      preview: text,
-      expandedContent: text,
-      accentColor: accentColor.withValues(alpha: 0.8),
     );
   }
 
@@ -1181,8 +1217,22 @@ class _MessageBubbleState extends State<MessageBubble>
   Widget _buildToolCallsBar(
     List<ToolCall> toolCalls, {
     bool isContentBlock = false,
+    List<String>? contentBlockReasonings,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
+    final normalizedContentBlockReasonings = <String>[];
+    final seenReasonings = <String>{};
+    for (final rawReasoning in contentBlockReasonings ?? const <String>[]) {
+      final normalized = rawReasoning.trim();
+      if (normalized.isEmpty) {
+        continue;
+      }
+      if (seenReasonings.add(normalized)) {
+        normalizedContentBlockReasonings.add(normalized);
+      }
+    }
+    final hasContentBlockReasoning =
+        isContentBlock && normalizedContentBlockReasonings.isNotEmpty;
     final renderedAssistantText = stripToolCallBlocksForDisplay(widget.message);
     // If the message is finalized (not streaming), tool calls should not
     // remain in running/pending — treat any stale ones as completed for
@@ -1208,6 +1258,7 @@ class _MessageBubbleState extends State<MessageBubble>
               t.status == ToolCallStatus.error,
         );
     final bool isReasoning =
+        !isContentBlock &&
         widget.isReasoningStreaming &&
         allDone &&
         (renderedAssistantText.trim().isEmpty ||
@@ -1337,21 +1388,35 @@ class _MessageBubbleState extends State<MessageBubble>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (int i = 0; i < toolCalls.length; i++) ...[
-                    // In content-block mode, reasoning is rendered as a
-                    // separate block above the tool calls bar, so skip
-                    // the per-tool roundThinking to avoid duplication.
-                    if (!isContentBlock &&
-                        toolCalls[i].roundThinking != null &&
-                        toolCalls[i].roundThinking!.trim().isNotEmpty)
+                  if (hasContentBlockReasoning)
+                    for (
+                      int ri = 0;
+                      ri < normalizedContentBlockReasonings.length;
+                      ri++
+                    )
                       _buildExpandableCard(
-                        key: 'thinking_round_${toolCalls[i].id}_$i',
+                        key: 'reasoning_block_${expandKey}_$ri',
                         icon: Icons.psychology,
                         label: 'Reasoning',
-                        preview: toolCalls[i].roundThinking!,
-                        expandedContent: toolCalls[i].roundThinking!,
+                        preview: normalizedContentBlockReasonings[ri],
+                        expandedContent: normalizedContentBlockReasonings[ri],
                         accentColor: colorScheme.primary,
                       ),
+                  for (int i = 0; i < toolCalls.length; i++) ...[
+                    if (toolCalls[i].roundThinking != null &&
+                        toolCalls[i].roundThinking!.trim().isNotEmpty)
+                      if (!hasContentBlockReasoning ||
+                          !seenReasonings.contains(
+                            toolCalls[i].roundThinking!.trim(),
+                          ))
+                        _buildExpandableCard(
+                          key: 'thinking_round_${toolCalls[i].id}_$i',
+                          icon: Icons.psychology,
+                          label: 'Reasoning',
+                          preview: toolCalls[i].roundThinking!,
+                          expandedContent: toolCalls[i].roundThinking!,
+                          accentColor: colorScheme.primary,
+                        ),
                     _buildExpandableCard(
                       key: 'tool_${toolCalls[i].id}',
                       icon: _toolCallIcon(toolCalls[i].status),

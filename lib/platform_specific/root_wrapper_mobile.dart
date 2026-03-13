@@ -353,7 +353,9 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Copied ${messages.length} messages (debug)'),
+        content: Text(
+          'Copied ${messages.length} messages (debug, images redacted)',
+        ),
         duration: const Duration(seconds: 2),
       ),
     );
