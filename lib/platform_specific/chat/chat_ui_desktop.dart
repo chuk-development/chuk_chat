@@ -159,7 +159,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   final ScrollController _scrollController = ScrollController();
   final ScrollController _composerScrollController = ScrollController();
   late ChatApiService _chatApiService;
-  final FocusNode _textFieldFocusNode = FocusNode();
+  late final FocusNode _textFieldFocusNode;
   final FocusNode _rawKeyboardListenerFocusNode = FocusNode();
 
   late AnimationController _animCtrl;
@@ -278,6 +278,40 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   @override
   void initState() {
     super.initState();
+    _textFieldFocusNode = FocusNode(
+      onKeyEvent: (node, event) {
+        if (event is! KeyDownEvent) return KeyEventResult.ignored;
+
+        // Ctrl+V / Cmd+V: clipboard image paste
+        if (event.logicalKey == LogicalKeyboardKey.keyV &&
+            (HardwareKeyboard.instance.isControlPressed ||
+                HardwareKeyboard.instance.isMetaPressed)) {
+          unawaited(_handleClipboardPaste());
+          // Don't consume — let normal text paste also happen
+          return KeyEventResult.ignored;
+        }
+
+        if (event.logicalKey != LogicalKeyboardKey.enter) {
+          return KeyEventResult.ignored;
+        }
+
+        // Shift+Enter: insert newline manually
+        if (HardwareKeyboard.instance.isShiftPressed) {
+          final text = _controller.text;
+          final sel = _controller.selection;
+          final newText = text.replaceRange(sel.start, sel.end, '\n');
+          _controller.value = TextEditingValue(
+            text: newText,
+            selection: TextSelection.collapsed(offset: sel.start + 1),
+          );
+          return KeyEventResult.handled;
+        }
+
+        // Bare Enter: send message, consume to prevent newline
+        unawaited(_sendMessage());
+        return KeyEventResult.handled;
+      },
+    );
     _animCtrl = AnimationController(
       duration: const Duration(milliseconds: 200),
       vsync: this,
@@ -4721,21 +4755,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                               mainAxisSize: MainAxisSize
                                   .min, // Crucial for column inside AnimatedPositioned/Center
                               children: [
-                                // Multiple Attachment Indicator Bar (if files are present)
-                                if (_attachedFiles.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.only(
-                                      bottom: _kAttachmentBarMarginBottom,
-                                    ), // Margin below chips
-                                    child: SizedBox(
-                                      width: targetInputWidth,
-                                      child: AttachmentPreviewBar(
-                                        files: _attachedFiles,
-                                        onRemove: _removeAttachedFile,
-                                      ),
-                                    ),
-                                  ),
-                                // Search Bar
+                                // Search Bar (attachment bar is now inside)
                                 _buildSearchBar(
                                   isCompactMode: widget.isCompactMode,
                                 ),
@@ -4790,251 +4810,241 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         borderRadius: BorderRadius.circular(containerRadius),
         border: Border.all(color: iconFg.withValues(alpha: 0.3), width: 2),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      padding: const EdgeInsets.all(14),
+      child: Stack(
+        fit: StackFit.passthrough,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          // Main content column
+          Column(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
-                child: KeyboardListener(
-                  focusNode: _rawKeyboardListenerFocusNode,
-                  onKeyEvent: (event) {
-                    if (event is! KeyDownEvent) return;
-
-                    // Handle Ctrl+V / Cmd+V for clipboard image paste
-                    if (event.logicalKey == LogicalKeyboardKey.keyV &&
-                        (HardwareKeyboard.instance.isControlPressed ||
-                            HardwareKeyboard.instance.isMetaPressed)) {
-                      unawaited(_handleClipboardPaste());
-                    }
-
-                    if (event.logicalKey != LogicalKeyboardKey.enter) return;
-
-                    final isShiftPressed =
-                        HardwareKeyboard.instance.isShiftPressed;
-                    if (isShiftPressed) {
-                      final value = _controller.value;
-                      final updatedText = value.text.replaceRange(
-                        value.selection.start,
-                        value.selection.end,
-                        '\n',
-                      );
-                      _controller.value = value.copyWith(
-                        text: updatedText,
-                        selection: TextSelection.collapsed(
-                          offset: value.selection.start + 1,
-                        ),
-                      );
-                      return;
-                    }
-
-                    unawaited(_sendMessage());
-                  },
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 160),
-                    child: Scrollbar(
-                      controller: _composerScrollController,
-                      child: TextField(
-                        controller: _controller,
-                        focusNode: _textFieldFocusNode,
-                        contextMenuBuilder: _buildComposerContextMenu,
-                        autofocus: false,
-                        showCursor: true,
-                        minLines: 1,
-                        maxLines: null,
-                        keyboardType: TextInputType.multiline,
-                        textInputAction: TextInputAction.send,
-                        scrollController: _composerScrollController,
-                        textAlignVertical: TextAlignVertical.top,
-                        style: TextStyle(
-                          color: iconFg,
+              // Attachment previews inside the textbox
+              if (_attachedFiles.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 14, left: 2),
+                  child: AttachmentPreviewBar(
+                    files: _attachedFiles,
+                    onRemove: _removeAttachedFile,
+                  ),
+                ),
+              // Text field with right padding to avoid send button overlap
+              Padding(
+                padding: EdgeInsets.only(right: btnW + 8),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 160),
+                  child: Scrollbar(
+                    controller: _composerScrollController,
+                    child: TextField(
+                      controller: _controller,
+                      focusNode: _textFieldFocusNode,
+                      contextMenuBuilder: _buildComposerContextMenu,
+                      autofocus: true,
+                      showCursor: true,
+                      minLines: 1,
+                      maxLines: null,
+                      keyboardType: TextInputType.multiline,
+                      textInputAction: TextInputAction.done,
+                      scrollController: _composerScrollController,
+                      textAlignVertical: TextAlignVertical.top,
+                      style: TextStyle(
+                        color: iconFg,
+                        fontWeight: FontWeight.w600,
+                        height: 1.4,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: hasAttachments
+                            ? 'Add a message or send documents'
+                            : 'Ask me anything !',
+                        hintStyle: TextStyle(
+                          color: iconFg.withValues(alpha: 0.8),
                           fontWeight: FontWeight.w600,
                         ),
-                        decoration: InputDecoration(
-                          hintText: hasAttachments
-                              ? 'Add a message or send documents'
-                              : 'Ask me anything !',
-                          hintStyle: TextStyle(
-                            color: iconFg.withValues(alpha: 0.8),
-                            fontWeight: FontWeight.w600,
-                          ),
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          errorBorder: InputBorder.none,
-                          focusedErrorBorder: InputBorder.none,
-                          disabledBorder: InputBorder.none,
-                          filled: false,
-                          fillColor: Colors.transparent,
-                          contentPadding: const EdgeInsets.symmetric(
-                            vertical: 8,
-                            horizontal: 0,
-                          ),
-                          isDense: true,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        errorBorder: InputBorder.none,
+                        focusedErrorBorder: InputBorder.none,
+                        disabledBorder: InputBorder.none,
+                        filled: false,
+                        fillColor: Colors.transparent,
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 8,
+                          horizontal: 0,
                         ),
-                        cursorColor: accent,
-                        cursorWidth: 2,
+                        isDense: true,
                       ),
+                      cursorColor: accent,
+                      cursorWidth: 2,
+                      cursorRadius: const Radius.circular(1),
                     ),
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              // Smart Send Button: sends audio when mic active, text otherwise
-              GestureDetector(
-                onTap: _isTranscribingAudio
-                    ? null
-                    : () {
-                        if (_isStreaming || _isSending) {
-                          _cancelCurrentOperation();
-                        } else if (_isMicActive) {
-                          _handleAudioSend();
-                        } else {
-                          _sendMessage();
-                        }
-                      },
-                child: Container(
-                  width: btnW,
-                  height: btnH,
-                  decoration: BoxDecoration(
-                    color: (_isStreaming || _isSending) ? Colors.red : accent,
-                    borderRadius: BorderRadius.circular(buttonRadius),
-                  ),
-                  child: _isTranscribingAudio
-                      ? Center(
-                          child: SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              valueColor: const AlwaysStoppedAnimation<Color>(
-                                Colors.black,
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 250),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      child: _isMicActive
+                          ? _buildAudioVisualizer(
+                              accent: accent,
+                              iconFg: iconFg,
+                            )
+                          : Row(
+                              key: const ValueKey<String>(
+                                'default-mic-controls',
                               ),
-                              backgroundColor: Colors.black.withValues(
-                                alpha: 0.2,
-                              ),
+                              children: [
+                                // Add Button (File Upload)
+                                _buildIconBtn(
+                                  icon: Icons.add_rounded,
+                                  iconSize: 24,
+                                  onTap: _uploadFiles,
+                                  isActive: hasAttachments,
+                                  debugLabel: 'Add button',
+                                ),
+                                // Project Selection Dropdown (only when feature enabled)
+                                if (kFeatureProjects) ...[
+                                  const SizedBox(width: 8),
+                                  ProjectSelectionDropdown(
+                                    selectedProjectId: _selectedProjectId,
+                                    onProjectSelected: (projectId) {
+                                      if (kDebugMode) {
+                                        debugPrint(
+                                          '📁 onProjectSelected callback: $projectId (was: $_selectedProjectId)',
+                                        );
+                                      }
+                                      setState(() {
+                                        _selectedProjectId = projectId;
+                                      });
+                                      if (kDebugMode) {
+                                        debugPrint(
+                                          '📁 After setState: $_selectedProjectId',
+                                        );
+                                      }
+                                    },
+                                    textFieldFocusNode: _textFieldFocusNode,
+                                  ),
+                                ],
+                                // Spacer to push model dropdown to the right edge
+                                Expanded(
+                                  child: Align(
+                                    alignment: Alignment.centerRight,
+                                    child: ModelSelectionDropdown(
+                                      key: const ValueKey<String>(
+                                        'desktop-model-selection-dropdown',
+                                      ),
+                                      initialSelectedModelId: _selectedModelId,
+                                      onModelSelected: (newModelId) {
+                                        setState(() {
+                                          _selectedModelId = newModelId;
+                                        });
+                                        if (kDebugMode) {
+                                          debugPrint(
+                                            'Selected model ID: $_selectedModelId',
+                                          );
+                                        }
+                                      },
+                                      textFieldFocusNode: _textFieldFocusNode,
+                                      isCompactMode: isCompactMode,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                        )
-                      : (_isStreaming || _isSending)
-                      ? const Icon(
-                          Icons.stop_rounded,
-                          color: Colors.black,
-                          size: 22,
-                        )
-                      : Transform(
-                          transform: Matrix4.diagonal3Values(1, 0.95, 1),
-                          alignment: Alignment.center,
-                          child: const Icon(
-                            Icons.arrow_upward_rounded,
-                            color: Colors.black,
-                            size: 26,
-                          ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Mic Button (acts as record/stop toggle)
+                  _buildIconBtn(
+                    icon: _isMicActive ? Icons.stop_rounded : Icons.mic,
+                    iconSize: 22,
+                    onTap: _handleMicTap,
+                    isActive: _isMicActive,
+                    debugLabel: 'Mic button',
+                  ),
+                  // Voice Mode button (only when feature enabled, hidden during recording)
+                  if (!_isMicActive && kFeatureVoiceMode) ...[
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      key: const ValueKey<String>('voice-mode-button'),
+                      onTap: () => _openComingSoonFeature('Voice Mode'),
+                      child: Container(
+                        width: 44,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: accent,
+                          borderRadius: BorderRadius.circular(buttonRadius),
                         ),
-                ),
+                        child: const Icon(
+                          Icons.graphic_eq,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ],
           ),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 250),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  child: _isMicActive
-                      ? _buildAudioVisualizer(accent: accent, iconFg: iconFg)
-                      : Row(
-                          key: const ValueKey<String>('default-mic-controls'),
-                          children: [
-                            // Add Button (File Upload)
-                            _buildIconBtn(
-                              icon: Icons.add_rounded,
-                              iconSize: 24,
-                              onTap: _uploadFiles,
-                              isActive: hasAttachments,
-                              debugLabel: 'Add button',
+          // Send / Stop button pinned to top-right of container
+          Positioned(
+            top: 0,
+            right: 0,
+            child: GestureDetector(
+              onTap: _isTranscribingAudio
+                  ? null
+                  : () {
+                      if (_isStreaming || _isSending) {
+                        _cancelCurrentOperation();
+                      } else if (_isMicActive) {
+                        _handleAudioSend();
+                      } else {
+                        _sendMessage();
+                      }
+                    },
+              child: Container(
+                width: btnW,
+                height: btnH,
+                decoration: BoxDecoration(
+                  color: (_isStreaming || _isSending) ? Colors.red : accent,
+                  borderRadius: BorderRadius.circular(buttonRadius),
+                ),
+                child: _isTranscribingAudio
+                    ? Center(
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            valueColor: const AlwaysStoppedAnimation<Color>(
+                              Colors.black,
                             ),
-                            // Project Selection Dropdown (only when feature enabled)
-                            if (kFeatureProjects) ...[
-                              const SizedBox(width: 8),
-                              ProjectSelectionDropdown(
-                                selectedProjectId: _selectedProjectId,
-                                onProjectSelected: (projectId) {
-                                  if (kDebugMode) {
-                                    debugPrint(
-                                      '📁 onProjectSelected callback: $projectId (was: $_selectedProjectId)',
-                                    );
-                                  }
-                                  setState(() {
-                                    _selectedProjectId = projectId;
-                                  });
-                                  if (kDebugMode) {
-                                    debugPrint(
-                                      '📁 After setState: $_selectedProjectId',
-                                    );
-                                  }
-                                },
-                                textFieldFocusNode: _textFieldFocusNode,
-                              ),
-                            ],
-                            // Spacer to push model dropdown to the right edge
-                            Expanded(
-                              child: Align(
-                                alignment: Alignment.centerRight,
-                                child: ModelSelectionDropdown(
-                                  key: const ValueKey<String>(
-                                    'desktop-model-selection-dropdown',
-                                  ),
-                                  initialSelectedModelId: _selectedModelId,
-                                  onModelSelected: (newModelId) {
-                                    setState(() {
-                                      _selectedModelId = newModelId;
-                                    });
-                                    if (kDebugMode) {
-                                      debugPrint(
-                                        'Selected model ID: $_selectedModelId',
-                                      );
-                                    }
-                                  },
-                                  textFieldFocusNode: _textFieldFocusNode,
-                                  isCompactMode: isCompactMode,
-                                ),
-                              ),
+                            backgroundColor: Colors.black.withValues(
+                              alpha: 0.2,
                             ),
-                          ],
+                          ),
                         ),
-                ),
+                      )
+                    : (_isStreaming || _isSending)
+                    ? const Icon(
+                        Icons.stop_rounded,
+                        color: Colors.black,
+                        size: 22,
+                      )
+                    : Transform(
+                        transform: Matrix4.diagonal3Values(1, 0.95, 1),
+                        alignment: Alignment.center,
+                        child: const Icon(
+                          Icons.arrow_upward_rounded,
+                          color: Colors.black,
+                          size: 26,
+                        ),
+                      ),
               ),
-              const SizedBox(width: 8),
-              // Mic Button (acts as record/stop toggle)
-              _buildIconBtn(
-                icon: _isMicActive ? Icons.stop_rounded : Icons.mic,
-                iconSize: 22,
-                onTap: _handleMicTap,
-                isActive: _isMicActive,
-                debugLabel: 'Mic button',
-              ),
-              // Voice Mode button (only when feature enabled, hidden during recording)
-              if (!_isMicActive && kFeatureVoiceMode) ...[
-                const SizedBox(width: 8),
-                GestureDetector(
-                  key: const ValueKey<String>('voice-mode-button'),
-                  onTap: () => _openComingSoonFeature('Voice Mode'),
-                  child: Container(
-                    width: 44,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: accent,
-                      borderRadius: BorderRadius.circular(buttonRadius),
-                    ),
-                    child: const Icon(Icons.graphic_eq, color: Colors.black),
-                  ),
-                ),
-              ],
-            ],
+            ),
           ),
         ],
       ),
