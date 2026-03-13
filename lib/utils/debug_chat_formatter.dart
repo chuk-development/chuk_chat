@@ -2,13 +2,31 @@
 
 import 'dart:convert';
 
+import 'package:chuk_chat/utils/clipboard_text_sanitizer.dart';
+
 /// Formats the full chat message list as a debug-friendly text string.
 ///
 /// Includes ALL fields: role, text, reasoning, tool calls (name, arguments,
-/// result, status), model ID, provider, images metadata, and attachments.
+/// result, status), model ID, provider, redacted image metadata,
+/// and attachments.
 /// Intended for clipboard copy to aid debugging.
 class DebugChatFormatter {
   const DebugChatFormatter._();
+
+  static int _countImages(String rawImages) {
+    if (rawImages.trim().isEmpty) {
+      return 0;
+    }
+
+    try {
+      final decoded = jsonDecode(rawImages);
+      if (decoded is List) {
+        return decoded.length;
+      }
+    } catch (_) {}
+
+    return 1;
+  }
 
   /// Format a list of message maps (as used by chat UIs) into a debug string.
   static String format(List<Map<String, String>> messages) {
@@ -23,16 +41,20 @@ class DebugChatFormatter {
     for (var i = 0; i < messages.length; i++) {
       final m = messages[i];
       final role = m['sender'] ?? m['role'] ?? 'unknown';
-      final text = m['text'] ?? '';
-      final reasoning = m['reasoning'] ?? '';
+      final text = ClipboardTextSanitizer.sanitize(m['text'] ?? '');
+      final reasoning = ClipboardTextSanitizer.sanitize(m['reasoning'] ?? '');
       final modelId = m['modelId'] ?? '';
       final provider = m['provider'] ?? '';
       final toolCallsJson = m['toolCalls'] ?? '';
       final images = m['images'] ?? '';
       final imageCostEur = m['imageCostEur'] ?? '';
       final imageGeneratedAt = m['imageGeneratedAt'] ?? '';
-      final attachments = m['attachments'] ?? '';
-      final attachedFilesJson = m['attachedFilesJson'] ?? '';
+      final attachments = ClipboardTextSanitizer.sanitize(
+        m['attachments'] ?? '',
+      );
+      final attachedFilesJson = ClipboardTextSanitizer.sanitize(
+        m['attachedFilesJson'] ?? '',
+      );
       final contentBlocksJson = m['contentBlocks'] ?? '';
       final debugRequestsJson = m['debugRequests'] ?? '';
 
@@ -75,13 +97,21 @@ class DebugChatFormatter {
                   final argsStr = const JsonEncoder.withIndent(
                     '    ',
                   ).convert(args);
-                  buf.writeln('    Args: $argsStr');
+                  final sanitizedArgs = ClipboardTextSanitizer.sanitize(
+                    argsStr,
+                  );
+                  buf.writeln('    Args: $sanitizedArgs');
                 } catch (_) {
-                  buf.writeln('    Args: $args');
+                  final sanitizedArgs = ClipboardTextSanitizer.sanitize(
+                    args.toString(),
+                  );
+                  buf.writeln('    Args: $sanitizedArgs');
                 }
               }
               if (result != null && result.toString().trim().isNotEmpty) {
-                final resultStr = result.toString().trim();
+                final resultStr = ClipboardTextSanitizer.sanitize(
+                  result.toString().trim(),
+                );
                 if (resultStr.length > 500) {
                   buf.writeln(
                     '    Result: ${resultStr.substring(0, 500)}... '
@@ -95,7 +125,8 @@ class DebugChatFormatter {
           }
         } catch (_) {
           // Not valid JSON — dump raw
-          buf.writeln('  (raw): $toolCallsJson');
+          final sanitizedRaw = ClipboardTextSanitizer.sanitize(toolCallsJson);
+          buf.writeln('  (raw): $sanitizedRaw');
         }
         buf.writeln();
       }
@@ -112,7 +143,10 @@ class DebugChatFormatter {
             buf.writeln('  [$bi] type=$type');
             final textValue = block['text']?.toString() ?? '';
             if (textValue.trim().isNotEmpty) {
-              buf.writeln('    text: ${textValue.trim()}');
+              final sanitizedBlockText = ClipboardTextSanitizer.sanitize(
+                textValue.trim(),
+              );
+              buf.writeln('    text: $sanitizedBlockText');
             }
             final rawCalls = block['toolCalls'];
             if (rawCalls is List && rawCalls.isNotEmpty) {
@@ -120,7 +154,10 @@ class DebugChatFormatter {
             }
           }
         } catch (_) {
-          buf.writeln('  (raw): $contentBlocksJson');
+          final sanitizedRaw = ClipboardTextSanitizer.sanitize(
+            contentBlocksJson,
+          );
+          buf.writeln('  (raw): $sanitizedRaw');
         }
         buf.writeln();
       }
@@ -131,9 +168,13 @@ class DebugChatFormatter {
         try {
           final decoded = jsonDecode(debugRequestsJson);
           final pretty = const JsonEncoder.withIndent('  ').convert(decoded);
-          buf.writeln(pretty);
+          final sanitizedPretty = ClipboardTextSanitizer.sanitize(pretty);
+          buf.writeln(sanitizedPretty);
         } catch (_) {
-          buf.writeln(debugRequestsJson);
+          final sanitizedRaw = ClipboardTextSanitizer.sanitize(
+            debugRequestsJson,
+          );
+          buf.writeln(sanitizedRaw);
         }
         buf.writeln();
       }
@@ -147,7 +188,12 @@ class DebugChatFormatter {
 
       // Images
       if (images.isNotEmpty) {
-        buf.writeln('Images: $images');
+        final imageCount = _countImages(images);
+        if (imageCount > 0) {
+          buf.writeln('Images: $imageCount (content omitted from clipboard)');
+        } else {
+          buf.writeln('Images: (content omitted from clipboard)');
+        }
         if (imageCostEur.isNotEmpty) buf.writeln('Image Cost: €$imageCostEur');
         if (imageGeneratedAt.isNotEmpty) {
           buf.writeln('Image Generated: $imageGeneratedAt');
@@ -166,6 +212,6 @@ class DebugChatFormatter {
       buf.writeln();
     }
 
-    return buf.toString();
+    return ClipboardTextSanitizer.sanitize(buf.toString());
   }
 }

@@ -35,6 +35,8 @@ import 'package:chuk_chat/widgets/project_selection_dropdown.dart';
 import 'package:chuk_chat/services/project_message_service.dart';
 import 'package:chuk_chat/services/artifact_context_service.dart';
 import 'package:chuk_chat/services/title_generation_service.dart';
+import 'package:chuk_chat/services/round_content_block_service.dart';
+import 'package:chuk_chat/utils/clipboard_text_sanitizer.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
 import 'package:chuk_chat/services/streaming_transcription_service.dart';
 
@@ -235,9 +237,23 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     BuildContext context,
     EditableTextState editableTextState,
   ) {
-    final buttonItems = List<ContextMenuButtonItem>.from(
-      editableTextState.contextMenuButtonItems,
-    );
+    final buttonItems = editableTextState.contextMenuButtonItems.map((item) {
+      if (item.type != ContextMenuButtonType.copy) {
+        return item;
+      }
+
+      return ContextMenuButtonItem(
+        type: ContextMenuButtonType.copy,
+        onPressed: () {
+          final text = _selectedTextOrAll(editableTextState.textEditingValue);
+          if (text.isNotEmpty) {
+            final sanitized = ClipboardTextSanitizer.sanitize(text);
+            Clipboard.setData(ClipboardData(text: sanitized));
+          }
+          ContextMenuController.removeAny();
+        },
+      );
+    }).toList();
 
     final hasCopy = buttonItems.any(
       (item) => item.type == ContextMenuButtonType.copy,
@@ -251,7 +267,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           onPressed: () {
             final text = _selectedTextOrAll(editableTextState.textEditingValue);
             if (text.isNotEmpty) {
-              Clipboard.setData(ClipboardData(text: text));
+              final sanitized = ClipboardTextSanitizer.sanitize(text);
+              Clipboard.setData(ClipboardData(text: sanitized));
             }
             ContextMenuController.removeAny();
           },
@@ -269,10 +286,42 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     BuildContext context,
     SelectableRegionState selectableRegionState,
   ) {
+    final buttonItems = selectableRegionState.contextMenuButtonItems.map((
+      item,
+    ) {
+      if (item.type != ContextMenuButtonType.copy) {
+        return item;
+      }
+
+      return ContextMenuButtonItem(
+        type: ContextMenuButtonType.copy,
+        onPressed: () async {
+          item.onPressed?.call();
+          await Future<void>.delayed(Duration.zero);
+          await _sanitizeClipboardInPlace();
+        },
+      );
+    }).toList();
+
     return AdaptiveTextSelectionToolbar.buttonItems(
       anchors: selectableRegionState.contextMenuAnchors,
-      buttonItems: selectableRegionState.contextMenuButtonItems,
+      buttonItems: buttonItems,
     );
+  }
+
+  Future<void> _sanitizeClipboardInPlace() async {
+    final clipData = await Clipboard.getData(Clipboard.kTextPlain);
+    final clipText = clipData?.text;
+    if (clipText == null || clipText.isEmpty) {
+      return;
+    }
+
+    if (!ClipboardTextSanitizer.containsImageData(clipText)) {
+      return;
+    }
+
+    final sanitized = ClipboardTextSanitizer.sanitize(clipText);
+    await Clipboard.setData(ClipboardData(text: sanitized));
   }
 
   @override
@@ -1567,8 +1616,24 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _showSnackBar('Nothing to copy.');
       return;
     }
-    await Clipboard.setData(ClipboardData(text: text));
-    _showSnackBar(label ?? 'Copied to clipboard.');
+
+    final hadImageData = ClipboardTextSanitizer.containsImageData(text);
+    final sanitizedText = ClipboardTextSanitizer.sanitize(text);
+
+    if (sanitizedText.trim().isEmpty) {
+      _showSnackBar(
+        hadImageData ? 'Nothing to copy (images removed).' : 'Nothing to copy.',
+      );
+      return;
+    }
+
+    await Clipboard.setData(ClipboardData(text: sanitizedText));
+    _showSnackBar(
+      label ??
+          (hadImageData
+              ? 'Copied to clipboard (images removed).'
+              : 'Copied to clipboard.'),
+    );
   }
 
   void _editMessageAt(int index) {
@@ -1584,7 +1649,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     });
   }
 
-  Future<void> _submitEditedMessage(int index, String newText) async {
+  Future<void> _submitEditedMessage(
+    int index,
+    String newText, {
+    bool removeFollowingAssistant = true,
+    bool clearMessagesBelow = false,
+  }) async {
     if (!_isValidMessageIndex(index)) return;
     final String trimmedText = newText.trim();
     if (trimmedText.isEmpty) {
@@ -1606,8 +1676,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _editingMessageIndex = null;
     });
 
-    // Delete the AI response that follows this user message (if it exists)
-    if (index + 1 < _messages.length &&
+    // For resend flows on older messages, reset the chat branch from this
+    // point by clearing everything below the resent message.
+    if (clearMessagesBelow && index + 1 < _messages.length) {
+      setState(() {
+        _messages.removeRange(index + 1, _messages.length);
+      });
+    } else if (removeFollowingAssistant &&
+        index + 1 < _messages.length &&
         _messages[index + 1]['sender'] == 'ai') {
       setState(() {
         _messages.removeAt(index + 1);
@@ -1929,41 +2005,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                   : <ToolCall>[];
               previousToolCallCount = allToolCalls.length;
 
-              // Add per-round content blocks so the UI shows the flow:
-              // reasoning → tool calls → interim text for each round.
-              //
-              // Reasoning source priority:
-              //  1. Provider reasoning tokens (finalReasoning).
-              //  2. roundThinking on the first new tool call (captures
-              //     pre-tool text from the content stream for models
-              //     that embed thinking inline).
-              final bool hasProviderReasoning = finalReasoning
-                  .trim()
-                  .isNotEmpty;
-              String roundReasoning = hasProviderReasoning
-                  ? finalReasoning.trim()
-                  : (newToolCalls.isNotEmpty
-                        ? (newToolCalls.first.roundThinking?.trim() ?? '')
-                        : '');
-              var interimOutputText = interimText;
-              if (!hasProviderReasoning && roundReasoning.isNotEmpty) {
-                if (interimOutputText == roundReasoning) {
-                  interimOutputText = '';
-                } else if (interimOutputText.startsWith(roundReasoning)) {
-                  interimOutputText = interimOutputText
-                      .substring(roundReasoning.length)
-                      .trim();
-                }
-              }
-              if (roundReasoning.isNotEmpty) {
-                contentBlocks.add(ContentBlock.reasoning(roundReasoning));
-              }
-              if (newToolCalls.isNotEmpty) {
-                contentBlocks.add(ContentBlock.toolCalls(newToolCalls));
-              }
-              if (interimOutputText.isNotEmpty) {
-                contentBlocks.add(ContentBlock.text(interimOutputText));
-              }
+              final roundResult = RoundContentBlockService.buildRoundBlocks(
+                interimText: interimText,
+                providerReasoning: finalReasoning,
+                newToolCalls: newToolCalls,
+                interimBeforeToolCalls: loopResult.interimBeforeToolCalls,
+              );
+              contentBlocks.addAll(roundResult.blocks);
+              final interimOutputText = roundResult.interimOutputText;
 
               // Accumulate text for backward-compat message field.
               if (interimOutputText.isNotEmpty) {
@@ -2107,9 +2156,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               final finalText = stripToolCallBlocksForDisplay(
                 rawContent,
               ).trim();
-              if (resolvedReasoning.isNotEmpty) {
-                contentBlocks.add(ContentBlock.reasoning(resolvedReasoning));
-              }
               if (finalText.isNotEmpty) {
                 contentBlocks.add(ContentBlock.text(finalText));
               }
@@ -2261,7 +2307,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       return;
     }
     // Use the same logic as editing and submitting
-    await _submitEditedMessage(sourceIndex, text);
+    await _submitEditedMessage(
+      sourceIndex,
+      text,
+      removeFollowingAssistant: false,
+      clearMessagesBelow: true,
+    );
   }
 
   List<MessageBubbleAction> _buildMessageActionsForIndex(
@@ -2968,42 +3019,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                     : <ToolCall>[];
                 previousToolCallCount2 = allToolCalls.length;
 
-                // Add per-round content blocks so the UI shows the flow:
-                // reasoning → tool calls → interim text for each round.
-                //
-                // Reasoning source priority:
-                //  1. Provider reasoning tokens (finalReasoning).
-                //  2. roundThinking on the first new tool call (captures
-                //     pre-tool text from the content stream for models
-                //     that embed thinking inline).
-                final bool hasProviderReasoning = finalReasoning
-                    .trim()
-                    .isNotEmpty;
-                String roundReasoning = hasProviderReasoning
-                    ? finalReasoning.trim()
-                    : (newToolCalls.isNotEmpty
-                          ? (newToolCalls.first.roundThinking?.trim() ?? '')
-                          : '');
-                var interimOutputText = interimText;
-                if (!hasProviderReasoning && roundReasoning.isNotEmpty) {
-                  if (interimOutputText == roundReasoning) {
-                    interimOutputText = '';
-                  } else if (interimOutputText.startsWith(roundReasoning)) {
-                    interimOutputText = interimOutputText
-                        .substring(roundReasoning.length)
-                        .trim();
-                  }
-                }
-
-                if (roundReasoning.isNotEmpty) {
-                  contentBlocks2.add(ContentBlock.reasoning(roundReasoning));
-                }
-                if (newToolCalls.isNotEmpty) {
-                  contentBlocks2.add(ContentBlock.toolCalls(newToolCalls));
-                }
-                if (interimOutputText.isNotEmpty) {
-                  contentBlocks2.add(ContentBlock.text(interimOutputText));
-                }
+                final roundResult = RoundContentBlockService.buildRoundBlocks(
+                  interimText: interimText,
+                  providerReasoning: finalReasoning,
+                  newToolCalls: newToolCalls,
+                  interimBeforeToolCalls: loopResult.interimBeforeToolCalls,
+                );
+                contentBlocks2.addAll(roundResult.blocks);
+                final interimOutputText = roundResult.interimOutputText;
 
                 // Accumulate text for backward-compat message field.
                 if (interimOutputText.isNotEmpty) {
@@ -3145,9 +3168,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 final finalText = stripToolCallBlocksForDisplay(
                   rawContent,
                 ).trim();
-                if (resolvedReasoning.isNotEmpty) {
-                  contentBlocks2.add(ContentBlock.reasoning(resolvedReasoning));
-                }
                 if (finalText.isNotEmpty) {
                   contentBlocks2.add(ContentBlock.text(finalText));
                 }

@@ -1,6 +1,8 @@
 // lib/platform_specific/chat/handlers/message_actions_handler.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
+import 'package:chuk_chat/utils/clipboard_text_sanitizer.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 
 /// Handles message-related actions (copy, edit, resend)
@@ -24,8 +26,21 @@ class MessageActionsHandler {
       onShowSnackBar?.call('Nothing to copy');
       return;
     }
-    await Clipboard.setData(ClipboardData(text: text));
-    onShowSnackBar?.call(label ?? 'Copied');
+
+    final hadImageData = ClipboardTextSanitizer.containsImageData(text);
+    final sanitizedText = ClipboardTextSanitizer.sanitize(text);
+
+    if (sanitizedText.trim().isEmpty) {
+      onShowSnackBar?.call(
+        hadImageData ? 'Nothing to copy (images removed)' : 'Nothing to copy',
+      );
+      return;
+    }
+
+    await Clipboard.setData(ClipboardData(text: sanitizedText));
+    onShowSnackBar?.call(
+      label ?? (hadImageData ? 'Copied (images removed)' : 'Copied'),
+    );
   }
 
   /// Start editing a message at the given index
