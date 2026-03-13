@@ -89,10 +89,11 @@ flutter build web --release --dart-define-from-file=.env
 
 1. `flutter test` — all must pass
 2. `flutter analyze` — 0 new issues (4 pre-existing info-level lints in `chat_ui_desktop.dart` OK)
-3. **BEFORE committing**: run `coderabbit review --plain` (timeout 300s) on your **uncommitted** changes
+3. **BEFORE committing**: run `coderabbit review --plain --type uncommitted` (timeout 300s) on your **uncommitted** changes
+   - The `--type uncommitted` flag is **required** — without it CodeRabbit reviews all files and will fail with "Too many files" in large repos.
    - CodeRabbit only reviews uncommitted files. If you commit first, it won't see your changes.
    - Review the output and fix any findings **in your changed files** (ignore pre-existing issues in other files)
-   - Re-run `coderabbit review --plain` after fixing to confirm clean
+   - Re-run `coderabbit review --plain --type uncommitted` after fixing to confirm clean
 4. Commit with descriptive message
 5. `git push`
 
