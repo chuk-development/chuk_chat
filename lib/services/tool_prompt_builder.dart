@@ -91,17 +91,35 @@ class ToolPromptBuilder {
         final findToolDef = tools
             .where((t) => t['name'] == 'find_tools')
             .toList();
+        // Collect names of tools not yet discovered so the AI knows
+        // what else is available via find_tools.
+        final shownNames = <String>{
+          'find_tools',
+          ...alwaysAvailableTools.map((t) => t['name']?.toString() ?? ''),
+          ...discoveredTools.map((t) => t['name']?.toString() ?? ''),
+        };
+        final undiscoveredNames = tools
+            .map((t) => t['name']?.toString() ?? '')
+            .where((n) => n.isNotEmpty && !shownNames.contains(n))
+            .toList();
         buffer.writeln(
           _buildToolProtocol(
             [...findToolDef, ...alwaysAvailableTools, ...discoveredTools],
+            undiscoveredToolNames: undiscoveredNames,
             includeMapVisualOutput: includeMapVisualOutput,
             includeChartVisualOutput: includeChartVisualOutput,
           ),
         );
       } else if (discoveryMode) {
+        // Extract all tool names so the AI sees what's available.
+        final allToolNames = tools
+            .map((t) => t['name']?.toString() ?? '')
+            .where((n) => n.isNotEmpty && n != 'find_tools')
+            .toList();
         buffer.writeln(
           _buildDiscoveryPrompt(
             alwaysAvailableTools,
+            allToolNames: allToolNames,
             includeMapVisualOutput: includeMapVisualOutput,
             includeChartVisualOutput: includeChartVisualOutput,
           ),
@@ -220,14 +238,41 @@ class ToolPromptBuilder {
     return buffer.toString();
   }
 
-  /// Discovery prompt: MINIMAL -- only find_tools explanation.
+  /// Discovery prompt: shows ALL tool names but requires find_tools
+  /// to get full descriptions before use.
+  ///
   /// [alwaysAvailableTools] are tool definitions that bypass discovery
-  /// (e.g. notes) and are always shown.
+  /// (e.g. notes) and are always shown with full details.
+  /// [allToolNames] is the list of all registered tool names (excluding
+  /// find_tools) so the AI knows the full catalog.
   String _buildDiscoveryPrompt(
     List<Map<String, dynamic>> alwaysAvailableTools, {
+    List<String> allToolNames = const [],
     required bool includeMapVisualOutput,
     required bool includeChartVisualOutput,
   }) {
+    // Build the tool name catalog.
+    final alwaysAvailableNames = alwaysAvailableTools
+        .map((t) => t['name']?.toString() ?? '')
+        .where((n) => n.isNotEmpty)
+        .toSet();
+    final discoverableNames = allToolNames
+        .where((n) => !alwaysAvailableNames.contains(n))
+        .toList();
+
+    final catalogSection = discoverableNames.isNotEmpty
+        ? '''
+
+## AVAILABLE TOOLS
+
+The following tools exist. You can see their names but you do NOT know what they do yet.
+**Before using ANY of these tools, you MUST call find_tools first** to get the full description and parameters.
+
+${discoverableNames.map((n) => '- $n').join('\n')}
+
+'''
+        : '';
+
     return '''
 ALWAYS respond in the user's language.
 
@@ -235,8 +280,12 @@ IMPORTANT: Never mention tool names, tool internals, or technical details to the
 
 CRITICAL -- OUTDATED KNOWLEDGE: Your training data is OLD and INCOMPLETE.
 RULE: For ANY question involving real-world facts, products, people, events, or current information -> SEARCH THE WEB FIRST.
+$catalogSection
+## TOOL DISCOVERY
 
-You have tools available but don't know their names yet. Call **find_tools** first to discover them.
+You can see the tool names above but you do NOT have their descriptions or parameters yet.
+**You MUST call find_tools to get the full description of a tool before you can use it.**
+Do NOT guess what a tool does or what parameters it takes based on the name alone.
 
 $toolCallStart
 {"name": "find_tools", "arguments": {"query": "restaurant"}}
@@ -257,7 +306,7 @@ RESEARCH DEPTH: Do NOT answer from a single source. A good answer requires multi
 4) If coverage is still incomplete, run another discovery/search pass from a different angle
 5) Only then compile your final answer from real tool outputs
 
-After find_tools returns, you can use the discovered tools. If no tool is needed, just answer directly.
+After find_tools returns the tool descriptions and parameters, you can use those discovered tools. If no tool is needed, just answer directly.
 DO NOT STALL: Never end with intention-only text like "I will search". Either emit the next tool_call, or provide a complete final answer.
 
 VISUAL OUTPUT NOTE:
@@ -315,8 +364,12 @@ ${_buildAlwaysAvailableSection(alwaysAvailableTools)}''';
   }
 
   /// Full tool protocol -- shown AFTER find_tools returns tool definitions.
+  ///
+  /// [undiscoveredToolNames] lists tools the AI hasn't discovered yet
+  /// (names only) so it knows what else is available via find_tools.
   String _buildToolProtocol(
     List<Map<String, dynamic>> tools, {
+    List<String> undiscoveredToolNames = const [],
     required bool includeMapVisualOutput,
     required bool includeChartVisualOutput,
   }) {
@@ -368,6 +421,15 @@ ${_buildAlwaysAvailableSection(alwaysAvailableTools)}''';
 
     final toolsText = toolDocs.join('\n');
 
+    // Show undiscovered tool names if any.
+    final undiscoveredSection = undiscoveredToolNames.isNotEmpty
+        ? '''
+
+### Other available tools (call find_tools to get details):
+${undiscoveredToolNames.map((n) => '- $n').join('\n')}
+'''
+        : '';
+
     return '''
 ALWAYS respond in the user's language. Never mix languages.
 
@@ -376,7 +438,7 @@ IMPORTANT: Never mention tool names, tool internals, or technical details to the
 ## TOOLS
 
 $toolsText
-
+$undiscoveredSection
 ### How to call:
 $toolCallStart
 {"name": "tool_name", "arguments": {"param1": "value1"}}
@@ -387,14 +449,14 @@ Multiple tools in one response: use multiple $toolCallStart...$toolCallEnd block
 FORMAT: Emit raw $toolCallStart...$toolCallEnd tags only. Do NOT wrap tool calls in Markdown code fences.
 
 ### Rules:
-1. ONLY the tools listed above exist. Unknown names are rejected.
+1. You can only call tools whose full description is shown above. To use a tool from "Other available tools", call find_tools first to get its description.
 2. STOP after your last $toolCallEnd. Wait for real results -- never fabricate outputs.
 3. Never use OpenAI-style function_call -- only $toolCallStart...$toolCallEnd XML tags.
 4. NEVER invent factual data (phone numbers, addresses, URLs, prices, ratings). Only include what tools returned.
 5. web_search includes search snippets and auto-fetched context from top pages. Use web_crawl for deeper extraction of a specific URL.
 6. Never stop with intention-only text (e.g. "I will now search"). Do the next tool_call or provide the final answer.
 7. COST & PRIVACY: Before calling generate_image or edit_image, ALWAYS briefly inform the user that (a) it costs credits and (b) generated/edited images are NOT end-to-end encrypted and can be seen by the service operator. Then proceed with the tool call in the same response — do not wait for confirmation unless the user previously expressed privacy concerns. After the image is generated, do NOT show the URL, dimensions, seed, model, or other technical metadata — the image is displayed inline automatically by the app.
-8. If the needed tool is already listed above, call it directly. Do NOT call find_tools again in the same request unless you need a new tool category that is not listed.
+8. If the needed tool is already listed above with its full description, call it directly. Do NOT call find_tools again unless you need a tool from "Other available tools".
 
 ### Research depth:
 Do NOT give shallow one-search answers. For any factual question:

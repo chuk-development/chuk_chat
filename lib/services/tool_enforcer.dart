@@ -30,7 +30,16 @@ class ToolEnforcer {
   /// Tools discovered via find_tools (names only). Updated externally.
   Set<String> discoveredToolNames = {};
 
+  /// Tools that bypass discovery (always available without find_tools).
+  /// Populated by the handler based on prompt configuration.
+  Set<String> _alwaysAllowedTools = const {'notes', 'ask_user'};
+
   ToolEnforcer({this.maxIterations = 100});
+
+  /// Set the tools that bypass discovery mode (always callable).
+  set alwaysAllowedTools(Set<String> tools) {
+    _alwaysAllowedTools = {'notes', 'ask_user', ...tools};
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
   // Configuration
@@ -67,6 +76,7 @@ class ToolEnforcer {
     _toolSchemas = {};
     discoveryMode = false;
     discoveredToolNames = {};
+    _alwaysAllowedTools = const {'notes', 'ask_user'};
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -166,12 +176,11 @@ class ToolEnforcer {
         continue;
       }
 
-      // 1b. In discovery mode, only find_tools + notes + ask_user +
+      // 1b. In discovery mode, only find_tools + always-available tools +
       //     discovered tools are allowed without discovery.
       if (discoveryMode &&
           name != 'find_tools' &&
-          name != 'notes' &&
-          name != 'ask_user' &&
+          !_alwaysAllowedTools.contains(name) &&
           !discoveredToolNames.contains(name)) {
         rejected.add(
           RejectedToolCall(

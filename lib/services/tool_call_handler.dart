@@ -128,6 +128,19 @@ class ToolCallHandler {
   }) {
     final enforcer = ToolEnforcer(maxIterations: 24)..resetIteration();
 
+    // Tell the enforcer which tools bypass discovery.
+    final bypass = <String>{};
+    if (ProjectStorageService.selectedProjectId != null) {
+      bypass.add('update_project');
+    }
+    if (kFeatureArtifacts &&
+        (ChatStorageService.selectedChatId ?? '').isNotEmpty) {
+      bypass.add('artifact_manager');
+    }
+    if (bypass.isNotEmpty) {
+      enforcer.alwaysAllowedTools = bypass;
+    }
+
     final session = ToolLoopSession(
       latestUserMessage: initialUserMessage,
       history: _cloneHistory(history),
