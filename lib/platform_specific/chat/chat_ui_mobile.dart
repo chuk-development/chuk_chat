@@ -819,7 +819,19 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         _audioHandler.resetAudioLevels();
       });
     } else {
-      final bool started = await _audioHandler.startRecording();
+      // Get an access token so the handler can open a streaming WebSocket.
+      // If the session is unavailable, startRecording falls back to file mode.
+      String? accessToken;
+      try {
+        final session =
+            await SupabaseService.refreshSession() ??
+            SupabaseService.auth.currentSession;
+        accessToken = session?.accessToken;
+      } catch (_) {}
+
+      final bool started = await _audioHandler.startRecording(
+        accessToken: accessToken,
+      );
       if (!mounted) return;
       if (started) {
         setState(() {

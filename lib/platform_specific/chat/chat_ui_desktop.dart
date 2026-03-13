@@ -36,6 +36,7 @@ import 'package:chuk_chat/services/project_message_service.dart';
 import 'package:chuk_chat/services/artifact_context_service.dart';
 import 'package:chuk_chat/services/title_generation_service.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
+import 'package:chuk_chat/services/streaming_transcription_service.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:chuk_chat/utils/io_helper.dart';
@@ -180,6 +181,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   Uint8List? _lastRecordedBytes;
   String? _activeRecordingPath;
   bool _isSending = false;
+
+  // Streaming transcription (audio streamed to server as user speaks)
+  StreamingTranscriptionService? _streamingTranscription;
+  StreamSubscription<Uint8List>? _pcmStreamSub;
+  bool _isStreamingMode = false;
   bool _showScrollToBottom = false;
   bool _isTranscribingAudio = false;
   bool _isLoadingChat = false; // Loading indicator for chat switching
@@ -436,6 +442,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _animCtrl.dispose();
     unawaited(_stopMicRecording());
     _amplitudeSub?.cancel();
+    _pcmStreamSub?.cancel();
+    unawaited(_streamingTranscription?.dispose() ?? Future<void>.value());
     unawaited(_audioRecorder.dispose());
     ModelSelectionDropdown.selectedModelListenable.removeListener(
       _modelSelectionListener,
@@ -1009,6 +1017,55 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _isMicActive = false;
       _resetAudioLevels();
     });
+
+    // --- Streaming mode: audio is already on the server ---
+    if (_isStreamingMode && _streamingTranscription != null) {
+      if (!mounted) return;
+      setState(() {
+        _isTranscribingAudio = true;
+      });
+      try {
+        final result = await _streamingTranscription!.finishAndTranscribe();
+        _streamingTranscription = null;
+        _isStreamingMode = false;
+
+        if (!mounted) return;
+
+        if (result == null || result.containsKey('error')) {
+          final error = (result?['error'] as String?) ?? 'Transcription failed';
+          _showSnackBar(error);
+        } else {
+          final String text = ((result['text'] as String?) ?? '').trim();
+          if (text.isEmpty) {
+            _showSnackBar('Transcription returned no text.');
+          } else {
+            setState(() {
+              _controller.text = text;
+              _controller.selection = TextSelection.fromPosition(
+                TextPosition(offset: text.length),
+              );
+            });
+            Future.delayed(
+              Duration.zero,
+              () => _textFieldFocusNode.requestFocus(),
+            );
+          }
+        }
+      } catch (e) {
+        _showSnackBar('Transcription error: $e');
+      } finally {
+        _streamingTranscription = null;
+        _isStreamingMode = false;
+        if (mounted) {
+          setState(() {
+            _isTranscribingAudio = false;
+          });
+        }
+      }
+      return;
+    }
+
+    // --- File mode: upload the recording via HTTP ---
     if (kIsWeb) {
       final Uint8List? bytes = _lastRecordedBytes;
       if (bytes == null || bytes.isEmpty) {
@@ -1189,6 +1246,27 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _resetAudioLevels();
       _amplitudeSub?.cancel();
 
+      // --- Try streaming mode: stream PCM to server via WebSocket ---
+      String? accessToken;
+      try {
+        final session =
+            await SupabaseService.refreshSession() ??
+            SupabaseService.auth.currentSession;
+        accessToken = session?.accessToken;
+      } catch (_) {}
+
+      if (accessToken != null) {
+        final streamingOk = await _tryStartStreamingRecording(accessToken);
+        if (streamingOk) return true;
+        // Streaming failed — fall through to file mode.
+        if (kDebugMode) {
+          debugPrint(
+            'Streaming transcription unavailable, falling back to file mode',
+          );
+        }
+      }
+
+      // --- File mode (original behaviour) ---
       if (kIsWeb) {
         await _audioRecorder.start(
           const RecordConfig(
@@ -1216,6 +1294,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           .onAmplitudeChanged(const Duration(milliseconds: 80))
           .listen(_handleAmplitudeSample);
 
+      _isStreamingMode = false;
       return true;
     } catch (error, stackTrace) {
       if (kDebugMode) {
@@ -1226,7 +1305,83 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     }
   }
 
+  /// Attempt to start streaming-mode recording (PCM → WebSocket).
+  Future<bool> _tryStartStreamingRecording(String accessToken) async {
+    try {
+      _streamingTranscription = StreamingTranscriptionService();
+      final connected = await _streamingTranscription!.connect(
+        accessToken: accessToken,
+      );
+      if (!connected) {
+        await _streamingTranscription?.dispose();
+        _streamingTranscription = null;
+        return false;
+      }
+
+      const config = RecordConfig(
+        encoder: AudioEncoder.pcm16bits,
+        sampleRate: 16000,
+        numChannels: 1,
+      );
+      final Stream<Uint8List> pcmStream = await _audioRecorder.startStream(
+        config,
+      );
+
+      _pcmStreamSub = pcmStream.listen((Uint8List data) {
+        _streamingTranscription?.sendAudioChunk(data);
+        _computeAmplitudeFromPcm(data);
+      });
+
+      _isStreamingMode = true;
+      return true;
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('Streaming start failed: $e');
+      }
+      _pcmStreamSub?.cancel();
+      _pcmStreamSub = null;
+      await _streamingTranscription?.dispose();
+      _streamingTranscription = null;
+      _isStreamingMode = false;
+      return false;
+    }
+  }
+
+  /// Compute normalised amplitude from raw PCM-16 LE samples.
+  void _computeAmplitudeFromPcm(Uint8List data) {
+    if (data.length < 2 || !mounted) return;
+    final byteData = ByteData.sublistView(data);
+    double maxSample = 0;
+    for (int i = 0; i + 1 < data.length; i += 2) {
+      final sample = byteData.getInt16(i, Endian.little).abs().toDouble();
+      if (sample > maxSample) maxSample = sample;
+    }
+    final double normalized = (maxSample / 32768.0).clamp(0.0, 1.0);
+    setState(() {
+      if (_audioLevels.isNotEmpty) {
+        _audioLevels.removeAt(0);
+      }
+      _audioLevels.add(normalized);
+    });
+  }
+
   Future<void> _stopMicRecording({bool keepFile = false}) async {
+    // --- Streaming mode ---
+    if (_isStreamingMode) {
+      _pcmStreamSub?.cancel();
+      _pcmStreamSub = null;
+      try {
+        await _audioRecorder.stop();
+      } catch (_) {}
+      if (!keepFile) {
+        await _streamingTranscription?.abort();
+        _streamingTranscription = null;
+        _isStreamingMode = false;
+      }
+      return;
+    }
+
+    // --- File mode ---
     _amplitudeSub?.cancel();
     _amplitudeSub = null;
     try {
