@@ -13,14 +13,12 @@ import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
-import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/message_composition_service.dart';
 import 'package:chuk_chat/services/tool_call_handler.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart'
     show MessageBubble, MessageBubbleAction, DocumentAttachment;
-import 'package:chuk_chat/pages/coming_soon_page.dart';
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart'; // NEW
@@ -52,43 +50,8 @@ import 'package:chuk_chat/utils/path_provider_stub.dart'
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/utils/desktop_drop_stub.dart'
     if (dart.library.io) 'package:desktop_drop/desktop_drop.dart';
-import 'package:pasteboard/pasteboard.dart';
-
-class _MessageRenderData {
-  const _MessageRenderData({
-    required this.sender,
-    required this.displayText,
-    required this.reasoning,
-    required this.isReasoningStreaming,
-    this.modelLabel,
-    this.modelProvider,
-    this.tps,
-    this.images,
-    this.imageCostEur,
-    this.imageGeneratedAt,
-    this.attachments,
-    this.toolCalls,
-    this.contentBlocks,
-    this.isStreamingMessage = false,
-  });
-
-  final String sender;
-  final String displayText;
-  final String reasoning;
-  final bool isReasoningStreaming;
-  final String? modelLabel;
-  final String? modelProvider;
-  final double? tps;
-  final List<String>? images;
-  final double? imageCostEur;
-  final DateTime? imageGeneratedAt;
-  final List<DocumentAttachment>? attachments;
-  final List<ToolCall>? toolCalls;
-  final List<ContentBlock>? contentBlocks;
-  final bool isStreamingMessage;
-
-  bool get isUser => sender == 'user';
-}
+import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
+import 'package:chuk_chat/platform_specific/chat/handlers/desktop_clipboard_handler.dart';
 
 class ChukChatUIDesktop extends StatefulWidget {
   // RENAMED CLASS
@@ -206,6 +169,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   final List<AttachedFile> _attachedFiles = [];
   final Uuid _uuid = Uuid();
+  late final DesktopClipboardHandler _clipboardHandler;
   bool get _isLinuxDesktop =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
 
@@ -230,104 +194,16 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   static const double _kMessageListBottomLift = 40.0;
   static const double _kStreamingBottomScrollSlack = 180.0;
 
-  String _selectedTextOrAll(TextEditingValue value) {
-    final selection = value.selection;
-    if (selection.isValid && !selection.isCollapsed) {
-      return selection.textInside(value.text);
-    }
-    return value.text;
-  }
-
   Widget _buildComposerContextMenu(
     BuildContext context,
     EditableTextState editableTextState,
-  ) {
-    final buttonItems = editableTextState.contextMenuButtonItems.map((item) {
-      if (item.type != ContextMenuButtonType.copy) {
-        return item;
-      }
-
-      return ContextMenuButtonItem(
-        type: ContextMenuButtonType.copy,
-        onPressed: () {
-          final text = _selectedTextOrAll(editableTextState.textEditingValue);
-          if (text.isNotEmpty) {
-            final sanitized = ClipboardTextSanitizer.sanitize(text);
-            Clipboard.setData(ClipboardData(text: sanitized));
-          }
-          ContextMenuController.removeAny();
-        },
-      );
-    }).toList();
-
-    final hasCopy = buttonItems.any(
-      (item) => item.type == ContextMenuButtonType.copy,
-    );
-
-    if (!hasCopy) {
-      buttonItems.insert(
-        0,
-        ContextMenuButtonItem(
-          type: ContextMenuButtonType.copy,
-          onPressed: () {
-            final text = _selectedTextOrAll(editableTextState.textEditingValue);
-            if (text.isNotEmpty) {
-              final sanitized = ClipboardTextSanitizer.sanitize(text);
-              Clipboard.setData(ClipboardData(text: sanitized));
-            }
-            ContextMenuController.removeAny();
-          },
-        ),
-      );
-    }
-
-    return AdaptiveTextSelectionToolbar.buttonItems(
-      anchors: editableTextState.contextMenuAnchors,
-      buttonItems: buttonItems,
-    );
-  }
+  ) => _clipboardHandler.buildComposerContextMenu(context, editableTextState);
 
   Widget _buildMessageContextMenu(
     BuildContext context,
     SelectableRegionState selectableRegionState,
-  ) {
-    final buttonItems = selectableRegionState.contextMenuButtonItems.map((
-      item,
-    ) {
-      if (item.type != ContextMenuButtonType.copy) {
-        return item;
-      }
-
-      return ContextMenuButtonItem(
-        type: ContextMenuButtonType.copy,
-        onPressed: () async {
-          item.onPressed?.call();
-          await Future<void>.delayed(Duration.zero);
-          await _sanitizeClipboardInPlace();
-        },
-      );
-    }).toList();
-
-    return AdaptiveTextSelectionToolbar.buttonItems(
-      anchors: selectableRegionState.contextMenuAnchors,
-      buttonItems: buttonItems,
-    );
-  }
-
-  Future<void> _sanitizeClipboardInPlace() async {
-    final clipData = await Clipboard.getData(Clipboard.kTextPlain);
-    final clipText = clipData?.text;
-    if (clipText == null || clipText.isEmpty) {
-      return;
-    }
-
-    if (!ClipboardTextSanitizer.containsImageData(clipText)) {
-      return;
-    }
-
-    final sanitized = ClipboardTextSanitizer.sanitize(clipText);
-    await Clipboard.setData(ClipboardData(text: sanitized));
-  }
+  ) =>
+      _clipboardHandler.buildMessageContextMenu(context, selectableRegionState);
 
   @override
   void initState() {
@@ -340,7 +216,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         if (event.logicalKey == LogicalKeyboardKey.keyV &&
             (HardwareKeyboard.instance.isControlPressed ||
                 HardwareKeyboard.instance.isMetaPressed)) {
-          unawaited(_handleSmartPaste());
+          unawaited(_clipboardHandler.handleSmartPaste(_controller));
           return KeyEventResult.handled;
         }
 
@@ -372,10 +248,13 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _chatApiService = ChatApiService(
       onUploadStatusUpdate: _handleFileUploadUpdate,
     );
+    _clipboardHandler = DesktopClipboardHandler(
+      onProcessFilePaths: _processFilePaths,
+    );
     _scrollController.addListener(_onScrollChanged);
     _selectedProjectId = widget.projectId;
     _loadChatById(widget.selectedChatId);
-    unawaited(_cleanupOldPasteTempDirectories());
+    unawaited(_clipboardHandler.cleanupOldPasteTempDirectories());
 
     // Defer network-dependent loading to after first frame for faster startup
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -797,43 +676,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     return true;
   }
 
-  Map<String, String> _messageToRawMap(ChatMessage message) {
-    final map = <String, String>{
-      'sender': message.sender,
-      'text': message.text,
-      'reasoning': message.reasoning ?? '',
-    };
-    if (message.modelId != null && message.modelId!.isNotEmpty) {
-      map['modelId'] = message.modelId!;
-    }
-    if (message.provider != null && message.provider!.isNotEmpty) {
-      map['provider'] = message.provider!;
-    }
-    if (message.images != null && message.images!.isNotEmpty) {
-      map['images'] = message.images!;
-    }
-    if (message.imageCostEur != null && message.imageCostEur!.isNotEmpty) {
-      map['imageCostEur'] = message.imageCostEur!;
-    }
-    if (message.imageGeneratedAt != null &&
-        message.imageGeneratedAt!.isNotEmpty) {
-      map['imageGeneratedAt'] = message.imageGeneratedAt!;
-    }
-    if (message.attachments != null && message.attachments!.isNotEmpty) {
-      map['attachments'] = message.attachments!;
-    }
-    if (message.attachedFilesJson != null &&
-        message.attachedFilesJson!.isNotEmpty) {
-      map['attachedFilesJson'] = message.attachedFilesJson!;
-    }
-    if (message.toolCalls != null && message.toolCalls!.isNotEmpty) {
-      map['toolCalls'] = message.toolCalls!;
-    }
-    if (message.contentBlocks != null && message.contentBlocks!.isNotEmpty) {
-      map['contentBlocks'] = message.contentBlocks!;
-    }
-    return map;
-  }
+  Map<String, String> _messageToRawMap(ChatMessage message) =>
+      ChatUiHelpers.messageToRawMap(message);
 
   /// Returns the current messages list for debug export.
   List<Map<String, String>> get debugMessages =>
@@ -893,14 +737,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   void _openComingSoonFeature(String featureName) {
     if (!mounted) return;
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ComingSoonPage(
-          title: featureName,
-          message: 'Stay tuned for $featureName.',
-        ),
-      ),
-    );
+    ChatUiHelpers.openComingSoonFeature(context, featureName);
   }
 
   Future<void> _loadProviderSlugForModel(String modelId) async {
@@ -1065,7 +902,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   }
 
   bool get _modelSupportsImageInput =>
-      ModelCapabilitiesService.supportsImageInputSync(_selectedModelId);
+      ChatUiHelpers.modelSupportsImageInput(_selectedModelId);
 
   // State for drag and drop
   bool _isDraggingFiles = false;
@@ -1597,21 +1434,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   }
 
   void _showSnackBar(String message) {
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    messenger?.showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        duration: const Duration(seconds: 2),
-        dismissDirection: DismissDirection.horizontal,
-      ),
-    );
+    ChatUiHelpers.showSnackBar(context, message);
   }
 
   bool _isValidMessageIndex(int index) =>
@@ -2384,160 +2207,22 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   }
 
   List<AttachedFile> _reconstructAttachedFilesForResend(int index) {
-    if (!_isValidMessageIndex(index)) {
-      return <AttachedFile>[];
-    }
-
-    final attachedFiles = <AttachedFile>[];
-    final String? attachedFilesJson = _messages[index]['attachedFilesJson'];
-
-    if (attachedFilesJson != null && attachedFilesJson.isNotEmpty) {
-      try {
-        final decoded = jsonDecode(attachedFilesJson);
-        if (decoded is List) {
-          for (final item in decoded) {
-            if (item is Map) {
-              attachedFiles.add(
-                AttachedFile.fromJson(Map<String, dynamic>.from(item)),
-              );
-            }
-          }
-        }
-      } catch (e) {
-        if (kDebugMode) {
-          debugPrint('🔄 [ResendDebug] Failed to parse attachedFilesJson: $e');
-        }
-      }
-    }
-
-    if (attachedFiles.isNotEmpty) {
-      return attachedFiles;
-    }
-
-    // Fallback for older messages where only "attachments" was persisted.
-    final String? attachmentsJson = _messages[index]['attachments'];
-    if (attachmentsJson != null && attachmentsJson.isNotEmpty) {
-      try {
-        final decoded = jsonDecode(attachmentsJson);
-        if (decoded is List) {
-          for (final item in decoded.whereType<Map>()) {
-            final data = Map<String, dynamic>.from(item);
-            final String fileName = (data['fileName'] as String? ?? '').trim();
-            final String markdownContent =
-                (data['markdownContent'] as String? ?? '').trim();
-            if (fileName.isEmpty || markdownContent.isEmpty) {
-              continue;
-            }
-            attachedFiles.add(
-              AttachedFile(
-                id: _uuid.v4(),
-                fileName: fileName,
-                markdownContent: markdownContent,
-                isUploading: false,
-                isImage: false,
-              ),
-            );
-          }
-        }
-      } catch (e) {
-        if (kDebugMode) {
-          debugPrint('🔄 [ResendDebug] Failed to parse attachments JSON: $e');
-        }
-      }
-    }
-
-    return attachedFiles;
+    if (!_isValidMessageIndex(index)) return <AttachedFile>[];
+    return ChatUiHelpers.reconstructAttachedFilesForResend(
+      _messages[index],
+      _uuid,
+    );
   }
 
   String _extractResendUserQueryFromDisplayText(
     String displayText,
     List<AttachedFile> attachedFiles,
-  ) {
-    final text = displayText.trim();
-    if (text.isEmpty || attachedFiles.isEmpty) {
-      return text;
-    }
-
-    final separatorIndex = text.indexOf('\n\n');
-    if (separatorIndex < 0) {
-      return _looksLikeGeneratedAttachmentHeader(text) ? '' : text;
-    }
-
-    final header = text.substring(0, separatorIndex).trim();
-    if (!_looksLikeGeneratedAttachmentHeader(header)) {
-      return text;
-    }
-
-    return text.substring(separatorIndex + 2).trim();
-  }
-
-  bool _looksLikeGeneratedAttachmentHeader(String text) {
-    if (text.startsWith('Documents: ')) {
-      return true;
-    }
-
-    return RegExp(r'^\d+ images? attached(?:, Documents: .+)?$').hasMatch(text);
-  }
+  ) => ChatUiHelpers.extractResendUserQuery(displayText, attachedFiles);
 
   String _buildResendUserPrompt(
     String userQuery,
     List<AttachedFile> attachedFiles,
-  ) {
-    final normalizedQuery = userQuery.trim();
-    final documentFiles = attachedFiles
-        .where(
-          (file) =>
-              !file.isImage &&
-              file.markdownContent != null &&
-              file.markdownContent!.isNotEmpty,
-        )
-        .toList(growable: false);
-
-    if (documentFiles.isEmpty) {
-      if (normalizedQuery.isNotEmpty) {
-        return normalizedQuery;
-      }
-      final hasImageAttachments = attachedFiles.any(
-        (file) => file.isImage && file.encryptedImagePath != null,
-      );
-      return hasImageAttachments ? 'Please describe these images.' : '';
-    }
-
-    final markdownSections = documentFiles
-        .map((file) {
-          final safeName = _sanitizeAttachmentFileNameForPrompt(file.fileName);
-          final content = file.markdownContent ?? '';
-          final fence = _buildMarkdownFenceForContent(content);
-          return 'Document: "$safeName"\n$fence\n$content\n$fence';
-        })
-        .join('\n\n');
-
-    final effectiveQuery = normalizedQuery.isNotEmpty
-        ? normalizedQuery
-        : 'Please review the uploaded documents.';
-
-    return '$markdownSections\n\nUser query: $effectiveQuery';
-  }
-
-  String _sanitizeAttachmentFileNameForPrompt(String fileName) {
-    return fileName
-        .replaceAll(RegExp(r'[\r\n\t]+'), ' ')
-        .replaceAll('"', "'")
-        .trim();
-  }
-
-  String _buildMarkdownFenceForContent(String content) {
-    var maxBacktickRun = 0;
-    for (final match in RegExp(r'`+').allMatches(content)) {
-      final runLength = match.group(0)?.length ?? 0;
-      if (runLength > maxBacktickRun) {
-        maxBacktickRun = runLength;
-      }
-    }
-
-    final fenceLength = math.max(3, maxBacktickRun + 1);
-    return List<String>.filled(fenceLength, '`').join();
-  }
+  ) => ChatUiHelpers.buildResendUserPrompt(userQuery, attachedFiles);
 
   Future<void> _resendMessageAt(int index) async {
     if (!_isValidMessageIndex(index)) return;
@@ -2574,7 +2259,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   List<MessageBubbleAction> _buildMessageActionsForIndex(
     int index,
-    _MessageRenderData data,
+    MessageRenderData data,
   ) {
     if (!_isValidMessageIndex(index)) {
       return const <MessageBubbleAction>[];
@@ -3762,54 +3447,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   static final Map<String, String> _imageBase64Cache = {};
   static const int _maxImageCacheSize = 10;
 
-  String _detectImageMimeType(Uint8List bytes) {
-    if (bytes.length >= 8 &&
-        bytes[0] == 0x89 &&
-        bytes[1] == 0x50 &&
-        bytes[2] == 0x4E &&
-        bytes[3] == 0x47 &&
-        bytes[4] == 0x0D &&
-        bytes[5] == 0x0A &&
-        bytes[6] == 0x1A &&
-        bytes[7] == 0x0A) {
-      return 'image/png';
-    }
-
-    if (bytes.length >= 3 &&
-        bytes[0] == 0xFF &&
-        bytes[1] == 0xD8 &&
-        bytes[2] == 0xFF) {
-      return 'image/jpeg';
-    }
-
-    if (bytes.length >= 6 &&
-        bytes[0] == 0x47 &&
-        bytes[1] == 0x49 &&
-        bytes[2] == 0x46 &&
-        bytes[3] == 0x38 &&
-        (bytes[4] == 0x37 || bytes[4] == 0x39) &&
-        bytes[5] == 0x61) {
-      return 'image/gif';
-    }
-
-    if (bytes.length >= 12 &&
-        bytes[0] == 0x52 &&
-        bytes[1] == 0x49 &&
-        bytes[2] == 0x46 &&
-        bytes[3] == 0x46 &&
-        bytes[8] == 0x57 &&
-        bytes[9] == 0x45 &&
-        bytes[10] == 0x42 &&
-        bytes[11] == 0x50) {
-      return 'image/webp';
-    }
-
-    if (bytes.length >= 2 && bytes[0] == 0x42 && bytes[1] == 0x4D) {
-      return 'image/bmp';
-    }
-
-    return 'image/jpeg';
-  }
+  String _detectImageMimeType(Uint8List bytes) =>
+      ChatUiHelpers.detectImageMimeType(bytes);
 
   Future<List<Map<String, dynamic>>> _buildApiHistoryWithPendingMessage(
     String pendingUserText,
@@ -4601,105 +4240,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     await _processFilePaths(filePaths);
   }
 
-  /// Handles Ctrl+V paste of clipboard images
-  /// Threshold (characters) above which pasted text is auto-converted to an
-  /// attached .txt file instead of being inserted into the composer.
-  static const int _kLongPasteThreshold = 3000;
-  static const Duration _kPasteTempRetention = Duration(hours: 24);
-
-  Future<void> _cleanupOldPasteTempDirectories() async {
-    if (kIsWeb) {
-      return;
-    }
-
-    try {
-      final tempDir = await getTemporaryDirectory();
-      final dynamic tempDirDynamic = tempDir;
-      final cutoff = DateTime.now().subtract(_kPasteTempRetention);
-      await for (final dynamic entity in tempDirDynamic.list(
-        followLinks: false,
-      )) {
-        try {
-          final String path = entity.path as String;
-          final String name = path.split(Platform.pathSeparator).last;
-          if (!name.startsWith('paste_')) {
-            continue;
-          }
-
-          final dynamic stat = await entity.stat();
-          final DateTime modified = stat.modified as DateTime;
-          if (modified.isBefore(cutoff)) {
-            await entity.delete(recursive: true);
-          }
-        } catch (_) {
-          // Ignore cleanup failures for temp files.
-        }
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('Failed to clean old paste temp directories: $e');
-      }
-    }
-  }
-
-  Future<void> _handleSmartPaste() async {
-    unawaited(_cleanupOldPasteTempDirectories());
-
-    // 1. Try image paste first
-    try {
-      final Uint8List? imageBytes = await Pasteboard.image;
-      if (imageBytes != null && imageBytes.isNotEmpty) {
-        final tempDir = await getTemporaryDirectory();
-        final timestamp = DateTime.now().millisecondsSinceEpoch;
-        final pasteDir = Directory('${tempDir.path}/paste_$timestamp');
-        if (!await pasteDir.exists()) {
-          await pasteDir.create(recursive: true);
-        }
-        final tempFile = File('${pasteDir.path}/clipboard_image.png');
-        await tempFile.writeAsBytes(imageBytes);
-        await _processFilePaths([tempFile.path]);
-        return;
-      }
-    } catch (_) {
-      // No image on clipboard — fall through to text handling.
-    }
-
-    // 2. Handle text paste
-    try {
-      final clipData = await Clipboard.getData(Clipboard.kTextPlain);
-      final String? text = clipData?.text;
-      if (text == null || text.isEmpty) return;
-
-      if (text.length > _kLongPasteThreshold) {
-        // Long text → create an attached .txt file
-        final tempDir = await getTemporaryDirectory();
-        final timestamp = DateTime.now().millisecondsSinceEpoch;
-        final pasteDir = Directory('${tempDir.path}/paste_$timestamp');
-        if (!await pasteDir.exists()) {
-          await pasteDir.create(recursive: true);
-        }
-        final tempFile = File('${pasteDir.path}/clipboard_text.txt');
-        await tempFile.writeAsString(text);
-        await _processFilePaths([tempFile.path]);
-      } else {
-        // Short text → insert at cursor position normally
-        final currentText = _controller.text;
-        final sel = _controller.selection;
-        final start = sel.isValid ? sel.start : currentText.length;
-        final end = sel.isValid ? sel.end : currentText.length;
-        final newText = currentText.replaceRange(start, end, text);
-        _controller.value = TextEditingValue(
-          text: newText,
-          selection: TextSelection.collapsed(offset: start + text.length),
-        );
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('Clipboard text paste error: $e');
-      }
-    }
-  }
-
   void _removeAttachedFile(String fileId) {
     // If this was an uploaded image, delete it from Supabase Storage
     final file = _attachedFiles.where((f) => f.id == fileId).firstOrNull;
@@ -4904,91 +4444,16 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     }
   }
 
-  String? _formatModelInfo(String? modelId, String? provider) {
-    final String normalizedModel = (modelId ?? '').trim();
-    final String normalizedProvider = (provider ?? '').trim();
-    if (normalizedModel.isEmpty && normalizedProvider.isEmpty) {
-      return null;
-    }
-    // Return just the model name for the card header.
-    // Provider is passed separately via modelProvider parameter.
-    if (normalizedModel.isEmpty) {
-      return normalizedProvider;
-    }
-    return normalizedModel;
-  }
-
-  _MessageRenderData _buildMessageRenderData(int index) {
-    final Map<String, String> raw = _messages[index];
-    final String sender = raw['sender'] ?? 'ai';
-    final String displayText = (raw['text'] ?? '').trimRight();
-    final String reasoning = raw['reasoning'] ?? '';
-    final bool isAiMessage = sender != 'user';
-    final bool isStreamingMessage =
-        _isStreaming && index == _messages.length - 1 && isAiMessage;
-    final bool hasReasoning = reasoning.isNotEmpty;
-    final String? modelLabel = isAiMessage
-        ? _formatModelInfo(raw['modelId'], raw['provider'])
-        : null;
-    final String? modelProvider = isAiMessage
-        ? (raw['provider'] ?? '').trim()
-        : null;
-
-    List<String>? images;
-    final String? imagesJson = raw['images'];
-    if (imagesJson != null && imagesJson.isNotEmpty) {
-      images = _decodeImages(imagesJson);
-    }
-
-    List<DocumentAttachment>? attachments;
-    final String? attachmentsJson = raw['attachments'];
-    if (attachmentsJson != null && attachmentsJson.isNotEmpty) {
-      attachments = _decodeAttachments(attachmentsJson);
-    }
-
-    final tpsStr = raw['tps'];
-    final double? tps = (tpsStr != null && tpsStr.isNotEmpty)
-        ? double.tryParse(tpsStr)
-        : null;
-
-    List<ToolCall>? toolCalls;
-    final String? toolCallsJson = raw['toolCalls'];
-    if (toolCallsJson != null && toolCallsJson.isNotEmpty) {
-      toolCalls = _decodeToolCalls(toolCallsJson);
-    }
-
-    List<ContentBlock>? parsedContentBlocks;
-    final String? contentBlocksJson = raw['contentBlocks'];
-    if (contentBlocksJson != null && contentBlocksJson.isNotEmpty) {
-      parsedContentBlocks = _decodeContentBlocks(contentBlocksJson);
-    }
-
-    final String? imageCostStr = raw['imageCostEur'];
-    final double? imageCostEur = imageCostStr != null && imageCostStr.isNotEmpty
-        ? double.tryParse(imageCostStr)
-        : null;
-    final String? imageGeneratedAtStr = raw['imageGeneratedAt'];
-    final DateTime? imageGeneratedAt =
-        imageGeneratedAtStr != null && imageGeneratedAtStr.isNotEmpty
-        ? DateTime.tryParse(imageGeneratedAtStr)
-        : null;
-
-    return _MessageRenderData(
-      sender: sender,
-      displayText: displayText,
-      reasoning: reasoning,
-      isReasoningStreaming:
-          isStreamingMessage && (hasReasoning || displayText.isNotEmpty),
-      modelLabel: modelLabel,
-      modelProvider: modelProvider,
-      tps: tps,
-      images: images,
-      imageCostEur: imageCostEur,
-      imageGeneratedAt: imageGeneratedAt,
-      attachments: attachments,
-      toolCalls: toolCalls,
-      contentBlocks: parsedContentBlocks,
-      isStreamingMessage: isStreamingMessage,
+  MessageRenderData _buildMessageRenderData(int index) {
+    return ChatUiHelpers.buildMessageRenderData(
+      raw: _messages[index],
+      index: index,
+      messageCount: _messages.length,
+      isStreaming: _isStreaming,
+      imagesCache: _decodedImagesCache,
+      attachmentsCache: _decodedAttachmentsCache,
+      toolCallsCache: _decodedToolCallsCache,
+      contentBlocksCache: _decodedContentBlocksCache,
     );
   }
 
@@ -4997,100 +4462,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _decodedAttachmentsCache.clear();
     _decodedToolCallsCache.clear();
     _decodedContentBlocksCache.clear();
-  }
-
-  void _trimMessageDecodeCachesIfNeeded() {
-    const int maxEntriesPerCache = 240;
-    if (_decodedImagesCache.length > maxEntriesPerCache) {
-      _decodedImagesCache.clear();
-    }
-    if (_decodedAttachmentsCache.length > maxEntriesPerCache) {
-      _decodedAttachmentsCache.clear();
-    }
-    if (_decodedToolCallsCache.length > maxEntriesPerCache) {
-      _decodedToolCallsCache.clear();
-    }
-    if (_decodedContentBlocksCache.length > maxEntriesPerCache) {
-      _decodedContentBlocksCache.clear();
-    }
-  }
-
-  List<String>? _decodeImages(String json) {
-    if (_decodedImagesCache.containsKey(json)) {
-      return _decodedImagesCache[json];
-    }
-    List<String>? parsed;
-    try {
-      final decoded = jsonDecode(json);
-      if (decoded is List) {
-        parsed = decoded.cast<String>();
-      }
-    } catch (_) {}
-    _decodedImagesCache[json] = parsed;
-    _trimMessageDecodeCachesIfNeeded();
-    return parsed;
-  }
-
-  List<DocumentAttachment>? _decodeAttachments(String json) {
-    if (_decodedAttachmentsCache.containsKey(json)) {
-      return _decodedAttachmentsCache[json];
-    }
-    List<DocumentAttachment>? parsed;
-    try {
-      final decoded = jsonDecode(json);
-      if (decoded is List) {
-        parsed = decoded
-            .whereType<Map>()
-            .map(
-              (item) =>
-                  DocumentAttachment.fromJson(Map<String, dynamic>.from(item)),
-            )
-            .toList();
-      }
-    } catch (_) {}
-    _decodedAttachmentsCache[json] = parsed;
-    _trimMessageDecodeCachesIfNeeded();
-    return parsed;
-  }
-
-  List<ToolCall>? _decodeToolCalls(String json) {
-    if (_decodedToolCallsCache.containsKey(json)) {
-      return _decodedToolCallsCache[json];
-    }
-    List<ToolCall>? parsed;
-    try {
-      final decoded = jsonDecode(json);
-      if (decoded is List) {
-        parsed = decoded
-            .whereType<Map>()
-            .map((item) => ToolCall.fromJson(Map<String, dynamic>.from(item)))
-            .toList();
-      }
-    } catch (_) {}
-    _decodedToolCallsCache[json] = parsed;
-    _trimMessageDecodeCachesIfNeeded();
-    return parsed;
-  }
-
-  List<ContentBlock>? _decodeContentBlocks(String json) {
-    if (_decodedContentBlocksCache.containsKey(json)) {
-      return _decodedContentBlocksCache[json];
-    }
-    List<ContentBlock>? parsed;
-    try {
-      final decoded = jsonDecode(json);
-      if (decoded is List) {
-        parsed = decoded
-            .whereType<Map>()
-            .map(
-              (item) => ContentBlock.fromJson(Map<String, dynamic>.from(item)),
-            )
-            .toList();
-      }
-    } catch (_) {}
-    _decodedContentBlocksCache[json] = parsed;
-    _trimMessageDecodeCachesIfNeeded();
-    return parsed;
   }
 
   @override
@@ -5282,7 +4653,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                           ? 360.0
                                           : 1200.0, // Lower Linux cache to reduce jank spikes
                                       itemBuilder: (_, int i) {
-                                        final _MessageRenderData data =
+                                        final MessageRenderData data =
                                             _buildMessageRenderData(i);
                                         final String? reasoningText =
                                             data.reasoning.trim().isEmpty

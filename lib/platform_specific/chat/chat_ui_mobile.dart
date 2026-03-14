@@ -10,13 +10,11 @@ import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
-import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/message_composition_service.dart';
 import 'package:chuk_chat/services/title_generation_service.dart';
 import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
-import 'package:chuk_chat/pages/coming_soon_page.dart';
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart';
@@ -32,10 +30,12 @@ import 'package:chuk_chat/platform_specific/chat/handlers/message_actions_handle
 import 'package:chuk_chat/platform_specific/chat/handlers/chat_persistence_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/streaming_message_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/widgets/mobile_chat_widgets.dart';
+import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
+import 'package:chuk_chat/platform_specific/chat/handlers/mobile_project_handler.dart';
+import 'package:chuk_chat/platform_specific/chat/widgets/fullscreen_composer.dart';
 import 'package:chuk_chat/services/project_storage_service.dart';
 import 'package:chuk_chat/services/project_message_service.dart';
 import 'package:chuk_chat/services/artifact_context_service.dart';
-import 'package:chuk_chat/pages/project_management_page.dart';
 
 class ChukChatUIMobile extends StatefulWidget {
   final VoidCallback onToggleSidebar;
@@ -1073,207 +1073,29 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
   /// Show project selection bottom sheet
   void _showProjectSelectionSheet() {
-    if (!mounted) return;
-    final theme = Theme.of(context);
-    final projects = ProjectStorageService.activeProjects;
-
-    showModalBottomSheet<void>(
+    MobileProjectHandler.showProjectSelectionSheet(
       context: context,
-      backgroundColor: theme.colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      isScrollControlled: true,
-      builder: (sheetContext) {
-        final Color indicatorColor = theme.dividerColor.withValues(alpha: 0.3);
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: indicatorColor,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Projects',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                // No project option
-                _buildProjectOption(
-                  sheetContext,
-                  theme,
-                  null,
-                  'No Project',
-                  Icons.close,
-                ),
-                if (projects.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 24),
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.folder_open,
-                          size: 48,
-                          color: theme.colorScheme.onSurface.withValues(
-                            alpha: 0.3,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'No projects yet',
-                          style: TextStyle(
-                            color: theme.colorScheme.onSurface.withValues(
-                              alpha: 0.6,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            Navigator.pop(sheetContext);
-                            _createNewProject();
-                          },
-                          icon: const Icon(Icons.add),
-                          label: const Text('Create Project'),
-                        ),
-                      ],
-                    ),
-                  )
-                else
-                  ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxHeight: MediaQuery.of(context).size.height * 0.4,
-                    ),
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: projects.length + 1, // +1 for create button
-                      itemBuilder: (context, index) {
-                        if (index == projects.length) {
-                          // Create new project button at the end
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            child: OutlinedButton.icon(
-                              onPressed: () {
-                                Navigator.pop(sheetContext);
-                                _createNewProject();
-                              },
-                              icon: const Icon(Icons.add),
-                              label: const Text('Create New Project'),
-                            ),
-                          );
-                        }
-                        final project = projects[index];
-                        return _buildProjectOption(
-                          sheetContext,
-                          theme,
-                          project.id,
-                          project.name,
-                          Icons.folder,
-                          subtitle:
-                              ProjectMessageService.getProjectContextSummary(
-                                project,
-                              ),
-                        );
-                      },
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        );
+      selectedProjectId: _selectedProjectId,
+      activeChatId: _activeChatId,
+      onProjectSelected: (projectId) {
+        if (!mounted) return;
+        setState(() {
+          _selectedProjectId = projectId;
+        });
       },
+      onShowSnackBar: _showSnackBar,
+      onStateChanged: () {
+        if (mounted) setState(() {});
+      },
+      onOpenProjectManagement: _openProjectManagement,
     );
-  }
-
-  Future<void> _createNewProject() async {
-    final nameController = TextEditingController();
-    final descController = TextEditingController();
-
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Create Project'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Project Name',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: descController,
-              decoration: const InputDecoration(
-                labelText: 'Description (optional)',
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 2,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Create'),
-          ),
-        ],
-      ),
-    );
-
-    if (result == true && nameController.text.trim().isNotEmpty && mounted) {
-      try {
-        final project = await ProjectStorageService.createProject(
-          nameController.text.trim(),
-          description: descController.text.trim().isEmpty
-              ? null
-              : descController.text.trim(),
-        );
-        _showSnackBar('Project "${project.name}" created');
-        // Open the project management page
-        if (mounted) {
-          _openProjectManagement(project.id);
-        }
-      } catch (e) {
-        _showSnackBar('Failed to create project: $e');
-      }
-    }
   }
 
   void _openProjectManagement(String projectId) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ProjectManagementPage(
-          projectId: projectId,
-          onStartNewChat: (selectedProjectId) {
-            // Start new chat with project context
-            _startNewChatWithProject(selectedProjectId);
-          },
-        ),
-      ),
+    MobileProjectHandler.openProjectManagement(
+      context: context,
+      projectId: projectId,
+      onStartNewChat: _startNewChatWithProject,
     );
   }
 
@@ -1294,225 +1116,29 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     }
   }
 
-  Widget _buildProjectOption(
-    BuildContext sheetContext,
-    ThemeData theme,
-    String? projectId,
-    String name,
-    IconData icon, {
-    String? subtitle,
-  }) {
-    final isSelected = _selectedProjectId == projectId;
-    // Check if this project already contains the current chat
-    final project = projectId != null
-        ? ProjectStorageService.getProject(projectId)
-        : null;
-    final bool chatInProject =
-        project != null &&
-        _activeChatId != null &&
-        project.chatIds.contains(_activeChatId);
-
-    return ListTile(
-      leading: Icon(icon, color: isSelected ? theme.colorScheme.primary : null),
-      title: Text(
-        name,
-        style: TextStyle(
-          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-          color: isSelected ? theme.colorScheme.primary : null,
-        ),
-      ),
-      subtitle: subtitle != null ? Text(subtitle) : null,
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (isSelected) Icon(Icons.check, color: theme.colorScheme.primary),
-          if (projectId != null) ...[
-            // Link/unlink chat button
-            if (_activeChatId != null) ...[
-              const SizedBox(width: 4),
-              IconButton(
-                icon: Icon(
-                  chatInProject ? Icons.link_off : Icons.link,
-                  size: 20,
-                  color: chatInProject
-                      ? Colors.orange
-                      : theme.colorScheme.primary.withValues(alpha: 0.7),
-                ),
-                tooltip: chatInProject
-                    ? 'Remove chat from project'
-                    : 'Add chat to project',
-                onPressed: () async {
-                  Navigator.of(sheetContext).pop();
-                  if (chatInProject) {
-                    await _removeChatFromProject(projectId);
-                  } else {
-                    await _addChatToProject(projectId);
-                  }
-                },
-              ),
-            ],
-            // Manage project button
-            IconButton(
-              icon: Icon(
-                Icons.settings,
-                size: 20,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-              ),
-              tooltip: 'Manage project',
-              onPressed: () {
-                Navigator.of(sheetContext).pop();
-                _openProjectManagement(projectId);
-              },
-            ),
-          ],
-        ],
-      ),
-      onTap: () {
-        Navigator.of(sheetContext).pop();
-        setState(() {
-          _selectedProjectId = projectId;
-        });
-        if (projectId != null) {
-          _showSnackBar('Project selected: $name');
-        } else {
-          _showSnackBar('Project cleared');
-        }
-      },
-    );
-  }
-
-  Future<void> _addChatToProject(String projectId) async {
-    if (_activeChatId == null) {
-      _showSnackBar('No active chat to add');
-      return;
-    }
-    try {
-      await ProjectStorageService.addChatToProject(projectId, _activeChatId!);
-      _showSnackBar('Chat added to project');
-      setState(() {});
-    } catch (e) {
-      _showSnackBar('Failed to add chat: $e');
-    }
-  }
-
-  Future<void> _removeChatFromProject(String projectId) async {
-    if (_activeChatId == null) return;
-    try {
-      await ProjectStorageService.removeChatFromProject(
-        projectId,
-        _activeChatId!,
-      );
-      _showSnackBar('Chat removed from project');
-      setState(() {});
-    } catch (e) {
-      _showSnackBar('Failed to remove chat: $e');
-    }
-  }
-
   Widget _buildSelectedProjectBadge(ThemeData theme) {
-    final project = ProjectStorageService.getProject(_selectedProjectId!);
-    if (project == null) return const SizedBox.shrink();
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.folder,
-            size: 16,
-            color: theme.colorScheme.onPrimaryContainer,
-          ),
-          const SizedBox(width: 6),
-          Text(
-            project.name,
-            style: TextStyle(
-              fontSize: 12,
-              color: theme.colorScheme.onPrimaryContainer,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(width: 6),
-          GestureDetector(
-            onTap: () {
-              setState(() {
-                _selectedProjectId = null;
-              });
-            },
-            child: Icon(
-              Icons.close,
-              size: 14,
-              color: theme.colorScheme.onPrimaryContainer,
-            ),
-          ),
-        ],
-      ),
+    return MobileProjectHandler.buildSelectedProjectBadge(
+      theme: theme,
+      selectedProjectId: _selectedProjectId!,
+      onClearProject: () {
+        setState(() {
+          _selectedProjectId = null;
+        });
+      },
     );
   }
 
   /// Build a compact project indicator for the input area
   Widget _buildProjectIndicator(ThemeData theme) {
-    final project = ProjectStorageService.getProject(_selectedProjectId!);
-    if (project == null) return const SizedBox.shrink();
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: theme.colorScheme.primary.withValues(alpha: 0.3),
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.folder, size: 18, color: theme.colorScheme.primary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  project.name,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: theme.colorScheme.onSurface,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  ProjectMessageService.getProjectContextSummary(project),
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          GestureDetector(
-            onTap: () {
-              setState(() {
-                _selectedProjectId = null;
-              });
-              _showSnackBar('Project cleared');
-            },
-            child: Padding(
-              padding: const EdgeInsets.all(4),
-              child: Icon(
-                Icons.close,
-                size: 18,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-              ),
-            ),
-          ),
-        ],
-      ),
+    return MobileProjectHandler.buildProjectIndicator(
+      theme: theme,
+      selectedProjectId: _selectedProjectId!,
+      onClearProject: () {
+        setState(() {
+          _selectedProjectId = null;
+        });
+      },
+      onShowSnackBar: _showSnackBar,
     );
   }
 
@@ -2375,154 +2001,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   // --- FULLSCREEN EDITOR ---
 
   Future<void> _openFullscreenEditor() async {
-    final String currentText = _controller.text;
-    final theme = Theme.of(context);
-    final Color bg = theme.scaffoldBackgroundColor;
-    final Color iconFg = theme.resolvedIconColor;
-    final Color accent = theme.colorScheme.primary;
-    final Color borderColor = iconFg.withValues(alpha: 0.15);
-
-    final String? result = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (BuildContext sheetContext) {
-        final TextEditingController dialogController = TextEditingController(
-          text: currentText,
-        );
-        // Use most of the screen height minus status bar
-        final double sheetHeight =
-            MediaQuery.of(sheetContext).size.height * 0.75;
-
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
-          ),
-          child: Container(
-            height: sheetHeight,
-            margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-            decoration: BoxDecoration(
-              color: bg.withValues(alpha: 0.98),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: borderColor, width: 1),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.1),
-                  blurRadius: 16,
-                  offset: const Offset(0, -4),
-                ),
-              ],
-            ),
-            child: Column(
-              children: [
-                // Mini header row — same style as pill buttons
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 8, 0),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.edit_note_rounded,
-                        size: 18,
-                        color: iconFg.withValues(alpha: 0.6),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Compose',
-                        style: TextStyle(
-                          color: iconFg.withValues(alpha: 0.6),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const Spacer(),
-                      IconButton(
-                        icon: Icon(
-                          Icons.close_fullscreen_rounded,
-                          size: 18,
-                          color: iconFg.withValues(alpha: 0.5),
-                        ),
-                        visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.all(6),
-                        constraints: const BoxConstraints(
-                          minWidth: 28,
-                          minHeight: 28,
-                        ),
-                        onPressed: () => Navigator.of(
-                          sheetContext,
-                        ).pop(dialogController.text),
-                      ),
-                    ],
-                  ),
-                ),
-                Divider(
-                  color: borderColor,
-                  height: 1,
-                  indent: 16,
-                  endIndent: 16,
-                ),
-                // Text field area
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: TextField(
-                      controller: dialogController,
-                      autofocus: true,
-                      maxLines: null,
-                      expands: true,
-                      keyboardType: TextInputType.multiline,
-                      textAlignVertical: TextAlignVertical.top,
-                      style: TextStyle(
-                        color: theme.colorScheme.onSurface,
-                        fontSize: 15,
-                        height: 1.4,
-                      ),
-                      decoration: InputDecoration(
-                        hintText: 'Type your message here...',
-                        hintStyle: TextStyle(
-                          color: theme.colorScheme.onSurface.withValues(
-                            alpha: 0.4,
-                          ),
-                          fontSize: 15,
-                        ),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                          vertical: 12,
-                        ),
-                      ),
-                      cursorColor: accent,
-                    ),
-                  ),
-                ),
-                // Done button at the bottom
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: TextButton(
-                      onPressed: () =>
-                          Navigator.of(sheetContext).pop(dialogController.text),
-                      style: TextButton.styleFrom(
-                        backgroundColor: accent,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                      child: const Text(
-                        'Done',
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+    final result = await showFullscreenComposer(
+      context,
+      initialText: _controller.text,
     );
-
     if (result != null) {
       setState(() {
         _controller.text = result;
@@ -2632,36 +2114,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   }
 
   bool get _modelSupportsImageInput =>
-      ModelCapabilitiesService.supportsImageInputSync(_selectedModelId);
+      ChatUiHelpers.modelSupportsImageInput(_selectedModelId);
 
   void _openComingSoonFeature(String featureName) {
     if (!mounted) return;
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ComingSoonPage(
-          title: featureName,
-          message: 'Stay tuned for $featureName.',
-        ),
-      ),
-    );
+    ChatUiHelpers.openComingSoonFeature(context, featureName);
   }
 
   void _showSnackBar(String message) {
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    messenger?.showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        duration: const Duration(seconds: 2),
-        dismissDirection: DismissDirection.horizontal,
-      ),
-    );
+    ChatUiHelpers.showSnackBar(context, message);
   }
 
   void _onScrollChanged() {
@@ -2711,19 +2172,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     );
   }
 
-  String? _formatModelInfo(String? modelId, String? provider) {
-    final String normalizedModel = (modelId ?? '').trim();
-    final String normalizedProvider = (provider ?? '').trim();
-    if (normalizedModel.isEmpty && normalizedProvider.isEmpty) {
-      return null;
-    }
-    // Return just the model name for the card header.
-    // Provider is passed separately via modelProvider parameter.
-    if (normalizedModel.isEmpty) {
-      return normalizedProvider;
-    }
-    return normalizedModel;
-  }
+  String? _formatModelInfo(String? modelId, String? provider) =>
+      ChatUiHelpers.formatModelInfo(modelId, provider);
 
   // --- BUILD METHOD ---
 
