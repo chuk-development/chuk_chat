@@ -118,3 +118,8 @@ report.xml
 
 # Playwright MCP
 .playwright-mcp/
+
+# Demo recordings
+demo/.auth-state.json
+demo/recordings/
+demo/node_modules/

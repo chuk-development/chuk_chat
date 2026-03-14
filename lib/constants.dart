@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 
 /* ---------- DEFAULT COLOURS ---------- */
-const Color kDefaultBgColor = Color(0xFF211B15);
-const Color kDefaultAccentColor = Color(0xFF3F5E5D);
-const Color kDefaultIconFgColor = Color(0xFF93854C);
+const Color kDefaultBgColor = Color(0xFF2A302A);
+const Color kDefaultAccentColor = Color(0xFF93854C);
+const Color kDefaultIconFgColor = Color(0xFFB0B0B0);
 const Brightness kDefaultThemeMode = Brightness.dark;
 
 /* ---------- FILM GRAIN DEFAULT ---------- */
