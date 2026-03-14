@@ -1966,6 +1966,51 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     );
   }
 
+  /// Returns a callback for the ask_user interactive buttons if [index] is
+  /// the last AI message, is not streaming, and contains a completed
+  /// ask_user tool call. Otherwise returns null.
+  ValueChanged<String>? _askUserCallbackForMessage({
+    required int index,
+    required bool isUser,
+    required bool isStreaming,
+    required List<ToolCall>? toolCalls,
+    required List<ContentBlock>? contentBlocks,
+  }) {
+    if (isUser || isStreaming || _isCurrentChatStreaming || _isSendingMessage) {
+      return null;
+    }
+    if (index != _messages.length - 1) {
+      return null;
+    }
+
+    bool hasAskUser = false;
+    if (contentBlocks != null) {
+      for (final block in contentBlocks) {
+        if (block.type == ContentBlockType.toolCalls &&
+            block.toolCalls != null) {
+          hasAskUser = block.toolCalls!.any(
+            (tc) =>
+                tc.name == 'ask_user' && tc.status == ToolCallStatus.completed,
+          );
+          if (hasAskUser) break;
+        }
+      }
+    }
+    if (!hasAskUser && toolCalls != null) {
+      hasAskUser = toolCalls.any(
+        (tc) => tc.name == 'ask_user' && tc.status == ToolCallStatus.completed,
+      );
+    }
+    if (!hasAskUser) {
+      return null;
+    }
+
+    return (String answer) {
+      _controller.text = answer;
+      _sendMessage();
+    };
+  }
+
   Future<void> _resendMessageAt(int index) async {
     if (index < 0 || index >= _messages.length) return;
 
@@ -2494,6 +2539,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                           widget.showReasoningTokens,
                                       showModelInfo: widget.showModelInfo,
                                       showTps: widget.showTps,
+                                      onAskUserAnswer:
+                                          _askUserCallbackForMessage(
+                                            index: i,
+                                            isUser: isUser,
+                                            isStreaming: isStreamingMessage,
+                                            toolCalls: toolCalls,
+                                            contentBlocks: parsedContentBlocks,
+                                          ),
                                       onRetry: !isUser && !isStreamingMessage
                                           ? () => _resendMessageAt(i)
                                           : null,

@@ -1011,7 +1011,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     });
   }
 
-
   Future<void> _resendMessageAt(int index) async {
     if (!_isValidMessageIndex(index)) return;
 
@@ -1043,6 +1042,50 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       removeFollowingAssistant: false,
       clearMessagesBelow: true,
     );
+  }
+
+  /// Returns a callback for the ask_user interactive buttons if [index] is
+  /// the last AI message, is not streaming, and contains a completed
+  /// ask_user tool call. Otherwise returns null.
+  ValueChanged<String>? _askUserCallbackForIndex(
+    int index,
+    MessageRenderData data,
+  ) {
+    // Only the very last message, and only AI messages, and only when idle.
+    if (data.isUser || data.isStreamingMessage || _isStreaming || _isSending) {
+      return null;
+    }
+    if (index != _messages.length - 1) {
+      return null;
+    }
+
+    // Check if any tool call is ask_user + completed.
+    bool hasAskUser = false;
+    if (data.contentBlocks != null) {
+      for (final block in data.contentBlocks!) {
+        if (block.type == ContentBlockType.toolCalls &&
+            block.toolCalls != null) {
+          hasAskUser = block.toolCalls!.any(
+            (tc) =>
+                tc.name == 'ask_user' && tc.status == ToolCallStatus.completed,
+          );
+          if (hasAskUser) break;
+        }
+      }
+    }
+    if (!hasAskUser && data.toolCalls != null) {
+      hasAskUser = data.toolCalls!.any(
+        (tc) => tc.name == 'ask_user' && tc.status == ToolCallStatus.completed,
+      );
+    }
+    if (!hasAskUser) {
+      return null;
+    }
+
+    return (String answer) {
+      _controller.text = answer;
+      _sendMessage();
+    };
   }
 
   List<MessageBubbleAction> _buildMessageActionsForIndex(
@@ -1136,7 +1179,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   // In-memory cache for resolved Base64 images (storage path -> data URL)
   static final Map<String, String> _imageBase64Cache = {};
   static const int _maxImageCacheSize = 10;
-
 
   void _onScrollChanged() {
     if (!_scrollController.hasClients) return;
@@ -1524,6 +1566,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                                 widget.showReasoningTokens,
                                             showModelInfo: widget.showModelInfo,
                                             showTps: widget.showTps,
+                                            onAskUserAnswer:
+                                                _askUserCallbackForIndex(
+                                                  i,
+                                                  data,
+                                                ),
                                             onRetry:
                                                 !data.isUser &&
                                                     !data.isStreamingMessage
