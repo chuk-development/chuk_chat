@@ -178,6 +178,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
   double _buttonWidth = 180.0;
 
   static const Duration _apiPollInterval = Duration(seconds: 8);
+  static const Duration _backgroundFetchDelay = Duration(seconds: 5);
   static const Duration _linuxBackgroundFetchDelay = Duration(seconds: 8);
   String get _apiBaseUrl => ApiConfigService.apiBaseUrl;
 
@@ -245,11 +246,16 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
         setState(() => _isLoadingModels = false);
       }
 
-      // Fetch fresh models in background (don't await). On Linux desktop,
-      // defer this when cache exists to keep startup interactions smooth.
-      if (_isLinuxDesktop && _allModels.isNotEmpty) {
+      // Fetch fresh models in background (don't await).
+      // When cache is populated, defer the network fetch on ALL platforms
+      // so startup stays smooth — cache is assumed correct until proven
+      // otherwise. Linux gets an extra-long delay for GTK thread reasons.
+      if (_allModels.isNotEmpty) {
+        final delay = _isLinuxDesktop
+            ? _linuxBackgroundFetchDelay
+            : _backgroundFetchDelay;
         unawaited(
-          Future<void>.delayed(_linuxBackgroundFetchDelay, () async {
+          Future<void>.delayed(delay, () async {
             if (!mounted) return;
             await _fetchModels();
           }).catchError((e) {
@@ -456,13 +462,13 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
   Future<void> _fetchModels() async {
     final stopwatch = Stopwatch()..start();
     try {
-      final session =
-          await SupabaseService.refreshSession() ??
-          SupabaseService.auth.currentSession;
+      // Use current session directly — avoid the expensive refreshSession()
+      // network round-trip. We only refresh on an actual 401 below.
+      var session = SupabaseService.auth.currentSession;
       if (session == null) {
         throw const _AuthRequiredException();
       }
-      final String accessToken = session.accessToken;
+      String accessToken = session.accessToken;
       if (accessToken.isEmpty) {
         throw const _AuthRequiredException();
       }
@@ -470,10 +476,23 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
         _lastSavedPreferences =
             await UserPreferencesService.loadAllProviderPreferences();
       }
-      final response = await http.get(
+      var response = await http.get(
         Uri.parse('$_apiBaseUrl/v1/models_info'),
         headers: {'Authorization': 'Bearer $accessToken'},
       );
+
+      // On 401, refresh the session once and retry.
+      if (response.statusCode == 401) {
+        session = await SupabaseService.refreshSession();
+        if (session == null) {
+          throw const _AuthRequiredException();
+        }
+        accessToken = session.accessToken;
+        response = await http.get(
+          Uri.parse('$_apiBaseUrl/v1/models_info'),
+          headers: {'Authorization': 'Bearer $accessToken'},
+        );
+      }
 
       if (response.statusCode == 200) {
         _stopApiAvailabilityPolling();
@@ -519,8 +538,10 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
 
           Future(() async {
             try {
+              final userId = session?.user.id;
+              if (userId == null) return;
               await ModelCacheService.saveProviderPreferences(
-                session.user.id,
+                userId,
                 _lastSavedPreferences,
               );
             } catch (error) {

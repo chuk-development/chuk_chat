@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/tool_handlers/notes_tools.dart';
@@ -36,6 +38,7 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
   String _originalSoul = '';
   String _originalUserInfo = '';
   String _originalMemory = '';
+  bool _originalIdentityEnabled = true;
 
   bool get _isDesktopPlatform {
     if (kIsWeb) return false;
@@ -126,32 +129,27 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
     });
 
     try {
-      // Refresh only identity fields here to keep the page snappy.
-      await syncIdentityFromSupabase(forceRefresh: true);
+      // Phase 1: Load from local SharedPreferences (instant, no network).
+      final prefs = await SharedPreferences.getInstance();
+      final localSystemPrompt =
+          await UserPreferencesService.loadSystemPromptLocal();
+      final localSoul = prefs.getString('identity_soul') ?? '';
+      final localUserInfo = prefs.getString('identity_user') ?? '';
+      final localMemory = prefs.getString('identity_memory') ?? '';
+      final localIdentityOn = prefs.getBool('identity_enabled') ?? true;
 
-      final results = await Future.wait([
-        UserPreferencesService.loadSystemPrompt(),
-        loadSoulText(),
-        loadUserInfoText(),
-        loadMemoryText(),
-        isIdentityEnabled(),
-      ]);
       if (!mounted) return;
-      final systemPrompt = results[0] as String?;
-      final soul = results[1] as String;
-      final userInfo = results[2] as String;
-      final memory = results[3] as String;
-      final identityOn = results[4] as bool;
       setState(() {
-        _originalPrompt = systemPrompt;
-        _systemPromptCtrl.text = systemPrompt ?? '';
-        _originalSoul = soul;
-        _soulCtrl.text = soul;
-        _originalUserInfo = userInfo;
-        _userInfoCtrl.text = userInfo;
-        _originalMemory = memory;
-        _memoryCtrl.text = memory;
-        _identityEnabled = identityOn;
+        _originalPrompt = localSystemPrompt;
+        _systemPromptCtrl.text = localSystemPrompt ?? '';
+        _originalSoul = localSoul;
+        _soulCtrl.text = localSoul;
+        _originalUserInfo = localUserInfo;
+        _userInfoCtrl.text = localUserInfo;
+        _originalMemory = localMemory;
+        _memoryCtrl.text = localMemory;
+        _identityEnabled = localIdentityOn;
+        _originalIdentityEnabled = localIdentityOn;
         _isLoading = false;
       });
 
@@ -162,13 +160,17 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
           stopwatch.elapsedMilliseconds,
           data: {
             'platform': defaultTargetPlatform.name,
-            'soul_len': soul.length,
-            'user_len': userInfo.length,
-            'memory_len': memory.length,
-            'identity_enabled': identityOn,
+            'soul_len': localSoul.length,
+            'user_len': localUserInfo.length,
+            'memory_len': localMemory.length,
+            'identity_enabled': localIdentityOn,
           },
         ),
       );
+
+      // Phase 2: Sync from Supabase in background. If anything changed,
+      // update the UI silently — only if the user hasn't started editing.
+      unawaited(_backgroundSyncIdentity());
     } on StateError catch (error) {
       if (!mounted) return;
       setState(() {
@@ -205,6 +207,58 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
           },
         ),
       );
+    }
+  }
+
+  /// Refresh identity fields from Supabase in the background.
+  /// Updates the UI only if the user hasn't started editing.
+  Future<void> _backgroundSyncIdentity() async {
+    try {
+      await syncIdentityFromSupabase(forceRefresh: true);
+      final results = await Future.wait([
+        UserPreferencesService.loadSystemPrompt(),
+        loadSoulText(),
+        loadUserInfoText(),
+        loadMemoryText(),
+        isIdentityEnabled(),
+      ]);
+      if (!mounted) return;
+      final remoteSysPrompt = results[0] as String?;
+      final remoteSoul = results[1] as String;
+      final remoteUserInfo = results[2] as String;
+      final remoteMemory = results[3] as String;
+      final remoteIdentityOn = results[4] as bool;
+
+      // Only overwrite fields the user hasn't touched yet.
+      final bool userHasEdited = _hasAnyChanges;
+      if (userHasEdited) return;
+
+      final bool changed =
+          remoteSysPrompt != _originalPrompt ||
+          remoteSoul != _originalSoul ||
+          remoteUserInfo != _originalUserInfo ||
+          remoteMemory != _originalMemory ||
+          remoteIdentityOn != _originalIdentityEnabled;
+      if (!changed) return;
+
+      if (!mounted) return;
+      setState(() {
+        _originalPrompt = remoteSysPrompt;
+        _systemPromptCtrl.text = remoteSysPrompt ?? '';
+        _originalSoul = remoteSoul;
+        _soulCtrl.text = remoteSoul;
+        _originalUserInfo = remoteUserInfo;
+        _userInfoCtrl.text = remoteUserInfo;
+        _originalMemory = remoteMemory;
+        _memoryCtrl.text = remoteMemory;
+        _identityEnabled = remoteIdentityOn;
+        _originalIdentityEnabled = remoteIdentityOn;
+      });
+    } catch (error) {
+      // Background sync failure is non-critical — local data is displayed.
+      if (kDebugMode) {
+        debugPrint('Background identity sync failed: $error');
+      }
     }
   }
 
@@ -273,11 +327,15 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
 
   bool get _hasMemoryChanges => _memoryCtrl.text.trim() != _originalMemory;
 
+  bool get _hasIdentityToggleChanged =>
+      _identityEnabled != _originalIdentityEnabled;
+
   bool get _hasAnyChanges =>
       _hasPromptChanges ||
       _hasSoulChanges ||
       _hasUserInfoChanges ||
-      _hasMemoryChanges;
+      _hasMemoryChanges ||
+      _hasIdentityToggleChanged;
 
   // ─── Memory helpers ────────────────────────────────────────────────────
 
