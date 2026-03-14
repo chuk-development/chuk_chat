@@ -331,6 +331,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       toolDiscoveryMode: widget.config.toolDiscoveryMode,
       showToolCalls: widget.config.showToolCalls,
       allowMarkdownToolCalls: widget.config.allowMarkdownToolCalls,
+      autoSendVoiceTranscription: widget.config.autoSendVoiceTranscription,
     );
 
     // Right panel width for Projects/Media/Artifacts.
