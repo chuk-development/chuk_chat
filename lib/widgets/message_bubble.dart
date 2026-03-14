@@ -16,6 +16,7 @@ import 'package:chuk_chat/widgets/document_viewer.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
+import 'package:chuk_chat/widgets/ask_user_card.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/platform_config.dart';
@@ -105,6 +106,7 @@ class MessageBubble extends StatefulWidget {
     this.attachments,
     this.imageCostEur,
     this.imageGeneratedAt,
+    this.onAskUserAnswer,
     this.onRetry,
   });
 
@@ -144,6 +146,11 @@ class MessageBubble extends StatefulWidget {
   final List<DocumentAttachment>? attachments; // Document attachments
   final double? imageCostEur;
   final DateTime? imageGeneratedAt;
+
+  /// Called when the user taps an option button on an ask_user tool call.
+  /// When non-null, the bubble renders interactive option buttons extracted
+  /// from the most recent ask_user tool call in this message.
+  final ValueChanged<String>? onAskUserAnswer;
 
   /// Called when the user taps the "Retry" button on a finalized AI message
   /// (e.g. after empty response or failed tool calls). Triggers resending
@@ -624,6 +631,7 @@ class _MessageBubbleState extends State<MessageBubble>
         bgColor: bgColor,
         isUserMessage: isUserMessage,
       ),
+      ..._buildAskUserOptions(),
       // Image actions go below the text, matching the regular action buttons.
       if (widget.images != null &&
           widget.images!.isNotEmpty &&
@@ -864,6 +872,9 @@ class _MessageBubbleState extends State<MessageBubble>
       children.add(_buildImagesGrid(widget.images!));
       children.add(const SizedBox(height: 8));
     }
+
+    // ask_user interactive options.
+    children.addAll(_buildAskUserOptions());
 
     // Image actions at the bottom, matching the regular action buttons.
     if (hasImages &&
@@ -1636,6 +1647,82 @@ class _MessageBubbleState extends State<MessageBubble>
     }
 
     return _truncatePreview(result, 70);
+  }
+
+  // ─── ask_user interactive options ─────────────────────────────────────
+
+  /// Find the last completed ask_user tool call across all tool call sources.
+  ToolCall? _findAskUserToolCall() {
+    ToolCall? found;
+
+    // Check contentBlocks first (interleaved layout).
+    if (widget.contentBlocks != null) {
+      for (final block in widget.contentBlocks!) {
+        if (block.type == ContentBlockType.toolCalls &&
+            block.toolCalls != null) {
+          for (final tc in block.toolCalls!) {
+            if (tc.name == 'ask_user' &&
+                tc.status == ToolCallStatus.completed) {
+              found = tc;
+            }
+          }
+        }
+      }
+    }
+
+    // Check flat toolCalls list (classic layout).
+    if (widget.toolCalls != null) {
+      for (final tc in widget.toolCalls!) {
+        if (tc.name == 'ask_user' && tc.status == ToolCallStatus.completed) {
+          found = tc;
+        }
+      }
+    }
+
+    return found;
+  }
+
+  /// Build ask_user interactive option buttons if applicable.
+  List<Widget> _buildAskUserOptions() {
+    if (widget.onAskUserAnswer == null) {
+      return const [];
+    }
+
+    final askUserCall = _findAskUserToolCall();
+    if (askUserCall == null) {
+      return const [];
+    }
+
+    final rawOptions = askUserCall.arguments['options'];
+    List<String> options;
+    if (rawOptions is List) {
+      options = rawOptions
+          .map((o) => o.toString().trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+    } else if (rawOptions is String) {
+      try {
+        final decoded = jsonDecode(rawOptions);
+        if (decoded is List) {
+          options = decoded
+              .map((o) => o.toString().trim())
+              .where((s) => s.isNotEmpty)
+              .toList();
+        } else {
+          return const [];
+        }
+      } catch (_) {
+        return const [];
+      }
+    } else {
+      return const [];
+    }
+
+    if (options.isEmpty) {
+      return const [];
+    }
+
+    return [AskUserCard(options: options, onSelect: widget.onAskUserAnswer!)];
   }
 
   Widget _buildImagesGrid(List<String> images) {
