@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/model_cache_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -556,6 +558,23 @@ class UserPreferencesService {
     }
   }
 
+  /// Local SharedPreferences key for the decrypted system prompt cache.
+  static const String _systemPromptCacheKey = 'cached_system_prompt';
+
+  /// Load the system prompt from local SharedPreferences only (no network).
+  /// The cached value is stored encrypted; returns `null` if nothing is cached
+  /// or if decryption fails (e.g. encryption key not yet loaded).
+  static Future<String?> loadSystemPromptLocal() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final encrypted = prefs.getString(_systemPromptCacheKey);
+      if (encrypted == null || encrypted.isEmpty) return null;
+      return await EncryptionService.decrypt(encrypted);
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Save the user's system prompt (encrypted)
   static Future<bool> saveSystemPrompt(String systemPrompt) async {
     try {
@@ -606,6 +625,13 @@ class UserPreferencesService {
           .select();
 
       if (response.isNotEmpty) {
+        // Cache locally only after successful server save.
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString(_systemPromptCacheKey, encryptedPrompt);
+        } catch (_) {
+          // Non-critical — caching is best-effort.
+        }
         if (kDebugMode) {
           debugPrint('Successfully saved encrypted system prompt');
         }
@@ -651,6 +677,14 @@ class UserPreferencesService {
           encryptedPrompt,
         );
 
+        // Cache the encrypted value locally for instant page loads.
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString(_systemPromptCacheKey, encryptedPrompt);
+        } catch (_) {
+          // Non-critical — caching is best-effort.
+        }
+
         if (kDebugMode) {
           debugPrint(
             'Loaded and decrypted system prompt: ${decryptedPrompt.length} characters',
@@ -692,6 +726,11 @@ class UserPreferencesService {
           .select();
 
       if (response.isNotEmpty) {
+        // Clear local cache after successful server clear.
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.remove(_systemPromptCacheKey);
+        } catch (_) {}
         if (kDebugMode) {
           debugPrint('Successfully cleared system prompt');
         }
