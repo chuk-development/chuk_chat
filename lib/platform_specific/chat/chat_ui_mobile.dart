@@ -164,7 +164,16 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
     _messageActionsHandler = MessageActionsHandler()
       ..onShowSnackBar = _showSnackBar
-      ..onSubmitEdit = _submitEditedMessage
+      ..onSubmitEdit = (index, newText) {
+        unawaited(
+          _submitEditedMessage(
+            index,
+            newText,
+            removeFollowingAssistant: false,
+            clearMessagesBelow: true,
+          ),
+        );
+      }
       ..onResend = _resendMessageAt;
 
     _persistenceHandler = ChatPersistenceHandler()
@@ -3016,8 +3025,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                           ? displayText
                                           : null,
                                       onSubmitEdit: isBeingEdited && isUser
-                                          ? (newText) =>
-                                                _submitEditedMessage(i, newText)
+                                          ? (newText) => _submitEditedMessage(
+                                              i,
+                                              newText,
+                                              removeFollowingAssistant: false,
+                                              clearMessagesBelow: true,
+                                            )
                                           : null,
                                       onCancelEdit: isBeingEdited
                                           ? () {

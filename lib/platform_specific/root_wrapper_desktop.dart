@@ -264,13 +264,17 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   }
 
   Future<void> _handleChatDeleted(String deletedChatId) async {
-    // ChatStorageCrud.deleteChat() already sets selectedChatId = null before
-    // this callback fires, so we cannot compare against it.  Instead, always
-    // tell the chat UI to start fresh and clear project context.
-    _activeProjectId = null;
-    _chatUIKey.currentState?.newChat();
-    if (kFeatureArtifacts) {
-      unawaited(ArtifactStorageService.setActiveChat(null, forceRefresh: true));
+    // deleteChat() clears selectedChatId when the active chat is deleted.
+    // If selectedChatId is null here, reset the chat UI to a fresh state.
+    final shouldStartFresh = ChatStorageService.selectedChatId == null;
+    if (shouldStartFresh) {
+      _activeProjectId = null;
+      _chatUIKey.currentState?.newChat();
+      if (kFeatureArtifacts) {
+        unawaited(
+          ArtifactStorageService.setActiveChat(null, forceRefresh: true),
+        );
+      }
     }
     setState(() {});
   }
