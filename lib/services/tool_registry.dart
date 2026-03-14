@@ -1,5 +1,11 @@
 import 'package:chuk_chat/models/client_tool.dart';
-import 'package:chuk_chat/platform_config.dart';
+import 'package:chuk_chat/platform_config.dart'
+    show
+        kFeatureArtifacts,
+        kFeatureServerTools,
+        kFeatureStockData,
+        kPlatformDesktop,
+        kPlatformMobile;
 import 'package:chuk_chat/services/tool_executor.dart' show ToolExecutor;
 import 'package:chuk_chat/utils/io_helper.dart' show Platform;
 
@@ -965,6 +971,10 @@ void registerBuiltinTools(ToolExecutor executor) {
       continue;
     }
     if (!kFeatureArtifacts && tool.name == 'artifact_manager') {
+      continue;
+    }
+    // Stock data uses unofficial Yahoo Finance API — disabled by default.
+    if (!kFeatureStockData && tool.name == 'stock_data') {
       continue;
     }
     // Device tool (GPS, alarms, SMS) is mobile-only.

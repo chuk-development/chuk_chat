@@ -84,3 +84,12 @@ const bool kFeatureLinuxKeyring = bool.fromEnvironment(
   'FEATURE_LINUX_KEYRING',
   defaultValue: true,
 );
+
+/// Stock market data tool (Yahoo Finance).
+/// Disabled by default because the unofficial Yahoo Finance API should not be
+/// used in a commercial product. Enable via --dart-define for local testing
+/// only; keep disabled in release builds.
+const bool kFeatureStockData = bool.fromEnvironment(
+  'FEATURE_STOCK_DATA',
+  defaultValue: false,
+);
