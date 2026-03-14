@@ -74,6 +74,8 @@ class ChukChatUIDesktop extends StatefulWidget {
   final bool toolDiscoveryMode;
   final bool showToolCalls;
   final bool allowMarkdownToolCalls;
+  // Voice transcription settings
+  final bool autoSendVoiceTranscription;
 
   const ChukChatUIDesktop({
     // RENAMED CONSTRUCTOR
@@ -100,6 +102,7 @@ class ChukChatUIDesktop extends StatefulWidget {
     this.toolDiscoveryMode = true,
     this.showToolCalls = true,
     this.allowMarkdownToolCalls = true,
+    this.autoSendVoiceTranscription = false,
   });
 
   @override
@@ -1009,8 +1012,19 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         _controller.selection = TextSelection.fromPosition(
           TextPosition(offset: result.text!.length),
         );
+        // Set sending flag instantly so loading indicator shows without gap
+        if (widget.autoSendVoiceTranscription) {
+          _isSending = true;
+        }
       });
-      Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+
+      // If auto-send is enabled, send the message immediately
+      if (widget.autoSendVoiceTranscription) {
+        await _sendMessage();
+      } else {
+        // Otherwise, focus the text field so user can review before sending
+        Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+      }
     }
   }
 
