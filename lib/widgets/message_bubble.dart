@@ -59,6 +59,23 @@ class MessageBubbleAction {
   final String? label;
 }
 
+class _ToolCallGroupSegment {
+  _ToolCallGroupSegment({this.reasoning = ''});
+
+  String reasoning;
+  final List<ToolCall> toolCalls = <ToolCall>[];
+}
+
+class _ToolTimelineEntry {
+  const _ToolTimelineEntry.reasoning(this.reasoning) : toolCall = null;
+  const _ToolTimelineEntry.tool(this.toolCall) : reasoning = null;
+
+  final String? reasoning;
+  final ToolCall? toolCall;
+
+  bool get isReasoning => reasoning != null;
+}
+
 class MessageBubble extends StatefulWidget {
   const MessageBubble({
     super.key,
@@ -673,32 +690,62 @@ class _MessageBubbleState extends State<MessageBubble>
     // Group contiguous reasoning/tool-call rounds into one parent block.
     // A plain text block ends the current reasoning block and starts a new one
     // below that text.
-    final groupedReasonings = <String>[];
-    final groupedToolCalls = <ToolCall>[];
+    final groupedSegments = <_ToolCallGroupSegment>[];
 
     void flushGroupedReasoningTools() {
-      if (groupedReasonings.isEmpty && groupedToolCalls.isEmpty) {
+      if (groupedSegments.isEmpty) {
         return;
       }
 
-      if (widget.showToolCalls && groupedToolCalls.isNotEmpty) {
-        children.add(
-          _buildToolCallsBar(
-            List<ToolCall>.from(groupedToolCalls),
-            isContentBlock: true,
-            contentBlockReasonings: List<String>.from(groupedReasonings),
-          ),
-        );
-        children.add(const SizedBox(height: 8));
-      } else if (groupedReasonings.isNotEmpty) {
-        final mergedReasoning = groupedReasonings.join('\n\n').trim();
-        if (mergedReasoning.isNotEmpty) {
-          children.add(_buildBlockReasoning(mergedReasoning, accentColor));
+      final mergedToolCalls = <ToolCall>[];
+      final timeline = <_ToolTimelineEntry>[];
+      final fallbackReasonings = <String>[];
+
+      for (final segment in groupedSegments) {
+        final segmentReasoning = segment.reasoning.trim();
+
+        if (!widget.showToolCalls) {
+          if (segmentReasoning.isNotEmpty) {
+            fallbackReasonings.add(segmentReasoning);
+          }
+          continue;
+        }
+
+        if (segmentReasoning.isNotEmpty) {
+          timeline.add(_ToolTimelineEntry.reasoning(segmentReasoning));
+        }
+
+        if (segment.toolCalls.isNotEmpty) {
+          for (final toolCall in segment.toolCalls) {
+            mergedToolCalls.add(toolCall);
+            timeline.add(_ToolTimelineEntry.tool(toolCall));
+          }
         }
       }
 
-      groupedReasonings.clear();
-      groupedToolCalls.clear();
+      if (widget.showToolCalls && mergedToolCalls.isNotEmpty) {
+        children.add(
+          _buildToolCallsBar(
+            mergedToolCalls,
+            isContentBlock: true,
+            contentBlockTimeline: timeline,
+          ),
+        );
+        children.add(const SizedBox(height: 8));
+      } else if (widget.showToolCalls && timeline.isNotEmpty) {
+        for (final entry in timeline) {
+          if (entry.isReasoning &&
+              (entry.reasoning?.trim().isNotEmpty ?? false)) {
+            children.add(_buildBlockReasoning(entry.reasoning!, accentColor));
+          }
+        }
+      } else if (!widget.showToolCalls && fallbackReasonings.isNotEmpty) {
+        for (final reasoning in fallbackReasonings) {
+          children.add(_buildBlockReasoning(reasoning, accentColor));
+        }
+      }
+
+      groupedSegments.clear();
     }
 
     // Render grouped reasoning/tool-call blocks. Text blocks break groups.
@@ -707,11 +754,28 @@ class _MessageBubbleState extends State<MessageBubble>
         case ContentBlockType.reasoning:
           final reasoningText = block.text?.trim() ?? '';
           if (reasoningText.isNotEmpty) {
-            groupedReasonings.add(reasoningText);
+            if (groupedSegments.isEmpty ||
+                groupedSegments.last.toolCalls.isNotEmpty) {
+              groupedSegments.add(
+                _ToolCallGroupSegment(reasoning: reasoningText),
+              );
+            } else {
+              final existing = groupedSegments.last.reasoning.trim();
+              groupedSegments.last.reasoning = existing.isEmpty
+                  ? reasoningText
+                  : '$existing\n\n$reasoningText';
+            }
           }
         case ContentBlockType.toolCalls:
           if (block.toolCalls != null && block.toolCalls!.isNotEmpty) {
-            groupedToolCalls.addAll(block.toolCalls!);
+            if (groupedSegments.isEmpty) {
+              groupedSegments.add(_ToolCallGroupSegment());
+            }
+            groupedSegments.last.toolCalls.addAll(
+              block.toolCalls!
+                  .map((tc) => ToolCall.fromJson(tc.toJson()))
+                  .toList(),
+            );
           }
         case ContentBlockType.text:
           flushGroupedReasoningTools();
@@ -779,7 +843,12 @@ class _MessageBubbleState extends State<MessageBubble>
     }
 
     if (trailingText.isEmpty && liveToolCalls.isNotEmpty) {
-      groupedToolCalls.addAll(liveToolCalls);
+      if (groupedSegments.isEmpty) {
+        groupedSegments.add(_ToolCallGroupSegment());
+      }
+      groupedSegments.last.toolCalls.addAll(
+        liveToolCalls.map((tc) => ToolCall.fromJson(tc.toJson())).toList(),
+      );
     }
 
     // Flush any still-open reasoning/tool-call group now.
@@ -1217,22 +1286,9 @@ class _MessageBubbleState extends State<MessageBubble>
   Widget _buildToolCallsBar(
     List<ToolCall> toolCalls, {
     bool isContentBlock = false,
-    List<String>? contentBlockReasonings,
+    List<_ToolTimelineEntry>? contentBlockTimeline,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
-    final normalizedContentBlockReasonings = <String>[];
-    final seenReasonings = <String>{};
-    for (final rawReasoning in contentBlockReasonings ?? const <String>[]) {
-      final normalized = rawReasoning.trim();
-      if (normalized.isEmpty) {
-        continue;
-      }
-      if (seenReasonings.add(normalized)) {
-        normalizedContentBlockReasonings.add(normalized);
-      }
-    }
-    final hasContentBlockReasoning =
-        isContentBlock && normalizedContentBlockReasonings.isNotEmpty;
     final renderedAssistantText = stripToolCallBlocksForDisplay(widget.message);
     // If the message is finalized (not streaming), tool calls should not
     // remain in running/pending — treat any stale ones as completed for
@@ -1263,6 +1319,10 @@ class _MessageBubbleState extends State<MessageBubble>
         allDone &&
         (renderedAssistantText.trim().isEmpty ||
             renderedAssistantText == 'Thinking...');
+
+    final effectiveTimeline = isContentBlock && contentBlockTimeline != null
+        ? contentBlockTimeline
+        : const <_ToolTimelineEntry>[];
 
     final int completedCount = toolCalls
         .where((t) => t.status == ToolCallStatus.completed)
@@ -1388,27 +1448,49 @@ class _MessageBubbleState extends State<MessageBubble>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (hasContentBlockReasoning)
-                    for (
-                      int ri = 0;
-                      ri < normalizedContentBlockReasonings.length;
-                      ri++
-                    )
-                      _buildExpandableCard(
-                        key: 'reasoning_block_${expandKey}_$ri',
-                        icon: Icons.psychology,
-                        label: 'Reasoning',
-                        preview: normalizedContentBlockReasonings[ri],
-                        expandedContent: normalizedContentBlockReasonings[ri],
-                        accentColor: colorScheme.primary,
-                      ),
-                  for (int i = 0; i < toolCalls.length; i++) ...[
-                    if (toolCalls[i].roundThinking != null &&
-                        toolCalls[i].roundThinking!.trim().isNotEmpty)
-                      if (!hasContentBlockReasoning ||
-                          !seenReasonings.contains(
-                            toolCalls[i].roundThinking!.trim(),
-                          ))
+                  if (isContentBlock && effectiveTimeline.isNotEmpty)
+                    for (int ti = 0; ti < effectiveTimeline.length; ti++) ...[
+                      if (effectiveTimeline[ti].isReasoning)
+                        _buildExpandableCard(
+                          key: 'timeline_reasoning_${expandKey}_$ti',
+                          icon: Icons.psychology,
+                          label: 'Reasoning',
+                          preview: effectiveTimeline[ti].reasoning!,
+                          expandedContent: effectiveTimeline[ti].reasoning!,
+                          accentColor: colorScheme.primary,
+                        )
+                      else
+                        _buildExpandableCard(
+                          key: 'tool_${effectiveTimeline[ti].toolCall!.id}_$ti',
+                          icon: _toolCallIcon(
+                            effectiveTimeline[ti].toolCall!.status,
+                          ),
+                          label: effectiveTimeline[ti].toolCall!.name,
+                          preview:
+                              _toolCallSubtitle(
+                                effectiveTimeline[ti].toolCall!,
+                              ) ??
+                              (effectiveTimeline[ti].toolCall!.result != null
+                                  ? _truncatePreview(
+                                      effectiveTimeline[ti].toolCall!.result!,
+                                      60,
+                                    )
+                                  : 'running...'),
+                          expandedContent: _formatToolCallDetails(
+                            effectiveTimeline[ti].toolCall!,
+                          ),
+                          accentColor: _toolCallColor(
+                            effectiveTimeline[ti].toolCall!.status,
+                          ),
+                          isRunning:
+                              effectiveTimeline[ti].toolCall!.status ==
+                              ToolCallStatus.running,
+                        ),
+                    ]
+                  else
+                    for (int i = 0; i < toolCalls.length; i++) ...[
+                      if (toolCalls[i].roundThinking != null &&
+                          toolCalls[i].roundThinking!.trim().isNotEmpty)
                         _buildExpandableCard(
                           key: 'thinking_round_${toolCalls[i].id}_$i',
                           icon: Icons.psychology,
@@ -1417,20 +1499,21 @@ class _MessageBubbleState extends State<MessageBubble>
                           expandedContent: toolCalls[i].roundThinking!,
                           accentColor: colorScheme.primary,
                         ),
-                    _buildExpandableCard(
-                      key: 'tool_${toolCalls[i].id}',
-                      icon: _toolCallIcon(toolCalls[i].status),
-                      label: toolCalls[i].name,
-                      preview:
-                          _toolCallSubtitle(toolCalls[i]) ??
-                          (toolCalls[i].result != null
-                              ? _truncatePreview(toolCalls[i].result!, 60)
-                              : 'running...'),
-                      expandedContent: _formatToolCallDetails(toolCalls[i]),
-                      accentColor: _toolCallColor(toolCalls[i].status),
-                      isRunning: toolCalls[i].status == ToolCallStatus.running,
-                    ),
-                  ],
+                      _buildExpandableCard(
+                        key: 'tool_${toolCalls[i].id}',
+                        icon: _toolCallIcon(toolCalls[i].status),
+                        label: toolCalls[i].name,
+                        preview:
+                            _toolCallSubtitle(toolCalls[i]) ??
+                            (toolCalls[i].result != null
+                                ? _truncatePreview(toolCalls[i].result!, 60)
+                                : 'running...'),
+                        expandedContent: _formatToolCallDetails(toolCalls[i]),
+                        accentColor: _toolCallColor(toolCalls[i].status),
+                        isRunning:
+                            toolCalls[i].status == ToolCallStatus.running,
+                      ),
+                    ],
                   // Skip reasoning/model info in content block mode —
                   // those are rendered as separate blocks.
                   if (!isContentBlock && _hasReasoning)

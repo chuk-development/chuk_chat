@@ -183,6 +183,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   Uint8List? _lastRecordedBytes;
   String? _activeRecordingPath;
   bool _isSending = false;
+  int _sendOperationCounter = 0;
+  int? _activeSendOperationId;
+  int? _cancelledSendOperationId;
 
   // Streaming transcription (audio streamed to server as user speaks)
   StreamingTranscriptionService? _streamingTranscription;
@@ -224,6 +227,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   static const double _kHorizontalPaddingSmall = 8.0;
   static const double _kShowScrollButtonDistance = 260.0;
   static const double _kHideScrollButtonDistance = 140.0;
+  static const double _kMessageListBottomLift = 40.0;
+  static const double _kStreamingBottomScrollSlack = 180.0;
 
   String _selectedTextOrAll(TextEditingValue value) {
     final selection = value.selection;
@@ -370,6 +375,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _scrollController.addListener(_onScrollChanged);
     _selectedProjectId = widget.projectId;
     _loadChatById(widget.selectedChatId);
+    unawaited(_cleanupOldPasteTempDirectories());
 
     // Defer network-dependent loading to after first frame for faster startup
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1670,371 +1676,641 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       return;
     }
 
-    // Store the edited message
-    setState(() {
-      _messages[index]['text'] = trimmedText;
-      _editingMessageIndex = null;
-    });
-
-    // For resend flows on older messages, reset the chat branch from this
-    // point by clearing everything below the resent message.
-    if (clearMessagesBelow && index + 1 < _messages.length) {
-      setState(() {
-        _messages.removeRange(index + 1, _messages.length);
-      });
-    } else if (removeFollowingAssistant &&
-        index + 1 < _messages.length &&
-        _messages[index + 1]['sender'] == 'ai') {
-      setState(() {
-        _messages.removeAt(index + 1);
-      });
+    if (_activeChatId == null && widget.selectedChatId != null) {
+      _activeChatId = widget.selectedChatId;
+    }
+    if (_activeChatId == null) {
+      _showSnackBar('Cannot resend message without an active chat.');
+      return;
     }
 
-    _persistChat();
+    final int sendOperationId = _beginSendOperation();
 
-    // Prepare to send the edited message
-    final String originalUserInput = trimmedText;
-    late int placeholderIndex;
+    try {
+      // Store the edited message
+      setState(() {
+        _messages[index]['text'] = trimmedText;
+        _editingMessageIndex = null;
+      });
 
-    // Always use the currently selected model and provider for resend
-    // This allows users to switch models and resend with the new selection
-    final String modelIdToUse = _selectedModelId;
-    final String? providerToUse = _selectedProviderSlug;
+      // For resend flows on older messages, reset the chat branch from this
+      // point by clearing everything below the resent message.
+      if (clearMessagesBelow && index + 1 < _messages.length) {
+        setState(() {
+          _messages.removeRange(index + 1, _messages.length);
+        });
+      } else if (removeFollowingAssistant &&
+          index + 1 < _messages.length &&
+          _messages[index + 1]['sender'] == 'ai') {
+        setState(() {
+          _messages.removeAt(index + 1);
+        });
+      }
 
-    // Update the user message with the new model/provider
-    _messages[index]['modelId'] = modelIdToUse;
-    _messages[index]['provider'] = providerToUse ?? '';
+      _persistChat();
 
-    // Reconstruct images from stored JSON for resend
-    List<String>? imagesForResend;
-    final String? imagesJson = _messages[index]['images'];
-    if (imagesJson != null && imagesJson.isNotEmpty) {
-      try {
-        final decoded = jsonDecode(imagesJson);
-        if (decoded is List) {
-          final storedImages = decoded.cast<String>();
-          if (kDebugMode) {
-            debugPrint(
-              '🔄 [ResendDebug] Found ${storedImages.length} images for resend',
-            );
-          }
+      // Prepare to send the edited message
+      final String originalUserInput = trimmedText;
+      String messageForSend = originalUserInput;
+      late int placeholderIndex;
 
-          // Convert encrypted storage paths to base64 data URLs
-          imagesForResend = [];
-          for (final img in storedImages) {
-            if (img.endsWith('.enc') && img.contains('/')) {
-              // This is a storage path - download, decrypt, and convert to base64
-              try {
-                if (kDebugMode) {
-                  debugPrint(
-                    '🔄 [ResendDebug] Converting storage path to base64: $img',
-                  );
+      // Always use the currently selected model and provider for resend
+      // This allows users to switch models and resend with the new selection
+      final String modelIdToUse = _selectedModelId;
+      final String? providerToUse = _selectedProviderSlug;
+
+      // Update the user message with the new model/provider
+      _messages[index]['modelId'] = modelIdToUse;
+      _messages[index]['provider'] = providerToUse ?? '';
+
+      // Reconstruct images from stored JSON for resend
+      List<String>? imagesForResend;
+      final String? imagesJson = _messages[index]['images'];
+      if (imagesJson != null && imagesJson.isNotEmpty) {
+        try {
+          final decoded = jsonDecode(imagesJson);
+          if (decoded is List) {
+            final storedImages = decoded.whereType<String>().toList();
+            if (kDebugMode) {
+              debugPrint(
+                '🔄 [ResendDebug] Found ${storedImages.length} images for resend',
+              );
+            }
+
+            // Convert encrypted storage paths to base64 data URLs
+            imagesForResend = [];
+            for (final img in storedImages) {
+              if (img.endsWith('.enc') && img.contains('/')) {
+                // This is a storage path - download, decrypt, and convert to base64
+                try {
+                  if (kDebugMode) {
+                    debugPrint(
+                      '🔄 [ResendDebug] Converting storage path to base64: $img',
+                    );
+                  }
+                  final imageBytes =
+                      await ImageStorageService.downloadAndDecryptImage(img);
+                  final base64Image = base64Encode(imageBytes);
+                  final mimeType = _detectImageMimeType(imageBytes);
+                  final dataUrl = 'data:$mimeType;base64,$base64Image';
+                  imagesForResend.add(dataUrl);
+                  if (kDebugMode) {
+                    debugPrint(
+                      '🔄 [ResendDebug] Successfully converted image to base64',
+                    );
+                  }
+                } catch (e) {
+                  if (kDebugMode) {
+                    debugPrint('🔄 [ResendDebug] Failed to convert image: $e');
+                  }
                 }
-                final imageBytes =
-                    await ImageStorageService.downloadAndDecryptImage(img);
-                final base64Image = base64Encode(imageBytes);
-                final dataUrl = 'data:image/jpeg;base64,$base64Image';
-                imagesForResend.add(dataUrl);
-                if (kDebugMode) {
-                  debugPrint(
-                    '🔄 [ResendDebug] Successfully converted image to base64',
-                  );
-                }
-              } catch (e) {
-                if (kDebugMode) {
-                  debugPrint('🔄 [ResendDebug] Failed to convert image: $e');
-                }
+              } else if (img.startsWith('data:image')) {
+                // Already a base64 data URL
+                imagesForResend.add(img);
               }
-            } else if (img.startsWith('data:image')) {
-              // Already a base64 data URL
-              imagesForResend.add(img);
+            }
+            if (kDebugMode) {
+              debugPrint(
+                '🔄 [ResendDebug] Converted ${imagesForResend.length} images for AI',
+              );
             }
           }
+        } catch (e) {
           if (kDebugMode) {
-            debugPrint(
-              '🔄 [ResendDebug] Converted ${imagesForResend.length} images for AI',
-            );
+            debugPrint('🔄 [ResendDebug] Failed to parse images JSON: $e');
           }
         }
-      } catch (e) {
-        if (kDebugMode) {
-          debugPrint('🔄 [ResendDebug] Failed to parse images JSON: $e');
-        }
       }
-    }
 
-    setState(() {
-      _isSending = true;
-      _messages.add({
-        'sender': 'ai',
-        'text': 'Thinking...',
-        'reasoning': '',
-        'modelId': modelIdToUse,
-        'provider': providerToUse ?? '',
-      });
-      placeholderIndex = _messages.length - 1;
-    });
-
-    // Don't persist "Thinking..." placeholder - wait for actual response
-    // _persistChat(); // Removed - will persist after streaming completes
-    _scrollChatToBottom(force: true);
-
-    final session =
-        await SupabaseService.refreshSession() ??
-        SupabaseService.auth.currentSession;
-    if (session == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text(
-              'Session expired. Please sign in again.',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            duration: const Duration(seconds: 2),
-            dismissDirection: DismissDirection.horizontal,
-          ),
+      // Reconstruct attached files from stored JSON for resend.
+      final attachedFilesForResend = _reconstructAttachedFilesForResend(index);
+      if (attachedFilesForResend.isNotEmpty) {
+        final resendUserQuery = _extractResendUserQueryFromDisplayText(
+          originalUserInput,
+          attachedFilesForResend,
         );
+        messageForSend = _buildResendUserPrompt(
+          resendUserQuery,
+          attachedFilesForResend,
+        );
+        if (kDebugMode) {
+          final documentCount = attachedFilesForResend
+              .where(
+                (file) =>
+                    !file.isImage &&
+                    file.markdownContent != null &&
+                    file.markdownContent!.isNotEmpty,
+              )
+              .length;
+          debugPrint(
+            '🔄 [ResendDebug] Reconstructed ${attachedFilesForResend.length} attached files ($documentCount documents) for resend',
+          );
+        }
       }
-      if (mounted) {
-        setState(() {
-          _isSending = false;
+
+      setState(() {
+        _isSending = true;
+        _messages.add({
+          'sender': 'ai',
+          'text': 'Thinking...',
+          'reasoning': '',
+          'modelId': modelIdToUse,
+          'provider': providerToUse ?? '',
         });
+        placeholderIndex = _messages.length - 1;
+      });
+
+      // Don't persist "Thinking..." placeholder - wait for actual response
+      // _persistChat(); // Removed - will persist after streaming completes
+      _scrollChatToBottom(force: true);
+
+      final session =
+          await SupabaseService.refreshSession() ??
+          SupabaseService.auth.currentSession;
+      if (session == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text(
+                'Session expired. Please sign in again.',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              ),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              duration: const Duration(seconds: 2),
+              dismissDirection: DismissDirection.horizontal,
+            ),
+          );
+        }
+        if (mounted) {
+          setState(() {
+            _isSending = false;
+          });
+        }
+        _finalizeAiMessage(
+          placeholderIndex,
+          'Session expired. Please sign in again.',
+        );
+        return;
       }
-      _finalizeAiMessage(
-        placeholderIndex,
-        'Session expired. Please sign in again.',
-      );
-      return;
-    }
 
-    final String accessToken = session.accessToken;
-    if (accessToken.isEmpty) {
-      _finalizeAiMessage(
-        placeholderIndex,
-        'Authentication failed. Please sign in again.',
-      );
-      return;
-    }
+      final String accessToken = session.accessToken;
+      if (accessToken.isEmpty) {
+        _finalizeAiMessage(
+          placeholderIndex,
+          'Authentication failed. Please sign in again.',
+        );
+        return;
+      }
 
-    // Build conversation history up to the edited message (with images/reasoning support)
-    final List<Map<String, dynamic>> conversationHistory = [];
-    final bool shouldIncludeImages =
-        widget.includeRecentImagesInHistory || widget.includeAllImagesInHistory;
-    final int imgWindow = widget.includeAllImagesInHistory ? index : 6;
-    final Set<int> imgEligible = {};
-    var remainingHistoryImageCount = 2;
-    var remainingHistoryImageChars = 350000;
-    if (shouldIncludeImages) {
-      int uCount = 0;
-      for (int j = index - 1; j >= 0; j--) {
-        if (_messages[j]['sender'] == 'user') {
-          uCount++;
-          if (uCount <= imgWindow) imgEligible.add(j);
+      // Build conversation history up to the edited message (with images/reasoning support)
+      final List<Map<String, dynamic>> conversationHistory = [];
+      final bool shouldIncludeImages =
+          widget.includeRecentImagesInHistory ||
+          widget.includeAllImagesInHistory;
+      final int imgWindow = widget.includeAllImagesInHistory ? index : 6;
+      final Set<int> imgEligible = {};
+      var remainingHistoryImageCount = 2;
+      var remainingHistoryImageChars = 350000;
+      if (shouldIncludeImages) {
+        int uCount = 0;
+        for (int j = index - 1; j >= 0; j--) {
+          if (_messages[j]['sender'] == 'user') {
+            uCount++;
+            if (uCount <= imgWindow) imgEligible.add(j);
+          }
         }
       }
-    }
-    for (int i = 0; i < index; i++) {
-      final msg = _messages[i];
-      final sender = msg['sender'];
-      final text = msg['text'] ?? '';
-      if (sender == 'user') {
-        final bool hasImages =
-            msg['images'] != null && msg['images']!.isNotEmpty;
-        if (shouldIncludeImages && hasImages && imgEligible.contains(i)) {
-          final content = <Map<String, dynamic>>[];
-          if (text.isNotEmpty) content.add({'type': 'text', 'text': text});
-          final urls = await _resolveHistoryImages(msg['images']!);
-          var addedHistoryImages = 0;
-          for (final u in urls) {
-            if (remainingHistoryImageCount <= 0) break;
-            final urlChars = u.length;
-            if (urlChars > remainingHistoryImageChars) break;
-            content.add({
-              'type': 'image_url',
-              'image_url': {'url': u},
-            });
-            remainingHistoryImageCount--;
-            remainingHistoryImageChars -= urlChars;
-            addedHistoryImages++;
+      for (int i = 0; i < index; i++) {
+        final msg = _messages[i];
+        final sender = msg['sender'];
+        final text = msg['text'] ?? '';
+        if (sender == 'user') {
+          final bool hasImages =
+              msg['images'] != null && msg['images']!.isNotEmpty;
+          if (shouldIncludeImages && hasImages && imgEligible.contains(i)) {
+            final content = <Map<String, dynamic>>[];
+            if (text.isNotEmpty) content.add({'type': 'text', 'text': text});
+            final urls = await _resolveHistoryImages(msg['images']!);
+            var addedHistoryImages = 0;
+            for (final u in urls) {
+              if (remainingHistoryImageCount <= 0) break;
+              final urlChars = u.length;
+              if (urlChars > remainingHistoryImageChars) break;
+              content.add({
+                'type': 'image_url',
+                'image_url': {'url': u},
+              });
+              remainingHistoryImageCount--;
+              remainingHistoryImageChars -= urlChars;
+              addedHistoryImages++;
+            }
+            final skippedImages = urls.length - addedHistoryImages;
+            if (skippedImages > 0) {
+              content.add({
+                'type': 'text',
+                'text':
+                    '[$skippedImages image(s) omitted from history due request size limits.]',
+              });
+            }
+            if (content.isNotEmpty) {
+              conversationHistory.add({'role': 'user', 'content': content});
+            }
+          } else if (text.isNotEmpty) {
+            conversationHistory.add({'role': 'user', 'content': text});
           }
-          final skippedImages = urls.length - addedHistoryImages;
-          if (skippedImages > 0) {
-            content.add({
-              'type': 'text',
-              'text':
-                  '[$skippedImages image(s) omitted from history due request size limits.]',
-            });
+        } else if (sender == 'ai') {
+          if (text.isEmpty) continue;
+          String assistantContent = text;
+          if (widget.includeReasoningInHistory) {
+            final reasoning = msg['reasoning'] ?? '';
+            if (reasoning.isNotEmpty) {
+              assistantContent =
+                  '<thinking>\n$reasoning\n</thinking>\n\n$assistantContent';
+            }
           }
-          if (content.isNotEmpty) {
-            conversationHistory.add({'role': 'user', 'content': content});
-          }
-        } else if (text.isNotEmpty) {
-          conversationHistory.add({'role': 'user', 'content': text});
+          conversationHistory.add({
+            'role': 'assistant',
+            'content': assistantContent,
+          });
         }
-      } else if (sender == 'ai') {
-        if (text.isEmpty) continue;
-        String assistantContent = text;
-        if (widget.includeReasoningInHistory) {
-          final reasoning = msg['reasoning'] ?? '';
-          if (reasoning.isNotEmpty) {
-            assistantContent =
-                '<thinking>\n$reasoning\n</thinking>\n\n$assistantContent';
-          }
-        }
-        conversationHistory.add({
-          'role': 'assistant',
-          'content': assistantContent,
-        });
       }
-    }
 
-    final String? systemPrompt = await _resolveSystemPromptForSend();
+      if (_isSendOperationCancelled(sendOperationId)) {
+        return;
+      }
 
-    var toolSession = _toolCallHandler.createSession(
-      initialUserMessage: originalUserInput,
-      history: conversationHistory,
-      accessToken: accessToken,
-      discoveryContextKey: _activeChatId,
-      baseSystemPrompt: systemPrompt,
-      toolCallingEnabled: widget.toolCallingEnabled,
-      discoveryMode: widget.toolDiscoveryMode,
-      allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
-    );
-    final initialSystemPrompt = await _toolCallHandler.buildInitialSystemPrompt(
-      toolSession,
-    );
+      final String? systemPrompt = await _resolveSystemPromptForSend();
 
-    // Capture chatId for this streaming operation
-    final String chatIdForStream = _activeChatId!;
+      if (_isSendOperationCancelled(sendOperationId)) {
+        return;
+      }
 
-    // Message-level auto-retry: if the final answer is empty after all
-    // tool-loop retries, re-send the last user message once more.
-    const int kMaxMessageLevelRetries = 1;
-    int messageLevelRetries = 0;
-
-    // Accumulates display text across all streaming passes so that AI text
-    // from earlier passes is never lost when a new pass begins.
-    final accumulatedText = StringBuffer();
-    // Ordered content blocks built across streaming passes.
-    final contentBlocks = <ContentBlock>[];
-    int previousToolCallCount = 0;
-
-    Future<void> startStreamPass({
-      required String message,
-      required List<Map<String, dynamic>> history,
-      required String? passSystemPrompt,
-      List<String>? passImages,
-      int currentPass = 0,
-    }) async {
-      final requestPayload = <String, dynamic>{
-        'pass': currentPass + 1,
-        'message': message,
-        'history_count': history.length,
-        'history': history,
-        if (passSystemPrompt != null && passSystemPrompt.trim().isNotEmpty)
-          'system_prompt': passSystemPrompt,
-        if (passImages != null && passImages.isNotEmpty) 'images': passImages,
-      };
-      _appendDebugRequestForMessage(
-        placeholderIndex,
-        jsonEncode(requestPayload),
-        chatIdForStream,
-      );
-
-      final eventStream = WebSocketChatService.sendStreamingChat(
+      var toolSession = _toolCallHandler.createSession(
+        initialUserMessage: messageForSend,
+        history: conversationHistory,
         accessToken: accessToken,
-        message: message,
-        modelId: modelIdToUse,
-        providerSlug: providerToUse ?? 'openai',
-        history: history,
-        systemPrompt: passSystemPrompt,
-        maxTokens: 4096,
-        temperature: 0.7,
-        images: passImages,
+        discoveryContextKey: _activeChatId,
+        baseSystemPrompt: systemPrompt,
+        toolCallingEnabled: widget.toolCallingEnabled,
+        discoveryMode: widget.toolDiscoveryMode,
+        allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
       );
+      final initialSystemPrompt = await _toolCallHandler
+          .buildInitialSystemPrompt(toolSession);
 
-      await _streamingManager.startStream(
-        chatId: chatIdForStream,
-        messageIndex: placeholderIndex,
-        stream: eventStream,
-        onUpdate: (content, reasoning) {
-          if (mounted &&
-              _isValidMessageIndex(placeholderIndex) &&
-              _activeChatId == chatIdForStream) {
-            final displayContent = stripToolCallBlocksForDisplay(content);
-            final prefix = accumulatedText.toString();
-            final fullDisplay = prefix.isEmpty
-                ? displayContent
-                : '$prefix$displayContent';
+      // Capture chatId for this streaming operation
+      final String chatIdForStream = _activeChatId!;
 
-            setState(() {
-              _messages[placeholderIndex]['text'] = fullDisplay;
-              _messages[placeholderIndex]['reasoning'] = reasoning;
-            });
-            _scrollChatToBottom();
-          }
-        },
-        onComplete: (finalContent, finalReasoning, tps) {
-          unawaited(() async {
-            final loopResult = await _toolCallHandler.processAssistantResponse(
-              session: toolSession,
-              content: finalContent,
-              reasoning: finalReasoning,
-              onToolCallsUpdated: (toolCalls) {
-                _updateToolCallsForMessage(
+      // Message-level auto-retry: if the final answer is empty after all
+      // tool-loop retries, re-send the last user message once more.
+      const int kMaxMessageLevelRetries = 1;
+      int messageLevelRetries = 0;
+
+      // Accumulates display text across all streaming passes so that AI text
+      // from earlier passes is never lost when a new pass begins.
+      final accumulatedText = StringBuffer();
+      // Ordered content blocks built across streaming passes.
+      final contentBlocks = <ContentBlock>[];
+      int previousToolCallCount = 0;
+
+      Future<void> startStreamPass({
+        required String message,
+        required List<Map<String, dynamic>> history,
+        required String? passSystemPrompt,
+        List<String>? passImages,
+        int currentPass = 0,
+      }) async {
+        if (_isSendOperationCancelled(sendOperationId)) {
+          return;
+        }
+
+        final requestPayload = <String, dynamic>{
+          'pass': currentPass + 1,
+          'message': message,
+          'history_count': history.length,
+          'history': history,
+          if (passSystemPrompt != null && passSystemPrompt.trim().isNotEmpty)
+            'system_prompt': passSystemPrompt,
+          if (passImages != null && passImages.isNotEmpty) 'images': passImages,
+        };
+        _appendDebugRequestForMessage(
+          placeholderIndex,
+          jsonEncode(requestPayload),
+          chatIdForStream,
+        );
+
+        final eventStream = WebSocketChatService.sendStreamingChat(
+          accessToken: accessToken,
+          message: message,
+          modelId: modelIdToUse,
+          providerSlug: providerToUse ?? 'openai',
+          history: history,
+          systemPrompt: passSystemPrompt,
+          maxTokens: 4096,
+          temperature: 0.7,
+          images: passImages,
+        );
+
+        await _streamingManager.startStream(
+          chatId: chatIdForStream,
+          messageIndex: placeholderIndex,
+          stream: eventStream,
+          onUpdate: (content, reasoning) {
+            if (mounted &&
+                _isValidMessageIndex(placeholderIndex) &&
+                _activeChatId == chatIdForStream) {
+              final displayContent = stripToolCallBlocksForDisplay(content);
+              final prefix = accumulatedText.toString();
+              final fullDisplay = prefix.isEmpty
+                  ? displayContent
+                  : '$prefix$displayContent';
+
+              setState(() {
+                _messages[placeholderIndex]['text'] = fullDisplay;
+                _messages[placeholderIndex]['reasoning'] = reasoning;
+              });
+              _scrollChatToBottom();
+            }
+          },
+          onComplete: (finalContent, finalReasoning, tps) {
+            unawaited(
+              (() async {
+                final loopResult = await _toolCallHandler
+                    .processAssistantResponse(
+                      session: toolSession,
+                      content: finalContent,
+                      reasoning: finalReasoning,
+                      onToolCallsUpdated: (toolCalls) {
+                        _updateToolCallsForMessage(
+                          placeholderIndex,
+                          toolCalls,
+                          chatIdForStream,
+                        );
+                      },
+                    );
+
+                if (loopResult.shouldContinue && loopResult.nextStep != null) {
+                  final interimText = loopResult.interimContent?.trim() ?? '';
+
+                  // Build content blocks for this completed pass.
+                  final allToolCalls = loopResult.toolCalls;
+                  final newToolCalls =
+                      allToolCalls.length > previousToolCallCount
+                      ? allToolCalls.sublist(previousToolCallCount)
+                      : <ToolCall>[];
+                  previousToolCallCount = allToolCalls.length;
+
+                  final roundResult = RoundContentBlockService.buildRoundBlocks(
+                    interimText: interimText,
+                    providerReasoning: finalReasoning,
+                    newToolCalls: newToolCalls,
+                    interimBeforeToolCalls: loopResult.interimBeforeToolCalls,
+                  );
+                  contentBlocks.addAll(roundResult.blocks);
+                  final interimOutputText = roundResult.interimOutputText;
+
+                  // Accumulate text for backward-compat message field.
+                  if (interimOutputText.isNotEmpty) {
+                    accumulatedText.write(interimOutputText);
+                    accumulatedText.write('\n\n');
+                  }
+
+                  final contentBlocksJson = jsonEncode(
+                    contentBlocks.map((b) => b.toJson()).toList(),
+                  );
+
+                  if (_activeChatId == chatIdForStream) {
+                    final persistedInterim = accumulatedText.toString();
+                    if (placeholderIndex >= 0 &&
+                        placeholderIndex < _messages.length) {
+                      _messages[placeholderIndex]['text'] = persistedInterim;
+                      _messages[placeholderIndex]['reasoning'] = finalReasoning;
+                      _messages[placeholderIndex]['contentBlocks'] =
+                          contentBlocksJson;
+                    }
+                    if (mounted) {
+                      setState(() {});
+                    }
+                    _persistChatWithId(chatIdForStream);
+                  } else {
+                    final backgroundMsgs = _streamingManager
+                        .getBackgroundMessages(chatIdForStream);
+                    if (backgroundMsgs != null &&
+                        placeholderIndex < backgroundMsgs.length) {
+                      backgroundMsgs[placeholderIndex]['text'] = accumulatedText
+                          .toString();
+                      backgroundMsgs[placeholderIndex]['reasoning'] =
+                          finalReasoning;
+                      backgroundMsgs[placeholderIndex]['contentBlocks'] =
+                          contentBlocksJson;
+                      _persistChatWithIdAndMessages(
+                        chatIdForStream,
+                        backgroundMsgs,
+                      );
+                    }
+                  }
+
+                  final next = loopResult.nextStep!;
+                  await Future<void>.delayed(Duration.zero);
+                  await startStreamPass(
+                    message: next.message,
+                    history: next.history,
+                    passSystemPrompt: next.systemPrompt,
+                    passImages: imagesForResend,
+                    currentPass: currentPass + 1,
+                  );
+                  return;
+                }
+
+                final resolvedContent = loopResult.finalContent ?? finalContent;
+                final resolvedReasoning =
+                    loopResult.finalReasoning ?? finalReasoning;
+
+                // Message-level auto-retry: if the model returned an empty
+                // response after all tool-loop retries, re-send the original
+                // user message once more so the model gets a fresh chance.
+                if (resolvedContent.trim().isEmpty &&
+                    messageLevelRetries < kMaxMessageLevelRetries &&
+                    mounted) {
+                  messageLevelRetries++;
+
+                  if (kDebugMode) {
+                    debugPrint(
+                      '[Desktop] Empty response after tool loop — '
+                      'auto-retrying (attempt $messageLevelRetries/$kMaxMessageLevelRetries)',
+                    );
+                  }
+
+                  toolSession = _toolCallHandler.createSession(
+                    initialUserMessage: messageForSend,
+                    history: conversationHistory,
+                    accessToken: accessToken,
+                    discoveryContextKey: chatIdForStream,
+                    baseSystemPrompt: systemPrompt,
+                    toolCallingEnabled: widget.toolCallingEnabled,
+                    discoveryMode: widget.toolDiscoveryMode,
+                    allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
+                  );
+                  final retryPrompt = await _toolCallHandler
+                      .buildInitialSystemPrompt(toolSession);
+
+                  contentBlocks.clear();
+                  accumulatedText.clear();
+                  previousToolCallCount = 0;
+
+                  await Future<void>.delayed(const Duration(milliseconds: 500));
+                  if (!mounted) return;
+
+                  await startStreamPass(
+                    message: messageForSend,
+                    history: conversationHistory,
+                    passSystemPrompt: retryPrompt,
+                    passImages: imagesForResend,
+                    currentPass: currentPass + 1,
+                  );
+                  return;
+                }
+
+                final rawContent = resolvedContent.isEmpty
+                    ? 'The model returned an empty response. Tap resend on your last message to continue.'
+                    : resolvedContent;
+
+                // Prepend accumulated text from previous passes so nothing is lost.
+                final effectiveContent = accumulatedText.isEmpty
+                    ? rawContent
+                    : '$accumulatedText$rawContent';
+
+                // Defensive: finalize any tool calls that are still
+                // running/pending (e.g. due to background race conditions).
+                final finalToolCalls = loopResult.toolCalls;
+                finalizeStaleToolCalls(finalToolCalls);
+
+                // Also finalize stale tool calls inside content blocks.
+                for (final block in contentBlocks) {
+                  if (block.type == ContentBlockType.toolCalls &&
+                      block.toolCalls != null) {
+                    finalizeStaleToolCalls(block.toolCalls!);
+                  }
+                }
+
+                // Notify UI with finalized tool calls.
+                if (finalToolCalls.isNotEmpty) {
+                  _updateToolCallsForMessage(
+                    placeholderIndex,
+                    finalToolCalls,
+                    chatIdForStream,
+                  );
+                }
+
+                // Build final content blocks.
+                if (contentBlocks.isNotEmpty) {
+                  // Only use the final pass's text for the text block —
+                  // interim text from earlier passes is already in content
+                  // blocks.
+                  final finalText = stripToolCallBlocksForDisplay(
+                    rawContent,
+                  ).trim();
+                  if (finalText.isNotEmpty) {
+                    contentBlocks.add(ContentBlock.text(finalText));
+                  }
+                }
+                final contentBlocksJson = contentBlocks.isNotEmpty
+                    ? jsonEncode(contentBlocks.map((b) => b.toJson()).toList())
+                    : null;
+
+                // Persist tool-generated images to encrypted storage
+                await _processToolImages(
+                  loopResult.toolCalls,
                   placeholderIndex,
-                  toolCalls,
                   chatIdForStream,
                 );
-              },
-            );
 
-            if (loopResult.shouldContinue && loopResult.nextStep != null) {
-              final interimText = loopResult.interimContent?.trim() ?? '';
-
-              // Build content blocks for this completed pass.
-              final allToolCalls = loopResult.toolCalls;
-              final newToolCalls = allToolCalls.length > previousToolCallCount
-                  ? allToolCalls.sublist(previousToolCallCount)
-                  : <ToolCall>[];
-              previousToolCallCount = allToolCalls.length;
-
-              final roundResult = RoundContentBlockService.buildRoundBlocks(
-                interimText: interimText,
-                providerReasoning: finalReasoning,
-                newToolCalls: newToolCalls,
-                interimBeforeToolCalls: loopResult.interimBeforeToolCalls,
-              );
-              contentBlocks.addAll(roundResult.blocks);
-              final interimOutputText = roundResult.interimOutputText;
-
-              // Accumulate text for backward-compat message field.
-              if (interimOutputText.isNotEmpty) {
-                accumulatedText.write(interimOutputText);
-                accumulatedText.write('\n\n');
-              }
-
-              final contentBlocksJson = jsonEncode(
-                contentBlocks.map((b) => b.toJson()).toList(),
-              );
-
-              if (_activeChatId == chatIdForStream) {
-                final persistedInterim = accumulatedText.toString();
-                if (placeholderIndex >= 0 &&
-                    placeholderIndex < _messages.length) {
-                  _messages[placeholderIndex]['text'] = persistedInterim;
-                  _messages[placeholderIndex]['reasoning'] = finalReasoning;
-                  _messages[placeholderIndex]['contentBlocks'] =
-                      contentBlocksJson;
+                if (_activeChatId == chatIdForStream) {
+                  if (mounted) {
+                    setState(() {
+                      _isSending = false;
+                    });
+                  }
+                  _finalizeAiMessage(
+                    placeholderIndex,
+                    effectiveContent,
+                    reasoning: resolvedReasoning,
+                    tps: tps,
+                  );
+                  if (contentBlocksJson != null &&
+                      placeholderIndex >= 0 &&
+                      placeholderIndex < _messages.length) {
+                    _messages[placeholderIndex]['contentBlocks'] =
+                        contentBlocksJson;
+                  }
+                  _persistChatWithId(chatIdForStream);
+                } else {
+                  final backgroundMsgs = _streamingManager
+                      .getBackgroundMessages(chatIdForStream);
+                  if (backgroundMsgs != null &&
+                      placeholderIndex < backgroundMsgs.length) {
+                    backgroundMsgs[placeholderIndex]['text'] = effectiveContent;
+                    backgroundMsgs[placeholderIndex]['reasoning'] =
+                        resolvedReasoning;
+                    if (contentBlocksJson != null) {
+                      backgroundMsgs[placeholderIndex]['contentBlocks'] =
+                          contentBlocksJson;
+                    }
+                    if (tps != null) {
+                      backgroundMsgs[placeholderIndex]['tps'] = tps.toString();
+                    }
+                    _persistChatWithIdAndMessages(
+                      chatIdForStream,
+                      backgroundMsgs,
+                    );
+                  }
                 }
+              })().catchError((Object error, StackTrace stackTrace) {
+                if (kDebugMode) {
+                  debugPrint(
+                    '⚠️ [Desktop-Edit] onComplete async error: $error\n$stackTrace',
+                  );
+                }
+
+                if (_activeChatId == chatIdForStream) {
+                  if (mounted) {
+                    setState(() {
+                      _isSending = false;
+                    });
+                  }
+                  _finalizeAiMessage(placeholderIndex, 'Error: $error');
+                  _persistChatWithId(chatIdForStream);
+                } else {
+                  final backgroundMsgs = _streamingManager
+                      .getBackgroundMessages(chatIdForStream);
+                  if (backgroundMsgs != null &&
+                      placeholderIndex < backgroundMsgs.length) {
+                    backgroundMsgs[placeholderIndex]['text'] = 'Error: $error';
+                    backgroundMsgs[placeholderIndex]['reasoning'] = '';
+                    _persistChatWithIdAndMessages(
+                      chatIdForStream,
+                      backgroundMsgs,
+                    );
+                  }
+                }
+              }),
+            );
+          },
+          onError: (errorMessage) {
+            if (errorMessage == '__PAYMENT_REQUIRED__') {
+              final paymentMessage =
+                  'You have used all free messages. Please subscribe to continue chatting.';
+              if (_activeChatId == chatIdForStream) {
+                _finalizeAiMessage(placeholderIndex, paymentMessage);
                 if (mounted) {
-                  setState(() {});
+                  setState(() {
+                    _isSending = false;
+                  });
                 }
                 _persistChatWithId(chatIdForStream);
               } else {
@@ -2043,133 +2319,17 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 );
                 if (backgroundMsgs != null &&
                     placeholderIndex < backgroundMsgs.length) {
-                  backgroundMsgs[placeholderIndex]['text'] = accumulatedText
-                      .toString();
-                  backgroundMsgs[placeholderIndex]['reasoning'] =
-                      finalReasoning;
-                  backgroundMsgs[placeholderIndex]['contentBlocks'] =
-                      contentBlocksJson;
+                  backgroundMsgs[placeholderIndex]['text'] = paymentMessage;
+                  backgroundMsgs[placeholderIndex]['reasoning'] = '';
                   _persistChatWithIdAndMessages(
                     chatIdForStream,
                     backgroundMsgs,
                   );
                 }
               }
-
-              final next = loopResult.nextStep!;
-              await Future<void>.delayed(Duration.zero);
-              await startStreamPass(
-                message: next.message,
-                history: next.history,
-                passSystemPrompt: next.systemPrompt,
-                passImages: imagesForResend,
-                currentPass: currentPass + 1,
-              );
+              _showPaymentRequiredDialog();
               return;
             }
-
-            final resolvedContent = loopResult.finalContent ?? finalContent;
-            final resolvedReasoning =
-                loopResult.finalReasoning ?? finalReasoning;
-
-            // Message-level auto-retry: if the model returned an empty
-            // response after all tool-loop retries, re-send the original
-            // user message once more so the model gets a fresh chance.
-            if (resolvedContent.trim().isEmpty &&
-                messageLevelRetries < kMaxMessageLevelRetries &&
-                mounted) {
-              messageLevelRetries++;
-
-              if (kDebugMode) {
-                debugPrint(
-                  '[Desktop] Empty response after tool loop — '
-                  'auto-retrying (attempt $messageLevelRetries/$kMaxMessageLevelRetries)',
-                );
-              }
-
-              toolSession = _toolCallHandler.createSession(
-                initialUserMessage: originalUserInput,
-                history: conversationHistory,
-                accessToken: accessToken,
-                discoveryContextKey: chatIdForStream,
-                baseSystemPrompt: systemPrompt,
-                toolCallingEnabled: widget.toolCallingEnabled,
-                discoveryMode: widget.toolDiscoveryMode,
-                allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
-              );
-              final retryPrompt = await _toolCallHandler
-                  .buildInitialSystemPrompt(toolSession);
-
-              contentBlocks.clear();
-              accumulatedText.clear();
-              previousToolCallCount = 0;
-
-              await Future<void>.delayed(const Duration(milliseconds: 500));
-              if (!mounted) return;
-
-              await startStreamPass(
-                message: originalUserInput,
-                history: conversationHistory,
-                passSystemPrompt: retryPrompt,
-                passImages: imagesForResend,
-                currentPass: currentPass + 1,
-              );
-              return;
-            }
-
-            final rawContent = resolvedContent.isEmpty
-                ? 'The model returned an empty response. Tap resend on your last message to continue.'
-                : resolvedContent;
-
-            // Prepend accumulated text from previous passes so nothing is lost.
-            final effectiveContent = accumulatedText.isEmpty
-                ? rawContent
-                : '$accumulatedText$rawContent';
-
-            // Defensive: finalize any tool calls that are still
-            // running/pending (e.g. due to background race conditions).
-            final finalToolCalls = loopResult.toolCalls;
-            finalizeStaleToolCalls(finalToolCalls);
-
-            // Also finalize stale tool calls inside content blocks.
-            for (final block in contentBlocks) {
-              if (block.type == ContentBlockType.toolCalls &&
-                  block.toolCalls != null) {
-                finalizeStaleToolCalls(block.toolCalls!);
-              }
-            }
-
-            // Notify UI with finalized tool calls.
-            if (finalToolCalls.isNotEmpty) {
-              _updateToolCallsForMessage(
-                placeholderIndex,
-                finalToolCalls,
-                chatIdForStream,
-              );
-            }
-
-            // Build final content blocks.
-            if (contentBlocks.isNotEmpty) {
-              // Only use the final pass's text for the text block —
-              // interim text from earlier passes is already in content
-              // blocks.
-              final finalText = stripToolCallBlocksForDisplay(
-                rawContent,
-              ).trim();
-              if (finalText.isNotEmpty) {
-                contentBlocks.add(ContentBlock.text(finalText));
-              }
-            }
-            final contentBlocksJson = contentBlocks.isNotEmpty
-                ? jsonEncode(contentBlocks.map((b) => b.toJson()).toList())
-                : null;
-
-            // Persist tool-generated images to encrypted storage
-            await _processToolImages(
-              loopResult.toolCalls,
-              placeholderIndex,
-              chatIdForStream,
-            );
 
             if (_activeChatId == chatIdForStream) {
               if (mounted) {
@@ -2177,18 +2337,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                   _isSending = false;
                 });
               }
-              _finalizeAiMessage(
-                placeholderIndex,
-                effectiveContent,
-                reasoning: resolvedReasoning,
-                tps: tps,
-              );
-              if (contentBlocksJson != null &&
-                  placeholderIndex >= 0 &&
-                  placeholderIndex < _messages.length) {
-                _messages[placeholderIndex]['contentBlocks'] =
-                    contentBlocksJson;
-              }
+              _finalizeAiMessage(placeholderIndex, 'Error: $errorMessage');
               _persistChatWithId(chatIdForStream);
             } else {
               final backgroundMsgs = _streamingManager.getBackgroundMessages(
@@ -2196,90 +2345,198 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               );
               if (backgroundMsgs != null &&
                   placeholderIndex < backgroundMsgs.length) {
-                backgroundMsgs[placeholderIndex]['text'] = effectiveContent;
-                backgroundMsgs[placeholderIndex]['reasoning'] =
-                    resolvedReasoning;
-                if (contentBlocksJson != null) {
-                  backgroundMsgs[placeholderIndex]['contentBlocks'] =
-                      contentBlocksJson;
-                }
-                if (tps != null) {
-                  backgroundMsgs[placeholderIndex]['tps'] = tps.toString();
-                }
-                _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
-              }
-            }
-          }());
-        },
-        onError: (errorMessage) {
-          if (errorMessage == '__PAYMENT_REQUIRED__') {
-            final paymentMessage =
-                'You have used all free messages. Please subscribe to continue chatting.';
-            if (_activeChatId == chatIdForStream) {
-              _finalizeAiMessage(placeholderIndex, paymentMessage);
-              if (mounted) {
-                setState(() {
-                  _isSending = false;
-                });
-              }
-              _persistChatWithId(chatIdForStream);
-            } else {
-              final backgroundMsgs = _streamingManager.getBackgroundMessages(
-                chatIdForStream,
-              );
-              if (backgroundMsgs != null &&
-                  placeholderIndex < backgroundMsgs.length) {
-                backgroundMsgs[placeholderIndex]['text'] = paymentMessage;
+                backgroundMsgs[placeholderIndex]['text'] =
+                    'Error: $errorMessage';
                 backgroundMsgs[placeholderIndex]['reasoning'] = '';
                 _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
               }
             }
-            _showPaymentRequiredDialog();
-            return;
-          }
+          },
+        );
+      }
 
-          if (_activeChatId == chatIdForStream) {
-            if (mounted) {
-              setState(() {
-                _isSending = false;
-              });
+      if (_isSendOperationCancelled(sendOperationId)) {
+        return;
+      }
+
+      try {
+        await startStreamPass(
+          message: messageForSend,
+          history: conversationHistory,
+          passSystemPrompt: initialSystemPrompt,
+          passImages: imagesForResend,
+        );
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('Streaming error: $e');
+        }
+        _finalizeAiMessage(placeholderIndex, 'Error: $e');
+        if (mounted) {
+          setState(() {
+            _isSending = false;
+          });
+        }
+        _persistChatWithId(chatIdForStream);
+      }
+    } finally {
+      _clearSendOperation(sendOperationId);
+    }
+  }
+
+  List<AttachedFile> _reconstructAttachedFilesForResend(int index) {
+    if (!_isValidMessageIndex(index)) {
+      return <AttachedFile>[];
+    }
+
+    final attachedFiles = <AttachedFile>[];
+    final String? attachedFilesJson = _messages[index]['attachedFilesJson'];
+
+    if (attachedFilesJson != null && attachedFilesJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(attachedFilesJson);
+        if (decoded is List) {
+          for (final item in decoded) {
+            if (item is Map) {
+              attachedFiles.add(
+                AttachedFile.fromJson(Map<String, dynamic>.from(item)),
+              );
             }
-            _finalizeAiMessage(placeholderIndex, 'Error: $errorMessage');
-            _persistChatWithId(chatIdForStream);
-          } else {
-            final backgroundMsgs = _streamingManager.getBackgroundMessages(
-              chatIdForStream,
+          }
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('🔄 [ResendDebug] Failed to parse attachedFilesJson: $e');
+        }
+      }
+    }
+
+    if (attachedFiles.isNotEmpty) {
+      return attachedFiles;
+    }
+
+    // Fallback for older messages where only "attachments" was persisted.
+    final String? attachmentsJson = _messages[index]['attachments'];
+    if (attachmentsJson != null && attachmentsJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(attachmentsJson);
+        if (decoded is List) {
+          for (final item in decoded.whereType<Map>()) {
+            final data = Map<String, dynamic>.from(item);
+            final String fileName = (data['fileName'] as String? ?? '').trim();
+            final String markdownContent =
+                (data['markdownContent'] as String? ?? '').trim();
+            if (fileName.isEmpty || markdownContent.isEmpty) {
+              continue;
+            }
+            attachedFiles.add(
+              AttachedFile(
+                id: _uuid.v4(),
+                fileName: fileName,
+                markdownContent: markdownContent,
+                isUploading: false,
+                isImage: false,
+              ),
             );
-            if (backgroundMsgs != null &&
-                placeholderIndex < backgroundMsgs.length) {
-              backgroundMsgs[placeholderIndex]['text'] = 'Error: $errorMessage';
-              backgroundMsgs[placeholderIndex]['reasoning'] = '';
-              _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
-            }
           }
-        },
-      );
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('🔄 [ResendDebug] Failed to parse attachments JSON: $e');
+        }
+      }
     }
 
-    try {
-      await startStreamPass(
-        message: originalUserInput,
-        history: conversationHistory,
-        passSystemPrompt: initialSystemPrompt,
-        passImages: imagesForResend,
-      );
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('Streaming error: $e');
-      }
-      _finalizeAiMessage(placeholderIndex, 'Error: $e');
-      if (mounted) {
-        setState(() {
-          _isSending = false;
-        });
-      }
-      _persistChatWithId(chatIdForStream);
+    return attachedFiles;
+  }
+
+  String _extractResendUserQueryFromDisplayText(
+    String displayText,
+    List<AttachedFile> attachedFiles,
+  ) {
+    final text = displayText.trim();
+    if (text.isEmpty || attachedFiles.isEmpty) {
+      return text;
     }
+
+    final separatorIndex = text.indexOf('\n\n');
+    if (separatorIndex < 0) {
+      return _looksLikeGeneratedAttachmentHeader(text) ? '' : text;
+    }
+
+    final header = text.substring(0, separatorIndex).trim();
+    if (!_looksLikeGeneratedAttachmentHeader(header)) {
+      return text;
+    }
+
+    return text.substring(separatorIndex + 2).trim();
+  }
+
+  bool _looksLikeGeneratedAttachmentHeader(String text) {
+    if (text.startsWith('Documents: ')) {
+      return true;
+    }
+
+    return RegExp(r'^\d+ images? attached(?:, Documents: .+)?$').hasMatch(text);
+  }
+
+  String _buildResendUserPrompt(
+    String userQuery,
+    List<AttachedFile> attachedFiles,
+  ) {
+    final normalizedQuery = userQuery.trim();
+    final documentFiles = attachedFiles
+        .where(
+          (file) =>
+              !file.isImage &&
+              file.markdownContent != null &&
+              file.markdownContent!.isNotEmpty,
+        )
+        .toList(growable: false);
+
+    if (documentFiles.isEmpty) {
+      if (normalizedQuery.isNotEmpty) {
+        return normalizedQuery;
+      }
+      final hasImageAttachments = attachedFiles.any(
+        (file) => file.isImage && file.encryptedImagePath != null,
+      );
+      return hasImageAttachments ? 'Please describe these images.' : '';
+    }
+
+    final markdownSections = documentFiles
+        .map((file) {
+          final safeName = _sanitizeAttachmentFileNameForPrompt(file.fileName);
+          final content = file.markdownContent ?? '';
+          final fence = _buildMarkdownFenceForContent(content);
+          return 'Document: "$safeName"\n$fence\n$content\n$fence';
+        })
+        .join('\n\n');
+
+    final effectiveQuery = normalizedQuery.isNotEmpty
+        ? normalizedQuery
+        : 'Please review the uploaded documents.';
+
+    return '$markdownSections\n\nUser query: $effectiveQuery';
+  }
+
+  String _sanitizeAttachmentFileNameForPrompt(String fileName) {
+    return fileName
+        .replaceAll(RegExp(r'[\r\n\t]+'), ' ')
+        .replaceAll('"', "'")
+        .trim();
+  }
+
+  String _buildMarkdownFenceForContent(String content) {
+    var maxBacktickRun = 0;
+    for (final match in RegExp(r'`+').allMatches(content)) {
+      final runLength = match.group(0)?.length ?? 0;
+      if (runLength > maxBacktickRun) {
+        maxBacktickRun = runLength;
+      }
+    }
+
+    final fenceLength = math.max(3, maxBacktickRun + 1);
+    return List<String>.filled(fenceLength, '`').join();
   }
 
   Future<void> _resendMessageAt(int index) async {
@@ -2492,6 +2749,75 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _scrollChatToBottom();
   }
 
+  int _beginSendOperation() {
+    final operationId = ++_sendOperationCounter;
+    _activeSendOperationId = operationId;
+    _cancelledSendOperationId = null;
+    return operationId;
+  }
+
+  bool _isSendOperationCancelled(int operationId) =>
+      _cancelledSendOperationId == operationId;
+
+  void _clearSendOperation(int operationId) {
+    if (_activeSendOperationId == operationId) {
+      _activeSendOperationId = null;
+    }
+    if (_cancelledSendOperationId == operationId) {
+      _cancelledSendOperationId = null;
+    }
+  }
+
+  void _markLastAssistantMessageCancelled() {
+    if (_messages.isEmpty) {
+      return;
+    }
+    final lastMessage = _messages.last;
+    if (lastMessage['sender'] != 'ai' && lastMessage['sender'] != 'assistant') {
+      return;
+    }
+
+    final updatedLastMessage = Map<String, String>.from(lastMessage);
+    final currentText = updatedLastMessage['text'] ?? '';
+    if (currentText.isEmpty || currentText == 'Thinking...') {
+      updatedLastMessage['text'] = '[Cancelled]';
+    } else if (!currentText.contains('[Response cancelled]')) {
+      updatedLastMessage['text'] = '$currentText\n\n[Response cancelled]';
+    }
+    _messages[_messages.length - 1] = updatedLastMessage;
+  }
+
+  void _cancelPendingSendOperation() {
+    final operationId = _activeSendOperationId;
+    if (operationId != null) {
+      _cancelledSendOperationId = operationId;
+    }
+
+    _autoSaveTimer?.cancel();
+
+    if (ChatStorageService.isMessageOperationInProgress) {
+      ChatStorageService.isMessageOperationInProgress = false;
+    }
+
+    if (mounted) {
+      setState(() {
+        _isSending = false;
+        _markLastAssistantMessageCancelled();
+      });
+    } else {
+      _isSending = false;
+      _markLastAssistantMessageCancelled();
+    }
+
+    if (_activeChatId != null) {
+      _persistChatWithId(_activeChatId!);
+    } else {
+      _persistChat();
+    }
+
+    _showSnackBar('Response cancelled');
+  }
+
   Future<void> _cancelStream() async {
     if (_activeChatId != null && _isStreaming) {
       if (kDebugMode) {
@@ -2501,18 +2827,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
       setState(() {
         _isSending = false;
-        if (_messages.isNotEmpty &&
-            (_messages.last['sender'] == 'ai' ||
-                _messages.last['sender'] == 'assistant')) {
-          final lastMessage = Map<String, String>.from(_messages.last);
-          final currentText = lastMessage['text'] ?? '';
-          if (currentText.isEmpty || currentText == 'Thinking...') {
-            lastMessage['text'] = '[Cancelled]';
-          } else {
-            lastMessage['text'] = '$currentText\n\n[Response cancelled]';
-          }
-          _messages[_messages.length - 1] = lastMessage;
-        }
+        _markLastAssistantMessageCancelled();
       });
 
       _persistChat();
@@ -2526,14 +2841,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       // Stream is active - cancel via existing method
       await _cancelStream();
     } else if (_isSending) {
-      // Only sending flag is set (stream not yet started) - reset state
-      setState(() {
-        _isSending = false;
-      });
-      if (ChatStorageService.isMessageOperationInProgress) {
-        ChatStorageService.isMessageOperationInProgress = false;
-      }
-      _showSnackBar('Cancelled');
+      // Request cancellation for in-flight send setup.
+      _cancelPendingSendOperation();
     }
   }
 
@@ -2609,675 +2918,778 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   }
 
   Future<void> _sendMessage() async {
-    // SET GLOBAL LOCK IMMEDIATELY - before any async operations
-    // This prevents didUpdateWidget from switching chats during the entire operation
-    ChatStorageService.isMessageOperationInProgress = true;
-    if (kDebugMode) {
-      debugPrint('🔒 [SendMessage] GLOBAL LOCK SET');
-    }
+    final int sendOperationId = _beginSendOperation();
 
-    if (_isStreaming) {
-      // Current chat is streaming - cancel it
-      await _cancelStream();
-      ChatStorageService.isMessageOperationInProgress = false;
+    try {
+      // SET GLOBAL LOCK IMMEDIATELY - before any async operations
+      // This prevents didUpdateWidget from switching chats during the entire operation
+      ChatStorageService.isMessageOperationInProgress = true;
       if (kDebugMode) {
-        debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (cancelled)');
+        debugPrint('🔒 [SendMessage] GLOBAL LOCK SET');
       }
-      return;
-    }
 
-    if (_attachedFiles.any((f) => f.isUploading)) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text(
-              'Please wait for file uploads to finish.',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+      if (_isStreaming) {
+        // Current chat is streaming - cancel it
+        await _cancelStream();
+        ChatStorageService.isMessageOperationInProgress = false;
+        if (kDebugMode) {
+          debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (cancelled)');
+        }
+        return;
+      }
+
+      if (_attachedFiles.any((f) => f.isUploading)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text(
+                'Please wait for file uploads to finish.',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              ),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              duration: const Duration(seconds: 2),
+              dismissDirection: DismissDirection.horizontal,
             ),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+          );
+        }
+        ChatStorageService.isMessageOperationInProgress = false;
+        if (kDebugMode) {
+          debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (uploading)');
+        }
+        return;
+      }
+
+      // Check if a model is selected
+      if (_selectedModelId.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text(
+                'Please select a model first.',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              ),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              duration: const Duration(seconds: 3),
+              dismissDirection: DismissDirection.horizontal,
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            duration: const Duration(seconds: 2),
-            dismissDirection: DismissDirection.horizontal,
-          ),
-        );
-      }
-      ChatStorageService.isMessageOperationInProgress = false;
-      if (kDebugMode) {
-        debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (uploading)');
-      }
-      return;
-    }
-
-    // Check if a model is selected
-    if (_selectedModelId.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text(
-              'Please select a model first.',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            duration: const Duration(seconds: 3),
-            dismissDirection: DismissDirection.horizontal,
-          ),
-        );
-      }
-      ChatStorageService.isMessageOperationInProgress = false;
-      if (kDebugMode) {
-        debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (no model selected)');
-      }
-      return;
-    }
-
-    // Credit/free message checks are handled server-side (API returns 402)
-
-    final String originalUserInput = _controller.text.trim();
-
-    // Use MessageCompositionService to prepare the message
-    final List<Map<String, dynamic>> apiHistory =
-        await _buildApiHistoryWithPendingMessage(originalUserInput);
-    final String? resolvedSystemPrompt = await _resolveSystemPromptForSend();
-
-    final result = await MessageCompositionService.prepareMessage(
-      userInput: originalUserInput,
-      attachedFiles: _attachedFiles,
-      selectedModelId: _selectedModelId,
-      apiHistory: apiHistory,
-      systemPrompt: resolvedSystemPrompt,
-      getProviderSlug: _ensureProviderSlugForCurrentModel,
-    );
-
-    if (!result.isValid) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              result.errorMessage ?? 'Invalid message',
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            duration: const Duration(seconds: 2),
-            dismissDirection: DismissDirection.horizontal,
-          ),
-        );
-      }
-      ChatStorageService.isMessageOperationInProgress = false;
-      if (kDebugMode) {
-        debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (invalid message)');
-      }
-      return;
-    }
-
-    // Check if widget was disposed during async operation
-    if (!mounted) {
-      ChatStorageService.isMessageOperationInProgress = false;
-      if (kDebugMode) {
-        debugPrint(
-          '🔓 [SendMessage] GLOBAL LOCK RELEASED (widget disposed during prepareMessage)',
-        );
-      }
-      return;
-    }
-
-    // Extract prepared values
-    final String displayMessageText = result.displayMessageText!;
-    final String aiPromptContent = result.aiPromptContent!;
-    final String accessToken = result.accessToken!;
-    final String providerSlug = result.providerSlug!;
-    final int maxResponseTokens = result.maxResponseTokens!;
-    final String? systemPrompt = result.effectiveSystemPrompt;
-    final List<String>? imageDataUrls = result.images;
-
-    final bool hasAttachments = _attachedFiles.any(
-      (f) => f.markdownContent != null || f.encryptedImagePath != null,
-    );
-
-    final bool firstMessageInChat = _messages.isEmpty;
-
-    // CRITICAL FIX: Sync _activeChatId with widget.selectedChatId if out of sync
-    // This handles cases where _activeChatId was cleared but user is still on existing chat
-    if (_activeChatId == null && widget.selectedChatId != null) {
-      _activeChatId = widget.selectedChatId;
-      if (kDebugMode) {
-        debugPrint('');
-      }
-      if (kDebugMode) {
-        debugPrint(
-          '┌─────────────────────────────────────────────────────────────',
-        );
-      }
-      if (kDebugMode) {
-        debugPrint(
-          '│ ⚠️ [SEND-DESKTOP] SYNCED _activeChatId with widget.selectedChatId',
-        );
-      }
-      if (kDebugMode) {
-        debugPrint(
-          '│ ⚠️ [SEND-DESKTOP] _activeChatId was null, now: $_activeChatId',
-        );
-      }
-      if (kDebugMode) {
-        debugPrint(
-          '└─────────────────────────────────────────────────────────────',
-        );
-      }
-    }
-
-    // Generate chat ID ONCE at the start for truly NEW chats only
-    // This prevents race conditions where multiple _persistChat calls
-    // each generate their own UUID before the first one completes
-    if (_activeChatId == null) {
-      _activeChatId = _uuid.v4();
-      if (kDebugMode) {
-        debugPrint('');
-      }
-      if (kDebugMode) {
-        debugPrint(
-          '┌─────────────────────────────────────────────────────────────',
-        );
-      }
-      if (kDebugMode) {
-        debugPrint('│ 🆔 [SEND-DESKTOP] PRE-GENERATED Chat ID: $_activeChatId');
-      }
-      if (kDebugMode) {
-        debugPrint(
-          '│ 🆔 [SEND-DESKTOP] This ID will be used for all persist calls',
-        );
-      }
-      if (kDebugMode) {
-        debugPrint(
-          '└─────────────────────────────────────────────────────────────',
-        );
-      }
-    }
-
-    int placeholderIndex = -1;
-    setState(() {
-      // Store message with images and attachments (if any)
-      final userMessage = {
-        'sender': 'user',
-        'text': displayMessageText,
-        'reasoning': '',
-        'modelId': _selectedModelId,
-        'provider': providerSlug,
-      };
-
-      // Store images as JSON-encoded string if present
-      if (imageDataUrls != null && imageDataUrls.isNotEmpty) {
-        userMessage['images'] = jsonEncode(imageDataUrls);
-      }
-
-      // Store document attachments as JSON-encoded string if present
-      final documentAttachments = _attachedFiles
-          .where((f) => !f.isImage && f.markdownContent != null)
-          .map(
-            (f) => {
-              'fileName': f.fileName,
-              'markdownContent': f.markdownContent!,
-            },
-          )
-          .toList();
-
-      if (documentAttachments.isNotEmpty) {
-        userMessage['attachments'] = jsonEncode(documentAttachments);
+          );
+        }
+        ChatStorageService.isMessageOperationInProgress = false;
         if (kDebugMode) {
           debugPrint(
-            '📄 [AttachmentDebug] Storing ${documentAttachments.length} attachments',
+            '🔓 [SendMessage] GLOBAL LOCK RELEASED (no model selected)',
+          );
+        }
+        return;
+      }
+
+      // Credit/free message checks are handled server-side (API returns 402)
+
+      final String originalUserInput = _controller.text.trim();
+
+      // Use MessageCompositionService to prepare the message
+      final List<Map<String, dynamic>> apiHistory =
+          await _buildApiHistoryWithPendingMessage(originalUserInput);
+      final String? resolvedSystemPrompt = await _resolveSystemPromptForSend();
+
+      final result = await MessageCompositionService.prepareMessage(
+        userInput: originalUserInput,
+        attachedFiles: _attachedFiles,
+        selectedModelId: _selectedModelId,
+        apiHistory: apiHistory,
+        systemPrompt: resolvedSystemPrompt,
+        getProviderSlug: _ensureProviderSlugForCurrentModel,
+      );
+
+      if (!result.isValid) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                result.errorMessage ?? 'Invalid message',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              duration: const Duration(seconds: 2),
+              dismissDirection: DismissDirection.horizontal,
+            ),
+          );
+        }
+        ChatStorageService.isMessageOperationInProgress = false;
+        if (kDebugMode) {
+          debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (invalid message)');
+        }
+        return;
+      }
+
+      if (_isSendOperationCancelled(sendOperationId)) {
+        return;
+      }
+
+      // Check if widget was disposed during async operation
+      if (!mounted) {
+        ChatStorageService.isMessageOperationInProgress = false;
+        if (kDebugMode) {
+          debugPrint(
+            '🔓 [SendMessage] GLOBAL LOCK RELEASED (widget disposed during prepareMessage)',
+          );
+        }
+        return;
+      }
+
+      // Extract prepared values
+      final String displayMessageText = result.displayMessageText!;
+      final String aiPromptContent = result.aiPromptContent!;
+      final String accessToken = result.accessToken!;
+      final String providerSlug = result.providerSlug!;
+      final int maxResponseTokens = result.maxResponseTokens!;
+      final String? systemPrompt = result.effectiveSystemPrompt;
+      final List<String>? imageDataUrls = result.images;
+
+      final bool hasAttachments = _attachedFiles.any(
+        (f) => f.markdownContent != null || f.encryptedImagePath != null,
+      );
+
+      final bool firstMessageInChat = _messages.isEmpty;
+
+      // CRITICAL FIX: Sync _activeChatId with widget.selectedChatId if out of sync
+      // This handles cases where _activeChatId was cleared but user is still on existing chat
+      if (_activeChatId == null && widget.selectedChatId != null) {
+        _activeChatId = widget.selectedChatId;
+        if (kDebugMode) {
+          debugPrint('');
+        }
+        if (kDebugMode) {
+          debugPrint(
+            '┌─────────────────────────────────────────────────────────────',
+          );
+        }
+        if (kDebugMode) {
+          debugPrint(
+            '│ ⚠️ [SEND-DESKTOP] SYNCED _activeChatId with widget.selectedChatId',
+          );
+        }
+        if (kDebugMode) {
+          debugPrint(
+            '│ ⚠️ [SEND-DESKTOP] _activeChatId was null, now: $_activeChatId',
+          );
+        }
+        if (kDebugMode) {
+          debugPrint(
+            '└─────────────────────────────────────────────────────────────',
           );
         }
       }
 
-      // Store original AttachedFile objects for resend functionality
-      if (_attachedFiles.isNotEmpty) {
-        userMessage['attachedFilesJson'] = jsonEncode(
-          _attachedFiles.map((f) => f.toJson()).toList(),
-        );
+      // Generate chat ID ONCE at the start for truly NEW chats only
+      // This prevents race conditions where multiple _persistChat calls
+      // each generate their own UUID before the first one completes
+      if (_activeChatId == null) {
+        _activeChatId = _uuid.v4();
+        if (kDebugMode) {
+          debugPrint('');
+        }
         if (kDebugMode) {
           debugPrint(
-            '💾 [AttachmentDebug] Storing ${_attachedFiles.length} attached files for resend',
+            '┌─────────────────────────────────────────────────────────────',
+          );
+        }
+        if (kDebugMode) {
+          debugPrint(
+            '│ 🆔 [SEND-DESKTOP] PRE-GENERATED Chat ID: $_activeChatId',
+          );
+        }
+        if (kDebugMode) {
+          debugPrint(
+            '│ 🆔 [SEND-DESKTOP] This ID will be used for all persist calls',
+          );
+        }
+        if (kDebugMode) {
+          debugPrint(
+            '└─────────────────────────────────────────────────────────────',
           );
         }
       }
 
-      _messages.add(userMessage);
-      if (kDebugMode) {
-        debugPrint(
-          '💾 [MessageDebug] Message added to _messages list. Total messages: ${_messages.length}',
-        );
-      }
+      int placeholderIndex = -1;
+      setState(() {
+        // Store message with images and attachments (if any)
+        final userMessage = {
+          'sender': 'user',
+          'text': displayMessageText,
+          'reasoning': '',
+          'modelId': _selectedModelId,
+          'provider': providerSlug,
+        };
 
-      _controller.clear();
-      _isSending = true;
-      if (hasAttachments) {
-        _attachedFiles.clear();
-      }
-      _messages.add({
-        'sender': 'ai',
-        'text': 'Thinking...',
-        'reasoning': '',
-        'modelId': _selectedModelId,
-        'provider': providerSlug,
-      });
-      placeholderIndex = _messages.length - 1;
-    });
-
-    // Don't persist "Thinking..." placeholder - wait for actual response
-    // _persistChat(); // Removed - will persist after streaming completes
-
-    if (firstMessageInChat) _animCtrl.forward();
-    _scrollChatToBottom(force: true);
-    Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
-
-    // Capture chatId for this streaming operation - ensures correct persistence even if user switches chats
-    final String chatIdForStream = _activeChatId!;
-
-    // Auto-generate title for new chats (fire and forget)
-    if (firstMessageInChat) {
-      unawaited(
-        TitleGenerationService.generateAndApplyTitle(
-          chatIdForStream,
-          displayMessageText,
-        ),
-      );
-    }
-
-    // Start auto-save timer during streaming (uses captured chatId)
-    _autoSaveTimer?.cancel();
-    _autoSaveTimer = Timer.periodic(const Duration(seconds: 2), (_) {
-      // Only persist if still viewing the same chat
-      // If user switched, _messages belongs to a different chat!
-      if (_activeChatId == chatIdForStream) {
-        _persistChatWithId(chatIdForStream);
-      } else {
-        // Get background messages and persist those instead
-        final backgroundMsgs = _streamingManager.getBackgroundMessages(
-          chatIdForStream,
-        );
-        if (backgroundMsgs != null) {
-          _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
+        // Store images as JSON-encoded string if present
+        if (imageDataUrls != null && imageDataUrls.isNotEmpty) {
+          userMessage['images'] = jsonEncode(imageDataUrls);
         }
-      }
-    });
 
-    var toolSession = _toolCallHandler.createSession(
-      initialUserMessage: aiPromptContent,
-      history: apiHistory,
-      accessToken: accessToken,
-      discoveryContextKey: chatIdForStream,
-      baseSystemPrompt: systemPrompt,
-      toolCallingEnabled: widget.toolCallingEnabled,
-      discoveryMode: widget.toolDiscoveryMode,
-      allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
-    );
-    final initialSystemPrompt = await _toolCallHandler.buildInitialSystemPrompt(
-      toolSession,
-    );
+        // Store document attachments as JSON-encoded string if present
+        final documentAttachments = _attachedFiles
+            .where((f) => !f.isImage && f.markdownContent != null)
+            .map(
+              (f) => {
+                'fileName': f.fileName,
+                'markdownContent': f.markdownContent!,
+              },
+            )
+            .toList();
 
-    // Message-level auto-retry for the second streaming path.
-    const int kMaxMessageLevelRetries2 = 1;
-    int messageLevelRetries2 = 0;
-
-    // Accumulates display text across all streaming passes so that AI text
-    // from earlier passes is never lost when a new pass begins.
-    final accumulatedText2 = StringBuffer();
-    // Ordered content blocks built across streaming passes.
-    final contentBlocks2 = <ContentBlock>[];
-    int previousToolCallCount2 = 0;
-
-    Future<void> startStreamPass({
-      required String message,
-      required List<Map<String, dynamic>> history,
-      required String? passSystemPrompt,
-      List<String>? passImages,
-      int currentPass = 0,
-    }) async {
-      final requestPayload = <String, dynamic>{
-        'pass': currentPass + 1,
-        'message': message,
-        'history_count': history.length,
-        'history': history,
-        if (passSystemPrompt != null && passSystemPrompt.trim().isNotEmpty)
-          'system_prompt': passSystemPrompt,
-        if (passImages != null && passImages.isNotEmpty) 'images': passImages,
-      };
-      _appendDebugRequestForMessage(
-        placeholderIndex,
-        jsonEncode(requestPayload),
-        chatIdForStream,
-      );
-
-      final stream = WebSocketChatService.sendStreamingChat(
-        accessToken: accessToken,
-        message: message,
-        modelId: _selectedModelId,
-        providerSlug: providerSlug,
-        history: history.isEmpty ? null : history,
-        systemPrompt: passSystemPrompt,
-        maxTokens: maxResponseTokens,
-        images: passImages,
-      );
-
-      await _streamingManager.startStream(
-        chatId: chatIdForStream,
-        messageIndex: placeholderIndex,
-        stream: stream,
-        onUpdate: (content, reasoning) {
-          if (mounted && _activeChatId == chatIdForStream) {
-            final displayContent = stripToolCallBlocksForDisplay(content);
-            if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
-              _messages[placeholderIndex]['text'] = displayContent;
-              _messages[placeholderIndex]['reasoning'] = reasoning;
-            }
-            _updateAiMessage(placeholderIndex, displayContent, reasoning);
-            _scrollChatToBottom();
+        if (documentAttachments.isNotEmpty) {
+          userMessage['attachments'] = jsonEncode(documentAttachments);
+          if (kDebugMode) {
+            debugPrint(
+              '📄 [AttachmentDebug] Storing ${documentAttachments.length} attachments',
+            );
           }
-        },
-        onComplete: (finalContent, finalReasoning, tps) {
-          unawaited(() async {
-            if (kDebugMode) {
-              debugPrint('Stream completed for chat $chatIdForStream');
+        }
+
+        // Store original AttachedFile objects for resend functionality
+        if (_attachedFiles.isNotEmpty) {
+          userMessage['attachedFilesJson'] = jsonEncode(
+            _attachedFiles.map((f) => f.toJson()).toList(),
+          );
+          if (kDebugMode) {
+            debugPrint(
+              '💾 [AttachmentDebug] Storing ${_attachedFiles.length} attached files for resend',
+            );
+          }
+        }
+
+        _messages.add(userMessage);
+        if (kDebugMode) {
+          debugPrint(
+            '💾 [MessageDebug] Message added to _messages list. Total messages: ${_messages.length}',
+          );
+        }
+
+        _controller.clear();
+        _isSending = true;
+        if (hasAttachments) {
+          _attachedFiles.clear();
+        }
+        _messages.add({
+          'sender': 'ai',
+          'text': 'Thinking...',
+          'reasoning': '',
+          'modelId': _selectedModelId,
+          'provider': providerSlug,
+        });
+        placeholderIndex = _messages.length - 1;
+      });
+
+      // Don't persist "Thinking..." placeholder - wait for actual response
+      // _persistChat(); // Removed - will persist after streaming completes
+
+      if (_isSendOperationCancelled(sendOperationId)) {
+        return;
+      }
+
+      if (firstMessageInChat) _animCtrl.forward();
+      _scrollChatToBottom(force: true);
+      Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+
+      // Capture chatId for this streaming operation - ensures correct persistence even if user switches chats
+      final String chatIdForStream = _activeChatId!;
+
+      // Auto-generate title for new chats (fire and forget)
+      if (firstMessageInChat) {
+        unawaited(
+          TitleGenerationService.generateAndApplyTitle(
+            chatIdForStream,
+            displayMessageText,
+          ),
+        );
+      }
+
+      // Start auto-save timer during streaming (uses captured chatId)
+      _autoSaveTimer?.cancel();
+      _autoSaveTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+        // Only persist if still viewing the same chat
+        // If user switched, _messages belongs to a different chat!
+        if (_activeChatId == chatIdForStream) {
+          _persistChatWithId(chatIdForStream);
+        } else {
+          // Get background messages and persist those instead
+          final backgroundMsgs = _streamingManager.getBackgroundMessages(
+            chatIdForStream,
+          );
+          if (backgroundMsgs != null) {
+            _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
+          }
+        }
+      });
+
+      var toolSession = _toolCallHandler.createSession(
+        initialUserMessage: aiPromptContent,
+        history: apiHistory,
+        accessToken: accessToken,
+        discoveryContextKey: chatIdForStream,
+        baseSystemPrompt: systemPrompt,
+        toolCallingEnabled: widget.toolCallingEnabled,
+        discoveryMode: widget.toolDiscoveryMode,
+        allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
+      );
+      final initialSystemPrompt = await _toolCallHandler
+          .buildInitialSystemPrompt(toolSession);
+
+      if (_isSendOperationCancelled(sendOperationId)) {
+        return;
+      }
+
+      // Message-level auto-retry for the second streaming path.
+      const int kMaxMessageLevelRetries2 = 1;
+      int messageLevelRetries2 = 0;
+
+      // Accumulates display text across all streaming passes so that AI text
+      // from earlier passes is never lost when a new pass begins.
+      final accumulatedText2 = StringBuffer();
+      // Ordered content blocks built across streaming passes.
+      final contentBlocks2 = <ContentBlock>[];
+      int previousToolCallCount2 = 0;
+
+      Future<void> startStreamPass({
+        required String message,
+        required List<Map<String, dynamic>> history,
+        required String? passSystemPrompt,
+        List<String>? passImages,
+        int currentPass = 0,
+      }) async {
+        if (_isSendOperationCancelled(sendOperationId)) {
+          return;
+        }
+
+        final requestPayload = <String, dynamic>{
+          'pass': currentPass + 1,
+          'message': message,
+          'history_count': history.length,
+          'history': history,
+          if (passSystemPrompt != null && passSystemPrompt.trim().isNotEmpty)
+            'system_prompt': passSystemPrompt,
+          if (passImages != null && passImages.isNotEmpty) 'images': passImages,
+        };
+        _appendDebugRequestForMessage(
+          placeholderIndex,
+          jsonEncode(requestPayload),
+          chatIdForStream,
+        );
+
+        final stream = WebSocketChatService.sendStreamingChat(
+          accessToken: accessToken,
+          message: message,
+          modelId: _selectedModelId,
+          providerSlug: providerSlug,
+          history: history.isEmpty ? null : history,
+          systemPrompt: passSystemPrompt,
+          maxTokens: maxResponseTokens,
+          images: passImages,
+        );
+
+        await _streamingManager.startStream(
+          chatId: chatIdForStream,
+          messageIndex: placeholderIndex,
+          stream: stream,
+          onUpdate: (content, reasoning) {
+            if (mounted && _activeChatId == chatIdForStream) {
+              final displayContent = stripToolCallBlocksForDisplay(content);
+              if (placeholderIndex >= 0 &&
+                  placeholderIndex < _messages.length) {
+                _messages[placeholderIndex]['text'] = displayContent;
+                _messages[placeholderIndex]['reasoning'] = reasoning;
+              }
+              _updateAiMessage(placeholderIndex, displayContent, reasoning);
+              _scrollChatToBottom();
             }
-
-            try {
-              final loopResult = await _toolCallHandler
-                  .processAssistantResponse(
-                    session: toolSession,
-                    content: finalContent,
-                    reasoning: finalReasoning,
-                    onToolCallsUpdated: (toolCalls) {
-                      _updateToolCallsForMessage(
-                        placeholderIndex,
-                        toolCalls,
-                        chatIdForStream,
-                      );
-                    },
-                  );
-
-              if (loopResult.shouldContinue && loopResult.nextStep != null) {
-                final interimText = loopResult.interimContent?.trim() ?? '';
-
-                // Build content blocks for this completed pass.
-                final allToolCalls = loopResult.toolCalls;
-                final newToolCalls =
-                    allToolCalls.length > previousToolCallCount2
-                    ? allToolCalls.sublist(previousToolCallCount2)
-                    : <ToolCall>[];
-                previousToolCallCount2 = allToolCalls.length;
-
-                final roundResult = RoundContentBlockService.buildRoundBlocks(
-                  interimText: interimText,
-                  providerReasoning: finalReasoning,
-                  newToolCalls: newToolCalls,
-                  interimBeforeToolCalls: loopResult.interimBeforeToolCalls,
-                );
-                contentBlocks2.addAll(roundResult.blocks);
-                final interimOutputText = roundResult.interimOutputText;
-
-                // Accumulate text for backward-compat message field.
-                if (interimOutputText.isNotEmpty) {
-                  accumulatedText2.write(interimOutputText);
-                  accumulatedText2.write('\n\n');
+          },
+          onComplete: (finalContent, finalReasoning, tps) {
+            unawaited(
+              (() async {
+                if (kDebugMode) {
+                  debugPrint('Stream completed for chat $chatIdForStream');
                 }
 
-                final contentBlocksJson = jsonEncode(
-                  contentBlocks2.map((b) => b.toJson()).toList(),
-                );
+                try {
+                  final loopResult = await _toolCallHandler
+                      .processAssistantResponse(
+                        session: toolSession,
+                        content: finalContent,
+                        reasoning: finalReasoning,
+                        onToolCallsUpdated: (toolCalls) {
+                          _updateToolCallsForMessage(
+                            placeholderIndex,
+                            toolCalls,
+                            chatIdForStream,
+                          );
+                        },
+                      );
 
-                if (_activeChatId == chatIdForStream) {
-                  if (placeholderIndex >= 0 &&
-                      placeholderIndex < _messages.length) {
-                    _messages[placeholderIndex]['text'] = '';
-                    _messages[placeholderIndex]['reasoning'] = finalReasoning;
-                    _messages[placeholderIndex]['contentBlocks'] =
-                        contentBlocksJson;
+                  if (loopResult.shouldContinue &&
+                      loopResult.nextStep != null) {
+                    final interimText = loopResult.interimContent?.trim() ?? '';
+
+                    // Build content blocks for this completed pass.
+                    final allToolCalls = loopResult.toolCalls;
+                    final newToolCalls =
+                        allToolCalls.length > previousToolCallCount2
+                        ? allToolCalls.sublist(previousToolCallCount2)
+                        : <ToolCall>[];
+                    previousToolCallCount2 = allToolCalls.length;
+
+                    final roundResult =
+                        RoundContentBlockService.buildRoundBlocks(
+                          interimText: interimText,
+                          providerReasoning: finalReasoning,
+                          newToolCalls: newToolCalls,
+                          interimBeforeToolCalls:
+                              loopResult.interimBeforeToolCalls,
+                        );
+                    contentBlocks2.addAll(roundResult.blocks);
+                    final interimOutputText = roundResult.interimOutputText;
+
+                    // Accumulate text for backward-compat message field.
+                    if (interimOutputText.isNotEmpty) {
+                      accumulatedText2.write(interimOutputText);
+                      accumulatedText2.write('\n\n');
+                    }
+
+                    final contentBlocksJson = jsonEncode(
+                      contentBlocks2.map((b) => b.toJson()).toList(),
+                    );
+
+                    if (_activeChatId == chatIdForStream) {
+                      if (placeholderIndex >= 0 &&
+                          placeholderIndex < _messages.length) {
+                        _messages[placeholderIndex]['text'] = '';
+                        _messages[placeholderIndex]['reasoning'] =
+                            finalReasoning;
+                        _messages[placeholderIndex]['contentBlocks'] =
+                            contentBlocksJson;
+                      }
+                      if (mounted) {
+                        setState(() {});
+                      }
+                      _persistChatWithId(chatIdForStream);
+                    } else {
+                      final backgroundMsgs = _streamingManager
+                          .getBackgroundMessages(chatIdForStream);
+                      if (backgroundMsgs != null &&
+                          placeholderIndex < backgroundMsgs.length) {
+                        backgroundMsgs[placeholderIndex]['text'] = '';
+                        backgroundMsgs[placeholderIndex]['reasoning'] =
+                            finalReasoning;
+                        backgroundMsgs[placeholderIndex]['contentBlocks'] =
+                            contentBlocksJson;
+                        _persistChatWithIdAndMessages(
+                          chatIdForStream,
+                          backgroundMsgs,
+                        );
+                      }
+                    }
+
+                    final next = loopResult.nextStep!;
+                    await Future<void>.delayed(Duration.zero);
+                    await startStreamPass(
+                      message: next.message,
+                      history: next.history,
+                      passSystemPrompt: next.systemPrompt,
+                      passImages: imageDataUrls,
+                      currentPass: currentPass + 1,
+                    );
+                    return;
                   }
-                  if (mounted) {
-                    setState(() {});
-                  }
-                  _persistChatWithId(chatIdForStream);
-                } else {
-                  final backgroundMsgs = _streamingManager
-                      .getBackgroundMessages(chatIdForStream);
-                  if (backgroundMsgs != null &&
-                      placeholderIndex < backgroundMsgs.length) {
-                    backgroundMsgs[placeholderIndex]['text'] = '';
-                    backgroundMsgs[placeholderIndex]['reasoning'] =
-                        finalReasoning;
-                    backgroundMsgs[placeholderIndex]['contentBlocks'] =
-                        contentBlocksJson;
-                    _persistChatWithIdAndMessages(
-                      chatIdForStream,
-                      backgroundMsgs,
+
+                  _autoSaveTimer?.cancel();
+                  ChatStorageService.isMessageOperationInProgress = false;
+                  if (kDebugMode) {
+                    debugPrint(
+                      '🔓 [SendMessage] GLOBAL LOCK RELEASED (stream done)',
                     );
                   }
+
+                  final resolvedContent =
+                      loopResult.finalContent ?? finalContent;
+                  final resolvedReasoning =
+                      loopResult.finalReasoning ?? finalReasoning;
+
+                  // Message-level auto-retry: if the model returned empty.
+                  if (resolvedContent.trim().isEmpty &&
+                      messageLevelRetries2 < kMaxMessageLevelRetries2 &&
+                      mounted) {
+                    messageLevelRetries2++;
+
+                    if (kDebugMode) {
+                      debugPrint(
+                        '[Desktop-Send] Empty response — auto-retrying '
+                        '(attempt $messageLevelRetries2/$kMaxMessageLevelRetries2)',
+                      );
+                    }
+
+                    toolSession = _toolCallHandler.createSession(
+                      initialUserMessage: aiPromptContent,
+                      history: apiHistory,
+                      accessToken: accessToken,
+                      discoveryContextKey: chatIdForStream,
+                      baseSystemPrompt: systemPrompt,
+                      toolCallingEnabled: widget.toolCallingEnabled,
+                      discoveryMode: widget.toolDiscoveryMode,
+                      allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
+                    );
+                    final retryPrompt = await _toolCallHandler
+                        .buildInitialSystemPrompt(toolSession);
+
+                    contentBlocks2.clear();
+                    accumulatedText2.clear();
+                    previousToolCallCount2 = 0;
+
+                    await Future<void>.delayed(
+                      const Duration(milliseconds: 500),
+                    );
+                    if (!mounted) return;
+
+                    await startStreamPass(
+                      message: aiPromptContent,
+                      history: apiHistory,
+                      passSystemPrompt: retryPrompt,
+                      passImages: imageDataUrls,
+                      currentPass: currentPass + 1,
+                    );
+                    return;
+                  }
+
+                  final rawContent = resolvedContent.isEmpty
+                      ? 'The model returned an empty response. Tap resend on your last message to continue.'
+                      : resolvedContent;
+
+                  // Prepend accumulated text from previous passes so nothing is lost.
+                  final effectiveContent = accumulatedText2.isEmpty
+                      ? rawContent
+                      : '$accumulatedText2$rawContent';
+
+                  // Defensive: finalize stale tool calls.
+                  final finalToolCalls = loopResult.toolCalls;
+                  finalizeStaleToolCalls(finalToolCalls);
+                  for (final block in contentBlocks2) {
+                    if (block.type == ContentBlockType.toolCalls &&
+                        block.toolCalls != null) {
+                      finalizeStaleToolCalls(block.toolCalls!);
+                    }
+                  }
+                  if (finalToolCalls.isNotEmpty) {
+                    _updateToolCallsForMessage(
+                      placeholderIndex,
+                      finalToolCalls,
+                      chatIdForStream,
+                    );
+                  }
+
+                  // Build final content blocks.
+                  if (contentBlocks2.isNotEmpty) {
+                    // Only use the final pass's text for the text block —
+                    // interim text from earlier passes is already in content
+                    // blocks.
+                    final finalText = stripToolCallBlocksForDisplay(
+                      rawContent,
+                    ).trim();
+                    if (finalText.isNotEmpty) {
+                      contentBlocks2.add(ContentBlock.text(finalText));
+                    }
+                  }
+                  final contentBlocksJson = contentBlocks2.isNotEmpty
+                      ? jsonEncode(
+                          contentBlocks2.map((b) => b.toJson()).toList(),
+                        )
+                      : null;
+
+                  // Persist tool-generated images to encrypted storage
+                  await _processToolImages(
+                    loopResult.toolCalls,
+                    placeholderIndex,
+                    chatIdForStream,
+                  );
+
+                  if (_activeChatId == chatIdForStream) {
+                    if (placeholderIndex >= 0 &&
+                        placeholderIndex < _messages.length) {
+                      _messages[placeholderIndex]['text'] = effectiveContent;
+                      _messages[placeholderIndex]['reasoning'] =
+                          resolvedReasoning;
+                      if (contentBlocksJson != null) {
+                        _messages[placeholderIndex]['contentBlocks'] =
+                            contentBlocksJson;
+                      }
+                      if (tps != null) {
+                        _messages[placeholderIndex]['tps'] = tps.toString();
+                      }
+                    }
+                    if (mounted) {
+                      setState(() {
+                        _isSending = false;
+                      });
+                    }
+                    _finalizeAiMessage(
+                      placeholderIndex,
+                      effectiveContent,
+                      reasoning: resolvedReasoning,
+                      tps: tps,
+                    );
+                    _persistChatWithId(chatIdForStream);
+                  } else {
+                    final backgroundMsgs = _streamingManager
+                        .getBackgroundMessages(chatIdForStream);
+                    if (backgroundMsgs != null &&
+                        placeholderIndex < backgroundMsgs.length) {
+                      backgroundMsgs[placeholderIndex]['text'] =
+                          effectiveContent;
+                      backgroundMsgs[placeholderIndex]['reasoning'] =
+                          resolvedReasoning;
+                      if (contentBlocksJson != null) {
+                        backgroundMsgs[placeholderIndex]['contentBlocks'] =
+                            contentBlocksJson;
+                      }
+                      if (tps != null) {
+                        backgroundMsgs[placeholderIndex]['tps'] = tps
+                            .toString();
+                      }
+                      _persistChatWithIdAndMessages(
+                        chatIdForStream,
+                        backgroundMsgs,
+                      );
+                    }
+                  }
+                } catch (error) {
+                  _autoSaveTimer?.cancel();
+                  ChatStorageService.isMessageOperationInProgress = false;
+
+                  final errorText = 'Error: $error';
+                  if (_activeChatId == chatIdForStream) {
+                    if (mounted) {
+                      setState(() {
+                        _isSending = false;
+                      });
+                    }
+                    _finalizeAiMessage(placeholderIndex, errorText);
+                    _persistChatWithId(chatIdForStream);
+                  } else {
+                    final backgroundMsgs = _streamingManager
+                        .getBackgroundMessages(chatIdForStream);
+                    if (backgroundMsgs != null &&
+                        placeholderIndex < backgroundMsgs.length) {
+                      backgroundMsgs[placeholderIndex]['text'] = errorText;
+                      _persistChatWithIdAndMessages(
+                        chatIdForStream,
+                        backgroundMsgs,
+                      );
+                    }
+                  }
                 }
-
-                final next = loopResult.nextStep!;
-                await Future<void>.delayed(Duration.zero);
-                await startStreamPass(
-                  message: next.message,
-                  history: next.history,
-                  passSystemPrompt: next.systemPrompt,
-                  passImages: imageDataUrls,
-                  currentPass: currentPass + 1,
-                );
-                return;
-              }
-
-              _autoSaveTimer?.cancel();
-              ChatStorageService.isMessageOperationInProgress = false;
-              if (kDebugMode) {
-                debugPrint(
-                  '🔓 [SendMessage] GLOBAL LOCK RELEASED (stream done)',
-                );
-              }
-
-              final resolvedContent = loopResult.finalContent ?? finalContent;
-              final resolvedReasoning =
-                  loopResult.finalReasoning ?? finalReasoning;
-
-              // Message-level auto-retry: if the model returned empty.
-              if (resolvedContent.trim().isEmpty &&
-                  messageLevelRetries2 < kMaxMessageLevelRetries2 &&
-                  mounted) {
-                messageLevelRetries2++;
-
+              })().catchError((Object error, StackTrace stackTrace) {
                 if (kDebugMode) {
                   debugPrint(
-                    '[Desktop-Send] Empty response — auto-retrying '
-                    '(attempt $messageLevelRetries2/$kMaxMessageLevelRetries2)',
+                    '⚠️ [Desktop-Send] onComplete async error: $error\n$stackTrace',
                   );
                 }
-
-                toolSession = _toolCallHandler.createSession(
-                  initialUserMessage: aiPromptContent,
-                  history: apiHistory,
-                  accessToken: accessToken,
-                  discoveryContextKey: chatIdForStream,
-                  baseSystemPrompt: systemPrompt,
-                  toolCallingEnabled: widget.toolCallingEnabled,
-                  discoveryMode: widget.toolDiscoveryMode,
-                  allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
-                );
-                final retryPrompt = await _toolCallHandler
-                    .buildInitialSystemPrompt(toolSession);
-
-                contentBlocks2.clear();
-                accumulatedText2.clear();
-                previousToolCallCount2 = 0;
-
-                await Future<void>.delayed(const Duration(milliseconds: 500));
-                if (!mounted) return;
-
-                await startStreamPass(
-                  message: aiPromptContent,
-                  history: apiHistory,
-                  passSystemPrompt: retryPrompt,
-                  passImages: imageDataUrls,
-                  currentPass: currentPass + 1,
-                );
-                return;
-              }
-
-              final rawContent = resolvedContent.isEmpty
-                  ? 'The model returned an empty response. Tap resend on your last message to continue.'
-                  : resolvedContent;
-
-              // Prepend accumulated text from previous passes so nothing is lost.
-              final effectiveContent = accumulatedText2.isEmpty
-                  ? rawContent
-                  : '$accumulatedText2$rawContent';
-
-              // Defensive: finalize stale tool calls.
-              final finalToolCalls = loopResult.toolCalls;
-              finalizeStaleToolCalls(finalToolCalls);
-              for (final block in contentBlocks2) {
-                if (block.type == ContentBlockType.toolCalls &&
-                    block.toolCalls != null) {
-                  finalizeStaleToolCalls(block.toolCalls!);
-                }
-              }
-              if (finalToolCalls.isNotEmpty) {
-                _updateToolCallsForMessage(
-                  placeholderIndex,
-                  finalToolCalls,
-                  chatIdForStream,
-                );
-              }
-
-              // Build final content blocks.
-              if (contentBlocks2.isNotEmpty) {
-                // Only use the final pass's text for the text block —
-                // interim text from earlier passes is already in content
-                // blocks.
-                final finalText = stripToolCallBlocksForDisplay(
-                  rawContent,
-                ).trim();
-                if (finalText.isNotEmpty) {
-                  contentBlocks2.add(ContentBlock.text(finalText));
-                }
-              }
-              final contentBlocksJson = contentBlocks2.isNotEmpty
-                  ? jsonEncode(contentBlocks2.map((b) => b.toJson()).toList())
-                  : null;
-
-              // Persist tool-generated images to encrypted storage
-              await _processToolImages(
-                loopResult.toolCalls,
-                placeholderIndex,
-                chatIdForStream,
+              }),
+            );
+          },
+          onError: (errorMessage) {
+            if (kDebugMode) {
+              debugPrint(
+                'Stream error for chat $chatIdForStream: $errorMessage',
               );
-
-              if (_activeChatId == chatIdForStream) {
-                if (placeholderIndex >= 0 &&
-                    placeholderIndex < _messages.length) {
-                  _messages[placeholderIndex]['text'] = effectiveContent;
-                  _messages[placeholderIndex]['reasoning'] = resolvedReasoning;
-                  if (contentBlocksJson != null) {
-                    _messages[placeholderIndex]['contentBlocks'] =
-                        contentBlocksJson;
-                  }
-                  if (tps != null) {
-                    _messages[placeholderIndex]['tps'] = tps.toString();
-                  }
-                }
-                if (mounted) {
-                  setState(() {
-                    _isSending = false;
-                  });
-                }
-                _finalizeAiMessage(
-                  placeholderIndex,
-                  effectiveContent,
-                  reasoning: resolvedReasoning,
-                  tps: tps,
-                );
-                _persistChatWithId(chatIdForStream);
-              } else {
-                final backgroundMsgs = _streamingManager.getBackgroundMessages(
-                  chatIdForStream,
-                );
-                if (backgroundMsgs != null &&
-                    placeholderIndex < backgroundMsgs.length) {
-                  backgroundMsgs[placeholderIndex]['text'] = effectiveContent;
-                  backgroundMsgs[placeholderIndex]['reasoning'] =
-                      resolvedReasoning;
-                  if (contentBlocksJson != null) {
-                    backgroundMsgs[placeholderIndex]['contentBlocks'] =
-                        contentBlocksJson;
-                  }
-                  if (tps != null) {
-                    backgroundMsgs[placeholderIndex]['tps'] = tps.toString();
-                  }
-                  _persistChatWithIdAndMessages(
-                    chatIdForStream,
-                    backgroundMsgs,
-                  );
-                }
-              }
-            } catch (error) {
-              _autoSaveTimer?.cancel();
-              ChatStorageService.isMessageOperationInProgress = false;
-
-              final errorText = 'Error: $error';
-              if (_activeChatId == chatIdForStream) {
-                if (mounted) {
-                  setState(() {
-                    _isSending = false;
-                  });
-                }
-                _finalizeAiMessage(placeholderIndex, errorText);
-                _persistChatWithId(chatIdForStream);
-              } else {
-                final backgroundMsgs = _streamingManager.getBackgroundMessages(
-                  chatIdForStream,
-                );
-                if (backgroundMsgs != null &&
-                    placeholderIndex < backgroundMsgs.length) {
-                  backgroundMsgs[placeholderIndex]['text'] = errorText;
-                  _persistChatWithIdAndMessages(
-                    chatIdForStream,
-                    backgroundMsgs,
-                  );
-                }
-              }
             }
-          }());
-        },
-        onError: (errorMessage) {
-          if (kDebugMode) {
-            debugPrint('Stream error for chat $chatIdForStream: $errorMessage');
-          }
-          _autoSaveTimer?.cancel();
-          ChatStorageService.isMessageOperationInProgress = false;
-          if (kDebugMode) {
-            debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (stream error)');
-          }
+            _autoSaveTimer?.cancel();
+            ChatStorageService.isMessageOperationInProgress = false;
+            if (kDebugMode) {
+              debugPrint(
+                '🔓 [SendMessage] GLOBAL LOCK RELEASED (stream error)',
+              );
+            }
 
-          if (errorMessage == '__PAYMENT_REQUIRED__') {
-            final paymentMessage =
-                'You have used all free messages. Please subscribe to continue chatting.';
+            if (errorMessage == '__PAYMENT_REQUIRED__') {
+              final paymentMessage =
+                  'You have used all free messages. Please subscribe to continue chatting.';
+              if (_activeChatId == chatIdForStream) {
+                _finalizeAiMessage(placeholderIndex, paymentMessage);
+                if (mounted) {
+                  setState(() {
+                    _isSending = false;
+                  });
+                }
+                _persistChatWithId(chatIdForStream);
+              } else {
+                final backgroundMsgs = _streamingManager.getBackgroundMessages(
+                  chatIdForStream,
+                );
+                if (backgroundMsgs != null &&
+                    placeholderIndex < backgroundMsgs.length) {
+                  backgroundMsgs[placeholderIndex]['text'] = paymentMessage;
+                  backgroundMsgs[placeholderIndex]['reasoning'] = '';
+                  _persistChatWithIdAndMessages(
+                    chatIdForStream,
+                    backgroundMsgs,
+                  );
+                }
+              }
+              _showPaymentRequiredDialog();
+              return;
+            }
+
+            final errorText = 'Error: $errorMessage';
             if (_activeChatId == chatIdForStream) {
-              _finalizeAiMessage(placeholderIndex, paymentMessage);
+              if (placeholderIndex >= 0 &&
+                  placeholderIndex < _messages.length) {
+                _messages[placeholderIndex]['text'] = errorText;
+              }
               if (mounted) {
                 setState(() {
                   _isSending = false;
                 });
+              }
+              _finalizeAiMessage(placeholderIndex, errorText);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      errorMessage,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    behavior: SnackBarBehavior.floating,
+                    margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    duration: const Duration(seconds: 2),
+                    dismissDirection: DismissDirection.horizontal,
+                  ),
+                );
               }
               _persistChatWithId(chatIdForStream);
             } else {
@@ -3286,107 +3698,118 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               );
               if (backgroundMsgs != null &&
                   placeholderIndex < backgroundMsgs.length) {
-                backgroundMsgs[placeholderIndex]['text'] = paymentMessage;
-                backgroundMsgs[placeholderIndex]['reasoning'] = '';
+                backgroundMsgs[placeholderIndex]['text'] = errorText;
                 _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
               }
             }
-            _showPaymentRequiredDialog();
-            return;
-          }
-
-          final errorText = 'Error: $errorMessage';
-          if (_activeChatId == chatIdForStream) {
-            if (placeholderIndex >= 0 && placeholderIndex < _messages.length) {
-              _messages[placeholderIndex]['text'] = errorText;
-            }
-            if (mounted) {
-              setState(() {
-                _isSending = false;
-              });
-            }
-            _finalizeAiMessage(placeholderIndex, errorText);
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    errorMessage,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  behavior: SnackBarBehavior.floating,
-                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  duration: const Duration(seconds: 2),
-                  dismissDirection: DismissDirection.horizontal,
-                ),
-              );
-            }
-            _persistChatWithId(chatIdForStream);
-          } else {
-            final backgroundMsgs = _streamingManager.getBackgroundMessages(
-              chatIdForStream,
-            );
-            if (backgroundMsgs != null &&
-                placeholderIndex < backgroundMsgs.length) {
-              backgroundMsgs[placeholderIndex]['text'] = errorText;
-              _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
-            }
-          }
-        },
-      );
-    }
-
-    try {
-      await startStreamPass(
-        message: aiPromptContent,
-        history: apiHistory,
-        passSystemPrompt: initialSystemPrompt,
-        passImages: imageDataUrls,
-      );
-    } catch (error) {
-      if (kDebugMode) {
-        debugPrint('Failed to start stream: $error');
-      }
-      _autoSaveTimer?.cancel();
-      ChatStorageService.isMessageOperationInProgress = false;
-      _finalizeAiMessage(placeholderIndex, 'Failed to start streaming: $error');
-      if (mounted) {
-        setState(() {
-          _isSending = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Failed to start streaming: $error',
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            duration: const Duration(seconds: 2),
-            dismissDirection: DismissDirection.horizontal,
-          ),
+          },
         );
       }
-      _persistChatWithId(chatIdForStream);
+
+      if (_isSendOperationCancelled(sendOperationId)) {
+        return;
+      }
+
+      try {
+        await startStreamPass(
+          message: aiPromptContent,
+          history: apiHistory,
+          passSystemPrompt: initialSystemPrompt,
+          passImages: imageDataUrls,
+        );
+      } catch (error) {
+        if (kDebugMode) {
+          debugPrint('Failed to start stream: $error');
+        }
+        _autoSaveTimer?.cancel();
+        ChatStorageService.isMessageOperationInProgress = false;
+        _finalizeAiMessage(
+          placeholderIndex,
+          'Failed to start streaming: $error',
+        );
+        if (mounted) {
+          setState(() {
+            _isSending = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Failed to start streaming: $error',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              duration: const Duration(seconds: 2),
+              dismissDirection: DismissDirection.horizontal,
+            ),
+          );
+        }
+        _persistChatWithId(chatIdForStream);
+      }
+    } finally {
+      _clearSendOperation(sendOperationId);
     }
   }
 
   // In-memory cache for resolved Base64 images (storage path -> data URL)
   static final Map<String, String> _imageBase64Cache = {};
   static const int _maxImageCacheSize = 10;
+
+  String _detectImageMimeType(Uint8List bytes) {
+    if (bytes.length >= 8 &&
+        bytes[0] == 0x89 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x4E &&
+        bytes[3] == 0x47 &&
+        bytes[4] == 0x0D &&
+        bytes[5] == 0x0A &&
+        bytes[6] == 0x1A &&
+        bytes[7] == 0x0A) {
+      return 'image/png';
+    }
+
+    if (bytes.length >= 3 &&
+        bytes[0] == 0xFF &&
+        bytes[1] == 0xD8 &&
+        bytes[2] == 0xFF) {
+      return 'image/jpeg';
+    }
+
+    if (bytes.length >= 6 &&
+        bytes[0] == 0x47 &&
+        bytes[1] == 0x49 &&
+        bytes[2] == 0x46 &&
+        bytes[3] == 0x38 &&
+        (bytes[4] == 0x37 || bytes[4] == 0x39) &&
+        bytes[5] == 0x61) {
+      return 'image/gif';
+    }
+
+    if (bytes.length >= 12 &&
+        bytes[0] == 0x52 &&
+        bytes[1] == 0x49 &&
+        bytes[2] == 0x46 &&
+        bytes[3] == 0x46 &&
+        bytes[8] == 0x57 &&
+        bytes[9] == 0x45 &&
+        bytes[10] == 0x42 &&
+        bytes[11] == 0x50) {
+      return 'image/webp';
+    }
+
+    if (bytes.length >= 2 && bytes[0] == 0x42 && bytes[1] == 0x4D) {
+      return 'image/bmp';
+    }
+
+    return 'image/jpeg';
+  }
 
   Future<List<Map<String, dynamic>>> _buildApiHistoryWithPendingMessage(
     String pendingUserText,
@@ -3505,7 +3928,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         try {
           final bytes = await ImageStorageService.downloadAndDecryptImage(path);
           final base64 = base64Encode(bytes);
-          final dataUrl = 'data:image/jpeg;base64,$base64';
+          final mimeType = _detectImageMimeType(bytes);
+          final dataUrl = 'data:$mimeType;base64,$base64';
 
           if (_imageBase64Cache.length >= _maxImageCacheSize) {
             _imageBase64Cache.remove(_imageBase64Cache.keys.first);
@@ -4180,16 +4604,58 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   /// Handles Ctrl+V paste of clipboard images
   /// Threshold (characters) above which pasted text is auto-converted to an
   /// attached .txt file instead of being inserted into the composer.
-  static const int _kLongPasteThreshold = 500;
+  static const int _kLongPasteThreshold = 3000;
+  static const Duration _kPasteTempRetention = Duration(hours: 24);
+
+  Future<void> _cleanupOldPasteTempDirectories() async {
+    if (kIsWeb) {
+      return;
+    }
+
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final dynamic tempDirDynamic = tempDir;
+      final cutoff = DateTime.now().subtract(_kPasteTempRetention);
+      await for (final dynamic entity in tempDirDynamic.list(
+        followLinks: false,
+      )) {
+        try {
+          final String path = entity.path as String;
+          final String name = path.split(Platform.pathSeparator).last;
+          if (!name.startsWith('paste_')) {
+            continue;
+          }
+
+          final dynamic stat = await entity.stat();
+          final DateTime modified = stat.modified as DateTime;
+          if (modified.isBefore(cutoff)) {
+            await entity.delete(recursive: true);
+          }
+        } catch (_) {
+          // Ignore cleanup failures for temp files.
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('Failed to clean old paste temp directories: $e');
+      }
+    }
+  }
 
   Future<void> _handleSmartPaste() async {
+    unawaited(_cleanupOldPasteTempDirectories());
+
     // 1. Try image paste first
     try {
       final Uint8List? imageBytes = await Pasteboard.image;
       if (imageBytes != null && imageBytes.isNotEmpty) {
         final tempDir = await getTemporaryDirectory();
         final timestamp = DateTime.now().millisecondsSinceEpoch;
-        final tempFile = File('${tempDir.path}/paste_$timestamp.png');
+        final pasteDir = Directory('${tempDir.path}/paste_$timestamp');
+        if (!await pasteDir.exists()) {
+          await pasteDir.create(recursive: true);
+        }
+        final tempFile = File('${pasteDir.path}/clipboard_image.png');
         await tempFile.writeAsBytes(imageBytes);
         await _processFilePaths([tempFile.path]);
         return;
@@ -4208,7 +4674,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         // Long text → create an attached .txt file
         final tempDir = await getTemporaryDirectory();
         final timestamp = DateTime.now().millisecondsSinceEpoch;
-        final tempFile = File('${tempDir.path}/pasted_text_$timestamp.txt');
+        final pasteDir = Directory('${tempDir.path}/paste_$timestamp');
+        if (!await pasteDir.exists()) {
+          await pasteDir.create(recursive: true);
+        }
+        final tempFile = File('${pasteDir.path}/clipboard_text.txt');
         await tempFile.writeAsString(text);
         await _processFilePaths([tempFile.path]);
       } else {
@@ -4701,6 +5171,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 builder: (context) {
                   final Color accent = Theme.of(context).colorScheme.primary;
                   final Color bg = Theme.of(context).scaffoldBackgroundColor;
+                  final bool isMessageSendActive = _isStreaming || _isSending;
+                  final double messageListBottomPadding =
+                      _kMessageListBottomLift +
+                      (isMessageSendActive ? _kStreamingBottomScrollSlack : 0);
 
                   return Stack(
                     children: [
@@ -4794,9 +5268,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                     },
                                     child: ListView.builder(
                                       controller: _scrollController,
-                                      padding: EdgeInsets.symmetric(
-                                        horizontal: effectiveHorizontalPadding,
-                                        vertical: 10,
+                                      padding: EdgeInsets.only(
+                                        left: effectiveHorizontalPadding,
+                                        right: effectiveHorizontalPadding,
+                                        top: 10,
+                                        bottom: messageListBottomPadding,
                                       ),
                                       itemCount: _messages.length,
                                       addAutomaticKeepAlives:
@@ -4869,11 +5345,15 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                                 : null,
                                             onSubmitEdit:
                                                 isBeingEdited && data.isUser
-                                                ? (newText) =>
-                                                      _submitEditedMessage(
-                                                        i,
-                                                        newText,
-                                                      )
+                                                ? (
+                                                    newText,
+                                                  ) => _submitEditedMessage(
+                                                    i,
+                                                    newText,
+                                                    removeFollowingAssistant:
+                                                        false,
+                                                    clearMessagesBelow: true,
+                                                  )
                                                 : null,
                                             onCancelEdit: isBeingEdited
                                                 ? _cancelEditMessage

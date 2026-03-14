@@ -308,8 +308,9 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     if (_isSidebarExpanded) {
       FocusScope.of(context).unfocus();
     }
-    // If the deleted chat is the one currently displayed, start a new chat
-    if (ChatStorageService.selectedChatId == deletedChatId) {
+    // deleteChat() clears selectedChatId when the active chat is deleted.
+    // If selectedChatId is null here, reset the chat UI to a fresh state.
+    if (ChatStorageService.selectedChatId == null) {
       _chatUIMobileKey.currentState?.newChat();
       if (kFeatureArtifacts) {
         unawaited(
