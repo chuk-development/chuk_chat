@@ -1,0 +1,16 @@
+{
+  "name": "chuk-chat-demo-recorder",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "login": "node record.mjs login",
+    "record": "node record.mjs record",
+    "record:all": "node record.mjs all",
+    "list": "node record.mjs list",
+    "calibrate": "node record.mjs calibrate"
+  },
+  "dependencies": {
+    "playwright": "^1.52.0"
+  }
+}
