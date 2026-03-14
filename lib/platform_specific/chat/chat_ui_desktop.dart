@@ -143,6 +143,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   bool get _isStreaming =>
       _activeChatId != null && _streamingManager.isStreaming(_activeChatId!);
   Timer? _autoSaveTimer;
+  Timer? _audioVisualizerTimer;
 
   late final DesktopFileHandler _fileHandler;
   final Uuid _uuid = Uuid();
@@ -408,6 +409,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // Don't cancel streams - they continue in background
     // _streamingManager handles all streams globally
     _autoSaveTimer?.cancel();
+    _audioVisualizerTimer?.cancel();
     _providerRefreshSubscription?.cancel();
     _controller.dispose();
     _scrollController.dispose();
@@ -925,8 +927,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   Future<void> _handleMicTap() async {
     if (_audioHandler.isMicActive) {
       await _audioHandler.stopRecording();
+      _audioVisualizerTimer?.cancel();
+      _audioVisualizerTimer = null;
       if (!mounted) return;
-      setState(() {});
+      setState(() {
+        _audioHandler.resetAudioLevels();
+      });
     } else {
       String? accessToken;
       try {
@@ -941,7 +947,20 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       );
       if (!mounted) return;
       if (started) {
-        setState(() {});
+        setState(() {
+          _audioHandler.resetAudioLevels();
+        });
+        // Update visualizer every 50ms for smooth animation
+        _audioVisualizerTimer = Timer.periodic(
+          const Duration(milliseconds: 50),
+          (_) {
+            if (mounted && _audioHandler.isMicActive) {
+              setState(() {});
+            }
+          },
+        );
+      } else {
+        _showSnackBar('Mic access failed');
       }
     }
     if (kDebugMode) {
@@ -953,8 +972,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     if (!_audioHandler.isMicActive || _audioHandler.isTranscribingAudio) return;
 
     await _audioHandler.stopRecording(keepFile: true);
+    _audioVisualizerTimer?.cancel();
+    _audioVisualizerTimer = null;
     if (!mounted) return;
-    setState(() {});
+    setState(() {
+      _audioHandler.resetAudioLevels();
+    });
 
     final session =
         await SupabaseService.refreshSession() ??
