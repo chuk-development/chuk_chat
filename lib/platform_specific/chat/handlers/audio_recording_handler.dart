@@ -536,6 +536,10 @@ class AudioRecordingHandler {
 
   Future<bool> _ensureMicPermission() async {
     if (kIsWeb) return true; // Browser handles permission via record package
+    // Linux desktop has no permission_handler plugin — the record package
+    // handles permissions natively via PulseAudio/PipeWire, and the
+    // _audioRecorder.hasPermission() call in startRecording() is sufficient.
+    if (Platform.isLinux) return true;
     final PermissionStatus status = await Permission.microphone.request();
     if (status.isGranted) {
       return true;
