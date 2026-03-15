@@ -2,6 +2,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:record/record.dart';
 
 import 'package:chuk_chat/utils/io_helper.dart';
@@ -536,24 +537,39 @@ class AudioRecordingHandler {
 
   Future<bool> _ensureMicPermission() async {
     if (kIsWeb) return true; // Browser handles permission via record package
-    // Linux desktop has no permission_handler plugin — the record package
-    // handles permissions natively via PulseAudio/PipeWire, and the
-    // _audioRecorder.hasPermission() call in startRecording() is sufficient.
-    if (Platform.isLinux) return true;
-    final PermissionStatus status = await Permission.microphone.request();
-    if (status.isGranted) {
+
+    // permission_handler only supports Android, iOS, macOS, and Windows.
+    // On Linux (and any other desktop), skip — the record package handles
+    // audio permissions natively via PulseAudio/PipeWire.
+    if (!(Platform.isAndroid ||
+        Platform.isIOS ||
+        Platform.isMacOS ||
+        Platform.isWindows)) {
       return true;
     }
-    if (status.isPermanentlyDenied) {
+
+    try {
+      final PermissionStatus status = await Permission.microphone.request();
+      if (status.isGranted) {
+        return true;
+      }
+      if (status.isPermanentlyDenied) {
+        if (kDebugMode) {
+          debugPrint('Enable mic in settings');
+        }
+        return false;
+      }
       if (kDebugMode) {
-        debugPrint('Enable mic in settings');
+        debugPrint('Mic permission required');
       }
       return false;
+    } on MissingPluginException {
+      // Plugin unavailable on this platform — proceed without it.
+      if (kDebugMode) {
+        debugPrint('permission_handler plugin unavailable; skipping request.');
+      }
+      return true;
     }
-    if (kDebugMode) {
-      debugPrint('Mic permission required');
-    }
-    return false;
   }
 
   Future<String> _createRecordingPath() async {
