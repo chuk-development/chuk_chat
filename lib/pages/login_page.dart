@@ -21,6 +21,7 @@ class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
+  final _confirmPasswordCtrl = TextEditingController();
   final _displayNameCtrl = TextEditingController();
 
   final AuthService _authService = const AuthService();
@@ -28,8 +29,10 @@ class _LoginPageState extends State<LoginPage> {
   bool _isSubmitting = false;
   bool _isSignInMode = true;
   bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
   bool _agreedToTerms = false;
   bool _confirmedAge = false;
+  bool _showEmailConfirmationBanner = false;
   String? _errorMessage;
   String _currentPassword = '';
 
@@ -48,6 +51,7 @@ class _LoginPageState extends State<LoginPage> {
   void dispose() {
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
+    _confirmPasswordCtrl.dispose();
     _displayNameCtrl.dispose();
     super.dispose();
   }
@@ -99,24 +103,13 @@ class _LoginPageState extends State<LoginPage> {
         );
 
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text(
-              'Check your email inbox to confirm the account.',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            duration: const Duration(seconds: 2),
-            dismissDirection: DismissDirection.horizontal,
-          ),
-        );
         setState(() {
           _isSignInMode = true;
+          _showEmailConfirmationBanner = true;
+          _passwordCtrl.clear();
+          _confirmPasswordCtrl.clear();
+          _displayNameCtrl.clear();
+          _currentPassword = '';
         });
       }
     } on AuthServiceException catch (error) {
@@ -169,8 +162,11 @@ class _LoginPageState extends State<LoginPage> {
     setState(() {
       _isSignInMode = !_isSignInMode;
       _errorMessage = null;
+      _showEmailConfirmationBanner = false;
       _agreedToTerms = false; // Reset checkbox when switching modes
       _confirmedAge = false;
+      _confirmPasswordCtrl.clear();
+      _obscureConfirmPassword = true;
     });
   }
 
@@ -261,6 +257,56 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                       ),
                     ],
+                    if (_showEmailConfirmationBanner) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary.withValues(
+                            alpha: 0.1,
+                          ),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: theme.colorScheme.primary.withValues(
+                              alpha: 0.4,
+                            ),
+                          ),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.mark_email_unread_outlined,
+                              color: theme.colorScheme.primary,
+                              size: 22,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Confirm your email to continue',
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      color: theme.colorScheme.primary,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'We sent a confirmation link to your email address. '
+                                    'Please open it and click the link before signing in.',
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: iconFg.withValues(alpha: 0.8),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 24),
                     if (!_isSignInMode) ...[
                       TextFormField(
@@ -322,6 +368,47 @@ class _LoginPageState extends State<LoginPage> {
                     if (!_isSignInMode && _currentPassword.isNotEmpty) ...[
                       const SizedBox(height: 12),
                       PasswordStrengthMeter(password: _currentPassword),
+                    ],
+                    if (!_isSignInMode) ...[
+                      const SizedBox(height: 16),
+                      Semantics(
+                        identifier: 'login_confirm_password_field',
+                        child: TextFormField(
+                          controller: _confirmPasswordCtrl,
+                          decoration: InputDecoration(
+                            labelText: 'Confirm password',
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscureConfirmPassword
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
+                              ),
+                              onPressed: () {
+                                setState(
+                                  () => _obscureConfirmPassword =
+                                      !_obscureConfirmPassword,
+                                );
+                              },
+                            ),
+                          ),
+                          obscureText: _obscureConfirmPassword,
+                          textInputAction: TextInputAction.done,
+                          onFieldSubmitted: (_) {
+                            if (!_isSubmitting) {
+                              _handleSubmit();
+                            }
+                          },
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Please confirm your password.';
+                            }
+                            if (value.trim() != _passwordCtrl.text.trim()) {
+                              return 'Passwords do not match.';
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
                     ],
                     if (_errorMessage != null) ...[
                       const SizedBox(height: 16),
