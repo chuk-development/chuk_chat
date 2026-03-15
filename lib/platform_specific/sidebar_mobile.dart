@@ -706,7 +706,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
             child: Stack(
               children: [
                 ListView(
-                  padding: const EdgeInsets.only(bottom: 24),
+                  padding: const EdgeInsets.only(bottom: 130),
                   children: [
                     _buildSectionHeader('Recents', textColor: textColorDefault),
                     if (_filteredRecentChats.isEmpty && _searchQuery.isEmpty)

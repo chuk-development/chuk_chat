@@ -480,7 +480,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
             child: Stack(
               children: [
                 ListView.builder(
-                  padding: const EdgeInsets.only(bottom: 24),
+                  padding: const EdgeInsets.only(bottom: 130),
                   addAutomaticKeepAlives: false,
                   addRepaintBoundaries: false,
                   cacheExtent: 200.0,
