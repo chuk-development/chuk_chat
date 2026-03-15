@@ -3,6 +3,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
@@ -80,6 +81,16 @@ class ChatPersistenceHandler {
     final String? chatIdAtStart = chatId;
 
     try {
+      // CRITICAL: Never persist a recently deleted chat — it would resurrect it
+      if (chatId != null && ChatStorageState.wasRecentlyDeleted(chatId)) {
+        if (kDebugMode) {
+          debugPrint(
+            '🚫 [ChatPersistence] Skipping persist for deleted chat: $chatId',
+          );
+        }
+        return null;
+      }
+
       // Check if chat actually exists in storage
       final bool chatExists =
           chatId != null &&
@@ -222,6 +233,16 @@ class ChatPersistenceHandler {
     }
 
     try {
+      // Skip if chat was recently deleted
+      if (ChatStorageState.wasRecentlyDeleted(pending.chatId)) {
+        if (kDebugMode) {
+          debugPrint(
+            '🚫 [ChatPersistence] Skipping background update for deleted chat: ${pending.chatId}',
+          );
+        }
+        return;
+      }
+
       final chatIndex = ChatStorageService.savedChats.indexWhere(
         (chat) => chat.id == pending.chatId,
       );

@@ -5,6 +5,8 @@ import 'dart:convert';
 
 import 'package:chuk_chat/models/chat_message.dart';
 import 'package:chuk_chat/models/stored_chat.dart';
+import 'package:chuk_chat/services/chat_storage_mutations.dart'
+    show saveTitlesToCache;
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
@@ -85,6 +87,16 @@ class ChatStorageSync {
   /// IMPORTANT: Uses background decryption to avoid blocking UI.
   static Future<void> mergeSyncedChat(Map<String, dynamic> row) async {
     final chatId = row['id'] as String;
+
+    // Skip if this chat was recently deleted locally
+    if (ChatStorageState.wasRecentlyDeleted(chatId)) {
+      if (kDebugMode) {
+        debugPrint(
+          '⏭️ [ChatStorage] Skipping sync for recently deleted chat: $chatId',
+        );
+      }
+      return;
+    }
 
     // Skip if we're currently saving this chat (to avoid conflicts)
     if (ChatStorageState.savingChats.contains(chatId)) {
@@ -178,9 +190,17 @@ class ChatStorageSync {
   ) async {
     if (rows.isEmpty) return;
 
-    // Filter out chats we're currently saving or have pending saves
+    // Filter out chats that are recently deleted, currently saving, or have pending saves
     final validRows = rows.where((row) {
       final chatId = row['id'] as String;
+      if (ChatStorageState.wasRecentlyDeleted(chatId)) {
+        if (kDebugMode) {
+          debugPrint(
+            '⏭️ [ChatStorage] Skipping sync for recently deleted chat: $chatId',
+          );
+        }
+        return false;
+      }
       if (ChatStorageState.savingChats.contains(chatId)) {
         if (kDebugMode) {
           debugPrint(
@@ -301,6 +321,9 @@ class ChatStorageSync {
       debugPrint('🗑️ [ChatStorage] Removing locally deleted chat: $chatId');
     }
 
+    // Mark as recently deleted to prevent re-addition during sync
+    ChatStorageState.markDeleted(chatId);
+
     ChatStorageState.chatsById.remove(chatId);
     ChatStorageState.savingChats.remove(chatId);
     ChatStorageState.pendingSaves.remove(chatId);
@@ -311,5 +334,14 @@ class ChatStorageSync {
     }
 
     ChatStorageState.notifyChanges(chatId);
+
+    // Also remove from local cache and update title cache
+    final user = SupabaseService.auth.currentUser;
+    if (user != null) {
+      unawaited(LocalChatCacheService.delete(user.id, chatId));
+      unawaited(
+        saveTitlesToCache(user.id, ChatStorageState.chatsById.values.toList()),
+      );
+    }
   }
 }

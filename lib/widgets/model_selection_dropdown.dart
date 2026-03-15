@@ -154,6 +154,102 @@ class ModelSelectionDropdown extends StatefulWidget {
     return null;
   }
 
+  /// Show a model selection bottom sheet.
+  /// Used when the compact model selector is hidden (e.g., user is typing)
+  /// and the user opens the attachment menu.
+  static void showModelSelectionSheet(
+    BuildContext context, {
+    required String currentModelId,
+    required ValueChanged<String> onModelSelected,
+  }) {
+    // Gather models from any active dropdown state
+    List<ModelItem> models = const [];
+    for (final state in _activeStates) {
+      if (state._allModels.isNotEmpty) {
+        models = state._allModels;
+        break;
+      }
+    }
+    if (models.isEmpty) return;
+
+    final theme = Theme.of(context);
+    final iconFg = theme.colorScheme.onSurface;
+    final indicatorColor = theme.dividerColor.withValues(alpha: 0.3);
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: theme.colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: indicatorColor,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Flexible(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: models.length,
+                    itemBuilder: (_, index) {
+                      final model = models[index];
+                      final selected = currentModelId == model.value;
+                      return ListTile(
+                        dense: true,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        title: Text(
+                          model.name,
+                          style: TextStyle(
+                            color: iconFg,
+                            fontWeight: selected
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                          ),
+                        ),
+                        trailing: selected
+                            ? Icon(Icons.check, color: iconFg, size: 18)
+                            : null,
+                        onTap: () async {
+                          Navigator.of(sheetContext).pop();
+                          onModelSelected(model.value);
+                          selectedModelNotifier.value = model.value;
+                          try {
+                            await UserPreferencesService.saveSelectedModel(
+                              model.value,
+                            );
+                          } catch (error) {
+                            if (kDebugMode) {
+                              debugPrint(
+                                'Failed to save selected model: $error',
+                              );
+                            }
+                          }
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   State<ModelSelectionDropdown> createState() => _ModelSelectionDropdownState();
 }
