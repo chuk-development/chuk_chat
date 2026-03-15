@@ -41,6 +41,11 @@ class AudioRecordingHandler {
   bool _isMicActive = false;
   bool _isTranscribingAudio = false;
 
+  /// Called whenever audio levels are updated, so the UI can trigger a
+  /// rebuild (replaces the old inline `setState` that was lost during the
+  /// handler extraction).
+  VoidCallback? onLevelsChanged;
+
   // --- file-mode state ---
   String? _lastRecordedFilePath;
   Uint8List? _lastRecordedBytes;
@@ -295,6 +300,7 @@ class AudioRecordingHandler {
       _audioLevels.removeAt(0);
     }
     _audioLevels.add(normalized);
+    onLevelsChanged?.call();
   }
 
   // =====================================================================
@@ -533,6 +539,7 @@ class AudioRecordingHandler {
       _audioLevels.removeAt(0);
     }
     _audioLevels.add(normalized);
+    onLevelsChanged?.call();
   }
 
   Future<bool> _ensureMicPermission() async {
