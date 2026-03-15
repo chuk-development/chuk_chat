@@ -82,6 +82,26 @@ class ChatStorageState {
   static final Map<String, Completer<StoredChat?>> pendingSaves =
       <String, Completer<StoredChat?>>{};
 
+  /// Track recently deleted chat IDs to prevent sync/persist from resurrecting them.
+  /// Entries are auto-cleared after [_deletedChatTtl] to avoid unbounded growth.
+  static final Set<String> recentlyDeletedChats = <String>{};
+  static final Map<String, Timer> _deletedChatTimers = <String, Timer>{};
+  static const Duration _deletedChatTtl = Duration(minutes: 2);
+
+  /// Mark a chat as recently deleted (prevents sync from re-adding it).
+  static void markDeleted(String chatId) {
+    recentlyDeletedChats.add(chatId);
+    _deletedChatTimers[chatId]?.cancel();
+    _deletedChatTimers[chatId] = Timer(_deletedChatTtl, () {
+      recentlyDeletedChats.remove(chatId);
+      _deletedChatTimers.remove(chatId);
+    });
+  }
+
+  /// Check if a chat was recently deleted.
+  static bool wasRecentlyDeleted(String chatId) =>
+      recentlyDeletedChats.contains(chatId);
+
   // Cache-first loading: track if cache has been loaded
   static bool cacheLoaded = false;
 
@@ -170,6 +190,11 @@ class ChatStorageState {
     activeMessageChatId = null;
     savingChats.clear();
     pendingSaves.clear();
+    for (final timer in _deletedChatTimers.values) {
+      timer.cancel();
+    }
+    _deletedChatTimers.clear();
+    recentlyDeletedChats.clear();
     cacheLoaded = false;
     initialSyncComplete = false;
     loadingCompleter = null;

@@ -1039,6 +1039,41 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    buildAttachmentSheetOption(
+                      context: sheetContext,
+                      icon: Icons.tag_rounded,
+                      label: 'Model',
+                      isEnabled: true,
+                      onTap: () {
+                        Navigator.of(sheetContext).pop();
+                        // Show model selection as a separate bottom sheet
+                        Future<void>.delayed(
+                          const Duration(milliseconds: 200),
+                          () {
+                            if (!mounted) return;
+                            ModelSelectionDropdown.showModelSelectionSheet(
+                              context,
+                              currentModelId: _selectedModelId,
+                              onModelSelected: (newModelId) {
+                                setState(() {
+                                  _selectedModelId = newModelId;
+                                });
+                              },
+                            );
+                          },
+                        );
+                      },
+                    ),
+                    // Spacers to keep the single option left-aligned at 1/3 width
+                    const SizedBox(width: 12),
+                    const Spacer(),
+                    const SizedBox(width: 12),
+                    const Spacer(),
+                  ],
+                ),
                 // Project selection row (when feature enabled)
                 if (kFeatureProjects) ...[
                   const SizedBox(height: 12),
@@ -2713,7 +2748,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                 constraints: const BoxConstraints(minWidth: pillHeight),
                 decoration: pillDecoration(),
                 padding: EdgeInsets.symmetric(
-                  horizontal: _isInputFocused ? 7 : 4,
+                  horizontal: _controller.text.isNotEmpty ? 7 : 4,
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -2726,7 +2761,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                       isActive: hasAttachments,
                       color: iconFg,
                     ),
-                    if (!_isInputFocused) ...[
+                    if (_controller.text.isEmpty) ...[
                       const SizedBox(width: 1),
                       ModelSelectionDropdown(
                         initialSelectedModelId: _selectedModelId,

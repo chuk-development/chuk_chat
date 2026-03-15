@@ -900,6 +900,9 @@ class ChatStorageCrud {
         .eq('user_id', user.id)
         .timeout(const Duration(seconds: 10));
 
+    // Mark as recently deleted FIRST to prevent sync from resurrecting
+    ChatStorageState.markDeleted(chatId);
+
     ChatStorageState.chatsById.remove(chatId);
     ChatStorageState.savingChats.remove(chatId);
     ChatStorageState.pendingSaves.remove(chatId);
@@ -911,6 +914,12 @@ class ChatStorageCrud {
 
     ChatStorageState.notifyChanges(chatId);
     unawaited(LocalChatCacheService.delete(user.id, chatId));
+
+    // Update title cache to remove the deleted chat
+    unawaited(
+      saveTitlesToCache(user.id, ChatStorageState.chatsById.values.toList()),
+    );
+
     if (kDebugMode) {
       debugPrint('🗑️ [ChatStorage] Deleted chat: $chatId');
     }

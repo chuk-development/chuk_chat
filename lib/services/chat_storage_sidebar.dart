@@ -234,6 +234,10 @@ class ChatStorageSidebar {
       for (final row in rows) {
         final id = row['id'] as String?;
         if (id == null) continue;
+
+        // Skip recently deleted chats to prevent resurrection
+        if (ChatStorageState.wasRecentlyDeleted(id)) continue;
+
         newIds.add(id);
 
         final existing = ChatStorageState.chatsById[id];
