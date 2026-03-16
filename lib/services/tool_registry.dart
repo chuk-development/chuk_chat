@@ -546,17 +546,29 @@ final List<ClientTool> builtinTools = [
         '3) "my playlists" / "show playlists" → use get_my_playlists. '
         '4) "recently liked" / "neue songs" → use get_recently_liked. '
         '5) "stop" / "pause" / "next" / "skip" → use pause/next/previous. '
+        'PLAYLIST MANAGEMENT: create_playlist (name, optional uris list to pre-fill), '
+        'add_to_playlist (playlist_id + uri/uris), remove_from_playlist, '
+        'get_playlist_tracks (playlist_id). '
+        'LIKES: like_track / unlike_track (optional uri, defaults to current track). '
         'For all liked songs: {"action": "play", "uri": "liked"}',
     parameters: {
       'action':
           'string (now_playing, play, pause, next, previous, volume, search, '
           'devices, shuffle, repeat, find_and_play, get_my_playlists, '
-          'get_recently_liked, add_to_queue, create_playlist, get_playlists)',
+          'get_recently_liked, add_to_queue, create_playlist, get_my_playlists, '
+          'get_playlist_tracks, add_to_playlist, remove_from_playlist, '
+          'like_track, unlike_track)',
       'query': 'string (for search or find_and_play)',
       'volume': 'int (0-100 for volume)',
-      'uri': 'string (spotify URI)',
+      'uri': 'string (spotify URI for play, add_to_playlist, like_track)',
+      'uris':
+          'list of strings (track URIs for create_playlist, add_to_playlist, '
+          'remove_from_playlist)',
+      'playlist_id':
+          'string (for add_to_playlist, remove_from_playlist, '
+          'get_playlist_tracks)',
       'state': 'string or boolean (shuffle on/off; repeat track/context/off)',
-      'limit': 'int (for get_recently_liked, default 20)',
+      'limit': 'int (for get_recently_liked / get_playlist_tracks, default 20)',
       'name': 'string (for create_playlist)',
       'description': 'string (for create_playlist)',
     },

@@ -186,12 +186,23 @@ Future<String> executeSpotify(Map<String, dynamic> args) async {
       case 'get_recently_liked':
       case 'recently_liked':
         return await _spotifyRecentlyLiked(token, args);
+      case 'add_to_playlist':
+        return await _spotifyAddToPlaylist(token, args);
+      case 'remove_from_playlist':
+        return await _spotifyRemoveFromPlaylist(token, args);
+      case 'like_track':
+        return await _spotifyLikeTrack(token, args);
+      case 'unlike_track':
+        return await _spotifyUnlikeTrack(token, args);
+      case 'get_playlist_tracks':
+        return await _spotifyGetPlaylistTracks(token, args);
       default:
         return 'Unknown Spotify action: $action. '
             'Available: play, pause, next, previous, volume, search, '
             'now_playing, devices, shuffle, repeat, create_playlist, '
-            'get_playlists, add_to_queue, find_and_play, '
-            'get_recently_liked';
+            'get_playlists, get_playlist_tracks, add_to_playlist, '
+            'remove_from_playlist, add_to_queue, find_and_play, '
+            'get_recently_liked, like_track, unlike_track';
     }
   } catch (e) {
     return 'Spotify error: $e';
@@ -227,7 +238,16 @@ Future<String> _spotifyApi(
         body: body != null ? jsonEncode(body) : null,
       );
     case 'DELETE':
-      response = await http.delete(uri, headers: headers);
+      // http.delete() doesn't support a body, use Request for DELETE+body
+      if (body != null) {
+        final request = http.Request('DELETE', uri)
+          ..headers.addAll(headers)
+          ..body = jsonEncode(body);
+        final streamed = await request.send();
+        response = await http.Response.fromStream(streamed);
+      } else {
+        response = await http.delete(uri, headers: headers);
+      }
     default:
       return 'Unsupported HTTP method: $method';
   }
@@ -235,8 +255,9 @@ Future<String> _spotifyApi(
   if (response.statusCode >= 200 && response.statusCode < 300) {
     return response.body.isEmpty ? 'Success' : response.body;
   } else {
-    return 'Spotify API error ${response.statusCode}: '
-        '${response.body}';
+    throw StateError(
+      'Spotify API error ${response.statusCode}: ${response.body}',
+    );
   }
 }
 
@@ -347,6 +368,12 @@ Future<String> _spotifyDevices(String token) async {
   return buffer.toString();
 }
 
+Future<String> _spotifyUserId(String token) async {
+  final response = await _spotifyApi(token, '/me');
+  final data = jsonDecode(response) as Map<String, dynamic>;
+  return data['id'] as String;
+}
+
 Future<String> _spotifyCreatePlaylist(
   String token,
   Map<String, dynamic> args,
@@ -355,9 +382,7 @@ Future<String> _spotifyCreatePlaylist(
   final description = args['description'] as String? ?? '';
   final isPublic = args['public'] as bool? ?? false;
 
-  final userResponse = await _spotifyApi(token, '/me');
-  final userData = jsonDecode(userResponse);
-  final userId = userData['id'];
+  final userId = await _spotifyUserId(token);
 
   final body = {'name': name, 'description': description, 'public': isPublic};
 
@@ -367,11 +392,171 @@ Future<String> _spotifyCreatePlaylist(
     method: 'POST',
     body: body,
   );
-  final playlist = jsonDecode(response);
+  final playlist = jsonDecode(response) as Map<String, dynamic>;
+
+  // If track URIs were provided, add them immediately
+  final uris = args['uris'];
+  final playlistId = playlist['id'] as String;
+  if (uris is List && uris.isNotEmpty) {
+    final trackUris = uris.cast<String>().toList();
+    await _spotifyApi(
+      token,
+      '/playlists/$playlistId/tracks',
+      method: 'POST',
+      body: {'uris': trackUris},
+    );
+    return 'Playlist created: ${playlist['name']} '
+        '(${trackUris.length} tracks added)\n'
+        'URI: ${playlist['uri']}';
+  }
 
   return 'Playlist created: ${playlist['name']}\n'
-      'URL: ${playlist['external_urls']['spotify']}\n'
-      'ID: ${playlist['id']}';
+      'URI: ${playlist['uri']}';
+}
+
+Future<String> _spotifyAddToPlaylist(
+  String token,
+  Map<String, dynamic> args,
+) async {
+  final playlistId = args['playlist_id'] as String? ?? '';
+  if (playlistId.isEmpty) return 'Error: playlist_id required';
+
+  // Accept uris as a list, or a single uri
+  List<String> uris;
+  final urisArg = args['uris'];
+  final uriArg = args['uri'] as String?;
+  if (urisArg is List) {
+    uris = urisArg.cast<String>().toList();
+  } else if (uriArg != null && uriArg.isNotEmpty) {
+    uris = [uriArg];
+  } else {
+    return 'Error: uri or uris required';
+  }
+
+  await _spotifyApi(
+    token,
+    '/playlists/$playlistId/tracks',
+    method: 'POST',
+    body: {'uris': uris},
+  );
+  return 'Added ${uris.length} track(s) to playlist';
+}
+
+Future<String> _spotifyRemoveFromPlaylist(
+  String token,
+  Map<String, dynamic> args,
+) async {
+  final playlistId = args['playlist_id'] as String? ?? '';
+  if (playlistId.isEmpty) return 'Error: playlist_id required';
+
+  List<String> uris;
+  final urisArg = args['uris'];
+  final uriArg = args['uri'] as String?;
+  if (urisArg is List) {
+    uris = urisArg.cast<String>().toList();
+  } else if (uriArg != null && uriArg.isNotEmpty) {
+    uris = [uriArg];
+  } else {
+    return 'Error: uri or uris required';
+  }
+
+  await _spotifyApi(
+    token,
+    '/playlists/$playlistId/tracks',
+    method: 'DELETE',
+    body: {
+      'tracks': uris.map((u) => {'uri': u}).toList(),
+    },
+  );
+  return 'Removed ${uris.length} track(s) from playlist';
+}
+
+Future<String> _spotifyLikeTrack(
+  String token,
+  Map<String, dynamic> args,
+) async {
+  // If no URI provided, like the currently playing track
+  String? trackId = args['track_id'] as String?;
+  final uri = args['uri'] as String?;
+
+  if (trackId == null && uri != null && uri.startsWith('spotify:track:')) {
+    trackId = uri.replaceFirst('spotify:track:', '');
+  }
+
+  if (trackId == null) {
+    // Get currently playing track
+    final nowPlaying = await _spotifyApi(token, '/me/player/currently-playing');
+    if (nowPlaying == 'Success') return 'No track currently playing';
+    final data = jsonDecode(nowPlaying) as Map<String, dynamic>;
+    final item = data['item'] as Map<String, dynamic>?;
+    if (item == null) return 'No track currently playing';
+    trackId = item['id'] as String?;
+    if (trackId == null) return 'Could not identify current track';
+  }
+
+  await _spotifyApi(token, '/me/tracks?ids=$trackId', method: 'PUT');
+  return 'Track added to Liked Songs';
+}
+
+Future<String> _spotifyUnlikeTrack(
+  String token,
+  Map<String, dynamic> args,
+) async {
+  String? trackId = args['track_id'] as String?;
+  final uri = args['uri'] as String?;
+
+  if (trackId == null && uri != null && uri.startsWith('spotify:track:')) {
+    trackId = uri.replaceFirst('spotify:track:', '');
+  }
+
+  if (trackId == null) {
+    final nowPlaying = await _spotifyApi(token, '/me/player/currently-playing');
+    if (nowPlaying == 'Success') return 'No track currently playing';
+    final data = jsonDecode(nowPlaying) as Map<String, dynamic>;
+    final item = data['item'] as Map<String, dynamic>?;
+    if (item == null) return 'No track currently playing';
+    trackId = item['id'] as String?;
+    if (trackId == null) return 'Could not identify current track';
+  }
+
+  await _spotifyApi(token, '/me/tracks?ids=$trackId', method: 'DELETE');
+  return 'Track removed from Liked Songs';
+}
+
+Future<String> _spotifyGetPlaylistTracks(
+  String token,
+  Map<String, dynamic> args,
+) async {
+  final playlistId = args['playlist_id'] as String? ?? '';
+  if (playlistId.isEmpty) return 'Error: playlist_id required';
+
+  final limit = (args['limit'] as int? ?? 20).clamp(1, 50);
+  final response = await _spotifyApi(
+    token,
+    '/playlists/$playlistId/tracks?limit=$limit&fields='
+    'items(track(name,artists(name),uri)),total',
+  );
+  final data = jsonDecode(response) as Map<String, dynamic>;
+  final items = data['items'] as List? ?? [];
+  final total = data['total'] as int? ?? 0;
+
+  if (items.isEmpty) return 'Playlist is empty';
+
+  final buffer = StringBuffer('Playlist tracks ($total total):\n\n');
+  for (int i = 0; i < items.length; i++) {
+    final track = items[i]['track'] as Map<String, dynamic>?;
+    if (track == null) continue;
+    final name = track['name'] ?? 'Unknown';
+    final artists =
+        (track['artists'] as List?)?.map((a) => a['name']).join(', ') ??
+        'Unknown';
+    buffer.writeln('${i + 1}. $name');
+    buffer.writeln('   Artist: $artists');
+    buffer.writeln('   URI: ${track['uri']}');
+    buffer.writeln();
+  }
+
+  return buffer.toString();
 }
 
 Future<String> _spotifyGetPlaylists(String token) async {
