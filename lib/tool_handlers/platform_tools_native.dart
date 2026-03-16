@@ -26,6 +26,7 @@ final ApprovalConfig _approvalConfig = ApprovalConfig();
 Future<void> initPlatformServices() async {
   await Future.wait([
     _approvalConfig.load(),
+    _spotifyOAuth.checkAuthenticated(), // loads tokens internally
     _gitHubOAuth.loadSavedToken(),
     _slackOAuth.isAuthenticated(), // loads tokens internally
     _googleOAuth.getAccessToken().then((_) {}), // loads tokens internally
@@ -54,10 +55,56 @@ bool isPlatformServiceConnected(String service) {
   }
 }
 
+// ============== Service connection management ==============
+
+/// Categories that support OAuth connect/disconnect.
+const Set<String> connectableServices = {
+  'spotify',
+  'github',
+  'slack',
+  'google',
+};
+
+/// Start the OAuth flow for a service. Returns true on success.
+Future<bool> connectPlatformService(String service) async {
+  switch (service) {
+    case 'spotify':
+      await _spotifyOAuth.startAuth();
+      return _spotifyOAuth.completeAuth();
+    case 'github':
+      await _gitHubOAuth.startAuth();
+      return _gitHubOAuth.completeAuth();
+    case 'slack':
+      await _slackOAuth.startAuth();
+      return _slackOAuth.completeAuth();
+    case 'google':
+      await _googleOAuth.startAuth();
+      return _googleOAuth.completeAuth();
+    default:
+      return false;
+  }
+}
+
+/// Disconnect a service by clearing its stored tokens.
+Future<void> disconnectPlatformService(String service) async {
+  switch (service) {
+    case 'spotify':
+      await _spotifyOAuth.logout();
+    case 'github':
+      await _gitHubOAuth.logout();
+    case 'slack':
+      await _slackOAuth.logout();
+    case 'google':
+      await _googleOAuth.logout();
+    case 'email':
+      await _emailService.clearConfig();
+  }
+}
+
 // ============== Spotify ==============
 
 Future<String> executeSpotify(Map<String, dynamic> args) async {
-  final isAuth = await _spotifyOAuth.isAuthenticated();
+  final isAuth = await _spotifyOAuth.checkAuthenticated();
   if (!isAuth) {
     return 'Spotify not authenticated. '
         'Please connect your Spotify account first.';

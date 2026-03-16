@@ -39,3 +39,12 @@ Future<void> initPlatformServices() async {}
 
 /// Check if a platform service is connected (always false on web).
 bool isPlatformServiceConnected(String service) => false;
+
+/// Categories that support OAuth connect/disconnect (empty on web).
+const Set<String> connectableServices = <String>{};
+
+/// Start the OAuth flow for a service (not available on web).
+Future<bool> connectPlatformService(String service) async => false;
+
+/// Disconnect a service (no-op on web).
+Future<void> disconnectPlatformService(String service) async {}

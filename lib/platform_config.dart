@@ -65,10 +65,11 @@ const bool kFeatureImageGen = true;
 const bool kFeatureMediaManager = true;
 
 /// Server-backed integration tools (Spotify, GitHub, Slack, Google, Email,
-/// Nextcloud). Keep disabled until backend support is fully available.
+/// Nextcloud). OAuth credentials are managed by the API server; tokens are
+/// stored locally on the client.
 const bool kFeatureServerTools = bool.fromEnvironment(
   'FEATURE_SERVER_TOOLS',
-  defaultValue: false,
+  defaultValue: true,
 );
 
 /// Linux system tray integration.

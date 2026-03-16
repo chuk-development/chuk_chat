@@ -7,6 +7,7 @@ import 'package:chuk_chat/models/client_tool.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/tool_call_handler.dart';
 import 'package:chuk_chat/services/tool_executor.dart';
+import 'package:chuk_chat/tool_handlers/platform_tools.dart' as platform_tools;
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 
@@ -220,6 +221,119 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
     }
   }
 
+  /// Map a ToolCategory to the service name used by platform_tools.
+  /// Returns null for categories that don't have OAuth connections.
+  String? _categoryServiceName(ToolCategory category) {
+    switch (category) {
+      case ToolCategory.spotify:
+        return 'spotify';
+      case ToolCategory.github:
+        return 'github';
+      case ToolCategory.slack:
+        return 'slack';
+      case ToolCategory.google:
+        return 'google';
+      case ToolCategory.email:
+        return 'email';
+      default:
+        return null;
+    }
+  }
+
+  bool _isCategoryConnectable(ToolCategory category) {
+    final name = _categoryServiceName(category);
+    return name != null && platform_tools.connectableServices.contains(name);
+  }
+
+  bool _isCategoryConnected(ToolCategory category) {
+    final name = _categoryServiceName(category);
+    if (name == null) {
+      return true; // non-OAuth categories are always "connected"
+    }
+    return _toolExecutor.isServiceConnected(category);
+  }
+
+  Future<void> _connectService(ToolCategory category) async {
+    final name = _categoryServiceName(category);
+    if (name == null) return;
+
+    try {
+      final success = await platform_tools.connectPlatformService(name);
+      if (!mounted) return;
+      if (success) {
+        setState(() {});
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${_categoryLabel(category)} connected'),
+              backgroundColor: Colors.green.shade700,
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to connect ${_categoryLabel(category)}'),
+              backgroundColor: Colors.red.shade700,
+            ),
+          );
+        }
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Unable to connect ${_categoryLabel(category)}. Please try again.',
+          ),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    }
+  }
+
+  Future<void> _disconnectService(ToolCategory category) async {
+    final name = _categoryServiceName(category);
+    if (name == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Disconnect ${_categoryLabel(category)}?'),
+        content: const Text('This will remove your saved credentials.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Disconnect'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await platform_tools.disconnectPlatformService(name);
+      if (!mounted) return;
+      setState(() {});
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Unable to disconnect ${_categoryLabel(category)}. Please try again.',
+          ),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    }
+  }
+
   String _displayName(String toolName) {
     final mapped = _toolDisplayNames[toolName];
     if (mapped != null) {
@@ -295,6 +409,9 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
 
     final widgets = <Widget>[];
     for (final category in orderedCategories) {
+      final connectable = _isCategoryConnectable(category);
+      final connected = _isCategoryConnected(category);
+
       widgets.add(
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -315,6 +432,49 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
                   fontSize: 13,
                 ),
               ),
+              if (connectable) ...[
+                const SizedBox(width: 8),
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: connected
+                        ? Colors.green.shade400
+                        : iconFg.withValues(alpha: 0.3),
+                  ),
+                ),
+              ],
+              const Spacer(),
+              if (connectable)
+                connected
+                    ? TextButton(
+                        onPressed: () => _disconnectService(category),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          minimumSize: const Size(0, 28),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text(
+                          'Disconnect',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: iconFg.withValues(alpha: 0.6),
+                          ),
+                        ),
+                      )
+                    : FilledButton.tonal(
+                        onPressed: () => _connectService(category),
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          minimumSize: const Size(0, 28),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: const Text(
+                          'Connect',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ),
             ],
           ),
         ),
