@@ -10,6 +10,7 @@ import 'package:chuk_chat/services/tool_enforcer.dart';
 import 'package:chuk_chat/services/tool_executor.dart';
 import 'package:chuk_chat/services/tool_prompt_builder.dart';
 import 'package:chuk_chat/services/tool_registry.dart';
+import 'package:chuk_chat/tool_handlers/platform_tools.dart' as platform_tools;
 import 'package:chuk_chat/tool_handlers/notes_tools.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
 import 'package:chuk_chat/utils/tool_sanitizer.dart';
@@ -107,6 +108,7 @@ class ToolCallHandler {
   ToolCallHandler._internal() {
     registerBuiltinTools(_toolExecutor);
     unawaited(_toolExecutor.loadPreferences());
+    unawaited(platform_tools.initPlatformServices());
   }
 
   static final ToolCallHandler _instance = ToolCallHandler._internal();

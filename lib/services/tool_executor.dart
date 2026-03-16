@@ -391,15 +391,23 @@ class ToolExecutor {
     await _syncAllToolEnabledToSupabase();
   }
 
-  /// Get only active tools -- this is what gets sent to the LLM.
+  /// Get all enabled tools -- this is what gets sent to the LLM.
+  ///
+  /// Tools are included regardless of service connection status so the model
+  /// always knows they exist and can instruct the user to connect.  The tool
+  /// executor returns a helpful "please connect" message when an unconnected
+  /// tool is called.
   List<ClientTool> get allTools {
     return _tools.values.where((tool) {
       if (tool.name == 'find_tools') return true; // Always available
-      return isToolAvailable(tool.name);
+      return isToolEnabled(tool.name);
     }).toList();
   }
 
-  /// Check if a specific tool is available.
+  /// Check if a specific tool is available (enabled + connected).
+  ///
+  /// Used by the settings UI to show connection badges.  NOT used for
+  /// filtering the LLM tool list (see [allTools]).
   bool isToolAvailable(String name) {
     if (!isToolEnabled(name)) {
       return false;
