@@ -104,7 +104,10 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
   Future<void> _loadToolPreferences() async {
     final stopwatch = Stopwatch()..start();
     try {
-      await _toolExecutor.loadPreferences();
+      await Future.wait([
+        _toolExecutor.loadPreferences(),
+        platform_tools.initPlatformServices(),
+      ]);
       if (!mounted) {
         return;
       }
