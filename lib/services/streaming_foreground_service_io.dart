@@ -239,9 +239,9 @@ class _StreamingTaskHandler extends TaskHandler {
   }
 
   @override
-  Future<void> onDestroy(DateTime timestamp) async {
+  Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {
     if (kDebugMode) {
-      debugPrint('[ForegroundTask] onDestroy');
+      debugPrint('[ForegroundTask] onDestroy (isTimeout: $isTimeout)');
     }
   }
 

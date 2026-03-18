@@ -63,7 +63,7 @@ class DeviceServices {
     );
 
     await _notificationsPlugin!.initialize(
-      const InitializationSettings(
+      settings: const InitializationSettings(
         android: androidSettings,
         iOS: darwinSettings,
         macOS: darwinSettings,
@@ -464,10 +464,10 @@ class DeviceServices {
     try {
       final plugin = await _getNotificationsPlugin();
       await plugin.show(
-        id + 100000, // Offset to avoid collision with other notifications
-        'Alarm: $title',
-        description ?? 'Your alarm "$title" is firing!',
-        const NotificationDetails(
+        id: id + 100000, // Offset to avoid collision with other notifications
+        title: 'Alarm: $title',
+        body: description ?? 'Your alarm "$title" is firing!',
+        notificationDetails: const NotificationDetails(
           android: AndroidNotificationDetails(
             'alarms',
             'Alarms & Timers',
@@ -667,10 +667,10 @@ class DeviceServices {
       final notifId = id ?? DateTime.now().millisecondsSinceEpoch % 100000;
 
       await plugin.show(
-        notifId,
-        title,
-        body,
-        const NotificationDetails(
+        id: notifId,
+        title: title,
+        body: body,
+        notificationDetails: const NotificationDetails(
           android: AndroidNotificationDetails(
             'device_services',
             'Device Services',
