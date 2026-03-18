@@ -117,7 +117,7 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
 
   Future<void> _initializeDesktopTrayInBackground() async {
     try {
-      if (_isLinuxDesktop && !kFeatureLinuxTray) {
+      if (!kFeatureSystemTray) {
         return;
       }
       if (_isLinuxDesktop) {

@@ -43,7 +43,7 @@ class SystemTrayService with TrayListener, WindowListener {
   bool get _supportsTooltip => defaultTargetPlatform != TargetPlatform.linux;
 
   Future<void> initialize() async {
-    if (defaultTargetPlatform == TargetPlatform.linux && !kFeatureLinuxTray) {
+    if (!kFeatureSystemTray) {
       return;
     }
     if (!_isDesktop || _isInitialized || _isInitializing) return;
