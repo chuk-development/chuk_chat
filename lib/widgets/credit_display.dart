@@ -93,6 +93,7 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
 
   /// Load credits from local cache for instant display
   Future<void> _loadCreditsFromCache() async {
+    final sw = Stopwatch()..start();
     try {
       final prefs = await SharedPreferences.getInstance();
       final cachedTotal = prefs.getDouble(_kCachedTotalCreditsAllocated);
@@ -116,18 +117,18 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
         });
         if (kDebugMode) {
           debugPrint(
-            '📦 [CreditMixin] Loaded from cache: €$remaining / €$total',
+            '📦 [CreditMixin] Loaded from cache: €$remaining / €$total (${sw.elapsedMilliseconds}ms)',
           );
         }
       } else {
         // No cache - keep loading state, server will provide value
         if (kDebugMode) {
-          debugPrint('📦 [CreditMixin] No cache - waiting for server');
+          debugPrint('📦 [CreditMixin] No cache - waiting for server (${sw.elapsedMilliseconds}ms)');
         }
       }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('⚠️ [CreditMixin] Cache load failed: $e');
+        debugPrint('⚠️ [CreditMixin] Cache load failed (${sw.elapsedMilliseconds}ms): $e');
       }
       // On error, keep loading - server will handle it
     }
@@ -135,13 +136,17 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
 
   /// Save credits to cache for offline access
   Future<void> _saveCreditsToCache(double total, double remaining) async {
+    final sw = Stopwatch()..start();
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setDouble(_kCachedTotalCreditsAllocated, total);
       await prefs.setDouble(_kCachedRemainingCredits, remaining);
+      if (kDebugMode) {
+        debugPrint('💾 [CreditMixin] Saved to cache (${sw.elapsedMilliseconds}ms)');
+      }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('⚠️ [CreditMixin] Cache save failed: $e');
+        debugPrint('⚠️ [CreditMixin] Cache save failed (${sw.elapsedMilliseconds}ms): $e');
       }
     }
   }
@@ -157,6 +162,7 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
       }
     }
 
+    final sw = Stopwatch()..start();
     try {
       final session = _supabase.auth.currentSession;
       if (session == null) {
@@ -176,6 +182,7 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
             headers: {'Authorization': 'Bearer ${session.accessToken}'},
           )
           .timeout(const Duration(seconds: 10));
+      final int apiMs = sw.elapsedMilliseconds;
 
       if (response.statusCode != 200) {
         throw Exception(
@@ -199,6 +206,7 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
       DateTime? periodStart;
       DateTime? periodEnd;
       if (hasSubscription) {
+        final billingSw = Stopwatch()..start();
         try {
           final billing = await _supabase
               .from('user_billing')
@@ -230,7 +238,17 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
               );
             }
           }
-        } catch (_) {
+          if (kDebugMode) {
+            debugPrint(
+              '📅 [CreditMixin] Billing period fetched (${billingSw.elapsedMilliseconds}ms)',
+            );
+          }
+        } catch (e) {
+          if (kDebugMode) {
+            debugPrint(
+              '⚠️ [CreditMixin] Billing period fetch failed (${billingSw.elapsedMilliseconds}ms): $e',
+            );
+          }
           // Non-critical — billing cycle display is optional
         }
       }
@@ -252,7 +270,7 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
       unawaited(_saveCreditsToCache(totalCredits, remainingCredits));
       if (kDebugMode) {
         debugPrint(
-          '✅ [CreditMixin] Loaded from API: €$remainingCredits / €$totalCredits',
+          '✅ [CreditMixin] Loaded from API: €$remainingCredits / €$totalCredits (API ${apiMs}ms, total ${sw.elapsedMilliseconds}ms)',
         );
       }
     } catch (error) {
@@ -262,7 +280,7 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
         _hasLoadedOnce = true;
       });
       if (kDebugMode) {
-        debugPrint('⚠️ [CreditMixin] API load failed (using cache): $error');
+        debugPrint('⚠️ [CreditMixin] API load failed (${sw.elapsedMilliseconds}ms, using cache): $error');
       }
     }
   }
@@ -641,6 +659,7 @@ class _BalanceBadgeState extends State<BalanceBadge> {
 
   /// Load balance from local cache for offline display
   Future<void> _loadFromCache() async {
+    final sw = Stopwatch()..start();
     try {
       final prefs = await SharedPreferences.getInstance();
       final cachedCredits = prefs.getDouble(_kCachedCredits);
@@ -659,17 +678,17 @@ class _BalanceBadgeState extends State<BalanceBadge> {
           _loading = false;
         });
         if (kDebugMode) {
-          debugPrint('📦 [BalanceBadge] Loaded from cache: €$_credits');
+          debugPrint('📦 [BalanceBadge] Loaded from cache: €$_credits (${sw.elapsedMilliseconds}ms)');
         }
       } else {
         // No cache - keep loading state, server will provide value
         if (kDebugMode) {
-          debugPrint('📦 [BalanceBadge] No cache - waiting for server');
+          debugPrint('📦 [BalanceBadge] No cache - waiting for server (${sw.elapsedMilliseconds}ms)');
         }
       }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('⚠️ [BalanceBadge] Cache load failed: $e');
+        debugPrint('⚠️ [BalanceBadge] Cache load failed (${sw.elapsedMilliseconds}ms): $e');
       }
       // On error, keep loading - server will handle it
     }
@@ -677,15 +696,19 @@ class _BalanceBadgeState extends State<BalanceBadge> {
 
   /// Save balance to local cache
   Future<void> _saveToCache() async {
+    final sw = Stopwatch()..start();
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setDouble(_kCachedCredits, _credits);
       await prefs.setBool(_kCachedHasSubscription, _hasSubscription);
       await prefs.setInt(_kCachedFreeMessagesRemaining, _freeMessagesRemaining);
       await prefs.setInt(_kCachedFreeMessagesTotal, _freeMessagesTotal);
+      if (kDebugMode) {
+        debugPrint('💾 [BalanceBadge] Saved to cache (${sw.elapsedMilliseconds}ms)');
+      }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('⚠️ [Credits] Cache save failed: $e');
+        debugPrint('⚠️ [BalanceBadge] Cache save failed (${sw.elapsedMilliseconds}ms): $e');
       }
     }
   }
@@ -695,6 +718,7 @@ class _BalanceBadgeState extends State<BalanceBadge> {
       setState(() => _loading = true);
     }
 
+    final sw = Stopwatch()..start();
     try {
       final session = _supabase.auth.currentSession;
       if (session == null) {
@@ -736,12 +760,12 @@ class _BalanceBadgeState extends State<BalanceBadge> {
       unawaited(_saveToCache());
       if (kDebugMode) {
         debugPrint(
-          '✅ [BalanceBadge] Loaded from API: €$_credits, $_freeMessagesRemaining/$_freeMessagesTotal free',
+          '✅ [BalanceBadge] Loaded from API: €$_credits, $_freeMessagesRemaining/$_freeMessagesTotal free (${sw.elapsedMilliseconds}ms)',
         );
       }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('⚠️ [BalanceBadge] API load failed (using cache): $e');
+        debugPrint('⚠️ [BalanceBadge] API load failed (${sw.elapsedMilliseconds}ms, using cache): $e');
       }
       if (mounted) setState(() => _loading = false);
       // Don't clear data on error - keep showing cached values
