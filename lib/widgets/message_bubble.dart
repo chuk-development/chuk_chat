@@ -109,6 +109,7 @@ class MessageBubble extends StatefulWidget {
     this.imageGeneratedAt,
     this.onAskUserAnswer,
     this.onRetry,
+    this.userMessageActions = const <MessageBubbleAction>[],
   });
 
   final String message;
@@ -158,6 +159,11 @@ class MessageBubble extends StatefulWidget {
   /// the last user message without re-running the full tool discovery.
   final VoidCallback? onRetry;
 
+  /// Actions shown in a popup menu on long-press for user messages.
+  /// These are hidden by default and only appear on long-press, matching
+  /// the UX pattern of ChatGPT, Gemini, etc.
+  final List<MessageBubbleAction> userMessageActions;
+
   @override
   State<MessageBubble> createState() => _MessageBubbleState();
 }
@@ -179,9 +185,6 @@ class _MessageBubbleState extends State<MessageBubble>
   bool _isReasoningExpanded = false;
   final Map<String, bool> _blockExpanded = {};
   final Set<String> _expandedCards = {};
-  final TextEditingController _editController = TextEditingController();
-  final FocusNode _editFocusNode = FocusNode();
-  bool _shouldFocusEditField = false;
   bool _complexBubbleLogged = false;
 
   @override
@@ -249,9 +252,6 @@ class _MessageBubbleState extends State<MessageBubble>
   void initState() {
     super.initState();
     _loadPreferences();
-    if (widget.isEditing) {
-      _configureEditController();
-    }
   }
 
   Future<void> _loadPreferences() async {
@@ -275,44 +275,58 @@ class _MessageBubbleState extends State<MessageBubble>
   @override
   void didUpdateWidget(covariant MessageBubble oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.isEditing && !oldWidget.isEditing) {
-      _configureEditController();
-    } else if (!widget.isEditing && oldWidget.isEditing) {
-      _editController.clear();
-      _shouldFocusEditField = false;
-    } else if (widget.isEditing &&
-        oldWidget.isEditing &&
-        widget.initialEditText != oldWidget.initialEditText) {
-      _configureEditController();
-    }
   }
 
-  @override
-  void dispose() {
-    _editController.dispose();
-    _editFocusNode.dispose();
-    super.dispose();
-  }
-
-  void _configureEditController() {
-    final String sourceText = widget.initialEditText ?? widget.message;
-    _editController
-      ..text = sourceText
-      ..selection = TextSelection.fromPosition(
-        TextPosition(offset: sourceText.length),
-      );
-    _shouldFocusEditField = true;
-  }
-
-  void _maybeRequestEditFocus() {
-    if (!_shouldFocusEditField) return;
-    _shouldFocusEditField = false;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      if (_editFocusNode.canRequestFocus) {
-        _editFocusNode.requestFocus();
-      }
-    });
+  /// Shows a popup menu with actions for user messages on long-press.
+  void _showUserMessagePopup(BuildContext context, Color iconFgColor) {
+    final colorScheme = Theme.of(context).colorScheme;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 32,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                ...widget.userMessageActions.map((action) {
+                  final actionColor = action.isEnabled
+                      ? colorScheme.onSurface
+                      : colorScheme.onSurface.withValues(alpha: 0.38);
+                  return ListTile(
+                    leading: Icon(action.icon, color: actionColor),
+                    title: Text(
+                      action.label ?? action.tooltip,
+                      style: TextStyle(color: actionColor),
+                    ),
+                    enabled: action.isEnabled,
+                    onTap: action.isEnabled
+                        ? () {
+                            Navigator.pop(ctx);
+                            action.onPressed();
+                          }
+                        : null,
+                  );
+                }),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Widget _buildActionButtons(Color iconFgColor, bool alignRight) {
@@ -370,84 +384,6 @@ class _MessageBubbleState extends State<MessageBubble>
     );
   }
 
-  Widget _buildEditingControls(Color iconFgColor, bool alignRight) {
-    final bool canSubmit = widget.onSubmitEdit != null;
-    final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      mainAxisAlignment: alignRight
-          ? MainAxisAlignment.end
-          : MainAxisAlignment.start,
-      children: [
-        Container(
-          decoration: BoxDecoration(
-            color: bgColor.lighten(0.05),
-            borderRadius: BorderRadius.circular(100),
-            border: Border.all(
-              color: iconFgColor.withValues(alpha: 0.15),
-              width: 1,
-            ),
-          ),
-          padding: EdgeInsets.symmetric(
-            horizontal: kPlatformMobile ? 2 : 8,
-            vertical: kPlatformMobile ? 0 : 4,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Tooltip(
-                message: 'Resend edited message',
-                child: IconButton(
-                  icon: Icon(
-                    Icons.send,
-                    color: iconFgColor,
-                    size: kPlatformMobile ? 15 : 18,
-                  ),
-                  padding: EdgeInsets.all(kPlatformMobile ? 4 : 8),
-                  visualDensity: VisualDensity.compact,
-                  constraints: BoxConstraints(
-                    minWidth: kPlatformMobile ? 24 : 30,
-                    minHeight: kPlatformMobile ? 24 : 30,
-                  ),
-                  style: kPlatformMobile
-                      ? null
-                      : IconButton.styleFrom(
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                  onPressed: canSubmit
-                      ? () => widget.onSubmitEdit?.call(_editController.text)
-                      : null,
-                ),
-              ),
-              Tooltip(
-                message: 'Cancel edit',
-                child: IconButton(
-                  icon: Icon(
-                    Icons.close,
-                    color: iconFgColor,
-                    size: kPlatformMobile ? 15 : 18,
-                  ),
-                  padding: EdgeInsets.all(kPlatformMobile ? 4 : 8),
-                  visualDensity: VisualDensity.compact,
-                  constraints: BoxConstraints(
-                    minWidth: kPlatformMobile ? 24 : 30,
-                    minHeight: kPlatformMobile ? 24 : 30,
-                  ),
-                  style: kPlatformMobile
-                      ? null
-                      : IconButton.styleFrom(
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                  onPressed: widget.onCancelEdit,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     super.build(context); // Required for AutomaticKeepAliveClientMixin
@@ -469,8 +405,10 @@ class _MessageBubbleState extends State<MessageBubble>
     final double effectiveMaxWidth =
         widget.maxWidth ?? MediaQuery.of(context).size.width * 0.8;
 
+    // AI message actions are shown below the bubble (copy, retry).
+    // User message actions are hidden and shown via long-press popup.
     final bool hasActions =
-        widget.actions.isNotEmpty && !(widget.isEditing && isUserMessage);
+        !isUserMessage && widget.actions.isNotEmpty;
 
     // Check if we should use the interleaved content blocks layout
     final bool useContentBlocks =
@@ -515,8 +453,6 @@ class _MessageBubbleState extends State<MessageBubble>
           )
         : null;
 
-    _maybeRequestEditFocus();
-
     final Widget bubbleContent = Container(
       margin: EdgeInsets.only(top: widget.startsNewGroup ? 10 : 2, bottom: 2),
       padding: containerPadding,
@@ -545,6 +481,14 @@ class _MessageBubbleState extends State<MessageBubble>
       ),
     );
 
+    // Wrap user messages in GestureDetector for long-press popup actions.
+    final Widget userBubble = isUserMessage && widget.userMessageActions.isNotEmpty
+        ? GestureDetector(
+            onLongPress: () => _showUserMessagePopup(context, iconFgColor),
+            child: bubbleContent,
+          )
+        : bubbleContent;
+
     final result = Align(
       alignment: alignRight ? Alignment.centerRight : Alignment.centerLeft,
       child: ConstrainedBox(
@@ -555,9 +499,7 @@ class _MessageBubbleState extends State<MessageBubble>
               ? CrossAxisAlignment.end
               : CrossAxisAlignment.start,
           children: [
-            bubbleContent,
-            if (widget.isEditing && isUserMessage)
-              _buildEditingControls(iconFgColor, alignRight),
+            userBubble,
             if (hasActions) _buildActionButtons(iconFgColor, alignRight),
           ],
         ),
@@ -2094,38 +2036,6 @@ class _MessageBubbleState extends State<MessageBubble>
     required Color bgColor,
     required bool isUserMessage,
   }) {
-    if (widget.isEditing && isUserMessage) {
-      return Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: accentColor.withValues(
-            alpha: 0.9,
-          ), // Full accent color background
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: TextField(
-          controller: _editController,
-          focusNode: _editFocusNode,
-          minLines: 1,
-          maxLines: null,
-          keyboardType: TextInputType.multiline,
-          style: TextStyle(color: iconFgColor, fontSize: 14, height: 1.35),
-          cursorColor: iconFgColor,
-          decoration: InputDecoration(
-            isDense: true,
-            isCollapsed: true,
-            filled: true,
-            fillColor: accentColor.withValues(alpha: 0.9), // Accent color fill
-            border: InputBorder.none,
-            focusedBorder: InputBorder.none,
-            enabledBorder: InputBorder.none,
-            hintText: 'Edit your message',
-            hintStyle: TextStyle(color: iconFgColor.withValues(alpha: 0.6)),
-          ),
-        ),
-      );
-    }
-
     final displayText = isUserMessage
         ? widget.message
         : stripToolCallBlocksForDisplay(widget.message);

@@ -224,6 +224,13 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           return KeyEventResult.handled;
         }
 
+        // Escape: cancel editing mode
+        if (event.logicalKey == LogicalKeyboardKey.escape &&
+            _messageActionsHandler.isEditing) {
+          _cancelEditMessage();
+          return KeyEventResult.handled;
+        }
+
         if (event.logicalKey != LogicalKeyboardKey.enter) {
           return KeyEventResult.ignored;
         }
@@ -240,8 +247,22 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           return KeyEventResult.handled;
         }
 
-        // Bare Enter: send message, consume to prevent newline
-        unawaited(_sendMessage());
+        // Bare Enter: send message (or submit edit), consume to prevent newline
+        if (_messageActionsHandler.isEditing) {
+          final editIndex = _messageActionsHandler.editingMessageIndex!;
+          final newText = _controller.text.trim();
+          _cancelEditMessage();
+          if (newText.isNotEmpty) {
+            unawaited(_submitEditedMessage(
+              editIndex,
+              newText,
+              removeFollowingAssistant: false,
+              clearMessagesBelow: true,
+            ));
+          }
+        } else {
+          unawaited(_sendMessage());
+        }
         return KeyEventResult.handled;
       },
     );
@@ -1033,14 +1054,21 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   void _editMessageAt(int index) {
     if (!_isValidMessageIndex(index)) return;
+    final String text = (_messages[index]['text'] ?? '').trim();
+    if (text.isEmpty) return;
     setState(() {
       _messageActionsHandler.startEdit(index);
+      _controller.text = text;
+      _controller.selection = TextSelection.fromPosition(
+        TextPosition(offset: text.length),
+      );
     });
   }
 
   void _cancelEditMessage() {
     setState(() {
       _messageActionsHandler.cancelEdit();
+      _controller.clear();
     });
   }
 
@@ -1143,6 +1171,22 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       onEdit: _editMessageAt,
       onResendMessage: _resendMessageAt,
       hasFailedToolCalls: hasFailedToolCalls,
+    );
+  }
+
+  List<MessageBubbleAction> _buildUserMessageActionsForIndex(
+    int index,
+    MessageRenderData data,
+  ) {
+    if (!_isValidMessageIndex(index) || !data.isUser) {
+      return const <MessageBubbleAction>[];
+    }
+    final String messageText = (_messages[index]['text'] ?? '');
+    return _messageActionsHandler.buildUserMessageActions(
+      index: index,
+      messageText: messageText,
+      onEdit: _editMessageAt,
+      onResendMessage: _resendMessageAt,
     );
   }
 
@@ -1576,25 +1620,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                                   i,
                                                   data,
                                                 ),
+                                            userMessageActions:
+                                                _buildUserMessageActionsForIndex(
+                                                  i,
+                                                  data,
+                                                ),
                                             isEditing: isBeingEdited,
-                                            initialEditText: isBeingEdited
-                                                ? data.displayText
-                                                : null,
-                                            onSubmitEdit:
-                                                isBeingEdited && data.isUser
-                                                ? (
-                                                    newText,
-                                                  ) => _submitEditedMessage(
-                                                    i,
-                                                    newText,
-                                                    removeFollowingAssistant:
-                                                        false,
-                                                    clearMessagesBelow: true,
-                                                  )
-                                                : null,
-                                            onCancelEdit: isBeingEdited
-                                                ? _cancelEditMessage
-                                                : null,
                                             showReasoningTokens:
                                                 widget.showReasoningTokens,
                                             showModelInfo: widget.showModelInfo,
@@ -1754,6 +1785,37 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                     },
                   ),
                 ),
+              // Editing indicator
+              if (_messageActionsHandler.isEditing)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    children: [
+                      Icon(Icons.edit, size: 14, color: iconFg.withValues(alpha: 0.6)),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Editing message',
+                        style: TextStyle(
+                          color: iconFg.withValues(alpha: 0.6),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const Spacer(),
+                      GestureDetector(
+                        onTap: _cancelEditMessage,
+                        child: Text(
+                          'Cancel',
+                          style: TextStyle(
+                            color: accent.withValues(alpha: 0.8),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               // Text field with right padding to avoid send button overlap
               Padding(
                 padding: EdgeInsets.only(right: btnW + 8),
@@ -1779,9 +1841,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                         height: 1.4,
                       ),
                       decoration: InputDecoration(
-                        hintText: hasAttachments
-                            ? 'Add a message or send documents'
-                            : 'Ask me anything !',
+                        hintText: _messageActionsHandler.isEditing
+                            ? 'Edit your message...'
+                            : hasAttachments
+                                ? 'Add a message or send documents'
+                                : 'Ask me anything !',
                         hintStyle: TextStyle(
                           color: iconFg.withValues(alpha: 0.8),
                           fontWeight: FontWeight.w600,
@@ -1936,6 +2000,19 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                         _cancelCurrentOperation();
                       } else if (_audioHandler.isMicActive) {
                         _handleAudioSend();
+                      } else if (_messageActionsHandler.isEditing) {
+                        final editIndex =
+                            _messageActionsHandler.editingMessageIndex!;
+                        final newText = _controller.text.trim();
+                        _cancelEditMessage();
+                        if (newText.isNotEmpty) {
+                          _submitEditedMessage(
+                            editIndex,
+                            newText,
+                            removeFollowingAssistant: false,
+                            clearMessagesBelow: true,
+                          );
+                        }
                       } else {
                         _sendMessage();
                       }

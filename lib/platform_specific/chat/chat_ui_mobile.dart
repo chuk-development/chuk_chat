@@ -2046,6 +2046,46 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     };
   }
 
+  void _editMessageAt(int index) {
+    if (index < 0 || index >= _messages.length) return;
+    final String text = (_messages[index]['text'] ?? '').trim();
+    if (text.isEmpty) return;
+    setState(() {
+      _messageActionsHandler.startEdit(index);
+      _controller.text = text;
+      _controller.selection = TextSelection.fromPosition(
+        TextPosition(offset: text.length),
+      );
+    });
+    _textFieldFocusNode.requestFocus();
+  }
+
+  void _cancelEditMessage() {
+    setState(() {
+      _messageActionsHandler.cancelEdit();
+      _controller.clear();
+    });
+  }
+
+  /// Sends the message, or submits an edited message if in edit mode.
+  Future<void> _sendOrSubmitEdit() async {
+    if (_messageActionsHandler.isEditing) {
+      final editIndex = _messageActionsHandler.editingMessageIndex!;
+      final newText = _controller.text.trim();
+      _cancelEditMessage();
+      if (newText.isNotEmpty) {
+        await _submitEditedMessage(
+          editIndex,
+          newText,
+          removeFollowingAssistant: false,
+          clearMessagesBelow: true,
+        );
+      }
+    } else {
+      await _sendMessage();
+    }
+  }
+
   Future<void> _resendMessageAt(int index) async {
     if (index < 0 || index >= _messages.length) return;
 
@@ -2542,34 +2582,20 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                                       t.status ==
                                                       ToolCallStatus.error,
                                                 ),
-                                            onEdit: (index) {
-                                              setState(() {
-                                                _messageActionsHandler
-                                                    .startEdit(index);
-                                              });
-                                            },
+                                            onEdit: _editMessageAt,
                                             onResendMessage: _resendMessageAt,
                                           ),
+                                      userMessageActions: isUser
+                                          ? _messageActionsHandler
+                                                .buildUserMessageActions(
+                                                  index: i,
+                                                  messageText: displayText,
+                                                  onEdit: _editMessageAt,
+                                                  onResendMessage:
+                                                      _resendMessageAt,
+                                                )
+                                          : const [],
                                       isEditing: isBeingEdited,
-                                      initialEditText: isBeingEdited
-                                          ? displayText
-                                          : null,
-                                      onSubmitEdit: isBeingEdited && isUser
-                                          ? (newText) => _submitEditedMessage(
-                                              i,
-                                              newText,
-                                              removeFollowingAssistant: false,
-                                              clearMessagesBelow: true,
-                                            )
-                                          : null,
-                                      onCancelEdit: isBeingEdited
-                                          ? () {
-                                              setState(() {
-                                                _messageActionsHandler
-                                                    .cancelEdit();
-                                              });
-                                            }
-                                          : null,
                                       showReasoningTokens:
                                           widget.showReasoningTokens,
                                       showModelInfo: widget.showModelInfo,
@@ -2735,10 +2761,44 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         !hasText && !_audioHandler.isMicActive && !showStopAction;
 
     // Three-part layout: [+]  [TextField + mic]  [Send]
-    // With optional attachment previews above.
+    // With optional attachment previews and editing indicator above.
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (_messageActionsHandler.isEditing)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6, left: 4, right: 4),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.edit,
+                  size: 14,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Editing message',
+                  style: TextStyle(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const Spacer(),
+                GestureDetector(
+                  onTap: _cancelEditMessage,
+                  child: Text(
+                    'Cancel',
+                    style: TextStyle(
+                      color: theme.colorScheme.primary.withValues(alpha: 0.8),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         if (hasAttachments)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
@@ -2830,7 +2890,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                     : buildKeyboardListener(
                         focusNode: _rawKeyboardListenerFocusNode,
                         controller: _controller,
-                        onSend: _sendMessage,
+                        onSend: _sendOrSubmitEdit,
                         child: Scrollbar(
                           controller: _composerScrollController,
                           child: Semantics(
@@ -2850,7 +2910,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                               minLines: 1,
                               maxLines: 6,
                               decoration: InputDecoration(
-                                hintText: 'Ask me anything',
+                                hintText: _messageActionsHandler.isEditing
+                                    ? 'Edit your message...'
+                                    : 'Ask me anything',
                                 hintStyle: TextStyle(
                                   color: theme.colorScheme.onSurface.withValues(
                                     alpha: 0.5,
@@ -2955,7 +3017,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                               ? _cancelCurrentOperation
                               : (showVoiceModeAction
                                     ? () => _openComingSoonFeature('Voice Mode')
-                                    : _sendMessage)),
+                                    : _sendOrSubmitEdit)),
                     color: _audioHandler.isMicActive
                         ? accent
                         : (showStopAction ? Colors.red : accent),
