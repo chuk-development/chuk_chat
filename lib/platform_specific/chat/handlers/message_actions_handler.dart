@@ -7,9 +7,6 @@ import 'package:chuk_chat/widgets/message_bubble.dart';
 
 /// Handles message-related actions (copy, edit, resend)
 class MessageActionsHandler {
-  static const String _emptyAssistantResponsePrefix =
-      'The model returned an empty response.';
-
   // Callbacks
   Function(String)? onShowSnackBar;
   Function(int, String)? onSubmitEdit;
@@ -74,7 +71,7 @@ class MessageActionsHandler {
     onResend?.call(index);
   }
 
-  /// Build message actions for a specific message
+  /// Build actions for AI messages (shown below the bubble).
   List<MessageBubbleAction> buildActionsForMessage({
     required int index,
     required String messageText,
@@ -84,10 +81,13 @@ class MessageActionsHandler {
     required Function(int) onResendMessage,
     bool hasFailedToolCalls = false,
   }) {
-    final bool isAssistantPending = !isUser && isStreaming;
+    // User message actions are built separately via buildUserMessageActions.
+    if (isUser) return const [];
+
+    final bool isAssistantPending = isStreaming;
     final List<MessageBubbleAction> actions = [];
 
-    // Copy action
+    // Copy action for AI messages
     if (messageText.trim().isNotEmpty) {
       actions.add(
         MessageBubbleAction(
@@ -95,32 +95,13 @@ class MessageActionsHandler {
           tooltip: 'Copy message',
           label: 'Copy',
           onPressed: () => copyToClipboard(messageText),
-          isEnabled: !isAssistantPending || isUser,
+          isEnabled: !isAssistantPending,
         ),
       );
     }
 
-    // Edit and Resend actions (only for user messages)
-    if (isUser) {
-      actions.add(
-        MessageBubbleAction(
-          icon: Icons.edit,
-          tooltip: 'Edit message',
-          label: 'Edit',
-          onPressed: () => onEdit(index),
-        ),
-      );
-      actions.add(
-        MessageBubbleAction(
-          icon: Icons.replay,
-          tooltip: 'Resend message',
-          label: 'Resend',
-          onPressed: () => onResendMessage(index),
-        ),
-      );
-    } else if (!isAssistantPending &&
-        (messageText.startsWith(_emptyAssistantResponsePrefix) ||
-            hasFailedToolCalls)) {
+    // Retry action — always available on finalized AI messages
+    if (!isAssistantPending) {
       actions.add(
         MessageBubbleAction(
           icon: Icons.replay,
@@ -130,6 +111,47 @@ class MessageActionsHandler {
         ),
       );
     }
+
+    return actions;
+  }
+
+  /// Build actions for user messages (shown in long-press popup).
+  List<MessageBubbleAction> buildUserMessageActions({
+    required int index,
+    required String messageText,
+    required Function(int) onEdit,
+    required Function(int) onResendMessage,
+  }) {
+    final List<MessageBubbleAction> actions = [];
+
+    if (messageText.trim().isNotEmpty) {
+      actions.add(
+        MessageBubbleAction(
+          icon: Icons.copy,
+          tooltip: 'Copy message',
+          label: 'Copy',
+          onPressed: () => copyToClipboard(messageText),
+        ),
+      );
+    }
+
+    actions.add(
+      MessageBubbleAction(
+        icon: Icons.edit,
+        tooltip: 'Edit message',
+        label: 'Edit',
+        onPressed: () => onEdit(index),
+      ),
+    );
+
+    actions.add(
+      MessageBubbleAction(
+        icon: Icons.replay,
+        tooltip: 'Resend message',
+        label: 'Resend',
+        onPressed: () => onResendMessage(index),
+      ),
+    );
 
     return actions;
   }
