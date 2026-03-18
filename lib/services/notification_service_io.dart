@@ -30,7 +30,7 @@ class NotificationService {
     );
 
     await _plugin.initialize(
-      const InitializationSettings(
+      settings: const InitializationSettings(
         android: androidSettings,
         iOS: darwinSettings,
         macOS: darwinSettings,
@@ -93,10 +93,10 @@ class NotificationService {
 
     try {
       await _plugin.show(
-        chatId.hashCode, // Unique ID per chat
-        'Response ready', // Title
-        preview,
-        NotificationDetails(
+        id: chatId.hashCode, // Unique ID per chat
+        title: 'Response ready',
+        body: preview,
+        notificationDetails: NotificationDetails(
           android: AndroidNotificationDetails(
             'ai_completion',
             'AI Responses',
