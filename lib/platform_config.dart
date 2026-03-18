@@ -72,11 +72,11 @@ const bool kFeatureServerTools = bool.fromEnvironment(
   defaultValue: true,
 );
 
-/// Linux system tray integration.
-/// Enabled by default, can still be disabled via --dart-define.
-const bool kFeatureLinuxTray = bool.fromEnvironment(
-  'FEATURE_LINUX_TRAY',
-  defaultValue: true,
+/// Desktop system tray integration (Linux, Windows, macOS).
+/// Disabled by default; enable via --dart-define=FEATURE_SYSTEM_TRAY=true.
+const bool kFeatureSystemTray = bool.fromEnvironment(
+  'FEATURE_SYSTEM_TRAY',
+  defaultValue: false,
 );
 
 /// Linux secure storage backend for encryption keys.
