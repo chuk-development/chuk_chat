@@ -2592,7 +2592,19 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                             ),
                           ),
                         )
-                      : const SizedBox.expand(),
+                      : SizedBox.expand(
+                          child: Center(
+                            child: Opacity(
+                              opacity: 0.08,
+                              child: Image.asset(
+                                'web/icons/Icon-512.png',
+                                width: 180,
+                                height: 180,
+                                color: theme.colorScheme.onSurface,
+                              ),
+                            ),
+                          ),
+                        ),
                   // Scroll-to-bottom button (centered above input)
                   if (_showScrollToBottom && hasMessages)
                     Positioned(
@@ -2761,19 +2773,28 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                       isActive: hasAttachments,
                       color: iconFg,
                     ),
-                    if (_controller.text.isEmpty) ...[
-                      const SizedBox(width: 1),
-                      ModelSelectionDropdown(
-                        initialSelectedModelId: _selectedModelId,
-                        onModelSelected: (newModelId) {
-                          setState(() {
-                            _selectedModelId = newModelId;
-                          });
-                        },
-                        textFieldFocusNode: _textFieldFocusNode,
-                        isCompactMode: true,
+                    Offstage(
+                      offstage: _controller.text.isNotEmpty,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SizedBox(width: 1),
+                          ModelSelectionDropdown(
+                            key: const ValueKey<String>(
+                              'mobile-model-selection-dropdown',
+                            ),
+                            initialSelectedModelId: _selectedModelId,
+                            onModelSelected: (newModelId) {
+                              setState(() {
+                                _selectedModelId = newModelId;
+                              });
+                            },
+                            textFieldFocusNode: _textFieldFocusNode,
+                            isCompactMode: true,
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ],
                 ),
               ),
