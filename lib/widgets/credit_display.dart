@@ -27,16 +27,22 @@ class CreditBalances {
     required this.totalCredits,
     required this.usedCredits,
     required this.remainingCredits,
+    this.billingPeriodStart,
+    this.billingPeriodEnd,
   });
 
   const CreditBalances.empty()
     : totalCredits = 0,
       usedCredits = 0,
-      remainingCredits = 0;
+      remainingCredits = 0,
+      billingPeriodStart = null,
+      billingPeriodEnd = null;
 
   final double totalCredits;
   final double usedCredits;
   final double remainingCredits;
+  final DateTime? billingPeriodStart;
+  final DateTime? billingPeriodEnd;
 
   double get remainingRatio =>
       totalCredits > 0 ? remainingCredits / totalCredits : 0.0;
@@ -189,12 +195,54 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
         totalCredits,
       );
 
+      // Fetch billing period dates if subscribed
+      DateTime? periodStart;
+      DateTime? periodEnd;
+      if (hasSubscription) {
+        try {
+          final billing = await _supabase
+              .from('user_billing')
+              .select('credits_last_renewed_period')
+              .eq('user_id', session.user.id)
+              .maybeSingle();
+          if (billing != null) {
+            final rawDate = billing['credits_last_renewed_period'];
+            if (rawDate is String) {
+              periodStart = DateTime.tryParse(rawDate);
+            } else if (rawDate is DateTime) {
+              periodStart = rawDate;
+            }
+            if (periodStart != null) {
+              // Handle month overflow (e.g., Jan 31 → Feb 28)
+              final nextMonth = DateTime(
+                periodStart.year,
+                periodStart.month + 1,
+              );
+              final lastDay = DateTime(
+                nextMonth.year,
+                nextMonth.month + 1,
+                0,
+              ).day;
+              periodEnd = DateTime(
+                nextMonth.year,
+                nextMonth.month,
+                periodStart.day.clamp(1, lastDay),
+              );
+            }
+          }
+        } catch (_) {
+          // Non-critical — billing cycle display is optional
+        }
+      }
+
       if (!mounted) return;
       setState(() {
         creditBalances = CreditBalances(
           totalCredits: totalCredits,
           usedCredits: usedCredits,
           remainingCredits: remainingCredits,
+          billingPeriodStart: periodStart,
+          billingPeriodEnd: periodEnd,
         );
         creditLoading = false;
         _hasLoadedOnce = true;
@@ -336,10 +384,94 @@ class _CreditDisplayState extends State<CreditDisplay>
                 ),
               ],
             ),
+            // Billing cycle progress
+            if (creditBalances.billingPeriodStart != null &&
+                creditBalances.billingPeriodEnd != null) ...[
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Icon(Icons.calendar_today, color: accent, size: 16),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Billing Cycle',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: iconFg,
+                    ),
+                  ),
+                  const Spacer(),
+                  Builder(builder: (context) {
+                    final now = DateTime.now().toUtc();
+                    final end = creditBalances.billingPeriodEnd!;
+                    final daysLeft = end.difference(now).inDays;
+                    return Text(
+                      daysLeft > 0
+                          ? '$daysLeft days left'
+                          : 'Renews soon',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: accent,
+                      ),
+                    );
+                  }),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Builder(builder: (context) {
+                  final now = DateTime.now().toUtc();
+                  final start = creditBalances.billingPeriodStart!;
+                  final end = creditBalances.billingPeriodEnd!;
+                  final totalDuration =
+                      end.difference(start).inSeconds.toDouble();
+                  final elapsed =
+                      now.difference(start).inSeconds.toDouble();
+                  final progress = totalDuration > 0
+                      ? (elapsed / totalDuration).clamp(0.0, 1.0)
+                      : 0.0;
+                  return LinearProgressIndicator(
+                    value: progress,
+                    minHeight: 8,
+                    backgroundColor: iconFg.withValues(alpha: 0.2),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      accent.withValues(alpha: 0.7),
+                    ),
+                  );
+                }),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    _formatDate(creditBalances.billingPeriodStart!),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: iconFg.withValues(alpha: 0.7),
+                    ),
+                  ),
+                  Text(
+                    'Renews ${_formatDate(creditBalances.billingPeriodEnd!)}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: iconFg.withValues(alpha: 0.7),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),
     );
+  }
+
+  static String _formatDate(DateTime dt) {
+    final local = dt.toLocal();
+    return '${local.day.toString().padLeft(2, '0')}.${local.month.toString().padLeft(2, '0')}.${local.year}';
   }
 }
 
