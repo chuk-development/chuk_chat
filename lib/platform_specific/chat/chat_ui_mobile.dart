@@ -2593,7 +2593,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                           ),
                         )
                       : SizedBox.expand(
-                          child: Center(
+                          child: Align(
+                            alignment: const Alignment(0.0, -0.3),
                             child: Opacity(
                               opacity: 0.08,
                               child: Image.asset(
