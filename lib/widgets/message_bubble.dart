@@ -18,6 +18,7 @@ import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
 import 'package:chuk_chat/widgets/ask_user_card.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:flutter/foundation.dart';
@@ -631,6 +632,10 @@ class _MessageBubbleState extends State<MessageBubble>
         bgColor: bgColor,
         isUserMessage: isUserMessage,
       ),
+      if (!widget.isUser &&
+          widget.toolCalls != null &&
+          widget.toolCalls!.isNotEmpty)
+        _buildSourcesBar(widget.toolCalls!),
       ..._buildAskUserOptions(),
       // Image actions go below the text, matching the regular action buttons.
       if (widget.images != null &&
@@ -871,6 +876,11 @@ class _MessageBubbleState extends State<MessageBubble>
     if (placeQrImageAboveResponse && !insertedQrImage) {
       children.add(_buildImagesGrid(widget.images!));
       children.add(const SizedBox(height: 8));
+    }
+
+    // Sources bar for web search / web crawl citations.
+    if (widget.toolCalls != null && widget.toolCalls!.isNotEmpty) {
+      children.add(_buildSourcesBar(widget.toolCalls!));
     }
 
     // ask_user interactive options.
@@ -1647,6 +1657,195 @@ class _MessageBubbleState extends State<MessageBubble>
     }
 
     return _truncatePreview(result, 70);
+  }
+
+  // ─── Sources bar (web search / web crawl citations) ──────────────────
+
+  /// Collects all source URLs from web_search and web_crawl tool calls and
+  /// renders a collapsible bar with favicon icons, similar to the
+  /// function_calling reference implementation.
+  Widget _buildSourcesBar(List<ToolCall> toolCalls) {
+    final sources = <Map<String, String>>[];
+    final seenUrls = <String>{};
+
+    for (final tool in toolCalls) {
+      if (tool.result == null) continue;
+
+      if (tool.name == 'web_search') {
+        final urlRegex = RegExp(r'^\s+(https?://\S+)', multiLine: true);
+        final titleRegex = RegExp(r'^\d+\.\s+(.+)$', multiLine: true);
+        final urls =
+            urlRegex.allMatches(tool.result!).map((m) => m.group(1)!).toList();
+        final titles = titleRegex
+            .allMatches(tool.result!)
+            .map((m) => m.group(1)!)
+            .toList();
+        for (int i = 0; i < urls.length; i++) {
+          if (seenUrls.add(urls[i])) {
+            sources.add({
+              'url': urls[i],
+              'title': i < titles.length ? titles[i] : Uri.parse(urls[i]).host,
+              'host': Uri.tryParse(urls[i])?.host ?? urls[i],
+            });
+          }
+        }
+      } else if (tool.name == 'web_crawl') {
+        final url = tool.arguments['url'] as String? ?? '';
+        if (url.isNotEmpty && seenUrls.add(url)) {
+          final firstLine = tool.result!.split('\n').first;
+          sources.add({
+            'url': url,
+            'title': firstLine.replaceFirst(RegExp(r'^Content from\s+'), ''),
+            'host': Uri.tryParse(url)?.host ?? url,
+          });
+        }
+      }
+    }
+
+    if (sources.isEmpty) return const SizedBox.shrink();
+
+    final isExpanded = _blockExpanded['sources_bar'] ?? false;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () =>
+                setState(() => _blockExpanded['sources_bar'] = !isExpanded),
+            borderRadius: BorderRadius.circular(10),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              child: Row(
+                children: [
+                  for (int i = 0; i < sources.length && i < 5; i++)
+                    Padding(
+                      padding: EdgeInsets.only(right: i < 4 ? 4.0 : 0),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: Image.network(
+                          'https://www.google.com/s2/favicons?domain=${sources[i]['host']}&sz=32',
+                          width: 16,
+                          height: 16,
+                          errorBuilder: (_, __, ___) => Icon(
+                            Icons.public,
+                            size: 16,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${sources.length} source${sources.length == 1 ? '' : 's'}',
+                      style: TextStyle(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    isExpanded ? Icons.expand_less : Icons.expand_more,
+                    size: 16,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (isExpanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: sources.map((source) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: InkWell(
+                      onTap: () async {
+                        final url = Uri.tryParse(source['url']!);
+                        if (url != null && await canLaunchUrl(url)) {
+                          await launchUrl(
+                            url,
+                            mode: LaunchMode.externalApplication,
+                          );
+                        }
+                      },
+                      borderRadius: BorderRadius.circular(6),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 4,
+                          horizontal: 4,
+                        ),
+                        child: Row(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: Image.network(
+                                'https://www.google.com/s2/favicons?domain=${source['host']}&sz=32',
+                                width: 16,
+                                height: 16,
+                                errorBuilder: (_, __, ___) => Icon(
+                                  Icons.public,
+                                  size: 16,
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    source['title']!,
+                                    style: TextStyle(
+                                      color: colorScheme.onSurface,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  Text(
+                                    source['host']!,
+                                    style: TextStyle(
+                                      color: colorScheme.onSurfaceVariant,
+                                      fontSize: 11,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Icon(
+                              Icons.open_in_new,
+                              size: 14,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   // ─── ask_user interactive options ─────────────────────────────────────
