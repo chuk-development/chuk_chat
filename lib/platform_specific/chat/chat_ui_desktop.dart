@@ -220,6 +220,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         if (event.logicalKey == LogicalKeyboardKey.keyV &&
             (HardwareKeyboard.instance.isControlPressed ||
                 HardwareKeyboard.instance.isMetaPressed)) {
+          _fileHandler.modelSupportsImageInput = _modelSupportsImageInput;
           unawaited(_clipboardHandler.handleSmartPaste(_controller));
           return KeyEventResult.handled;
         }
