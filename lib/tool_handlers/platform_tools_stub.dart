@@ -34,6 +34,18 @@ Future<String> executeDevice(Map<String, dynamic> args) async {
   return 'Device features are not available on web.';
 }
 
+Future<String> executeCalendar(Map<String, dynamic> args) async {
+  return 'Calendar is not available on web.';
+}
+
+Future<String> executeReminder(Map<String, dynamic> args) async {
+  return 'Reminders are not available on web.';
+}
+
+Future<String> executeDraftEmail(Map<String, dynamic> args) async {
+  return 'Email drafts are not available on web.';
+}
+
 /// Initialize platform services (no-op on web).
 Future<void> initPlatformServices() async {}
 

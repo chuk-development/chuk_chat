@@ -53,6 +53,9 @@ const Map<String, ToolCategory> toolCategoryMap = {
   'email': ToolCategory.email,
   'nextcloud': ToolCategory.nextcloud,
   'device': ToolCategory.device,
+  'calendar': ToolCategory.device,
+  'reminder': ToolCategory.device,
+  'draft_email': ToolCategory.device,
   'search_chats': ToolCategory.basic,
   'artifact_manager': ToolCategory.basic,
   'update_project': ToolCategory.basic,
@@ -88,8 +91,8 @@ const Map<String, String> discoveryCatalog = {
         'Email (IMAP/SMTP), Gmail, Slack, GitHub, Nextcloud, Google Calendar / '
         'E-Mail, Gmail, Slack, GitHub, Nextcloud, Google Kalender',
   'Device / Gerät':
-      'Create calendar events, set alarms/timers, SMS draft, GPS location / '
-      'Kalendereinträge erstellen, Wecker/Timer setzen, SMS-Entwurf, GPS-Standort',
+      'Reminders, calendar events, alarms, timers, email drafts, SMS drafts, GPS / '
+      'Erinnerungen, Kalendereinträge, Wecker, Timer, E-Mail-Entwurf, SMS, GPS',
   'System':
       'Execute bash commands (sandboxed) / Bash-Befehle ausführen (sandboxed)',
 };
@@ -798,14 +801,18 @@ final List<ClientTool> builtinTools = [
   ClientTool(
     name: 'device',
     description:
-        'Native device features. Creates calendar events the user just '
-        'clicks to confirm, sets alarms/timers with notifications, '
-        'opens SMS or email drafts for user to review, gets GPS location. '
+        'Create reminders, calendar events, alarms, timers, and email/SMS '
+        'drafts directly on the user\'s device. Works on Android, Linux, '
+        'Windows, and macOS. '
         'Actions: create_calendar_event, set_alarm, set_timer, cancel_alarm, '
         'list_alarms, sms_draft, email_draft, get_location, get_last_location, '
         'platform_info, distance. '
-        'IMPORTANT: For calendar events, SMS, and email drafts, the user gets '
-        'to review and confirm before anything is sent.',
+        'Use create_calendar_event for reminders and appointments — the user '
+        'confirms before saving. Use set_alarm for wake-up alarms. Use '
+        'set_timer for countdown timers (cooking, breaks). Use email_draft '
+        'to compose emails opened in the default mail app. '
+        'IMPORTANT: Calendar events, SMS, and email drafts require user '
+        'confirmation — nothing is sent automatically.',
     parameters: {
       'action': 'string (required)',
       'title': 'string (for calendar event or alarm)',
@@ -850,6 +857,100 @@ final List<ClientTool> builtinTools = [
       'nähe',
       'nearby',
       'position',
+    ],
+  ),
+
+  // -- Calendar (standalone) --
+  ClientTool(
+    name: 'calendar',
+    description:
+        'Create a calendar event or reminder. Opens the system calendar app '
+        'for the user to confirm. Works on Android (native), Linux (.ics file), '
+        'Windows (.ics file), and macOS (native). '
+        'Use this for appointments, meetings, reminders, deadlines, birthdays.',
+    parameters: {
+      'title': 'string (required — event title)',
+      'start': 'string (required — ISO datetime, e.g. "2026-03-20T14:00:00")',
+      'end': 'string (required — ISO datetime for event end)',
+      'description': 'string (optional — event details)',
+      'location': 'string (optional — event location)',
+      'all_day': 'boolean (optional — true for all-day events)',
+    },
+    type: ToolType.builtin,
+    tags: [
+      'calendar',
+      'kalender',
+      'reminder',
+      'erinnerung',
+      'termin',
+      'event',
+      'meeting',
+      'appointment',
+      'deadline',
+      'birthday',
+      'geburtstag',
+    ],
+  ),
+
+  // -- Reminder / Alarm / Timer (standalone) --
+  ClientTool(
+    name: 'reminder',
+    description:
+        'Set alarms, timers, and reminders with notifications. '
+        'Actions: set_alarm (default), set_timer, cancel, list. '
+        'Use set_alarm for reminders at a specific time. '
+        'Use set_timer for countdown timers (e.g. 5 minutes). '
+        'Notifications fire even when the app is in the background.',
+    parameters: {
+      'action':
+          'string (optional, default "set_alarm": set_alarm, set_timer, cancel, list)',
+      'title': 'string (alarm/timer name)',
+      'time':
+          'string (ISO datetime for alarm, e.g. "2026-03-20T08:00:00")',
+      'minutes': 'int (timer duration in minutes)',
+      'seconds': 'int (timer duration in seconds)',
+      'alarm_id': 'int (for cancel action)',
+    },
+    type: ToolType.builtin,
+    tags: [
+      'reminder',
+      'erinnerung',
+      'alarm',
+      'wecker',
+      'timer',
+      'countdown',
+      'notification',
+      'benachrichtigung',
+    ],
+  ),
+
+  // -- Draft Email (standalone) --
+  ClientTool(
+    name: 'draft_email',
+    description:
+        'Compose an email and open it in the default mail app (Gmail, Outlook, '
+        'Thunderbird, etc.) for the user to review and send. Nothing is sent '
+        'automatically — the user always confirms. Works on all platforms.',
+    parameters: {
+      'to': 'string (required — recipient email address)',
+      'subject': 'string (optional — email subject line)',
+      'body': 'string (optional — email body text)',
+      'cc': 'string (optional — CC addresses, comma-separated)',
+      'bcc': 'string (optional — BCC addresses, comma-separated)',
+    },
+    type: ToolType.builtin,
+    tags: [
+      'email',
+      'e-mail',
+      'mail',
+      'draft',
+      'entwurf',
+      'nachricht',
+      'message',
+      'schreiben',
+      'write',
+      'send',
+      'senden',
     ],
   ),
 
@@ -980,10 +1081,9 @@ void registerBuiltinTools(ToolExecutor executor) {
     if (!kFeatureStockData && tool.name == 'stock_data') {
       continue;
     }
-    // Device tool (GPS, alarms, SMS) is mobile-only.
-    if (!isMobile && tool.name == 'device') {
-      continue;
-    }
+    // Device tool: available on all platforms.
+    // Some actions (SMS, GPS) are mobile-only — DeviceServices handles
+    // capability checks at runtime via getPlatformCapabilities().
     // Bash sandbox is desktop-only.
     if (isMobile && tool.name == 'bash') {
       continue;

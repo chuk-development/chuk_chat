@@ -694,6 +694,12 @@ class ToolExecutor {
         return _wrapOutput(await platform_tools.executeEmail(args));
       case 'device':
         return _wrapOutput(await platform_tools.executeDevice(args));
+      case 'calendar':
+        return _wrapOutput(await platform_tools.executeCalendar(args));
+      case 'reminder':
+        return _wrapOutput(await platform_tools.executeReminder(args));
+      case 'draft_email':
+        return _wrapOutput(await platform_tools.executeDraftEmail(args));
 
       // -- Nextcloud (web-safe) --
       case 'nextcloud':
