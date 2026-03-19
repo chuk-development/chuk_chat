@@ -24,7 +24,6 @@ const Map<String, ToolCategory> toolCategoryMap = {
   'find_tools': ToolCategory.basic,
   'calculate': ToolCategory.basic,
   'get_time': ToolCategory.basic,
-  'get_device_info': ToolCategory.basic,
   'random_number': ToolCategory.basic,
   'flip_coin': ToolCategory.basic,
   'roll_dice': ToolCategory.basic,
@@ -132,14 +131,6 @@ final List<ClientTool> builtinTools = [
     parameters: {},
     type: ToolType.builtin,
     tags: ['time', 'date', 'uhr', 'zeit', 'datum', 'clock'],
-  ),
-  ClientTool(
-    name: 'get_device_info',
-    description:
-        'Return runtime environment info (platform, web/native, debug/release).',
-    parameters: {},
-    type: ToolType.builtin,
-    tags: ['device', 'system', 'os', 'platform', 'info'],
   ),
   ClientTool(
     name: 'random_number',

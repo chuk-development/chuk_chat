@@ -57,7 +57,6 @@ class ToolExecutor {
     'find_tools',
     'calculate',
     'get_time',
-    'get_device_info',
     'random_number',
     'flip_coin',
     'roll_dice',
@@ -511,15 +510,6 @@ class ToolExecutor {
               '${now.day.toString().padLeft(2, '0')}',
           isError: false,
         );
-      case 'get_device_info':
-        return ToolExecutionResult(
-          output:
-              'Platform: ${_platformName()}\n'
-              'Web: ${kIsWeb ? 'yes' : 'no'}\n'
-              'Mode: ${kDebugMode ? 'debug' : 'release'}\n'
-              'Framework: Flutter',
-          isError: false,
-        );
       case 'random_number':
         final min = _coerceInt(args['min'], fallback: 1);
         final max = _coerceInt(args['max'], fallback: 100);
@@ -947,18 +937,4 @@ class ToolExecutor {
     return parsed ?? fallback;
   }
 
-  String _platformName() {
-    if (kIsWeb) {
-      return 'web';
-    }
-
-    return switch (defaultTargetPlatform) {
-      TargetPlatform.android => 'android',
-      TargetPlatform.iOS => 'ios',
-      TargetPlatform.macOS => 'macos',
-      TargetPlatform.windows => 'windows',
-      TargetPlatform.linux => 'linux',
-      TargetPlatform.fuchsia => 'fuchsia',
-    };
-  }
 }
