@@ -462,7 +462,7 @@ class ChatUiHelpers {
       final hasImageAttachments = attachedFiles.any(
         (file) => file.isImage && file.encryptedImagePath != null,
       );
-      return hasImageAttachments ? 'Please describe these images.' : '';
+      return hasImageAttachments ? '1 image attached' : '';
     }
 
     final markdownSections = documentFiles
