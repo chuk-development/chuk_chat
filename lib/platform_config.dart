@@ -83,7 +83,7 @@ const bool kFeatureSystemTray = bool.fromEnvironment(
 /// When disabled, Linux falls back to SharedPreferences instead of keyring.
 const bool kFeatureLinuxKeyring = bool.fromEnvironment(
   'FEATURE_LINUX_KEYRING',
-  defaultValue: true,
+  defaultValue: false,
 );
 
 /// Stock market data tool (Yahoo Finance).

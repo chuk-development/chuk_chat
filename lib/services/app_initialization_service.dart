@@ -32,8 +32,8 @@ class AppInitializationService {
   bool get _isLinuxDesktop =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
 
-  static const Duration _linuxDeferredKeySyncDelay = Duration(seconds: 25);
-  static const Duration _linuxInitialKeyPreloadDelay = Duration(seconds: 40);
+  static const Duration _linuxDeferredKeySyncDelay = Duration(seconds: 3);
+  static const Duration _linuxInitialKeyPreloadDelay = Duration(seconds: 2);
 
   bool get isInitializing => _isInitializing;
   bool get isSupabaseReady => _isSupabaseReady;
