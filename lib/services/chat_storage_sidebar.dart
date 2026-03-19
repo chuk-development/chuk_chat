@@ -94,11 +94,9 @@ class ChatStorageSidebar {
       // Mark initial load complete - ChatSyncService can now start syncing
       ChatStorageState.initialSyncComplete = true;
 
-      // Hydrate full chat payloads from plaintext cache in the background.
-      // This makes all cached chats isFullyLoaded=true so preload finds
-      // nothing to do (zero jank). Only truly new/updated chats from sync
-      // will need loading later.
-      unawaited(_hydrateFullChatsFromCache(user.id));
+      // No eager hydration needed — individual chats load instantly from
+      // plaintext cache when tapped (cache-first loadFullChat). Full preload
+      // only runs on-demand for search/export via awaitPreload().
     } catch (e) {
       if (kDebugMode) {
         debugPrint('❌ [ChatStorage] Sidebar load failed: $e');
