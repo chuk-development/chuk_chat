@@ -588,6 +588,25 @@ Charts and maps are disabled for this session. Do NOT emit <chart> or <map> tags
       buffer.writeln('</map>');
     }
 
+    // Email drafts — always available
+    buffer.writeln();
+    buffer.writeln('### Emails');
+    buffer.writeln(
+      'To draft an email, emit an <email> tag with JSON. The app renders it as a card with an "Open in Mail App" button. Nothing is sent automatically.',
+    );
+    buffer.writeln('<email>');
+    buffer.writeln(
+      '{"to":"recipient@example.com","subject":"Meeting Tomorrow","body":"Hi,\\n\\nJust confirming our meeting tomorrow at 2pm.\\n\\nBest regards"}',
+    );
+    buffer.writeln('</email>');
+    buffer.writeln();
+    buffer.writeln('**Email fields:**');
+    buffer.writeln('- "to": recipient email address (required)');
+    buffer.writeln('- "subject": email subject line (optional)');
+    buffer.writeln('- "body": email body text, use \\n for newlines (optional)');
+    buffer.writeln('- "cc": CC addresses, comma-separated (optional)');
+    buffer.writeln('- "bcc": BCC addresses, comma-separated (optional)');
+
     buffer.writeln();
     buffer.writeln('### Visual output rules:');
     var ruleNumber = 1;

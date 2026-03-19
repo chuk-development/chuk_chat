@@ -89,7 +89,6 @@ class ToolExecutor {
     'device',
     'calendar',
     'reminder',
-    'draft_email',
     'search_chats',
     'artifact_manager',
     'update_project',
@@ -701,9 +700,6 @@ class ToolExecutor {
         return _wrapOutput(await platform_tools.executeCalendar(args));
       case 'reminder':
         return _wrapOutput(await platform_tools.executeReminder(args));
-      case 'draft_email':
-        return _wrapOutput(await platform_tools.executeDraftEmail(args));
-
       // -- Nextcloud (web-safe) --
       case 'nextcloud':
         return _wrapOutput(await nextcloud_tools.executeNextcloud(args));
