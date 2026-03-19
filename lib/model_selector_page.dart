@@ -550,69 +550,72 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                 ),
               ),
             )
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Search field
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    child: TextField(
-                      controller: _searchController,
-                      style: TextStyle(color: iconFg, fontSize: 14),
-                      decoration: InputDecoration(
-                        hintText: 'Search models...',
-                        hintStyle: TextStyle(
-                          color: iconFg.withValues(alpha: 0.5),
-                          fontSize: 14,
+          : Column(
+              children: [
+                // Search field (pinned at top)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: TextField(
+                    controller: _searchController,
+                    style: TextStyle(color: iconFg, fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: 'Search models...',
+                      hintStyle: TextStyle(
+                        color: iconFg.withValues(alpha: 0.5),
+                        fontSize: 14,
+                      ),
+                      prefixIcon: Icon(
+                        Icons.search,
+                        color: iconFg.withValues(alpha: 0.6),
+                        size: 20,
+                      ),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: Icon(
+                                Icons.clear,
+                                color: iconFg.withValues(alpha: 0.6),
+                                size: 20,
+                              ),
+                              onPressed: () {
+                                _searchController.clear();
+                              },
+                            )
+                          : null,
+                      filled: true,
+                      fillColor: scaffoldBg.lighten(0.05),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                          color: iconFg.withValues(alpha: 0.3),
                         ),
-                        prefixIcon: Icon(
-                          Icons.search,
-                          color: iconFg.withValues(alpha: 0.6),
-                          size: 20,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                          color: iconFg.withValues(alpha: 0.3),
                         ),
-                        suffixIcon: _searchQuery.isNotEmpty
-                            ? IconButton(
-                                icon: Icon(
-                                  Icons.clear,
-                                  color: iconFg.withValues(alpha: 0.6),
-                                  size: 20,
-                                ),
-                                onPressed: () {
-                                  _searchController.clear();
-                                },
-                              )
-                            : null,
-                        filled: true,
-                        fillColor: scaffoldBg.lighten(0.05),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: iconFg.withValues(alpha: 0.3),
-                          ),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: iconFg.withValues(alpha: 0.3),
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(color: accent, width: 1.5),
-                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: accent, width: 1.5),
                       ),
                     ),
                   ),
-                  // Show results count when searching
-                  if (_searchQuery.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12, left: 8),
+                ),
+                // Show results count when searching
+                if (_searchQuery.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(
+                      top: 12,
+                      bottom: 4,
+                      left: 24,
+                    ),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
                       child: Text(
                         '${_filteredModels.length} model${_filteredModels.length == 1 ? '' : 's'} found',
                         style: TextStyle(
@@ -622,105 +625,122 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                         ),
                       ),
                     ),
-                  // Models list
-                  ..._filteredModels.map((model) {
-                    ModelProviderInfo? selectedProviderForModel =
-                        _selectedProviders[model.id];
-                    bool isDescriptionExpanded =
-                        _expandedDescriptions[model.id] ?? false;
+                  ),
+                // Models list — lazy-built for smooth scrolling
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                    itemCount: _filteredModels.length,
+                    // Estimated height per item for smoother scrollbar
+                    itemExtent: null,
+                    itemBuilder: (context, index) {
+                      final model = _filteredModels[index];
+                      final ModelProviderInfo? selectedProviderForModel =
+                          _selectedProviders[model.id];
+                      final bool isDescriptionExpanded =
+                          _expandedDescriptions[model.id] ?? false;
 
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        ModelSelectionRow(
-                          key: ValueKey(model.id),
-                          model: model,
-                          selectedProvider: selectedProviderForModel,
-                          onProviderChanged: (provider) =>
-                              _onProviderSelect(model.id, provider),
-                          formatContextLength: _formatContextLength,
-                          buildIconWidget: _buildIconWidget,
-                          accentColor: accent, // Pass accent to row
-                          iconFgColor: iconFg, // Pass iconFg to row
-                          bgColor: scaffoldBg, // Pass bg to row
-                        ),
-                        if (model.description != null &&
-                            model.description!.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(
-                              left: 8.0,
-                              right: 8.0,
-                              top: 4.0,
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                GestureDetector(
-                                  onTap: () => _toggleDescription(model.id),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 8.0,
-                                      horizontal: 12.0,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: scaffoldBg.darken(0.05),
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(
-                                        color: iconFg.withValues(alpha: 0.3),
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          ModelSelectionRow(
+                            key: ValueKey(model.id),
+                            model: model,
+                            selectedProvider: selectedProviderForModel,
+                            onProviderChanged: (provider) =>
+                                _onProviderSelect(model.id, provider),
+                            formatContextLength: _formatContextLength,
+                            buildIconWidget: _buildIconWidget,
+                            accentColor: accent,
+                            iconFgColor: iconFg,
+                            bgColor: scaffoldBg,
+                          ),
+                          if (model.description != null &&
+                              model.description!.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                left: 8.0,
+                                right: 8.0,
+                                top: 4.0,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  GestureDetector(
+                                    onTap: () =>
+                                        _toggleDescription(model.id),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 8.0,
+                                        horizontal: 12.0,
                                       ),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Text(
-                                          'Description',
-                                          style: TextStyle(
-                                            color: iconFg.lighten(0.3),
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 13,
+                                      decoration: BoxDecoration(
+                                        color: scaffoldBg.darken(0.05),
+                                        borderRadius:
+                                            BorderRadius.circular(10),
+                                        border: Border.all(
+                                          color: iconFg.withValues(
+                                            alpha: 0.3,
                                           ),
                                         ),
-                                        const Spacer(),
-                                        Icon(
-                                          isDescriptionExpanded
-                                              ? Icons.keyboard_arrow_up
-                                              : Icons.keyboard_arrow_down,
-                                          color: iconFg.lighten(0.3),
-                                          size: 20,
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Text(
+                                            'Description',
+                                            style: TextStyle(
+                                              color: iconFg.lighten(0.3),
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                          const Spacer(),
+                                          Icon(
+                                            isDescriptionExpanded
+                                                ? Icons.keyboard_arrow_up
+                                                : Icons.keyboard_arrow_down,
+                                            color: iconFg.lighten(0.3),
+                                            size: 20,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  if (isDescriptionExpanded)
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.all(12.0),
+                                      margin:
+                                          const EdgeInsets.only(top: 4.0),
+                                      decoration: BoxDecoration(
+                                        color: scaffoldBg.darken(0.05),
+                                        borderRadius:
+                                            BorderRadius.circular(10),
+                                        border: Border.all(
+                                          color: iconFg.withValues(
+                                            alpha: 0.3,
+                                          ),
                                         ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                if (isDescriptionExpanded)
-                                  Container(
-                                    width: double.infinity,
-                                    padding: const EdgeInsets.all(12.0),
-                                    margin: const EdgeInsets.only(top: 4.0),
-                                    decoration: BoxDecoration(
-                                      color: scaffoldBg.darken(0.05),
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(
-                                        color: iconFg.withValues(alpha: 0.3),
+                                      ),
+                                      child: Text(
+                                        model.description!,
+                                        style: TextStyle(
+                                          color: iconFg.lighten(0.3),
+                                          fontSize: 12,
+                                          height: 1.4,
+                                        ),
                                       ),
                                     ),
-                                    child: Text(
-                                      model.description!,
-                                      style: TextStyle(
-                                        color: iconFg.lighten(0.3),
-                                        fontSize: 12,
-                                        height: 1.4,
-                                      ),
-                                    ),
-                                  ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                        const SizedBox(height: 16),
-                      ],
-                    );
-                  }),
-                ],
-              ),
+                          const SizedBox(height: 16),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
     );
   }
