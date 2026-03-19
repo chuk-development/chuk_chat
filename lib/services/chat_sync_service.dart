@@ -1,7 +1,6 @@
 // lib/services/chat_sync_service.dart
 import 'dart:async';
 
-import 'package:chuk_chat/services/chat_preload_service.dart';
 import 'package:chuk_chat/services/chat_storage_mutations.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
@@ -325,11 +324,8 @@ class ChatSyncService {
           debugPrint('✅ [ChatSync] Sync complete');
         }
 
-        // If sync found new chats and preload already finished, trigger
-        // a follow-up preload so the new chats get cached for offline use.
-        if (newChatIds.isNotEmpty && ChatPreloadService.isPreloadComplete) {
-          unawaited(ChatPreloadService.preloadNewChats());
-        }
+        // Preload is on-demand only (export/search). New chats are loaded
+        // individually when the user opens them.
       }
 
       unawaited(
