@@ -358,13 +358,15 @@ After find_tools returns the tool descriptions and parameters, you can use those
 DO NOT STALL: Never end with intention-only text like "I will search". Either emit the next tool_call, or provide a complete final answer.
 
 VISUAL OUTPUT NOTE:
-- <chart> and <map> are OUTPUT TAGS, not tools.
-- Never call find_tools for "chart", "graph", "plot", or "map" itself.
+- <chart>, <map>, and <email> are OUTPUT TAGS, not tools. Write them directly in your response.
+- Never call find_tools for "chart", "graph", "plot", "map", or "email".
 - If user asks for a chart/map, discover DATA tools first, then emit <chart>/<map> directly in your final response text.
+- To draft an email, emit <email>{"to":"...","subject":"...","body":"..."}</email> in your response. The app renders it as a card with an "Open in Mail App" button.
 
 VISUAL OUTPUT SWITCHES (current):
 - chart tags: ${includeChartVisualOutput ? 'enabled' : 'disabled'}
 - map tags: ${includeMapVisualOutput ? 'enabled' : 'disabled'}
+- email tags: enabled
 
 STOP after $toolCallEnd -- wait for real results. Never fabricate outputs.
 ${_buildAlwaysAvailableSection(alwaysAvailableTools)}''';
