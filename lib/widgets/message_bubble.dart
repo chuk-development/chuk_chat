@@ -2067,7 +2067,9 @@ class _MessageBubbleState extends State<MessageBubble>
     }
 
     if (isUserMessage) {
-      return SelectableText(
+      // Use plain Text so taps pass through to the GestureDetector
+      // that toggles the action bar. Copy is available via the action bar.
+      return Text(
         displayText,
         style: TextStyle(color: iconFgColor, fontSize: 15, height: 1.38),
       );
