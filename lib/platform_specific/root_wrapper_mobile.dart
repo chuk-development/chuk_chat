@@ -94,11 +94,11 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     // Initialize smooth sidebar animation
     _sidebarAnimController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 250), // Smooth 250ms animation
+      duration: const Duration(milliseconds: 200),
     );
     _sidebarAnimation = CurvedAnimation(
       parent: _sidebarAnimController,
-      curve: Curves.easeInOut, // Smooth easing curve
+      curve: Curves.easeOutCubic,
     );
 
     // Don't block UI startup - check permissions after first frame
@@ -534,18 +534,15 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                       _toggleSidebar();
                     }
                   },
-                  child: FadeTransition(
-                    opacity: _sidebarAnimation,
-                    child: SidebarMobile(
-                      onChatSelected: _handleChatSelected,
-                      onSettingsTapped: _openSettingsPage,
-                      onProjectsTapped: _openProjectsPage,
-                      onMediaTapped: _openMediaPage,
-                      onAssistantsTapped: _openAssistantsPage,
-                      onChatDeleted: _handleChatDeleted,
-                      selectedChatId: ChatStorageService.selectedChatId,
-                      isCompactMode: true,
-                    ),
+                  child: SidebarMobile(
+                    onChatSelected: _handleChatSelected,
+                    onSettingsTapped: _openSettingsPage,
+                    onProjectsTapped: _openProjectsPage,
+                    onMediaTapped: _openMediaPage,
+                    onAssistantsTapped: _openAssistantsPage,
+                    onChatDeleted: _handleChatDeleted,
+                    selectedChatId: ChatStorageService.selectedChatId,
+                    isCompactMode: true,
                   ),
                 ),
               ),
