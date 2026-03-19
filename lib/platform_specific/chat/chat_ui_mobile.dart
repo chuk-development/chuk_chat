@@ -2363,9 +2363,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
-          AnimatedPadding(
-            duration: const Duration(milliseconds: 100),
-            curve: Curves.easeOut,
+          Padding(
             padding: EdgeInsets.only(bottom: keyboardInset),
             child: GestureDetector(
               behavior: HitTestBehavior.translucent,
