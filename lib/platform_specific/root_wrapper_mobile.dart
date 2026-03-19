@@ -412,7 +412,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                     padding: const EdgeInsets.only(left: 4.0),
                     child: Text(
                       'Chuk Chat',
-                      style: TextStyle(color: iconFg, fontSize: 16),
+                      style: TextStyle(color: iconFg, fontSize: 20, fontWeight: FontWeight.w700),
                       softWrap: false,
                       overflow: TextOverflow.clip,
                     ),
