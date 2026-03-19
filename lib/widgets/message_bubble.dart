@@ -371,7 +371,7 @@ class _MessageBubbleState extends State<MessageBubble>
             ),
           ),
           padding: EdgeInsets.symmetric(
-            horizontal: kPlatformMobile ? 2 : 8,
+            horizontal: kPlatformMobile ? 1 : 8,
             vertical: kPlatformMobile ? 0 : 4,
           ),
           child: Row(
@@ -383,13 +383,13 @@ class _MessageBubbleState extends State<MessageBubble>
                   icon: Icon(
                     action.icon,
                     color: iconFgColor,
-                    size: kPlatformMobile ? 15 : 18,
+                    size: kPlatformMobile ? 13 : 18,
                   ),
-                  padding: EdgeInsets.all(kPlatformMobile ? 4 : 8),
+                  padding: EdgeInsets.all(kPlatformMobile ? 3 : 8),
                   visualDensity: VisualDensity.compact,
                   constraints: BoxConstraints(
-                    minWidth: kPlatformMobile ? 24 : 30,
-                    minHeight: kPlatformMobile ? 24 : 30,
+                    minWidth: kPlatformMobile ? 20 : 30,
+                    minHeight: kPlatformMobile ? 20 : 30,
                   ),
                   // Desktop has oversized tap targets by default — shrink them.
                   // Mobile was already correct, so leave it untouched.
@@ -1791,24 +1791,24 @@ class _MessageBubbleState extends State<MessageBubble>
           ),
         ),
         padding: EdgeInsets.symmetric(
-          horizontal: kPlatformMobile ? 6 : 10,
-          vertical: kPlatformMobile ? 4 : 6,
+          horizontal: kPlatformMobile ? 8 : 10,
+          vertical: kPlatformMobile ? 5 : 6,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             for (int i = 0; i < sources.length && i < 5; i++)
               Padding(
-                padding: EdgeInsets.only(right: i < 4 ? 3.0 : 0),
+                padding: EdgeInsets.only(right: i < 4 ? 4.0 : 0),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: Image.network(
                     'https://www.google.com/s2/favicons?domain=${sources[i]['host']}&sz=32',
-                    width: 16,
-                    height: 16,
+                    width: kPlatformMobile ? 18 : 16,
+                    height: kPlatformMobile ? 18 : 16,
                     errorBuilder: (_, __, ___) => Icon(
                       Icons.public,
-                      size: 16,
+                      size: kPlatformMobile ? 18 : 16,
                       color: colorScheme.onSurfaceVariant,
                     ),
                   ),
@@ -1820,7 +1820,7 @@ class _MessageBubbleState extends State<MessageBubble>
               style: TextStyle(
                 color: colorScheme.onSurfaceVariant,
                 fontWeight: FontWeight.w500,
-                fontSize: 12,
+                fontSize: kPlatformMobile ? 13 : 12,
               ),
             ),
           ],
