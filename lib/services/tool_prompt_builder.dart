@@ -112,10 +112,58 @@ class ToolPromptBuilder {
         );
       } else if (discoveryMode) {
         // Extract all tool names so the AI sees what's available.
+        // Order: commonly used tools first for better AI discoverability.
+        const toolDisplayOrder = <String>[
+          // Core tools the AI should find immediately
+          'web_search',
+          'web_crawl',
+          'generate_image',
+          'edit_image',
+          'fetch_image',
+          'view_chat_images',
+          'search_chats',
+          'notes',
+          'ask_user',
+          // Utilities
+          'calculate',
+          'get_time',
+          'generate_qr',
+          'random_number',
+          'flip_coin',
+          'roll_dice',
+          'countdown',
+          'password_generator',
+          'uuid_generator',
+          // Location & maps
+          'search_places',
+          'search_restaurants',
+          'geocode',
+          'get_route',
+          // Integrations
+          'spotify_control',
+          'device',
+          'calendar',
+          'reminder',
+          'weather',
+          // Project
+          'update_project',
+          'artifact_manager',
+          // Finance
+          'stock_data',
+          // System
+          'bash',
+        ];
         final allToolNames = tools
             .map((t) => t['name']?.toString() ?? '')
             .where((n) => n.isNotEmpty && n != 'find_tools')
-            .toList();
+            .toList()
+          ..sort((a, b) {
+            final ai = toolDisplayOrder.indexOf(a);
+            final bi = toolDisplayOrder.indexOf(b);
+            final aPrio = ai >= 0 ? ai : 999;
+            final bPrio = bi >= 0 ? bi : 999;
+            return aPrio.compareTo(bPrio);
+          });
         buffer.writeln(
           _buildDiscoveryPrompt(
             alwaysAvailableTools,
