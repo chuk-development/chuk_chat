@@ -58,12 +58,11 @@ class ChatPreloadService {
   static int _totalCount = 0;
   static int get totalCount => _totalCount;
 
-  /// Batch size for loading — with plaintext cache, parsing is fast so we can
-  /// process larger batches without UI jank.
-  static const int _batchSize = 10;
+  /// Batch size for loading
+  static const int _batchSize = 5;
 
   /// Delay between batches to yield to UI thread (ms)
-  static const int _batchDelayMs = 50;
+  static const int _batchDelayMs = 100;
 
   /// Start background preload of all chat messages.
   /// Safe to call multiple times - will only run once.
@@ -167,13 +166,20 @@ class ChatPreloadService {
         );
       }
 
+      // Load entire cache once — avoid re-reading SharedPreferences per batch
+      final cachedRows = await LocalChatCacheService.load(user.id);
+      final cachedRowsById = <String, Map<String, dynamic>>{
+        for (final r in cachedRows)
+          if (r['id'] is String) r['id'] as String: r,
+      };
+
       // Process in batches to avoid blocking UI
       for (int i = 0; i < chatsToLoad.length; i += _batchSize) {
         final batchEnd = (i + _batchSize).clamp(0, chatsToLoad.length);
         final batchIds = chatsToLoad.sublist(i, batchEnd);
 
         // Load batch
-        await _loadBatch(batchIds, user.id);
+        await _loadBatch(batchIds, user.id, cachedRowsById);
 
         // Update progress
         _loadedCount = batchEnd;
@@ -234,24 +240,44 @@ class ChatPreloadService {
   }
 
   /// Load a batch of chats by their IDs.
-  /// Tries Supabase first, falls back to local cache if offline/error.
-  static Future<void> _loadBatch(List<String> chatIds, String userId) async {
+  /// Tries pre-loaded cache map first (instant), then Supabase for misses.
+  static Future<void> _loadBatch(
+    List<String> chatIds,
+    String userId,
+    Map<String, Map<String, dynamic>> cachedRowsById,
+  ) async {
     if (chatIds.isEmpty) return;
-    final stopwatch = Stopwatch()..start();
 
-    // Skip network call entirely if we know we're offline
-    if (!NetworkStatusService.isOnline) {
-      if (kDebugMode) {
-        debugPrint(
-          '📦 [Preload] Offline — loading ${chatIds.length} chats from cache',
-        );
+    // Find which chats are in cache
+    final matchingRows = <Map<String, dynamic>>[];
+    final missingIds = <String>[];
+
+    for (final id in chatIds) {
+      final cached = cachedRowsById[id];
+      if (cached != null) {
+        matchingRows.add(cached);
+      } else {
+        missingIds.add(id);
       }
-      await _loadBatchFromCache(chatIds, userId);
-      return;
     }
 
+    // Parse cached rows (plaintext, no decryption)
+    if (matchingRows.isNotEmpty) {
+      await _parseAndStoreRows(matchingRows);
+    }
+
+    // Fetch missing chats from Supabase
+    if (missingIds.isNotEmpty && NetworkStatusService.isOnline) {
+      await _fetchFromRemote(missingIds, userId);
+    }
+  }
+
+  /// Fetch chats from Supabase, decrypt, store, and cache as plaintext.
+  static Future<void> _fetchFromRemote(
+    List<String> chatIds,
+    String userId,
+  ) async {
     try {
-      // Fetch full payloads from Supabase (with timeout to avoid hanging)
       final rows = await SupabaseService.client
           .from('encrypted_chats')
           .select(
@@ -263,31 +289,14 @@ class ChatPreloadService {
 
       if (rows.isNotEmpty) {
         await _decryptAndStoreRows(rows, userId);
-
-        if (stopwatch.elapsedMilliseconds > 2500) {
-          unawaited(
-            DiagnosticsLogService.warning(
-              'preload',
-              'Slow preload batch from network',
-              data: {
-                'chat_count': chatIds.length,
-                'elapsed_ms': stopwatch.elapsedMilliseconds,
-              },
-            ),
-          );
-        }
-        return;
       }
     } catch (e) {
       if (kDebugMode) {
         debugPrint(
-          '⚠️ [Preload] Remote batch load failed, trying local cache: $e',
+          '⚠️ [Preload] Remote batch load failed: $e',
         );
       }
     }
-
-    // Fallback: Load from local cache
-    await _loadBatchFromCache(chatIds, userId);
   }
 
   /// Decrypt Supabase rows, store them in memory, and write plaintext to cache.
@@ -361,73 +370,48 @@ class ChatPreloadService {
     }
   }
 
-  /// Load a batch of chats from local cache (offline fallback).
-  /// Cache stores plaintext — no decryption needed.
-  static Future<void> _loadBatchFromCache(
-    List<String> chatIds,
-    String userId,
-  ) async {
-    try {
-      final cachedRows = await LocalChatCacheService.load(userId);
-      if (cachedRows.isEmpty) return;
-
-      // Filter to only the requested chat IDs
-      final chatIdSet = chatIds.toSet();
-      final matchingRows = cachedRows
-          .where((r) => chatIdSet.contains(r['id'] as String?))
-          .toList();
-
-      if (matchingRows.isEmpty) return;
-
-      if (kDebugMode) {
-        debugPrint(
-          '📦 [Preload] Loading ${matchingRows.length} chats from local cache',
-        );
-      }
-
-      await _parseAndStoreRows(matchingRows);
-    } catch (e) {
-      _failureCount++;
-      if (kDebugMode) {
-        debugPrint('⚠️ [Preload] Local cache batch load failed: $e');
-      }
-    }
-  }
-
   /// Parse plaintext cache rows and store them in memory (no decryption needed).
+  /// Uses a single isolate for batch JSON parsing to avoid spawning hundreds
+  /// of isolates during preload.
   static Future<void> _parseAndStoreRows(
     List<Map<String, dynamic>> rows,
   ) async {
-    for (int j = 0; j < rows.length; j++) {
-      final row = rows[j];
-      final payload = row['payload'] as String?;
-      if (payload == null || payload.isEmpty) continue;
+    // Collect valid payloads for batch processing in one isolate
+    final payloads = <String>[];
+    final validIndices = <int>[];
 
-      try {
-        final chatPayload = await deserializePayloadAsync(payload);
-        final chatId = row['id'] as String;
+    for (int i = 0; i < rows.length; i++) {
+      final payload = rows[i]['payload'] as String?;
+      if (payload != null && payload.isNotEmpty) {
+        payloads.add(payload);
+        validIndices.add(i);
+      }
+    }
 
-        // Preserve existing chat's title if available
-        final existing = ChatStorageState.chatsById[chatId];
+    if (payloads.isEmpty) return;
 
-        final chat = StoredChat.fromRow(
-          row,
-          chatPayload.messages,
-          customName: chatPayload.customName,
-          title: existing?.title,
-        );
+    // Single isolate for all JSON parsing
+    final chatPayloads = await deserializePayloadBatchAsync(payloads);
 
-        ChatStorageState.chatsById[chatId] = chat;
-      } catch (e) {
+    for (int j = 0; j < validIndices.length; j++) {
+      final chatPayload = chatPayloads[j];
+      if (chatPayload == null) {
         _failureCount++;
-        if (kDebugMode) {
-          debugPrint('⚠️ [Preload] Failed to parse cached chat: $e');
-        }
+        continue;
       }
 
-      if (j > 0 && j % 2 == 1) {
-        await Future<void>.delayed(Duration.zero);
-      }
+      final row = rows[validIndices[j]];
+      final chatId = row['id'] as String;
+
+      final existing = ChatStorageState.chatsById[chatId];
+      final chat = StoredChat.fromRow(
+        row,
+        chatPayload.messages,
+        customName: chatPayload.customName,
+        title: existing?.title,
+      );
+
+      ChatStorageState.chatsById[chatId] = chat;
     }
   }
 

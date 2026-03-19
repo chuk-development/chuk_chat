@@ -390,6 +390,7 @@ class ChatStorageCrud {
   }
 
   /// Parse plaintext cache rows into StoredChat objects (no decryption needed).
+  /// Uses a single isolate for batch JSON parsing.
   static Future<List<StoredChat?>> _parseChatRowsBatch(
     List<Map<String, dynamic>> rows,
   ) async {
@@ -397,20 +398,33 @@ class ChatStorageCrud {
 
     final results = List<StoredChat?>.filled(rows.length, null);
 
+    // Collect valid payloads for batch processing
+    final payloads = <String>[];
+    final validIndices = <int>[];
+
     for (int i = 0; i < rows.length; i++) {
       final payload = rows[i]['payload'] as String?;
-      if (payload == null || payload.isEmpty) continue;
-
-      try {
-        final chatPayload = await deserializePayloadAsync(payload);
-        results[i] = StoredChat.fromRow(
-          rows[i],
-          chatPayload.messages,
-          customName: chatPayload.customName,
-        );
-      } catch (_) {
-        // Skip invalid chats
+      if (payload != null && payload.isNotEmpty) {
+        payloads.add(payload);
+        validIndices.add(i);
       }
+    }
+
+    if (payloads.isEmpty) return results;
+
+    // Single isolate for all JSON parsing
+    final chatPayloads = await deserializePayloadBatchAsync(payloads);
+
+    for (int j = 0; j < validIndices.length; j++) {
+      final chatPayload = chatPayloads[j];
+      if (chatPayload == null) continue;
+
+      final i = validIndices[j];
+      results[i] = StoredChat.fromRow(
+        rows[i],
+        chatPayload.messages,
+        customName: chatPayload.customName,
+      );
     }
 
     return results;

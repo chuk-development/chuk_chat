@@ -78,6 +78,48 @@ Future<ChatPayload> deserializePayloadAsync(String json) async {
   return ChatPayload(messages, customName: result.customName);
 }
 
+/// Top-level function for batch deserialization in a single isolate.
+/// Avoids spawning one isolate per chat during preload.
+List<DeserializeResult?> _deserializeBatchIsolate(List<String> jsonPayloads) {
+  final results = <DeserializeResult?>[];
+  for (final json in jsonPayloads) {
+    try {
+      results.add(deserializePayloadIsolate(json));
+    } catch (_) {
+      results.add(null);
+    }
+  }
+  return results;
+}
+
+/// Batch deserialize multiple payloads in a single isolate (much faster
+/// than one compute() call per chat). Returns ChatPayload list with nulls
+/// for any entries that failed to parse.
+Future<List<ChatPayload?>> deserializePayloadBatchAsync(
+  List<String> jsonPayloads,
+) async {
+  if (jsonPayloads.isEmpty) return [];
+  final results = await compute(_deserializeBatchIsolate, jsonPayloads);
+  final payloads = <ChatPayload?>[];
+  for (int i = 0; i < results.length; i++) {
+    final result = results[i];
+    if (result == null) {
+      payloads.add(null);
+      continue;
+    }
+    final messages = <ChatMessage>[];
+    for (final m in result.messages) {
+      messages.add(ChatMessage.fromJson(m));
+    }
+    payloads.add(ChatPayload(messages, customName: result.customName));
+    // Yield every few chats to keep UI responsive
+    if (i > 0 && i % 3 == 0) {
+      await Future<void>.delayed(Duration.zero);
+    }
+  }
+  return payloads;
+}
+
 /// Extract title from messages (first user message, truncated).
 /// Duplicated here to avoid circular import with chat_storage_crud.dart.
 String _extractTitle(List<ChatMessage> messages) {
