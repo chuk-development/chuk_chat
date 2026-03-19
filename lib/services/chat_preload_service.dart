@@ -58,11 +58,12 @@ class ChatPreloadService {
   static int _totalCount = 0;
   static int get totalCount => _totalCount;
 
-  /// Batch size for loading (smaller = more responsive UI, larger = faster overall)
-  static const int _batchSize = 1;
+  /// Batch size for loading — with plaintext cache, parsing is fast so we can
+  /// process larger batches without UI jank.
+  static const int _batchSize = 10;
 
   /// Delay between batches to yield to UI thread (ms)
-  static const int _batchDelayMs = 300;
+  static const int _batchDelayMs = 50;
 
   /// Start background preload of all chat messages.
   /// Safe to call multiple times - will only run once.

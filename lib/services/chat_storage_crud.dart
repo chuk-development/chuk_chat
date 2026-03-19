@@ -50,7 +50,7 @@ class ChatStorageCrud {
     }
     final stopwatch = Stopwatch()..start();
 
-    // Check if already fully loaded
+    // Check if already fully loaded in memory
     final existing = ChatStorageState.chatsById[chatId];
     if (existing != null && existing.isFullyLoaded) {
       if (kDebugMode) {
@@ -61,11 +61,20 @@ class ChatStorageCrud {
       return existing;
     }
 
-    // Check network status with a real probe to avoid stale cached state
+    // Try local cache FIRST — it's plaintext JSON, instant load, no decryption.
+    // This gives sub-millisecond response for any previously cached chat.
+    final cached =
+        await _loadFullChatFromCache(chatId, user.id, existing, stopwatch);
+    if (cached != null) {
+      // Background: sync fresh copy from Supabase to keep cache up-to-date
+      unawaited(_syncChatFromRemote(chatId, user.id, existing));
+      return cached;
+    }
+
+    // Cache miss — load from Supabase
     final isOnline = await ChatStorageState.checkNetworkStatus();
 
     if (isOnline) {
-      // Try Supabase first (online path)
       try {
         final rows = await SupabaseService.client
             .from('encrypted_chats')
@@ -96,6 +105,20 @@ class ChatStorageCrud {
             ChatStorageState.chatsById[chatId] = chat;
             ChatStorageState.notifyChanges(chatId);
 
+            // Cache plaintext for next time
+            final title = chat.title ?? extractTitleFromMessages(chat.messages);
+            unawaited(LocalChatCacheService.upsert(
+              user.id,
+              LocalChatCacheService.buildPlaintextRow(
+                id: chatId,
+                payload: decrypted,
+                createdAt: row['created_at'] as String,
+                isStarred: (row['is_starred'] as bool?) ?? false,
+                updatedAt: row['updated_at'] as String?,
+                title: title.isNotEmpty ? title : null,
+              ),
+            ));
+
             stopwatch.stop();
             if (kDebugMode) {
               debugPrint(
@@ -106,10 +129,9 @@ class ChatStorageCrud {
           }
         }
 
-        // Chat not found on server - still try local cache
         if (kDebugMode) {
           debugPrint(
-            '⚠️ [ChatStorage] Chat not found on server, trying local cache: $chatId',
+            '⚠️ [ChatStorage] Chat not found on server or in cache: $chatId',
           );
         }
       } on SecretBoxAuthenticationError {
@@ -120,20 +142,97 @@ class ChatStorageCrud {
       } catch (e) {
         if (kDebugMode) {
           debugPrint(
-            '⚠️ [ChatStorage] Remote load failed, trying local cache: $e',
+            '⚠️ [ChatStorage] Remote load failed: $e',
           );
         }
       }
     } else {
       if (kDebugMode) {
         debugPrint(
-          '📦 [ChatStorage] Offline — loading chat from local cache: $chatId',
+          '📦 [ChatStorage] Offline and no cache for chat: $chatId',
         );
       }
     }
 
-    // Fallback: Load from local cache (offline path)
-    return _loadFullChatFromCache(chatId, user.id, existing, stopwatch);
+    return null;
+  }
+
+  /// Background sync: fetch latest version from Supabase and update cache.
+  /// Called after serving a chat from local cache to keep it fresh.
+  static Future<void> _syncChatFromRemote(
+    String chatId,
+    String userId,
+    StoredChat? existing,
+  ) async {
+    try {
+      final isOnline = await ChatStorageState.checkNetworkStatus();
+      if (!isOnline) return;
+
+      final rows = await SupabaseService.client
+          .from('encrypted_chats')
+          .select(
+            'id, encrypted_payload, created_at, is_starred, updated_at, encrypted_title',
+          )
+          .eq('id', chatId)
+          .eq('user_id', userId)
+          .limit(1)
+          .timeout(const Duration(seconds: 10));
+
+      if (rows.isEmpty) return;
+
+      final row = rows.first;
+      final encryptedPayload = row['encrypted_payload'] as String?;
+      if (encryptedPayload == null || encryptedPayload.isEmpty) return;
+
+      final decrypted = await EncryptionService.decryptInBackground(
+        encryptedPayload,
+      );
+      final chatPayload = await deserializePayloadAsync(decrypted);
+
+      final remoteChat = StoredChat.fromRow(
+        row,
+        chatPayload.messages,
+        customName: chatPayload.customName,
+        title: existing?.title,
+      );
+
+      // Only update if remote is newer
+      final current = ChatStorageState.chatsById[chatId];
+      if (current != null) {
+        final currentUpdated = current.updatedAt ?? current.createdAt;
+        final remoteUpdated = remoteChat.updatedAt ?? remoteChat.createdAt;
+        if (!remoteUpdated.isAfter(currentUpdated)) return;
+      }
+
+      ChatStorageState.chatsById[chatId] = remoteChat;
+      ChatStorageState.notifyChanges(chatId);
+
+      // Update plaintext cache
+      final title = remoteChat.title ?? extractTitleFromMessages(remoteChat.messages);
+      await LocalChatCacheService.upsert(
+        userId,
+        LocalChatCacheService.buildPlaintextRow(
+          id: chatId,
+          payload: decrypted,
+          createdAt: row['created_at'] as String,
+          isStarred: (row['is_starred'] as bool?) ?? false,
+          updatedAt: row['updated_at'] as String?,
+          title: title.isNotEmpty ? title : null,
+        ),
+      );
+
+      if (kDebugMode) {
+        debugPrint(
+          '🔄 [ChatStorage] Background sync updated chat: $chatId',
+        );
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint(
+          '⚠️ [ChatStorage] Background sync failed for $chatId: $e',
+        );
+      }
+    }
   }
 
   /// Load a single chat from local cache (SharedPreferences).
