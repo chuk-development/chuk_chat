@@ -347,13 +347,22 @@ class AppInitializationService {
   }
 
   void _startDeferredPreload() {
-    // Preload is now on-demand only (export/search). No automatic background
-    // preload — it blocked the main thread event loop and caused severe jank.
-    // Chats are loaded individually when the user opens them, and the local
-    // cache keeps them available offline.
+    // Local cache is now plaintext (no decryption), so background preload is
+    // cheap — just JSON parsing. Delay slightly to keep initial UI smooth,
+    // then preload all chats so every tap is instant.
     if (kDebugMode) {
-      debugPrint('⏭️ [AppInit] Preload is on-demand only (export/search)');
+      debugPrint('🔄 [AppInit] Scheduling background preload (plaintext cache)');
     }
+    unawaited(
+      Future.delayed(const Duration(seconds: 3), () {
+        if (SupabaseService.auth.currentUser == null) return;
+        ChatPreloadService.startBackgroundPreload();
+      }).catchError((error) {
+        if (kDebugMode) {
+          debugPrint('⚠️ [AppInit] Background preload failed: $error');
+        }
+      }),
+    );
   }
 
   /// Wait for Supabase to be initialized
