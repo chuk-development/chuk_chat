@@ -280,7 +280,7 @@ class _MessageBubbleState extends State<MessageBubble>
 
   /// Bottom bar for AI messages: action buttons (left) + sources (right).
   /// Both pills share the same height so they look balanced.
-  static const double _mobileBottomBarHeight = 38.0;
+  static const double _mobileBottomBarHeight = 36.0;
 
   Widget _buildBottomBar(Color iconFgColor, bool hasActions) {
     final bool hasSources = widget.toolCalls != null &&
@@ -387,13 +387,13 @@ class _MessageBubbleState extends State<MessageBubble>
                   icon: Icon(
                     action.icon,
                     color: iconFgColor,
-                    size: kPlatformMobile ? 19 : 18,
+                    size: kPlatformMobile ? 18 : 18,
                   ),
-                  padding: EdgeInsets.all(kPlatformMobile ? 6 : 8),
+                  padding: EdgeInsets.all(kPlatformMobile ? 5 : 8),
                   visualDensity: VisualDensity.compact,
                   constraints: BoxConstraints(
-                    minWidth: kPlatformMobile ? 30 : 30,
-                    minHeight: kPlatformMobile ? 30 : 30,
+                    minWidth: kPlatformMobile ? 28 : 30,
+                    minHeight: kPlatformMobile ? 28 : 30,
                   ),
                   style: kPlatformMobile
                       ? IconButton.styleFrom(
@@ -1809,11 +1809,11 @@ class _MessageBubbleState extends State<MessageBubble>
                   borderRadius: BorderRadius.circular(4),
                   child: Image.network(
                     'https://www.google.com/s2/favicons?domain=${sources[i]['host']}&sz=32',
-                    width: kPlatformMobile ? 22 : 16,
-                    height: kPlatformMobile ? 22 : 16,
+                    width: kPlatformMobile ? 21 : 16,
+                    height: kPlatformMobile ? 21 : 16,
                     errorBuilder: (_, __, ___) => Icon(
                       Icons.public,
-                      size: kPlatformMobile ? 22 : 16,
+                      size: kPlatformMobile ? 21 : 16,
                       color: colorScheme.onSurfaceVariant,
                     ),
                   ),
