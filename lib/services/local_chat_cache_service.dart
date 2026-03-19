@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:chuk_chat/services/encryption_service.dart';
+
 /// Top-level function for background JSON parsing of cache data
 /// Must be top-level to work with compute()
 List<Map<String, dynamic>> _parseAndSanitizeCacheInIsolate(String raw) {
@@ -12,7 +14,7 @@ List<Map<String, dynamic>> _parseAndSanitizeCacheInIsolate(String raw) {
   }
   // Version check - hardcoded since we can't access class constants in isolate
   final version = decoded['version'];
-  if (version is! int || version != 1) {
+  if (version is! int || version != 2) {
     return const <Map<String, dynamic>>[];
   }
   final chatsRaw = decoded['chats'];
@@ -24,9 +26,9 @@ List<Map<String, dynamic>> _parseAndSanitizeCacheInIsolate(String raw) {
     if (entry is Map<String, dynamic>) {
       // Inline sanitization
       final id = entry['id'];
-      final encryptedPayload = entry['encrypted_payload'];
+      final payload = entry['payload'];
       final createdAtRaw = entry['created_at'];
-      if (id is! String || encryptedPayload is! String) {
+      if (id is! String || payload is! String) {
         continue;
       }
       String? createdAt;
@@ -39,12 +41,11 @@ List<Map<String, dynamic>> _parseAndSanitizeCacheInIsolate(String raw) {
       }
       chats.add(<String, dynamic>{
         'id': id,
-        'encrypted_payload': encryptedPayload,
+        'payload': payload,
         'created_at': createdAt,
         'is_starred': (entry['is_starred'] as bool?) ?? false,
         if (entry['updated_at'] is String) 'updated_at': entry['updated_at'],
-        if (entry['encrypted_title'] is String)
-          'encrypted_title': entry['encrypted_title'],
+        if (entry['title'] is String) 'title': entry['title'],
       });
     }
   }
@@ -58,11 +59,35 @@ List<Map<String, dynamic>> _parseAndSanitizeCacheInIsolate(String raw) {
 }
 
 class LocalChatCacheService {
-  static const int _cacheVersion = 1;
+  static const int _cacheVersion = 2;
   static const String _storageKeyPrefix =
-      'cached_encrypted_chats_v$_cacheVersion-';
+      'cached_chats_v$_cacheVersion-';
+
+  /// Old v1 encrypted cache key prefix (for migration)
+  static const String _oldStorageKeyPrefix =
+      'cached_encrypted_chats_v1-';
 
   const LocalChatCacheService._();
+
+  /// Build a plaintext cache row from pre-encryption data.
+  /// Use this instead of passing Supabase rows (which contain encrypted fields).
+  static Map<String, dynamic> buildPlaintextRow({
+    required String id,
+    required String payload,
+    required String createdAt,
+    required bool isStarred,
+    String? updatedAt,
+    String? title,
+  }) {
+    return <String, dynamic>{
+      'id': id,
+      'payload': payload,
+      'created_at': createdAt,
+      'is_starred': isStarred,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (title != null) 'title': title,
+    };
+  }
 
   static Future<void> replaceAll(
     String userId,
@@ -144,11 +169,140 @@ class LocalChatCacheService {
     await prefs.remove(_storageKey(userId));
   }
 
+  /// Migrate from old encrypted v1 cache to plaintext v2 cache.
+  /// Returns true if migration was performed, false if no old cache found.
+  /// On decrypt failure, logs warning and returns false (Supabase sync will repopulate).
+  static Future<bool> migrateFromEncrypted(String userId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final oldKey = '$_oldStorageKeyPrefix$userId';
+    final raw = prefs.getString(oldKey);
+    if (raw == null) return false;
+
+    if (kDebugMode) {
+      debugPrint(
+        '🔄 [CacheService] Migrating from encrypted v1 cache...',
+      );
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) {
+        await prefs.remove(oldKey);
+        return false;
+      }
+      final version = decoded['version'];
+      final chatsRaw = decoded['chats'];
+      if (version != 1 || chatsRaw is! List) {
+        await prefs.remove(oldKey);
+        return false;
+      }
+
+      // Collect encrypted payloads and titles for batch decryption
+      final encryptedPayloads = <String>[];
+      final encryptedTitles = <String?>[];
+      final validEntries = <Map<String, dynamic>>[];
+
+      for (final entry in chatsRaw) {
+        if (entry is! Map<String, dynamic>) continue;
+        final id = entry['id'];
+        final encPayload = entry['encrypted_payload'];
+        if (id is! String || encPayload is! String) continue;
+
+        encryptedPayloads.add(encPayload);
+        encryptedTitles.add(entry['encrypted_title'] as String?);
+        validEntries.add(entry);
+      }
+
+      if (encryptedPayloads.isEmpty) {
+        await prefs.remove(oldKey);
+        return false;
+      }
+
+      // Batch decrypt payloads
+      final decryptedPayloads =
+          await EncryptionService.decryptBatchInBackground(encryptedPayloads);
+
+      // Batch decrypt titles (filter non-null)
+      final titlePayloads = <String>[];
+      final titleIndices = <int>[];
+      for (int i = 0; i < encryptedTitles.length; i++) {
+        final t = encryptedTitles[i];
+        if (t != null && t.isNotEmpty) {
+          titlePayloads.add(t);
+          titleIndices.add(i);
+        }
+      }
+      final decryptedTitles = titlePayloads.isNotEmpty
+          ? await EncryptionService.decryptBatchInBackground(titlePayloads)
+          : <String?>[];
+
+      // Build plaintext rows
+      final plaintextRows = <Map<String, dynamic>>[];
+      // Map title indices back
+      final titleMap = <int, String?>{};
+      for (int j = 0; j < titleIndices.length; j++) {
+        titleMap[titleIndices[j]] = decryptedTitles[j];
+      }
+
+      for (int i = 0; i < validEntries.length; i++) {
+        final decrypted = decryptedPayloads[i];
+        if (decrypted == null) {
+          if (kDebugMode) {
+            debugPrint(
+              '⚠️ [CacheService] Migration: failed to decrypt entry ${validEntries[i]['id']} (index $i)',
+            );
+          }
+          continue;
+        }
+
+        final entry = validEntries[i];
+        plaintextRows.add(buildPlaintextRow(
+          id: entry['id'] as String,
+          payload: decrypted,
+          createdAt: entry['created_at'] as String? ??
+              DateTime.now().toUtc().toIso8601String(),
+          isStarred: (entry['is_starred'] as bool?) ?? false,
+          updatedAt: entry['updated_at'] as String?,
+          title: titleMap[i],
+        ));
+      }
+
+      // Write new v2 cache
+      await replaceAll(userId, plaintextRows);
+
+      // Delete old v1 cache
+      await prefs.remove(oldKey);
+
+      if (kDebugMode) {
+        debugPrint(
+          '✅ [CacheService] Migrated ${plaintextRows.length} chats from encrypted to plaintext cache',
+        );
+      }
+      return true;
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint(
+          '⚠️ [CacheService] Migration failed (Supabase sync will repopulate): $e',
+        );
+      }
+      // Clean up old cache to avoid repeated failed attempts
+      await prefs.remove(oldKey);
+      return false;
+    }
+  }
+
+  /// Check if old encrypted v1 cache exists for this user
+  static Future<bool> hasOldEncryptedCache(String userId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final oldKey = '$_oldStorageKeyPrefix$userId';
+    return prefs.containsKey(oldKey);
+  }
+
   static Map<String, dynamic>? _sanitizeRow(Map<String, dynamic> row) {
     final id = row['id'];
-    final encryptedPayload = row['encrypted_payload'];
+    final payload = row['payload'];
     final createdAtRaw = row['created_at'];
-    if (id is! String || encryptedPayload is! String) {
+    if (id is! String || payload is! String) {
       return null;
     }
     String? createdAt;
@@ -171,12 +325,11 @@ class LocalChatCacheService {
 
     return <String, dynamic>{
       'id': id,
-      'encrypted_payload': encryptedPayload,
+      'payload': payload,
       'created_at': createdAt,
       'is_starred': isStarred,
       if (row['updated_at'] is String) 'updated_at': row['updated_at'],
-      if (row['encrypted_title'] is String)
-        'encrypted_title': row['encrypted_title'],
+      if (row['title'] is String) 'title': row['title'],
     };
   }
 

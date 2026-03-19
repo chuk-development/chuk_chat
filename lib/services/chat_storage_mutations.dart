@@ -105,8 +105,18 @@ class ChatStorageMutations {
     );
     ChatStorageState.notifyChanges(chatId);
 
-    // Update local caches (await to ensure consistency before title cache update)
-    await LocalChatCacheService.upsert(user.id, updatedRow);
+    // Update local cache with plaintext row (not encrypted Supabase row)
+    await LocalChatCacheService.upsert(
+      user.id,
+      LocalChatCacheService.buildPlaintextRow(
+        id: chatId,
+        payload: payload,
+        createdAt: updatedRow['created_at'] as String,
+        isStarred: (updatedRow['is_starred'] as bool?) ?? false,
+        updatedAt: updatedRow['updated_at'] as String?,
+        title: newName,
+      ),
+    );
 
     // Also update the title cache for sidebar persistence
     await saveTitlesToCache(
@@ -147,6 +157,19 @@ class ChatStorageMutations {
           chat.messages,
           customName: chat.customName,
         );
+
+        // Update local cache with plaintext row
+        unawaited(LocalChatCacheService.upsert(
+          user.id,
+          LocalChatCacheService.buildPlaintextRow(
+            id: chat.id,
+            payload: payload,
+            createdAt: updatedRow['created_at'] as String,
+            isStarred: (updatedRow['is_starred'] as bool?) ?? false,
+            updatedAt: updatedRow['updated_at'] as String?,
+            title: chat.title,
+          ),
+        ));
       }
     }
     ChatStorageState.notifyChanges();
