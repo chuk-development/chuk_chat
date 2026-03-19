@@ -6,7 +6,7 @@ import 'dart:convert';
 import 'package:chuk_chat/models/chat_message.dart';
 import 'package:chuk_chat/models/stored_chat.dart';
 import 'package:chuk_chat/services/chat_storage_mutations.dart'
-    show saveTitlesToCache;
+    show kChatPayloadVersion, saveTitlesToCache;
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
@@ -76,6 +76,31 @@ Future<ChatPayload> deserializePayloadAsync(String json) async {
     }
   }
   return ChatPayload(messages, customName: result.customName);
+}
+
+/// Extract title from messages (first user message, truncated).
+/// Duplicated here to avoid circular import with chat_storage_crud.dart.
+String _extractTitle(List<ChatMessage> messages) {
+  if (messages.isEmpty) return '';
+  for (final msg in messages) {
+    if (msg.role == 'user' && msg.text.isNotEmpty) {
+      return msg.text.length > 100
+          ? '${msg.text.substring(0, 100)}...'
+          : msg.text;
+    }
+  }
+  final first = messages.first.text;
+  return first.length > 100 ? '${first.substring(0, 100)}...' : first;
+}
+
+/// Build a plaintext payload JSON string from a ChatPayload.
+/// Used to store decrypted Supabase data into plaintext local cache.
+String _buildPlaintextPayloadJson(ChatPayload chatPayload) {
+  return jsonEncode({
+    'v': kChatPayloadVersion,
+    if (chatPayload.customName != null) 'customName': chatPayload.customName,
+    'messages': chatPayload.messages.map((m) => m.toJson()).toList(),
+  });
 }
 
 /// Handles chat synchronization from cloud to local state.
@@ -149,9 +174,9 @@ class ChatStorageSync {
           }
           ChatStorageState.chatsById[chatId] = chat;
           ChatStorageState.notifyChanges(chatId);
-          // Also update local cache for offline access
+          // Cache plaintext row (not encrypted Supabase row)
           if (user != null) {
-            unawaited(LocalChatCacheService.upsert(user.id, row));
+            unawaited(_upsertPlaintextCache(user.id, chatId, row, chatPayload, chat));
           }
         }
       } else {
@@ -161,9 +186,9 @@ class ChatStorageSync {
         }
         ChatStorageState.chatsById[chatId] = chat;
         ChatStorageState.notifyChanges(chatId);
-        // Also add to local cache for offline access
+        // Cache plaintext row (not encrypted Supabase row)
         if (user != null) {
-          unawaited(LocalChatCacheService.upsert(user.id, row));
+          unawaited(_upsertPlaintextCache(user.id, chatId, row, chatPayload, chat));
         }
       }
     } on SecretBoxAuthenticationError {
@@ -181,6 +206,28 @@ class ChatStorageSync {
         debugPrint('❌ [ChatStorage] Error merging synced chat: $chatId - $e');
       }
     }
+  }
+
+  /// Upsert a plaintext cache row from decrypted Supabase data.
+  static Future<void> _upsertPlaintextCache(
+    String userId,
+    String chatId,
+    Map<String, dynamic> row,
+    ChatPayload chatPayload,
+    StoredChat chat,
+  ) {
+    final title = chat.title ?? _extractTitle(chatPayload.messages);
+    return LocalChatCacheService.upsert(
+      userId,
+      LocalChatCacheService.buildPlaintextRow(
+        id: chatId,
+        payload: _buildPlaintextPayloadJson(chatPayload),
+        createdAt: row['created_at'] as String,
+        isStarred: (row['is_starred'] as bool?) ?? false,
+        updatedAt: row['updated_at'] as String?,
+        title: title.isNotEmpty ? title : null,
+      ),
+    );
   }
 
   /// Batch merge multiple synced chats efficiently.
@@ -267,14 +314,14 @@ class ChatStorageSync {
             if (syncedUpdatedAt.isAfter(existingUpdatedAt)) {
               ChatStorageState.chatsById[chatId] = chat;
               if (user != null) {
-                unawaited(LocalChatCacheService.upsert(user.id, row));
+                unawaited(_upsertPlaintextCache(user.id, chatId, row, chatPayload, chat));
               }
               updatedCount++;
             }
           } else {
             ChatStorageState.chatsById[chatId] = chat;
             if (user != null) {
-              unawaited(LocalChatCacheService.upsert(user.id, row));
+              unawaited(_upsertPlaintextCache(user.id, chatId, row, chatPayload, chat));
             }
             addedCount++;
           }

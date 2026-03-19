@@ -4,8 +4,12 @@
 // Enables search and export by ensuring all chats are fully decrypted.
 
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:chuk_chat/models/chat_message.dart';
 import 'package:chuk_chat/models/stored_chat.dart';
+import 'package:chuk_chat/services/chat_storage_mutations.dart'
+    show kChatPayloadVersion;
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/chat_storage_sync.dart';
 import 'package:chuk_chat/services/chat_sync_service.dart';
@@ -257,12 +261,7 @@ class ChatPreloadService {
           .timeout(const Duration(seconds: 15));
 
       if (rows.isNotEmpty) {
-        await _decryptAndStoreRows(rows);
-
-        // Write fetched rows to local cache so they're available offline
-        for (final row in rows) {
-          unawaited(LocalChatCacheService.upsert(userId, row));
-        }
+        await _decryptAndStoreRows(rows, userId);
 
         if (stopwatch.elapsedMilliseconds > 2500) {
           unawaited(
@@ -290,9 +289,10 @@ class ChatPreloadService {
     await _loadBatchFromCache(chatIds, userId);
   }
 
-  /// Decrypt rows and store them in memory.
+  /// Decrypt Supabase rows, store them in memory, and write plaintext to cache.
   static Future<void> _decryptAndStoreRows(
     List<Map<String, dynamic>> rows,
+    String userId,
   ) async {
     final encryptedPayloads = <String>[];
     final validRows = <Map<String, dynamic>>[];
@@ -333,6 +333,20 @@ class ChatPreloadService {
         );
 
         ChatStorageState.chatsById[chatId] = chat;
+
+        // Write plaintext cache row (not encrypted Supabase row)
+        final title = chat.title ?? _extractTitle(chatPayload.messages);
+        unawaited(LocalChatCacheService.upsert(
+          userId,
+          LocalChatCacheService.buildPlaintextRow(
+            id: chatId,
+            payload: _buildPlaintextPayloadJson(chatPayload),
+            createdAt: row['created_at'] as String,
+            isStarred: (row['is_starred'] as bool?) ?? false,
+            updatedAt: row['updated_at'] as String?,
+            title: title.isNotEmpty ? title : null,
+          ),
+        ));
       } catch (e) {
         _failureCount++;
         if (kDebugMode) {
@@ -347,6 +361,7 @@ class ChatPreloadService {
   }
 
   /// Load a batch of chats from local cache (offline fallback).
+  /// Cache stores plaintext — no decryption needed.
   static Future<void> _loadBatchFromCache(
     List<String> chatIds,
     String userId,
@@ -369,11 +384,48 @@ class ChatPreloadService {
         );
       }
 
-      await _decryptAndStoreRows(matchingRows);
+      await _parseAndStoreRows(matchingRows);
     } catch (e) {
       _failureCount++;
       if (kDebugMode) {
         debugPrint('⚠️ [Preload] Local cache batch load failed: $e');
+      }
+    }
+  }
+
+  /// Parse plaintext cache rows and store them in memory (no decryption needed).
+  static Future<void> _parseAndStoreRows(
+    List<Map<String, dynamic>> rows,
+  ) async {
+    for (int j = 0; j < rows.length; j++) {
+      final row = rows[j];
+      final payload = row['payload'] as String?;
+      if (payload == null || payload.isEmpty) continue;
+
+      try {
+        final chatPayload = await deserializePayloadAsync(payload);
+        final chatId = row['id'] as String;
+
+        // Preserve existing chat's title if available
+        final existing = ChatStorageState.chatsById[chatId];
+
+        final chat = StoredChat.fromRow(
+          row,
+          chatPayload.messages,
+          customName: chatPayload.customName,
+          title: existing?.title,
+        );
+
+        ChatStorageState.chatsById[chatId] = chat;
+      } catch (e) {
+        _failureCount++;
+        if (kDebugMode) {
+          debugPrint('⚠️ [Preload] Failed to parse cached chat: $e');
+        }
+      }
+
+      if (j > 0 && j % 2 == 1) {
+        await Future<void>.delayed(Duration.zero);
       }
     }
   }
@@ -434,4 +486,27 @@ class ChatPreloadService {
     _preloadCompleter?.complete();
     _preloadCompleter = null;
   }
+}
+
+/// Extract title from messages (first user message, truncated).
+String _extractTitle(List<ChatMessage> messages) {
+  if (messages.isEmpty) return '';
+  for (final msg in messages) {
+    if (msg.role == 'user' && msg.text.isNotEmpty) {
+      return msg.text.length > 100
+          ? '${msg.text.substring(0, 100)}...'
+          : msg.text;
+    }
+  }
+  final first = messages.first.text;
+  return first.length > 100 ? '${first.substring(0, 100)}...' : first;
+}
+
+/// Build a plaintext payload JSON string from a ChatPayload.
+String _buildPlaintextPayloadJson(ChatPayload chatPayload) {
+  return jsonEncode({
+    'v': kChatPayloadVersion,
+    if (chatPayload.customName != null) 'customName': chatPayload.customName,
+    'messages': chatPayload.messages.map((m) => m.toJson()).toList(),
+  });
 }

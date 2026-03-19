@@ -138,6 +138,7 @@ class ChatStorageCrud {
 
   /// Load a single chat from local cache (SharedPreferences).
   /// Used as fallback when Supabase is unreachable (offline mode).
+  /// Cache stores plaintext — no decryption needed.
   static Future<StoredChat?> _loadFullChatFromCache(
     String chatId,
     String userId,
@@ -158,7 +159,7 @@ class ChatStorageCrud {
         return null;
       }
 
-      final payload = cachedRow['encrypted_payload'] as String?;
+      final payload = cachedRow['payload'] as String?;
       if (payload == null || payload.isEmpty) {
         if (kDebugMode) {
           debugPrint(
@@ -168,8 +169,8 @@ class ChatStorageCrud {
         return null;
       }
 
-      final decrypted = await EncryptionService.decryptInBackground(payload);
-      final chatPayload = await deserializePayloadAsync(decrypted);
+      // Plaintext cache — deserialize directly, no decryption needed
+      final chatPayload = await deserializePayloadAsync(payload);
 
       final chat = StoredChat.fromRow(
         cachedRow,
@@ -188,13 +189,6 @@ class ChatStorageCrud {
         );
       }
       return chat;
-    } on SecretBoxAuthenticationError {
-      if (kDebugMode) {
-        debugPrint(
-          '🔐 [ChatStorage] Failed to decrypt chat from cache: $chatId',
-        );
-      }
-      return null;
     } catch (e) {
       if (kDebugMode) {
         debugPrint('❌ [ChatStorage] Local cache fallback failed: $e');
@@ -218,6 +212,20 @@ class ChatStorageCrud {
     }
 
     try {
+      // Migrate from old encrypted cache if needed
+      if (await LocalChatCacheService.hasOldEncryptedCache(user.id)) {
+        if (!EncryptionService.hasKey) {
+          await EncryptionService.tryLoadKey();
+        }
+        if (EncryptionService.hasKey) {
+          await LocalChatCacheService.migrateFromEncrypted(user.id);
+        } else if (kDebugMode) {
+          debugPrint(
+            '⚠️ [ChatStorage] Cannot migrate cache: encryption key unavailable',
+          );
+        }
+      }
+
       final rows = await LocalChatCacheService.load(user.id);
       if (rows.isEmpty) {
         if (kDebugMode) {
@@ -239,8 +247,8 @@ class ChatStorageCrud {
 
       ChatStorageState.chatsById.clear();
 
-      // Batch decrypt first 15 chats in ONE isolate (much faster!)
-      final firstChats = await _decryptChatRowsBatch(firstBatch);
+      // Parse first 15 chats (plaintext — no decryption needed!)
+      final firstChats = await _parseChatRowsBatch(firstBatch);
       for (final chat in firstChats) {
         if (chat != null) {
           ChatStorageState.chatsById[chat.id] = chat;
@@ -259,9 +267,9 @@ class ChatStorageCrud {
         }
       }
 
-      // Decrypt remaining in background (also batched)
+      // Parse remaining (also fast — no decryption)
       if (remainingBatch.isNotEmpty) {
-        final remainingChats = await _decryptChatRowsBatch(remainingBatch);
+        final remainingChats = await _parseChatRowsBatch(remainingBatch);
         for (final chat in remainingChats) {
           if (chat != null) {
             ChatStorageState.chatsById[chat.id] = chat;
@@ -282,8 +290,35 @@ class ChatStorageCrud {
     }
   }
 
-  /// Batch decrypt multiple chat rows in a single isolate
-  /// Much faster than decrypting one by one
+  /// Parse plaintext cache rows into StoredChat objects (no decryption needed).
+  static Future<List<StoredChat?>> _parseChatRowsBatch(
+    List<Map<String, dynamic>> rows,
+  ) async {
+    if (rows.isEmpty) return [];
+
+    final results = List<StoredChat?>.filled(rows.length, null);
+
+    for (int i = 0; i < rows.length; i++) {
+      final payload = rows[i]['payload'] as String?;
+      if (payload == null || payload.isEmpty) continue;
+
+      try {
+        final chatPayload = await deserializePayloadAsync(payload);
+        results[i] = StoredChat.fromRow(
+          rows[i],
+          chatPayload.messages,
+          customName: chatPayload.customName,
+        );
+      } catch (_) {
+        // Skip invalid chats
+      }
+    }
+
+    return results;
+  }
+
+  /// Batch decrypt multiple Supabase chat rows in a single isolate.
+  /// Used for Supabase rows which are still encrypted.
   static Future<List<StoredChat?>> _decryptChatRowsBatch(
     List<Map<String, dynamic>> rows,
   ) async {
@@ -379,8 +414,8 @@ class ChatStorageCrud {
             );
           }
 
-          // Update cache with remote data (use replaceAll to avoid race conditions)
-          unawaited(LocalChatCacheService.replaceAll(user.id, rows));
+          // Decrypt Supabase rows and build plaintext cache rows
+          // (done after in-memory state is built below)
         } catch (error, stackTrace) {
           remoteError = error;
           remoteStack = stackTrace;
@@ -388,7 +423,7 @@ class ChatStorageCrud {
             debugPrint('❌ [ChatStorage] Failed to load from remote: $error');
           }
 
-          // Fall back to cache
+          // Fall back to cache (plaintext)
           try {
             rows = await LocalChatCacheService.load(user.id);
             loadedFromCache = true;
@@ -435,8 +470,10 @@ class ChatStorageCrud {
       final firstBatch = rows.take(firstBatchSize).toList();
       final remainingBatch = rows.skip(firstBatchSize).toList();
 
-      // Batch decrypt first 15 chats in ONE isolate (much faster!)
-      final firstChats = await _decryptChatRowsBatch(firstBatch);
+      // Use appropriate parser: cache rows are plaintext, Supabase rows need decryption
+      final firstChats = loadedFromCache
+          ? await _parseChatRowsBatch(firstBatch)
+          : await _decryptChatRowsBatch(firstBatch);
       for (final chat in firstChats) {
         if (chat != null) {
           ChatStorageState.chatsById[chat.id] = chat;
@@ -453,14 +490,16 @@ class ChatStorageCrud {
         }
       }
 
-      // Decrypt remaining chats in background (also batched)
+      // Process remaining chats
       if (remainingBatch.isNotEmpty) {
         if (kDebugMode) {
           debugPrint(
-            '🔄 [ChatStorage] Decrypting ${remainingBatch.length} more chats in background...',
+            '🔄 [ChatStorage] Processing ${remainingBatch.length} more chats in background...',
           );
         }
-        final remainingChats = await _decryptChatRowsBatch(remainingBatch);
+        final remainingChats = loadedFromCache
+            ? await _parseChatRowsBatch(remainingBatch)
+            : await _decryptChatRowsBatch(remainingBatch);
         for (final chat in remainingChats) {
           if (chat != null) {
             ChatStorageState.chatsById[chat.id] = chat;
@@ -475,6 +514,11 @@ class ChatStorageCrud {
       } else if (ChatStorageState.chatsById.isEmpty) {
         // No chats at all - still notify
         ChatStorageState.notifyChanges();
+      }
+
+      // If loaded from Supabase, build plaintext cache rows and save
+      if (!loadedFromCache && rows.isNotEmpty) {
+        _buildAndCachePlaintextRows(user.id, rows);
       }
 
       // Log all loaded chats for debugging
@@ -516,6 +560,56 @@ class ChatStorageCrud {
       ChatStorageState.loadingCompleter?.complete();
       ChatStorageState.loadingCompleter = null;
     }
+  }
+
+  /// Build plaintext cache rows from already-decrypted in-memory chats
+  /// and replace the local cache. Runs in background (fire-and-forget).
+  static void _buildAndCachePlaintextRows(
+    String userId,
+    List<Map<String, dynamic>> supabaseRows,
+  ) {
+    unawaited(() async {
+      try {
+        final plaintextRows = <Map<String, dynamic>>[];
+        int skippedCount = 0;
+        for (final row in supabaseRows) {
+          final chatId = row['id'] as String;
+          final chat = ChatStorageState.chatsById[chatId];
+          if (chat == null || !chat.isFullyLoaded) {
+            skippedCount++;
+            continue;
+          }
+
+          final payload = jsonEncode({
+            'v': kChatPayloadVersion,
+            if (chat.customName != null) 'customName': chat.customName,
+            'messages': chat.messages.map((m) => m.toJson()).toList(),
+          });
+
+          plaintextRows.add(LocalChatCacheService.buildPlaintextRow(
+            id: chatId,
+            payload: payload,
+            createdAt: row['created_at'] as String,
+            isStarred: (row['is_starred'] as bool?) ?? false,
+            updatedAt: row['updated_at'] as String?,
+            title: chat.title,
+          ));
+        }
+        if (plaintextRows.isNotEmpty && skippedCount == 0) {
+          // All chats processed — safe to replace entire cache
+          await LocalChatCacheService.replaceAll(userId, plaintextRows);
+        } else if (plaintextRows.isNotEmpty) {
+          // Partial success — upsert individually to preserve existing cache
+          for (final row in plaintextRows) {
+            await LocalChatCacheService.upsert(userId, row);
+          }
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('⚠️ [ChatStorage] Failed to build plaintext cache: $e');
+        }
+      }
+    }());
   }
 
   /// Extract image storage paths from messages
@@ -662,12 +756,12 @@ class ChatStorageCrud {
       return null;
     }
 
-    final payload = jsonEncode({
+    final payloadJson = jsonEncode({
       'v': kChatPayloadVersion,
       'messages': messages.map((m) => m.toJson()).toList(),
     });
 
-    final encryptedPayload = await EncryptionService.encrypt(payload);
+    final encryptedPayload = await EncryptionService.encrypt(payloadJson);
 
     // Extract and encrypt title separately for fast sidebar loading
     final title = extractTitleFromMessages(messages);
@@ -705,7 +799,18 @@ class ChatStorageCrud {
     ChatStorageState.chatsById[finalId] = chat;
     ChatStorageState.notifyChanges(finalId);
 
-    unawaited(LocalChatCacheService.upsert(user.id, inserted));
+    // Cache plaintext row (NOT the encrypted Supabase row)
+    unawaited(LocalChatCacheService.upsert(
+      user.id,
+      LocalChatCacheService.buildPlaintextRow(
+        id: finalId,
+        payload: payloadJson,
+        createdAt: inserted['created_at'] as String,
+        isStarred: (inserted['is_starred'] as bool?) ?? false,
+        updatedAt: inserted['updated_at'] as String?,
+        title: title.isNotEmpty ? title : null,
+      ),
+    ));
 
     // Log with title for debugging
     final displayTitle = title.length > 50
@@ -792,9 +897,8 @@ class ChatStorageCrud {
       payloadMap['customName'] = existingCustomName;
     }
 
-    final encryptedPayload = await EncryptionService.encrypt(
-      jsonEncode(payloadMap),
-    );
+    final payloadJson = jsonEncode(payloadMap);
+    final encryptedPayload = await EncryptionService.encrypt(payloadJson);
 
     // Extract and encrypt title separately for fast sidebar loading
     final title = extractTitleFromMessages(messages);
@@ -835,7 +939,18 @@ class ChatStorageCrud {
     ChatStorageState.chatsById[chatId] = chat;
     ChatStorageState.notifyChanges(chatId);
 
-    unawaited(LocalChatCacheService.upsert(user.id, updatedRow));
+    // Cache plaintext row (NOT the encrypted Supabase row)
+    unawaited(LocalChatCacheService.upsert(
+      user.id,
+      LocalChatCacheService.buildPlaintextRow(
+        id: chatId,
+        payload: payloadJson,
+        createdAt: updatedRow['created_at'] as String,
+        isStarred: (updatedRow['is_starred'] as bool?) ?? false,
+        updatedAt: updatedRow['updated_at'] as String?,
+        title: title.isNotEmpty ? title : null,
+      ),
+    ));
 
     return chat;
   }
