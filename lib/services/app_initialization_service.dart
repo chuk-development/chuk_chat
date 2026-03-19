@@ -29,23 +29,11 @@ class AppInitializationService {
 
   bool _isInitializing = false;
   bool _isSupabaseReady = false;
-  Timer? _deferredPreloadTimer;
-
   bool get _isLinuxDesktop =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
 
   static const Duration _linuxDeferredKeySyncDelay = Duration(seconds: 25);
   static const Duration _linuxInitialKeyPreloadDelay = Duration(seconds: 40);
-
-  // Gives startup/session init time to settle before background decrypt work.
-  static Duration get _deferredPreloadDelay {
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.linux) {
-      // Linux desktop users are frequently interacting immediately after launch.
-      // Push preload further back to avoid random UI hitches during early use.
-      return const Duration(minutes: 3);
-    }
-    return const Duration(seconds: 45);
-  }
 
   bool get isInitializing => _isInitializing;
   bool get isSupabaseReady => _isSupabaseReady;
@@ -359,18 +347,13 @@ class AppInitializationService {
   }
 
   void _startDeferredPreload() {
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.linux) {
-      // Linux desktop should stay interactive; full-history preload is heavy
-      // and can run on-demand (e.g. export/search) via awaitPreload().
-      if (kDebugMode) {
-        debugPrint('⏭️ [AppInit] Skipping automatic preload on Linux');
-      }
-      return;
+    // Preload is now on-demand only (export/search). No automatic background
+    // preload — it blocked the main thread event loop and caused severe jank.
+    // Chats are loaded individually when the user opens them, and the local
+    // cache keeps them available offline.
+    if (kDebugMode) {
+      debugPrint('⏭️ [AppInit] Preload is on-demand only (export/search)');
     }
-    _deferredPreloadTimer?.cancel();
-    _deferredPreloadTimer = Timer(_deferredPreloadDelay, () {
-      unawaited(ChatPreloadService.startBackgroundPreload());
-    });
   }
 
   /// Wait for Supabase to be initialized
@@ -397,8 +380,6 @@ class AppInitializationService {
 
   /// Reset all services (call on logout)
   Future<void> resetServices() async {
-    _deferredPreloadTimer?.cancel();
-    _deferredPreloadTimer = null;
     ChatSyncService.stop();
     ChatPreloadService.reset();
     // Clear encryption key first, then reset storage services in parallel
