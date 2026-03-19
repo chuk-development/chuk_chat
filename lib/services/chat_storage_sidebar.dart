@@ -6,6 +6,8 @@ import 'dart:convert';
 import 'package:chuk_chat/models/stored_chat.dart';
 import 'package:chuk_chat/services/chat_storage_mutations.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
+import 'package:chuk_chat/services/chat_storage_sync.dart'
+    show deserializePayloadBatchAsync;
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -91,6 +93,12 @@ class ChatStorageSidebar {
 
       // Mark initial load complete - ChatSyncService can now start syncing
       ChatStorageState.initialSyncComplete = true;
+
+      // Hydrate full chat payloads from plaintext cache in the background.
+      // This makes all cached chats isFullyLoaded=true so preload finds
+      // nothing to do (zero jank). Only truly new/updated chats from sync
+      // will need loading later.
+      unawaited(_hydrateFullChatsFromCache(user.id));
     } catch (e) {
       if (kDebugMode) {
         debugPrint('❌ [ChatStorage] Sidebar load failed: $e');
@@ -504,6 +512,89 @@ class ChatStorageSidebar {
       if (kDebugMode) {
         debugPrint('❌ [ChatStorage] Cache fallback failed: $e');
       }
+    }
+  }
+
+  /// Hydrate full chat payloads from plaintext cache in the background.
+  /// After sidebar shows titles, this loads full messages from local cache
+  /// so that chats are marked isFullyLoaded=true. The background preload
+  /// then finds nothing to do, avoiding all jank.
+  ///
+  /// Processes in small batches with yields to avoid blocking the UI.
+  static Future<void> _hydrateFullChatsFromCache(String userId) async {
+    try {
+      final rows = await LocalChatCacheService.load(userId);
+      if (rows.isEmpty) return;
+
+      // Only hydrate chats that are sidebar-only (not already fully loaded)
+      final toHydrate = <Map<String, dynamic>>[];
+      for (final row in rows) {
+        final id = row['id'] as String?;
+        if (id == null) continue;
+        final existing = ChatStorageState.chatsById[id];
+        if (existing != null && existing.isFullyLoaded) continue;
+        final payload = row['payload'] as String?;
+        if (payload == null || payload.isEmpty) continue;
+        toHydrate.add(row);
+      }
+
+      if (toHydrate.isEmpty) {
+        if (kDebugMode) {
+          debugPrint(
+            '✅ [ChatStorage] All ${rows.length} chats already fully loaded',
+          );
+        }
+        return;
+      }
+
+      if (kDebugMode) {
+        debugPrint(
+          '🔄 [ChatStorage] Hydrating ${toHydrate.length} chats from plaintext cache...',
+        );
+      }
+
+      // Process in batches of 15 with yields between batches
+      const batchSize = 15;
+      for (int i = 0; i < toHydrate.length; i += batchSize) {
+        final batchEnd = (i + batchSize).clamp(0, toHydrate.length);
+        final batch = toHydrate.sublist(i, batchEnd);
+
+        // Extract payloads for batch parsing in a single isolate
+        final payloads = batch.map((r) => r['payload'] as String).toList();
+        final chatPayloads = await deserializePayloadBatchAsync(payloads);
+
+        for (int j = 0; j < batch.length; j++) {
+          final chatPayload = chatPayloads[j];
+          if (chatPayload == null) continue;
+
+          final row = batch[j];
+          final chatId = row['id'] as String;
+          final existing = ChatStorageState.chatsById[chatId];
+
+          ChatStorageState.chatsById[chatId] = StoredChat.fromRow(
+            row,
+            chatPayload.messages,
+            customName: chatPayload.customName,
+            title: existing?.title,
+          );
+        }
+
+        // Yield to UI thread between batches
+        if (batchEnd < toHydrate.length) {
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+        }
+      }
+
+      if (kDebugMode) {
+        debugPrint(
+          '✅ [ChatStorage] Hydrated ${toHydrate.length} chats from cache — preload will be a no-op',
+        );
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [ChatStorage] Cache hydration failed: $e');
+      }
+      // Not fatal — preload will pick up remaining chats
     }
   }
 }

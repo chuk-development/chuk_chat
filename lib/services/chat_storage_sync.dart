@@ -79,12 +79,17 @@ Future<ChatPayload> deserializePayloadAsync(String json) async {
 }
 
 /// Top-level function for batch deserialization in a single isolate.
-/// Avoids spawning one isolate per chat during preload.
-List<DeserializeResult?> _deserializeBatchIsolate(List<String> jsonPayloads) {
-  final results = <DeserializeResult?>[];
+/// Performs ALL work in the isolate — JSON parsing AND ChatMessage construction
+/// — so the main thread receives ready-to-use objects with zero processing.
+List<ChatPayload?> _deserializeBatchIsolate(List<String> jsonPayloads) {
+  final results = <ChatPayload?>[];
   for (final json in jsonPayloads) {
     try {
-      results.add(deserializePayloadIsolate(json));
+      final result = deserializePayloadIsolate(json);
+      final messages = result.messages
+          .map((m) => ChatMessage.fromJson(m))
+          .toList();
+      results.add(ChatPayload(messages, customName: result.customName));
     } catch (_) {
       results.add(null);
     }
@@ -93,31 +98,13 @@ List<DeserializeResult?> _deserializeBatchIsolate(List<String> jsonPayloads) {
 }
 
 /// Batch deserialize multiple payloads in a single isolate (much faster
-/// than one compute() call per chat). Returns ChatPayload list with nulls
-/// for any entries that failed to parse.
+/// than one compute() call per chat). All JSON parsing and ChatMessage
+/// construction happens in the isolate — main thread gets ready objects.
 Future<List<ChatPayload?>> deserializePayloadBatchAsync(
   List<String> jsonPayloads,
 ) async {
   if (jsonPayloads.isEmpty) return [];
-  final results = await compute(_deserializeBatchIsolate, jsonPayloads);
-  final payloads = <ChatPayload?>[];
-  for (int i = 0; i < results.length; i++) {
-    final result = results[i];
-    if (result == null) {
-      payloads.add(null);
-      continue;
-    }
-    final messages = <ChatMessage>[];
-    for (final m in result.messages) {
-      messages.add(ChatMessage.fromJson(m));
-    }
-    payloads.add(ChatPayload(messages, customName: result.customName));
-    // Yield every few chats to keep UI responsive
-    if (i > 0 && i % 3 == 0) {
-      await Future<void>.delayed(Duration.zero);
-    }
-  }
-  return payloads;
+  return await compute(_deserializeBatchIsolate, jsonPayloads);
 }
 
 /// Extract title from messages (first user message, truncated).
