@@ -69,7 +69,7 @@ const bool kFeatureMediaManager = true;
 /// stored locally on the client.
 const bool kFeatureServerTools = bool.fromEnvironment(
   'FEATURE_SERVER_TOOLS',
-  defaultValue: true,
+  defaultValue: false,
 );
 
 /// Desktop system tray integration (Linux, Windows, macOS).
