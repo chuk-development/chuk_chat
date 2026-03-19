@@ -524,6 +524,22 @@ class DiagnosticsLogService {
           ),
         );
       }
+      // Detect event loop blocking: high total time but low render time
+      // means the main thread was blocked by async operations.
+      if (totalMs > 100.0 && renderMs < 30.0) {
+        final gapMs = totalMs - renderMs;
+        unawaited(
+          warning(
+            'performance',
+            'Event loop blocked',
+            data: {
+              'total_ms': totalMs.toStringAsFixed(1),
+              'render_ms': renderMs.toStringAsFixed(1),
+              'gap_ms': gapMs.toStringAsFixed(1),
+            },
+          ),
+        );
+      }
     }
 
     final now = DateTime.now();

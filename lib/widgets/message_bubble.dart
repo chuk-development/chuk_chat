@@ -279,6 +279,9 @@ class _MessageBubbleState extends State<MessageBubble>
   }
 
   /// Bottom bar for AI messages: action buttons (left) + sources (right).
+  /// Both pills share the same height so they look balanced.
+  static const double _mobileBottomBarHeight = 30.0;
+
   Widget _buildBottomBar(Color iconFgColor, bool hasActions) {
     final bool hasSources = widget.toolCalls != null &&
         widget.toolCalls!.isNotEmpty;
@@ -362,6 +365,7 @@ class _MessageBubbleState extends State<MessageBubble>
           : MainAxisAlignment.start,
       children: [
         Container(
+          height: kPlatformMobile ? _mobileBottomBarHeight : null,
           decoration: BoxDecoration(
             color: bgColor.lighten(0.05),
             borderRadius: BorderRadius.circular(100),
@@ -371,7 +375,7 @@ class _MessageBubbleState extends State<MessageBubble>
             ),
           ),
           padding: EdgeInsets.symmetric(
-            horizontal: kPlatformMobile ? 1 : 8,
+            horizontal: kPlatformMobile ? 2 : 8,
             vertical: kPlatformMobile ? 0 : 4,
           ),
           child: Row(
@@ -383,18 +387,18 @@ class _MessageBubbleState extends State<MessageBubble>
                   icon: Icon(
                     action.icon,
                     color: iconFgColor,
-                    size: kPlatformMobile ? 13 : 18,
+                    size: kPlatformMobile ? 14 : 18,
                   ),
                   padding: EdgeInsets.all(kPlatformMobile ? 3 : 8),
                   visualDensity: VisualDensity.compact,
                   constraints: BoxConstraints(
-                    minWidth: kPlatformMobile ? 20 : 30,
-                    minHeight: kPlatformMobile ? 20 : 30,
+                    minWidth: kPlatformMobile ? 22 : 30,
+                    minHeight: kPlatformMobile ? 22 : 30,
                   ),
-                  // Desktop has oversized tap targets by default — shrink them.
-                  // Mobile was already correct, so leave it untouched.
                   style: kPlatformMobile
-                      ? null
+                      ? IconButton.styleFrom(
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        )
                       : IconButton.styleFrom(
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
@@ -1782,6 +1786,7 @@ class _MessageBubbleState extends State<MessageBubble>
       onTap: () => _showSourcesSheet(context, sources),
       borderRadius: BorderRadius.circular(100),
       child: Container(
+        height: kPlatformMobile ? _mobileBottomBarHeight : null,
         decoration: BoxDecoration(
           color: bgColor.lighten(0.05),
           borderRadius: BorderRadius.circular(100),
@@ -1792,7 +1797,7 @@ class _MessageBubbleState extends State<MessageBubble>
         ),
         padding: EdgeInsets.symmetric(
           horizontal: kPlatformMobile ? 8 : 10,
-          vertical: kPlatformMobile ? 5 : 6,
+          vertical: kPlatformMobile ? 0 : 6,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
