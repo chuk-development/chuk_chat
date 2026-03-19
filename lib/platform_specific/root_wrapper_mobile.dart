@@ -532,8 +532,8 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                       _toggleSidebar();
                     }
                   },
-                  child: Opacity(
-                    opacity: animValue,
+                  child: FadeTransition(
+                    opacity: _sidebarAnimation,
                     child: SidebarMobile(
                       onChatSelected: _handleChatSelected,
                       onSettingsTapped: _openSettingsPage,

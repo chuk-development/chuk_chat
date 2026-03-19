@@ -83,6 +83,12 @@ class ModelSelectionDropdown extends StatefulWidget {
   static StreamSubscription<void>? _refreshSubscription;
   static StreamSubscription<String>? _modelSelectedSubscription;
 
+  // ── Static model cache ──
+  // Survives widget dispose/re-init cycles so re-mounts are instant.
+  static List<ModelItem> _cachedModels = [];
+  static Map<String, String> _cachedProviders = {};
+  static bool _hasEverLoaded = false;
+
   static ValueListenable<String> get selectedModelListenable =>
       selectedModelNotifier;
 
@@ -287,14 +293,33 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
     ModelSelectionDropdown.selectedModelListenable.addListener(
       _selectedModelListener,
     );
-    unawaited(
-      DiagnosticsLogService.info(
-        'model_menu',
-        'Dropdown initialized',
-        data: {'initial_model_id_len': _selectedModelId.length},
-      ),
-    );
-    unawaited(_initializeModelSelection());
+
+    // Fast path: if we already loaded models in a previous mount, reuse
+    // the static cache. Zero async work, zero setState, zero jank.
+    if (ModelSelectionDropdown._hasEverLoaded &&
+        ModelSelectionDropdown._cachedModels.isNotEmpty) {
+      _allModels = ModelSelectionDropdown._cachedModels;
+      _enabledModelProviders.addAll(ModelSelectionDropdown._cachedProviders);
+      _providerLimits.addAll(ModelSelectionDropdown._cachedProviderLimits);
+      _isLoadingModels = false;
+      _updateSelectedModelNameSync();
+      unawaited(
+        DiagnosticsLogService.info(
+          'model_menu',
+          'Dropdown initialized (cached)',
+          data: {'initial_model_id_len': _selectedModelId.length},
+        ),
+      );
+    } else {
+      unawaited(
+        DiagnosticsLogService.info(
+          'model_menu',
+          'Dropdown initialized',
+          data: {'initial_model_id_len': _selectedModelId.length},
+        ),
+      );
+      unawaited(_initializeModelSelection());
+    }
   }
 
   void _handleSelectedModelNotifierChange() {
@@ -528,9 +553,15 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       _errorMessage = '';
     });
 
+    // Update static cache so future mounts are instant.
+    ModelSelectionDropdown._cachedModels = models;
+    ModelSelectionDropdown._cachedProviders = Map<String, String>.from(
+      enabledProviders,
+    );
     if (providerLimits.isNotEmpty) {
       ModelSelectionDropdown._cachedProviderLimits.addAll(providerLimits);
     }
+    ModelSelectionDropdown._hasEverLoaded = true;
 
     // Only notify if model actually changed to avoid duplicate callbacks
     if (newModelId != previousModelId) {
@@ -788,6 +819,22 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
   void _stopApiAvailabilityPolling() {
     _apiAvailabilityTimer?.cancel();
     _apiAvailabilityTimer = null;
+  }
+
+  /// Update name + widths synchronously (no setState — for use in initState).
+  void _updateSelectedModelNameSync() {
+    final bool hasModels = _allModels.isNotEmpty;
+    final ModelItem selectedItem = _allModels.firstWhere(
+      (model) => model.value == _selectedModelId,
+      orElse: () => ModelItem(
+        name: hasModels ? 'Select Model' : 'No Enabled Models',
+        value: '',
+      ),
+    );
+    _selectedModelName = selectedItem.name;
+    // Skip width calculation here — it needs BuildContext which isn't
+    // available in initState. Widths are recalculated on first build via
+    // LayoutBuilder anyway.
   }
 
   void _updateSelectedModelName() {

@@ -2363,7 +2363,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
-          Padding(
+          AnimatedPadding(
+            duration: const Duration(milliseconds: 100),
+            curve: Curves.easeOut,
             padding: EdgeInsets.only(bottom: keyboardInset),
             child: GestureDetector(
               behavior: HitTestBehavior.translucent,
@@ -2765,40 +2767,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (_messageActionsHandler.isEditing)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 6, left: 4, right: 4),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.edit,
-                  size: 14,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  'Editing message',
-                  style: TextStyle(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const Spacer(),
-                GestureDetector(
-                  onTap: _cancelEditMessage,
-                  child: Text(
-                    'Cancel',
-                    style: TextStyle(
-                      color: theme.colorScheme.primary.withValues(alpha: 0.8),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
         if (hasAttachments)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
@@ -2887,7 +2855,62 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                           ],
                         ),
                       )
-                    : buildKeyboardListener(
+                    : Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // ── Editing indicator (inside the pill) ──
+                          if (_messageActionsHandler.isEditing)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.edit,
+                                    size: 12,
+                                    color: theme.colorScheme.primary
+                                        .withValues(alpha: 0.7),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Editing message',
+                                    style: TextStyle(
+                                      color: theme.colorScheme.primary
+                                          .withValues(alpha: 0.7),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  GestureDetector(
+                                    onTap: _cancelEditMessage,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: theme.colorScheme.onSurface
+                                            .withValues(alpha: 0.08),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        'Cancel',
+                                        style: TextStyle(
+                                          color: theme.colorScheme.onSurface
+                                              .withValues(alpha: 0.6),
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          // ── TextField ──
+                          buildKeyboardListener(
                         focusNode: _rawKeyboardListenerFocusNode,
                         controller: _controller,
                         onSend: _sendOrSubmitEdit,
@@ -2977,6 +3000,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                             ),
                           ),
                         ),
+                      ),
+                        ],
                       ),
               ),
             ),
