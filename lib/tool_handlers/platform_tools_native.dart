@@ -1422,3 +1422,33 @@ Future<String> executeDevice(Map<String, dynamic> args) async {
     return 'Device error: $e';
   }
 }
+
+// ============== Standalone wrappers for top-level tools ==============
+// These delegate to DeviceServices so the AI can discover them by name
+// without going through the generic "device" tool + action parameter.
+
+Future<String> executeCalendar(Map<String, dynamic> args) async {
+  return executeDevice({...args, 'action': 'create_calendar_event'});
+}
+
+Future<String> executeReminder(Map<String, dynamic> args) async {
+  // A reminder is an alarm at a specific time
+  final action = args['action'] as String? ?? 'set_alarm';
+  switch (action) {
+    case 'set_timer':
+      return executeDevice({...args, 'action': 'set_timer'});
+    case 'cancel':
+      return executeDevice({...args, 'action': 'cancel_alarm'});
+    case 'list':
+      return executeDevice({...args, 'action': 'list_alarms'});
+    default:
+      // Default: set_alarm
+      // Allow "time" or "start" for convenience
+      final time = args['time'] ?? args['start'];
+      return executeDevice({...args, if (time != null) 'time': time, 'action': 'set_alarm'});
+  }
+}
+
+Future<String> executeDraftEmail(Map<String, dynamic> args) async {
+  return executeDevice({...args, 'action': 'email_draft'});
+}
