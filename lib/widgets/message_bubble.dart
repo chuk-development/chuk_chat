@@ -186,6 +186,7 @@ class _MessageBubbleState extends State<MessageBubble>
   final Map<String, bool> _blockExpanded = {};
   final Set<String> _expandedCards = {};
   bool _complexBubbleLogged = false;
+  bool _showUserActions = false;
 
   @override
   bool get wantKeepAlive => true; // Keep this widget alive to prevent rebuilds
@@ -277,55 +278,61 @@ class _MessageBubbleState extends State<MessageBubble>
     super.didUpdateWidget(oldWidget);
   }
 
-  /// Shows a popup menu with actions for user messages on long-press.
-  void _showUserMessagePopup(BuildContext context, Color iconFgColor) {
-    final colorScheme = Theme.of(context).colorScheme;
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 32,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 8),
-                  decoration: BoxDecoration(
-                    color: colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                ...widget.userMessageActions.map((action) {
-                  final actionColor = action.isEnabled
-                      ? colorScheme.onSurface
-                      : colorScheme.onSurface.withValues(alpha: 0.38);
-                  return ListTile(
-                    leading: Icon(action.icon, color: actionColor),
-                    title: Text(
-                      action.label ?? action.tooltip,
-                      style: TextStyle(color: actionColor),
-                    ),
-                    enabled: action.isEnabled,
-                    onTap: action.isEnabled
-                        ? () {
-                            Navigator.pop(ctx);
-                            action.onPressed();
-                          }
-                        : null,
-                  );
-                }),
-              ],
+  Widget _buildUserActionButtons(Color iconFgColor) {
+    final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            color: bgColor.lighten(0.05),
+            borderRadius: BorderRadius.circular(100),
+            border: Border.all(
+              color: iconFgColor.withValues(alpha: 0.15),
+              width: 1,
             ),
           ),
-        );
-      },
+          padding: EdgeInsets.symmetric(
+            horizontal: kPlatformMobile ? 2 : 8,
+            vertical: kPlatformMobile ? 0 : 4,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: widget.userMessageActions.map((action) {
+              return Tooltip(
+                message: action.tooltip,
+                child: IconButton(
+                  icon: Icon(
+                    action.icon,
+                    color: action.isEnabled
+                        ? iconFgColor
+                        : iconFgColor.withValues(alpha: 0.38),
+                    size: kPlatformMobile ? 15 : 18,
+                  ),
+                  padding: EdgeInsets.all(kPlatformMobile ? 4 : 8),
+                  visualDensity: VisualDensity.compact,
+                  constraints: BoxConstraints(
+                    minWidth: kPlatformMobile ? 24 : 30,
+                    minHeight: kPlatformMobile ? 24 : 30,
+                  ),
+                  style: kPlatformMobile
+                      ? null
+                      : IconButton.styleFrom(
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                  onPressed: action.isEnabled
+                      ? () {
+                          setState(() => _showUserActions = false);
+                          action.onPressed();
+                        }
+                      : null,
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
     );
   }
 
@@ -481,10 +488,13 @@ class _MessageBubbleState extends State<MessageBubble>
       ),
     );
 
-    // Wrap user messages in GestureDetector for long-press popup actions.
-    final Widget userBubble = isUserMessage && widget.userMessageActions.isNotEmpty
+    // Wrap user messages in GestureDetector for long-press action bar.
+    final bool hasUserActions =
+        isUserMessage && widget.userMessageActions.isNotEmpty;
+    final Widget userBubble = hasUserActions
         ? GestureDetector(
-            onLongPress: () => _showUserMessagePopup(context, iconFgColor),
+            onTap: () =>
+                setState(() => _showUserActions = !_showUserActions),
             child: bubbleContent,
           )
         : bubbleContent;
@@ -500,6 +510,8 @@ class _MessageBubbleState extends State<MessageBubble>
               : CrossAxisAlignment.start,
           children: [
             userBubble,
+            if (hasUserActions && _showUserActions)
+              _buildUserActionButtons(iconFgColor),
             if (hasActions) _buildActionButtons(iconFgColor, alignRight),
           ],
         ),
