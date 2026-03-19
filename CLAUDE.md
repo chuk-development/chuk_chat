@@ -45,12 +45,16 @@ flutter analyze            # Static analysis
 
 Pass via `--dart-define=FLAG=value`. Defined in `lib/platform_config.dart`.
 
-| Flag | Android | Linux/Web | Notes |
-|------|---------|-----------|-------|
-| `FEATURE_PROJECTS` | `false` | `true` | Project workspaces |
-| `FEATURE_IMAGE_GEN` | **always on** | **always on** | Hardcoded, no flag needed |
-| `FEATURE_VOICE_MODE` | `false` | `true` | Voice mode button |
-| `PLATFORM_MOBILE` | `true` | omit | Mobile UI layout |
+| Flag | Default | Notes |
+|------|---------|-------|
+| `PLATFORM_MOBILE` | `false` | Mobile UI layout (set `true` for Android) |
+| `FEATURE_PROJECTS` | `false` | Project workspaces |
+| `FEATURE_VOICE_MODE` | `false` | Voice mode button |
+| `FEATURE_IMAGE_GEN` | **always on** | Hardcoded, no flag needed |
+| `FEATURE_SERVER_TOOLS` | `false` | GitHub, Slack, Gmail, Google Calendar, Email, Nextcloud (need backend OAuth) |
+| `FEATURE_STOCK_DATA` | `false` | Yahoo Finance stock data tool |
+| `FEATURE_LINUX_KEYRING` | `false` | Use libsecret/keyring for encryption key (causes 10s+ startup stall) |
+| `FEATURE_SYSTEM_TRAY` | `false` | System tray integration on desktop |
 
 ## Building Android
 
@@ -77,6 +81,8 @@ flutter build apk --release --split-per-abi \
 
 Install: `adb install -r build/app/outputs/flutter-apk/app-release.apk`
 Signature mismatch: `adb uninstall dev.chuk.chat && adb install ...`
+
+**Local testing builds:** To avoid `INSTALL_FAILED_VERSION_DOWNGRADE`, temporarily set a high build number in `pubspec.yaml` (e.g. `1.0.48+9000`) before building. This raises the Android version code without bumping the release version. Revert `pubspec.yaml` after installing — do NOT commit the build number change.
 
 **Signing:** Env vars > `android/key.properties` > debug keystore. See `android/key.properties.example`.
 
@@ -136,6 +142,32 @@ Stale cache? Purge Cloudflare: Dashboard > chuk.chat > Caching > Purge Everythin
 6. Web deploys automatically via Dokploy on push to master
 
 **Note:** Do not rely on git tags to trigger releases. Use `workflow_dispatch` for `build-cross-platform.yml`.
+
+## Local Cache Architecture
+
+Chat data uses a **plaintext local cache** (`cached_chats_v2-{userId}` in SharedPreferences). No local encryption — the encryption key lives on the same device, so local encryption was security theater causing 1.5s frame drops.
+
+- **Server-side encryption**: Unchanged. AES-256-GCM, E2E, zero knowledge.
+- **Local cache fields**: `payload` + `title` (plaintext JSON)
+- **Supabase fields**: `encrypted_payload` + `encrypted_title` (encrypted)
+- **Safety**: Different field names prevent accidentally sending plaintext to Supabase
+- **Chat loading**: Cache-first via `loadFullChat()` — instant from local cache, Supabase sync in background
+- **Preload**: On-demand only (search/export triggers `ChatPreloadService.awaitPreload()`)
+- **Migration**: Old encrypted v1 cache auto-migrates on first load, then deletes
+
+Key files: `lib/services/local_chat_cache_service.dart`, `lib/services/chat_storage_crud.dart`
+
+## Visual Output Tags
+
+The AI can emit special tags in responses that the UI renders as interactive blocks (like tools, but no tool call needed):
+
+| Tag | Renders as | Example |
+|-----|-----------|---------|
+| `<chart>` | Interactive chart (bar, line, pie, scatter, radar) | `<chart>{"type":"line","title":"...","labels":[...],"datasets":[...]}</chart>` |
+| `<map>` | Interactive map (markers, places, routes) | `<map>{"type":"markers","markers":[{"lat":54.3,"lon":10.1,"label":"Kiel"}]}</map>` |
+| `<email>` | Email card with "Open in Mail App" button | `<email>{"to":"...","subject":"...","body":"..."}</email>` |
+
+Configured in `lib/services/tool_prompt_builder.dart`. Rendered in `lib/widgets/message_bubble.dart`.
 
 ## Privacy: Logging
 
