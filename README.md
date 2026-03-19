@@ -44,13 +44,17 @@ We use only open-weight models — no black boxes and no silent data collection.
 - **Cross-Platform** — Android, iOS, Linux, macOS, Windows, and Web
 - **Real-Time Streaming** — Watch AI responses as they're generated, with streaming preserved across chat switches
 - **File Attachments** — Share images, PDFs, and documents with AI
-- **Offline Support** — Access your chat history without a connection, with automatic network recovery and cache preloading
+- **Offline Support** — Access your chat history without a connection, with automatic network recovery and plaintext local cache for instant loading
 
 ### AI Tools
 - **Tool Calling** — Built-in tool system with registry, executor, and per-tool settings. AI can call tools and display results inline
-- **AI Image Generation** — Generate and edit images directly in chat (including Hunyuan v3 Instruct via edit-image tool)
-- **Interactive Maps** — AI responses with `<map>` blocks render inline maps with markers, popups, and route polylines (OSRM)
-- **Calculator, Weather, Stocks, QR Codes, Notes, Web Search** — Expanding set of built-in tool handlers
+- **AI Image Generation** — Generate and edit images directly in chat
+- **Interactive Maps** — AI responses with `<map>` blocks render inline maps with markers, places, and route polylines
+- **Interactive Charts** — AI responses with `<chart>` blocks render inline charts (bar, line, pie, scatter, radar)
+- **Email Drafts** — AI responses with `<email>` blocks render email cards with "Open in Mail App" button
+- **Spotify Control** — Play, pause, search, manage playlists and volume via OAuth-connected Spotify
+- **Calendar & Reminders** — Create calendar events (native on Android/macOS, .ics on Linux/Windows) and set alarms/timers with notifications
+- **Web Search, Weather, Calculator, QR Codes, Notes** — Expanding set of built-in tool handlers
 - **Multi-Pass Tool Call Rendering** — Interleaved content blocks show text and tool calls in correct chronological order with collapsible UI
 
 ### Account & Privacy
@@ -79,10 +83,10 @@ We use only open-weight models — no black boxes and no silent data collection.
 
 | Data | Storage |
 |------|---------|
-| All chat messages | Encrypted locally + synced to cloud (still encrypted) |
-| Chat titles & metadata | Encrypted |
-| Starred chat status | Encrypted |
-| Your encryption key | Stored in device keychain/keystore — never leaves your device |
+| All chat messages | Encrypted on the server (AES-256-GCM). Local cache stores plaintext for instant loading — device OS sandbox provides local isolation |
+| Chat titles & metadata | Encrypted on the server |
+| Starred chat status | Encrypted on the server |
+| Your encryption key | Stored locally (device keychain or app storage) — never leaves your device |
 
 For detailed security information, see [SECURITY.md](SECURITY.md).
 
@@ -162,4 +166,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 - [Documentation](https://docs.chuk.chat) — Full docs
 - [Privacy Policy](https://chuk.chat/en/privacy)
 - [Status](https://status.chuk.chat)
-- [Blog](https://chuk.dev/en/blog)
+- [Blog](https://chuk.chat/en/blog)
