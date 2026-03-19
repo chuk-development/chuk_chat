@@ -278,6 +278,24 @@ class _MessageBubbleState extends State<MessageBubble>
     super.didUpdateWidget(oldWidget);
   }
 
+  /// Bottom bar for AI messages: sources (left) + action buttons (right).
+  Widget _buildBottomBar(Color iconFgColor, bool hasActions) {
+    final bool hasSources = widget.toolCalls != null &&
+        widget.toolCalls!.isNotEmpty;
+
+    if (!hasSources && !hasActions) return const SizedBox.shrink();
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (hasSources)
+          Flexible(child: _buildSourcesBar(widget.toolCalls!)),
+        if (hasSources && hasActions) const Spacer(),
+        if (hasActions) _buildActionButtons(iconFgColor, false),
+      ],
+    );
+  }
+
   Widget _buildUserActionButtons(Color iconFgColor) {
     final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
     return Row(
@@ -512,7 +530,7 @@ class _MessageBubbleState extends State<MessageBubble>
             userBubble,
             if (hasUserActions && _showUserActions)
               _buildUserActionButtons(iconFgColor),
-            if (hasActions) _buildActionButtons(iconFgColor, alignRight),
+            if (!isUserMessage) _buildBottomBar(iconFgColor, hasActions),
           ],
         ),
       ),
@@ -586,10 +604,6 @@ class _MessageBubbleState extends State<MessageBubble>
         bgColor: bgColor,
         isUserMessage: isUserMessage,
       ),
-      if (!widget.isUser &&
-          widget.toolCalls != null &&
-          widget.toolCalls!.isNotEmpty)
-        _buildSourcesBar(widget.toolCalls!),
       ..._buildAskUserOptions(),
       // Image actions go below the text, matching the regular action buttons.
       if (widget.images != null &&
@@ -830,11 +844,6 @@ class _MessageBubbleState extends State<MessageBubble>
     if (placeQrImageAboveResponse && !insertedQrImage) {
       children.add(_buildImagesGrid(widget.images!));
       children.add(const SizedBox(height: 8));
-    }
-
-    // Sources bar for web search / web crawl citations.
-    if (widget.toolCalls != null && widget.toolCalls!.isNotEmpty) {
-      children.add(_buildSourcesBar(widget.toolCalls!));
     }
 
     // ask_user interactive options.
@@ -1662,24 +1671,25 @@ class _MessageBubbleState extends State<MessageBubble>
     final colorScheme = Theme.of(context).colorScheme;
 
     return Container(
-      margin: const EdgeInsets.only(top: 8),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(isExpanded ? 10 : 100),
         border: Border.all(
           color: colorScheme.outlineVariant.withValues(alpha: 0.3),
         ),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           InkWell(
             onTap: () =>
                 setState(() => _blockExpanded['sources_bar'] = !isExpanded),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(100),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   for (int i = 0; i < sources.length && i < 5; i++)
                     Padding(
@@ -1699,16 +1709,15 @@ class _MessageBubbleState extends State<MessageBubble>
                       ),
                     ),
                   const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '${sources.length} source${sources.length == 1 ? '' : 's'}',
-                      style: TextStyle(
-                        color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w500,
-                        fontSize: 12,
-                      ),
+                  Text(
+                    '${sources.length} source${sources.length == 1 ? '' : 's'}',
+                    style: TextStyle(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w500,
+                      fontSize: 12,
                     ),
                   ),
+                  const SizedBox(width: 4),
                   Icon(
                     isExpanded ? Icons.expand_less : Icons.expand_more,
                     size: 16,
