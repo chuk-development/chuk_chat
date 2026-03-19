@@ -278,7 +278,7 @@ class _MessageBubbleState extends State<MessageBubble>
     super.didUpdateWidget(oldWidget);
   }
 
-  /// Bottom bar for AI messages: sources (left) + action buttons (right).
+  /// Bottom bar for AI messages: action buttons (left) + sources (right).
   Widget _buildBottomBar(Color iconFgColor, bool hasActions) {
     final bool hasSources = widget.toolCalls != null &&
         widget.toolCalls!.isNotEmpty;
@@ -286,12 +286,11 @@ class _MessageBubbleState extends State<MessageBubble>
     if (!hasSources && !hasActions) return const SizedBox.shrink();
 
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        if (hasSources)
-          Flexible(child: _buildSourcesBar(widget.toolCalls!)),
-        if (hasSources && hasActions) const Spacer(),
         if (hasActions) _buildActionButtons(iconFgColor, false),
+        const Spacer(),
+        if (hasSources) _buildSourcesBar(widget.toolCalls!),
       ],
     );
   }
@@ -1624,10 +1623,8 @@ class _MessageBubbleState extends State<MessageBubble>
 
   // ─── Sources bar (web search / web crawl citations) ──────────────────
 
-  /// Collects all source URLs from web_search and web_crawl tool calls and
-  /// renders a collapsible bar with favicon icons, similar to the
-  /// function_calling reference implementation.
-  Widget _buildSourcesBar(List<ToolCall> toolCalls) {
+  /// Extracts source URLs from web_search and web_crawl tool calls.
+  List<Map<String, String>> _extractSources(List<ToolCall> toolCalls) {
     final sources = <Map<String, String>>[];
     final seenUrls = <String>{};
 
@@ -1664,149 +1661,170 @@ class _MessageBubbleState extends State<MessageBubble>
         }
       }
     }
+    return sources;
+  }
 
-    if (sources.isEmpty) return const SizedBox.shrink();
-
-    final isExpanded = _blockExpanded['sources_bar'] ?? false;
+  /// Shows the sources list in a bottom sheet.
+  void _showSourcesSheet(
+    BuildContext context,
+    List<Map<String, String>> sources,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-        borderRadius: BorderRadius.circular(isExpanded ? 10 : 100),
-        border: Border.all(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.3),
-        ),
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            onTap: () =>
-                setState(() => _blockExpanded['sources_bar'] = !isExpanded),
-            borderRadius: BorderRadius.circular(100),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (int i = 0; i < sources.length && i < 5; i++)
-                    Padding(
-                      padding: EdgeInsets.only(right: i < 4 ? 4.0 : 0),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: Image.network(
-                          'https://www.google.com/s2/favicons?domain=${sources[i]['host']}&sz=32',
-                          width: 16,
-                          height: 16,
-                          errorBuilder: (_, __, ___) => Icon(
-                            Icons.public,
-                            size: 16,
-                            color: colorScheme.onSurfaceVariant,
-                          ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 32,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.language,
+                        size: 18,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${sources.length} source${sources.length == 1 ? '' : 's'}',
+                        style: TextStyle(
+                          color: colorScheme.onSurface,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ...sources.map((source) {
+                  return ListTile(
+                    leading: ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: Image.network(
+                        'https://www.google.com/s2/favicons?domain=${source['host']}&sz=32',
+                        width: 20,
+                        height: 20,
+                        errorBuilder: (_, __, ___) => Icon(
+                          Icons.public,
+                          size: 20,
+                          color: colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '${sources.length} source${sources.length == 1 ? '' : 's'}',
-                    style: TextStyle(
-                      color: colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w500,
-                      fontSize: 12,
+                    title: Text(
+                      source['title']!,
+                      style: TextStyle(
+                        color: colorScheme.onSurface,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    isExpanded ? Icons.expand_less : Icons.expand_more,
-                    size: 16,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ],
-              ),
+                    subtitle: Text(
+                      source['host']!,
+                      style: TextStyle(
+                        color: colorScheme.onSurfaceVariant,
+                        fontSize: 12,
+                      ),
+                    ),
+                    trailing: Icon(
+                      Icons.open_in_new,
+                      size: 16,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    onTap: () async {
+                      final url = Uri.tryParse(source['url']!);
+                      if (url != null && await canLaunchUrl(url)) {
+                        await launchUrl(
+                          url,
+                          mode: LaunchMode.externalApplication,
+                        );
+                      }
+                    },
+                  );
+                }),
+              ],
             ),
           ),
-          if (isExpanded)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: sources.map((source) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 3),
-                    child: InkWell(
-                      onTap: () async {
-                        final url = Uri.tryParse(source['url']!);
-                        if (url != null && await canLaunchUrl(url)) {
-                          await launchUrl(
-                            url,
-                            mode: LaunchMode.externalApplication,
-                          );
-                        }
-                      },
-                      borderRadius: BorderRadius.circular(6),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 4,
-                          horizontal: 4,
-                        ),
-                        child: Row(
-                          children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: Image.network(
-                                'https://www.google.com/s2/favicons?domain=${source['host']}&sz=32',
-                                width: 16,
-                                height: 16,
-                                errorBuilder: (_, __, ___) => Icon(
-                                  Icons.public,
-                                  size: 16,
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    source['title']!,
-                                    style: TextStyle(
-                                      color: colorScheme.onSurface,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  Text(
-                                    source['host']!,
-                                    style: TextStyle(
-                                      color: colorScheme.onSurfaceVariant,
-                                      fontSize: 11,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Icon(
-                              Icons.open_in_new,
-                              size: 14,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ],
-                        ),
-                      ),
+        );
+      },
+    );
+  }
+
+  /// Compact sources pill — shows favicon icons + count, opens sheet on tap.
+  Widget _buildSourcesBar(List<ToolCall> toolCalls) {
+    final sources = _extractSources(toolCalls);
+    if (sources.isEmpty) return const SizedBox.shrink();
+
+    final colorScheme = Theme.of(context).colorScheme;
+    final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
+
+    return InkWell(
+      onTap: () => _showSourcesSheet(context, sources),
+      borderRadius: BorderRadius.circular(100),
+      child: Container(
+        decoration: BoxDecoration(
+          color: bgColor.lighten(0.05),
+          borderRadius: BorderRadius.circular(100),
+          border: Border.all(
+            color: colorScheme.onSurface.withValues(alpha: 0.15),
+            width: 1,
+          ),
+        ),
+        padding: EdgeInsets.symmetric(
+          horizontal: kPlatformMobile ? 6 : 10,
+          vertical: kPlatformMobile ? 4 : 6,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (int i = 0; i < sources.length && i < 5; i++)
+              Padding(
+                padding: EdgeInsets.only(right: i < 4 ? 3.0 : 0),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: Image.network(
+                    'https://www.google.com/s2/favicons?domain=${sources[i]['host']}&sz=32',
+                    width: 16,
+                    height: 16,
+                    errorBuilder: (_, __, ___) => Icon(
+                      Icons.public,
+                      size: 16,
+                      color: colorScheme.onSurfaceVariant,
                     ),
-                  );
-                }).toList(),
+                  ),
+                ),
+              ),
+            const SizedBox(width: 6),
+            Text(
+              '${sources.length} source${sources.length == 1 ? '' : 's'}',
+              style: TextStyle(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w500,
+                fontSize: 12,
               ),
             ),
-        ],
+          ],
+        ),
       ),
     );
   }
