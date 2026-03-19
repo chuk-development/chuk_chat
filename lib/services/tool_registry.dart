@@ -55,7 +55,6 @@ const Map<String, ToolCategory> toolCategoryMap = {
   'device': ToolCategory.device,
   'calendar': ToolCategory.device,
   'reminder': ToolCategory.device,
-  'draft_email': ToolCategory.device,
   'search_chats': ToolCategory.basic,
   'artifact_manager': ToolCategory.basic,
   'update_project': ToolCategory.basic,
@@ -91,8 +90,8 @@ const Map<String, String> discoveryCatalog = {
         'Email (IMAP/SMTP), Gmail, Slack, GitHub, Nextcloud, Google Calendar / '
         'E-Mail, Gmail, Slack, GitHub, Nextcloud, Google Kalender',
   'Device / Gerät':
-      'Reminders, calendar events, alarms, timers, email drafts, SMS drafts, GPS / '
-      'Erinnerungen, Kalendereinträge, Wecker, Timer, E-Mail-Entwurf, SMS, GPS',
+      'Reminders, calendar events, alarms, timers, SMS drafts, GPS / '
+      'Erinnerungen, Kalendereinträge, Wecker, Timer, SMS, GPS',
   'System':
       'Execute bash commands (sandboxed) / Bash-Befehle ausführen (sandboxed)',
 };
@@ -924,35 +923,6 @@ final List<ClientTool> builtinTools = [
     ],
   ),
 
-  // -- Draft Email (standalone) --
-  ClientTool(
-    name: 'draft_email',
-    description:
-        'Compose an email and open it in the default mail app (Gmail, Outlook, '
-        'Thunderbird, etc.) for the user to review and send. Nothing is sent '
-        'automatically — the user always confirms. Works on all platforms.',
-    parameters: {
-      'to': 'string (required — recipient email address)',
-      'subject': 'string (optional — email subject line)',
-      'body': 'string (optional — email body text)',
-      'cc': 'string (optional — CC addresses, comma-separated)',
-      'bcc': 'string (optional — BCC addresses, comma-separated)',
-    },
-    type: ToolType.builtin,
-    tags: [
-      'email',
-      'e-mail',
-      'mail',
-      'draft',
-      'entwurf',
-      'nachricht',
-      'message',
-      'schreiben',
-      'write',
-      'send',
-      'senden',
-    ],
-  ),
 
   // -- Weather --
   ClientTool(
