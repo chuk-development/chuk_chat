@@ -10,7 +10,6 @@ import 'package:chuk_chat/services/tool_executor.dart' show ToolExecutor;
 import 'package:chuk_chat/utils/io_helper.dart' show Platform;
 
 const Set<String> _serverBackedToolNames = {
-  'spotify_control',
   'github',
   'slack',
   'google_calendar',
@@ -84,9 +83,10 @@ const Map<String, String> discoveryCatalog = {
   'Music / Musik':
       'Spotify: play, pause, search, playlists, volume / '
       'Spotify steuern: abspielen, pausieren, suchen, Playlists, Lautstärke',
-  'Productivity / Produktivität':
-      'Email (IMAP/SMTP), Gmail, Slack, GitHub, Nextcloud, Google Calendar / '
-      'E-Mail, Gmail, Slack, GitHub, Nextcloud, Google Kalender',
+  if (kFeatureServerTools)
+    'Productivity / Produktivität':
+        'Email (IMAP/SMTP), Gmail, Slack, GitHub, Nextcloud, Google Calendar / '
+        'E-Mail, Gmail, Slack, GitHub, Nextcloud, Google Kalender',
   'Device / Gerät':
       'Create calendar events, set alarms/timers, SMS draft, GPS location / '
       'Kalendereinträge erstellen, Wecker/Timer setzen, SMS-Entwurf, GPS-Standort',
