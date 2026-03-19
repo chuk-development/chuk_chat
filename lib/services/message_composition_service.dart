@@ -263,7 +263,7 @@ class MessageCompositionService {
       final String queryText = userInput.isNotEmpty
           ? userInput
           : (imageFiles.isNotEmpty
-                ? 'Please describe these images.'
+                ? '1 image attached'
                 : 'Please review the uploaded documents.');
 
       if (promptParts.isNotEmpty) {
