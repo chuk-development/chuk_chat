@@ -3,7 +3,6 @@ import 'package:chuk_chat/platform_config.dart'
     show
         kFeatureArtifacts,
         kFeatureServerTools,
-        kFeatureStockData,
         kPlatformDesktop,
         kPlatformMobile;
 import 'package:chuk_chat/services/tool_executor.dart' show ToolExecutor;
@@ -38,7 +37,8 @@ const Map<String, ToolCategory> toolCategoryMap = {
   'edit_image': ToolCategory.search,
   'fetch_image': ToolCategory.search,
   'view_chat_images': ToolCategory.search,
-  'stock_data': ToolCategory.search,
+  'crypto_data': ToolCategory.search,
+  'find_domain': ToolCategory.search,
   'weather': ToolCategory.search,
   'search_places': ToolCategory.map,
   'search_restaurants': ToolCategory.map,
@@ -72,8 +72,11 @@ const Map<String, String> discoveryCatalog = {
       'Im Internet suchen, Webseiten lesen, Bilder erzeugen/bearbeiten/holen '
       '(kostet Credits, nicht privat)',
   'Finance / Finanzen':
-      'Get stock quotes and historical price data / '
-      'Aktienkurse und Kursverlauf abrufen',
+      'Cryptocurrency prices, market data, trending coins (CoinGecko) / '
+      'Kryptowährungspreise, Marktdaten, Trending Coins (CoinGecko)',
+  'Domains':
+      'Check domain name availability across 1400+ TLDs with WHOIS data / '
+      'Domain-Verfügbarkeit über 1400+ TLDs prüfen, WHOIS-Daten',
   'Weather / Wetter':
       'Current conditions, forecast (up to 16 days), hourly forecast / '
       'Aktuelles Wetter, Vorhersage (bis 16 Tage)',
@@ -428,29 +431,71 @@ final List<ClientTool> builtinTools = [
     tags: ['image', 'vision', 'analyze', 'inspect', 'describe', 'bildanalyse'],
   ),
   ClientTool(
-    name: 'stock_data',
+    name: 'crypto_data',
     description:
-        'Get stock market data from Yahoo Finance. Actions: quote (current '
-        'price), history (time-series chart data), compare (multiple '
-        'tickers). Returns OHLC prices, volume, and summary statistics.',
+        'Get cryptocurrency data from CoinGecko (free, no API key). Actions: '
+        'price (current price + 24h change), markets (top coins or specific '
+        'coins with market cap ranking), trending (trending coins right now), '
+        'search (find a coin by name/symbol). Use CoinGecko coin IDs like '
+        '"bitcoin", "ethereum", "solana" — search first if unsure.',
     parameters: {
-      'action': 'string (optional, default quote: quote, history, compare)',
-      'symbol': 'string (required for quote/history, e.g. AAPL)',
-      'symbols': 'string or list (required for compare, e.g. "AAPL,MSFT,NVDA")',
-      'period': 'string (optional history range: 5d, 1mo, 3mo, 6mo, 1y, 5y)',
-      'interval': 'string (optional history interval: 1d, 1h, 30m, 5m)',
+      'action':
+          'string (optional, default price: price, markets, trending, search)',
+      'ids':
+          'string or list (for price/markets: CoinGecko coin IDs, '
+          'e.g. "bitcoin" or "bitcoin,ethereum,solana")',
+      'currency': 'string (optional, default "usd": target currency)',
+      'query': 'string (required for search: coin name or symbol to find)',
+      'limit': 'int (optional for markets: number of results, default 20)',
     },
     type: ToolType.builtin,
     tags: [
-      'stock',
-      'aktie',
-      'finance',
-      'market',
-      'quote',
-      'ticker',
+      'crypto',
+      'krypto',
+      'bitcoin',
+      'ethereum',
+      'coin',
+      'token',
+      'price',
       'preis',
       'kurs',
-      'yahoo',
+      'market',
+      'markt',
+      'finance',
+      'finanzen',
+      'coingecko',
+      'trending',
+    ],
+  ),
+  ClientTool(
+    name: 'find_domain',
+    description:
+        'Check domain name availability across 1400+ TLDs. Uses the '
+        'FindADomain service. Actions: check (domain availability + optional '
+        'WHOIS), list_tlds (show all supported TLDs). Provide the domain name '
+        'without TLD and one or more TLDs to check. NOTE: This service can '
+        'be slow — results may take up to 30 seconds.',
+    parameters: {
+      'action': 'string (optional, default check: check, list_tlds)',
+      'name':
+          'string (required for check: domain name WITHOUT TLD, e.g. "myapp")',
+      'tld':
+          'string (required for check: one or more TLDs comma-separated, '
+          'e.g. "com" or "com,net,org,de,io")',
+      'whois': 'boolean (optional: include WHOIS data, default false)',
+    },
+    type: ToolType.builtin,
+    tags: [
+      'domain',
+      'dns',
+      'website',
+      'url',
+      'tld',
+      'whois',
+      'registrar',
+      'available',
+      'verfügbar',
+      'webseite',
     ],
   ),
 
@@ -1045,10 +1090,6 @@ void registerBuiltinTools(ToolExecutor executor) {
       continue;
     }
     if (!kFeatureArtifacts && tool.name == 'artifact_manager') {
-      continue;
-    }
-    // Stock data uses unofficial Yahoo Finance API — disabled by default.
-    if (!kFeatureStockData && tool.name == 'stock_data') {
       continue;
     }
     // Device tool: available on all platforms.
