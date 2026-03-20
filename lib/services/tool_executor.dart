@@ -171,7 +171,22 @@ class ToolExecutor {
     _chartVisualOutputEnabled =
         prefs.getBool(_kChartVisualOutputEnabledKey) ?? true;
 
-    await _syncToolEnabledPreferencesFromSupabase(prefs);
+    // Defer Supabase sync to avoid blocking UI at startup.
+    // Local prefs are already loaded above — tools work immediately.
+    unawaited(_deferredSupabaseSync(prefs));
+  }
+
+  Future<void> _deferredSupabaseSync(SharedPreferences prefs) async {
+    // Wait for the UI to settle before hitting the network.
+    await Future<void>.delayed(const Duration(seconds: 5));
+    try {
+      await _syncToolEnabledPreferencesFromSupabase(prefs)
+          .timeout(const Duration(seconds: 10));
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Tool preferences Supabase sync skipped: $error');
+      }
+    }
   }
 
   String? _safeCurrentUserId() {
