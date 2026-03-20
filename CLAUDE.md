@@ -52,7 +52,6 @@ Pass via `--dart-define=FLAG=value`. Defined in `lib/platform_config.dart`.
 | `FEATURE_VOICE_MODE` | `false` | Voice mode button |
 | `FEATURE_IMAGE_GEN` | **always on** | Hardcoded, no flag needed |
 | `FEATURE_SERVER_TOOLS` | `false` | GitHub, Slack, Gmail, Google Calendar, Email, Nextcloud (need backend OAuth) |
-| `FEATURE_STOCK_DATA` | `false` | Yahoo Finance stock data tool |
 | `FEATURE_LINUX_KEYRING` | `false` | Use libsecret/keyring for encryption key (causes 10s+ startup stall) |
 | `FEATURE_SYSTEM_TRAY` | `false` | System tray integration on desktop |
 
