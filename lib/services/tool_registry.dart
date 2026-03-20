@@ -434,17 +434,22 @@ final List<ClientTool> builtinTools = [
     name: 'crypto_data',
     description:
         'Get cryptocurrency data from CoinGecko (free, no API key). Actions: '
-        'price (current price + 24h change), markets (top coins or specific '
-        'coins with market cap ranking), trending (trending coins right now), '
-        'search (find a coin by name/symbol). Use CoinGecko coin IDs like '
-        '"bitcoin", "ethereum", "solana" — search first if unsure.',
+        'price (current price + 24h change), markets (top coins with full '
+        'stats: 24h range, 1h/24h/7d/30d changes, ATH, supply), '
+        'history (time-series price data for charts — specify days), '
+        'trending (trending coins right now), search (find a coin by '
+        'name/symbol). Use CoinGecko coin IDs like "bitcoin", "ethereum", '
+        '"solana" — search first if unsure.',
     parameters: {
       'action':
-          'string (optional, default price: price, markets, trending, search)',
+          'string (optional, default price: price, markets, history, '
+          'trending, search)',
       'ids':
-          'string or list (for price/markets: CoinGecko coin IDs, '
+          'string or list (for price/markets/history: CoinGecko coin IDs, '
           'e.g. "bitcoin" or "bitcoin,ethereum,solana")',
       'currency': 'string (optional, default "usd": target currency)',
+      'days':
+          'string (for history: number of days, e.g. "1", "7", "30", "365")',
       'query': 'string (required for search: coin name or symbol to find)',
       'limit': 'int (optional for markets: number of results, default 20)',
     },
