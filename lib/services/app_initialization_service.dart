@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:chuk_chat/services/chat_preload_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/chat_sync_service.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
@@ -269,6 +270,19 @@ class AppInitializationService {
         debugPrint('⚠️ [AppInit] Chat loading failed: $error');
         debugPrint('$stackTrace');
       }
+    }
+
+    // Migrate old chat cache from SharedPreferences/JSON to SQLite
+    // in background (shrinks SharedPreferences from ~21 MB to ~50 KB).
+    final migrationUser = SupabaseService.auth.currentUser;
+    if (migrationUser != null) {
+      unawaited(
+        LocalChatCacheService.ensureMigrated(migrationUser.id).catchError((e) {
+          if (kDebugMode) {
+            debugPrint('⚠️ [AppInit] Cache migration failed: $e');
+          }
+        }),
+      );
     }
 
     // Load projects in parallel
