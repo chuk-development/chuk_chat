@@ -3,13 +3,13 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import 'package:chuk_chat/constants/file_constants.dart';
 import 'package:chuk_chat/models/project_model.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/file_conversion_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
@@ -98,8 +98,7 @@ class ProjectStorageService {
     if (_cacheLoaded) return;
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final cached = prefs.getString(_cacheKey);
+      final cached = await LocalChatCacheService.kvGet(_cacheKey);
       if (cached != null && cached.isNotEmpty) {
         final List<dynamic> jsonList = jsonDecode(cached);
         _projectsById.clear();
@@ -113,7 +112,6 @@ class ProjectStorageService {
           );
         }
         _cacheLoaded = true;
-        // Use immediate notify for cache load - don't auto-save (we just loaded!)
         _notifyChangesImmediate();
       }
     } catch (e) {
@@ -126,9 +124,8 @@ class ProjectStorageService {
   /// Save projects to local cache
   static Future<void> _saveToCache() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
       final jsonList = _projectsById.values.map((p) => p.toJson()).toList();
-      await prefs.setString(_cacheKey, jsonEncode(jsonList));
+      await LocalChatCacheService.kvSet(_cacheKey, jsonEncode(jsonList));
       if (kDebugMode) {
         debugPrint(
           '✅ [ProjectStorage] Saved ${jsonList.length} projects to cache',
