@@ -874,6 +874,9 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
   /// Cancel any ongoing operation (streaming or sending)
   Future<void> _cancelCurrentOperation() async {
+    // Explicit cancel discards any queued follow-up message too.
+    _pendingMessageText = null;
+
     if (_isStreaming) {
       // Stream is active - cancel via existing method
       await _cancelStream();
@@ -965,13 +968,21 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         debugPrint('🔒 [SendMessage] GLOBAL LOCK SET');
       }
 
-      if (_isStreaming) {
-        // Current chat is streaming - cancel it
-        await _cancelStream();
-        ChatStorageService.isMessageOperationInProgress = false;
-        if (kDebugMode) {
-          debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (cancelled)');
+      if (_isStreaming || _isSending) {
+        // AI is still responding — queue the message instead of cancelling.
+        final text = _controller.text.trim();
+        if (text.isNotEmpty) {
+          _pendingMessageText = text;
+          _controller.clear();
+          if (kDebugMode) {
+            debugPrint(
+              '📋 [SendMessage] Queued pending message '
+              '(${text.length} chars)',
+            );
+          }
         }
+        // Do NOT release the global lock — the original streaming operation
+        // is still in progress and will release it upon completion.
         return;
       }
 
@@ -2137,6 +2148,29 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       _scrollChatToBottom();
       Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
       _persistChat();
+
+      // Drain the message queue — if the user typed while AI was responding.
+      _drainPendingMessage();
     }
+  }
+
+  /// If a message was queued while the AI was streaming, inject it into the
+  /// text field and trigger a new send cycle.
+  void _drainPendingMessage() {
+    final pending = _pendingMessageText;
+    if (pending == null) return;
+    _pendingMessageText = null;
+
+    if (kDebugMode) {
+      debugPrint(
+        '📋 [DrainQueue] Sending queued message (${pending.length} chars)',
+      );
+    }
+
+    // Put the text back into the controller so _sendMessage picks it up
+    // via its normal `_controller.text.trim()` path.
+    _controller.text = pending;
+    _controller.selection = TextSelection.collapsed(offset: pending.length);
+    unawaited(_sendMessage());
   }
 }

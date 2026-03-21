@@ -125,6 +125,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   // Network and UI state
   bool _isOffline = false;
   bool _isSendingMessage = false; // Flag to prevent rapid send spam
+
+  /// Queued message text — when the user sends while AI is still streaming,
+  /// the text is parked here and dispatched after the current response ends.
+  String? _pendingMessageText;
   bool _isLoadingChat = false; // Loading indicator for chat switching
   late final VoidCallback _networkStatusListener;
   Timer? _audioVisualizerTimer;
@@ -1396,6 +1400,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
       _scrollChatToBottom();
       _persistChat();
+
+      // Drain the message queue — if the user typed while AI was responding.
+      _drainPendingMessage();
     } else if (!isActiveChat) {
       // User switched to a different chat - _messages belongs to the OTHER chat!
       // DO NOT check _messages.length - it's the wrong chat's message list.
@@ -1412,6 +1419,24 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     }
   }
 
+  /// If a message was queued while the AI was streaming, inject it into the
+  /// text field and trigger a new send cycle.
+  void _drainPendingMessage() {
+    final pending = _pendingMessageText;
+    if (pending == null) return;
+    _pendingMessageText = null;
+
+    if (kDebugMode) {
+      debugPrint(
+        '📋 [DrainQueue] Sending queued message (${pending.length} chars)',
+      );
+    }
+
+    _controller.text = pending;
+    _controller.selection = TextSelection.collapsed(offset: pending.length);
+    unawaited(_sendMessage());
+  }
+
   Future<void> _sendMessage() async {
     // SET GLOBAL LOCK IMMEDIATELY - before any async operations or early returns
     // This prevents didUpdateWidget from loading a different chat during send
@@ -1420,10 +1445,20 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       debugPrint('🔒 [SendMessage] GLOBAL LOCK SET');
     }
 
-    if (_isCurrentChatStreaming) {
-      // Current chat is streaming - cancel it
-      _streamingHandler.cancelStream(_activeChatId);
-      _updateCancelledMessage();
+    if (_isCurrentChatStreaming || _isSendingMessage) {
+      // AI is still responding — queue the message instead of cancelling.
+      final text = _controller.text.trim();
+      if (text.isNotEmpty) {
+        _pendingMessageText = text;
+        _controller.clear();
+        if (kDebugMode) {
+          debugPrint(
+            '📋 [SendMessage] Queued pending message (${text.length} chars)',
+          );
+        }
+      }
+      // Do NOT release the global lock — the original streaming operation
+      // is still in progress and will release it upon completion.
       return;
     }
 
@@ -1874,6 +1909,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
   /// Cancel any ongoing operation (streaming or sending)
   Future<void> _cancelCurrentOperation() async {
+    // Explicit cancel discards any queued follow-up message too.
+    _pendingMessageText = null;
+
     if (_isCurrentChatStreaming) {
       // Stream is active - cancel via handler
       await _streamingHandler.cancelStream(_activeChatId);

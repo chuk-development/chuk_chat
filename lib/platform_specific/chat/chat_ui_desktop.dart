@@ -136,6 +136,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   int? _activeSendOperationId;
   int? _cancelledSendOperationId;
 
+  /// Queued message text — when the user sends while AI is still streaming,
+  /// the text is parked here and dispatched after the current response ends.
+  String? _pendingMessageText;
+
   bool _showScrollToBottom = false;
   bool _isLoadingChat = false; // Loading indicator for chat switching
   StreamSubscription<void>? _providerRefreshSubscription;
