@@ -62,11 +62,10 @@ flutter build web --release --dart-define-from-file=.env
 
 **When the user explicitly asks to "build a release" or "make a new release", ALWAYS follow these steps:**
 
-1. Bump version in `pubspec.yaml` (e.g. `1.0.26` → `1.0.27` — **no** `+buildnumber` suffix)
-2. Commit: `git commit -am "chore: bump version to 1.0.27"`
-3. Tag: `git tag v1.0.27`
-4. Push commit and tag: `git push origin master && git push origin v1.0.27`
-5. Trigger the cross-platform build (**always include all platforms except iOS**):
+1. Bump version in `pubspec.yaml` (e.g. `1.0.49` → `1.0.50` — **no** `+buildnumber` suffix)
+2. Commit: `git commit -am "chore: bump version to 1.0.50"`
+3. Push: `git push origin master`
+4. Trigger the cross-platform build (**always include all platforms except iOS**):
    ```bash
    gh workflow run build-cross-platform.yml \
      --field build_android=true \
@@ -77,11 +76,14 @@ flutter build web --release --dart-define-from-file=.env
       --field build_ios=false \
      --field enable_signing=true
    ```
-6. Verify the workflow started: `gh run list --limit 3`
-7. CI reads the version from `pubspec.yaml`, builds all platforms, and creates the GitHub Release automatically. The version-bump job also creates and pushes a git tag (belt and suspenders with the local tag).
-8. Web deploys automatically via Dokploy, triggered by the tag push (Dokploy watches for `v*` tags and rebuilds automatically)
+5. CI creates the GitHub Release with all artifacts automatically
+6. Web deploys automatically via Dokploy on push to master
 
-**Important:** The `Cross-Platform Build & Release` workflow is triggered by `workflow_dispatch` only. Web deploys automatically via Dokploy on tag push. The separate `Release - macOS` and `Release - Windows` tag-triggered workflows are legacy and may fail.
+**Repo is public** — only one release on `chuk-development/chuk_chat`. No second repo needed.
+
+**Release notes = changelog only.** Write what changed (from git commits), grouped by category (Performance, New Features, Bug Fixes, etc.). NEVER include download instructions, architecture explanations, platform lists, or "build artifacts will be attached" notices. Users can figure out downloads themselves.
+
+**Important:** The `Cross-Platform Build & Release` workflow is triggered by `workflow_dispatch` only. Do not rely on git tags to trigger releases.
 
 ### Mandatory Post-Task Workflow
 
