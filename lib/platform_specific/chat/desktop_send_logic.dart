@@ -968,8 +968,8 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         debugPrint('🔒 [SendMessage] GLOBAL LOCK SET');
       }
 
-      if (_isStreaming || _isSending) {
-        // AI is still responding — queue the message instead of cancelling.
+      if (_isStreaming) {
+        // AI is still streaming — queue the message instead of cancelling.
         final text = _controller.text.trim();
         if (text.isNotEmpty) {
           _pendingMessageText = text;
