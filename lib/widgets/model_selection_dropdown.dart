@@ -303,6 +303,10 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       _providerLimits.addAll(ModelSelectionDropdown._cachedProviderLimits);
       _isLoadingModels = false;
       _updateSelectedModelNameSync();
+      // Width metrics need BuildContext — recalculate after the first frame.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _updateSelectedModelName();
+      });
       unawaited(
         DiagnosticsLogService.info(
           'model_menu',
