@@ -332,8 +332,9 @@ class AudioRecordingHandler {
     }
 
     // Audio visualisation via the recorder's amplitude stream.
+    // 16ms ≈ 60 fps for immediate visual response.
     _amplitudeSub = _audioRecorder
-        .onAmplitudeChanged(const Duration(milliseconds: 30))
+        .onAmplitudeChanged(const Duration(milliseconds: 16))
         .listen(_handleAmplitudeSample);
 
     _isStreamingMode = false;
