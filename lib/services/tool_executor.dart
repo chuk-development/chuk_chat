@@ -95,7 +95,7 @@ class ToolExecutor {
     'update_project',
   };
 
-  static const Set<String> _defaultDisabledTools = {};
+  static const Set<String> _defaultDisabledTools = {'whoop'};
 
   /// Server HTTP base URL for server-proxied tools (Brave search, crawl).
   String? get serverHttpUrl => ApiConfigService.apiBaseUrl;
