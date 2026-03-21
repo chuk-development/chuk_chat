@@ -21,8 +21,6 @@ import 'package:chuk_chat/widgets/message_bubble.dart'
     show MessageBubble, MessageBubbleAction, DocumentAttachment;
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
-import 'package:chuk_chat/platform_specific/chat/widgets/mobile_chat_widgets.dart'
-    show buildAudioVisualizer;
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart'; // NEW
 import 'package:chuk_chat/services/websocket_chat_service.dart';
 import 'package:chuk_chat/services/streaming_manager.dart';
@@ -1206,9 +1204,63 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   }
 
   Widget _buildAudioVisualizer({required Color accent, required Color iconFg}) {
-    return buildAudioVisualizer(
-      audioLevels: _audioHandler.audioLevels,
-      accentColor: accent,
+    const int barCount = 40;
+    final levels = _audioHandler.audioLevels;
+    final int startIndex = levels.length > barCount
+        ? levels.length - barCount
+        : 0;
+
+    return SizedBox(
+      key: const ValueKey<String>('audio-visualizer'),
+      height: 32,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: List.generate(barCount, (index) {
+          final int levelIndex = startIndex + index;
+          final double rawLevel = levelIndex < levels.length
+              ? levels[levelIndex]
+              : 0.0;
+
+          // sqrt scaling — boosts quiet speech for visible response.
+          final double boosted = rawLevel < 0.01
+              ? 0.0
+              : math.sqrt(rawLevel);
+
+          // Bar height: 2px idle → 28px loud.
+          final double barHeight = (boosted * 26 + 2).clamp(2.0, 28.0);
+
+          final double opacity = (0.5 + boosted * 0.5).clamp(0.5, 1.0);
+
+          return Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 0.6),
+              child: Container(
+                height: barHeight,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      accent.withValues(alpha: opacity),
+                      accent.withValues(alpha: opacity * 0.6),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(2),
+                  boxShadow: boosted > 0.4
+                      ? [
+                          BoxShadow(
+                            color: accent.withValues(alpha: 0.3),
+                            blurRadius: 3,
+                            spreadRadius: 0.5,
+                          ),
+                        ]
+                      : null,
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
     );
   }
 
