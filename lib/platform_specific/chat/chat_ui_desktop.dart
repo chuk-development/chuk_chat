@@ -21,6 +21,8 @@ import 'package:chuk_chat/widgets/message_bubble.dart'
     show MessageBubble, MessageBubbleAction, DocumentAttachment;
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
+import 'package:chuk_chat/platform_specific/chat/widgets/mobile_chat_widgets.dart'
+    show buildAudioVisualizer;
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart'; // NEW
 import 'package:chuk_chat/services/websocket_chat_service.dart';
 import 'package:chuk_chat/services/streaming_manager.dart';
@@ -986,7 +988,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         // Periodic timer as backup — on some Linux audio backends,
         // onAmplitudeChanged may not emit reliably.
         _audioVisualizerTimer = Timer.periodic(
-          const Duration(milliseconds: 50),
+          const Duration(milliseconds: 30),
           (_) {
             if (mounted && _audioHandler.isMicActive) {
               setState(() {});
@@ -1204,65 +1206,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   }
 
   Widget _buildAudioVisualizer({required Color accent, required Color iconFg}) {
-    // Desktop adaptation of the mobile audio visualizer with gradient + glow
-    const int barCount = 40; // More bars for wider desktop layout
-    final levels = _audioHandler.audioLevels;
-    final int startIndex = levels.length > barCount
-        ? levels.length - barCount
-        : 0;
-
-    return SizedBox(
-      key: const ValueKey<String>('audio-visualizer'),
-      height: 32,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: List.generate(barCount, (index) {
-          final int levelIndex = startIndex + index;
-          final double rawLevel = levelIndex < levels.length
-              ? levels[levelIndex]
-              : 0.0;
-
-          // Exponential scaling for more dramatic response
-          final double level = rawLevel * rawLevel;
-
-          // Bar height with good range (3-28px)
-          final double barHeight = (level * 26 + 3).clamp(3.0, 28.0);
-
-          // Vary opacity based on level for depth effect
-          final double opacity = (0.6 + (level * 0.4)).clamp(0.6, 1.0);
-
-          return Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 0.8),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 50),
-                curve: Curves.easeOut,
-                height: barHeight,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      accent.withValues(alpha: opacity),
-                      accent.withValues(alpha: opacity * 0.7),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(2),
-                  boxShadow: level > 0.3
-                      ? [
-                          BoxShadow(
-                            color: accent.withValues(alpha: 0.3),
-                            blurRadius: 2,
-                            spreadRadius: 0.5,
-                          ),
-                        ]
-                      : null,
-                ),
-              ),
-            ),
-          );
-        }),
-      ),
+    return buildAudioVisualizer(
+      audioLevels: _audioHandler.audioLevels,
+      accentColor: accent,
     );
   }
 

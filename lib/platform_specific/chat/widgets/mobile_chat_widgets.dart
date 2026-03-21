@@ -1,4 +1,6 @@
 // lib/platform_specific/chat/widgets/mobile_chat_widgets.dart
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -207,7 +209,6 @@ Widget buildAudioVisualizer({
   required List<double> audioLevels,
   required Color accentColor,
 }) {
-  // Use the last 24 samples for smooth, responsive visualization
   const int barCount = 24;
   final int startIndex = audioLevels.length > barCount
       ? audioLevels.length - barCount
@@ -223,21 +224,20 @@ Widget buildAudioVisualizer({
             ? audioLevels[levelIndex]
             : 0.0;
 
-        // Apply exponential scaling for more dramatic response
-        final double level = rawLevel * rawLevel;
+        // Boost low amplitudes so speech registers clearly.
+        // sqrt gives a strong lift to quiet sounds (0.1 → 0.32).
+        final double boosted = rawLevel < 0.01 ? 0.0 : math.sqrt(rawLevel);
 
-        // Calculate bar height with better range (3-22px)
-        final double barHeight = (level * 20 + 3).clamp(3.0, 22.0);
+        // Bar height — full range from 2px idle to 22px loud.
+        final double barHeight = (boosted * 20 + 2).clamp(2.0, 22.0);
 
-        // Vary opacity based on level for depth effect
-        final double opacity = (0.6 + (level * 0.4)).clamp(0.6, 1.0);
+        // Opacity ramps with level for depth.
+        final double opacity = (0.5 + boosted * 0.5).clamp(0.5, 1.0);
 
         return Expanded(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 0.8),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 50),
-              curve: Curves.easeOut,
+            child: Container(
               height: barHeight,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -245,15 +245,15 @@ Widget buildAudioVisualizer({
                   end: Alignment.bottomCenter,
                   colors: [
                     accentColor.withValues(alpha: opacity),
-                    accentColor.withValues(alpha: opacity * 0.7),
+                    accentColor.withValues(alpha: opacity * 0.6),
                   ],
                 ),
                 borderRadius: BorderRadius.circular(2),
-                boxShadow: level > 0.3
+                boxShadow: boosted > 0.4
                     ? [
                         BoxShadow(
                           color: accentColor.withValues(alpha: 0.3),
-                          blurRadius: 2,
+                          blurRadius: 3,
                           spreadRadius: 0.5,
                         ),
                       ]
