@@ -71,12 +71,13 @@ class AudioRecordingHandler {
 
   /// Start microphone recording.
   ///
-  /// When [accessToken] is provided the handler attempts to open a WebSocket
-  /// to the server and stream PCM audio in real-time (streaming mode). If the
-  /// WebSocket connection fails, it falls back to file-based recording
-  /// transparently.
-  ///
-  /// When [accessToken] is `null`, file-based recording is used directly.
+  /// Recording starts **instantly** in file mode so the user sees the mic
+  /// activate with zero delay.  If [accessToken] is provided, a WebSocket
+  /// connection is attempted in the background.  When it succeeds before the
+  /// user stops recording, the handler transparently switches to streaming
+  /// mode (stops the file recorder, re-starts as PCM stream). If the
+  /// WebSocket isn't ready in time, file mode continues and the audio is
+  /// uploaded via HTTP at transcription time.
   Future<bool> startRecording({String? accessToken}) async {
     try {
       if (!await _ensureMicPermission()) {
@@ -97,23 +98,16 @@ class AudioRecordingHandler {
       _resetAudioLevels();
       _amplitudeSub?.cancel();
 
-      // --- Try streaming mode if we have a token ---
+      // Start file recording IMMEDIATELY — zero delay for the user.
+      final started = await _startFileRecording();
+      if (!started) return false;
+
+      // Try to upgrade to streaming in the background.
       if (accessToken != null) {
-        final connected = await _tryStartStreaming(accessToken);
-        if (connected) {
-          _isMicActive = true;
-          return true;
-        }
-        // Streaming failed — fall through to file mode.
-        if (kDebugMode) {
-          debugPrint(
-            'Streaming transcription unavailable, falling back to file mode',
-          );
-        }
+        unawaited(_tryUpgradeToStreaming(accessToken));
       }
 
-      // --- File mode (original behaviour) ---
-      return _startFileRecording();
+      return true;
     } catch (error, stackTrace) {
       if (kDebugMode) {
         debugPrint('Failed to start microphone: $error\n$stackTrace');
@@ -178,23 +172,41 @@ class AudioRecordingHandler {
   // STREAMING MODE
   // =====================================================================
 
-  /// Attempt to start a streaming-mode recording session.
+  /// Try to upgrade from file mode to streaming mode in the background.
   ///
-  /// Returns `true` if the WebSocket connected and the PCM audio stream
-  /// started successfully. Returns `false` on any failure.
-  Future<bool> _tryStartStreaming(String accessToken) async {
+  /// Connects WebSocket while file recording is already running. If the
+  /// connection succeeds and the user is still recording, stops the file
+  /// recorder and re-starts as a PCM stream. If the connection fails or
+  /// the user already stopped, nothing changes — file mode continues.
+  Future<void> _tryUpgradeToStreaming(String accessToken) async {
     try {
-      _streamingService = StreamingTranscriptionService();
-      final connected = await _streamingService!.connect(
-        accessToken: accessToken,
-      );
+      final service = StreamingTranscriptionService();
+      final connected = await service.connect(accessToken: accessToken);
+
       if (!connected) {
-        await _streamingService?.dispose();
-        _streamingService = null;
-        return false;
+        await service.dispose();
+        if (kDebugMode) {
+          debugPrint('Streaming upgrade: WS connect failed, staying in file mode');
+        }
+        return;
       }
 
-      // Start the recorder in PCM-16 streaming mode.
+      // WS connected — but only upgrade if still recording.
+      if (!_isMicActive || _isStreamingMode) {
+        await service.dispose();
+        return;
+      }
+
+      // Stop the file recorder (discard partial file).
+      _amplitudeSub?.cancel();
+      _amplitudeSub = null;
+      try {
+        await _audioRecorder.stop();
+      } catch (_) {}
+      await _deleteRecordingFile(_activeRecordingPath);
+      _activeRecordingPath = null;
+
+      // Re-start recorder as PCM stream.
       const config = RecordConfig(
         encoder: AudioEncoder.pcm16bits,
         sampleRate: 16000,
@@ -204,24 +216,26 @@ class AudioRecordingHandler {
         config,
       );
 
-      // Forward every PCM chunk to the server and compute amplitude.
+      _streamingService = service;
       _pcmStreamSub = pcmStream.listen((Uint8List data) {
         _streamingService?.sendAudioChunk(data);
         _computeAmplitudeFromPcm(data);
       });
 
       _isStreamingMode = true;
-      return true;
+      if (kDebugMode) {
+        debugPrint('Streaming upgrade: switched to WebSocket streaming');
+      }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('Streaming start failed: $e');
+        debugPrint('Streaming upgrade failed: $e');
       }
       _pcmStreamSub?.cancel();
       _pcmStreamSub = null;
       await _streamingService?.dispose();
       _streamingService = null;
       _isStreamingMode = false;
-      return false;
+      // File recording continues — nothing lost.
     }
   }
 
