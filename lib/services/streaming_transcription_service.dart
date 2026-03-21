@@ -25,7 +25,8 @@ import 'package:chuk_chat/services/websocket_connector.dart' as ws_connector;
 /// 4. [abort] to cancel without transcribing.
 class StreamingTranscriptionService {
   /// Timeout for establishing the WebSocket connection.
-  static const _connectionTimeout = Duration(seconds: 10);
+  /// Keep short so file-mode fallback kicks in quickly.
+  static const _connectionTimeout = Duration(seconds: 3);
 
   /// Timeout for the Groq transcription after signalling "stop".
   static const _transcriptionTimeout = Duration(seconds: 60);

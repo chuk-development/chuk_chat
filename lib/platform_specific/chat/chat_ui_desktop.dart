@@ -150,6 +150,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   bool get _isStreaming =>
       _activeChatId != null && _streamingManager.isStreaming(_activeChatId!);
   Timer? _autoSaveTimer;
+  Timer? _audioVisualizerTimer;
 
   late final DesktopFileHandler _fileHandler;
   final Uuid _uuid = Uuid();
@@ -437,6 +438,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // Don't cancel streams - they continue in background
     // _streamingManager handles all streams globally
     _autoSaveTimer?.cancel();
+    _audioVisualizerTimer?.cancel();
     _audioHandler.onLevelsChanged = null;
     _providerRefreshSubscription?.cancel();
     _controller.dispose();
@@ -956,18 +958,16 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     if (_audioHandler.isMicActive) {
       await _audioHandler.stopRecording();
       _audioHandler.onLevelsChanged = null;
+      _audioVisualizerTimer?.cancel();
+      _audioVisualizerTimer = null;
       if (!mounted) return;
       setState(() {
         _audioHandler.resetAudioLevels();
       });
     } else {
-      String? accessToken;
-      try {
-        final session =
-            await SupabaseService.refreshSession() ??
-            SupabaseService.auth.currentSession;
-        accessToken = session?.accessToken;
-      } catch (_) {}
+      // Use the existing session token — no need to refresh first.
+      final accessToken =
+          SupabaseService.auth.currentSession?.accessToken;
 
       final bool started = await _audioHandler.startRecording(
         accessToken: accessToken,
@@ -977,14 +977,22 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         setState(() {
           _audioHandler.resetAudioLevels();
         });
-        // Drive visualiser directly from amplitude data (matches the
-        // pre-refactor inline behaviour where setState was called inside
-        // _handleAmplitudeSample / _computeAmplitudeFromPcm).
+        // Drive visualiser from amplitude callback.
         _audioHandler.onLevelsChanged = () {
           if (mounted && _audioHandler.isMicActive) {
             setState(() {});
           }
         };
+        // Periodic timer as backup — on some Linux audio backends,
+        // onAmplitudeChanged may not emit reliably.
+        _audioVisualizerTimer = Timer.periodic(
+          const Duration(milliseconds: 50),
+          (_) {
+            if (mounted && _audioHandler.isMicActive) {
+              setState(() {});
+            }
+          },
+        );
       } else {
         _showSnackBar('Mic access failed');
       }
@@ -999,14 +1007,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     await _audioHandler.stopRecording(keepFile: true);
     _audioHandler.onLevelsChanged = null;
+    _audioVisualizerTimer?.cancel();
+    _audioVisualizerTimer = null;
     if (!mounted) return;
     setState(() {
       _audioHandler.resetAudioLevels();
     });
 
-    final session =
-        await SupabaseService.refreshSession() ??
-        SupabaseService.auth.currentSession;
+    final session = SupabaseService.auth.currentSession;
     if (session == null) {
       _showSnackBar('Session expired. Please sign in again.');
       return;
