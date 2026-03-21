@@ -123,8 +123,8 @@ Stale cache? Purge Cloudflare: Dashboard > chuk.chat > Caching > Purge Everythin
 - Build and validate Linux/Android locally first.
 - Trigger GitHub cross-platform release workflow **only** when the user explicitly asks for a real release.
 
-1. Bump version in `pubspec.yaml` (e.g. `1.0.38` → `1.0.39` — no `+buildnumber` suffix)
-2. Commit: `git commit -am "chore: bump version to 1.0.39"`
+1. Bump version in `pubspec.yaml` (e.g. `1.0.49` → `1.0.50` — no `+buildnumber` suffix)
+2. Commit: `git commit -am "chore: bump version to 1.0.50"`
 3. Push: `git push origin master`
 4. Trigger CI build (builds Android, Linux x64/ARM64, Windows, macOS):
    ```bash
@@ -140,21 +140,28 @@ Stale cache? Purge Cloudflare: Dashboard > chuk.chat > Caching > Purge Everythin
 5. CI creates the GitHub Release with all artifacts automatically
 6. Web deploys automatically via Dokploy on push to master
 
+**Repo is public** — only one release on `chuk-development/chuk_chat`. No second repo needed.
+
+**Release notes = changelog only.** Write what changed (from git commits), grouped by category. NEVER include download instructions, architecture explanations, platform lists, or "build artifacts" notices.
+
 **Note:** Do not rely on git tags to trigger releases. Use `workflow_dispatch` for `build-cross-platform.yml`.
 
 ## Local Cache Architecture
 
-Chat data uses a **plaintext local cache** (`cached_chats_v2-{userId}` in SharedPreferences). No local encryption — the encryption key lives on the same device, so local encryption was security theater causing 1.5s frame drops.
+Chat payloads stored in **SQLite database** (`chat_cache.db`) on all native platforms. No local encryption — the encryption key lives on the same device, so local encryption was security theater.
 
+- **Native (Android/iOS/Linux/Windows/macOS)**: SQLite via `sqflite_common_ffi`
+- **Web**: SharedPreferences fallback (always online, small cache)
 - **Server-side encryption**: Unchanged. AES-256-GCM, E2E, zero knowledge.
-- **Local cache fields**: `payload` + `title` (plaintext JSON)
+- **Local cache fields**: `payload` + `title` (plaintext in SQLite)
 - **Supabase fields**: `encrypted_payload` + `encrypted_title` (encrypted)
 - **Safety**: Different field names prevent accidentally sending plaintext to Supabase
-- **Chat loading**: Cache-first via `loadFullChat()` — instant from local cache, Supabase sync in background
+- **Chat loading**: Cache-first via `loadFullChat()` — instant from SQLite, Supabase sync in background
 - **Preload**: On-demand only (search/export triggers `ChatPreloadService.awaitPreload()`)
-- **Migration**: Old encrypted v1 cache auto-migrates on first load, then deletes
+- **KV cache**: Generic `kv_cache` table in SQLite for projects and other larger data
+- **SharedPreferences**: Only for small settings (~200 KB). NEVER store large data in SharedPreferences.
 
-Key files: `lib/services/local_chat_cache_service.dart`, `lib/services/chat_storage_crud.dart`
+Key files: `lib/services/local_chat_cache_service.dart` (conditional export), `lib/services/local_chat_cache_native.dart` (SQLite), `lib/services/local_chat_cache_web.dart` (web fallback)
 
 ## Visual Output Tags
 
