@@ -38,7 +38,6 @@ const Map<String, ToolCategory> toolCategoryMap = {
   'fetch_image': ToolCategory.search,
   'view_chat_images': ToolCategory.search,
   'crypto_data': ToolCategory.search,
-  'find_domain': ToolCategory.search,
   'weather': ToolCategory.search,
   'search_places': ToolCategory.map,
   'search_restaurants': ToolCategory.map,
@@ -470,37 +469,6 @@ final List<ClientTool> builtinTools = [
       'finanzen',
       'coingecko',
       'trending',
-    ],
-  ),
-  ClientTool(
-    name: 'find_domain',
-    description:
-        'Check domain name availability across 1400+ TLDs. Uses the '
-        'FindADomain service. Actions: check (domain availability + optional '
-        'WHOIS), list_tlds (show all supported TLDs). Provide the domain name '
-        'without TLD and one or more TLDs to check. NOTE: This service can '
-        'be slow — results may take up to 30 seconds.',
-    parameters: {
-      'action': 'string (optional, default check: check, list_tlds)',
-      'name':
-          'string (required for check: domain name WITHOUT TLD, e.g. "myapp")',
-      'tld':
-          'string (required for check: one or more TLDs comma-separated, '
-          'e.g. "com" or "com,net,org,de,io")',
-      'whois': 'boolean (optional: include WHOIS data, default false)',
-    },
-    type: ToolType.builtin,
-    tags: [
-      'domain',
-      'dns',
-      'website',
-      'url',
-      'tld',
-      'whois',
-      'registrar',
-      'available',
-      'verfügbar',
-      'webseite',
     ],
   ),
 
