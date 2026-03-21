@@ -137,7 +137,16 @@ Stale cache? Purge Cloudflare: Dashboard > chuk.chat > Caching > Purge Everythin
       --field build_ios=false \
       --field enable_signing=true
    ```
-5. CI creates the GitHub Release with all artifacts automatically
+5. **Immediately** after triggering CI, update the release notes on the draft release:
+   ```bash
+   gh release edit v1.0.50 --notes "$(cat <<'NOTES'
+   ## What's New
+   ### Section
+   - Change description
+   NOTES
+   )"
+   ```
+   Write the notes from git commits (`git log <prev-tag>..HEAD --oneline`). CI attaches artifacts to the same release tag.
 6. Web deploys automatically via Dokploy on push to master
 
 **Repo is public** — only one release on `chuk-development/chuk_chat`. No second repo needed.
