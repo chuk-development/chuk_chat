@@ -15,7 +15,7 @@ import 'package:chuk_chat/services/encryption_service.dart';
 
 class LocalChatCacheService {
   static const String _dbName = 'chat_cache.db';
-  static const int _dbVersion = 1;
+  static const int _dbVersion = 2;
 
   /// Old SharedPreferences key prefixes (for migration).
   static const String _oldV2PrefsKey = 'cached_chats_v2-';
@@ -69,10 +69,58 @@ class LocalChatCacheService {
         await db.execute(
           'CREATE INDEX idx_chat_cache_user ON chat_cache (user_id)',
         );
+        // Generic key-value store for larger cached data (projects, etc.)
+        await db.execute('''
+          CREATE TABLE kv_cache (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+          )
+        ''');
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS kv_cache (
+              key TEXT PRIMARY KEY,
+              value TEXT NOT NULL
+            )
+          ''');
+        }
       },
     );
 
     return _db!;
+  }
+
+  // ─── Generic KV cache (for projects, etc.) ─────────────────────────────
+
+  /// Read a cached value by key.
+  static Future<String?> kvGet(String key) async {
+    final db = await _getDb();
+    final rows = await db.query(
+      'kv_cache',
+      columns: ['value'],
+      where: 'key = ?',
+      whereArgs: [key],
+    );
+    if (rows.isEmpty) return null;
+    return rows.first['value'] as String?;
+  }
+
+  /// Write a cached value by key.
+  static Future<void> kvSet(String key, String value) async {
+    final db = await _getDb();
+    await db.insert(
+      'kv_cache',
+      {'key': key, 'value': value},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// Delete a cached value by key.
+  static Future<void> kvDelete(String key) async {
+    final db = await _getDb();
+    await db.delete('kv_cache', where: 'key = ?', whereArgs: [key]);
   }
 
   // ─── Public helpers ───────────────────────────────────────────────────
@@ -196,17 +244,27 @@ class LocalChatCacheService {
         }
       }
 
-      // Remove v1 encrypted cache (can be 10+ MB).
-      // Data is available from Supabase — no need to decrypt.
-      final v1Key = '$_oldV1PrefsKey$userId';
-      if (prefs.containsKey(v1Key)) {
-        await prefs.remove(v1Key);
-        if (kDebugMode) {
-          debugPrint(
-            '🧹 [CacheService] Removed old v1 encrypted cache from '
-            'SharedPreferences',
-          );
-        }
+      // Remove ALL v1 encrypted caches (current user + any old test accounts).
+      // Also remove stale model cache and old project cache.
+      final keysToRemove = prefs
+          .getKeys()
+          .where(
+            (k) =>
+                k.startsWith('cached_encrypted_chats_v1') ||
+                k == 'cached_models_v1' ||
+                k == 'cached_projects',
+          )
+          .toList();
+
+      for (final key in keysToRemove) {
+        await prefs.remove(key);
+      }
+
+      if (keysToRemove.isNotEmpty && kDebugMode) {
+        debugPrint(
+          '🧹 [CacheService] Removed ${keysToRemove.length} old cache keys '
+          'from SharedPreferences',
+        );
       }
     } catch (e) {
       if (kDebugMode) {

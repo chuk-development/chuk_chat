@@ -10,6 +10,25 @@ class LocalChatCacheService {
 
   const LocalChatCacheService._();
 
+  // ─── Generic KV cache ──────────────────────────────────────────────
+
+  static Future<String?> kvGet(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('kv_$key');
+  }
+
+  static Future<void> kvSet(String key, String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('kv_$key', value);
+  }
+
+  static Future<void> kvDelete(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('kv_$key');
+  }
+
+  // ─── Public helpers ───────────────────────────────────────────────
+
   static Map<String, dynamic> buildPlaintextRow({
     required String id,
     required String payload,
