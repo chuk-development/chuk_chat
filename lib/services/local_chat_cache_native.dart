@@ -171,10 +171,11 @@ class LocalChatCacheService {
       if (kDebugMode) {
         debugPrint('⚠️ [CacheService] SQLite migration failed: $e');
       }
-      // Even if SQLite fails, clean up SharedPreferences to fix the freeze.
-      // Data will be re-fetched from Supabase.
-      await _cleanupOldPrefsData(userId);
     }
+
+    // Always clean up old SharedPreferences data (v1 + v2) to shrink the
+    // prefs file. Data is available from Supabase — safe to delete.
+    await _cleanupOldPrefsData(userId);
   }
 
   /// Remove old bulky cache data from SharedPreferences.
@@ -183,12 +184,27 @@ class LocalChatCacheService {
   static Future<void> _cleanupOldPrefsData(String userId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
+
+      // Remove v2 plaintext cache.
       final v2Key = '$_oldV2PrefsKey$userId';
       if (prefs.containsKey(v2Key)) {
         await prefs.remove(v2Key);
         if (kDebugMode) {
           debugPrint(
             '🧹 [CacheService] Removed old v2 cache from SharedPreferences',
+          );
+        }
+      }
+
+      // Remove v1 encrypted cache (can be 10+ MB).
+      // Data is available from Supabase — no need to decrypt.
+      final v1Key = '$_oldV1PrefsKey$userId';
+      if (prefs.containsKey(v1Key)) {
+        await prefs.remove(v1Key);
+        if (kDebugMode) {
+          debugPrint(
+            '🧹 [CacheService] Removed old v1 encrypted cache from '
+            'SharedPreferences',
           );
         }
       }
