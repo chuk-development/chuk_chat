@@ -10,6 +10,8 @@ import 'package:chuk_chat/services/github_oauth.dart';
 import 'package:chuk_chat/services/google_oauth.dart';
 import 'package:chuk_chat/services/slack_oauth.dart';
 import 'package:chuk_chat/services/spotify_oauth.dart';
+import 'package:chuk_chat/services/whoop_oauth.dart';
+import 'package:chuk_chat/tool_handlers/whoop_tools.dart' as whoop_tools;
 import 'package:chuk_chat/utils/tool_helpers.dart';
 
 /// Singleton service instances for native platforms.
@@ -21,6 +23,7 @@ final GoogleOAuth _googleOAuth = GoogleOAuth();
 final EmailService _emailService = EmailService();
 final DeviceServices _deviceServices = DeviceServices();
 final ApprovalConfig _approvalConfig = ApprovalConfig();
+final WhoopOAuth _whoopOAuth = WhoopOAuth();
 
 /// Initialize platform services — loads saved tokens/configs.
 Future<void> initPlatformServices() async {
@@ -32,6 +35,7 @@ Future<void> initPlatformServices() async {
     _googleOAuth.getAccessToken().then((_) {}), // loads tokens internally
     _emailService.loadSavedConfig(),
     _bashSandbox.loadSavedFolder(),
+    _whoopOAuth.checkAuthenticated(), // loads tokens internally
   ]);
 }
 
@@ -50,6 +54,8 @@ bool isPlatformServiceConnected(String service) {
       return _googleOAuth.isAuthenticated;
     case 'email':
       return _emailService.isConfigured;
+    case 'whoop':
+      return _whoopOAuth.hasToken;
     default:
       return false;
   }
@@ -63,6 +69,7 @@ const Set<String> connectableServices = {
   'github',
   'slack',
   'google',
+  'whoop',
 };
 
 /// Start the OAuth flow for a service. Returns true on success.
@@ -80,6 +87,9 @@ Future<bool> connectPlatformService(String service) async {
     case 'google':
       await _googleOAuth.startAuth();
       return _googleOAuth.completeAuth();
+    case 'whoop':
+      await _whoopOAuth.startAuth();
+      return _whoopOAuth.completeAuth();
     default:
       return false;
   }
@@ -98,6 +108,8 @@ Future<void> disconnectPlatformService(String service) async {
       await _googleOAuth.logout();
     case 'email':
       await _emailService.clearConfig();
+    case 'whoop':
+      await _whoopOAuth.logout();
   }
 }
 
@@ -1451,4 +1463,10 @@ Future<String> executeReminder(Map<String, dynamic> args) async {
 
 Future<String> executeDraftEmail(Map<String, dynamic> args) async {
   return executeDevice({...args, 'action': 'email_draft'});
+}
+
+// ============== WHOOP ==============
+
+Future<String> executeWhoop(Map<String, dynamic> args) async {
+  return whoop_tools.executeWhoop(args, _whoopOAuth);
 }

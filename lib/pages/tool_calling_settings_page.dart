@@ -44,6 +44,7 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
     'uuid_generator': Icons.fingerprint,
     'notes': Icons.note_outlined,
     'generate_qr': Icons.qr_code_2,
+    'whoop': Icons.monitor_heart_outlined,
   };
 
   static const Map<String, String> _toolDisplayNames = {
@@ -68,6 +69,7 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
     'uuid_generator': 'UUID Generator',
     'notes': 'Notes',
     'generate_qr': 'QR Generator',
+    'whoop': 'WHOOP Health',
   };
 
   late bool _toolCallingEnabled;
@@ -163,8 +165,10 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return 8;
       case ToolCategory.email:
         return 9;
-      case ToolCategory.nextcloud:
+      case ToolCategory.whoop:
         return 10;
+      case ToolCategory.nextcloud:
+        return 11;
     }
   }
 
@@ -190,6 +194,8 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return 'Google (Calendar / Gmail)';
       case ToolCategory.email:
         return 'Email (IMAP/SMTP)';
+      case ToolCategory.whoop:
+        return 'WHOOP';
       case ToolCategory.nextcloud:
         return 'Nextcloud';
     }
@@ -217,6 +223,8 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return Icons.event_outlined;
       case ToolCategory.email:
         return Icons.email_outlined;
+      case ToolCategory.whoop:
+        return Icons.monitor_heart_outlined;
       case ToolCategory.nextcloud:
         return Icons.cloud_outlined;
     }
@@ -236,6 +244,8 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return 'google';
       case ToolCategory.email:
         return 'email';
+      case ToolCategory.whoop:
+        return 'whoop';
       default:
         return null;
     }

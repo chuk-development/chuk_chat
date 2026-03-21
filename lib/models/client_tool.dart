@@ -49,4 +49,5 @@ enum ToolCategory {
   google, // Google Calendar + Gmail
   email, // IMAP/SMTP email
   nextcloud, // Nextcloud files, calendar, contacts
+  whoop, // WHOOP health/fitness tracker
 }
