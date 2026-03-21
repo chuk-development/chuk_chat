@@ -46,6 +46,10 @@ class LocalChatCacheService {
     final baseDir = await getApplicationSupportDirectory();
     final dbPath = p.join(baseDir.path, _dbName);
 
+    if (kDebugMode) {
+      debugPrint('🗄️ [CacheService] Opening SQLite DB at $dbPath');
+    }
+
     _db = await openDatabase(
       dbPath,
       version: _dbVersion,
@@ -159,8 +163,40 @@ class LocalChatCacheService {
   /// Run all pending migrations (v1/v2/v3 → SQLite).
   /// Call this early at startup to clean up SharedPreferences even if
   /// `load()` is not called (sidebar uses the lightweight title cache).
+  /// Also cleans up old SharedPreferences data to shrink the prefs file.
   static Future<void> ensureMigrated(String userId) async {
-    await _runMigrations(userId);
+    try {
+      await _runMigrations(userId);
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [CacheService] SQLite migration failed: $e');
+      }
+      // Even if SQLite fails, clean up SharedPreferences to fix the freeze.
+      // Data will be re-fetched from Supabase.
+      await _cleanupOldPrefsData(userId);
+    }
+  }
+
+  /// Remove old bulky cache data from SharedPreferences.
+  /// This is critical for fixing the Linux startup freeze regardless of
+  /// whether SQLite migration succeeds.
+  static Future<void> _cleanupOldPrefsData(String userId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final v2Key = '$_oldV2PrefsKey$userId';
+      if (prefs.containsKey(v2Key)) {
+        await prefs.remove(v2Key);
+        if (kDebugMode) {
+          debugPrint(
+            '🧹 [CacheService] Removed old v2 cache from SharedPreferences',
+          );
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [CacheService] SharedPreferences cleanup failed: $e');
+      }
+    }
   }
 
   static Future<void> clear(String userId) async {
