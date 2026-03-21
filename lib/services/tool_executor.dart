@@ -86,6 +86,7 @@ class ToolExecutor {
     'gmail',
     'email',
     'nextcloud',
+    'whoop',
     'device',
     'calendar',
     'reminder',
@@ -459,6 +460,8 @@ class ToolExecutor {
         return platform_tools.isPlatformServiceConnected('email');
       case ToolCategory.nextcloud:
         return nextcloud_tools.isNextcloudConnected();
+      case ToolCategory.whoop:
+        return platform_tools.isPlatformServiceConnected('whoop');
     }
   }
 
@@ -715,6 +718,9 @@ class ToolExecutor {
         return _wrapOutput(await platform_tools.executeCalendar(args));
       case 'reminder':
         return _wrapOutput(await platform_tools.executeReminder(args));
+      case 'whoop':
+        return _wrapOutput(await platform_tools.executeWhoop(args));
+
       // -- Nextcloud (web-safe) --
       case 'nextcloud':
         return _wrapOutput(await nextcloud_tools.executeNextcloud(args));

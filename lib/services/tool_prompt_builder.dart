@@ -141,6 +141,7 @@ class ToolPromptBuilder {
           'get_route',
           // Integrations
           'spotify_control',
+          'whoop',
           'device',
           'calendar',
           'reminder',
