@@ -156,6 +156,13 @@ class LocalChatCacheService {
     return rows.map(_fromDbRow).toList();
   }
 
+  /// Run all pending migrations (v1/v2/v3 → SQLite).
+  /// Call this early at startup to clean up SharedPreferences even if
+  /// `load()` is not called (sidebar uses the lightweight title cache).
+  static Future<void> ensureMigrated(String userId) async {
+    await _runMigrations(userId);
+  }
+
   static Future<void> clear(String userId) async {
     final db = await _getDb();
     await db.delete('chat_cache', where: 'user_id = ?', whereArgs: [userId]);

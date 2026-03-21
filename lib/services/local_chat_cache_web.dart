@@ -78,6 +78,9 @@ class LocalChatCacheService {
     return _loadChats(userId);
   }
 
+  /// No-op on web (no migration needed).
+  static Future<void> ensureMigrated(String userId) async {}
+
   static Future<void> clear(String userId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('$_storageKeyPrefix$userId');
