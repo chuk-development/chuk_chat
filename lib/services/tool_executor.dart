@@ -20,7 +20,6 @@ import 'package:chuk_chat/tool_handlers/map_tools.dart' as map_tools;
 import 'package:chuk_chat/tool_handlers/notes_tools.dart' as notes_tools;
 import 'package:chuk_chat/tool_handlers/qr_tools.dart' as qr_tools;
 import 'package:chuk_chat/tool_handlers/crypto_tools.dart' as crypto_tools;
-import 'package:chuk_chat/tool_handlers/domain_tools.dart' as domain_tools;
 import 'package:chuk_chat/tool_handlers/weather_tools.dart' as weather_tools;
 import 'package:chuk_chat/tool_handlers/web_tools.dart' as web_tools;
 import 'package:chuk_chat/tool_handlers/platform_tools.dart' as platform_tools;
@@ -74,7 +73,6 @@ class ToolExecutor {
     'fetch_image',
     'view_chat_images',
     'crypto_data',
-    'find_domain',
     'weather',
     'search_places',
     'search_restaurants',
@@ -681,8 +679,6 @@ class ToolExecutor {
         return _wrapOutput(image_tools.executeViewChatImagesUnsupported());
       case 'crypto_data':
         return _wrapOutput(await crypto_tools.executeCryptoData(args));
-      case 'find_domain':
-        return _wrapOutput(await domain_tools.executeFindDomain(args));
 
       // -- Maps --
       case 'search_places':

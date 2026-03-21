@@ -148,9 +148,8 @@ class ToolPromptBuilder {
           // Project
           'update_project',
           'artifact_manager',
-          // Finance & Domains
+          // Finance
           'crypto_data',
-          'find_domain',
           // System
           'bash',
         ];
