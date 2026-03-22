@@ -2298,10 +2298,6 @@ class _MessageBubbleState extends State<MessageBubble>
         ? 'EUR ${imageCostEur.toStringAsFixed(2)}'
         : null;
     final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
-    // Use the same sizes as _buildActionButtons for consistency.
-    const double iconSize = 18;
-    final EdgeInsets buttonPadding = EdgeInsets.all(kPlatformMobile ? 5 : 8);
-    final double minButtonSize = kPlatformMobile ? 28 : 30;
 
     // Image actions always align right, directly under the image.
     return Padding(
@@ -2310,7 +2306,6 @@ class _MessageBubbleState extends State<MessageBubble>
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           Container(
-            height: kPlatformMobile ? _mobileBottomBarHeight : null,
             decoration: BoxDecoration(
               color: bgColor.lighten(0.05),
               borderRadius: BorderRadius.circular(100),
@@ -2320,79 +2315,89 @@ class _MessageBubbleState extends State<MessageBubble>
               ),
             ),
             padding: EdgeInsets.symmetric(
-              horizontal: kPlatformMobile ? 4 : 8,
+              horizontal: kPlatformMobile ? 2 : 8,
               vertical: kPlatformMobile ? 0 : 4,
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Tooltip(
-                  message: 'Copy image',
-                  child: IconButton(
-                    icon: Icon(Icons.copy, color: iconFgColor, size: iconSize),
-                    padding: buttonPadding,
-                    visualDensity: VisualDensity.compact,
-                    constraints: BoxConstraints(
-                      minWidth: minButtonSize,
-                      minHeight: minButtonSize,
-                    ),
-                    style: IconButton.styleFrom(
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    onPressed: _copyFirstImageToClipboard,
-                  ),
+                _imageActionIcon(
+                  icon: Icons.copy,
+                  tooltip: 'Copy image',
+                  color: iconFgColor,
+                  onPressed: _copyFirstImageToClipboard,
                 ),
-                Tooltip(
-                  message: 'Download image',
-                  child: IconButton(
-                    icon: Icon(
-                      Icons.download,
-                      color: iconFgColor,
-                      size: iconSize,
-                    ),
-                    padding: buttonPadding,
-                    visualDensity: VisualDensity.compact,
-                    constraints: BoxConstraints(
-                      minWidth: minButtonSize,
-                      minHeight: minButtonSize,
-                    ),
-                    style: IconButton.styleFrom(
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    onPressed: _downloadFirstImage,
-                  ),
+                _imageActionIcon(
+                  icon: Icons.download,
+                  tooltip: 'Download image',
+                  color: iconFgColor,
+                  onPressed: _downloadFirstImage,
                 ),
-                PopupMenuButton<String>(
+                _imageActionIcon(
+                  icon: Icons.more_vert,
                   tooltip: 'Image details',
-                  padding: buttonPadding,
-                  constraints: BoxConstraints(
-                    minWidth: minButtonSize,
-                    minHeight: minButtonSize,
-                  ),
-                  menuPadding: EdgeInsets.zero,
-                  iconSize: iconSize,
-                  icon: Icon(Icons.more_vert, color: iconFgColor),
-                  style: IconButton.styleFrom(
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  itemBuilder: (context) => [
-                    if (costLabel != null)
-                      PopupMenuItem<String>(
-                        enabled: false,
-                        value: 'cost',
-                        child: Text('Cost: $costLabel'),
+                  color: iconFgColor,
+                  onPressed: () {
+                    final renderBox = context.findRenderObject() as RenderBox;
+                    final offset = renderBox.localToGlobal(Offset.zero);
+                    showMenu<String>(
+                      context: context,
+                      position: RelativeRect.fromLTRB(
+                        offset.dx,
+                        offset.dy + renderBox.size.height,
+                        offset.dx + renderBox.size.width,
+                        offset.dy + renderBox.size.height,
                       ),
-                    PopupMenuItem<String>(
-                      enabled: false,
-                      value: 'time',
-                      child: Text('Generated: $generatedLabel'),
-                    ),
-                  ],
+                      items: [
+                        if (costLabel != null)
+                          PopupMenuItem<String>(
+                            enabled: false,
+                            value: 'cost',
+                            child: Text('Cost: $costLabel'),
+                          ),
+                        PopupMenuItem<String>(
+                          enabled: false,
+                          value: 'time',
+                          child: Text('Generated: $generatedLabel'),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _imageActionIcon({
+    required IconData icon,
+    required String tooltip,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: IconButton(
+        icon: Icon(
+          icon,
+          color: color,
+          size: kPlatformMobile ? 15 : 18,
+        ),
+        padding: EdgeInsets.all(kPlatformMobile ? 4 : 8),
+        visualDensity: VisualDensity.compact,
+        constraints: BoxConstraints(
+          minWidth: kPlatformMobile ? 24 : 30,
+          minHeight: kPlatformMobile ? 24 : 30,
+        ),
+        style: kPlatformMobile
+            ? null
+            : IconButton.styleFrom(
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+        onPressed: onPressed,
       ),
     );
   }
