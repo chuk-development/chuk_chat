@@ -1,10 +1,13 @@
 // lib/widgets/image_viewer.dart
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'package:chuk_chat/services/image_storage_service.dart';
+import 'package:chuk_chat/utils/io_helper.dart';
 
 /// Full-screen image viewer with zoom and pan capabilities
 class ImageViewer extends StatefulWidget {
@@ -151,6 +154,14 @@ class _ImageViewerState extends State<ImageViewer> {
             onPressed: () => Navigator.of(context).pop(),
             tooltip: 'Close',
           ),
+          actions: [
+            if (!kIsWeb)
+              IconButton(
+                icon: Icon(Icons.download, color: iconColor),
+                onPressed: _downloadCurrentImage,
+                tooltip: 'Download image',
+              ),
+          ],
           title: _hasMultipleImages
               ? Text(
                   'Image ${_currentIndex + 1} of ${widget.allImages!.length}',
@@ -313,6 +324,31 @@ class _ImageViewerState extends State<ImageViewer> {
         );
       },
     );
+  }
+
+  Future<void> _downloadCurrentImage() async {
+    try {
+      final source = _hasMultipleImages
+          ? widget.allImages![_currentIndex]
+          : widget.imageDataUrl;
+      final bytes = await _loadImageBytes(source);
+      final dir = await getDownloadsDirectory() ??
+          await getApplicationDocumentsDirectory();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final file = File(
+        '${dir.path}${Platform.pathSeparator}chuk_chat_image_$timestamp.png',
+      );
+      await file.writeAsBytes(bytes, flush: true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Saved to ${file.path}')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to save image')),
+      );
+    }
   }
 
   void _resetZoom() {
