@@ -2333,36 +2333,39 @@ class _MessageBubbleState extends State<MessageBubble>
                   color: iconFgColor,
                   onPressed: _downloadFirstImage,
                 ),
-                _imageActionIcon(
-                  icon: Icons.more_vert,
-                  tooltip: 'Image details',
-                  color: iconFgColor,
-                  onPressed: () {
-                    final renderBox = context.findRenderObject() as RenderBox;
-                    final offset = renderBox.localToGlobal(Offset.zero);
-                    showMenu<String>(
-                      context: context,
-                      position: RelativeRect.fromLTRB(
-                        offset.dx,
-                        offset.dy + renderBox.size.height,
-                        offset.dx + renderBox.size.width,
-                        offset.dy + renderBox.size.height,
-                      ),
-                      items: [
-                        if (costLabel != null)
+                Builder(
+                  builder: (btnContext) => _imageActionIcon(
+                    icon: Icons.more_vert,
+                    tooltip: 'Image details',
+                    color: iconFgColor,
+                    onPressed: () {
+                      final renderBox =
+                          btnContext.findRenderObject() as RenderBox;
+                      final pos = renderBox.localToGlobal(Offset.zero);
+                      showMenu<String>(
+                        context: btnContext,
+                        position: RelativeRect.fromLTRB(
+                          pos.dx,
+                          pos.dy + renderBox.size.height,
+                          pos.dx + renderBox.size.width,
+                          pos.dy + renderBox.size.height,
+                        ),
+                        items: [
+                          if (costLabel != null)
+                            PopupMenuItem<String>(
+                              enabled: false,
+                              value: 'cost',
+                              child: Text('Cost: $costLabel'),
+                            ),
                           PopupMenuItem<String>(
                             enabled: false,
-                            value: 'cost',
-                            child: Text('Cost: $costLabel'),
+                            value: 'time',
+                            child: Text('Generated: $generatedLabel'),
                           ),
-                        PopupMenuItem<String>(
-                          enabled: false,
-                          value: 'time',
-                          child: Text('Generated: $generatedLabel'),
-                        ),
-                      ],
-                    );
-                  },
+                        ],
+                      );
+                    },
+                  ),
                 ),
               ],
             ),
