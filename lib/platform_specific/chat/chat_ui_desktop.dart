@@ -1184,6 +1184,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       onEdit: _editMessageAt,
       onResendMessage: _resendMessageAt,
       hasFailedToolCalls: hasFailedToolCalls,
+      toolCalls: data.toolCalls,
     );
   }
 

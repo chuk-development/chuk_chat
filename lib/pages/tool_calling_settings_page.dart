@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/models/client_tool.dart';
+import 'package:chuk_chat/pages/connector_detail_page.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/tool_call_handler.dart';
 import 'package:chuk_chat/services/tool_executor.dart';
@@ -230,6 +231,35 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
     }
   }
 
+  String _categoryDescription(ToolCategory category) {
+    switch (category) {
+      case ToolCategory.search:
+        return 'Search the web, fetch pages, generate images, and look up data';
+      case ToolCategory.basic:
+        return 'Calculator, clock, notes, QR codes, and other utilities';
+      case ToolCategory.map:
+        return 'Find places, geocode addresses, and calculate routes';
+      case ToolCategory.device:
+        return 'Access device features like GPS, calendar, and reminders';
+      case ToolCategory.spotify:
+        return 'Control playback and browse your Spotify library';
+      case ToolCategory.bash:
+        return 'Run sandboxed shell commands on the desktop';
+      case ToolCategory.github:
+        return 'Access repos, issues, PRs, and commits from GitHub';
+      case ToolCategory.slack:
+        return 'Send messages, search channels, and fetch Slack data';
+      case ToolCategory.google:
+        return 'Manage your schedule and email via Google Calendar and Gmail';
+      case ToolCategory.email:
+        return 'Send and receive email via IMAP and SMTP';
+      case ToolCategory.whoop:
+        return 'View recovery, strain, sleep, and workout data from WHOOP';
+      case ToolCategory.nextcloud:
+        return 'Browse files, calendar, and contacts on Nextcloud';
+    }
+  }
+
   /// Map a ToolCategory to the service name used by platform_tools.
   /// Returns null for categories that don't have OAuth connections.
   String? _categoryServiceName(ToolCategory category) {
@@ -395,7 +425,7 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
     return tools;
   }
 
-  List<Widget> _buildPerToolCards(Color scaffoldBg, Color iconFg) {
+  List<Widget> _buildConnectorCards(Color scaffoldBg, Color iconFg) {
     final tools = _visibleTools();
     if (tools.isEmpty) {
       return [
@@ -422,32 +452,65 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
     for (final category in orderedCategories) {
       final connectable = _isCategoryConnectable(category);
       final connected = _isCategoryConnected(category);
+      final toolsInCategory = grouped[category]!;
 
+      // Category header card
       widgets.add(
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
             color: scaffoldBg.lighten(0.03),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: iconFg.withValues(alpha: 0.2), width: 1),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: iconFg.withValues(alpha: 0.15)),
           ),
           child: Row(
             children: [
-              Icon(_categoryIcon(category), size: 16, color: iconFg),
-              const SizedBox(width: 8),
-              Text(
-                _categoryLabel(category),
-                style: TextStyle(
-                  color: iconFg.withValues(alpha: 0.9),
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: scaffoldBg.lighten(0.07),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: iconFg.withValues(alpha: 0.1),
+                  ),
+                ),
+                child: Icon(
+                  _categoryIcon(category),
+                  size: 18,
+                  color: iconFg,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _categoryLabel(category),
+                      style: TextStyle(
+                        color: iconFg.withValues(alpha: 0.9),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                    Text(
+                      _categoryDescription(category),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: iconFg.lighten(0.2),
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               if (connectable) ...[
-                const SizedBox(width: 8),
                 Container(
-                  width: 8,
-                  height: 8,
+                  width: 7,
+                  height: 7,
+                  margin: const EdgeInsets.only(right: 8),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: connected
@@ -455,9 +518,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
                         : iconFg.withValues(alpha: 0.3),
                   ),
                 ),
-              ],
-              const Spacer(),
-              if (connectable)
                 connected
                     ? TextButton(
                         onPressed: () => _disconnectService(category),
@@ -486,16 +546,16 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
                           style: TextStyle(fontSize: 12),
                         ),
                       ),
+              ],
             ],
           ),
         ),
       );
-      widgets.add(const SizedBox(height: 8));
+      widgets.add(const SizedBox(height: 6));
 
-      final toolsInCategory = grouped[category]!;
+      // Individual tool cards under this category
       for (final tool in toolsInCategory) {
         final isEnabled = _toolExecutor.isToolEnabled(tool.name);
-        final hasCustomPrompt = _toolExecutor.hasCustomDescription(tool.name);
 
         widgets.add(
           Card(
@@ -503,230 +563,92 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
             margin: EdgeInsets.zero,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: iconFg.withValues(alpha: 0.3), width: 1),
+              side: BorderSide(
+                color: iconFg.withValues(alpha: 0.2),
+                width: 1,
+              ),
             ),
             child: ListTile(
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 4,
+              ),
               leading: Icon(
                 _toolIcons[tool.name] ?? Icons.extension,
                 color: isEnabled
                     ? Theme.of(context).colorScheme.primary
-                    : iconFg.withValues(alpha: 0.45),
+                    : iconFg.withValues(alpha: 0.4),
               ),
               title: Text(
                 _displayName(tool.name),
                 style: TextStyle(
                   color: Theme.of(context).textTheme.titleMedium?.color,
                   fontWeight: FontWeight.w600,
+                  fontSize: 14,
                 ),
               ),
               subtitle: Text(
-                hasCustomPrompt
-                    ? '${_trimDescription(_toolExecutor.getToolDescription(tool.name))}\nCustom model prompt'
-                    : _trimDescription(
-                        _toolExecutor.getToolDescription(tool.name),
-                      ),
-                maxLines: 2,
+                _trimDescription(
+                  _toolExecutor.getToolDescription(tool.name),
+                ),
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: hasCustomPrompt
-                      ? Theme.of(
-                          context,
-                        ).colorScheme.primary.withValues(alpha: 0.85)
-                      : iconFg.lighten(0.3),
+                  color: iconFg.lighten(0.2),
                   fontSize: 12,
                 ),
               ),
-              trailing: Switch(
-                value: isEnabled,
-                onChanged: (value) async {
-                  await _toolExecutor.setToolEnabled(tool.name, value);
-                  if (!mounted) {
-                    return;
-                  }
-                  setState(() {});
-                },
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    height: 28,
+                    child: Switch(
+                      value: isEnabled,
+                      onChanged: (value) async {
+                        await _toolExecutor.setToolEnabled(
+                          tool.name,
+                          value,
+                        );
+                        if (!mounted) return;
+                        setState(() {});
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.chevron_right,
+                    color: iconFg.withValues(alpha: 0.4),
+                    size: 20,
+                  ),
+                ],
               ),
-              onTap: () => _showToolDetailsDialog(tool),
+              onTap: () => _openToolDetail(tool),
             ),
           ),
         );
-        widgets.add(const SizedBox(height: 8));
+        widgets.add(const SizedBox(height: 6));
       }
 
-      widgets.add(const SizedBox(height: 8));
+      widgets.add(const SizedBox(height: 12));
     }
 
     return widgets;
   }
 
-  Future<void> _showToolDetailsDialog(ClientTool tool) async {
-    final controller = TextEditingController(
-      text: _toolExecutor.getToolDescription(tool.name),
+  Future<void> _openToolDetail(ClientTool tool) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ConnectorDetailPage(
+          tool: tool,
+          toolExecutor: _toolExecutor,
+          displayName: _displayName(tool.name),
+          icon: _toolIcons[tool.name] ?? Icons.extension,
+        ),
+      ),
     );
-    bool isSaving = false;
-
-    try {
-      await showDialog<void>(
-        context: context,
-        builder: (dialogContext) {
-          return StatefulBuilder(
-            builder: (dialogContext, setDialogState) {
-              final effectiveDescription = _toolExecutor
-                  .getToolDescription(tool.name)
-                  .trim();
-              final editedDescription = controller.text.trim();
-              final descriptionChanged =
-                  editedDescription != effectiveDescription;
-              final hasCustomDescription = _toolExecutor.hasCustomDescription(
-                tool.name,
-              );
-              final isEnabled = _toolExecutor.isToolEnabled(tool.name);
-
-              return AlertDialog(
-                title: Text(_displayName(tool.name)),
-                content: SizedBox(
-                  width: 560,
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: const Text('Enable this tool'),
-                          subtitle: const Text(
-                            'Disabled tools are hidden from find_tools and cannot execute',
-                          ),
-                          value: isEnabled,
-                          onChanged: isSaving
-                              ? null
-                              : (value) async {
-                                  await _toolExecutor.setToolEnabled(
-                                    tool.name,
-                                    value,
-                                  );
-                                  if (!mounted) {
-                                    return;
-                                  }
-                                  setState(() {});
-                                  setDialogState(() {});
-                                },
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Model Prompt',
-                          style: Theme.of(context).textTheme.titleSmall
-                              ?.copyWith(fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'This is the tool description shown to the model after discovery.',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: controller,
-                          minLines: 4,
-                          maxLines: 10,
-                          onChanged: (_) => setDialogState(() {}),
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
-                            isDense: true,
-                          ),
-                        ),
-                        if (tool.parameters.isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          Text(
-                            'Parameters',
-                            style: Theme.of(context).textTheme.titleSmall
-                                ?.copyWith(fontWeight: FontWeight.w600),
-                          ),
-                          const SizedBox(height: 6),
-                          ...tool.parameters.entries.map(
-                            (entry) => Padding(
-                              padding: const EdgeInsets.only(bottom: 4),
-                              child: Text(
-                                '${entry.key}: ${entry.value}',
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ),
-                          ),
-                        ],
-                        if (hasCustomDescription) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            'Custom prompt active',
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.primary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: isSaving
-                        ? null
-                        : () => Navigator.of(dialogContext).pop(),
-                    child: const Text('Close'),
-                  ),
-                  if (hasCustomDescription)
-                    TextButton(
-                      onPressed: isSaving
-                          ? null
-                          : () async {
-                              setDialogState(() {
-                                isSaving = true;
-                              });
-                              await _toolExecutor.resetToolDescription(
-                                tool.name,
-                              );
-                              controller.text = _toolExecutor
-                                  .getToolDescription(tool.name);
-                              if (!mounted) {
-                                return;
-                              }
-                              setState(() {});
-                              setDialogState(() {
-                                isSaving = false;
-                              });
-                            },
-                      child: const Text('Reset Prompt'),
-                    ),
-                  FilledButton(
-                    onPressed: !descriptionChanged || isSaving
-                        ? null
-                        : () async {
-                            setDialogState(() {
-                              isSaving = true;
-                            });
-                            await _toolExecutor.setToolDescription(
-                              tool.name,
-                              controller.text,
-                            );
-                            if (!mounted) {
-                              return;
-                            }
-                            setState(() {});
-                            setDialogState(() {
-                              isSaving = false;
-                            });
-                          },
-                    child: const Text('Save Prompt'),
-                  ),
-                ],
-              );
-            },
-          );
-        },
-      );
-    } finally {
-      controller.dispose();
-    }
+    if (!mounted) return;
+    setState(() {});
   }
 
   Future<void> _resetAllToolPreferences() async {
@@ -923,7 +845,7 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
           const SizedBox(height: 24),
           _buildSectionHeader(
             context,
-            'Per-Tool Controls',
+            'Connectors',
             Icons.extension_outlined,
             iconFg,
           ),
@@ -936,7 +858,7 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
               iconFg,
             )
           else
-            ..._buildPerToolCards(scaffoldBg, iconFg),
+            ..._buildConnectorCards(scaffoldBg, iconFg),
           const SizedBox(height: 12),
           Align(
             alignment: Alignment.centerLeft,

@@ -12,7 +12,10 @@ class ToolCall {
     this.result,
     this.status = ToolCallStatus.pending,
     this.roundThinking,
-  }) : id = id ?? const Uuid().v4();
+    DateTime? startedAt,
+    this.completedAt,
+  }) : id = id ?? const Uuid().v4(),
+       startedAt = startedAt ?? DateTime.now();
 
   final String id;
   final String name;
@@ -23,6 +26,16 @@ class ToolCall {
   /// Thinking text for this round (set on the first tool call of each round).
   String? roundThinking;
 
+  /// When this tool call was created / started executing.
+  final DateTime startedAt;
+
+  /// When execution completed (success or error).
+  DateTime? completedAt;
+
+  /// How long the tool call has been running (or ran).
+  Duration get elapsed =>
+      (completedAt ?? DateTime.now()).difference(startedAt);
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
@@ -30,6 +43,8 @@ class ToolCall {
     if (result != null) 'result': result,
     'status': status.name,
     if (roundThinking != null) 'roundThinking': roundThinking,
+    'startedAt': startedAt.toIso8601String(),
+    if (completedAt != null) 'completedAt': completedAt!.toIso8601String(),
   };
 
   factory ToolCall.fromJson(Map<String, dynamic> json) {
@@ -43,6 +58,12 @@ class ToolCall {
         orElse: () => ToolCallStatus.pending,
       ),
       roundThinking: json['roundThinking'] as String?,
+      startedAt: json['startedAt'] != null
+          ? DateTime.tryParse(json['startedAt'] as String)
+          : null,
+      completedAt: json['completedAt'] != null
+          ? DateTime.tryParse(json['completedAt'] as String)
+          : null,
     );
   }
 }
@@ -64,6 +85,7 @@ bool finalizeStaleToolCalls(List<ToolCall> toolCalls) {
     if (tc.status == ToolCallStatus.running ||
         tc.status == ToolCallStatus.pending) {
       tc.status = ToolCallStatus.error;
+      tc.completedAt = DateTime.now();
       tc.result ??= 'Tool call did not complete.';
       modified = true;
     }
