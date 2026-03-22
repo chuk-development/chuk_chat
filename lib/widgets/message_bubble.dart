@@ -2303,15 +2303,11 @@ class _MessageBubbleState extends State<MessageBubble>
     final EdgeInsets buttonPadding = EdgeInsets.all(kPlatformMobile ? 5 : 8);
     final double minButtonSize = kPlatformMobile ? 28 : 30;
 
-    // Match the pill-shaped container style used by _buildActionButtons.
+    // Image actions always align right, directly under the image.
     return Padding(
-      padding: alignRight
-          ? const EdgeInsets.only(top: 4, right: 6)
-          : const EdgeInsets.only(top: 4, left: 6),
+      padding: const EdgeInsets.only(top: 4, right: 6),
       child: Row(
-        mainAxisAlignment: alignRight
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.end,
         children: [
           Container(
             height: kPlatformMobile ? _mobileBottomBarHeight : null,
