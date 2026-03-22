@@ -1,8 +1,12 @@
 // lib/pages/media_manager_page.dart
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+
 import 'package:chuk_chat/services/image_storage_service.dart';
+import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
 
@@ -365,6 +369,70 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
     });
   }
 
+  Future<void> _downloadImage(StoredImage image) async {
+    try {
+      final bytes = await _loadThumbnail(image.path);
+      if (bytes == null) throw Exception('Failed to load image');
+      final dir = await getDownloadsDirectory() ??
+          await getApplicationDocumentsDirectory();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final file = File(
+        '${dir.path}${Platform.pathSeparator}chuk_chat_image_$timestamp.png',
+      );
+      await file.writeAsBytes(bytes, flush: true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Saved to ${file.path}')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to save image')),
+      );
+    }
+  }
+
+  Future<void> _downloadSelectedImages() async {
+    if (_selectedImages.isEmpty) return;
+
+    int savedCount = 0;
+    int failedCount = 0;
+    final dir = await getDownloadsDirectory() ??
+        await getApplicationDocumentsDirectory();
+
+    for (final path in _selectedImages.toList()) {
+      try {
+        final bytes = await _loadThumbnail(path);
+        if (bytes == null) {
+          failedCount++;
+          continue;
+        }
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        final file = File(
+          '${dir.path}${Platform.pathSeparator}chuk_chat_image_${timestamp}_$savedCount.png',
+        );
+        await file.writeAsBytes(bytes, flush: true);
+        savedCount++;
+      } catch (e) {
+        failedCount++;
+      }
+    }
+
+    if (!mounted) return;
+
+    if (failedCount > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Saved $savedCount images, $failedCount failed'),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Saved $savedCount images to ${dir.path}')),
+      );
+    }
+  }
+
   String _formatFileSize(int? bytes) {
     if (bytes == null) return '';
     if (bytes < 1024) return '$bytes B';
@@ -400,6 +468,12 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
                     ),
                   ),
                   const Spacer(),
+                  if (!kIsWeb)
+                    IconButton(
+                      icon: Icon(Icons.download, color: iconFg),
+                      onPressed: _downloadSelectedImages,
+                      tooltip: 'Download selected',
+                    ),
                   IconButton(
                     icon: const Icon(Icons.delete, color: Colors.red),
                     onPressed: _deleteSelectedImages,
@@ -447,13 +521,19 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
                 onPressed: () => Navigator.pop(context),
               ),
         actions: [
-          if (_isSelectionMode)
+          if (_isSelectionMode) ...[
+            if (!kIsWeb)
+              IconButton(
+                icon: Icon(Icons.download, color: iconFg),
+                onPressed: _downloadSelectedImages,
+                tooltip: 'Download selected',
+              ),
             IconButton(
               icon: const Icon(Icons.delete, color: Colors.red),
               onPressed: _deleteSelectedImages,
               tooltip: 'Delete selected',
-            )
-          else
+            ),
+          ] else
             IconButton(
               icon: Icon(Icons.refresh, color: iconFg),
               onPressed: _loadImages,
@@ -668,26 +748,48 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
               ),
             ),
 
-          // Delete button (non-selection mode, desktop only)
+          // Action buttons (non-selection mode, desktop only)
           if (!_isSelectionMode && !compact)
             Positioned(
               top: 4,
               right: 4,
-              child: IconButton(
-                icon: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!kIsWeb)
+                    IconButton(
+                      icon: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Icon(
+                          Icons.download,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                      ),
+                      onPressed: () => _downloadImage(image),
+                      tooltip: 'Download',
+                    ),
+                  IconButton(
+                    icon: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Icon(
+                        Icons.delete,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                    ),
+                    onPressed: () => _deleteImage(image),
+                    tooltip: 'Delete',
                   ),
-                  child: const Icon(
-                    Icons.delete,
-                    color: Colors.white,
-                    size: 18,
-                  ),
-                ),
-                onPressed: () => _deleteImage(image),
-                tooltip: 'Delete',
+                ],
               ),
             ),
 
