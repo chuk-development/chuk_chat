@@ -1,6 +1,9 @@
 name: Cross-Platform Build & Release
 
 on:
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
     inputs:
       build_android:
@@ -160,7 +163,7 @@ jobs:
     name: Android APKs
     runs-on: ubuntu-latest
     needs: version-bump
-    if: inputs.build_android
+    if: inputs.build_android || (github.event_name == 'push')
     timeout-minutes: 30
 
     steps:
@@ -187,7 +190,7 @@ jobs:
       - run: flutter pub get
 
       - name: Create key.properties
-        if: inputs.enable_signing
+        if: inputs.enable_signing || (github.event_name == 'push')
         run: |
           printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=%s\n' \
             '${{ secrets.ANDROID_KEYSTORE_PASSWORD }}' \
@@ -199,7 +202,7 @@ jobs:
           cat android/key.properties | sed 's/Password=.*/Password=***/'
 
       - name: Decode keystore
-        if: inputs.enable_signing
+        if: inputs.enable_signing || (github.event_name == 'push')
         run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/upload-keystore.jks
 
       - name: Build Split APKs
@@ -235,7 +238,7 @@ jobs:
     name: Linux x86_64
     runs-on: ubuntu-latest
     needs: version-bump
-    if: inputs.build_linux_x64
+    if: inputs.build_linux_x64 || (github.event_name == 'push')
     timeout-minutes: 45
 
     steps:
@@ -463,7 +466,7 @@ jobs:
     name: Linux ARM64
     runs-on: ubuntu-24.04-arm
     needs: version-bump
-    if: inputs.build_linux_arm64
+    if: inputs.build_linux_arm64 || (github.event_name == 'push')
     timeout-minutes: 60
 
     steps:
@@ -646,7 +649,7 @@ jobs:
     name: Windows
     runs-on: windows-latest
     needs: version-bump
-    if: inputs.build_windows
+    if: inputs.build_windows || (github.event_name == 'push')
     timeout-minutes: 45
 
     steps:
@@ -799,7 +802,7 @@ jobs:
     name: macOS
     runs-on: macos-latest
     needs: version-bump
-    if: inputs.build_macos
+    if: inputs.build_macos || (github.event_name == 'push')
     timeout-minutes: 30
 
     steps:
