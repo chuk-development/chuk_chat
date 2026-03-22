@@ -34,6 +34,8 @@ const Map<String, ToolCategory> toolCategoryMap = {
   'web_search': ToolCategory.search,
   'web_crawl': ToolCategory.search,
   'generate_image': ToolCategory.search,
+  'generate_image_hunyuan': ToolCategory.search,
+  'generate_image_flux': ToolCategory.search,
   'edit_image': ToolCategory.search,
   'fetch_image': ToolCategory.search,
   'view_chat_images': ToolCategory.search,
@@ -354,10 +356,10 @@ final List<ClientTool> builtinTools = [
   ClientTool(
     name: 'generate_image',
     description:
-        'Generate an image from a text prompt. The image is displayed '
-        'inline in the chat automatically — do NOT repeat the URL, '
-        'dimensions, seed, or other technical details to the user. '
-        'Costs credits (~0.01 EUR per image). '
+        'Generate an image from a text prompt using Z-Image Turbo (fast). '
+        'The image is displayed inline in the chat automatically — do NOT '
+        'repeat the URL, dimensions, seed, or other technical details to the '
+        'user. Costs credits (~0.01 EUR per image). '
         'PRIVACY: generated images are processed on an external server and '
         'the operator can see them — they are NOT end-to-end encrypted like '
         'chat messages. Before calling, inform the user about the cost and '
@@ -381,11 +383,85 @@ final List<ClientTool> builtinTools = [
     ],
   ),
   ClientTool(
+    name: 'generate_image_hunyuan',
+    description:
+        'Generate a high-quality image using Hunyuan Image 3. '
+        'Higher quality than generate_image but costs more (~0.08 EUR per '
+        'image). Use this when the user asks for Hunyuan or high quality. '
+        'The image is displayed inline in the chat automatically — do NOT '
+        'repeat the URL, dimensions, seed, or other technical details. '
+        'PRIVACY: generated images are processed on an external server and '
+        'the operator can see them — they are NOT end-to-end encrypted like '
+        'chat messages. Before calling, inform the user about the cost and '
+        'that image generation is not private.',
+    parameters: {
+      'prompt': 'string (required: descriptive image prompt)',
+      'image_size':
+          'string (optional preset: square_hd, square, portrait_4_3, '
+          'portrait_16_9, landscape_4_3, landscape_16_9)',
+      'aspect_ratio':
+          'string (optional, overrides image_size: 1:1, 16:9, 9:16, '
+          '3:2, 2:3, 4:5, 5:4, 3:4, 4:3, 21:9, 9:21)',
+    },
+    type: ToolType.builtin,
+    tags: [
+      'image',
+      'generate',
+      'hunyuan',
+      'high quality',
+      'picture',
+      'photo',
+      'art',
+      'bild',
+      'grafik',
+      'ai image',
+    ],
+  ),
+  ClientTool(
+    name: 'generate_image_flux',
+    description:
+        'Generate the best quality image using FLUX 2 (black-forest-labs). '
+        'Best quality of all models, costs ~0.02 EUR per image. '
+        'Use this when the user asks for best quality, FLUX, or '
+        'when standard generation quality is not sufficient. '
+        'The image is displayed inline in the chat automatically — do NOT '
+        'repeat the URL, dimensions, seed, or other technical details. '
+        'PRIVACY: generated images are processed on an external server and '
+        'the operator can see them — they are NOT end-to-end encrypted like '
+        'chat messages. Before calling, inform the user about the cost and '
+        'that image generation is not private.',
+    parameters: {
+      'prompt': 'string (required: descriptive image prompt)',
+      'image_size':
+          'string (optional preset: square_hd, square, portrait_4_3, '
+          'portrait_16_9, landscape_4_3, landscape_16_9)',
+      'aspect_ratio':
+          'string (optional, overrides image_size: 1:1, 16:9, 9:16, '
+          '3:2, 2:3, 4:3, 3:4, 5:4, 4:5, 21:9, 9:21)',
+      'megapixels':
+          'string (optional resolution: "0.25", "0.5", "1", "2", "4" — '
+          'default "1")',
+    },
+    type: ToolType.builtin,
+    tags: [
+      'image',
+      'generate',
+      'flux',
+      'best quality',
+      'picture',
+      'photo',
+      'art',
+      'bild',
+      'grafik',
+      'ai image',
+    ],
+  ),
+  ClientTool(
     name: 'edit_image',
     description:
         'Edit/modify an existing image with a text instruction. Requires '
         'the URL of the source image and a prompt describing the edit. '
-        'Costs credits (~0.10 EUR per edit). '
+        'Costs credits (~0.03 EUR per edit). '
         'PRIVACY: the source image and result are processed on an external '
         'server and the operator can see them — they are NOT end-to-end '
         'encrypted like chat messages. Before calling, inform the user about '

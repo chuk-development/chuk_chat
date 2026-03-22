@@ -5,8 +5,10 @@ import 'package:chuk_chat/models/client_tool.dart';
 const companions = <String, List<String>>{
   'web_search': ['web_crawl'],
   'web_crawl': ['web_search'],
-  'generate_image': ['edit_image', 'fetch_image', 'view_chat_images'],
-  'edit_image': ['generate_image', 'fetch_image', 'view_chat_images'],
+  'generate_image': ['generate_image_hunyuan', 'generate_image_flux', 'edit_image', 'fetch_image', 'view_chat_images'],
+  'generate_image_hunyuan': ['generate_image', 'generate_image_flux', 'edit_image', 'fetch_image', 'view_chat_images'],
+  'generate_image_flux': ['generate_image', 'generate_image_hunyuan', 'edit_image', 'fetch_image', 'view_chat_images'],
+  'edit_image': ['generate_image', 'generate_image_hunyuan', 'generate_image_flux', 'fetch_image', 'view_chat_images'],
   'fetch_image': ['view_chat_images', 'web_crawl'],
   'view_chat_images': ['fetch_image'],
   'search_restaurants': ['web_search', 'web_crawl', 'get_route', 'geocode'],
