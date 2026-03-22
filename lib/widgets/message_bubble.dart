@@ -589,6 +589,7 @@ class _MessageBubbleState extends State<MessageBubble>
         ),
       if (hasImages && !placeQrImageAboveResponse) ...[
         _buildImagesGrid(widget.images!),
+        _buildImageMetaMenu(iconFgColor, alignRight, widget.imageCostEur, widget.imageGeneratedAt),
         const SizedBox(height: 8),
       ],
       if (widget.attachments != null && widget.attachments!.isNotEmpty) ...[
@@ -601,6 +602,7 @@ class _MessageBubbleState extends State<MessageBubble>
       ],
       if (hasImages && placeQrImageAboveResponse) ...[
         _buildImagesGrid(widget.images!),
+        _buildImageMetaMenu(iconFgColor, alignRight, widget.imageCostEur, widget.imageGeneratedAt),
         const SizedBox(height: 8),
       ],
       _buildMessageBody(
@@ -610,14 +612,6 @@ class _MessageBubbleState extends State<MessageBubble>
         isUserMessage: isUserMessage,
       ),
       ..._buildAskUserOptions(),
-      // Image actions go below the text, matching the regular action buttons.
-      if (widget.images != null && widget.images!.isNotEmpty)
-        _buildImageMetaMenu(
-          iconFgColor,
-          alignRight,
-          widget.imageCostEur,
-          widget.imageGeneratedAt,
-        ),
     ];
   }
 
@@ -720,6 +714,14 @@ class _MessageBubbleState extends State<MessageBubble>
           });
           if (hasImageResult) {
             children.add(_buildImagesGrid(widget.images!));
+            children.add(
+              _buildImageMetaMenu(
+                iconFgColor,
+                alignRight,
+                widget.imageCostEur,
+                widget.imageGeneratedAt,
+              ),
+            );
             children.add(const SizedBox(height: 8));
             insertedImage = true;
           }
@@ -844,14 +846,6 @@ class _MessageBubbleState extends State<MessageBubble>
 
     if (hasImages && !insertedImage) {
       children.add(_buildImagesGrid(widget.images!));
-      children.add(const SizedBox(height: 8));
-    }
-
-    // ask_user interactive options.
-    children.addAll(_buildAskUserOptions());
-
-    // Image actions at the bottom, matching the regular action buttons.
-    if (hasImages) {
       children.add(
         _buildImageMetaMenu(
           iconFgColor,
@@ -860,7 +854,11 @@ class _MessageBubbleState extends State<MessageBubble>
           widget.imageGeneratedAt,
         ),
       );
+      children.add(const SizedBox(height: 8));
     }
+
+    // ask_user interactive options.
+    children.addAll(_buildAskUserOptions());
 
     if (children.isEmpty) {
       children.add(const SizedBox.shrink());
