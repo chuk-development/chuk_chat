@@ -2,31 +2,24 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-Future<String> executeGenerateImage({
+/// Shared helper: send a multipart POST to an image generation endpoint
+/// and return the IMAGE: result string.
+Future<String> _generateImageRequest({
   required String? serverHttpUrl,
   required String? accessToken,
-  required Map<String, dynamic> args,
+  required String endpoint,
+  required Map<String, String> fields,
 }) async {
-  final prompt = (args['prompt'] as String? ?? '').trim();
-  if (prompt.isEmpty) {
-    return 'Error: "prompt" parameter required';
-  }
-
   final baseUrl = serverHttpUrl;
   if (baseUrl == null || baseUrl.trim().isEmpty) {
     return 'Error: Not connected to server';
   }
 
-  final imageSize = (args['image_size'] as String? ?? 'landscape_4_3').trim();
-
   try {
-    final request =
-        http.MultipartRequest(
-            'POST',
-            Uri.parse('$baseUrl/v1/ai/generate-image'),
-          )
-          ..fields['prompt'] = prompt
-          ..fields['image_size'] = imageSize;
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl$endpoint'),
+    )..fields.addAll(fields);
 
     if (accessToken != null && accessToken.isNotEmpty) {
       request.headers['Authorization'] = 'Bearer $accessToken';
@@ -57,8 +50,8 @@ Future<String> executeGenerateImage({
       'width': data['width'],
       'height': data['height'],
       'seed': data['seed'],
-      'prompt': data['prompt'] ?? prompt,
-      'image_size': imageSize,
+      'prompt': data['prompt'] ?? fields['prompt'],
+      'image_size': fields['image_size'],
       if (billing != null) ...{
         'cost_eur': billing['cost_eur'],
         'megapixels': billing['megapixels'],
@@ -68,6 +61,87 @@ Future<String> executeGenerateImage({
   } catch (error) {
     return 'Image generation failed: $error';
   }
+}
+
+/// Z-Image Turbo — fastest, cheapest.
+Future<String> executeGenerateImage({
+  required String? serverHttpUrl,
+  required String? accessToken,
+  required Map<String, dynamic> args,
+}) async {
+  final prompt = (args['prompt'] as String? ?? '').trim();
+  if (prompt.isEmpty) {
+    return 'Error: "prompt" parameter required';
+  }
+
+  final imageSize = (args['image_size'] as String? ?? 'landscape_4_3').trim();
+
+  return _generateImageRequest(
+    serverHttpUrl: serverHttpUrl,
+    accessToken: accessToken,
+    endpoint: '/v1/ai/image/turbo',
+    fields: {'prompt': prompt, 'image_size': imageSize},
+  );
+}
+
+/// Hunyuan Image 3 — high quality, flat $0.08/image.
+Future<String> executeGenerateImageHunyuan({
+  required String? serverHttpUrl,
+  required String? accessToken,
+  required Map<String, dynamic> args,
+}) async {
+  final prompt = (args['prompt'] as String? ?? '').trim();
+  if (prompt.isEmpty) {
+    return 'Error: "prompt" parameter required';
+  }
+
+  final fields = <String, String>{'prompt': prompt};
+  final aspectRatio = (args['aspect_ratio'] as String?)?.trim();
+  if (aspectRatio != null && aspectRatio.isNotEmpty) {
+    fields['aspect_ratio'] = aspectRatio;
+  } else {
+    fields['image_size'] =
+        (args['image_size'] as String? ?? 'landscape_4_3').trim();
+  }
+
+  return _generateImageRequest(
+    serverHttpUrl: serverHttpUrl,
+    accessToken: accessToken,
+    endpoint: '/v1/ai/image/hunyuan',
+    fields: fields,
+  );
+}
+
+/// FLUX 2 Klein 9B — best quality, $0.015/megapixel.
+Future<String> executeGenerateImageFlux({
+  required String? serverHttpUrl,
+  required String? accessToken,
+  required Map<String, dynamic> args,
+}) async {
+  final prompt = (args['prompt'] as String? ?? '').trim();
+  if (prompt.isEmpty) {
+    return 'Error: "prompt" parameter required';
+  }
+
+  final fields = <String, String>{'prompt': prompt};
+  final aspectRatio = (args['aspect_ratio'] as String?)?.trim();
+  if (aspectRatio != null && aspectRatio.isNotEmpty) {
+    fields['aspect_ratio'] = aspectRatio;
+  } else {
+    fields['image_size'] =
+        (args['image_size'] as String? ?? 'landscape_4_3').trim();
+  }
+  final megapixels = (args['megapixels'] as String?)?.trim();
+  if (megapixels != null && megapixels.isNotEmpty) {
+    fields['megapixels'] = megapixels;
+  }
+
+  return _generateImageRequest(
+    serverHttpUrl: serverHttpUrl,
+    accessToken: accessToken,
+    endpoint: '/v1/ai/image/flux',
+    fields: fields,
+  );
 }
 
 Future<String> executeFetchImage(
@@ -121,6 +195,7 @@ Future<String> executeFetchImage(
   }
 }
 
+/// Qwen Image Edit Plus — flat $0.03/image.
 Future<String> executeEditImage({
   required String? serverHttpUrl,
   required String? accessToken,
@@ -146,7 +221,7 @@ Future<String> executeEditImage({
 
   try {
     final request =
-        http.MultipartRequest('POST', Uri.parse('$baseUrl/v1/ai/edit-image'))
+        http.MultipartRequest('POST', Uri.parse('$baseUrl/v1/ai/image/edit'))
           ..fields['prompt'] = prompt
           ..fields['image_url'] = imageUrl
           ..fields['image_size'] = imageSize;

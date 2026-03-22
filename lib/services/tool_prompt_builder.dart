@@ -118,6 +118,8 @@ class ToolPromptBuilder {
           'web_search',
           'web_crawl',
           'generate_image',
+          'generate_image_hunyuan',
+          'generate_image_flux',
           'edit_image',
           'fetch_image',
           'view_chat_images',
@@ -506,7 +508,7 @@ FORMAT: Emit raw $toolCallStart...$toolCallEnd tags only. Do NOT wrap tool calls
 4. NEVER invent factual data (phone numbers, addresses, URLs, prices, ratings). Only include what tools returned.
 5. web_search includes search snippets and auto-fetched context from top pages. Use web_crawl for deeper extraction of a specific URL.
 6. Never stop with intention-only text (e.g. "I will now search"). Do the next tool_call or provide the final answer.
-7. COST & PRIVACY: Before calling generate_image or edit_image, ALWAYS briefly inform the user that (a) it costs credits and (b) generated/edited images are NOT end-to-end encrypted and can be seen by the service operator. Then proceed with the tool call in the same response — do not wait for confirmation unless the user previously expressed privacy concerns. After the image is generated, do NOT show the URL, dimensions, seed, model, or other technical metadata — the image is displayed inline automatically by the app.
+7. COST & PRIVACY: Before calling generate_image, generate_image_hunyuan, generate_image_flux, or edit_image, ALWAYS briefly inform the user that (a) it costs credits and (b) generated/edited images are NOT end-to-end encrypted and can be seen by the service operator. Then proceed with the tool call in the same response — do not wait for confirmation unless the user previously expressed privacy concerns. After the image is generated, do NOT show the URL, dimensions, seed, model, or other technical metadata — the image is displayed inline automatically by the app. Use generate_image (fast, ~0.01 EUR) by default; use generate_image_hunyuan (high quality, ~0.08 EUR) or generate_image_flux (best quality, ~0.02 EUR) when the user requests higher quality or a specific model.
 8. If the needed tool is already listed above with its full description, call it directly. Do NOT call find_tools again unless you need a tool from "Other available tools".
 
 ### Research depth:

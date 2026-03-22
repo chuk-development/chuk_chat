@@ -69,6 +69,8 @@ class ToolExecutor {
     'web_search',
     'web_crawl',
     'generate_image',
+    'generate_image_hunyuan',
+    'generate_image_flux',
     'edit_image',
     'fetch_image',
     'view_chat_images',
@@ -663,6 +665,22 @@ class ToolExecutor {
       case 'generate_image':
         return _wrapOutput(
           await image_tools.executeGenerateImage(
+            serverHttpUrl: serverHttpUrl,
+            accessToken: accessToken,
+            args: args,
+          ),
+        );
+      case 'generate_image_hunyuan':
+        return _wrapOutput(
+          await image_tools.executeGenerateImageHunyuan(
+            serverHttpUrl: serverHttpUrl,
+            accessToken: accessToken,
+            args: args,
+          ),
+        );
+      case 'generate_image_flux':
+        return _wrapOutput(
+          await image_tools.executeGenerateImageFlux(
             serverHttpUrl: serverHttpUrl,
             accessToken: accessToken,
             args: args,

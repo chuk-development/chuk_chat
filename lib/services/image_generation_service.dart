@@ -36,7 +36,7 @@ class ImageGenerationResult {
   }
 }
 
-/// Size presets matching the API server
+/// Size presets matching the API server (used by turbo endpoint).
 class ImageSizePresets {
   static const Map<String, Map<String, int>> presets = {
     'square_hd': {'width': 1024, 'height': 1024},
@@ -51,29 +51,107 @@ class ImageSizePresets {
     return presets[preset] ?? presets['landscape_4_3']!;
   }
 
-  /// Calculate cost in EUR for given dimensions
-  static double calculateCostEur(int width, int height) {
+  /// Estimate cost for z-image-turbo (tiered pricing by megapixels).
+  /// Returns approximate cost rounded up to nearest cent.
+  /// Actual cost comes from the server billing response.
+  static double estimateTurboCost(int width, int height) {
     final megapixels = (width * height) / 1000000;
-    final costUsd = megapixels * 0.005;
-    // Round up to nearest cent
-    return (costUsd * 100).ceil() / 100;
+    final double cost;
+    if (megapixels <= 0.5) {
+      cost = 0.0025;
+    } else if (megapixels <= 1) {
+      cost = 0.005;
+    } else if (megapixels <= 2) {
+      cost = 0.01;
+    } else if (megapixels <= 3) {
+      cost = 0.015;
+    } else {
+      cost = 0.02;
+    }
+    return (cost * 100).ceil() / 100;
   }
 }
 
-/// Service for generating images via Z-Image Turbo API
+/// Service for generating images via API.
+///
+/// Endpoints:
+/// - `/v1/ai/image/turbo`   — Z-Image Turbo (fastest, cheapest)
+/// - `/v1/ai/image/hunyuan` — Hunyuan Image 3 (high quality, $0.08/image)
+/// - `/v1/ai/image/flux`    — FLUX 2 Klein 9B (best quality, $0.015/MP)
+/// - `/v1/ai/image/edit`    — Qwen Image Edit Plus ($0.03/image)
 class ImageGenerationService {
   const ImageGenerationService();
 
-  /// Generate an image from a text prompt
-  ///
-  /// If [storeEncrypted] is true, the image will be downloaded, encrypted,
-  /// and stored in Supabase storage. The [encryptedPath] will be returned
-  /// in the result for chat message storage.
+  /// Generate an image using Z-Image Turbo (fastest, cheapest).
   static Future<ImageGenerationResult> generateImage({
     required String prompt,
     String? sizePreset,
     int? customWidth,
     int? customHeight,
+    bool storeEncrypted = true,
+  }) async {
+    final fields = <String, String>{'prompt': prompt};
+    if (customWidth != null && customHeight != null) {
+      fields['custom_width'] = customWidth.toString();
+      fields['custom_height'] = customHeight.toString();
+    } else {
+      fields['image_size'] = sizePreset ?? 'landscape_4_3';
+    }
+    return _generate(
+      endpoint: '/v1/ai/image/turbo',
+      fields: fields,
+      storeEncrypted: storeEncrypted,
+    );
+  }
+
+  /// Generate an image using Hunyuan Image 3 (high quality, ~0.08 EUR).
+  static Future<ImageGenerationResult> generateImageHunyuan({
+    required String prompt,
+    String? sizePreset,
+    String? aspectRatio,
+    bool storeEncrypted = true,
+  }) async {
+    final fields = <String, String>{'prompt': prompt};
+    if (aspectRatio != null) {
+      fields['aspect_ratio'] = aspectRatio;
+    } else {
+      fields['image_size'] = sizePreset ?? 'landscape_4_3';
+    }
+    return _generate(
+      endpoint: '/v1/ai/image/hunyuan',
+      fields: fields,
+      storeEncrypted: storeEncrypted,
+    );
+  }
+
+  /// Generate an image using FLUX 2 Klein 9B (best quality, ~0.02 EUR).
+  static Future<ImageGenerationResult> generateImageFlux({
+    required String prompt,
+    String? sizePreset,
+    String? aspectRatio,
+    String? megapixels,
+    bool storeEncrypted = true,
+  }) async {
+    final fields = <String, String>{'prompt': prompt};
+    if (aspectRatio != null) {
+      fields['aspect_ratio'] = aspectRatio;
+    } else {
+      fields['image_size'] = sizePreset ?? 'landscape_4_3';
+    }
+    if (megapixels != null) {
+      fields['megapixels'] = megapixels;
+    }
+    return _generate(
+      endpoint: '/v1/ai/image/flux',
+      fields: fields,
+      storeEncrypted: storeEncrypted,
+    );
+  }
+
+  /// Shared generation logic for all image endpoints.
+  static Future<ImageGenerationResult> _generate({
+    required String endpoint,
+    required Map<String, String> fields,
     bool storeEncrypted = true,
   }) async {
     try {
@@ -86,21 +164,12 @@ class ImageGenerationService {
 
       // Build request
       final uri = Uri.parse(
-        '${ApiConfigService.apiBaseUrl}/v1/ai/generate-image',
+        '${ApiConfigService.apiBaseUrl}$endpoint',
       );
 
       final request = http.MultipartRequest('POST', uri);
       request.headers['Authorization'] = 'Bearer $accessToken';
-
-      // Add form fields
-      request.fields['prompt'] = prompt;
-
-      if (customWidth != null && customHeight != null) {
-        request.fields['custom_width'] = customWidth.toString();
-        request.fields['custom_height'] = customHeight.toString();
-      } else {
-        request.fields['image_size'] = sizePreset ?? 'landscape_4_3';
-      }
+      request.fields.addAll(fields);
 
       // Send request
       final streamedResponse = await request.send();
