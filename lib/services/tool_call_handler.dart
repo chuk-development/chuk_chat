@@ -356,6 +356,7 @@ class ToolCallHandler {
       }
 
       uiCall.result = rawResult;
+      uiCall.completedAt = DateTime.now();
       uiCall.status = isError ? ToolCallStatus.error : ToolCallStatus.completed;
       onToolCallsUpdated?.call(_cloneToolCalls(session.toolCalls));
 
