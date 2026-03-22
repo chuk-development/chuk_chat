@@ -1,9 +1,9 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:chuk_chat/services/app_initialization_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
 /// Switches between [signedInBuilder] and [signedOutBuilder] based on
@@ -39,18 +39,19 @@ class _AuthGateState extends State<AuthGate> {
     _initializeAuthState();
   }
 
-  void _initializeAuthState() {
-    // Read current session synchronously. Supabase is guaranteed to be
-    // initialized by the time AuthGate builds because main.dart calls
-    // waitForSupabase() before the first frame that renders this widget.
-    try {
-      _session = SupabaseService.auth.currentSession;
-    } catch (e) {
-      // Supabase not yet ready — will rely on onAuthStateChange stream below.
-      if (kDebugMode) {
-        debugPrint('AuthGate: Could not read initial session: $e');
-      }
+  Future<void> _initializeAuthState() async {
+    // Supabase initialization runs in the background (unawaited in main).
+    // Wait for it before accessing auth to avoid StateError.
+    final ready = await AppInitializationService.instance.waitForSupabase();
+    if (!mounted) return;
+
+    if (!ready) {
+      // Supabase failed to initialize — show signed-out UI.
+      setState(() => _checkingSession = false);
+      return;
     }
+
+    _session = SupabaseService.auth.currentSession;
 
     // Listen for future auth changes (sign-in, sign-out, token refresh).
     _authSubscription = SupabaseService.auth.onAuthStateChange.listen((event) {
@@ -61,7 +62,6 @@ class _AuthGateState extends State<AuthGate> {
       });
     });
 
-    // Show UI immediately — no artificial delay needed.
     if (mounted) {
       setState(() {
         _checkingSession = false;
