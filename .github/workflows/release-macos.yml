@@ -1,9 +1,7 @@
 name: Release - macOS
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:  # Disabled auto-trigger; use build-cross-platform.yml instead
 
 env:
   FLUTTER_VERSION: '3.38.7'
