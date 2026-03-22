@@ -28,6 +28,7 @@ import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/services/tool_image_result_service.dart';
 import 'package:chuk_chat/pages/pricing_page.dart';
 import 'package:chuk_chat/widgets/project_panel.dart';
+import 'package:chuk_chat/utils/shift_key_tracker.dart';
 import 'package:chuk_chat/widgets/project_selection_dropdown.dart';
 import 'package:chuk_chat/services/project_message_service.dart';
 import 'package:chuk_chat/services/artifact_context_service.dart';
@@ -193,6 +194,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   @override
   void initState() {
     super.initState();
+    initShiftKeyTracker();
     _audioHandler = AudioRecordingHandler();
     _messageActionsHandler = MessageActionsHandler()
       ..onShowSnackBar = _showSnackBar
@@ -242,7 +244,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         }
 
         // Shift+Enter: insert newline manually
-        if (HardwareKeyboard.instance.isShiftPressed) {
+        if (isShiftKeyPressed) {
           final text = _controller.text;
           final sel = _controller.selection;
           final newText = text.replaceRange(sel.start, sel.end, '\n');
