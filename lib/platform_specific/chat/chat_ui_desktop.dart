@@ -224,7 +224,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
         // Ctrl+V / Cmd+V: handle paste (images, text, long text → attachment)
-        if (event.logicalKey == LogicalKeyboardKey.keyV &&
+        // On web, let the browser handle paste natively — smart paste uses
+        // dart:io APIs (File, Directory, Pasteboard) that aren't available.
+        if (!kIsWeb &&
+            event.logicalKey == LogicalKeyboardKey.keyV &&
             (HardwareKeyboard.instance.isControlPressed ||
                 HardwareKeyboard.instance.isMetaPressed)) {
           _fileHandler.modelSupportsImageInput = _modelSupportsImageInput;
