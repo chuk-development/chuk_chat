@@ -3,6 +3,8 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/utils/io_helper.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
@@ -609,9 +611,7 @@ class _MessageBubbleState extends State<MessageBubble>
       ),
       ..._buildAskUserOptions(),
       // Image actions go below the text, matching the regular action buttons.
-      if (widget.images != null &&
-          widget.images!.isNotEmpty &&
-          (widget.imageCostEur != null || widget.imageGeneratedAt != null))
+      if (widget.images != null && widget.images!.isNotEmpty)
         _buildImageMetaMenu(
           iconFgColor,
           alignRight,
@@ -632,16 +632,11 @@ class _MessageBubbleState extends State<MessageBubble>
     final blocks = widget.contentBlocks!;
     final children = <Widget>[];
 
-    // By default, images render at the top.
-    // For QR messages, render just above the AI response text.
+    // Images render just above the first text block (after tool calls),
+    // so they appear in visual order with the tool that generated them.
     final bool hasImages = widget.images != null && widget.images!.isNotEmpty;
-    final bool placeQrImageAboveResponse = hasImages && _isQrImageMessage;
-    if (hasImages && !placeQrImageAboveResponse) {
-      children.add(_buildImagesGrid(widget.images!));
-      children.add(const SizedBox(height: 8));
-    }
 
-    var insertedQrImage = false;
+    var insertedImage = false;
 
     // Document attachments
     if (widget.attachments != null && widget.attachments!.isNotEmpty) {
@@ -764,10 +759,10 @@ class _MessageBubbleState extends State<MessageBubble>
         case ContentBlockType.text:
           flushGroupedReasoningTools();
           if (block.text != null && block.text!.trim().isNotEmpty) {
-            if (placeQrImageAboveResponse && !insertedQrImage) {
+            if (hasImages && !insertedImage) {
               children.add(_buildImagesGrid(widget.images!));
               children.add(const SizedBox(height: 8));
-              insertedQrImage = true;
+              insertedImage = true;
             }
             children.add(_buildBlockText(block.text!, iconFgColor, bgColor));
           }
@@ -797,10 +792,10 @@ class _MessageBubbleState extends State<MessageBubble>
       }
 
       if (trailingText.isNotEmpty) {
-        if (placeQrImageAboveResponse && !insertedQrImage) {
+        if (hasImages && !insertedImage) {
           children.add(_buildImagesGrid(widget.images!));
           children.add(const SizedBox(height: 8));
-          insertedQrImage = true;
+          insertedImage = true;
         }
         children.add(
           Padding(
@@ -844,7 +839,7 @@ class _MessageBubbleState extends State<MessageBubble>
       children.add(const SizedBox(height: 8));
     }
 
-    if (placeQrImageAboveResponse && !insertedQrImage) {
+    if (hasImages && !insertedImage) {
       children.add(_buildImagesGrid(widget.images!));
       children.add(const SizedBox(height: 8));
     }
@@ -853,8 +848,7 @@ class _MessageBubbleState extends State<MessageBubble>
     children.addAll(_buildAskUserOptions());
 
     // Image actions at the bottom, matching the regular action buttons.
-    if (hasImages &&
-        (widget.imageCostEur != null || widget.imageGeneratedAt != null)) {
+    if (hasImages) {
       children.add(
         _buildImageMetaMenu(
           iconFgColor,
@@ -2303,18 +2297,10 @@ class _MessageBubbleState extends State<MessageBubble>
         ? 'EUR ${imageCostEur.toStringAsFixed(2)}'
         : null;
     final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
-    final bool compactQrControls = _isQrImageMessage;
-    final double iconSize = kPlatformMobile
-        ? (compactQrControls ? 13 : 15)
-        : (compactQrControls ? 16 : 18);
-    final EdgeInsets buttonPadding = EdgeInsets.all(
-      kPlatformMobile
-          ? (compactQrControls ? 2 : 4)
-          : (compactQrControls ? 5 : 8),
-    );
-    final double minButtonSize = kPlatformMobile
-        ? (compactQrControls ? 20 : 24)
-        : (compactQrControls ? 26 : 30);
+    // Use the same sizes as _buildActionButtons for consistency.
+    const double iconSize = 18;
+    final EdgeInsets buttonPadding = EdgeInsets.all(kPlatformMobile ? 5 : 8);
+    final double minButtonSize = kPlatformMobile ? 28 : 30;
 
     // Match the pill-shaped container style used by _buildActionButtons.
     return Padding(
@@ -2327,6 +2313,7 @@ class _MessageBubbleState extends State<MessageBubble>
             : MainAxisAlignment.start,
         children: [
           Container(
+            height: kPlatformMobile ? _mobileBottomBarHeight : null,
             decoration: BoxDecoration(
               color: bgColor.lighten(0.05),
               borderRadius: BorderRadius.circular(100),
@@ -2336,10 +2323,8 @@ class _MessageBubbleState extends State<MessageBubble>
               ),
             ),
             padding: EdgeInsets.symmetric(
-              horizontal: kPlatformMobile
-                  ? (compactQrControls ? 1 : 2)
-                  : (compactQrControls ? 5 : 8),
-              vertical: kPlatformMobile ? 0 : (compactQrControls ? 2 : 4),
+              horizontal: kPlatformMobile ? 4 : 8,
+              vertical: kPlatformMobile ? 0 : 4,
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -2354,12 +2339,30 @@ class _MessageBubbleState extends State<MessageBubble>
                       minWidth: minButtonSize,
                       minHeight: minButtonSize,
                     ),
-                    style: kPlatformMobile
-                        ? null
-                        : IconButton.styleFrom(
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
+                    style: IconButton.styleFrom(
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
                     onPressed: _copyFirstImageToClipboard,
+                  ),
+                ),
+                Tooltip(
+                  message: 'Download image',
+                  child: IconButton(
+                    icon: Icon(
+                      Icons.download,
+                      color: iconFgColor,
+                      size: iconSize,
+                    ),
+                    padding: buttonPadding,
+                    visualDensity: VisualDensity.compact,
+                    constraints: BoxConstraints(
+                      minWidth: minButtonSize,
+                      minHeight: minButtonSize,
+                    ),
+                    style: IconButton.styleFrom(
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    onPressed: _downloadFirstImage,
                   ),
                 ),
                 PopupMenuButton<String>(
@@ -2372,11 +2375,9 @@ class _MessageBubbleState extends State<MessageBubble>
                   menuPadding: EdgeInsets.zero,
                   iconSize: iconSize,
                   icon: Icon(Icons.more_vert, color: iconFgColor),
-                  style: kPlatformMobile
-                      ? null
-                      : IconButton.styleFrom(
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
+                  style: IconButton.styleFrom(
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
                   itemBuilder: (context) => [
                     if (costLabel != null)
                       PopupMenuItem<String>(
@@ -2399,16 +2400,22 @@ class _MessageBubbleState extends State<MessageBubble>
     );
   }
 
-  Future<void> _copyFirstImageToClipboard() async {
+  Future<Uint8List?> _loadFirstImageBytes() async {
     final images = widget.images;
-    if (images == null || images.isEmpty) {
-      return;
+    if (images == null || images.isEmpty) return null;
+    final source = images.first;
+    if (source.startsWith('data:image/')) {
+      final commaIndex = source.indexOf(',');
+      if (commaIndex < 0) return null;
+      return base64Decode(source.substring(commaIndex + 1));
     }
+    return ImageStorageService.downloadAndDecryptImage(source);
+  }
 
+  Future<void> _copyFirstImageToClipboard() async {
     try {
-      final bytes = await ImageStorageService.downloadAndDecryptImage(
-        images.first,
-      );
+      final bytes = await _loadFirstImageBytes();
+      if (bytes == null) return;
       final copied = await ImageClipboardService.copyImageBytes(bytes);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2421,6 +2428,27 @@ class _MessageBubbleState extends State<MessageBubble>
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Unable to copy image')));
+    }
+  }
+
+  Future<void> _downloadFirstImage() async {
+    try {
+      final bytes = await _loadFirstImageBytes();
+      if (bytes == null) return;
+      final dir = await getDownloadsDirectory() ??
+          await getApplicationDocumentsDirectory();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final file = File('${dir.path}${Platform.pathSeparator}chuk_chat_image_$timestamp.png');
+      await file.writeAsBytes(bytes, flush: true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Saved to ${file.path}')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Unable to save image')));
     }
   }
 
