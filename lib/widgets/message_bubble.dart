@@ -711,6 +711,12 @@ class _MessageBubbleState extends State<MessageBubble>
           ),
         );
         children.add(const SizedBox(height: 8));
+        // Insert images right after the tool calls bar that produced them.
+        if (hasImages && !insertedImage) {
+          children.add(_buildImagesGrid(widget.images!));
+          children.add(const SizedBox(height: 8));
+          insertedImage = true;
+        }
       } else if (widget.showToolCalls && timeline.isNotEmpty) {
         for (final entry in timeline) {
           if (entry.isReasoning &&
@@ -759,11 +765,6 @@ class _MessageBubbleState extends State<MessageBubble>
         case ContentBlockType.text:
           flushGroupedReasoningTools();
           if (block.text != null && block.text!.trim().isNotEmpty) {
-            if (hasImages && !insertedImage) {
-              children.add(_buildImagesGrid(widget.images!));
-              children.add(const SizedBox(height: 8));
-              insertedImage = true;
-            }
             children.add(_buildBlockText(block.text!, iconFgColor, bgColor));
           }
       }
@@ -792,11 +793,6 @@ class _MessageBubbleState extends State<MessageBubble>
       }
 
       if (trailingText.isNotEmpty) {
-        if (hasImages && !insertedImage) {
-          children.add(_buildImagesGrid(widget.images!));
-          children.add(const SizedBox(height: 8));
-          insertedImage = true;
-        }
         children.add(
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
