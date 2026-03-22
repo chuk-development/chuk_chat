@@ -1,6 +1,7 @@
 // lib/services/chat_sync_service.dart
 import 'dart:async';
 
+import 'package:chuk_chat/services/chat_preload_service.dart';
 import 'package:chuk_chat/services/chat_storage_mutations.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
@@ -230,6 +231,11 @@ class ChatSyncService {
         if (_firstSyncCompleter != null && !_firstSyncCompleter!.isCompleted) {
           _firstSyncCompleter!.complete();
         }
+        // On native platforms, start background preload of all chats to SQLite
+        // so they're available offline. Web skips this.
+        if (!kIsWeb) {
+          unawaited(ChatPreloadService.startBackgroundPreload());
+        }
       }
       // Step 1: Fetch lightweight metadata from cloud (id + updated_at only)
       final cloudChats = await SupabaseService.client
@@ -324,8 +330,11 @@ class ChatSyncService {
           debugPrint('✅ [ChatSync] Sync complete');
         }
 
-        // Preload is on-demand only (export/search). New chats are loaded
-        // individually when the user opens them.
+        // On native platforms, preload all chats to SQLite for offline access.
+        // Web skips this (always online, uses SharedPreferences fallback).
+        if (!kIsWeb) {
+          unawaited(ChatPreloadService.preloadNewChats());
+        }
       }
 
       unawaited(
