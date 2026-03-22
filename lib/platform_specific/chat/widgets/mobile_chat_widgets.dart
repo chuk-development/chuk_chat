@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:chuk_chat/utils/shift_key_tracker.dart';
 
 /// Build a tiny icon button widget
 Widget buildTinyIconButton({
@@ -183,8 +184,7 @@ Widget buildKeyboardListener({
       if (event is! KeyDownEvent) return;
       if (event.logicalKey != LogicalKeyboardKey.enter) return;
 
-      final isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
-      if (isShiftPressed) {
+      if (isShiftKeyPressed) {
         final value = controller.value;
         final updatedText = value.text.replaceRange(
           value.selection.start,
