@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:chuk_chat/models/stored_chat.dart';
+import 'package:chuk_chat/services/key_version_service.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -426,4 +428,274 @@ void main() {
       expect(constantTimeEquals(a, b), isFalse);
     });
   });
+
+  group('Key version (kv) field', () {
+    /// Helper: encrypt with kv field (simulates new EncryptionService behavior)
+    Future<String> encryptWithKv(
+      String plaintext,
+      SecretKey key,
+      int keyVersion,
+    ) async {
+      final rng = Random.secure();
+      final nonce = List<int>.generate(12, (_) => rng.nextInt(256));
+      final secretBox = await cipher.encrypt(
+        utf8.encode(plaintext),
+        secretKey: key,
+        nonce: nonce,
+      );
+      return jsonEncode({
+        'v': payloadVersion,
+        'kv': keyVersion,
+        'nonce': base64Encode(secretBox.nonce),
+        'ciphertext': base64Encode(secretBox.cipherText),
+        'mac': base64Encode(secretBox.mac.bytes),
+      });
+    }
+
+    test('payload with kv field can be decrypted', () async {
+      const original = 'Hello with key version!';
+      final encrypted = await encryptWithKv(original, testKey, 2);
+      // Decrypt should work — kv is informational, not a gate
+      final payload = jsonDecode(encrypted) as Map<String, dynamic>;
+      expect(payload['kv'], equals(2));
+
+      final nonce = base64Decode(payload['nonce'] as String);
+      final cipherText = base64Decode(payload['ciphertext'] as String);
+      final mac = Mac(base64Decode(payload['mac'] as String));
+      final secretBox = SecretBox(cipherText, nonce: nonce, mac: mac);
+      final cleartextBytes =
+          await cipher.decrypt(secretBox, secretKey: testKey);
+      expect(utf8.decode(cleartextBytes), equals(original));
+    });
+
+    test('payload without kv field still works (backwards compat)', () async {
+      // Old-style payload without kv
+      const original = 'Legacy message';
+      final encrypted = await encryptString(original, testKey);
+      final payload = jsonDecode(encrypted) as Map<String, dynamic>;
+      expect(payload.containsKey('kv'), isFalse);
+
+      // Should still decrypt fine
+      final decrypted = await decryptString(encrypted, testKey);
+      expect(decrypted, equals(original));
+    });
+
+    test('extractKeyVersion returns kv from payload', () {
+      final payload = jsonEncode({
+        'v': '1',
+        'kv': 3,
+        'nonce': 'abc',
+        'ciphertext': 'def',
+        'mac': 'ghi',
+      });
+      expect(_extractKeyVersion(payload), equals(3));
+    });
+
+    test('extractKeyVersion returns null for legacy payload', () {
+      final payload = jsonEncode({
+        'v': '1',
+        'nonce': 'abc',
+        'ciphertext': 'def',
+        'mac': 'ghi',
+      });
+      expect(_extractKeyVersion(payload), isNull);
+    });
+
+    test('extractKeyVersion handles string kv', () {
+      final payload = jsonEncode({
+        'v': '1',
+        'kv': '5',
+        'nonce': 'abc',
+        'ciphertext': 'def',
+        'mac': 'ghi',
+      });
+      expect(_extractKeyVersion(payload), equals(5));
+    });
+
+    test('extractKeyVersion returns null for invalid JSON', () {
+      expect(_extractKeyVersion('not json'), isNull);
+    });
+
+    test('decrypt with wrong key returns null (multi-key scenario)', () async {
+      final key1 = await cipher.newSecretKey();
+      final key2 = await cipher.newSecretKey();
+      const original = 'Encrypted with key1';
+      final encrypted = await encryptWithKv(original, key1, 1);
+
+      // Try to decrypt with key2 — should fail
+      try {
+        final payload = jsonDecode(encrypted) as Map<String, dynamic>;
+        final nonce = base64Decode(payload['nonce'] as String);
+        final cipherText = base64Decode(payload['ciphertext'] as String);
+        final mac = Mac(base64Decode(payload['mac'] as String));
+        final secretBox = SecretBox(cipherText, nonce: nonce, mac: mac);
+        await cipher.decrypt(secretBox, secretKey: key2);
+        fail('Should have thrown');
+      } catch (e) {
+        expect(e, isA<SecretBoxAuthenticationError>());
+      }
+
+      // Decrypt with key1 should work
+      final payload = jsonDecode(encrypted) as Map<String, dynamic>;
+      final nonce = base64Decode(payload['nonce'] as String);
+      final cipherText = base64Decode(payload['ciphertext'] as String);
+      final mac = Mac(base64Decode(payload['mac'] as String));
+      final secretBox = SecretBox(cipherText, nonce: nonce, mac: mac);
+      final cleartextBytes =
+          await cipher.decrypt(secretBox, secretKey: key1);
+      expect(utf8.decode(cleartextBytes), equals(original));
+    });
+
+    test('batch decrypt with mixed key versions', () async {
+      final key1 = await cipher.newSecretKey();
+      final key2 = await cipher.newSecretKey();
+
+      final enc1 = await encryptWithKv('Message A', key1, 1);
+      final enc2 = await encryptWithKv('Message B', key2, 2);
+      final enc3 = await encryptWithKv('Message C', key1, 1);
+
+      // Batch decrypt with key1 — items encrypted with key2 should fail
+      final results = <String?>[];
+      for (final encrypted in [enc1, enc2, enc3]) {
+        try {
+          final payload = jsonDecode(encrypted) as Map<String, dynamic>;
+          final nonce = base64Decode(payload['nonce'] as String);
+          final cipherText = base64Decode(payload['ciphertext'] as String);
+          final mac = Mac(base64Decode(payload['mac'] as String));
+          final secretBox = SecretBox(cipherText, nonce: nonce, mac: mac);
+          final bytes = await cipher.decrypt(secretBox, secretKey: key1);
+          results.add(utf8.decode(bytes));
+        } catch (_) {
+          results.add(null);
+        }
+      }
+
+      expect(results[0], equals('Message A'));
+      expect(results[1], isNull); // Wrong key
+      expect(results[2], equals('Message C'));
+    });
+  });
+
+  group('StoredChat key version', () {
+    test('isLocked defaults to false', () {
+      final chat = StoredChat(
+        id: 'test',
+        createdAt: DateTime.now(),
+        isStarred: false,
+      );
+      expect(chat.isLocked, isFalse);
+      expect(chat.keyVersion, isNull);
+    });
+
+    test('isLocked can be set to true', () {
+      final chat = StoredChat(
+        id: 'test',
+        createdAt: DateTime.now(),
+        isStarred: false,
+        isLocked: true,
+        keyVersion: 1,
+      );
+      expect(chat.isLocked, isTrue);
+      expect(chat.keyVersion, equals(1));
+    });
+
+    test('copyWith preserves keyVersion and isLocked', () {
+      final original = StoredChat(
+        id: 'test',
+        createdAt: DateTime.now(),
+        isStarred: false,
+        keyVersion: 2,
+        isLocked: true,
+      );
+      final copy = original.copyWith(isStarred: true);
+      expect(copy.keyVersion, equals(2));
+      expect(copy.isLocked, isTrue);
+      expect(copy.isStarred, isTrue);
+    });
+
+    test('copyWith can clear isLocked', () {
+      final original = StoredChat(
+        id: 'test',
+        createdAt: DateTime.now(),
+        isStarred: false,
+        isLocked: true,
+        keyVersion: 1,
+      );
+      final unlocked = original.copyWith(isLocked: false);
+      expect(unlocked.isLocked, isFalse);
+    });
+
+    test('forSidebar accepts keyVersion and isLocked', () {
+      final chat = StoredChat.forSidebar(
+        id: 'test',
+        createdAt: DateTime.now(),
+        isStarred: false,
+        keyVersion: 3,
+        isLocked: true,
+      );
+      expect(chat.keyVersion, equals(3));
+      expect(chat.isLocked, isTrue);
+      expect(chat.isFullyLoaded, isFalse);
+    });
+  });
+
+  group('PreviousKeyInfo', () {
+    test('fromJson parses correctly', () {
+      final info = PreviousKeyInfo.fromJson({
+        'salt': 'abc123',
+        'version': 2,
+      });
+      expect(info.salt, equals('abc123'));
+      expect(info.version, equals(2));
+    });
+
+    test('fromJson handles string version', () {
+      final info = PreviousKeyInfo.fromJson({
+        'salt': 'abc123',
+        'version': '3',
+      });
+      expect(info.version, equals(3));
+    });
+
+    test('toJson roundtrip', () {
+      final original = PreviousKeyInfo(salt: 'xyz789', version: 5);
+      final json = original.toJson();
+      final restored = PreviousKeyInfo.fromJson(json);
+      expect(restored.salt, equals(original.salt));
+      expect(restored.version, equals(original.version));
+    });
+
+    test('multiple entries serialize correctly', () {
+      final keys = [
+        PreviousKeyInfo(salt: 'salt1', version: 1),
+        PreviousKeyInfo(salt: 'salt2', version: 2),
+        PreviousKeyInfo(salt: 'salt3', version: 3),
+      ];
+      final jsonList = keys.map((k) => k.toJson()).toList();
+      expect(jsonList.length, equals(3));
+
+      final restored = jsonList
+          .whereType<Map<String, dynamic>>()
+          .map(PreviousKeyInfo.fromJson)
+          .toList();
+      expect(restored.length, equals(3));
+      expect(restored[0].version, equals(1));
+      expect(restored[1].version, equals(2));
+      expect(restored[2].version, equals(3));
+    });
+  });
+}
+
+/// Mirror of EncryptionService.extractKeyVersion for testing
+int? _extractKeyVersion(String encrypted) {
+  try {
+    final Map<String, dynamic> payload = jsonDecode(encrypted);
+    final kv = payload['kv'];
+    if (kv == null) return null;
+    if (kv is int) return kv;
+    if (kv is String) return int.tryParse(kv);
+    return null;
+  } catch (_) {
+    return null;
+  }
 }

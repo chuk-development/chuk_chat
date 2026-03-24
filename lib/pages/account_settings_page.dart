@@ -5,9 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:chuk_chat/pages/recover_chats_page.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/auth_service.dart';
+import 'package:chuk_chat/services/key_version_service.dart';
 import 'package:chuk_chat/services/password_change_service.dart';
+import 'package:chuk_chat/services/password_reset_service.dart';
 import 'package:chuk_chat/services/profile_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
@@ -157,6 +160,73 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         _errorMessage = 'Failed to save profile: $error';
       });
     }
+  }
+
+  Widget _buildRecoverChatsSection(ThemeData theme, Color iconFg) {
+    final user = SupabaseService.auth.currentUser;
+    if (user == null || !KeyVersionService.hasPreviousKeys(user)) {
+      return const SizedBox.shrink();
+    }
+
+    final lockedCount = PasswordResetService.lockedChatCount;
+    if (lockedCount == 0) return const SizedBox.shrink();
+
+    return Column(
+      children: [
+        const SizedBox(height: 24),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primary.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: theme.colorScheme.primary.withValues(alpha: 0.3),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.lock, size: 20, color: theme.colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Encrypted Chat Recovery',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: iconFg,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '$lockedCount chat${lockedCount == 1 ? '' : 's'} encrypted with a previous password.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: iconFg.withValues(alpha: 0.7),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const RecoverChatsPage(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.lock_open, size: 18),
+                  label: const Text('Recover chats'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   Future<void> _changePassword() async {
@@ -707,6 +777,8 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
               ],
             ),
           ),
+          // Recover Encrypted Chats section
+          _buildRecoverChatsSection(theme, iconFg),
           const SizedBox(height: 32),
           SizedBox(
             width: double.infinity,

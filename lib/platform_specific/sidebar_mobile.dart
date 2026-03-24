@@ -1022,28 +1022,39 @@ class _SidebarMobileState extends State<SidebarMobile> {
     required Color textColor,
   }) {
     bool isSelected = chat.id == widget.selectedChatId;
-    final String title = _deriveChatTitle(chat);
+    final bool isLocked = chat.isLocked;
+    final String title = isLocked ? 'Locked chat' : _deriveChatTitle(chat);
     return ListTile(
+      leading: isLocked
+          ? Icon(Icons.lock, size: 16, color: textColor.withValues(alpha: 0.4))
+          : null,
       title: Text(
         title,
         style: TextStyle(
-          color: isLast
-              ? textColor.withValues(alpha: 0.38)
-              : (isSelected ? accentColor : textColor),
+          color: isLocked
+              ? textColor.withValues(alpha: 0.35)
+              : isLast
+                  ? textColor.withValues(alpha: 0.38)
+                  : (isSelected ? accentColor : textColor),
           fontSize: 15,
           fontWeight: FontWeight.w600,
+          fontStyle: isLocked ? FontStyle.italic : null,
         ),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
-      onTap: onTap,
-      onLongPress: () => _showChatOptionsBottomSheet(
-        chat,
-        onDelete: onDelete,
-        accentColor: accentColor,
-        iconColor: iconColor,
-        textColor: textColor,
-      ),
+      onTap: isLocked
+          ? () => _showLockedChatDialog(accentColor: accentColor)
+          : onTap,
+      onLongPress: isLocked
+          ? null
+          : () => _showChatOptionsBottomSheet(
+              chat,
+              onDelete: onDelete,
+              accentColor: accentColor,
+              iconColor: iconColor,
+              textColor: textColor,
+            ),
       dense: true,
       contentPadding: const EdgeInsets.only(
         left: _sidebarHorizontalPadding,
@@ -1054,6 +1065,32 @@ class _SidebarMobileState extends State<SidebarMobile> {
       selectedColor: accentColor,
       iconColor: iconColor,
       textColor: textColor,
+    );
+  }
+
+  void _showLockedChatDialog({required Color accentColor}) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.lock, color: accentColor, size: 20),
+            const SizedBox(width: 8),
+            const Text('Locked Chat'),
+          ],
+        ),
+        content: const Text(
+          'This chat is encrypted with a previous password. '
+          'Go to Settings \u2192 Recover Encrypted Chats to unlock it '
+          'by entering your old password.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
     );
   }
 

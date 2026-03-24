@@ -797,10 +797,12 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
   }) {
     final bool isSelected = chat.id == widget.selectedChatId;
     final bool isStreaming = StreamingManager().isStreaming(chat.id);
-    final String title = _deriveChatTitle(chat);
+    final String title = chat.isLocked ? 'Locked chat' : _deriveChatTitle(chat);
+    final bool isLocked = chat.isLocked;
     return RepaintBoundary(
       child: GestureDetector(
         onSecondaryTapDown: (details) {
+          if (isLocked) return;
           _showChatContextMenu(
             context,
             details.globalPosition,
@@ -811,19 +813,27 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
           );
         },
         child: ListTile(
+          leading: isLocked
+              ? Icon(Icons.lock, size: 16, color: iconFgColor.withValues(alpha: 0.4))
+              : null,
           title: Text(
             title,
             style: TextStyle(
-              color: isLast
-                  ? iconFgColor.withValues(alpha: 0.38)
-                  : (isSelected ? accentColor : iconFgColor),
+              color: isLocked
+                  ? iconFgColor.withValues(alpha: 0.35)
+                  : isLast
+                      ? iconFgColor.withValues(alpha: 0.38)
+                      : (isSelected ? accentColor : iconFgColor),
               fontSize: 15,
               fontWeight: FontWeight.w600,
+              fontStyle: isLocked ? FontStyle.italic : null,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          onTap: onTap,
+          onTap: isLocked
+              ? () => _showLockedChatDialog(context, iconFgColor: iconFgColor, accentColor: accentColor)
+              : onTap,
           dense: true,
           contentPadding: const EdgeInsets.only(
             left: _sidebarHorizontalPadding,
@@ -944,6 +954,36 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
         ),
       ),
     ];
+  }
+
+  void _showLockedChatDialog(
+    BuildContext context, {
+    required Color iconFgColor,
+    required Color accentColor,
+  }) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.lock, color: accentColor, size: 20),
+            const SizedBox(width: 8),
+            const Text('Locked Chat'),
+          ],
+        ),
+        content: const Text(
+          'This chat is encrypted with a previous password. '
+          'Go to Settings \u2192 Recover Encrypted Chats to unlock it '
+          'by entering your old password.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   // Show context menu on right-click
