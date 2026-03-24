@@ -8,7 +8,7 @@
 PRODUCT_NAME = chuk_chat
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.example.uiElementsFlutter
+PRODUCT_BUNDLE_IDENTIFIER = dev.chuk.chat
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2025 com.example. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2025 chuk.dev. All rights reserved.
