@@ -22,6 +22,7 @@ import 'package:chuk_chat/services/system_tray_service.dart';
 import 'package:chuk_chat/platform_specific/root_wrapper.dart';
 import 'package:chuk_chat/utils/grain_overlay.dart';
 import 'package:chuk_chat/pages/login_page.dart';
+import 'package:chuk_chat/pages/set_new_password_page.dart';
 import 'package:chuk_chat/widgets/auth_gate.dart';
 
 /* ---------- MAIN ---------- */
@@ -297,6 +298,17 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
             const Scaffold(body: Center(child: CircularProgressIndicator())),
         signedOutBuilder: (context) => const LoginPage(),
         signedInBuilder: (context) => _buildRootWrapper(),
+        passwordRecoveryBuilder: (context) => SetNewPasswordPage(
+          onComplete: () {
+            // Force rebuild of AuthGate to transition to signed-in view.
+            // The auth state is already signed-in; we just need to clear
+            // the password recovery flag by navigating.
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute<void>(builder: (_) => _buildRootWrapper()),
+              (route) => false,
+            );
+          },
+        ),
       ),
     );
   }

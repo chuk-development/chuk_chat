@@ -16,11 +16,13 @@ class _EncryptionParams {
   final Uint8List bytes;
   final List<int> keyBytes;
   final String payloadVersion;
+  final int keyVersion;
 
   _EncryptionParams({
     required this.bytes,
     required this.keyBytes,
     required this.payloadVersion,
+    required this.keyVersion,
   });
 }
 
@@ -63,8 +65,9 @@ Future<String> _encryptBytesInBackground(_EncryptionParams params) async {
     nonce: nonce,
   );
 
-  final payload = <String, String>{
+  final payload = <String, dynamic>{
     'v': params.payloadVersion,
+    'kv': params.keyVersion,
     'nonce': base64Encode(secretBox.nonce),
     'ciphertext': base64Encode(secretBox.cipherText),
     'mac': base64Encode(secretBox.mac.bytes),
@@ -200,6 +203,10 @@ class EncryptionService {
   static String? _cachedUserId;
   static SharedPreferences? _prefsCache;
   static Future<void> _lock = Future<void>.value();
+  static int _currentKeyVersion = 1;
+
+  /// The current key version used for encrypting new payloads.
+  static int get currentKeyVersion => _currentKeyVersion;
 
   static bool get hasKey => _cachedKey != null;
 
@@ -306,6 +313,69 @@ class EncryptionService {
       await _writeLocalSecret(versionKey, _payloadVersion);
       _cachedKey = SecretKey(derivedKeyBytes);
       _cachedUserId = user.id;
+
+      // Load key version from metadata (defaults to 1 for legacy accounts)
+      final kvRaw = user.userMetadata?[_metadataVersionKey];
+      _currentKeyVersion = _parseKeyVersion(kvRaw);
+    });
+  }
+
+  /// Initialize encryption after a password reset.
+  /// Generates a new salt and key, incrementing the key version.
+  /// The old salt+version should have already been preserved in previous_keys
+  /// by the caller (SetNewPasswordPage) before calling this.
+  static Future<void> initializeForPasswordReset(String newPassword) async {
+    await _runExclusive(() async {
+      final user = await _requireAuthenticatedUser();
+      final userId = user.id;
+      final saltKey = '$_storageSaltPrefix$userId';
+      final keyKey = '$_storagePrefix$userId';
+      final versionKey = '$_storageVersionPrefix$userId';
+
+      // Determine the new key version (increment from current)
+      final currentVersionRaw = user.userMetadata?[_metadataVersionKey];
+      final currentVersion = _parseKeyVersion(currentVersionRaw);
+      final newVersion = currentVersion + 1;
+
+      // Generate new salt and derive new key
+      final newSaltBytes = _randomNonce(_saltLength);
+      final newSaltBase64 = base64Encode(newSaltBytes);
+      final newKeyBytes = await _deriveKey(newPassword, newSaltBytes);
+      final newKeyBase64 = base64Encode(newKeyBytes);
+
+      // Backup current local state for potential rollback
+      final oldLocalKey = await _readLocalSecret(keyKey);
+      final oldLocalSalt = await _readLocalSecret(saltKey);
+      final oldLocalVersion = await _readLocalSecret(versionKey);
+
+      // Persist locally
+      await Future.wait([
+        _writeLocalSecret(keyKey, newKeyBase64),
+        _writeLocalSecret(saltKey, newSaltBase64),
+        _writeLocalSecret(versionKey, '$newVersion'),
+      ]);
+
+      // Persist to Supabase metadata
+      final metadataUpdates = <String, dynamic>{
+        _metadataSaltKey: newSaltBase64,
+        _metadataVersionKey: '$newVersion',
+      };
+      try {
+        await _updateUserMetadata(user, metadataUpdates);
+      } catch (_) {
+        // Rollback local storage to maintain consistency
+        await Future.wait([
+          if (oldLocalKey != null) _writeLocalSecret(keyKey, oldLocalKey) else _deleteLocalSecret(keyKey),
+          if (oldLocalSalt != null) _writeLocalSecret(saltKey, oldLocalSalt) else _deleteLocalSecret(saltKey),
+          if (oldLocalVersion != null) _writeLocalSecret(versionKey, oldLocalVersion) else _deleteLocalSecret(versionKey),
+        ]);
+        rethrow;
+      }
+
+      // Update in-memory state only after both local and remote succeed
+      _cachedKey = SecretKey(newKeyBytes);
+      _cachedUserId = userId;
+      _currentKeyVersion = newVersion;
     });
   }
 
@@ -341,6 +411,10 @@ class EncryptionService {
         ),
       );
       _cachedUserId = user.id;
+
+      // Load key version from metadata (defaults to 1 for legacy accounts)
+      final kvRaw = user.userMetadata?[_metadataVersionKey];
+      _currentKeyVersion = _parseKeyVersion(kvRaw);
 
       // Sync metadata in BACKGROUND - don't block key loading
       unawaited(_syncMetadataInBackground(user, saltKey, versionKey));
@@ -466,21 +540,25 @@ class EncryptionService {
         rethrow;
       }
 
+      final newKeyVersionInt = _currentKeyVersion + 1;
+      final newKeyVersionStr = '$newKeyVersionInt';
+
       try {
         // Parallelize storage writes for better performance
         await Future.wait([
           _writeLocalSecret(keyStorageKey, newKeyBase64),
           _writeLocalSecret(saltStorageKey, newSaltBase64),
-          _writeLocalSecret(versionStorageKey, _payloadVersion),
+          _writeLocalSecret(versionStorageKey, newKeyVersionStr),
         ]);
         final metadataUpdates = <String, dynamic>{
           _metadataSaltKey: newSaltBase64,
-          _metadataVersionKey: _payloadVersion,
+          _metadataVersionKey: newKeyVersionStr,
         };
         final updatedUser = await _updateUserMetadata(user, metadataUpdates);
         if (updatedUser != null) {
           user = updatedUser;
         }
+        _currentKeyVersion = newKeyVersionInt;
       } catch (error) {
         _cachedKey = oldKey;
         _cachedUserId = userId;
@@ -489,11 +567,12 @@ class EncryptionService {
         } catch (_) {
           // If rollback fails we cannot do much else; we still rethrow the original error.
         }
+        final oldKeyVersionStr = '$_currentKeyVersion';
         // Parallelize storage writes for better performance
         await Future.wait([
           _writeLocalSecret(keyStorageKey, storedKeyBase64),
           _writeLocalSecret(saltStorageKey, storedSaltBase64),
-          _writeLocalSecret(versionStorageKey, _payloadVersion),
+          _writeLocalSecret(versionStorageKey, oldKeyVersionStr),
         ]);
         _cachedKey = previousCachedKey ?? oldKey;
         _cachedUserId = previousCachedUserId ?? userId;
@@ -518,6 +597,7 @@ class EncryptionService {
       }
       _cachedKey = null;
       _cachedUserId = null;
+      _currentKeyVersion = 1;
     });
   }
 
@@ -529,8 +609,9 @@ class EncryptionService {
       secretKey: secretKey,
       nonce: nonce,
     );
-    final payload = <String, String>{
+    final payload = <String, dynamic>{
       'v': _payloadVersion,
+      'kv': _currentKeyVersion,
       'nonce': base64Encode(secretBox.nonce),
       'ciphertext': base64Encode(secretBox.cipherText),
       'mac': base64Encode(secretBox.mac.bytes),
@@ -566,6 +647,7 @@ class EncryptionService {
       bytes: bytes,
       keyBytes: keyBytes,
       payloadVersion: _payloadVersion,
+      keyVersion: _currentKeyVersion,
     );
 
     // Run encryption in background isolate to avoid blocking UI
@@ -621,6 +703,73 @@ class EncryptionService {
     );
 
     return await compute(_decryptBatchInBackground, params);
+  }
+
+  /// Try to decrypt with a specific key. Returns null on any failure.
+  /// Used by the recovery flow to test old passwords.
+  static Future<String?> tryDecryptWithKey(
+    String encrypted,
+    SecretKey key,
+  ) async {
+    try {
+      final keyBytes = await key.extractBytes();
+      final params = _DecryptionParams(
+        encrypted: encrypted,
+        keyBytes: keyBytes,
+        payloadVersion: _payloadVersion,
+      );
+      return await compute(_decryptStringInBackground, params);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Try to decrypt a batch with a specific key. Returns null for failed items.
+  /// Used by the recovery flow to bulk-test old passwords.
+  static Future<List<String?>> tryDecryptBatchWithKey(
+    List<String> encryptedList,
+    SecretKey key,
+  ) async {
+    if (encryptedList.isEmpty) return [];
+    try {
+      final keyBytes = await key.extractBytes();
+      final params = _BatchDecryptionParams(
+        encryptedList: encryptedList,
+        keyBytes: keyBytes,
+        payloadVersion: _payloadVersion,
+      );
+      return await compute(_decryptBatchInBackground, params);
+    } catch (_) {
+      return List.filled(encryptedList.length, null);
+    }
+  }
+
+  /// Encrypt with a specific key and key version tag.
+  /// Used by the recovery flow to re-encrypt old chats with the current key.
+  static Future<String> encryptWithKey(
+    String plaintext,
+    SecretKey key,
+    int keyVersion,
+  ) async {
+    final keyBytes = await key.extractBytes();
+    final params = _EncryptionParams(
+      bytes: Uint8List.fromList(utf8.encode(plaintext)),
+      keyBytes: keyBytes,
+      payloadVersion: _payloadVersion,
+      keyVersion: keyVersion,
+    );
+    return await compute(_encryptBytesInBackground, params);
+  }
+
+  /// Derive a key from a password and a base64-encoded salt.
+  /// Public for use by KeyVersionService during recovery.
+  static Future<SecretKey> deriveKeyFromPasswordAndSalt(
+    String password,
+    String saltBase64,
+  ) async {
+    final saltBytes = base64Decode(saltBase64);
+    final keyBytes = await _deriveKey(password, saltBytes);
+    return SecretKey(keyBytes);
   }
 
   static Future<SecretKey> _ensureKey() async {
@@ -777,6 +926,29 @@ class EncryptionService {
       return base64Decode(data);
     } on FormatException {
       throw StateError(errorMessage);
+    }
+  }
+
+  /// Parse key version from metadata value. Returns 1 for legacy/missing values.
+  static int _parseKeyVersion(dynamic raw) {
+    if (raw == null) return 1;
+    if (raw is int) return raw;
+    if (raw is String) return int.tryParse(raw) ?? 1;
+    return 1;
+  }
+
+  /// Extract the key version from an encrypted payload without decrypting it.
+  /// Returns null if the payload is not valid JSON or has no 'kv' field.
+  static int? extractKeyVersion(String encrypted) {
+    try {
+      final Map<String, dynamic> payload = jsonDecode(encrypted);
+      final kv = payload['kv'];
+      if (kv == null) return null;
+      if (kv is int) return kv;
+      if (kv is String) return int.tryParse(kv);
+      return null;
+    } catch (_) {
+      return null;
     }
   }
 

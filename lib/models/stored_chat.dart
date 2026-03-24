@@ -13,6 +13,8 @@ class StoredChat {
     this.title,
     this.customName,
     this.updatedAt,
+    this.keyVersion,
+    this.isLocked = false,
   }) : _messages = messages != null
            ? List<ChatMessage>.unmodifiable(messages)
            : null;
@@ -25,6 +27,8 @@ class StoredChat {
     String? title,
     String? customName,
     DateTime? updatedAt,
+    int? keyVersion,
+    bool isLocked = false,
   }) {
     return StoredChat(
       id: id,
@@ -34,6 +38,8 @@ class StoredChat {
       title: title,
       customName: customName,
       updatedAt: updatedAt,
+      keyVersion: keyVersion,
+      isLocked: isLocked,
     );
   }
 
@@ -47,6 +53,10 @@ class StoredChat {
   /// Decrypted title for sidebar display (from encrypted_title column)
   final String? title;
 
+  /// The encryption key version that was used to encrypt this chat.
+  /// null means legacy (before key versioning was introduced).
+  final int? keyVersion;
+
   /// Get messages - throws if not fully loaded
   List<ChatMessage> get messages {
     if (_messages == null) {
@@ -59,6 +69,11 @@ class StoredChat {
 
   /// Check if this chat has its messages loaded
   bool get isFullyLoaded => _messages != null;
+
+  /// Whether this chat is locked (encrypted with an old key after password reset).
+  /// Explicitly set when creating a StoredChat that failed decryption due to
+  /// key version mismatch.
+  final bool isLocked;
 
   /// Get messages or null if not loaded (safe access)
   List<ChatMessage>? get messagesOrNull => _messages;
@@ -92,6 +107,8 @@ class StoredChat {
     List<ChatMessage> messages, {
     String? customName,
     String? title,
+    int? keyVersion,
+    bool isLocked = false,
   }) {
     return StoredChat(
       id: row['id'] as String,
@@ -103,6 +120,8 @@ class StoredChat {
       isStarred: (row['is_starred'] as bool?) ?? false,
       customName: customName,
       title: title,
+      keyVersion: keyVersion,
+      isLocked: isLocked,
     );
   }
 
@@ -110,6 +129,8 @@ class StoredChat {
   factory StoredChat.fromRowTitleOnly(
     Map<String, dynamic> row, {
     String? title,
+    int? keyVersion,
+    bool isLocked = false,
   }) {
     return StoredChat.forSidebar(
       id: row['id'] as String,
@@ -119,6 +140,8 @@ class StoredChat {
           : null,
       isStarred: (row['is_starred'] as bool?) ?? false,
       title: title,
+      keyVersion: keyVersion,
+      isLocked: isLocked,
     );
   }
 
@@ -130,6 +153,8 @@ class StoredChat {
     bool? isStarred,
     String? customName,
     String? title,
+    int? keyVersion,
+    bool? isLocked,
   }) {
     return StoredChat(
       id: id ?? this.id,
@@ -139,6 +164,8 @@ class StoredChat {
       isStarred: isStarred ?? this.isStarred,
       customName: customName ?? this.customName,
       title: title ?? this.title,
+      keyVersion: keyVersion ?? this.keyVersion,
+      isLocked: isLocked ?? this.isLocked,
     );
   }
 
@@ -152,6 +179,7 @@ class StoredChat {
       isStarred: isStarred,
       customName: customName ?? this.customName,
       title: title,
+      keyVersion: keyVersion,
     );
   }
 }
