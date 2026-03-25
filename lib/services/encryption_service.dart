@@ -281,8 +281,11 @@ class EncryptionService {
         metadataUpdates: metadataUpdates,
       );
 
-      if (remoteVersion != _payloadVersion) {
-        metadataUpdates[_metadataVersionKey] = _payloadVersion;
+      // Don't overwrite key version here — it's managed by
+      // initializeForPasswordReset and rotateKeyForPasswordChange.
+      // Only sync if there's no remote version at all (first-time setup).
+      if (remoteVersion == null) {
+        metadataUpdates[_metadataVersionKey] = '1';
       }
 
       if (metadataUpdates.isNotEmpty) {
@@ -451,16 +454,22 @@ class EncryptionService {
         await _writeLocalSecret(saltKey, remoteSaltBase64);
       }
 
-      if (remoteVersion != _payloadVersion) {
-        metadataUpdates[_metadataVersionKey] = _payloadVersion;
+      // Sync key version — use the actual current key version, not _payloadVersion.
+      // _metadataVersionKey stores the encryption key version (1, 2, 3, ...),
+      // NOT the payload format version.
+      final expectedVersion = '$_currentKeyVersion';
+      if (version != null && remoteVersion != version) {
+        // Local version takes precedence (it was set during password init)
+        metadataUpdates[_metadataVersionKey] = version;
+      } else if (version == null && remoteVersion != null) {
+        await _writeLocalSecret(versionKey, remoteVersion);
+      } else if (version == null && remoteVersion == null) {
+        await _writeLocalSecret(versionKey, expectedVersion);
+        metadataUpdates[_metadataVersionKey] = expectedVersion;
       }
 
       if (metadataUpdates.isNotEmpty) {
         await _updateUserMetadata(user, metadataUpdates);
-      }
-
-      if (version == null) {
-        await _writeLocalSecret(versionKey, _payloadVersion);
       }
     } catch (e) {
       // Ignore metadata sync failures - not critical for key loading
