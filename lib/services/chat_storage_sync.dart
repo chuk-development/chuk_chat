@@ -325,20 +325,28 @@ class ChatStorageSync {
 
         // Chat failed to decrypt — create a locked placeholder
         if (decrypted == null) {
-          final encPayload = payloads[i];
-          final kv = EncryptionService.extractKeyVersion(encPayload);
-          if (!ChatStorageState.chatsById.containsKey(chatId)) {
-            ChatStorageState.chatsById[chatId] = StoredChat.forSidebar(
-              id: chatId,
-              createdAt: DateTime.parse(row['created_at'] as String),
-              updatedAt: row['updated_at'] != null
-                  ? DateTime.parse(row['updated_at'] as String)
-                  : null,
-              isStarred: (row['is_starred'] as bool?) ?? false,
-              keyVersion: kv,
-              isLocked: true,
-            );
-            addedCount++;
+          try {
+            final encPayload = payloads[i];
+            final kv = EncryptionService.extractKeyVersion(encPayload);
+            if (!ChatStorageState.chatsById.containsKey(chatId)) {
+              ChatStorageState.chatsById[chatId] = StoredChat.forSidebar(
+                id: chatId,
+                createdAt: DateTime.parse(row['created_at'] as String),
+                updatedAt: row['updated_at'] != null
+                    ? DateTime.parse(row['updated_at'] as String)
+                    : null,
+                isStarred: (row['is_starred'] as bool?) ?? false,
+                keyVersion: kv,
+                isLocked: true,
+              );
+              addedCount++;
+            }
+          } catch (e) {
+            if (kDebugMode) {
+              debugPrint(
+                '🔐 [ChatStorage] Failed to create locked placeholder for $chatId: $e',
+              );
+            }
           }
           continue;
         }
