@@ -825,6 +825,18 @@ jobs:
             --dart-define=FEATURE_SERVER_TOOLS=false \
             --tree-shake-icons
 
+      - name: Strip signature and entitlements
+        run: |
+          APP_PATH="build/macos/Build/Products/Release/Chuk Chat.app"
+          # Remove code signature entirely — unsigned apps run fine on macOS
+          # without App Store distribution. This avoids "Code Signature Invalid"
+          # errors caused by ad-hoc signatures with entitlements.
+          codesign --remove-signature "$APP_PATH" || true
+          # Also strip signatures from embedded frameworks/dylibs
+          find "$APP_PATH" -name '*.dylib' -o -name '*.framework' | while read f; do
+            codesign --remove-signature "$f" 2>/dev/null || true
+          done
+
       - name: Create DMG
         run: |
           brew install create-dmg
