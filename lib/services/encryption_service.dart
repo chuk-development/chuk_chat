@@ -210,12 +210,13 @@ class EncryptionService {
 
   static bool get hasKey => _cachedKey != null;
 
-  // Linux fallback for environments where keyring/libsecret causes
-  // noticeable startup stalls. This is opt-in via dart-define.
+  // SharedPreferences fallback for platforms where Keychain/keyring
+  // is unreliable without code signing (macOS unsigned builds) or
+  // causes startup stalls (Linux without libsecret).
   static bool get _usePrefsBackend =>
       !kIsWeb &&
-      defaultTargetPlatform == TargetPlatform.linux &&
-      !kFeatureLinuxKeyring;
+      (defaultTargetPlatform == TargetPlatform.macOS ||
+       (defaultTargetPlatform == TargetPlatform.linux && !kFeatureLinuxKeyring));
 
   static Future<SharedPreferences> _prefs() async {
     _prefsCache ??= await SharedPreferences.getInstance();
