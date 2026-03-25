@@ -24,8 +24,10 @@ class PasswordResetService {
   static Map<int, int> getLockedChatInfo() {
     final counts = <int, int>{};
     for (final chat in ChatStorageService.savedChats) {
-      if (chat.isLocked && chat.keyVersion != null) {
-        counts[chat.keyVersion!] = (counts[chat.keyVersion!] ?? 0) + 1;
+      if (chat.isLocked) {
+        // Legacy chats without kv field are assumed to be key version 1
+        final version = chat.keyVersion ?? 1;
+        counts[version] = (counts[version] ?? 0) + 1;
       }
     }
     return counts;
@@ -66,9 +68,9 @@ class PasswordResetService {
       salt,
     );
 
-    // 3. Get all locked chats for this version
+    // 3. Get all locked chats for this version (null keyVersion = legacy = version 1)
     final lockedChats = ChatStorageService.savedChats
-        .where((c) => c.isLocked && c.keyVersion == targetVersion)
+        .where((c) => c.isLocked && (c.keyVersion ?? 1) == targetVersion)
         .toList();
 
     if (lockedChats.isEmpty) {
@@ -145,13 +147,12 @@ class PasswordResetService {
           }
         }
 
-        // Update Supabase with re-encrypted data
+        // Update Supabase with re-encrypted data.
+        // If title re-encryption failed, clear it to avoid orphaned old-key ciphertext.
         final updateData = <String, dynamic>{
           'encrypted_payload': newEncPayload,
+          'encrypted_title': newEncTitle,
         };
-        if (newEncTitle != null) {
-          updateData['encrypted_title'] = newEncTitle;
-        }
 
         await SupabaseService.client
             .from('encrypted_chats')
@@ -193,7 +194,7 @@ class PasswordResetService {
     ValueChanged<String>? onProgress,
   }) async {
     final lockedChats = ChatStorageService.savedChats
-        .where((c) => c.isLocked && c.keyVersion == keyVersion)
+        .where((c) => c.isLocked && (c.keyVersion ?? 1) == keyVersion)
         .toList();
 
     if (lockedChats.isEmpty) return 0;

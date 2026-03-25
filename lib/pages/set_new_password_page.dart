@@ -74,8 +74,15 @@ class _SetNewPasswordPageState extends State<SetNewPasswordPage> {
       // 3. Preserve old encryption key metadata before creating new key
       final oldSalt = user.userMetadata?['chat_kdf_salt'] as String?;
       if (oldSalt != null && oldSalt.isNotEmpty) {
-        // User had encryption set up before — save old key info
-        await KeyVersionService.promoteCurrentToPrevious(user);
+        // User had encryption set up before — save old key info.
+        // This MUST succeed or old chats become unrecoverable.
+        final promoted = await KeyVersionService.promoteCurrentToPrevious(user);
+        if (promoted == null) {
+          throw StateError(
+            'Failed to preserve old encryption data. '
+            'Please check your connection and try again.',
+          );
+        }
       }
 
       // 4. Generate new encryption key with new password
