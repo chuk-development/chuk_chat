@@ -91,7 +91,10 @@ class PasswordResetService {
     }
 
     // 5. Try to decrypt first payload to verify password
-    final firstPayload = rows.first['encrypted_payload'] as String;
+    final firstPayload = rows.first['encrypted_payload'] as String?;
+    if (firstPayload == null || firstPayload.isEmpty) {
+      throw const RecoveryException('Chat data is missing or corrupted.');
+    }
     final testDecrypt = await EncryptionService.tryDecryptWithKey(
       firstPayload,
       oldKey,
@@ -104,8 +107,12 @@ class PasswordResetService {
 
     // 6. Decrypt all payloads
     final payloads = rows
-        .map((r) => r['encrypted_payload'] as String)
+        .map((r) => r['encrypted_payload'] as String?)
+        .whereType<String>()
         .toList();
+    if (payloads.length != rows.length) {
+      throw const RecoveryException('Some chat data is missing or corrupted.');
+    }
     final decrypted = await EncryptionService.tryDecryptBatchWithKey(
       payloads,
       oldKey,
@@ -212,6 +219,9 @@ class PasswordResetService {
         await KeyVersionService.removePreviousKey(user, keyVersion);
       }
     }
+
+    // Reload chats to refresh state
+    await ChatStorageService.loadChats();
 
     return deletedCount;
   }

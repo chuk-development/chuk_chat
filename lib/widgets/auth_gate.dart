@@ -65,9 +65,7 @@ class _AuthGateState extends State<AuthGate> {
       setState(() {
         _session = event.session;
         _checkingSession = false;
-        if (event.event == AuthChangeEvent.passwordRecovery) {
-          _isPasswordRecovery = true;
-        }
+        _isPasswordRecovery = event.event == AuthChangeEvent.passwordRecovery;
       });
     });
 

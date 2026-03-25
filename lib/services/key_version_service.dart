@@ -13,8 +13,12 @@ class PreviousKeyInfo {
   const PreviousKeyInfo({required this.salt, required this.version});
 
   factory PreviousKeyInfo.fromJson(Map<String, dynamic> json) {
+    final salt = json['salt'];
+    if (salt is! String || salt.isEmpty) {
+      throw const FormatException('Invalid or missing salt in previous key');
+    }
     return PreviousKeyInfo(
-      salt: json['salt'] as String,
+      salt: salt,
       version: json['version'] is int
           ? json['version'] as int
           : int.tryParse(json['version'].toString()) ?? 1,
