@@ -143,7 +143,9 @@ class PasswordRevisionService {
   // backed by a working Secret Service/libsecret keyring.
   // TODO: Prefer secure storage on Linux when keyring support is available.
   static bool get _usePrefsBackend =>
-      !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.macOS ||
+       defaultTargetPlatform == TargetPlatform.linux);
 
   static Future<SharedPreferences> _prefs() async {
     _prefsCache ??= await SharedPreferences.getInstance();
