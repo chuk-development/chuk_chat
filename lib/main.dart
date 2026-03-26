@@ -19,6 +19,7 @@ import 'package:chuk_chat/services/settings_sync_service.dart';
 import 'package:chuk_chat/services/session_manager_service.dart';
 import 'package:chuk_chat/services/notification_service.dart';
 import 'package:chuk_chat/services/system_tray_service.dart';
+import 'package:chuk_chat/services/window_close_service.dart';
 import 'package:chuk_chat/platform_specific/root_wrapper.dart';
 import 'package:chuk_chat/utils/grain_overlay.dart';
 import 'package:chuk_chat/pages/login_page.dart';
@@ -40,6 +41,9 @@ Future<void> main() async {
 
   // Keep chat storage cache deterministic to avoid early access races.
   await initChatStorageCache();
+
+  // Ensure clean window close on Linux desktop (see window_close_service_io.dart).
+  unawaited(initializeWindowCloseHandler());
 
   // Non-critical startup work can run in background.
   unawaited(
