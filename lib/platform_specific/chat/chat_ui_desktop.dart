@@ -1954,39 +1954,41 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                     textFieldFocusNode: _textFieldFocusNode,
                                   ),
                                 ],
-                                // Reasoning toggle + model dropdown
-                                if (_modelSupportsReasoning(_selectedModelId))
-                                  Tooltip(
-                                    message: _reasoningEnabled
-                                        ? 'Reasoning enabled (click to disable)'
-                                        : 'Reasoning disabled (click to enable)',
-                                    child: IconButton(
-                                      icon: Icon(
-                                        _reasoningEnabled
-                                            ? Icons.psychology
-                                            : Icons.psychology_outlined,
-                                        size: 20,
-                                        color: _reasoningEnabled
-                                            ? Theme.of(context).colorScheme.primary
-                                            : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
-                                      ),
-                                      onPressed: () {
-                                        setState(() {
-                                          _reasoningEnabled = !_reasoningEnabled;
-                                        });
-                                      },
-                                      visualDensity: VisualDensity.compact,
-                                      padding: EdgeInsets.zero,
-                                      constraints: const BoxConstraints(
-                                        minWidth: 32,
-                                        minHeight: 32,
-                                      ),
-                                    ),
-                                  ),
                                 Expanded(
-                                  child: Align(
-                                    alignment: Alignment.centerRight,
-                                    child: ModelSelectionDropdown(
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Spacer(),
+                                      // Reasoning toggle — right next to model dropdown
+                                      Tooltip(
+                                        message: _reasoningEnabled
+                                            ? 'Reasoning enabled (click to disable for faster responses)'
+                                            : 'Reasoning disabled (click to enable for deeper thinking)',
+                                        child: IconButton(
+                                          icon: Icon(
+                                            _reasoningEnabled
+                                                ? Icons.psychology
+                                                : Icons.psychology_outlined,
+                                            size: 20,
+                                            color: _reasoningEnabled
+                                                ? Theme.of(context).colorScheme.primary
+                                                : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+                                          ),
+                                          onPressed: () {
+                                            setState(() {
+                                              _reasoningEnabled = !_reasoningEnabled;
+                                            });
+                                          },
+                                          visualDensity: VisualDensity.compact,
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(
+                                            minWidth: 32,
+                                            minHeight: 32,
+                                          ),
+                                        ),
+                                      ),
+                                      ModelSelectionDropdown(
                                       key: const ValueKey<String>(
                                         'desktop-model-selection-dropdown',
                                       ),
@@ -2004,6 +2006,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                       textFieldFocusNode: _textFieldFocusNode,
                                       isCompactMode: isCompactMode,
                                     ),
+                                  ],
                                   ),
                                 ),
                               ],
