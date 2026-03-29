@@ -1206,7 +1206,9 @@ class _MessageBubbleState extends State<MessageBubble>
         (widget.message == 'Thinking...' || widget.message.isEmpty);
     final String label = waitingForTokens
         ? 'Connecting...'
-        : (isStreaming ? 'Reasoning...' : 'Reasoning');
+        : _hasReasoning
+            ? (isStreaming ? 'Reasoning...' : 'Reasoning')
+            : 'Model Info';
     final Color barAccent = accentColor;
 
     return Container(
@@ -1238,7 +1240,11 @@ class _MessageBubbleState extends State<MessageBubble>
                       ),
                     )
                   else
-                    Icon(Icons.psychology, size: 14, color: barAccent),
+                    Icon(
+                      _hasReasoning ? Icons.psychology : Icons.smart_toy_outlined,
+                      size: 14,
+                      color: barAccent,
+                    ),
                   const SizedBox(width: 8),
                   Text(
                     label,
