@@ -95,6 +95,7 @@ class StreamingMessageHandler {
     bool toolCallingEnabled = true,
     bool toolDiscoveryMode = true,
     bool allowMarkdownToolCalls = true,
+    String? reasoningEffort,
   }) async {
     if (_isDisposed) return;
 
@@ -294,6 +295,7 @@ class StreamingMessageHandler {
         systemPrompt: systemPrompt,
         maxTokens: maxResponseTokens,
         images: passImages,
+        reasoningEffort: reasoningEffort,
       );
 
       await _streamingManager.startStream(

@@ -397,6 +397,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           maxTokens: 4096,
           temperature: 0.7,
           images: passImages,
+          reasoningEffort: _reasoningEnabled ? null : 'none',
         );
 
         await _streamingManager.startStream(
@@ -1352,6 +1353,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           systemPrompt: passSystemPrompt,
           maxTokens: maxResponseTokens,
           images: passImages,
+          reasoningEffort: _reasoningEnabled ? null : 'none',
         );
 
         await _streamingManager.startStream(

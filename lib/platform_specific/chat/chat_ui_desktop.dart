@@ -125,6 +125,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   late AnimationController _animCtrl;
   String _selectedModelId = ''; // Will be loaded from user preferences
   String? _selectedProviderSlug;
+  bool _reasoningEnabled = true; // true = default (reasoning on for reasoning models)
   String? _systemPrompt;
   String? _selectedProjectId;
   late final VoidCallback _modelSelectionListener;
@@ -431,6 +432,17 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       // _isStreaming getter will automatically check the new _activeChatId
       setState(() {});
     }
+  }
+
+  static const _reasoningKeywords = [
+    'thinking', 'reasoning', '/o1', 'o1-', '/o3', 'o3-',
+    'deepseek-r1', 'deepseek/r1', 'gpt-5',
+  ];
+
+  bool _modelSupportsReasoning(String modelId) {
+    if (modelId.isEmpty) return false;
+    final lowered = modelId.toLowerCase();
+    return _reasoningKeywords.any((kw) => lowered.contains(kw));
   }
 
   @override
@@ -1942,7 +1954,35 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                     textFieldFocusNode: _textFieldFocusNode,
                                   ),
                                 ],
-                                // Spacer to push model dropdown to the right edge
+                                // Reasoning toggle + model dropdown
+                                if (_modelSupportsReasoning(_selectedModelId))
+                                  Tooltip(
+                                    message: _reasoningEnabled
+                                        ? 'Reasoning enabled (click to disable)'
+                                        : 'Reasoning disabled (click to enable)',
+                                    child: IconButton(
+                                      icon: Icon(
+                                        _reasoningEnabled
+                                            ? Icons.psychology
+                                            : Icons.psychology_outlined,
+                                        size: 20,
+                                        color: _reasoningEnabled
+                                            ? Theme.of(context).colorScheme.primary
+                                            : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+                                      ),
+                                      onPressed: () {
+                                        setState(() {
+                                          _reasoningEnabled = !_reasoningEnabled;
+                                        });
+                                      },
+                                      visualDensity: VisualDensity.compact,
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(
+                                        minWidth: 32,
+                                        minHeight: 32,
+                                      ),
+                                    ),
+                                  ),
                                 Expanded(
                                   child: Align(
                                     alignment: Alignment.centerRight,
