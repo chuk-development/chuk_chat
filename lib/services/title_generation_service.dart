@@ -13,12 +13,11 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 
 /// Service for automatically generating chat titles using AI.
-/// Uses qwen/qwen3-8b model via Fireworks provider over WebSocket.
+/// Uses qwen/qwen3.5-9b model for title generation over WebSocket.
 class TitleGenerationService {
   // Model and provider for title generation
-  // Using qwen3-8b via fireworks (fast and cheap for title generation)
-  static const String _titleModel = 'qwen/qwen3-8b';
-  static const String _titleProvider = 'fireworks';
+  static const String _titleModel = 'qwen/qwen3.5-9b';
+  static const String _titleProvider = '';
 
   // Settings keys
   static const String _settingsKey = 'auto_generate_titles';
@@ -357,6 +356,7 @@ Rules:
         systemPrompt: systemPrompt,
         maxTokens: 32, // Very short for titles
         temperature: 0.3, // Lower temperature for more focused output
+        reasoningEffort: 'none', // No reasoning for title generation
       )) {
         switch (event) {
           case ContentEvent(:final text):
