@@ -146,6 +146,14 @@ class ModelSelectionDropdown extends StatefulWidget {
     return null;
   }
 
+  static bool modelSupportsReasoning(String modelId) {
+    for (final _ModelSelectionDropdownState state in _activeStates) {
+      final bool? result = state.supportsReasoningFor(modelId);
+      if (result != null) return result;
+    }
+    return true; // Default to true if model info not loaded yet
+  }
+
   static ModelProviderLimits? providerLimitsForModel(String modelId) {
     final ModelProviderLimits? cached = _cachedProviderLimits[modelId];
     if (cached != null) return cached;
@@ -581,6 +589,15 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
 
   ModelProviderLimits? providerLimitsFor(String modelId) {
     return _providerLimits[modelId];
+  }
+
+  bool? supportsReasoningFor(String modelId) {
+    for (final model in _allModels) {
+      if (model.value == modelId) {
+        return model.supportsReasoning;
+      }
+    }
+    return null;
   }
 
   Future<void> refreshModels() async {

@@ -6,6 +6,7 @@ class ModelItem {
   final bool isToggle; // Not from API, for potential local use
   final String? badge; // Not from API, for potential local use
   final String? iconUrl; // Icon URL from API
+  final bool supportsReasoning; // Whether model supports reasoning tokens
 
   ModelItem({
     required this.name,
@@ -13,6 +14,7 @@ class ModelItem {
     this.isToggle = false,
     this.badge,
     this.iconUrl,
+    this.supportsReasoning = true,
   });
 
   // Factory constructor to create ModelItem from API JSON
@@ -25,6 +27,7 @@ class ModelItem {
       isToggle: false, // Defaulting as not from API
       badge: null, // Defaulting as not from API
       iconUrl: json['icon_url'] as String?,
+      supportsReasoning: json['supports_reasoning'] as bool? ?? true,
     );
   }
 

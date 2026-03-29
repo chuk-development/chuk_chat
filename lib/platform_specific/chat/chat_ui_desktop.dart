@@ -1960,22 +1960,24 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       const Spacer(),
-                                      // Reasoning toggle
-                                      Tooltip(
-                                        message: _reasoningEnabled
-                                            ? 'Reasoning on — click to disable for faster responses'
-                                            : 'Reasoning off — click to enable deeper thinking',
-                                        child: _buildIconBtn(
-                                          icon: Icons.psychology,
-                                          onTap: () {
-                                            setState(() {
-                                              _reasoningEnabled = !_reasoningEnabled;
-                                            });
-                                          },
-                                          isActive: _reasoningEnabled,
+                                      // Reasoning toggle (only for reasoning models)
+                                      if (ModelSelectionDropdown.modelSupportsReasoning(_selectedModelId)) ...[
+                                        Tooltip(
+                                          message: _reasoningEnabled
+                                              ? 'Reasoning on — click to disable for faster responses'
+                                              : 'Reasoning off — click to enable deeper thinking',
+                                          child: _buildIconBtn(
+                                            icon: Icons.psychology,
+                                            onTap: () {
+                                              setState(() {
+                                                _reasoningEnabled = !_reasoningEnabled;
+                                              });
+                                            },
+                                            isActive: _reasoningEnabled,
+                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(width: 6),
+                                        const SizedBox(width: 6),
+                                      ],
                                       ModelSelectionDropdown(
                                       key: const ValueKey<String>(
                                         'desktop-model-selection-dropdown',
