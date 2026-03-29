@@ -60,6 +60,7 @@ class WebSocketChatService {
     int maxTokens = 512,
     double temperature = 0.7,
     List<String>? images,
+    String? reasoningEffort,
   }) async* {
     WebSocketChannel? channel;
 
@@ -131,6 +132,10 @@ class WebSocketChatService {
 
       if (systemPrompt != null && systemPrompt.isNotEmpty) {
         requestPayload['system_prompt'] = systemPrompt;
+      }
+
+      if (reasoningEffort != null) {
+        requestPayload['reasoning_effort'] = reasoningEffort;
       }
 
       // Convert image storage paths to Base64 data URLs on-the-fly
