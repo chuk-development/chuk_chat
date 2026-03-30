@@ -1851,6 +1851,10 @@ class _MessageBubbleState extends State<MessageBubble>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
+      isScrollControlled: true,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.7,
+      ),
       builder: (ctx) {
         return SafeArea(
           child: Padding(
@@ -1889,54 +1893,61 @@ class _MessageBubbleState extends State<MessageBubble>
                   ),
                 ),
                 const SizedBox(height: 8),
-                ...sources.map((source) {
-                  return ListTile(
-                    leading: ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: Image.network(
-                        'https://www.google.com/s2/favicons?domain=${source['host']}&sz=32',
-                        width: 20,
-                        height: 20,
-                        errorBuilder: (_, __, ___) => Icon(
-                          Icons.public,
-                          size: 20,
+                Flexible(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: sources.length,
+                    itemBuilder: (ctx, index) {
+                      final source = sources[index];
+                      return ListTile(
+                        leading: ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: Image.network(
+                            'https://www.google.com/s2/favicons?domain=${source['host']}&sz=32',
+                            width: 20,
+                            height: 20,
+                            errorBuilder: (_, __, ___) => Icon(
+                              Icons.public,
+                              size: 20,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                        title: Text(
+                          source['title']!,
+                          style: TextStyle(
+                            color: colorScheme.onSurface,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          source['host']!,
+                          style: TextStyle(
+                            color: colorScheme.onSurfaceVariant,
+                            fontSize: 12,
+                          ),
+                        ),
+                        trailing: Icon(
+                          Icons.open_in_new,
+                          size: 16,
                           color: colorScheme.onSurfaceVariant,
                         ),
-                      ),
-                    ),
-                    title: Text(
-                      source['title']!,
-                      style: TextStyle(
-                        color: colorScheme.onSurface,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Text(
-                      source['host']!,
-                      style: TextStyle(
-                        color: colorScheme.onSurfaceVariant,
-                        fontSize: 12,
-                      ),
-                    ),
-                    trailing: Icon(
-                      Icons.open_in_new,
-                      size: 16,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                    onTap: () async {
-                      final url = Uri.tryParse(source['url']!);
-                      if (url != null && await canLaunchUrl(url)) {
-                        await launchUrl(
-                          url,
-                          mode: LaunchMode.externalApplication,
-                        );
-                      }
+                        onTap: () async {
+                          final url = Uri.tryParse(source['url']!);
+                          if (url != null && await canLaunchUrl(url)) {
+                            await launchUrl(
+                              url,
+                              mode: LaunchMode.externalApplication,
+                            );
+                          }
+                        },
+                      );
                     },
-                  );
-                }),
+                  ),
+                ),
               ],
             ),
           ),
