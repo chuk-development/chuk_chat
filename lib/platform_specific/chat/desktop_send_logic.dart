@@ -1884,7 +1884,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           history.add({'role': 'user', 'content': text});
         }
       } else if (sender == 'ai' || sender == 'assistant') {
-        if (text == null || text.trim().isEmpty) continue;
+        if (text == null || text.trim().isEmpty || text == 'Thinking...') continue;
         String assistantContent = text;
         if (widget.includeReasoningInHistory) {
           final reasoning = message['reasoning'] ?? '';
