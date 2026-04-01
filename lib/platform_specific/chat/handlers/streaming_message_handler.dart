@@ -891,7 +891,7 @@ class StreamingMessageHandler {
           history.add({'role': 'user', 'content': text});
         }
       } else if (sender == 'ai' || sender == 'assistant') {
-        if (text == null || text.trim().isEmpty) continue;
+        if (text == null || text.trim().isEmpty || text == 'Thinking...') continue;
         String assistantContent = text;
         if (includeReasoning) {
           final reasoning = message['reasoning'] ?? '';

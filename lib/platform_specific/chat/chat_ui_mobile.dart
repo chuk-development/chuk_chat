@@ -1783,7 +1783,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     for (final Map<String, String> message in _messages) {
       final String? sender = message['sender'];
       final String? text = message['text'];
-      if (text == null || text.trim().isEmpty) continue;
+      if (text == null || text.trim().isEmpty || text == 'Thinking...') continue;
 
       if (sender == 'user') {
         history.add({'role': 'user', 'content': text});
