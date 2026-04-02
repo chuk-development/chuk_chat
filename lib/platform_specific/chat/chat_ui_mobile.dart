@@ -145,6 +145,26 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   static const double _kHorizontalPaddingSmall = 8.0;
   static const double _kShowScrollButtonDistance = 260.0;
   static const double _kHideScrollButtonDistance = 140.0;
+  static const Color _kClaudeAccent = Color(0xFFE07A3C);
+  static const Color _kClaudeCream = Color(0xFFF4ECDD);
+  static const Color _kClaudeInk = Color(0xFF11110F);
+  static const Color _kClaudePanel = Color(0xFF181713);
+
+  ThemeData _buildClaudeTheme(ThemeData base) {
+    final ColorScheme scheme = base.colorScheme.copyWith(
+      primary: _kClaudeAccent,
+      onPrimary: const Color(0xFF18120C),
+      surface: _kClaudePanel,
+      onSurface: _kClaudeCream,
+      surfaceContainerHighest: const Color(0xFF2A2721),
+      outline: _kClaudeCream.withValues(alpha: 0.24),
+    );
+    return base.copyWith(
+      colorScheme: scheme,
+      scaffoldBackgroundColor: _kClaudeInk,
+      canvasColor: _kClaudeInk,
+    );
+  }
 
   @override
   void initState() {
@@ -2343,19 +2363,49 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     required double composerReservedSpace,
   }) {
     final String dayPart = _currentDayPart();
+    final Color headlineColor = theme.colorScheme.onSurface.withValues(
+      alpha: 0.95,
+    );
+    final Color mutedColor = iconFg.withValues(alpha: 0.64);
 
     return SizedBox.expand(
       child: Stack(
         children: [
-          Align(
-            alignment: const Alignment(0.0, -0.08),
-            child: Opacity(
-              opacity: 0.07,
-              child: Image.asset(
-                'web/icons/Icon-512.png',
-                width: 190,
-                height: 190,
-                color: theme.colorScheme.onSurface,
+          Positioned(
+            top: -140,
+            left: -130,
+            child: IgnorePointer(
+              child: Container(
+                width: 320,
+                height: 320,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      accent.withValues(alpha: 0.36),
+                      accent.withValues(alpha: 0.0),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            right: -110,
+            bottom: composerReservedSpace + 120,
+            child: IgnorePointer(
+              child: Container(
+                width: 260,
+                height: 260,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      _kClaudeCream.withValues(alpha: 0.08),
+                      _kClaudeCream.withValues(alpha: 0.0),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
@@ -2369,46 +2419,97 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                 14,
                 composerReservedSpace + 42,
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: accent.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Icon(
-                      Icons.auto_awesome_rounded,
-                      size: 18,
-                      color: accent,
-                    ),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      _kClaudeCream.withValues(alpha: 0.07),
+                      _kClaudeCream.withValues(alpha: 0.02),
+                    ],
                   ),
-                  const SizedBox(height: 14),
-                  Text(
-                    'How can I help you this $dayPart?',
-                    style: TextStyle(
-                      color: theme.colorScheme.onSurface.withValues(
-                        alpha: 0.93,
+                  borderRadius: BorderRadius.circular(26),
+                  border: Border.all(
+                    color: _kClaudeCream.withValues(alpha: 0.14),
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _kClaudeCream.withValues(alpha: 0.86),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              'AI',
+                              style: TextStyle(
+                                color: accent.withValues(alpha: 0.9),
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.2,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Icon(
+                            Icons.auto_awesome_rounded,
+                            size: 18,
+                            color: accent.withValues(alpha: 0.95),
+                          ),
+                        ],
                       ),
-                      fontSize: 46,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: -0.7,
-                      height: 1.02,
-                    ),
+                      const SizedBox(height: 14),
+                      Text(
+                        'How can I help you this $dayPart?',
+                        style: TextStyle(
+                          color: headlineColor,
+                          fontSize: 34,
+                          fontWeight: FontWeight.w500,
+                          height: 1.05,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Ask anything, attach files, or start with a quick prompt.',
+                        style: TextStyle(
+                          color: mutedColor,
+                          fontSize: 14,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'Ask anything, attach a file, or start with a quick idea.',
-                    style: TextStyle(
-                      color: iconFg.withValues(alpha: 0.58),
-                      fontSize: 15,
-                      height: 1.3,
-                    ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: composerReservedSpace + 14,
+            left: 0,
+            right: 0,
+            child: IgnorePointer(
+              child: Center(
+                child: Text(
+                  'New look, same intelligence',
+                  style: TextStyle(
+                    color: _kClaudeCream.withValues(alpha: 0.24),
+                    fontSize: 17,
+                    letterSpacing: -0.2,
                   ),
-                ],
+                ),
               ),
             ),
           ),
@@ -2423,36 +2524,39 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   Widget build(BuildContext context) {
     const bool isCompactModeForModelDropdown = true;
     final mediaQuery = MediaQuery.of(context);
-    final theme = Theme.of(context);
+    final theme = _buildClaudeTheme(Theme.of(context));
     final double keyboardInset = mediaQuery.viewInsets.bottom;
     final Color iconFg = theme.resolvedIconColor;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Use actual available width from constraints, not screen width
-        final double availableWidth = constraints.maxWidth;
+    return Theme(
+      data: theme,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Use actual available width from constraints, not screen width
+          final double availableWidth = constraints.maxWidth;
 
-        const double effectiveHorizontalPadding = _kHorizontalPaddingSmall;
-        final double maxPossibleChatContentWidth = math.max(
-          0.0,
-          availableWidth - (effectiveHorizontalPadding * 2),
-        );
-        final double constrainedChatContentWidth = math.min(
-          _kMaxChatContentWidth,
-          maxPossibleChatContentWidth,
-        );
+          const double effectiveHorizontalPadding = _kHorizontalPaddingSmall;
+          final double maxPossibleChatContentWidth = math.max(
+            0.0,
+            availableWidth - (effectiveHorizontalPadding * 2),
+          );
+          final double constrainedChatContentWidth = math.min(
+            _kMaxChatContentWidth,
+            maxPossibleChatContentWidth,
+          );
 
-        return _buildChatContent(
-          context: context,
-          mediaQuery: mediaQuery,
-          theme: theme,
-          iconFg: iconFg,
-          keyboardInset: keyboardInset,
-          expandedInputWidth: constrainedChatContentWidth,
-          effectiveHorizontalPadding: effectiveHorizontalPadding,
-          isCompactModeForModelDropdown: isCompactModeForModelDropdown,
-        );
-      },
+          return _buildChatContent(
+            context: context,
+            mediaQuery: mediaQuery,
+            theme: theme,
+            iconFg: iconFg,
+            keyboardInset: keyboardInset,
+            expandedInputWidth: constrainedChatContentWidth,
+            effectiveHorizontalPadding: effectiveHorizontalPadding,
+            isCompactModeForModelDropdown: isCompactModeForModelDropdown,
+          );
+        },
+      ),
     );
   }
 
@@ -2479,12 +2583,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
     final Color accent = theme.colorScheme.primary;
     final Color bg = theme.scaffoldBackgroundColor;
-    final Color chatBase = Color.lerp(bg, const Color(0xFF202327), 0.52)!;
-    final Color chatTop = Color.lerp(chatBase, Colors.black, 0.08)!;
-    final Color chatBottom = Color.lerp(chatBase, Colors.black, 0.2)!;
+    const Color chatTop = Color(0xFF1A1916);
+    const Color chatBottom = Color(0xFF0B0B09);
 
     return Scaffold(
-      backgroundColor: chatBase,
+      backgroundColor: bg,
       resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
@@ -2495,6 +2598,44 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [chatTop, chatBottom],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: -220,
+            left: -80,
+            right: -80,
+            height: 420,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    colors: [
+                      accent.withValues(alpha: 0.22),
+                      accent.withValues(alpha: 0.0),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -180,
+            left: 0,
+            right: 0,
+            height: 340,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [
+                      _kClaudeCream.withValues(alpha: 0.08),
+                      Colors.transparent,
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -2515,242 +2656,278 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                             constraints: BoxConstraints(
                               maxWidth: expandedInputWidth,
                             ),
-                            child: SelectionArea(
-                              child: ListView.builder(
-                                controller: _scrollController,
-                                padding: listPadding,
-                                itemCount: _messages.length,
-                                addAutomaticKeepAlives: false,
-                                addRepaintBoundaries: true,
-                                cacheExtent: 1000.0,
-                                itemBuilder: (_, int i) {
-                                  final Map<String, String> raw = _messages[i];
-                                  final String sender = raw['sender'] ?? 'ai';
-                                  final bool isAiMessage = sender != 'user';
-                                  final bool isStreamingMessage =
-                                      _isCurrentChatStreaming &&
-                                      i == _messages.length - 1 &&
-                                      isAiMessage;
-                                  final String displayText = (raw['text'] ?? '')
-                                      .trimRight();
-                                  final String reasoning =
-                                      raw['reasoning'] ?? '';
-                                  final String? modelLabel = isAiMessage
-                                      ? _formatModelInfo(
-                                          raw['modelId'],
-                                          raw['provider'],
-                                        )
-                                      : null;
-                                  final String? modelProvider = isAiMessage
-                                      ? (raw['provider'] ?? '').trim()
-                                      : null;
-                                  final String? reasoningText =
-                                      reasoning.trim().isEmpty
-                                      ? null
-                                      : reasoning;
-                                  final bool isBeingEdited =
-                                      _messageActionsHandler
-                                          .editingMessageIndex ==
-                                      i;
-                                  final bool isUser = sender == 'user';
-                                  final bool startsNewGroup =
-                                      i == 0 ||
-                                      ((_messages[i - 1]['sender'] ?? 'ai') !=
-                                          sender);
-                                  final bool endsGroup =
-                                      i == _messages.length - 1 ||
-                                      ((_messages[i + 1]['sender'] ?? 'ai') !=
-                                          sender);
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  _kClaudeCream.withValues(alpha: 0.05),
+                                  _kClaudeCream.withValues(alpha: 0.02),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(26),
+                              border: Border.all(
+                                color: _kClaudeCream.withValues(alpha: 0.13),
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.3),
+                                  blurRadius: 22,
+                                  offset: const Offset(0, 14),
+                                ),
+                              ],
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(26),
+                              child: SelectionArea(
+                                child: ListView.builder(
+                                  controller: _scrollController,
+                                  padding: listPadding,
+                                  itemCount: _messages.length,
+                                  addAutomaticKeepAlives: false,
+                                  addRepaintBoundaries: true,
+                                  cacheExtent: 1000.0,
+                                  itemBuilder: (_, int i) {
+                                    final Map<String, String> raw =
+                                        _messages[i];
+                                    final String sender = raw['sender'] ?? 'ai';
+                                    final bool isAiMessage = sender != 'user';
+                                    final bool isStreamingMessage =
+                                        _isCurrentChatStreaming &&
+                                        i == _messages.length - 1 &&
+                                        isAiMessage;
+                                    final String displayText =
+                                        (raw['text'] ?? '').trimRight();
+                                    final String reasoning =
+                                        raw['reasoning'] ?? '';
+                                    final String? modelLabel = isAiMessage
+                                        ? _formatModelInfo(
+                                            raw['modelId'],
+                                            raw['provider'],
+                                          )
+                                        : null;
+                                    final String? modelProvider = isAiMessage
+                                        ? (raw['provider'] ?? '').trim()
+                                        : null;
+                                    final String? reasoningText =
+                                        reasoning.trim().isEmpty
+                                        ? null
+                                        : reasoning;
+                                    final bool isBeingEdited =
+                                        _messageActionsHandler
+                                            .editingMessageIndex ==
+                                        i;
+                                    final bool isUser = sender == 'user';
+                                    final bool startsNewGroup =
+                                        i == 0 ||
+                                        ((_messages[i - 1]['sender'] ?? 'ai') !=
+                                            sender);
+                                    final bool endsGroup =
+                                        i == _messages.length - 1 ||
+                                        ((_messages[i + 1]['sender'] ?? 'ai') !=
+                                            sender);
 
-                                  // Parse images from JSON
-                                  List<String>? images;
-                                  final String? imagesJson = raw['images'];
-                                  if (imagesJson != null &&
-                                      imagesJson.isNotEmpty) {
-                                    try {
-                                      final decoded = jsonDecode(imagesJson);
-                                      if (decoded is List) {
-                                        images = decoded.cast<String>();
-                                      }
-                                    } catch (e) {
-                                      if (kDebugMode) {
-                                        debugPrint(
-                                          'Failed to decode images JSON: $e',
-                                        );
-                                      }
-                                    }
-                                  }
-
-                                  // Parse document attachments from JSON
-                                  List<DocumentAttachment>? attachments;
-                                  final String? attachmentsJson =
-                                      raw['attachments'];
-                                  if (attachmentsJson != null &&
-                                      attachmentsJson.isNotEmpty) {
-                                    try {
-                                      final decoded = jsonDecode(
-                                        attachmentsJson,
-                                      );
-                                      if (decoded is List) {
-                                        attachments = decoded
-                                            .map(
-                                              (item) =>
-                                                  DocumentAttachment.fromJson(
-                                                    item
-                                                        as Map<String, dynamic>,
-                                                  ),
-                                            )
-                                            .toList();
+                                    // Parse images from JSON
+                                    List<String>? images;
+                                    final String? imagesJson = raw['images'];
+                                    if (imagesJson != null &&
+                                        imagesJson.isNotEmpty) {
+                                      try {
+                                        final decoded = jsonDecode(imagesJson);
+                                        if (decoded is List) {
+                                          images = decoded.cast<String>();
+                                        }
+                                      } catch (e) {
                                         if (kDebugMode) {
                                           debugPrint(
-                                            '📄 [AttachmentDebug] Extracted ${attachments.length} attachments from message $i',
+                                            'Failed to decode images JSON: $e',
                                           );
                                         }
                                       }
-                                    } catch (e) {
-                                      if (kDebugMode) {
-                                        debugPrint(
-                                          '📄 [AttachmentDebug] Failed to decode attachments JSON: $e',
+                                    }
+
+                                    // Parse document attachments from JSON
+                                    List<DocumentAttachment>? attachments;
+                                    final String? attachmentsJson =
+                                        raw['attachments'];
+                                    if (attachmentsJson != null &&
+                                        attachmentsJson.isNotEmpty) {
+                                      try {
+                                        final decoded = jsonDecode(
+                                          attachmentsJson,
                                         );
+                                        if (decoded is List) {
+                                          attachments = decoded
+                                              .map(
+                                                (item) =>
+                                                    DocumentAttachment.fromJson(
+                                                      item
+                                                          as Map<
+                                                            String,
+                                                            dynamic
+                                                          >,
+                                                    ),
+                                              )
+                                              .toList();
+                                          if (kDebugMode) {
+                                            debugPrint(
+                                              '📄 [AttachmentDebug] Extracted ${attachments.length} attachments from message $i',
+                                            );
+                                          }
+                                        }
+                                      } catch (e) {
+                                        if (kDebugMode) {
+                                          debugPrint(
+                                            '📄 [AttachmentDebug] Failed to decode attachments JSON: $e',
+                                          );
+                                        }
                                       }
                                     }
-                                  }
 
-                                  // Parse TPS value from message
-                                  final tpsStr = raw['tps'];
-                                  double? tps;
-                                  if (tpsStr != null && tpsStr.isNotEmpty) {
-                                    tps = double.tryParse(tpsStr);
-                                  }
+                                    // Parse TPS value from message
+                                    final tpsStr = raw['tps'];
+                                    double? tps;
+                                    if (tpsStr != null && tpsStr.isNotEmpty) {
+                                      tps = double.tryParse(tpsStr);
+                                    }
 
-                                  List<ToolCall>? toolCalls;
-                                  final String? toolCallsJson =
-                                      raw['toolCalls'];
-                                  if (toolCallsJson != null &&
-                                      toolCallsJson.isNotEmpty) {
-                                    try {
-                                      final decoded = jsonDecode(toolCallsJson);
-                                      if (decoded is List) {
-                                        toolCalls = decoded
-                                            .whereType<Map>()
-                                            .map(
-                                              (item) => ToolCall.fromJson(
-                                                Map<String, dynamic>.from(item),
-                                              ),
-                                            )
-                                            .toList();
-                                      }
-                                    } catch (_) {}
-                                  }
-
-                                  // Parse content blocks for interleaved
-                                  // tool call / text display.
-                                  List<ContentBlock>? parsedContentBlocks;
-                                  final String? contentBlocksJson =
-                                      raw['contentBlocks'];
-                                  if (contentBlocksJson != null &&
-                                      contentBlocksJson.isNotEmpty) {
-                                    try {
-                                      final decoded = jsonDecode(
-                                        contentBlocksJson,
-                                      );
-                                      if (decoded is List) {
-                                        parsedContentBlocks = decoded
-                                            .whereType<Map>()
-                                            .map(
-                                              (item) => ContentBlock.fromJson(
-                                                Map<String, dynamic>.from(item),
-                                              ),
-                                            )
-                                            .toList();
-                                      }
-                                    } catch (_) {}
-                                  }
-
-                                  final String? imageCostStr =
-                                      raw['imageCostEur'];
-                                  final double? imageCostEur =
-                                      imageCostStr != null &&
-                                          imageCostStr.isNotEmpty
-                                      ? double.tryParse(imageCostStr)
-                                      : null;
-                                  final String? imageGeneratedAtStr =
-                                      raw['imageGeneratedAt'];
-                                  final DateTime? imageGeneratedAt =
-                                      imageGeneratedAtStr != null &&
-                                          imageGeneratedAtStr.isNotEmpty
-                                      ? DateTime.tryParse(imageGeneratedAtStr)
-                                      : null;
-
-                                  return RepaintBoundary(
-                                    child: MessageBubble(
-                                      key: ValueKey('msg_$i'),
-                                      message: displayText,
-                                      reasoning: reasoningText,
-                                      isUser: isUser,
-                                      startsNewGroup: startsNewGroup,
-                                      endsGroup: endsGroup,
-                                      maxWidth: isUser
-                                          ? expandedInputWidth * 0.8
-                                          : expandedInputWidth,
-                                      isReasoningStreaming: isStreamingMessage,
-                                      modelLabel: modelLabel,
-                                      modelProvider: modelProvider,
-                                      tps: tps,
-                                      toolCalls: toolCalls,
-                                      showToolCalls: widget.showToolCalls,
-                                      contentBlocks: parsedContentBlocks,
-                                      isStreamingMessage: isStreamingMessage,
-                                      images: images,
-                                      attachments: attachments,
-                                      imageCostEur: imageCostEur,
-                                      imageGeneratedAt: imageGeneratedAt,
-                                      actions: _messageActionsHandler
-                                          .buildActionsForMessage(
-                                            index: i,
-                                            messageText: displayText,
-                                            isUser: isUser,
-                                            isStreaming: isStreamingMessage,
-                                            hasFailedToolCalls:
-                                                toolCalls != null &&
-                                                toolCalls.any(
-                                                  (t) =>
-                                                      t.status ==
-                                                      ToolCallStatus.error,
+                                    List<ToolCall>? toolCalls;
+                                    final String? toolCallsJson =
+                                        raw['toolCalls'];
+                                    if (toolCallsJson != null &&
+                                        toolCallsJson.isNotEmpty) {
+                                      try {
+                                        final decoded = jsonDecode(
+                                          toolCallsJson,
+                                        );
+                                        if (decoded is List) {
+                                          toolCalls = decoded
+                                              .whereType<Map>()
+                                              .map(
+                                                (item) => ToolCall.fromJson(
+                                                  Map<String, dynamic>.from(
+                                                    item,
+                                                  ),
                                                 ),
-                                            onEdit: _editMessageAt,
-                                            onResendMessage: _resendMessageAt,
-                                            toolCalls: toolCalls,
-                                          ),
-                                      userMessageActions: isUser
-                                          ? _messageActionsHandler
-                                                .buildUserMessageActions(
-                                                  index: i,
-                                                  messageText: displayText,
-                                                  onEdit: _editMessageAt,
-                                                  onResendMessage:
-                                                      _resendMessageAt,
-                                                )
-                                          : const [],
-                                      isEditing: isBeingEdited,
-                                      showReasoningTokens:
-                                          widget.showReasoningTokens,
-                                      showModelInfo: widget.showModelInfo,
-                                      showTps: widget.showTps,
-                                      onAskUserAnswer:
-                                          _askUserCallbackForMessage(
-                                            index: i,
-                                            isUser: isUser,
-                                            isStreaming: isStreamingMessage,
-                                            toolCalls: toolCalls,
-                                            contentBlocks: parsedContentBlocks,
-                                          ),
-                                      onRetry: !isUser && !isStreamingMessage
-                                          ? () => _resendMessageAt(i)
-                                          : null,
-                                    ),
-                                  );
-                                },
+                                              )
+                                              .toList();
+                                        }
+                                      } catch (_) {}
+                                    }
+
+                                    // Parse content blocks for interleaved
+                                    // tool call / text display.
+                                    List<ContentBlock>? parsedContentBlocks;
+                                    final String? contentBlocksJson =
+                                        raw['contentBlocks'];
+                                    if (contentBlocksJson != null &&
+                                        contentBlocksJson.isNotEmpty) {
+                                      try {
+                                        final decoded = jsonDecode(
+                                          contentBlocksJson,
+                                        );
+                                        if (decoded is List) {
+                                          parsedContentBlocks = decoded
+                                              .whereType<Map>()
+                                              .map(
+                                                (item) => ContentBlock.fromJson(
+                                                  Map<String, dynamic>.from(
+                                                    item,
+                                                  ),
+                                                ),
+                                              )
+                                              .toList();
+                                        }
+                                      } catch (_) {}
+                                    }
+
+                                    final String? imageCostStr =
+                                        raw['imageCostEur'];
+                                    final double? imageCostEur =
+                                        imageCostStr != null &&
+                                            imageCostStr.isNotEmpty
+                                        ? double.tryParse(imageCostStr)
+                                        : null;
+                                    final String? imageGeneratedAtStr =
+                                        raw['imageGeneratedAt'];
+                                    final DateTime? imageGeneratedAt =
+                                        imageGeneratedAtStr != null &&
+                                            imageGeneratedAtStr.isNotEmpty
+                                        ? DateTime.tryParse(imageGeneratedAtStr)
+                                        : null;
+
+                                    return RepaintBoundary(
+                                      child: MessageBubble(
+                                        key: ValueKey('msg_$i'),
+                                        message: displayText,
+                                        reasoning: reasoningText,
+                                        isUser: isUser,
+                                        startsNewGroup: startsNewGroup,
+                                        endsGroup: endsGroup,
+                                        maxWidth: isUser
+                                            ? expandedInputWidth * 0.8
+                                            : expandedInputWidth,
+                                        isReasoningStreaming:
+                                            isStreamingMessage,
+                                        modelLabel: modelLabel,
+                                        modelProvider: modelProvider,
+                                        tps: tps,
+                                        toolCalls: toolCalls,
+                                        showToolCalls: widget.showToolCalls,
+                                        contentBlocks: parsedContentBlocks,
+                                        isStreamingMessage: isStreamingMessage,
+                                        images: images,
+                                        attachments: attachments,
+                                        imageCostEur: imageCostEur,
+                                        imageGeneratedAt: imageGeneratedAt,
+                                        actions: _messageActionsHandler
+                                            .buildActionsForMessage(
+                                              index: i,
+                                              messageText: displayText,
+                                              isUser: isUser,
+                                              isStreaming: isStreamingMessage,
+                                              hasFailedToolCalls:
+                                                  toolCalls != null &&
+                                                  toolCalls.any(
+                                                    (t) =>
+                                                        t.status ==
+                                                        ToolCallStatus.error,
+                                                  ),
+                                              onEdit: _editMessageAt,
+                                              onResendMessage: _resendMessageAt,
+                                              toolCalls: toolCalls,
+                                            ),
+                                        userMessageActions: isUser
+                                            ? _messageActionsHandler
+                                                  .buildUserMessageActions(
+                                                    index: i,
+                                                    messageText: displayText,
+                                                    onEdit: _editMessageAt,
+                                                    onResendMessage:
+                                                        _resendMessageAt,
+                                                  )
+                                            : const [],
+                                        isEditing: isBeingEdited,
+                                        showReasoningTokens:
+                                            widget.showReasoningTokens,
+                                        showModelInfo: widget.showModelInfo,
+                                        showTps: widget.showTps,
+                                        onAskUserAnswer:
+                                            _askUserCallbackForMessage(
+                                              index: i,
+                                              isUser: isUser,
+                                              isStreaming: isStreamingMessage,
+                                              toolCalls: toolCalls,
+                                              contentBlocks:
+                                                  parsedContentBlocks,
+                                            ),
+                                        onRetry: !isUser && !isStreamingMessage
+                                            ? () => _resendMessageAt(i)
+                                            : null,
+                                      ),
+                                    );
+                                  },
+                                ),
                               ),
                             ),
                           ),
@@ -2769,19 +2946,38 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                       left: 0,
                       right: 0,
                       child: Center(
-                        child: Material(
-                          elevation: 4,
-                          shape: const CircleBorder(),
-                          color: theme.colorScheme.surfaceContainerHighest,
-                          child: InkWell(
-                            customBorder: const CircleBorder(),
-                            onTap: () => _scrollChatToBottom(force: true),
-                            child: Padding(
-                              padding: const EdgeInsets.all(8),
-                              child: Icon(
-                                Icons.keyboard_arrow_down,
-                                size: 24,
-                                color: theme.colorScheme.onSurface,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: const Color(
+                              0xFF1D1B17,
+                            ).withValues(alpha: 0.92),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: _kClaudeCream.withValues(alpha: 0.2),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.4),
+                                blurRadius: 16,
+                                offset: const Offset(0, 7),
+                              ),
+                            ],
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            shape: const CircleBorder(),
+                            child: InkWell(
+                              customBorder: const CircleBorder(),
+                              onTap: () => _scrollChatToBottom(force: true),
+                              child: Padding(
+                                padding: const EdgeInsets.all(8),
+                                child: Icon(
+                                  Icons.keyboard_arrow_down,
+                                  size: 24,
+                                  color: theme.colorScheme.onSurface.withValues(
+                                    alpha: 0.9,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
@@ -2817,7 +3013,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                 'AI/LLMs can make mistakes — double-check important info.',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
-                                  color: iconFg.withValues(alpha: 0.62),
+                                  color: iconFg.withValues(alpha: 0.5),
                                   fontSize: 11,
                                 ),
                               ),
@@ -2835,7 +3031,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           if (_isLoadingChat)
             Positioned.fill(
               child: Container(
-                color: bg.withValues(alpha: 0.7),
+                color: bg.withValues(alpha: 0.78),
                 child: Center(
                   child: CircularProgressIndicator(
                     color: accent,
@@ -2854,18 +3050,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     required ThemeData theme,
     required Color iconFg,
   }) {
-    final Color bg = theme.scaffoldBackgroundColor;
     final Color accent = theme.colorScheme.primary;
-    final Color composerSurface = Color.lerp(
-      bg,
-      const Color(0xFF16181B),
-      0.45,
-    )!;
-    final Color composerRaisedSurface = Color.lerp(
-      composerSurface,
-      Colors.black,
-      0.2,
-    )!;
+    final Color composerText = iconFg.withValues(alpha: 0.94);
+    final Color composerHint = iconFg.withValues(alpha: 0.46);
+    final Color composerIcon = iconFg.withValues(alpha: 0.76);
+    const Color composerSurface = Color(0xFF11110F);
+    const Color composerRaisedSurface = Color(0xFF1A1814);
     final bool hasAttachments = _fileHandler.hasAttachments;
     final bool showStopAction = _isCurrentChatStreaming || _isSendingMessage;
     final bool hasText = _controller.text.trim().isNotEmpty || hasAttachments;
@@ -2873,7 +3063,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
     final Color borderColor = _audioHandler.isMicActive
         ? Colors.red.withValues(alpha: 0.4)
-        : iconFg.withValues(alpha: 0.24);
+        : _kClaudeCream.withValues(alpha: 0.22);
 
     // Uniform pill height for all three groups.
     const double pillHeight = 50;
@@ -2883,19 +3073,35 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       bool isActive = false,
       bool isRaised = false,
     }) => BoxDecoration(
-      color: (isRaised ? composerRaisedSurface : composerSurface).withValues(
-        alpha: 0.97,
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          (isRaised ? composerRaisedSurface : composerSurface).withValues(
+            alpha: 0.98,
+          ),
+          (isRaised ? composerRaisedSurface : composerSurface).withValues(
+            alpha: isRaised ? 0.92 : 0.9,
+          ),
+        ],
       ),
       borderRadius: BorderRadius.circular(pillHeight / 2),
       border: Border.all(
-        color: isActive ? Colors.red.withValues(alpha: 0.4) : borderColor,
+        color: isActive
+            ? Colors.red.withValues(alpha: 0.45)
+            : borderColor.withValues(alpha: isRaised ? 0.9 : 0.7),
         width: 1.4,
       ),
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withValues(alpha: 0.18),
-          blurRadius: 14,
-          offset: const Offset(0, 4),
+          color: Colors.black.withValues(alpha: isRaised ? 0.35 : 0.25),
+          blurRadius: isRaised ? 18 : 14,
+          offset: const Offset(0, 8),
+        ),
+        BoxShadow(
+          color: accent.withValues(alpha: isRaised ? 0.12 : 0.06),
+          blurRadius: 16,
+          spreadRadius: 0.4,
         ),
       ],
     );
@@ -2945,7 +3151,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                       cornerRadius: 20,
                       onTap: _handleAddAttachmentTap,
                       isActive: hasAttachments,
-                      color: iconFg,
+                      color: composerIcon,
                     ),
                     Offstage(
                       offstage: _controller.text.isNotEmpty,
@@ -3038,14 +3244,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                       ),
                                       decoration: BoxDecoration(
                                         color: theme.colorScheme.onSurface
-                                            .withValues(alpha: 0.08),
+                                            .withValues(alpha: 0.12),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                       child: Text(
                                         'Cancel',
                                         style: TextStyle(
                                           color: theme.colorScheme.onSurface
-                                              .withValues(alpha: 0.6),
+                                              .withValues(alpha: 0.68),
                                           fontSize: 11,
                                           fontWeight: FontWeight.w600,
                                         ),
@@ -3072,7 +3278,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                   textInputAction: TextInputAction.newline,
                                   scrollController: _composerScrollController,
                                   style: TextStyle(
-                                    color: theme.colorScheme.onSurface,
+                                    color: composerText,
                                     fontSize: 16,
                                     height: 1.3,
                                   ),
@@ -3083,8 +3289,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                         ? 'Edit your message...'
                                         : 'Ask me anything',
                                     hintStyle: TextStyle(
-                                      color: theme.colorScheme.onSurface
-                                          .withValues(alpha: 0.5),
+                                      color: composerHint,
                                       fontSize: 16,
                                     ),
                                     filled: false,
@@ -3111,9 +3316,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                                 child: Icon(
                                                   Icons.mic,
                                                   size: 22,
-                                                  color: iconFg.withValues(
-                                                    alpha: 0.6,
-                                                  ),
+                                                  color: composerIcon,
                                                 ),
                                               ),
                                             ),
@@ -3128,9 +3331,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                               child: Icon(
                                                 Icons.open_in_full_rounded,
                                                 size: 16,
-                                                color: iconFg.withValues(
-                                                  alpha: 0.4,
-                                                ),
+                                                color: composerHint,
                                               ),
                                             ),
                                           )
