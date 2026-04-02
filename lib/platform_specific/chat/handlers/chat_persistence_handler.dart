@@ -41,9 +41,13 @@ class ChatPersistenceHandler {
   }) async {
     if (messages.isEmpty) return null;
 
+    // Never persist "Thinking..." placeholders — they are UI-only
     final messagesCopy = messages
+        .where((message) => message['text'] != 'Thinking...')
         .map((message) => Map<String, String>.from(message))
         .toList(growable: false);
+
+    if (messagesCopy.isEmpty) return null;
 
     final operation = _persistChatInternal(
       messagesCopy,
