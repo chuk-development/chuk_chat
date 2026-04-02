@@ -22,14 +22,11 @@ Widget buildTinyIconButton({
     icon != null || svgAssetPath != null,
     'Either icon or svgAssetPath must be provided.',
   );
+  final Color foregroundColor = color.computeLuminance() > 0.5
+      ? Colors.black
+      : Colors.white;
 
   final Color effectiveColor = isActive ? color : color.withValues(alpha: 0.6);
-  final Color backgroundColor = isActive
-      ? color.withValues(alpha: 0.22)
-      : Colors.black.withValues(alpha: 0.16);
-  final Color borderColor = isActive
-      ? color.withValues(alpha: 0.55)
-      : color.withValues(alpha: 0.2);
 
   final result = Material(
     color: Colors.transparent,
@@ -40,9 +37,8 @@ Widget buildTinyIconButton({
         width: buttonSize,
         height: buttonSize,
         decoration: BoxDecoration(
-          color: backgroundColor,
+          color: isActive ? color.withValues(alpha: 0.15) : Colors.transparent,
           borderRadius: BorderRadius.circular(cornerRadius),
-          border: Border.all(color: borderColor),
         ),
         child: svgAssetPath != null
             ? SvgPicture.asset(
@@ -92,12 +88,11 @@ Widget buildTinyActionButton({
             end: Alignment.bottomRight,
           ),
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
           boxShadow: [
             BoxShadow(
               color: color.withValues(alpha: 0.25),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
             ),
           ],
         ),
@@ -106,7 +101,7 @@ Widget buildTinyActionButton({
                 padding: const EdgeInsets.all(8.0),
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.black),
+                  valueColor: AlwaysStoppedAnimation<Color>(foregroundColor),
                 ),
               )
             : svgAssetPath != null
@@ -114,18 +109,9 @@ Widget buildTinyActionButton({
                 svgAssetPath,
                 width: iconSize,
                 height: iconSize,
-                colorFilter: ColorFilter.mode(
-                  color.computeLuminance() > 0.45 ? Colors.black : Colors.white,
-                  BlendMode.srcIn,
-                ),
+                colorFilter: ColorFilter.mode(foregroundColor, BlendMode.srcIn),
               )
-            : Icon(
-                icon!,
-                size: iconSize,
-                color: color.computeLuminance() > 0.45
-                    ? Colors.black
-                    : Colors.white,
-              ),
+            : Icon(icon!, size: iconSize, color: foregroundColor),
       ),
     ),
   );
