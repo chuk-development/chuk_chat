@@ -193,6 +193,19 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
 
     setState(() => _isProcessing = true);
     try {
+      // Re-check subscription status before opening checkout to prevent
+      // duplicate subscriptions (server also checks, this is defense in depth)
+      final freshStatus = await getUserStatus();
+      if (!mounted) return;
+      if (freshStatus['has_subscription'] == true) {
+        setState(() {
+          _userStatus = freshStatus;
+          _isProcessing = false;
+        });
+        _showError('You already have an active subscription.');
+        return;
+      }
+
       await startCheckout();
 
       // Wait a bit and refresh
@@ -201,7 +214,12 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
       });
     } catch (error) {
       if (!mounted) return;
-      _showError(error.toString());
+      final msg = error.toString();
+      if (msg.contains('already have an active subscription')) {
+        // Server confirmed subscription exists — refresh UI
+        _loadUserStatus();
+      }
+      _showError(msg.replaceAll('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _isProcessing = false);
     }
