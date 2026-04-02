@@ -24,6 +24,12 @@ Widget buildTinyIconButton({
   );
 
   final Color effectiveColor = isActive ? color : color.withValues(alpha: 0.6);
+  final Color backgroundColor = isActive
+      ? color.withValues(alpha: 0.22)
+      : Colors.black.withValues(alpha: 0.16);
+  final Color borderColor = isActive
+      ? color.withValues(alpha: 0.55)
+      : color.withValues(alpha: 0.2);
 
   final result = Material(
     color: Colors.transparent,
@@ -34,8 +40,9 @@ Widget buildTinyIconButton({
         width: buttonSize,
         height: buttonSize,
         decoration: BoxDecoration(
-          color: isActive ? color.withValues(alpha: 0.15) : Colors.transparent,
+          color: backgroundColor,
           borderRadius: BorderRadius.circular(cornerRadius),
+          border: Border.all(color: borderColor),
         ),
         child: svgAssetPath != null
             ? SvgPicture.asset(
@@ -85,11 +92,12 @@ Widget buildTinyActionButton({
             end: Alignment.bottomRight,
           ),
           shape: BoxShape.circle,
+          border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
           boxShadow: [
             BoxShadow(
               color: color.withValues(alpha: 0.25),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
@@ -106,12 +114,18 @@ Widget buildTinyActionButton({
                 svgAssetPath,
                 width: iconSize,
                 height: iconSize,
-                colorFilter: const ColorFilter.mode(
-                  Colors.black,
+                colorFilter: ColorFilter.mode(
+                  color.computeLuminance() > 0.45 ? Colors.black : Colors.white,
                   BlendMode.srcIn,
                 ),
               )
-            : Icon(icon!, size: iconSize, color: Colors.black),
+            : Icon(
+                icon!,
+                size: iconSize,
+                color: color.computeLuminance() > 0.45
+                    ? Colors.black
+                    : Colors.white,
+              ),
       ),
     ),
   );
