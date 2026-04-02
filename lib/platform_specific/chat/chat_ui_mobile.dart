@@ -833,8 +833,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       });
     } else {
       // Use the existing session token — no need to refresh first.
-      final accessToken =
-          SupabaseService.auth.currentSession?.accessToken;
+      final accessToken = SupabaseService.auth.currentSession?.accessToken;
 
       final bool started = await _audioHandler.startRecording(
         accessToken: accessToken,
@@ -1783,7 +1782,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     for (final Map<String, String> message in _messages) {
       final String? sender = message['sender'];
       final String? text = message['text'];
-      if (text == null || text.trim().isEmpty || text == 'Thinking...') continue;
+      if (text == null || text.trim().isEmpty || text == 'Thinking...') {
+        continue;
+      }
 
       if (sender == 'user') {
         history.add({'role': 'user', 'content': text});
@@ -2327,6 +2328,95 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   String? _formatModelInfo(String? modelId, String? provider) =>
       ChatUiHelpers.formatModelInfo(modelId, provider);
 
+  String _currentDayPart() {
+    final int hour = DateTime.now().hour;
+    if (hour < 12) return 'morning';
+    if (hour < 18) return 'afternoon';
+    return 'evening';
+  }
+
+  Widget _buildEmptyState({
+    required ThemeData theme,
+    required Color iconFg,
+    required Color accent,
+    required double expandedInputWidth,
+    required double composerReservedSpace,
+  }) {
+    final String dayPart = _currentDayPart();
+
+    return SizedBox.expand(
+      child: Stack(
+        children: [
+          Align(
+            alignment: const Alignment(0.0, -0.08),
+            child: Opacity(
+              opacity: 0.07,
+              child: Image.asset(
+                'web/icons/Icon-512.png',
+                width: 190,
+                height: 190,
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
+          ),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              constraints: BoxConstraints(maxWidth: expandedInputWidth),
+              padding: EdgeInsets.fromLTRB(
+                14,
+                0,
+                14,
+                composerReservedSpace + 42,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Icon(
+                      Icons.auto_awesome_rounded,
+                      size: 18,
+                      color: accent,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'How can I help you this $dayPart?',
+                    style: TextStyle(
+                      color: theme.colorScheme.onSurface.withValues(
+                        alpha: 0.93,
+                      ),
+                      fontSize: 46,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: -0.7,
+                      height: 1.02,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Ask anything, attach a file, or start with a quick idea.',
+                    style: TextStyle(
+                      color: iconFg.withValues(alpha: 0.58),
+                      fontSize: 15,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // --- BUILD METHOD ---
 
   @override
@@ -2379,7 +2469,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     final bool hasAttachments = _fileHandler.hasAttachments;
     final bool hasMessages = _messages.isNotEmpty;
     final double composerReservedSpace =
-        40.0 + (hasAttachments ? 80.0 : 0.0) + 32.0 + mediaQuery.padding.bottom;
+        52.0 + (hasAttachments ? 88.0 : 0.0) + 34.0 + mediaQuery.padding.bottom;
     final EdgeInsets listPadding = EdgeInsets.fromLTRB(
       effectiveHorizontalPadding,
       10,
@@ -2389,12 +2479,26 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
     final Color accent = theme.colorScheme.primary;
     final Color bg = theme.scaffoldBackgroundColor;
+    final Color chatBase = Color.lerp(bg, const Color(0xFF202327), 0.52)!;
+    final Color chatTop = Color.lerp(chatBase, Colors.black, 0.08)!;
+    final Color chatBottom = Color.lerp(chatBase, Colors.black, 0.2)!;
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: chatBase,
       resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [chatTop, chatBottom],
+                ),
+              ),
+            ),
+          ),
           Padding(
             padding: EdgeInsets.only(bottom: keyboardInset),
             child: GestureDetector(
@@ -2651,19 +2755,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                             ),
                           ),
                         )
-                      : SizedBox.expand(
-                          child: Align(
-                            alignment: const Alignment(0.0, -0.3),
-                            child: Opacity(
-                              opacity: 0.08,
-                              child: Image.asset(
-                                'web/icons/Icon-512.png',
-                                width: 180,
-                                height: 180,
-                                color: theme.colorScheme.onSurface,
-                              ),
-                            ),
-                          ),
+                      : _buildEmptyState(
+                          theme: theme,
+                          iconFg: iconFg,
+                          accent: accent,
+                          expandedInputWidth: expandedInputWidth,
+                          composerReservedSpace: composerReservedSpace,
                         ),
                   // Scroll-to-bottom button (centered above input)
                   if (_showScrollToBottom && hasMessages)
@@ -2720,7 +2817,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                 'AI/LLMs can make mistakes — double-check important info.',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
-                                  color: iconFg.withValues(alpha: 0.7),
+                                  color: iconFg.withValues(alpha: 0.62),
                                   fontSize: 11,
                                 ),
                               ),
@@ -2759,6 +2856,16 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   }) {
     final Color bg = theme.scaffoldBackgroundColor;
     final Color accent = theme.colorScheme.primary;
+    final Color composerSurface = Color.lerp(
+      bg,
+      const Color(0xFF16181B),
+      0.45,
+    )!;
+    final Color composerRaisedSurface = Color.lerp(
+      composerSurface,
+      Colors.black,
+      0.2,
+    )!;
     final bool hasAttachments = _fileHandler.hasAttachments;
     final bool showStopAction = _isCurrentChatStreaming || _isSendingMessage;
     final bool hasText = _controller.text.trim().isNotEmpty || hasAttachments;
@@ -2766,24 +2873,29 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
     final Color borderColor = _audioHandler.isMicActive
         ? Colors.red.withValues(alpha: 0.4)
-        : iconFg.withValues(alpha: 0.25);
+        : iconFg.withValues(alpha: 0.24);
 
     // Uniform pill height for all three groups.
-    const double pillHeight = 46;
+    const double pillHeight = 50;
 
     // Shared pill decoration for all three groups.
-    BoxDecoration pillDecoration({bool isActive = false}) => BoxDecoration(
-      color: bg.withValues(alpha: 0.98),
+    BoxDecoration pillDecoration({
+      bool isActive = false,
+      bool isRaised = false,
+    }) => BoxDecoration(
+      color: (isRaised ? composerRaisedSurface : composerSurface).withValues(
+        alpha: 0.97,
+      ),
       borderRadius: BorderRadius.circular(pillHeight / 2),
       border: Border.all(
         color: isActive ? Colors.red.withValues(alpha: 0.4) : borderColor,
-        width: 2,
+        width: 1.4,
       ),
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withValues(alpha: 0.06),
-          blurRadius: 10,
-          offset: const Offset(0, 2),
+          color: Colors.black.withValues(alpha: 0.18),
+          blurRadius: 14,
+          offset: const Offset(0, 4),
         ),
       ],
     );
@@ -2820,7 +2932,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                 constraints: const BoxConstraints(minWidth: pillHeight),
                 decoration: pillDecoration(),
                 padding: EdgeInsets.symmetric(
-                  horizontal: _controller.text.isNotEmpty ? 7 : 4,
+                  horizontal: _controller.text.isNotEmpty ? 8 : 5,
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -2829,6 +2941,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                     buildTinyIconButton(
                       icon: Icons.add_rounded,
                       iconSize: 22,
+                      buttonSize: 40,
+                      cornerRadius: 20,
                       onTap: _handleAddAttachmentTap,
                       isActive: hasAttachments,
                       color: iconFg,
@@ -2850,7 +2964,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                               });
                             },
                             textFieldFocusNode: _textFieldFocusNode,
-                            isCompactMode: true,
+                            isCompactMode: isCompactMode,
                           ),
                         ],
                       ),
@@ -2859,7 +2973,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                 ),
               ),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 8),
 
             // ── Middle: TextField + inline mic (grows upward for multi-line) ──
             Expanded(
@@ -2869,7 +2983,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                     ? null
                     : const BoxConstraints(minHeight: pillHeight),
                 decoration: pillDecoration(isActive: _audioHandler.isMicActive),
-                padding: const EdgeInsets.symmetric(horizontal: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: _audioHandler.isMicActive
                     ? SizedBox(
                         height: pillHeight - 6, // minus border + padding
@@ -2900,8 +3014,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                   Icon(
                                     Icons.edit,
                                     size: 12,
-                                    color: theme.colorScheme.primary
-                                        .withValues(alpha: 0.7),
+                                    color: theme.colorScheme.primary.withValues(
+                                      alpha: 0.7,
+                                    ),
                                   ),
                                   const SizedBox(width: 4),
                                   Text(
@@ -2942,107 +3057,109 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                             ),
                           // ── TextField ──
                           buildKeyboardListener(
-                        focusNode: _rawKeyboardListenerFocusNode,
-                        controller: _controller,
-                        onSend: _sendOrSubmitEdit,
-                        child: Scrollbar(
-                          controller: _composerScrollController,
-                          child: Semantics(
-                            identifier: 'message_input',
-                            child: TextField(
-                              controller: _controller,
-                              focusNode: _textFieldFocusNode,
-                              autofocus: false,
-                              keyboardType: TextInputType.multiline,
-                              textInputAction: TextInputAction.newline,
-                              scrollController: _composerScrollController,
-                              style: TextStyle(
-                                color: theme.colorScheme.onSurface,
-                                fontSize: 15,
-                                height: 1.3,
-                              ),
-                              minLines: 1,
-                              maxLines: 6,
-                              decoration: InputDecoration(
-                                hintText: _messageActionsHandler.isEditing
-                                    ? 'Edit your message...'
-                                    : 'Ask me anything',
-                                hintStyle: TextStyle(
-                                  color: theme.colorScheme.onSurface.withValues(
-                                    alpha: 0.5,
+                            focusNode: _rawKeyboardListenerFocusNode,
+                            controller: _controller,
+                            onSend: _sendOrSubmitEdit,
+                            child: Scrollbar(
+                              controller: _composerScrollController,
+                              child: Semantics(
+                                identifier: 'message_input',
+                                child: TextField(
+                                  controller: _controller,
+                                  focusNode: _textFieldFocusNode,
+                                  autofocus: false,
+                                  keyboardType: TextInputType.multiline,
+                                  textInputAction: TextInputAction.newline,
+                                  scrollController: _composerScrollController,
+                                  style: TextStyle(
+                                    color: theme.colorScheme.onSurface,
+                                    fontSize: 16,
+                                    height: 1.3,
                                   ),
-                                  fontSize: 15,
-                                ),
-                                filled: false,
-                                border: InputBorder.none,
-                                enabledBorder: InputBorder.none,
-                                focusedBorder: InputBorder.none,
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 0,
-                                  vertical: 10,
-                                ),
-                                isDense: true,
-                                // Mic or fullscreen button as suffix icon.
-                                // Mic shown when text is empty; fullscreen
-                                // shown when text is long; otherwise nothing.
-                                suffixIcon: showInlineMic
-                                    ? GestureDetector(
-                                        onTap: _handleMicTap,
-                                        child: Semantics(
-                                          identifier: 'mic_button',
-                                          child: Padding(
-                                            padding: const EdgeInsets.only(
-                                              left: 4,
-                                            ),
-                                            child: Icon(
-                                              Icons.mic,
-                                              size: 20,
-                                              color: iconFg.withValues(
-                                                alpha: 0.6,
+                                  minLines: 1,
+                                  maxLines: 6,
+                                  decoration: InputDecoration(
+                                    hintText: _messageActionsHandler.isEditing
+                                        ? 'Edit your message...'
+                                        : 'Ask me anything',
+                                    hintStyle: TextStyle(
+                                      color: theme.colorScheme.onSurface
+                                          .withValues(alpha: 0.5),
+                                      fontSize: 16,
+                                    ),
+                                    filled: false,
+                                    border: InputBorder.none,
+                                    enabledBorder: InputBorder.none,
+                                    focusedBorder: InputBorder.none,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 0,
+                                      vertical: 12,
+                                    ),
+                                    isDense: true,
+                                    // Mic or fullscreen button as suffix icon.
+                                    // Mic shown when text is empty; fullscreen
+                                    // shown when text is long; otherwise nothing.
+                                    suffixIcon: showInlineMic
+                                        ? GestureDetector(
+                                            onTap: _handleMicTap,
+                                            child: Semantics(
+                                              identifier: 'mic_button',
+                                              child: Padding(
+                                                padding: const EdgeInsets.only(
+                                                  left: 4,
+                                                ),
+                                                child: Icon(
+                                                  Icons.mic,
+                                                  size: 22,
+                                                  color: iconFg.withValues(
+                                                    alpha: 0.6,
+                                                  ),
+                                                ),
                                               ),
                                             ),
-                                          ),
-                                        ),
-                                      )
-                                    : _showFullscreenButton
-                                    ? GestureDetector(
-                                        onTap: _openFullscreenEditor,
-                                        child: Padding(
-                                          padding: const EdgeInsets.only(
-                                            left: 4,
-                                          ),
-                                          child: Icon(
-                                            Icons.open_in_full_rounded,
-                                            size: 14,
-                                            color: iconFg.withValues(
-                                              alpha: 0.4,
+                                          )
+                                        : _showFullscreenButton
+                                        ? GestureDetector(
+                                            onTap: _openFullscreenEditor,
+                                            child: Padding(
+                                              padding: const EdgeInsets.only(
+                                                left: 4,
+                                              ),
+                                              child: Icon(
+                                                Icons.open_in_full_rounded,
+                                                size: 16,
+                                                color: iconFg.withValues(
+                                                  alpha: 0.4,
+                                                ),
+                                              ),
                                             ),
-                                          ),
-                                        ),
-                                      )
-                                    : null,
-                                suffixIconConstraints: const BoxConstraints(
-                                  minWidth: 24,
-                                  minHeight: 24,
+                                          )
+                                        : null,
+                                    suffixIconConstraints: const BoxConstraints(
+                                      minWidth: 28,
+                                      minHeight: 28,
+                                    ),
+                                  ),
+                                  cursorColor: accent,
+                                  cursorWidth: 1.5,
                                 ),
                               ),
-                              cursorColor: accent,
-                              cursorWidth: 1.5,
                             ),
                           ),
-                        ),
-                      ),
                         ],
                       ),
               ),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 8),
 
             // ── Right pill: Send / Stop / Voice Mode ──
             Container(
               height: pillHeight,
-              decoration: pillDecoration(isActive: _audioHandler.isMicActive),
-              padding: const EdgeInsets.symmetric(horizontal: 5),
+              decoration: pillDecoration(
+                isActive: _audioHandler.isMicActive,
+                isRaised: true,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 6),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -3051,6 +3168,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                     buildTinyIconButton(
                       icon: Icons.stop_rounded,
                       iconSize: 20,
+                      buttonSize: 40,
+                      cornerRadius: 20,
                       onTap: _handleMicTap,
                       isActive: true,
                       color: Colors.red,
@@ -3067,6 +3186,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                     ? Icons.graphic_eq_rounded
                                     : Icons.north_rounded)),
                     iconSize: 18,
+                    buttonSize: 40,
                     onTap: _audioHandler.isMicActive
                         ? _handleAudioSend
                         : (showStopAction

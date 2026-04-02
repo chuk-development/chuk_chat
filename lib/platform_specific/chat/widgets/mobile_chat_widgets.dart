@@ -13,6 +13,8 @@ Widget buildTinyIconButton({
   required VoidCallback? onTap,
   required bool isActive,
   required Color color,
+  double buttonSize = 38,
+  double cornerRadius = 12,
   double iconSize = 18,
   String? semanticsId,
 }) {
@@ -27,13 +29,13 @@ Widget buildTinyIconButton({
     color: Colors.transparent,
     child: InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(cornerRadius),
       child: Container(
-        width: 32,
-        height: 32,
+        width: buttonSize,
+        height: buttonSize,
         decoration: BoxDecoration(
           color: isActive ? color.withValues(alpha: 0.15) : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(cornerRadius),
         ),
         child: svgAssetPath != null
             ? SvgPicture.asset(
@@ -59,6 +61,7 @@ Widget buildTinyActionButton({
   required VoidCallback onTap,
   required Color color,
   bool isLoading = false,
+  double buttonSize = 40,
   double iconSize = 16,
   String? semanticsId,
 }) {
@@ -71,10 +74,10 @@ Widget buildTinyActionButton({
     color: Colors.transparent,
     child: InkWell(
       onTap: isLoading ? null : onTap,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(buttonSize / 2),
       child: Container(
-        width: 32,
-        height: 32,
+        width: buttonSize,
+        height: buttonSize,
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [color, color.withValues(alpha: 0.85)],
