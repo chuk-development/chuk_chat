@@ -2910,6 +2910,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     // Shown when: text is empty, not recording, not streaming.
     final bool showInlineMic =
         !hasText && !_audioHandler.isMicActive && !showStopAction;
+    final bool rightPillHasMultipleActions = _audioHandler.isMicActive;
 
     // Three-part layout: [+]  [TextField + mic]  [Send]
     // With optional attachment previews and editing indicator above.
@@ -3226,8 +3227,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
             // ── Right pill: Send / Stop / Voice Mode ──
             Container(
               height: pillHeight,
+              width: rightPillHasMultipleActions ? null : pillHeight,
               decoration: pillDecoration(isActive: _audioHandler.isMicActive),
-              padding: const EdgeInsets.symmetric(horizontal: 5),
+              padding: rightPillHasMultipleActions
+                  ? const EdgeInsets.symmetric(horizontal: 5)
+                  : EdgeInsets.zero,
+              alignment: Alignment.center,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
