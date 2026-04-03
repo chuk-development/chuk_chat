@@ -63,8 +63,12 @@ class ChatStorageCrud {
 
     // Try local cache FIRST — it's plaintext JSON, instant load, no decryption.
     // This gives sub-millisecond response for any previously cached chat.
-    final cached =
-        await _loadFullChatFromCache(chatId, user.id, existing, stopwatch);
+    final cached = await _loadFullChatFromCache(
+      chatId,
+      user.id,
+      existing,
+      stopwatch,
+    );
     if (cached != null) {
       // Background: sync fresh copy from Supabase to keep cache up-to-date
       unawaited(_syncChatFromRemote(chatId, user.id, existing));
@@ -107,17 +111,19 @@ class ChatStorageCrud {
 
             // Cache plaintext for next time
             final title = chat.title ?? extractTitleFromMessages(chat.messages);
-            unawaited(LocalChatCacheService.upsert(
-              user.id,
-              LocalChatCacheService.buildPlaintextRow(
-                id: chatId,
-                payload: decrypted,
-                createdAt: row['created_at'] as String,
-                isStarred: (row['is_starred'] as bool?) ?? false,
-                updatedAt: row['updated_at'] as String?,
-                title: title.isNotEmpty ? title : null,
+            unawaited(
+              LocalChatCacheService.upsert(
+                user.id,
+                LocalChatCacheService.buildPlaintextRow(
+                  id: chatId,
+                  payload: decrypted,
+                  createdAt: row['created_at'] as String,
+                  isStarred: (row['is_starred'] as bool?) ?? false,
+                  updatedAt: row['updated_at'] as String?,
+                  title: title.isNotEmpty ? title : null,
+                ),
               ),
-            ));
+            );
 
             stopwatch.stop();
             if (kDebugMode) {
@@ -141,16 +147,12 @@ class ChatStorageCrud {
         return null;
       } catch (e) {
         if (kDebugMode) {
-          debugPrint(
-            '⚠️ [ChatStorage] Remote load failed: $e',
-          );
+          debugPrint('⚠️ [ChatStorage] Remote load failed: $e');
         }
       }
     } else {
       if (kDebugMode) {
-        debugPrint(
-          '📦 [ChatStorage] Offline and no cache for chat: $chatId',
-        );
+        debugPrint('📦 [ChatStorage] Offline and no cache for chat: $chatId');
       }
     }
 
@@ -208,7 +210,8 @@ class ChatStorageCrud {
       ChatStorageState.notifyChanges(chatId);
 
       // Update plaintext cache
-      final title = remoteChat.title ?? extractTitleFromMessages(remoteChat.messages);
+      final title =
+          remoteChat.title ?? extractTitleFromMessages(remoteChat.messages);
       await LocalChatCacheService.upsert(
         userId,
         LocalChatCacheService.buildPlaintextRow(
@@ -222,15 +225,11 @@ class ChatStorageCrud {
       );
 
       if (kDebugMode) {
-        debugPrint(
-          '🔄 [ChatStorage] Background sync updated chat: $chatId',
-        );
+        debugPrint('🔄 [ChatStorage] Background sync updated chat: $chatId');
       }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint(
-          '⚠️ [ChatStorage] Background sync failed for $chatId: $e',
-        );
+        debugPrint('⚠️ [ChatStorage] Background sync failed for $chatId: $e');
       }
     }
   }
@@ -699,14 +698,16 @@ class ChatStorageCrud {
             'messages': chat.messages.map((m) => m.toJson()).toList(),
           });
 
-          plaintextRows.add(LocalChatCacheService.buildPlaintextRow(
-            id: chatId,
-            payload: payload,
-            createdAt: row['created_at'] as String,
-            isStarred: (row['is_starred'] as bool?) ?? false,
-            updatedAt: row['updated_at'] as String?,
-            title: chat.title,
-          ));
+          plaintextRows.add(
+            LocalChatCacheService.buildPlaintextRow(
+              id: chatId,
+              payload: payload,
+              createdAt: row['created_at'] as String,
+              isStarred: (row['is_starred'] as bool?) ?? false,
+              updatedAt: row['updated_at'] as String?,
+              title: chat.title,
+            ),
+          );
         }
         if (plaintextRows.isNotEmpty && skippedCount == 0) {
           // All chats processed — safe to replace entire cache
@@ -780,6 +781,7 @@ class ChatStorageCrud {
         role: role,
         text: text,
         reasoning: m['reasoning'] as String?,
+        replyContext: m['replyContext'] as String?,
         images: m['images'] as String?,
         imageCostEur: m['imageCostEur'] as String?,
         imageGeneratedAt: m['imageGeneratedAt'] as String?,
@@ -913,17 +915,19 @@ class ChatStorageCrud {
     ChatStorageState.notifyChanges(finalId);
 
     // Cache plaintext row (NOT the encrypted Supabase row)
-    unawaited(LocalChatCacheService.upsert(
-      user.id,
-      LocalChatCacheService.buildPlaintextRow(
-        id: finalId,
-        payload: payloadJson,
-        createdAt: inserted['created_at'] as String,
-        isStarred: (inserted['is_starred'] as bool?) ?? false,
-        updatedAt: inserted['updated_at'] as String?,
-        title: title.isNotEmpty ? title : null,
+    unawaited(
+      LocalChatCacheService.upsert(
+        user.id,
+        LocalChatCacheService.buildPlaintextRow(
+          id: finalId,
+          payload: payloadJson,
+          createdAt: inserted['created_at'] as String,
+          isStarred: (inserted['is_starred'] as bool?) ?? false,
+          updatedAt: inserted['updated_at'] as String?,
+          title: title.isNotEmpty ? title : null,
+        ),
       ),
-    ));
+    );
 
     // Log with title for debugging
     final displayTitle = title.length > 50
@@ -1053,17 +1057,19 @@ class ChatStorageCrud {
     ChatStorageState.notifyChanges(chatId);
 
     // Cache plaintext row (NOT the encrypted Supabase row)
-    unawaited(LocalChatCacheService.upsert(
-      user.id,
-      LocalChatCacheService.buildPlaintextRow(
-        id: chatId,
-        payload: payloadJson,
-        createdAt: updatedRow['created_at'] as String,
-        isStarred: (updatedRow['is_starred'] as bool?) ?? false,
-        updatedAt: updatedRow['updated_at'] as String?,
-        title: title.isNotEmpty ? title : null,
+    unawaited(
+      LocalChatCacheService.upsert(
+        user.id,
+        LocalChatCacheService.buildPlaintextRow(
+          id: chatId,
+          payload: payloadJson,
+          createdAt: updatedRow['created_at'] as String,
+          isStarred: (updatedRow['is_starred'] as bool?) ?? false,
+          updatedAt: updatedRow['updated_at'] as String?,
+          title: title.isNotEmpty ? title : null,
+        ),
       ),
-    ));
+    );
 
     return chat;
   }

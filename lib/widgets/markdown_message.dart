@@ -21,6 +21,7 @@ class MarkdownMessage extends StatefulWidget {
     this.wrapWithSelectionArea = true,
     this.paragraphFontSize,
     this.paragraphHeight,
+    this.fontFamily,
   });
 
   final String text;
@@ -29,6 +30,7 @@ class MarkdownMessage extends StatefulWidget {
   final bool wrapWithSelectionArea;
   final double? paragraphFontSize;
   final double? paragraphHeight;
+  final String? fontFamily;
 
   @override
   State<MarkdownMessage> createState() => _MarkdownMessageState();
@@ -53,7 +55,8 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
     super.didUpdateWidget(oldWidget);
     if (widget.text != oldWidget.text ||
         widget.textColor != oldWidget.textColor ||
-        widget.backgroundColor != oldWidget.backgroundColor) {
+        widget.backgroundColor != oldWidget.backgroundColor ||
+        widget.fontFamily != oldWidget.fontFamily) {
       _rebuildCache();
     }
   }
@@ -120,6 +123,7 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
     );
     final Color codeBorderColor = widget.textColor.withValues(alpha: 0.2);
     final Color accentColor = theme.colorScheme.primary;
+    final String? proseFontFamily = widget.fontFamily;
 
     final MarkdownConfig config = MarkdownConfig(
       configs: [
@@ -129,11 +133,13 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
                 color: widget.textColor,
                 height: widget.paragraphHeight ?? 1.45,
                 fontSize: widget.paragraphFontSize ?? 14,
+                fontFamily: proseFontFamily,
               )) ??
               TextStyle(
                 color: widget.textColor,
                 height: widget.paragraphHeight ?? 1.45,
                 fontSize: widget.paragraphFontSize ?? 14,
+                fontFamily: proseFontFamily,
               ),
         ),
         H1Config(
@@ -142,11 +148,13 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
                 color: widget.textColor,
                 height: 1.3,
                 fontWeight: FontWeight.w700,
+                fontFamily: proseFontFamily,
               )) ??
               TextStyle(
                 color: widget.textColor,
                 height: 1.3,
                 fontWeight: FontWeight.w700,
+                fontFamily: proseFontFamily,
               ),
         ),
         H2Config(
@@ -155,11 +163,13 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
                 color: widget.textColor,
                 height: 1.3,
                 fontWeight: FontWeight.w700,
+                fontFamily: proseFontFamily,
               )) ??
               TextStyle(
                 color: widget.textColor,
                 height: 1.3,
                 fontWeight: FontWeight.w700,
+                fontFamily: proseFontFamily,
               ),
         ),
         H3Config(
@@ -168,11 +178,13 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
                 color: widget.textColor,
                 height: 1.3,
                 fontWeight: FontWeight.w700,
+                fontFamily: proseFontFamily,
               )) ??
               TextStyle(
                 color: widget.textColor,
                 height: 1.3,
                 fontWeight: FontWeight.w700,
+                fontFamily: proseFontFamily,
               ),
         ),
         H4Config(
@@ -181,11 +193,13 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
                 color: widget.textColor,
                 height: 1.35,
                 fontWeight: FontWeight.w600,
+                fontFamily: proseFontFamily,
               )) ??
               TextStyle(
                 color: widget.textColor,
                 height: 1.35,
                 fontWeight: FontWeight.w600,
+                fontFamily: proseFontFamily,
               ),
         ),
         H5Config(
@@ -194,11 +208,13 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
                 color: widget.textColor,
                 height: 1.35,
                 fontWeight: FontWeight.w600,
+                fontFamily: proseFontFamily,
               )) ??
               TextStyle(
                 color: widget.textColor,
                 height: 1.35,
                 fontWeight: FontWeight.w600,
+                fontFamily: proseFontFamily,
               ),
         ),
         H6Config(
@@ -207,11 +223,13 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
                 color: widget.textColor,
                 height: 1.35,
                 fontWeight: FontWeight.w600,
+                fontFamily: proseFontFamily,
               )) ??
               TextStyle(
                 color: widget.textColor,
                 height: 1.35,
                 fontWeight: FontWeight.w600,
+                fontFamily: proseFontFamily,
               ),
         ),
         CodeConfig(
@@ -238,10 +256,12 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
               (theme.textTheme.bodyMedium?.copyWith(
                 color: accentColor,
                 decoration: TextDecoration.underline,
+                fontFamily: proseFontFamily,
               )) ??
               TextStyle(
                 color: accentColor,
                 decoration: TextDecoration.underline,
+                fontFamily: proseFontFamily,
               ),
           onTap: (url) {
             _onTapLink(url);
@@ -264,11 +284,19 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
               (theme.textTheme.bodyMedium?.copyWith(
                 color: widget.textColor,
                 fontWeight: FontWeight.w600,
+                fontFamily: proseFontFamily,
               )) ??
-              TextStyle(color: widget.textColor, fontWeight: FontWeight.w600),
+              TextStyle(
+                color: widget.textColor,
+                fontWeight: FontWeight.w600,
+                fontFamily: proseFontFamily,
+              ),
           bodyStyle:
-              (theme.textTheme.bodyMedium?.copyWith(color: widget.textColor)) ??
-              TextStyle(color: widget.textColor),
+              (theme.textTheme.bodyMedium?.copyWith(
+                color: widget.textColor,
+                fontFamily: proseFontFamily,
+              )) ??
+              TextStyle(color: widget.textColor, fontFamily: proseFontFamily),
         ),
         ListConfig(),
         HrConfig(color: widget.textColor.withValues(alpha: 0.2), height: 1),

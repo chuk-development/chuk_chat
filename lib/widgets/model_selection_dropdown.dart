@@ -63,6 +63,7 @@ class ModelSelectionDropdown extends StatefulWidget {
   final FocusNode textFieldFocusNode;
   final bool isCompactMode;
   final String? compactLabel;
+  final bool transparentStyle;
 
   const ModelSelectionDropdown({
     super.key,
@@ -71,6 +72,7 @@ class ModelSelectionDropdown extends StatefulWidget {
     required this.textFieldFocusNode,
     this.isCompactMode = false,
     this.compactLabel,
+    this.transparentStyle = false,
   });
 
   static final ValueNotifier<String> selectedModelNotifier =
@@ -1037,7 +1039,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
             height: 36,
             width: effectiveWidth,
             decoration: BoxDecoration(
-              color: bgColor,
+              color: widget.transparentStyle ? Colors.transparent : bgColor,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
                 color: hovered
@@ -1102,7 +1104,9 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
         return Theme(
           data: compactTapTargetTheme,
           child: PopupMenuButton<String>(
-            color: theme.scaffoldBackgroundColor,
+            color: widget.transparentStyle
+                ? theme.scaffoldBackgroundColor.withValues(alpha: 0.94)
+                : theme.scaffoldBackgroundColor,
             constraints: BoxConstraints.tightFor(width: popupWidth),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(18),

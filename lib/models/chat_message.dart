@@ -6,6 +6,7 @@ class ChatMessage {
     required this.role,
     required this.text,
     this.reasoning,
+    this.replyContext,
     this.images,
     this.imageCostEur,
     this.imageGeneratedAt,
@@ -22,6 +23,7 @@ class ChatMessage {
       role: json['role'] as String? ?? json['sender'] as String? ?? 'user',
       text: json['text'] as String? ?? '',
       reasoning: json['reasoning'] as String?,
+      replyContext: json['replyContext'] as String?,
       images: json['images'] as String?,
       imageCostEur: json['imageCostEur'] as String?,
       imageGeneratedAt: json['imageGeneratedAt'] as String?,
@@ -37,6 +39,7 @@ class ChatMessage {
   final String role;
   final String text;
   final String? reasoning;
+  final String? replyContext;
   final String? images;
   final String? imageCostEur;
   final String? imageGeneratedAt;
@@ -59,6 +62,8 @@ class ChatMessage {
     'role': role,
     'text': text,
     if (reasoning != null && reasoning!.isNotEmpty) 'reasoning': reasoning,
+    if (replyContext != null && replyContext!.isNotEmpty)
+      'replyContext': replyContext,
     if (images != null && images!.isNotEmpty) 'images': images,
     if (imageCostEur != null && imageCostEur!.isNotEmpty)
       'imageCostEur': imageCostEur,

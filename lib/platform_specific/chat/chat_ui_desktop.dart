@@ -125,7 +125,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   late AnimationController _animCtrl;
   String _selectedModelId = ''; // Will be loaded from user preferences
   String? _selectedProviderSlug;
-  bool _reasoningEnabled = true; // true = default (reasoning on for reasoning models)
+  bool _reasoningEnabled =
+      true; // true = default (reasoning on for reasoning models)
   String? _systemPrompt;
   String? _selectedProjectId;
   late final VoidCallback _modelSelectionListener;
@@ -141,6 +142,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   /// Queued message text — when the user sends while AI is still streaming,
   /// the text is parked here and dispatched after the current response ends.
   String? _pendingMessageText;
+  String? _pendingMessageReplyContext;
+  String? _pendingMessageReplyPreviewText;
+  String? _pendingReplyContext;
+  String? _pendingReplyPreviewText;
+  String _pendingReplyPreviewLabel = 'Reply to AI';
 
   bool _showScrollToBottom = false;
   bool _isLoadingChat = false; // Loading indicator for chat switching
@@ -265,12 +271,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           final newText = _controller.text.trim();
           _cancelEditMessage();
           if (newText.isNotEmpty) {
-            unawaited(_submitEditedMessage(
-              editIndex,
-              newText,
-              removeFollowingAssistant: false,
-              clearMessagesBelow: true,
-            ));
+            unawaited(
+              _submitEditedMessage(
+                editIndex,
+                newText,
+                removeFollowingAssistant: false,
+                clearMessagesBelow: true,
+              ),
+            );
           }
         } else {
           unawaited(_sendMessage());
@@ -434,17 +442,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     }
   }
 
-  static const _reasoningKeywords = [
-    'thinking', 'reasoning', '/o1', 'o1-', '/o3', 'o3-',
-    'deepseek-r1', 'deepseek/r1', 'gpt-5',
-  ];
-
-  bool _modelSupportsReasoning(String modelId) {
-    if (modelId.isEmpty) return false;
-    final lowered = modelId.toLowerCase();
-    return _reasoningKeywords.any((kw) => lowered.contains(kw));
-  }
-
   @override
   void dispose() {
     // CRITICAL: Clear loading lock if we're disposed while loading
@@ -531,6 +528,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // Show loading indicator immediately
     setState(() {
       _isLoadingChat = true;
+      _pendingReplyContext = null;
+      _pendingReplyPreviewText = null;
+      _pendingReplyPreviewLabel = 'Reply to AI';
     });
     _clearMessageDecodeCaches();
 
@@ -983,8 +983,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       });
     } else {
       // Use the existing session token — no need to refresh first.
-      final accessToken =
-          SupabaseService.auth.currentSession?.accessToken;
+      final accessToken = SupabaseService.auth.currentSession?.accessToken;
 
       final bool started = await _audioHandler.startRecording(
         accessToken: accessToken,
@@ -1088,6 +1087,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     if (text.isEmpty) return;
     setState(() {
       _messageActionsHandler.startEdit(index);
+      _pendingReplyContext = null;
+      _pendingReplyPreviewText = null;
+      _pendingReplyPreviewLabel = 'Reply to AI';
       _controller.text = text;
       _controller.selection = TextSelection.fromPosition(
         TextPosition(offset: text.length),
@@ -1240,9 +1242,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               : 0.0;
 
           // sqrt scaling — boosts quiet speech for visible response.
-          final double boosted = rawLevel < 0.01
-              ? 0.0
-              : math.sqrt(rawLevel);
+          final double boosted = rawLevel < 0.01 ? 0.0 : math.sqrt(rawLevel);
 
           // Bar height: 2px idle → 28px loud.
           final double barHeight = (boosted * 26 + 2).clamp(2.0, 28.0);
@@ -1397,6 +1397,44 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _decodedAttachmentsCache.clear();
     _decodedToolCallsCache.clear();
     _decodedContentBlocksCache.clear();
+  }
+
+  void _clearPendingReplyContext() {
+    if (!mounted) return;
+    setState(() {
+      _pendingReplyContext = null;
+      _pendingReplyPreviewText = null;
+      _pendingReplyPreviewLabel = 'Reply to AI';
+    });
+  }
+
+  void _setPendingReplyContext({
+    required int messageIndex,
+    required int blockIndex,
+    required String blockType,
+    required String blockText,
+  }) {
+    final String trimmed = blockText.trim();
+    if (trimmed.isEmpty) return;
+
+    final String replyContext = ChatUiHelpers.buildReplyContextJson(
+      sourceMessageIndex: messageIndex,
+      sourceBlockIndex: blockIndex,
+      blockType: blockType,
+      blockText: trimmed,
+    );
+    final String? preview = ChatUiHelpers.extractReplyPreviewText(replyContext);
+    if (!mounted || preview == null || preview.isEmpty) return;
+
+    setState(() {
+      _pendingReplyContext = replyContext;
+      _pendingReplyPreviewText = preview;
+      _pendingReplyPreviewLabel = ChatUiHelpers.extractReplyPreviewLabel(
+        replyContext,
+      );
+    });
+    _textFieldFocusNode.requestFocus();
+    _showSnackBar('Reply target selected');
   }
 
   @override
@@ -1637,6 +1675,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                             toolCalls: data.toolCalls,
                                             showToolCalls: widget.showToolCalls,
                                             contentBlocks: data.contentBlocks,
+                                            replyPreviewText:
+                                                data.replyPreviewText,
+                                            replyPreviewLabel:
+                                                data.replyPreviewLabel,
                                             isStreamingMessage:
                                                 data.isStreamingMessage,
                                             images: data.images,
@@ -1668,6 +1710,20 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                                 !data.isUser &&
                                                     !data.isStreamingMessage
                                                 ? () => _resendMessageAt(i)
+                                                : null,
+                                            onReplyToAiBlock:
+                                                !data.isUser &&
+                                                    !data.isStreamingMessage
+                                                ? (
+                                                    blockText,
+                                                    blockType,
+                                                    blockIndex,
+                                                  ) => _setPendingReplyContext(
+                                                    messageIndex: i,
+                                                    blockIndex: blockIndex,
+                                                    blockType: blockType,
+                                                    blockText: blockText,
+                                                  )
                                                 : null,
                                           ),
                                         );
@@ -1795,6 +1851,75 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           Column(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              if (_pendingReplyPreviewText != null &&
+                  _pendingReplyPreviewText!.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: bg.withValues(alpha: 0.35),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: accent.withValues(alpha: 0.35),
+                        width: 1.2,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.reply_rounded,
+                          size: 16,
+                          color: accent.withValues(alpha: 0.95),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _pendingReplyPreviewLabel,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: accent.withValues(alpha: 0.95),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _pendingReplyPreviewText!,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: iconFg.withValues(alpha: 0.78),
+                                  fontSize: 12,
+                                  height: 1.2,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Clear reply',
+                          onPressed: _clearPendingReplyContext,
+                          icon: Icon(
+                            Icons.close_rounded,
+                            color: iconFg.withValues(alpha: 0.8),
+                            size: 18,
+                          ),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               // Attachment previews inside the textbox (right-padded so cards don't go under send button)
               if (_fileHandler.attachedFiles.isNotEmpty)
                 Padding(
@@ -1820,7 +1945,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                   padding: const EdgeInsets.only(bottom: 6),
                   child: Row(
                     children: [
-                      Icon(Icons.edit, size: 14, color: iconFg.withValues(alpha: 0.6)),
+                      Icon(
+                        Icons.edit,
+                        size: 14,
+                        color: iconFg.withValues(alpha: 0.6),
+                      ),
                       const SizedBox(width: 6),
                       Text(
                         'Editing message',
@@ -1873,8 +2002,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                         hintText: _messageActionsHandler.isEditing
                             ? 'Edit your message...'
                             : hasAttachments
-                                ? 'Add a message or send documents'
-                                : 'Ask me anything !',
+                            ? 'Add a message or send documents'
+                            : 'Ask me anything !',
                         hintStyle: TextStyle(
                           color: iconFg.withValues(alpha: 0.8),
                           fontWeight: FontWeight.w600,
@@ -1961,7 +2090,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                     children: [
                                       const Spacer(),
                                       // Reasoning toggle (only for reasoning models)
-                                      if (ModelSelectionDropdown.modelSupportsReasoning(_selectedModelId)) ...[
+                                      if (ModelSelectionDropdown.modelSupportsReasoning(
+                                        _selectedModelId,
+                                      )) ...[
                                         Tooltip(
                                           message: _reasoningEnabled
                                               ? 'Reasoning on — click to disable for faster responses'
@@ -1970,7 +2101,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                             icon: Icons.psychology,
                                             onTap: () {
                                               setState(() {
-                                                _reasoningEnabled = !_reasoningEnabled;
+                                                _reasoningEnabled =
+                                                    !_reasoningEnabled;
                                               });
                                             },
                                             isActive: _reasoningEnabled,
@@ -1979,24 +2111,26 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                         const SizedBox(width: 6),
                                       ],
                                       ModelSelectionDropdown(
-                                      key: const ValueKey<String>(
-                                        'desktop-model-selection-dropdown',
+                                        key: const ValueKey<String>(
+                                          'desktop-model-selection-dropdown',
+                                        ),
+                                        initialSelectedModelId:
+                                            _selectedModelId,
+                                        onModelSelected: (newModelId) {
+                                          setState(() {
+                                            _selectedModelId = newModelId;
+                                          });
+                                          if (kDebugMode) {
+                                            debugPrint(
+                                              'Selected model ID: $_selectedModelId',
+                                            );
+                                          }
+                                        },
+                                        textFieldFocusNode: _textFieldFocusNode,
+                                        isCompactMode: isCompactMode,
+                                        transparentStyle: true,
                                       ),
-                                      initialSelectedModelId: _selectedModelId,
-                                      onModelSelected: (newModelId) {
-                                        setState(() {
-                                          _selectedModelId = newModelId;
-                                        });
-                                        if (kDebugMode) {
-                                          debugPrint(
-                                            'Selected model ID: $_selectedModelId',
-                                          );
-                                        }
-                                      },
-                                      textFieldFocusNode: _textFieldFocusNode,
-                                      isCompactMode: isCompactMode,
-                                    ),
-                                  ],
+                                    ],
                                   ),
                                 ),
                               ],
