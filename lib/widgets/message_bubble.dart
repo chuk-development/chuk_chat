@@ -826,12 +826,12 @@ class _MessageBubbleState extends State<MessageBubble>
         case ContentBlockType.text:
           flushGroupedReasoningTools();
           if (block.text != null && block.text!.trim().isNotEmpty) {
-            children.add(
-              _buildSwipeToReplyWrapper(
-                blockText: block.text!,
-                blockType: 'text',
-                blockIndex: blockIndex,
-                child: _buildBlockText(block.text!, iconFgColor, bgColor),
+            children.addAll(
+              _buildSwipeableTextParagraphs(
+                text: block.text!,
+                textColor: iconFgColor,
+                bgColor: bgColor,
+                baseBlockIndex: blockIndex * 1000,
               ),
             );
           }
@@ -861,20 +861,12 @@ class _MessageBubbleState extends State<MessageBubble>
       }
 
       if (trailingText.isNotEmpty) {
-        children.add(
-          _buildSwipeToReplyWrapper(
-            blockText: trailingText,
-            blockType: 'text',
-            blockIndex: blocks.length,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: MarkdownMessage(
-                text: trailingText,
-                textColor: iconFgColor,
-                backgroundColor: bgColor,
-                fontFamily: _kAiResponseFontFamily,
-              ),
-            ),
+        children.addAll(
+          _buildSwipeableTextParagraphs(
+            text: trailingText,
+            textColor: iconFgColor,
+            bgColor: bgColor,
+            baseBlockIndex: blocks.length * 1000,
           ),
         );
       }
@@ -1242,6 +1234,72 @@ class _MessageBubbleState extends State<MessageBubble>
         fontFamily: _kAiResponseFontFamily,
       ),
     );
+  }
+
+  List<String> _extractReplyParagraphs(String text) {
+    final String normalized = text.replaceAll('\r\n', '\n').trim();
+    if (normalized.isEmpty) {
+      return const <String>[];
+    }
+
+    // Keep fenced code intact; splitting on blank lines would break it.
+    if (normalized.contains('```')) {
+      return <String>[normalized];
+    }
+
+    final List<String> parts = normalized
+        .split(RegExp(r'\n\s*\n+'))
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList();
+    if (parts.length <= 1) {
+      return <String>[normalized];
+    }
+    return parts;
+  }
+
+  List<Widget> _buildSwipeableTextParagraphs({
+    required String text,
+    required Color textColor,
+    required Color bgColor,
+    required int baseBlockIndex,
+  }) {
+    final String trimmed = text.trim();
+    if (trimmed.isEmpty) {
+      return const <Widget>[];
+    }
+
+    if (_hasVisualBlocks(trimmed)) {
+      return <Widget>[
+        _buildSwipeToReplyWrapper(
+          blockText: trimmed,
+          blockType: 'text',
+          blockIndex: baseBlockIndex,
+          child: _buildVisualContent(
+            content: trimmed,
+            textColor: textColor,
+            bgColor: bgColor,
+          ),
+        ),
+      ];
+    }
+
+    final List<String> paragraphs = _extractReplyParagraphs(trimmed);
+    final List<Widget> widgets = <Widget>[];
+    for (int i = 0; i < paragraphs.length; i++) {
+      widgets.add(
+        _buildSwipeToReplyWrapper(
+          blockText: paragraphs[i],
+          blockType: 'text',
+          blockIndex: baseBlockIndex + i,
+          child: _buildBlockText(paragraphs[i], textColor, bgColor),
+        ),
+      );
+      if (i < paragraphs.length - 1) {
+        widgets.add(const SizedBox(height: 2));
+      }
+    }
+    return widgets;
   }
 
   /// Renders a reasoning content block as an expandable card.
@@ -2339,20 +2397,6 @@ class _MessageBubbleState extends State<MessageBubble>
       return const SizedBox.shrink();
     }
 
-    // For AI messages, check for embedded <chart> / <map> blocks
-    if (!isUserMessage && _hasVisualBlocks(displayText)) {
-      return _buildSwipeToReplyWrapper(
-        blockText: displayText,
-        blockType: 'text',
-        blockIndex: 0,
-        child: _buildVisualContent(
-          content: displayText,
-          textColor: iconFgColor,
-          bgColor: bgColor,
-        ),
-      );
-    }
-
     if (isUserMessage) {
       final List<Widget> children = <Widget>[];
       final String? replyPreviewText = widget.replyPreviewText;
@@ -2426,22 +2470,22 @@ class _MessageBubbleState extends State<MessageBubble>
       );
     }
 
-    final Widget messageWidget = MarkdownMessage(
+    final List<Widget> aiParagraphs = _buildSwipeableTextParagraphs(
       text: displayText,
       textColor: iconFgColor,
-      backgroundColor: bgColor,
-      wrapWithSelectionArea: false,
-      fontFamily: _kAiResponseFontFamily,
+      bgColor: bgColor,
+      baseBlockIndex: 0,
     );
-
-    return _buildSwipeToReplyWrapper(
-      blockText: displayText,
-      blockType: 'text',
-      blockIndex: 0,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: messageWidget,
-      ),
+    if (aiParagraphs.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    if (aiParagraphs.length == 1) {
+      return aiParagraphs.first;
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: aiParagraphs,
     );
   }
 
