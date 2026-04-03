@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:chuk_chat/models/content_block.dart';
@@ -104,6 +105,8 @@ class MessageBubble extends StatefulWidget {
     this.toolCalls,
     this.showToolCalls = true,
     this.contentBlocks,
+    this.replyPreviewText,
+    this.replyPreviewLabel,
     this.isStreamingMessage = false,
     this.images,
     this.attachments,
@@ -111,6 +114,7 @@ class MessageBubble extends StatefulWidget {
     this.imageGeneratedAt,
     this.onAskUserAnswer,
     this.onRetry,
+    this.onReplyToAiBlock,
     this.userMessageActions = const <MessageBubbleAction>[],
   });
 
@@ -141,6 +145,8 @@ class MessageBubble extends StatefulWidget {
   /// When present and non-empty, the bubble renders these in sequence
   /// instead of the flat text + single-tool-calls-bar layout.
   final List<ContentBlock>? contentBlocks;
+  final String? replyPreviewText;
+  final String? replyPreviewLabel;
 
   /// Whether this message is currently being streamed. Used with
   /// [contentBlocks] to show trailing text from the active streaming pass.
@@ -160,6 +166,11 @@ class MessageBubble extends StatefulWidget {
   /// (e.g. after empty response or failed tool calls). Triggers resending
   /// the last user message without re-running the full tool discovery.
   final VoidCallback? onRetry;
+
+  /// Called when the user swipes right on an AI response block to reply to it.
+  /// Callback args: block text, block type, and block index within the message.
+  final void Function(String blockText, String blockType, int blockIndex)?
+  onReplyToAiBlock;
 
   /// Actions shown in a popup menu on long-press for user messages.
   /// These are hidden by default and only appear on long-press, matching
@@ -189,6 +200,8 @@ class _MessageBubbleState extends State<MessageBubble>
   final Set<String> _expandedCards = {};
   bool _complexBubbleLogged = false;
   bool _showUserActions = false;
+  static final String _kAiResponseFontFamily =
+      GoogleFonts.arimo().fontFamily ?? 'Arimo';
 
   @override
   bool get wantKeepAlive => true; // Keep this widget alive to prevent rebuilds
@@ -257,6 +270,37 @@ class _MessageBubbleState extends State<MessageBubble>
     _loadPreferences();
   }
 
+  Widget _buildSwipeToReplyWrapper({
+    required Widget child,
+    required String blockText,
+    required String blockType,
+    required int blockIndex,
+  }) {
+    final callback = widget.onReplyToAiBlock;
+    if (!kPlatformMobile ||
+        callback == null ||
+        widget.isUser ||
+        widget.isStreamingMessage ||
+        blockText.trim().isEmpty) {
+      return child;
+    }
+
+    double dragDx = 0;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onHorizontalDragUpdate: (details) {
+        dragDx += details.delta.dx;
+      },
+      onHorizontalDragEnd: (_) {
+        if (dragDx >= 42) {
+          callback(blockText, blockType, blockIndex);
+        }
+        dragDx = 0;
+      },
+      child: child,
+    );
+  }
+
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     if (mounted) {
@@ -285,8 +329,8 @@ class _MessageBubbleState extends State<MessageBubble>
   static const double _mobileBottomBarHeight = 36.0;
 
   Widget _buildBottomBar(Color iconFgColor, bool hasActions) {
-    final bool hasSources = widget.toolCalls != null &&
-        widget.toolCalls!.isNotEmpty;
+    final bool hasSources =
+        widget.toolCalls != null && widget.toolCalls!.isNotEmpty;
 
     if (!hasSources && !hasActions) return const SizedBox.shrink();
 
@@ -437,8 +481,7 @@ class _MessageBubbleState extends State<MessageBubble>
 
     // AI message actions are shown below the bubble (copy, retry).
     // User message actions are hidden and shown via long-press popup.
-    final bool hasActions =
-        !isUserMessage && widget.actions.isNotEmpty;
+    final bool hasActions = !isUserMessage && widget.actions.isNotEmpty;
 
     // Check if we should use the interleaved content blocks layout
     final bool useContentBlocks =
@@ -516,8 +559,7 @@ class _MessageBubbleState extends State<MessageBubble>
         isUserMessage && widget.userMessageActions.isNotEmpty;
     final Widget userBubble = hasUserActions
         ? GestureDetector(
-            onTap: () =>
-                setState(() => _showUserActions = !_showUserActions),
+            onTap: () => setState(() => _showUserActions = !_showUserActions),
             child: bubbleContent,
           )
         : bubbleContent;
@@ -589,7 +631,12 @@ class _MessageBubbleState extends State<MessageBubble>
         ),
       if (hasImages && !placeQrImageAboveResponse) ...[
         _buildImagesGrid(widget.images!),
-        _buildImageMetaMenu(iconFgColor, alignRight, widget.imageCostEur, widget.imageGeneratedAt),
+        _buildImageMetaMenu(
+          iconFgColor,
+          alignRight,
+          widget.imageCostEur,
+          widget.imageGeneratedAt,
+        ),
         const SizedBox(height: 8),
       ],
       if (widget.attachments != null && widget.attachments!.isNotEmpty) ...[
@@ -602,12 +649,16 @@ class _MessageBubbleState extends State<MessageBubble>
       ],
       if (hasImages && placeQrImageAboveResponse) ...[
         _buildImagesGrid(widget.images!),
-        _buildImageMetaMenu(iconFgColor, alignRight, widget.imageCostEur, widget.imageGeneratedAt),
+        _buildImageMetaMenu(
+          iconFgColor,
+          alignRight,
+          widget.imageCostEur,
+          widget.imageGeneratedAt,
+        ),
         const SizedBox(height: 8),
       ],
       _buildMessageBody(
         iconFgColor: iconFgColor,
-        accentColor: accentColor,
         bgColor: bgColor,
         isUserMessage: isUserMessage,
       ),
@@ -743,7 +794,8 @@ class _MessageBubbleState extends State<MessageBubble>
     }
 
     // Render grouped reasoning/tool-call blocks. Text blocks break groups.
-    for (final block in blocks) {
+    for (int blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
+      final block = blocks[blockIndex];
       switch (block.type) {
         case ContentBlockType.reasoning:
           final reasoningText = block.text?.trim() ?? '';
@@ -774,7 +826,14 @@ class _MessageBubbleState extends State<MessageBubble>
         case ContentBlockType.text:
           flushGroupedReasoningTools();
           if (block.text != null && block.text!.trim().isNotEmpty) {
-            children.add(_buildBlockText(block.text!, iconFgColor, bgColor));
+            children.add(
+              _buildSwipeToReplyWrapper(
+                blockText: block.text!,
+                blockType: 'text',
+                blockIndex: blockIndex,
+                child: _buildBlockText(block.text!, iconFgColor, bgColor),
+              ),
+            );
           }
       }
     }
@@ -803,12 +862,18 @@ class _MessageBubbleState extends State<MessageBubble>
 
       if (trailingText.isNotEmpty) {
         children.add(
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: MarkdownMessage(
-              text: trailingText,
-              textColor: iconFgColor,
-              backgroundColor: bgColor,
+          _buildSwipeToReplyWrapper(
+            blockText: trailingText,
+            blockType: 'text',
+            blockIndex: blocks.length,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: MarkdownMessage(
+                text: trailingText,
+                textColor: iconFgColor,
+                backgroundColor: bgColor,
+                fontFamily: _kAiResponseFontFamily,
+              ),
             ),
           ),
         );
@@ -912,6 +977,7 @@ class _MessageBubbleState extends State<MessageBubble>
               text: textBefore,
               textColor: textColor,
               backgroundColor: bgColor,
+              fontFamily: _kAiResponseFontFamily,
             ),
           ),
         );
@@ -970,6 +1036,7 @@ class _MessageBubbleState extends State<MessageBubble>
             text: textAfter,
             textColor: textColor,
             backgroundColor: bgColor,
+            fontFamily: _kAiResponseFontFamily,
           ),
         ),
       );
@@ -983,6 +1050,7 @@ class _MessageBubbleState extends State<MessageBubble>
             text: content,
             textColor: textColor,
             backgroundColor: bgColor,
+            fontFamily: _kAiResponseFontFamily,
           ),
         ),
       );
@@ -1058,8 +1126,7 @@ class _MessageBubbleState extends State<MessageBubble>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (to.isNotEmpty)
-                  _emailField('To', to, colorScheme),
+                if (to.isNotEmpty) _emailField('To', to, colorScheme),
                 if (cc != null && cc.isNotEmpty)
                   _emailField('CC', cc, colorScheme),
                 if (bcc != null && bcc.isNotEmpty)
@@ -1123,10 +1190,7 @@ class _MessageBubbleState extends State<MessageBubble>
           Expanded(
             child: Text(
               value,
-              style: TextStyle(
-                fontSize: 13,
-                color: colorScheme.onSurface,
-              ),
+              style: TextStyle(fontSize: 13, color: colorScheme.onSurface),
             ),
           ),
         ],
@@ -1175,6 +1239,7 @@ class _MessageBubbleState extends State<MessageBubble>
         text: text,
         textColor: textColor,
         backgroundColor: bgColor,
+        fontFamily: _kAiResponseFontFamily,
       ),
     );
   }
@@ -1207,8 +1272,8 @@ class _MessageBubbleState extends State<MessageBubble>
     final String label = waitingForTokens
         ? 'Connecting...'
         : _hasReasoning
-            ? (isStreaming ? 'Reasoning...' : 'Reasoning')
-            : 'Model Info';
+        ? (isStreaming ? 'Reasoning...' : 'Reasoning')
+        : 'Model Info';
     final Color barAccent = accentColor;
 
     return Container(
@@ -1241,7 +1306,9 @@ class _MessageBubbleState extends State<MessageBubble>
                     )
                   else
                     Icon(
-                      _hasReasoning ? Icons.psychology : Icons.smart_toy_outlined,
+                      _hasReasoning
+                          ? Icons.psychology
+                          : Icons.smart_toy_outlined,
                       size: 14,
                       color: barAccent,
                     ),
@@ -1809,8 +1876,10 @@ class _MessageBubbleState extends State<MessageBubble>
       if (tool.name == 'web_search') {
         final urlRegex = RegExp(r'^\s+(https?://\S+)', multiLine: true);
         final titleRegex = RegExp(r'^\d+\.\s+(.+)$', multiLine: true);
-        final urls =
-            urlRegex.allMatches(tool.result!).map((m) => m.group(1)!).toList();
+        final urls = urlRegex
+            .allMatches(tool.result!)
+            .map((m) => m.group(1)!)
+            .toList();
         final titles = titleRegex
             .allMatches(tool.result!)
             .map((m) => m.group(1)!)
@@ -1906,7 +1975,7 @@ class _MessageBubbleState extends State<MessageBubble>
                             'https://www.google.com/s2/favicons?domain=${source['host']}&sz=32',
                             width: 20,
                             height: 20,
-                            errorBuilder: (_, __, ___) => Icon(
+                            errorBuilder: (context, error, stackTrace) => Icon(
                               Icons.public,
                               size: 20,
                               color: colorScheme.onSurfaceVariant,
@@ -1993,7 +2062,7 @@ class _MessageBubbleState extends State<MessageBubble>
                     'https://www.google.com/s2/favicons?domain=${sources[i]['host']}&sz=32',
                     width: kPlatformMobile ? 21 : 16,
                     height: kPlatformMobile ? 21 : 16,
-                    errorBuilder: (_, __, ___) => Icon(
+                    errorBuilder: (context, error, stackTrace) => Icon(
                       Icons.public,
                       size: kPlatformMobile ? 21 : 16,
                       color: colorScheme.onSurfaceVariant,
@@ -2258,7 +2327,6 @@ class _MessageBubbleState extends State<MessageBubble>
 
   Widget _buildMessageBody({
     required Color iconFgColor,
-    required Color accentColor,
     required Color bgColor,
     required bool isUserMessage,
   }) {
@@ -2273,19 +2341,88 @@ class _MessageBubbleState extends State<MessageBubble>
 
     // For AI messages, check for embedded <chart> / <map> blocks
     if (!isUserMessage && _hasVisualBlocks(displayText)) {
-      return _buildVisualContent(
-        content: displayText,
-        textColor: iconFgColor,
-        bgColor: bgColor,
+      return _buildSwipeToReplyWrapper(
+        blockText: displayText,
+        blockType: 'text',
+        blockIndex: 0,
+        child: _buildVisualContent(
+          content: displayText,
+          textColor: iconFgColor,
+          bgColor: bgColor,
+        ),
       );
     }
 
     if (isUserMessage) {
+      final List<Widget> children = <Widget>[];
+      final String? replyPreviewText = widget.replyPreviewText;
+      if (replyPreviewText != null && replyPreviewText.trim().isNotEmpty) {
+        children.add(
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: iconFgColor.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: iconFgColor.withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.reply_rounded,
+                  size: 14,
+                  color: iconFgColor.withValues(alpha: 0.85),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        widget.replyPreviewLabel ?? 'Reply to AI',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: iconFgColor.withValues(alpha: 0.85),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        replyPreviewText,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: iconFgColor.withValues(alpha: 0.75),
+                          fontSize: 12,
+                          height: 1.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+
       // Use plain Text so taps pass through to the GestureDetector
       // that toggles the action bar. Copy is available via the action bar.
-      return Text(
-        displayText,
-        style: TextStyle(color: iconFgColor, fontSize: 15, height: 1.38),
+      children.add(
+        Text(
+          displayText,
+          style: TextStyle(color: iconFgColor, fontSize: 15, height: 1.38),
+        ),
+      );
+
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: children,
       );
     }
 
@@ -2294,11 +2431,17 @@ class _MessageBubbleState extends State<MessageBubble>
       textColor: iconFgColor,
       backgroundColor: bgColor,
       wrapWithSelectionArea: false,
+      fontFamily: _kAiResponseFontFamily,
     );
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: messageWidget,
+    return _buildSwipeToReplyWrapper(
+      blockText: displayText,
+      blockType: 'text',
+      blockIndex: 0,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: messageWidget,
+      ),
     );
   }
 
@@ -2401,11 +2544,7 @@ class _MessageBubbleState extends State<MessageBubble>
     return Tooltip(
       message: tooltip,
       child: IconButton(
-        icon: Icon(
-          icon,
-          color: color,
-          size: kPlatformMobile ? 15 : 18,
-        ),
+        icon: Icon(icon, color: color, size: kPlatformMobile ? 15 : 18),
         padding: EdgeInsets.all(kPlatformMobile ? 4 : 8),
         visualDensity: VisualDensity.compact,
         constraints: BoxConstraints(
@@ -2457,15 +2596,18 @@ class _MessageBubbleState extends State<MessageBubble>
     try {
       final bytes = await _loadFirstImageBytes();
       if (bytes == null) return;
-      final dir = await getDownloadsDirectory() ??
+      final dir =
+          await getDownloadsDirectory() ??
           await getApplicationDocumentsDirectory();
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final file = File('${dir.path}${Platform.pathSeparator}chuk_chat_image_$timestamp.png');
+      final file = File(
+        '${dir.path}${Platform.pathSeparator}chuk_chat_image_$timestamp.png',
+      );
       await file.writeAsBytes(bytes, flush: true);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Saved to ${file.path}')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Saved to ${file.path}')));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(

@@ -1,7 +1,7 @@
 name: chuk_chat
 description: "Chuk Chat — AI chat client for all platforms."
 
-version: 1.0.61+2062
+version: 1.0.62
 
 environment:
   sdk: ^3.9.2
@@ -30,6 +30,7 @@ dependencies:
   url_launcher: ^6.3.0
   path_provider: ^2.1.4
   markdown_widget: ^2.3.2+8
+  google_fonts: ^6.3.2
   markdown: ^7.3.0
   flutter_math_fork: ^0.7.2
   highlight: ^0.7.0

@@ -877,6 +877,8 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
   Future<void> _cancelCurrentOperation() async {
     // Explicit cancel discards any queued follow-up message too.
     _pendingMessageText = null;
+    _pendingMessageReplyContext = null;
+    _pendingMessageReplyPreviewText = null;
 
     if (_isStreaming) {
       // Stream is active - cancel via existing method
@@ -974,7 +976,20 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         final text = _controller.text.trim();
         if (text.isNotEmpty) {
           _pendingMessageText = text;
+          _pendingMessageReplyContext = _pendingReplyContext;
+          _pendingMessageReplyPreviewText = _pendingReplyPreviewText;
           _controller.clear();
+          if (mounted) {
+            setState(() {
+              _pendingReplyContext = null;
+              _pendingReplyPreviewText = null;
+              _pendingReplyPreviewLabel = 'Reply to AI';
+            });
+          } else {
+            _pendingReplyContext = null;
+            _pendingReplyPreviewText = null;
+            _pendingReplyPreviewLabel = 'Reply to AI';
+          }
           if (kDebugMode) {
             debugPrint(
               '📋 [SendMessage] Queued pending message '
@@ -1045,6 +1060,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       // Credit/free message checks are handled server-side (API returns 402)
 
       final String originalUserInput = _controller.text.trim();
+      final String? replyContextForMessage = _pendingReplyContext;
 
       // Use MessageCompositionService to prepare the message
       final List<Map<String, dynamic>> apiHistory =
@@ -1056,6 +1072,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         attachedFiles: _fileHandler.attachedFiles,
         selectedModelId: _selectedModelId,
         apiHistory: apiHistory,
+        replyContextJson: replyContextForMessage,
         systemPrompt: resolvedSystemPrompt,
         getProviderSlug: _ensureProviderSlugForCurrentModel,
       );
@@ -1193,6 +1210,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         if (imageDataUrls != null && imageDataUrls.isNotEmpty) {
           userMessage['images'] = jsonEncode(imageDataUrls);
         }
+        if (replyContextForMessage != null &&
+            replyContextForMessage.isNotEmpty) {
+          userMessage['replyContext'] = replyContextForMessage;
+        }
 
         // Store document attachments as JSON-encoded string if present
         final documentAttachments = _fileHandler.attachedFiles
@@ -1234,6 +1255,9 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         }
 
         _controller.clear();
+        _pendingReplyContext = null;
+        _pendingReplyPreviewText = null;
+        _pendingReplyPreviewLabel = 'Reply to AI';
         _isSending = true;
         if (hasAttachments) {
           _fileHandler.attachedFiles.clear();
@@ -1884,7 +1908,9 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           history.add({'role': 'user', 'content': text});
         }
       } else if (sender == 'ai' || sender == 'assistant') {
-        if (text == null || text.trim().isEmpty || text == 'Thinking...') continue;
+        if (text == null || text.trim().isEmpty || text == 'Thinking...') {
+          continue;
+        }
         String assistantContent = text;
         if (widget.includeReasoningInHistory) {
           final reasoning = message['reasoning'] ?? '';
@@ -2161,7 +2187,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
   void _drainPendingMessage() {
     final pending = _pendingMessageText;
     if (pending == null) return;
+    final pendingReplyContext = _pendingMessageReplyContext;
+    final pendingReplyPreview = _pendingMessageReplyPreviewText;
     _pendingMessageText = null;
+    _pendingMessageReplyContext = null;
+    _pendingMessageReplyPreviewText = null;
 
     if (kDebugMode) {
       debugPrint(
@@ -2171,6 +2201,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
     // Put the text back into the controller so _sendMessage picks it up
     // via its normal `_controller.text.trim()` path.
+    _pendingReplyContext = pendingReplyContext;
+    _pendingReplyPreviewText = pendingReplyPreview;
+    _pendingReplyPreviewLabel = pendingReplyPreview != null
+        ? ChatUiHelpers.extractReplyPreviewLabel(pendingReplyContext)
+        : 'Reply to AI';
     _controller.text = pending;
     _controller.selection = TextSelection.collapsed(offset: pending.length);
     unawaited(_sendMessage());

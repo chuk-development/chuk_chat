@@ -50,6 +50,8 @@ DeserializeResult deserializePayloadIsolate(String json) {
       if (msg['attachedFilesJson'] != null)
         'attachedFilesJson': msg['attachedFilesJson'],
       if (msg['toolCalls'] != null) 'toolCalls': msg['toolCalls'],
+      if (msg['contentBlocks'] != null) 'contentBlocks': msg['contentBlocks'],
+      if (msg['replyContext'] != null) 'replyContext': msg['replyContext'],
       if (msg['modelId'] != null) 'modelId': msg['modelId'],
       if (msg['provider'] != null) 'provider': msg['provider'],
     };
@@ -205,7 +207,9 @@ class ChatStorageSync {
           ChatStorageState.notifyChanges(chatId);
           // Cache plaintext row (not encrypted Supabase row)
           if (user != null) {
-            unawaited(_upsertPlaintextCache(user.id, chatId, row, chatPayload, chat));
+            unawaited(
+              _upsertPlaintextCache(user.id, chatId, row, chatPayload, chat),
+            );
           }
         }
       } else {
@@ -217,7 +221,9 @@ class ChatStorageSync {
         ChatStorageState.notifyChanges(chatId);
         // Cache plaintext row (not encrypted Supabase row)
         if (user != null) {
-          unawaited(_upsertPlaintextCache(user.id, chatId, row, chatPayload, chat));
+          unawaited(
+            _upsertPlaintextCache(user.id, chatId, row, chatPayload, chat),
+          );
         }
       }
     } on SecretBoxAuthenticationError {
@@ -369,14 +375,24 @@ class ChatStorageSync {
             if (syncedUpdatedAt.isAfter(existingUpdatedAt)) {
               ChatStorageState.chatsById[chatId] = chat;
               if (user != null) {
-                unawaited(_upsertPlaintextCache(user.id, chatId, row, chatPayload, chat));
+                unawaited(
+                  _upsertPlaintextCache(
+                    user.id,
+                    chatId,
+                    row,
+                    chatPayload,
+                    chat,
+                  ),
+                );
               }
               updatedCount++;
             }
           } else {
             ChatStorageState.chatsById[chatId] = chat;
             if (user != null) {
-              unawaited(_upsertPlaintextCache(user.id, chatId, row, chatPayload, chat));
+              unawaited(
+                _upsertPlaintextCache(user.id, chatId, row, chatPayload, chat),
+              );
             }
             addedCount++;
           }
