@@ -2754,7 +2754,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                                 ),
                                             onEdit: _editMessageAt,
                                             onResendMessage: _resendMessageAt,
-                                            toolCalls: toolCalls,
                                           ),
                                       userMessageActions: isUser
                                           ? _messageActionsHandler

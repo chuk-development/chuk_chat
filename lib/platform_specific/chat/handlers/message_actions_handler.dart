@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/utils/clipboard_text_sanitizer.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 
@@ -81,7 +80,6 @@ class MessageActionsHandler {
     required Function(int) onEdit,
     required Function(int) onResendMessage,
     bool hasFailedToolCalls = false,
-    List<ToolCall>? toolCalls,
   }) {
     // User message actions are built separately via buildUserMessageActions.
     if (isUser) return const [];
@@ -89,17 +87,14 @@ class MessageActionsHandler {
     final bool isAssistantPending = isStreaming;
     final List<MessageBubbleAction> actions = [];
 
-    // Copy action for AI messages — includes tool call debug info
-    if (messageText.trim().isNotEmpty || (toolCalls?.isNotEmpty ?? false)) {
+    // Copy action for AI messages — message text only (no tool call metadata)
+    if (messageText.trim().isNotEmpty) {
       actions.add(
         MessageBubbleAction(
           icon: Icons.copy,
           tooltip: 'Copy message',
           label: 'Copy',
-          onPressed: () {
-            final debugText = _buildCopyText(messageText, toolCalls);
-            copyToClipboard(debugText);
-          },
+          onPressed: () => copyToClipboard(messageText),
           isEnabled: !isAssistantPending,
         ),
       );
@@ -118,60 +113,6 @@ class MessageActionsHandler {
     }
 
     return actions;
-  }
-
-  /// Build the text to copy, including tool call debug info when present.
-  String _buildCopyText(String messageText, List<ToolCall>? toolCalls) {
-    if (toolCalls == null || toolCalls.isEmpty) return messageText;
-
-    final buffer = StringBuffer();
-    if (messageText.trim().isNotEmpty) {
-      buffer.writeln(messageText.trim());
-      buffer.writeln();
-    }
-
-    buffer.writeln('--- Tool Calls (${toolCalls.length}) ---');
-    for (final tc in toolCalls) {
-      final elapsed = tc.elapsed;
-      final elapsedStr = elapsed.inSeconds >= 60
-          ? '${elapsed.inMinutes}m ${elapsed.inSeconds % 60}s'
-          : '${elapsed.inSeconds}.${(elapsed.inMilliseconds % 1000) ~/ 100}s';
-
-      buffer.writeln();
-      buffer.writeln('[${tc.status.name.toUpperCase()}] ${tc.name}');
-      buffer.writeln('  Started: ${_formatTime(tc.startedAt)}');
-      if (tc.completedAt != null) {
-        buffer.writeln('  Completed: ${_formatTime(tc.completedAt!)}');
-      }
-      buffer.writeln('  Elapsed: $elapsedStr');
-
-      if (tc.arguments.isNotEmpty) {
-        final argsStr = tc.arguments.entries
-            .map((e) => '${e.key}: ${e.value}')
-            .join(', ');
-        buffer.writeln('  Args: $argsStr');
-      }
-
-      if (tc.status == ToolCallStatus.running ||
-          tc.status == ToolCallStatus.pending) {
-        buffer.writeln('  ⚠ STUCK — tool never completed');
-      }
-
-      if (tc.result != null) {
-        final resultPreview = tc.result!.length > 200
-            ? '${tc.result!.substring(0, 200)}...'
-            : tc.result!;
-        buffer.writeln('  Result: $resultPreview');
-      }
-    }
-
-    return buffer.toString();
-  }
-
-  String _formatTime(DateTime time) {
-    return '${time.hour.toString().padLeft(2, '0')}:'
-        '${time.minute.toString().padLeft(2, '0')}:'
-        '${time.second.toString().padLeft(2, '0')}';
   }
 
   /// Build actions for user messages (shown in long-press popup).
