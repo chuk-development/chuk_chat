@@ -351,6 +351,7 @@ class _MessageBubbleState extends State<MessageBubble>
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         Container(
+          height: kPlatformMobile ? _mobileBottomBarHeight : null,
           decoration: BoxDecoration(
             color: bgColor.lighten(0.05),
             borderRadius: BorderRadius.circular(100),
@@ -360,7 +361,7 @@ class _MessageBubbleState extends State<MessageBubble>
             ),
           ),
           padding: EdgeInsets.symmetric(
-            horizontal: kPlatformMobile ? 2 : 8,
+            horizontal: kPlatformMobile ? 4 : 8,
             vertical: kPlatformMobile ? 0 : 4,
           ),
           child: Row(
@@ -374,19 +375,17 @@ class _MessageBubbleState extends State<MessageBubble>
                     color: action.isEnabled
                         ? iconFgColor
                         : iconFgColor.withValues(alpha: 0.38),
-                    size: kPlatformMobile ? 15 : 18,
+                    size: 18,
                   ),
-                  padding: EdgeInsets.all(kPlatformMobile ? 4 : 8),
+                  padding: EdgeInsets.all(kPlatformMobile ? 5 : 8),
                   visualDensity: VisualDensity.compact,
                   constraints: BoxConstraints(
-                    minWidth: kPlatformMobile ? 24 : 30,
-                    minHeight: kPlatformMobile ? 24 : 30,
+                    minWidth: kPlatformMobile ? 28 : 30,
+                    minHeight: kPlatformMobile ? 28 : 30,
                   ),
-                  style: kPlatformMobile
-                      ? null
-                      : IconButton.styleFrom(
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
+                  style: IconButton.styleFrom(
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
                   onPressed: action.isEnabled
                       ? () {
                           setState(() => _showUserActions = false);
@@ -530,6 +529,7 @@ class _MessageBubbleState extends State<MessageBubble>
       margin: EdgeInsets.only(top: widget.startsNewGroup ? 10 : 2, bottom: 2),
       padding: containerPadding,
       decoration: decoration,
+      clipBehavior: isUserMessage ? Clip.antiAlias : Clip.none,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: alignRight
@@ -630,7 +630,7 @@ class _MessageBubbleState extends State<MessageBubble>
           child: _buildInfoStatusBar(iconFgColor, accentColor),
         ),
       if (hasImages && !placeQrImageAboveResponse) ...[
-        _buildImagesGrid(widget.images!),
+        _buildFramedUserImageGrid(_buildImagesGrid(widget.images!)),
         _buildImageMetaMenu(
           iconFgColor,
           alignRight,
@@ -648,7 +648,7 @@ class _MessageBubbleState extends State<MessageBubble>
         const SizedBox(height: 8),
       ],
       if (hasImages && placeQrImageAboveResponse) ...[
-        _buildImagesGrid(widget.images!),
+        _buildFramedUserImageGrid(_buildImagesGrid(widget.images!)),
         _buildImageMetaMenu(
           iconFgColor,
           alignRight,
@@ -664,6 +664,25 @@ class _MessageBubbleState extends State<MessageBubble>
       ),
       ..._buildAskUserOptions(),
     ];
+  }
+
+  Widget _buildFramedUserImageGrid(Widget child) {
+    if (!widget.isUser) {
+      return child;
+    }
+
+    final Color borderColor = Theme.of(
+      context,
+    ).resolvedIconColor.withValues(alpha: 0.24);
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borderColor, width: 1),
+      ),
+      child: child,
+    );
   }
 
   /// Interleaved content blocks layout: renders text, tool calls, and
