@@ -613,6 +613,21 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           mapStopwatch.stop();
           mapMs = mapStopwatch.elapsedMilliseconds;
           if (!applied) return;
+
+          final bool shouldRecoverStaleToolCalls =
+              !_streamingManager.isStreaming(chatId) &&
+              !_streamingManager.hasCompletedStream(chatId);
+          if (shouldRecoverStaleToolCalls) {
+            var recoveredStaleCalls = false;
+            for (final message in _messages) {
+              if (ChatUiHelpers.finalizeStaleToolCallsInRawMessage(message)) {
+                recoveredStaleCalls = true;
+              }
+            }
+            if (recoveredStaleCalls) {
+              _persistChatWithId(chatId);
+            }
+          }
           // Instant visibility
           _animCtrl.value = 1.0;
         } else {
