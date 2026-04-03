@@ -351,7 +351,6 @@ class _MessageBubbleState extends State<MessageBubble>
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         Container(
-          height: kPlatformMobile ? _mobileBottomBarHeight : null,
           decoration: BoxDecoration(
             color: bgColor.lighten(0.05),
             borderRadius: BorderRadius.circular(100),
@@ -361,7 +360,7 @@ class _MessageBubbleState extends State<MessageBubble>
             ),
           ),
           padding: EdgeInsets.symmetric(
-            horizontal: kPlatformMobile ? 4 : 8,
+            horizontal: kPlatformMobile ? 2 : 8,
             vertical: kPlatformMobile ? 0 : 4,
           ),
           child: Row(
@@ -375,17 +374,19 @@ class _MessageBubbleState extends State<MessageBubble>
                     color: action.isEnabled
                         ? iconFgColor
                         : iconFgColor.withValues(alpha: 0.38),
-                    size: 18,
+                    size: kPlatformMobile ? 15 : 18,
                   ),
-                  padding: EdgeInsets.all(kPlatformMobile ? 5 : 8),
+                  padding: EdgeInsets.all(kPlatformMobile ? 4 : 8),
                   visualDensity: VisualDensity.compact,
                   constraints: BoxConstraints(
-                    minWidth: kPlatformMobile ? 28 : 30,
-                    minHeight: kPlatformMobile ? 28 : 30,
+                    minWidth: kPlatformMobile ? 24 : 30,
+                    minHeight: kPlatformMobile ? 24 : 30,
                   ),
-                  style: IconButton.styleFrom(
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
+                  style: kPlatformMobile
+                      ? null
+                      : IconButton.styleFrom(
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
                   onPressed: action.isEnabled
                       ? () {
                           setState(() => _showUserActions = false);
