@@ -22,10 +22,6 @@ Widget buildTinyIconButton({
     icon != null || svgAssetPath != null,
     'Either icon or svgAssetPath must be provided.',
   );
-  final Color foregroundColor = color.computeLuminance() > 0.5
-      ? Colors.black
-      : Colors.white;
-
   final Color effectiveColor = isActive ? color : color.withValues(alpha: 0.6);
 
   final result = Material(
@@ -72,6 +68,9 @@ Widget buildTinyActionButton({
     icon != null || svgAssetPath != null,
     'Either icon or svgAssetPath must be provided.',
   );
+  final Color foregroundColor = color.computeLuminance() > 0.5
+      ? Colors.black
+      : Colors.white;
 
   final result = Material(
     color: Colors.transparent,
