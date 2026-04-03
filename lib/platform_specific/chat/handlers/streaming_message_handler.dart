@@ -248,6 +248,31 @@ class StreamingMessageHandler {
     String encodeBlocks() =>
         jsonEncode(contentBlocks.map((b) => b.toJson()).toList());
 
+    /// Finalize stale tool calls and notify/persist updated UI state.
+    ///
+    /// This is used in terminal/error paths where tool execution can be
+    /// interrupted, leaving running/pending calls orphaned.
+    void finalizeStaleToolState() {
+      final sessionToolCalls = toolSession.toolCalls;
+      if (sessionToolCalls.isNotEmpty) {
+        finalizeStaleToolCalls(sessionToolCalls);
+        onToolCallsUpdate?.call(placeholderIndex, sessionToolCalls, chatId);
+      }
+
+      var blocksChanged = false;
+      for (final block in contentBlocks) {
+        if (block.type == ContentBlockType.toolCalls &&
+            block.toolCalls != null &&
+            finalizeStaleToolCalls(block.toolCalls!)) {
+          blocksChanged = true;
+        }
+      }
+
+      if (blocksChanged) {
+        onContentBlocksUpdate?.call(placeholderIndex, encodeBlocks(), chatId);
+      }
+    }
+
     Future<void> startStreamingPass({
       required String message,
       required List<Map<String, dynamic>> history,
@@ -258,6 +283,7 @@ class StreamingMessageHandler {
       if (currentPass >= kMaxStreamingPasses) {
         const stopMessage =
             'Tool loop stopped after reaching the safety limit.';
+        finalizeStaleToolState();
         if (onMessageFinalize != null) {
           onMessageFinalize!(placeholderIndex, stopMessage, '', chatId, null);
         }
@@ -563,6 +589,7 @@ class StreamingMessageHandler {
               if (kDebugMode) {
                 debugPrint('Tool loop processing failed: $error');
               }
+              finalizeStaleToolState();
               const userMessage =
                   'An unexpected error occurred while processing tools.';
               if (onMessageFinalize != null) {
@@ -589,6 +616,8 @@ class StreamingMessageHandler {
         },
         onError: (errorMessage) {
           if (_isDisposed) return;
+
+          finalizeStaleToolState();
 
           if (errorMessage == '__PAYMENT_REQUIRED__') {
             final paymentMessage =
@@ -650,6 +679,7 @@ class StreamingMessageHandler {
       }
       onShowSnackBar?.call(failureMessage);
 
+      finalizeStaleToolState();
       _isStreaming = false;
       _isSending = false;
       onUpdateUI?.call();

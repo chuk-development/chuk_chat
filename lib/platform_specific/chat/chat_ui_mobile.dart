@@ -696,6 +696,32 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                 return map;
               }),
             );
+
+          final bool shouldRecoverStaleToolCalls =
+              !_streamingHandler.isChatStreaming(_activeChatId!) &&
+              !_streamingHandler.hasCompletedStream(_activeChatId!);
+          if (shouldRecoverStaleToolCalls) {
+            var recoveredStaleCalls = false;
+            for (final message in _messages) {
+              if (ChatUiHelpers.finalizeStaleToolCallsInRawMessage(message)) {
+                recoveredStaleCalls = true;
+              }
+            }
+
+            if (recoveredStaleCalls) {
+              unawaited(
+                _persistenceHandler.persistChat(
+                  messages: _messages
+                      .map((m) => Map<String, String>.from(m))
+                      .toList(),
+                  chatId: _activeChatId,
+                  waitForCompletion: false,
+                  isOffline: _isOffline,
+                  silent: true,
+                ),
+              );
+            }
+          }
         } else {
           // Chat load failed - treat as new chat
           if (kDebugMode) {
@@ -1244,11 +1270,17 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     }
 
     if (!isActiveChat) {
+      final bool hasInFlightCalls = toolCalls.any(
+        (call) =>
+            call.status == ToolCallStatus.running ||
+            call.status == ToolCallStatus.pending,
+      );
       unawaited(
         _persistenceHandler.updateBackgroundChatMessage(
           chatId: chatId,
           messageIndex: index,
           toolCallsJson: toolCallsJson,
+          immediate: !hasInFlightCalls,
         ),
       );
     }
@@ -1288,6 +1320,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           images: jsonEncode(imagePaths),
           imageCostEur: imageCostEur,
           imageGeneratedAt: imageGeneratedAt,
+          immediate: true,
         ),
       );
     }

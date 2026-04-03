@@ -262,6 +262,69 @@ class ChatUiHelpers {
     return map;
   }
 
+  /// Finalize stale tool-call statuses in a raw message map.
+  ///
+  /// This heals orphaned `running/pending` tool calls that can remain after
+  /// app/process interruptions. Returns `true` if the message was modified.
+  static bool finalizeStaleToolCallsInRawMessage(Map<String, String> message) {
+    var modified = false;
+
+    final toolCallsJson = message['toolCalls'];
+    if (toolCallsJson != null && toolCallsJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(toolCallsJson);
+        if (decoded is List) {
+          final toolCalls = decoded
+              .whereType<Map>()
+              .map((item) => ToolCall.fromJson(Map<String, dynamic>.from(item)))
+              .toList();
+          if (_finalizeStaleToolCallsForRecovery(toolCalls)) {
+            message['toolCalls'] = jsonEncode(
+              toolCalls.map((call) => call.toJson()).toList(),
+            );
+            modified = true;
+          }
+        }
+      } catch (_) {}
+    }
+
+    final contentBlocksJson = message['contentBlocks'];
+    if (contentBlocksJson != null && contentBlocksJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(contentBlocksJson);
+        if (decoded is List) {
+          final blocks = decoded
+              .whereType<Map>()
+              .map(
+                (item) =>
+                    ContentBlock.fromJson(Map<String, dynamic>.from(item)),
+              )
+              .toList();
+          var blockModified = false;
+          for (final block in blocks) {
+            if (block.type == ContentBlockType.toolCalls &&
+                block.toolCalls != null &&
+                _finalizeStaleToolCallsForRecovery(block.toolCalls!)) {
+              blockModified = true;
+            }
+          }
+          if (blockModified) {
+            message['contentBlocks'] = jsonEncode(
+              blocks.map((block) => block.toJson()).toList(),
+            );
+            modified = true;
+          }
+        }
+      } catch (_) {}
+    }
+
+    return modified;
+  }
+
+  static bool _finalizeStaleToolCallsForRecovery(List<ToolCall> toolCalls) {
+    return finalizeStaleToolCalls(toolCalls);
+  }
+
   /// Build a normalized JSON payload for a reply-to-block target.
   static String buildReplyContextJson({
     required int sourceMessageIndex,
