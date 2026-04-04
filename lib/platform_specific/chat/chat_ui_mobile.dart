@@ -541,6 +541,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     ModelSelectionDropdown.selectedModelListenable.removeListener(
       _modelSelectionListener,
     );
+    _audioHandler.onLevelsChanged = null;
     _audioHandler.dispose();
     super.dispose();
   }
@@ -863,6 +864,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   Future<void> _handleMicTap() async {
     if (_audioHandler.isMicActive) {
       await _audioHandler.stopRecording();
+      _audioHandler.onLevelsChanged = null;
       _audioVisualizerTimer?.cancel();
       _audioVisualizerTimer = null;
       if (!mounted) return;
@@ -881,15 +883,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         setState(() {
           _audioHandler.resetAudioLevels();
         });
-        // Update visualizer every 50ms for smooth animation
-        _audioVisualizerTimer = Timer.periodic(
-          const Duration(milliseconds: 50),
-          (_) {
-            if (mounted && _audioHandler.isMicActive) {
-              setState(() {});
-            }
-          },
-        );
+        // Drive visualizer updates from recorder/PCM callbacks directly.
+        // This avoids unnecessary full-screen rebuilds while attachments upload.
+        _audioHandler.onLevelsChanged = () {
+          if (mounted && _audioHandler.isMicActive) {
+            setState(() {});
+          }
+        };
       } else {
         _showSnackBar('Mic access failed');
       }
@@ -902,6 +902,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     }
 
     await _audioHandler.stopRecording(keepFile: true);
+    _audioHandler.onLevelsChanged = null;
     _audioVisualizerTimer?.cancel();
     _audioVisualizerTimer = null;
     if (!mounted) return;
@@ -2911,7 +2912,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     final Color accent = theme.colorScheme.primary;
     final bool hasAttachments = _fileHandler.hasAttachments;
     final bool showStopAction = _isCurrentChatStreaming || _isSendingMessage;
-    final bool hasText = _controller.text.trim().isNotEmpty || hasAttachments;
+    final bool hasTypedText = _controller.text.trim().isNotEmpty;
+    final bool hasText = hasTypedText || hasAttachments;
     final bool showVoiceModeAction = !hasText && kFeatureVoiceMode;
 
     final Color borderColor = _audioHandler.isMicActive
@@ -2939,9 +2941,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     );
 
     // Whether to show the mic inside the text field pill.
-    // Shown when: text is empty, not recording, not streaming.
+    // Shown when: typed text is empty, not recording, not streaming.
+    // Attachments must not hide the mic (user can dictate with images attached).
     final bool showInlineMic =
-        !hasText && !_audioHandler.isMicActive && !showStopAction;
+        !hasTypedText && !_audioHandler.isMicActive && !showStopAction;
     final bool rightPillHasMultipleActions = _audioHandler.isMicActive;
 
     // Three-part layout: [+]  [TextField + mic]  [Send]

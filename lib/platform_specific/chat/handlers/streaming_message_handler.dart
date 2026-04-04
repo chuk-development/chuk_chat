@@ -248,6 +248,66 @@ class StreamingMessageHandler {
     String encodeBlocks() =>
         jsonEncode(contentBlocks.map((b) => b.toJson()).toList());
 
+    /// Merge accumulated multi-pass text with the final pass text while
+    /// avoiding duplicated prefixes when the model restarts its final answer.
+    String mergeAccumulatedWithFinal({
+      required String accumulated,
+      required String finalText,
+    }) {
+      final normalizedAccumulated = accumulated.trim();
+      final normalizedFinal = finalText.trim();
+
+      if (normalizedAccumulated.isEmpty) return normalizedFinal;
+      if (normalizedFinal.isEmpty) return normalizedAccumulated;
+
+      if (normalizedFinal == normalizedAccumulated) {
+        return normalizedFinal;
+      }
+      if (normalizedFinal.startsWith(normalizedAccumulated)) {
+        return normalizedFinal;
+      }
+      if (normalizedAccumulated.startsWith(normalizedFinal)) {
+        return normalizedAccumulated;
+      }
+
+      return '$normalizedAccumulated\n\n$normalizedFinal';
+    }
+
+    /// Remove text already represented by finalized content blocks so we do
+    /// not show duplicated "partial final answer + full final answer".
+    String dedupeFinalTextAgainstBlocks(String finalText) {
+      final normalizedFinalText = finalText.trim();
+      if (normalizedFinalText.isEmpty || contentBlocks.isEmpty) {
+        return normalizedFinalText;
+      }
+
+      final finalizedPrefix = contentBlocks
+          .where(
+            (block) =>
+                block.type == ContentBlockType.text &&
+                block.text != null &&
+                block.text!.trim().isNotEmpty,
+          )
+          .map((block) => block.text!.trim())
+          .join('\n\n')
+          .trim();
+
+      if (finalizedPrefix.isEmpty) {
+        return normalizedFinalText;
+      }
+      if (normalizedFinalText == finalizedPrefix) {
+        return '';
+      }
+      if (normalizedFinalText.startsWith('$finalizedPrefix\n\n')) {
+        return normalizedFinalText.substring(finalizedPrefix.length).trim();
+      }
+      if (finalizedPrefix.startsWith(normalizedFinalText)) {
+        return '';
+      }
+
+      return normalizedFinalText;
+    }
+
     /// Finalize stale tool calls and notify/persist updated UI state.
     ///
     /// This is used in terminal/error paths where tool execution can be
@@ -540,17 +600,18 @@ class StreamingMessageHandler {
 
               // Prepend accumulated text from previous passes so nothing
               // is lost in the flat message field (backward compat).
-              final effectiveContent = accumulatedText.isEmpty
-                  ? rawContent
-                  : '$accumulatedText$rawContent';
+              final effectiveContent = mergeAccumulatedWithFinal(
+                accumulated: accumulatedText.toString(),
+                finalText: rawContent,
+              );
 
               // --- Build final content blocks ---
               if (contentBlocks.isNotEmpty) {
                 // Only use the final pass's text for the text block —
                 // interim text from earlier passes is already in content
                 // blocks.
-                final finalText = stripToolCallBlocksForDisplay(
-                  rawContent,
+                final finalText = dedupeFinalTextAgainstBlocks(
+                  stripToolCallBlocksForDisplay(rawContent),
                 ).trim();
                 if (finalText.isNotEmpty) {
                   contentBlocks.add(ContentBlock.text(finalText));
