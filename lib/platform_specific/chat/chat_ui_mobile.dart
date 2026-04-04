@@ -13,6 +13,7 @@ import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/message_composition_service.dart';
 import 'package:chuk_chat/services/title_generation_service.dart';
+import 'package:chuk_chat/services/app_lifecycle_service.dart';
 import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
@@ -125,7 +126,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   // Network and UI state
   bool _isOffline = false;
   bool _isSendingMessage = false; // Flag to prevent rapid send spam
-  bool _pendingAttachmentRebuild = false; // Deferred rebuild when mic active
 
   /// Queued message text — when the user sends while AI is still streaming,
   /// the text is parked here and dispatched after the current response ends.
@@ -136,6 +136,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   String? _pendingReplyPreviewText;
   String _pendingReplyPreviewLabel = 'Reply to AI';
   bool _isLoadingChat = false; // Loading indicator for chat switching
+  bool _isAppInBackground = false;
   late final VoidCallback _networkStatusListener;
   Timer? _audioVisualizerTimer;
 
@@ -157,6 +158,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     super.initState();
     _initializeHandlers();
     _initializeListeners();
+    AppLifecycleService.instance.addOnResumeCallback(_handleAppResumed);
+    AppLifecycleService.instance.addOnPauseCallback(_handleAppPaused);
     _loadInitialData();
   }
 
@@ -172,9 +175,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       ..onError = _showSnackBar
       ..onUpdate = () {
         if (_audioHandler.isMicActive) {
-          // Defer rebuild — the next audio-level setState will pick it up,
-          // avoiding competing rebuilds that cause visual flicker.
-          _pendingAttachmentRebuild = true;
+          // Defer rebuild while mic visualizer is active to avoid flicker.
         } else {
           setState(() {});
         }
@@ -216,18 +217,37 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       ..onContentBlocksUpdate = _updateContentBlocksForMessage
       ..onRequestPayloadUpdate = _updateRequestPayloadForMessage
       ..onBackgroundUpdate = (chatId, index, content, reasoning) {
-        if (_activeChatId != chatId) {
+        if (_activeChatId != chatId || _isAppInBackground) {
           unawaited(
             _persistenceHandler.updateBackgroundChatMessage(
               chatId: chatId,
               messageIndex: index,
               content: content,
               reasoning: reasoning,
+              immediate: _isAppInBackground,
             ),
           );
         }
       }
       ..onPaymentRequired = _showPaymentRequiredDialog;
+  }
+
+  void _handleAppResumed() {
+    _isAppInBackground = false;
+  }
+
+  void _handleAppPaused() {
+    _isAppInBackground = true;
+
+    // Snapshot active chat state so streaming/tool loops can persist updates
+    // while the app is backgrounded or the device is locked.
+    if (_activeChatId != null &&
+        _streamingHandler.isChatStreaming(_activeChatId!)) {
+      final messagesCopy = _messages
+          .map((m) => Map<String, dynamic>.from(m))
+          .toList();
+      _streamingHandler.setBackgroundMessages(_activeChatId!, messagesCopy);
+    }
   }
 
   void _showPaymentRequiredDialog() {
@@ -533,6 +553,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
   @override
   void dispose() {
+    AppLifecycleService.instance.removeOnResumeCallback(_handleAppResumed);
+    AppLifecycleService.instance.removeOnPauseCallback(_handleAppPaused);
     if (_activeChatId != null) {
       _streamingHandler.cancelStream(_activeChatId);
     }
@@ -874,7 +896,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     if (_audioHandler.isMicActive) {
       await _audioHandler.stopRecording();
       _audioHandler.onLevelsChanged = null;
-      _pendingAttachmentRebuild = false;
       _audioVisualizerTimer?.cancel();
       _audioVisualizerTimer = null;
       if (!mounted) return;
@@ -897,9 +918,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         // This avoids unnecessary full-screen rebuilds while attachments upload.
         _audioHandler.onLevelsChanged = () {
           if (mounted && _audioHandler.isMicActive) {
-            // Also flush any deferred attachment rebuild so both
-            // the visualizer and attachment previews update together.
-            _pendingAttachmentRebuild = false;
             setState(() {});
           }
         };
@@ -1452,6 +1470,18 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
       _scrollChatToBottom();
       _persistChat();
+      if (_isAppInBackground) {
+        unawaited(
+          _persistenceHandler.updateBackgroundChatMessage(
+            chatId: chatId,
+            messageIndex: index,
+            content: content,
+            reasoning: reasoning,
+            tps: tps?.toString(),
+            immediate: true,
+          ),
+        );
+      }
 
       // Drain the message queue — if the user typed while AI was responding.
       _drainPendingMessage();
@@ -2792,9 +2822,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                             toolCalls: toolCalls,
                                             contentBlocks: parsedContentBlocks,
                                           ),
-                                      onRetry: !isUser && !isStreamingMessage
-                                          ? () => _resendMessageAt(i)
-                                          : null,
                                       onReplyToAiBlock:
                                           !isUser && !isStreamingMessage
                                           ? (

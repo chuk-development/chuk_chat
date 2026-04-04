@@ -1720,11 +1720,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                                   i,
                                                   data,
                                                 ),
-                                            onRetry:
-                                                !data.isUser &&
-                                                    !data.isStreamingMessage
-                                                ? () => _resendMessageAt(i)
-                                                : null,
                                             onReplyToAiBlock:
                                                 !data.isUser &&
                                                     !data.isStreamingMessage
