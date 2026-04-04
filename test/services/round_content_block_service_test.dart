@@ -28,7 +28,7 @@ void main() {
     });
 
     test(
-      'orders reasoning, text, then tool calls for pre-tool interim text',
+      'folds pre-tool interim text into first tool call roundThinking',
       () {
         final toolCalls = [
           ToolCall(name: 'web_search', status: ToolCallStatus.completed),
@@ -41,13 +41,21 @@ void main() {
           interimBeforeToolCalls: true,
         );
 
+        // Interim text is folded into tool call's roundThinking, not a
+        // separate text block.
         expect(
           result.blocks.map((b) => b.type).toList(),
           equals([
             ContentBlockType.reasoning,
-            ContentBlockType.text,
             ContentBlockType.toolCalls,
           ]),
+        );
+
+        final tcBlock = result.blocks
+            .firstWhere((b) => b.type == ContentBlockType.toolCalls);
+        expect(
+          tcBlock.toolCalls!.first.roundThinking,
+          contains('ZWISCHENSTAND 1'),
         );
       },
     );
