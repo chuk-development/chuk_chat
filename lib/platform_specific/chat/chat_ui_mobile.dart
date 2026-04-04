@@ -3291,7 +3291,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                               : (showVoiceModeAction
                                     ? Icons.graphic_eq_rounded
                                     : Icons.north_rounded)),
-                    iconSize: 18,
+                    buttonSize: 36,
+                    iconSize: 16,
                     onTap: _audioHandler.isMicActive
                         ? _handleAudioSend
                         : (showStopAction
