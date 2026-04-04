@@ -113,7 +113,6 @@ class MessageBubble extends StatefulWidget {
     this.imageCostEur,
     this.imageGeneratedAt,
     this.onAskUserAnswer,
-    this.onRetry,
     this.onReplyToAiBlock,
     this.userMessageActions = const <MessageBubbleAction>[],
   });
@@ -161,11 +160,6 @@ class MessageBubble extends StatefulWidget {
   /// When non-null, the bubble renders interactive option buttons extracted
   /// from the most recent ask_user tool call in this message.
   final ValueChanged<String>? onAskUserAnswer;
-
-  /// Called when the user taps the "Retry" button on a finalized AI message
-  /// (e.g. after empty response or failed tool calls). Triggers resending
-  /// the last user message without re-running the full tool discovery.
-  final VoidCallback? onRetry;
 
   /// Called when the user swipes right on an AI response block to reply to it.
   /// Callback args: block text, block type, and block index within the message.
@@ -1627,9 +1621,6 @@ class _MessageBubbleState extends State<MessageBubble>
         ? contentBlockTimeline
         : const <_ToolTimelineEntry>[];
 
-    final int completedCount = toolCalls
-        .where((t) => t.status == ToolCallStatus.completed)
-        .length;
     final String label;
     final IconData icon;
     final bool showSpinner;
@@ -1709,37 +1700,6 @@ class _MessageBubbleState extends State<MessageBubble>
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  if (!showSpinner)
-                    Text(
-                      '$completedCount/${toolCalls.length}',
-                      style: TextStyle(
-                        color: colorScheme.onSurface.withValues(alpha: 0.6),
-                        fontSize: 11,
-                      ),
-                    ),
-                  // Compact retry button in the header when there are errors
-                  if (!showSpinner &&
-                      !widget.isStreamingMessage &&
-                      widget.onRetry != null &&
-                      toolCalls.any(
-                        (t) => t.status == ToolCallStatus.error,
-                      )) ...[
-                    const SizedBox(width: 4),
-                    GestureDetector(
-                      onTap: widget.onRetry,
-                      child: Icon(
-                        Icons.replay,
-                        size: 14,
-                        color: colorScheme.primary,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(width: 4),
-                  Icon(
-                    isExpanded ? Icons.expand_less : Icons.expand_more,
-                    size: 16,
-                    color: colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
                 ],
               ),
@@ -1836,40 +1796,6 @@ class _MessageBubbleState extends State<MessageBubble>
                       preview: _buildModelPreview(),
                       expandedContent: _buildModelDetails(),
                       accentColor: Colors.green,
-                    ),
-                  // Show a retry button when tool calls have errors
-                  // and the message is no longer streaming.
-                  if (!widget.isStreamingMessage &&
-                      widget.onRetry != null &&
-                      toolCalls.any((t) => t.status == ToolCallStatus.error))
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton.icon(
-                          onPressed: widget.onRetry,
-                          icon: Icon(
-                            Icons.replay,
-                            size: 14,
-                            color: colorScheme.primary,
-                          ),
-                          label: Text(
-                            'Retry',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: colorScheme.primary,
-                            ),
-                          ),
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 4,
-                            ),
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                        ),
-                      ),
                     ),
                 ],
               ),

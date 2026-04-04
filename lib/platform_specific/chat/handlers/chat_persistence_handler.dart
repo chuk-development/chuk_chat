@@ -24,7 +24,13 @@ class ChatPersistenceHandler {
       timer.cancel();
     }
     _backgroundUpdateTimers.clear();
-    _pendingBackgroundUpdates.clear();
+
+    // Best-effort flush so pending background stream/tool-call updates are not
+    // lost when the widget tree is disposed while a response is still running.
+    final pendingKeys = _pendingBackgroundUpdates.keys.toList(growable: false);
+    for (final key in pendingKeys) {
+      unawaited(_flushBackgroundUpdate(key));
+    }
   }
 
   /// Save or update chat in storage
