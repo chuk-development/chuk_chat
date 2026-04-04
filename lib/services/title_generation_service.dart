@@ -406,6 +406,7 @@ Rules:
       }
       // Remove any trailing punctuation that looks weird
       title = title.replaceAll(RegExp(r'[.!?]+$'), '').trim();
+      title = _normalizeGeneratedTitle(title);
       // Limit length
       if (title.length > 50) {
         title = '${title.substring(0, 47)}...';
@@ -498,6 +499,44 @@ Rules:
 
   static bool _hasCustomName(String? name) {
     return name != null && name.trim().isNotEmpty;
+  }
+
+  static String _stripWrappingMarkdown(String value) {
+    var current = value.trim();
+    final wrappers = <RegExp>[
+      RegExp(r'^\*\*(.+)\*\*$', dotAll: true),
+      RegExp(r'^__(.+)__$', dotAll: true),
+      RegExp(r'^\*(.+)\*$', dotAll: true),
+      RegExp(r'^_(.+)_$', dotAll: true),
+      RegExp(r'^`(.+)`$', dotAll: true),
+    ];
+
+    var changed = true;
+    while (changed) {
+      changed = false;
+      for (final pattern in wrappers) {
+        final match = pattern.firstMatch(current);
+        if (match == null) continue;
+        final inner = match.group(1)?.trim() ?? '';
+        if (inner.isEmpty) continue;
+        current = inner;
+        changed = true;
+      }
+    }
+    return current;
+  }
+
+  static String _normalizeGeneratedTitle(String raw) {
+    var title = raw.trim();
+    title = title.replaceAll(RegExp(r'<\/?[^>]+>'), ' ').trim();
+    title = title.replaceFirst(
+      RegExp(r'^\s*title\s*:\s*', caseSensitive: false),
+      '',
+    );
+    title = title.replaceFirst(RegExp(r'^\s*#+\s*'), '');
+    title = _stripWrappingMarkdown(title);
+    title = title.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return title;
   }
 
   static Future<bool> _waitUntilChatAvailable(String chatId) async {

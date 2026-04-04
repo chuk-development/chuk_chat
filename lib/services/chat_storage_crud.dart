@@ -36,6 +36,64 @@ class ChatStorageCrud {
     return first.length > 100 ? '${first.substring(0, 100)}...' : first;
   }
 
+  /// Resolve the display/persisted title for a chat.
+  /// Priority: customName > fallbackTitle > extracted first-user-message title.
+  static String? _resolveStoredTitle({
+    required List<ChatMessage> messages,
+    String? customName,
+    String? fallbackTitle,
+  }) {
+    final trimmedCustomName = customName?.trim();
+    if (trimmedCustomName != null && trimmedCustomName.isNotEmpty) {
+      return trimmedCustomName;
+    }
+
+    final trimmedFallback = fallbackTitle?.trim();
+    if (trimmedFallback != null && trimmedFallback.isNotEmpty) {
+      return trimmedFallback;
+    }
+
+    final extractedTitle = extractTitleFromMessages(messages).trim();
+    return extractedTitle.isEmpty ? null : extractedTitle;
+  }
+
+  /// Ensure `encrypted_title` matches payload customName when they diverge.
+  /// This repairs stale sidebar titles across devices without waiting for a manual rename.
+  static Future<void> _repairEncryptedTitleIfNeeded({
+    required String chatId,
+    required String userId,
+    required String? payloadCustomName,
+    required String? currentTitle,
+  }) async {
+    final customName = payloadCustomName?.trim();
+    if (customName == null || customName.isEmpty) return;
+
+    final localTitle = currentTitle?.trim();
+    if (localTitle == customName) return;
+
+    try {
+      final encryptedTitle = await EncryptionService.encrypt(customName);
+      await SupabaseService.client
+          .from('encrypted_chats')
+          .update({'encrypted_title': encryptedTitle})
+          .eq('id', chatId)
+          .eq('user_id', userId)
+          .timeout(const Duration(seconds: 10));
+
+      if (kDebugMode) {
+        debugPrint(
+          '🔧 [ChatStorage] Repaired encrypted_title for $chatId to match payload customName',
+        );
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint(
+          '⚠️ [ChatStorage] Failed to repair encrypted_title for $chatId: $e',
+        );
+      }
+    }
+  }
+
   /// Load a single chat's full content (messages) on demand.
   /// Used for lazy loading when user clicks on a chat in sidebar.
   /// Returns the fully loaded chat or null if not found/error.
@@ -98,16 +156,30 @@ class ChatStorageCrud {
               encryptedPayload,
             );
             final chatPayload = await deserializePayloadAsync(decrypted);
+            final resolvedTitle = _resolveStoredTitle(
+              messages: chatPayload.messages,
+              customName: chatPayload.customName,
+              fallbackTitle: existing?.title,
+            );
 
             final chat = StoredChat.fromRow(
               row,
               chatPayload.messages,
               customName: chatPayload.customName,
-              title: existing?.title,
+              title: resolvedTitle,
             );
 
             ChatStorageState.chatsById[chatId] = chat;
             ChatStorageState.notifyChanges(chatId);
+
+            unawaited(
+              _repairEncryptedTitleIfNeeded(
+                chatId: chatId,
+                userId: user.id,
+                payloadCustomName: chatPayload.customName,
+                currentTitle: existing?.title,
+              ),
+            );
 
             // Cache plaintext for next time
             final title = chat.title ?? extractTitleFromMessages(chat.messages);
@@ -190,12 +262,17 @@ class ChatStorageCrud {
         encryptedPayload,
       );
       final chatPayload = await deserializePayloadAsync(decrypted);
+      final resolvedTitle = _resolveStoredTitle(
+        messages: chatPayload.messages,
+        customName: chatPayload.customName,
+        fallbackTitle: existing?.title,
+      );
 
       final remoteChat = StoredChat.fromRow(
         row,
         chatPayload.messages,
         customName: chatPayload.customName,
-        title: existing?.title,
+        title: resolvedTitle,
       );
 
       // Only update if remote is newer
@@ -208,6 +285,15 @@ class ChatStorageCrud {
 
       ChatStorageState.chatsById[chatId] = remoteChat;
       ChatStorageState.notifyChanges(chatId);
+
+      unawaited(
+        _repairEncryptedTitleIfNeeded(
+          chatId: chatId,
+          userId: userId,
+          payloadCustomName: chatPayload.customName,
+          currentTitle: existing?.title,
+        ),
+      );
 
       // Update plaintext cache
       final title =
@@ -269,12 +355,17 @@ class ChatStorageCrud {
 
       // Plaintext cache — deserialize directly, no decryption needed
       final chatPayload = await deserializePayloadAsync(payload);
+      final resolvedTitle = _resolveStoredTitle(
+        messages: chatPayload.messages,
+        customName: chatPayload.customName,
+        fallbackTitle: existing?.title,
+      );
 
       final chat = StoredChat.fromRow(
         cachedRow,
         chatPayload.messages,
         customName: chatPayload.customName,
-        title: existing?.title,
+        title: resolvedTitle,
       );
 
       ChatStorageState.chatsById[chatId] = chat;
@@ -419,10 +510,15 @@ class ChatStorageCrud {
       if (chatPayload == null) continue;
 
       final i = validIndices[j];
+      final resolvedTitle = _resolveStoredTitle(
+        messages: chatPayload.messages,
+        customName: chatPayload.customName,
+      );
       results[i] = StoredChat.fromRow(
         rows[i],
         chatPayload.messages,
         customName: chatPayload.customName,
+        title: resolvedTitle,
       );
     }
 
@@ -465,10 +561,15 @@ class ChatStorageCrud {
 
       try {
         final chatPayload = await deserializePayloadAsync(decrypted);
+        final resolvedTitle = _resolveStoredTitle(
+          messages: chatPayload.messages,
+          customName: chatPayload.customName,
+        );
         results[i] = StoredChat.fromRow(
           rows[i],
           chatPayload.messages,
           customName: chatPayload.customName,
+          title: resolvedTitle,
         );
       } catch (_) {
         // Skip invalid chats
@@ -894,7 +995,7 @@ class ChatStorageCrud {
       'id': effectiveChatId,
       'user_id': user.id,
       'encrypted_payload': encryptedPayload,
-      if (encryptedTitle != null) 'encrypted_title': encryptedTitle,
+      ...?encryptedTitle == null ? null : {'encrypted_title': encryptedTitle},
       if (imagePaths.isNotEmpty) 'image_paths': imagePaths,
     };
 
@@ -1005,20 +1106,25 @@ class ChatStorageCrud {
     // Preserve existing customName
     final existingChat = ChatStorageState.chatsById[chatId];
     final String? existingCustomName = existingChat?.customName;
+    final String? normalizedCustomName =
+        existingCustomName?.trim().isNotEmpty == true
+        ? existingCustomName!.trim()
+        : null;
 
     final Map<String, dynamic> payloadMap = {
       'v': kChatPayloadVersion,
       'messages': messages.map((m) => m.toJson()).toList(),
     };
-    if (existingCustomName != null) {
-      payloadMap['customName'] = existingCustomName;
+    if (normalizedCustomName != null) {
+      payloadMap['customName'] = normalizedCustomName;
     }
 
     final payloadJson = jsonEncode(payloadMap);
     final encryptedPayload = await EncryptionService.encrypt(payloadJson);
 
     // Extract and encrypt title separately for fast sidebar loading
-    final title = extractTitleFromMessages(messages);
+    final String title =
+        normalizedCustomName ?? extractTitleFromMessages(messages);
     final encryptedTitle = title.isNotEmpty
         ? await EncryptionService.encrypt(title)
         : null;
@@ -1030,7 +1136,9 @@ class ChatStorageCrud {
         .from('encrypted_chats')
         .update({
           'encrypted_payload': encryptedPayload,
-          if (encryptedTitle != null) 'encrypted_title': encryptedTitle,
+          ...?encryptedTitle == null
+              ? null
+              : {'encrypted_title': encryptedTitle},
           'image_paths': imagePaths.isNotEmpty ? imagePaths : null,
         })
         .eq('id', chatId)
@@ -1048,8 +1156,8 @@ class ChatStorageCrud {
     final chat = StoredChat.fromRow(
       updatedRow,
       messages,
-      customName: existingCustomName,
-      title: title,
+      customName: normalizedCustomName,
+      title: title.isNotEmpty ? title : null,
     );
 
     // Update in our map - this is the ONLY place we update chats

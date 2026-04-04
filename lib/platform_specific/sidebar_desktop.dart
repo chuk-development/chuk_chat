@@ -202,7 +202,40 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
     // customName: User-renamed or AI-generated title stored in payload
     // title: Fast-loaded decrypted title for sidebar
     // previewText: Fallback derived from first user message
-    return chat.customName ?? chat.title ?? chat.previewText;
+    final rawTitle = chat.customName ?? chat.title ?? chat.previewText;
+    final normalized = _normalizeTitleForDisplay(rawTitle);
+    return normalized.isEmpty ? 'New chat' : normalized;
+  }
+
+  String _normalizeTitleForDisplay(String title) {
+    var normalized = title.trim();
+    normalized = normalized.replaceFirst(
+      RegExp(r'^\s*title\s*:\s*', caseSensitive: false),
+      '',
+    );
+    normalized = normalized.replaceFirst(RegExp(r'^\s*#+\s*'), '');
+
+    final wrappers = <RegExp>[
+      RegExp(r'^\*\*(.+)\*\*$', dotAll: true),
+      RegExp(r'^__(.+)__$', dotAll: true),
+      RegExp(r'^\*(.+)\*$', dotAll: true),
+      RegExp(r'^_(.+)_$', dotAll: true),
+      RegExp(r'^`(.+)`$', dotAll: true),
+    ];
+    var changed = true;
+    while (changed) {
+      changed = false;
+      for (final pattern in wrappers) {
+        final match = pattern.firstMatch(normalized);
+        if (match == null) continue;
+        final inner = match.group(1)?.trim() ?? '';
+        if (inner.isEmpty) continue;
+        normalized = inner;
+        changed = true;
+      }
+    }
+
+    return normalized.replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
   Future<void> _toggleStarred(StoredChat chat) async {
@@ -814,7 +847,11 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
         },
         child: ListTile(
           leading: isLocked
-              ? Icon(Icons.lock, size: 16, color: iconFgColor.withValues(alpha: 0.4))
+              ? Icon(
+                  Icons.lock,
+                  size: 16,
+                  color: iconFgColor.withValues(alpha: 0.4),
+                )
               : null,
           title: Text(
             title,
@@ -822,8 +859,8 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
               color: isLocked
                   ? iconFgColor.withValues(alpha: 0.35)
                   : isLast
-                      ? iconFgColor.withValues(alpha: 0.38)
-                      : (isSelected ? accentColor : iconFgColor),
+                  ? iconFgColor.withValues(alpha: 0.38)
+                  : (isSelected ? accentColor : iconFgColor),
               fontSize: 15,
               fontWeight: FontWeight.w600,
               fontStyle: isLocked ? FontStyle.italic : null,
@@ -832,7 +869,11 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
             overflow: TextOverflow.ellipsis,
           ),
           onTap: isLocked
-              ? () => _showLockedChatDialog(context, iconFgColor: iconFgColor, accentColor: accentColor)
+              ? () => _showLockedChatDialog(
+                  context,
+                  iconFgColor: iconFgColor,
+                  accentColor: accentColor,
+                )
               : onTap,
           dense: true,
           contentPadding: const EdgeInsets.only(
