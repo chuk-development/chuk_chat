@@ -125,6 +125,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   // Network and UI state
   bool _isOffline = false;
   bool _isSendingMessage = false; // Flag to prevent rapid send spam
+  bool _pendingAttachmentRebuild = false; // Deferred rebuild when mic active
 
   /// Queued message text — when the user sends while AI is still streaming,
   /// the text is parked here and dispatched after the current response ends.
@@ -169,7 +170,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     _fileHandler = FileAttachmentHandler()
       ..initialize(_chatApiService)
       ..onError = _showSnackBar
-      ..onUpdate = () => setState(() {});
+      ..onUpdate = () {
+        if (_audioHandler.isMicActive) {
+          // Defer rebuild — the next audio-level setState will pick it up,
+          // avoiding competing rebuilds that cause visual flicker.
+          _pendingAttachmentRebuild = true;
+        } else {
+          setState(() {});
+        }
+      };
 
     _messageActionsHandler = MessageActionsHandler()
       ..onShowSnackBar = _showSnackBar
@@ -865,6 +874,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     if (_audioHandler.isMicActive) {
       await _audioHandler.stopRecording();
       _audioHandler.onLevelsChanged = null;
+      _pendingAttachmentRebuild = false;
       _audioVisualizerTimer?.cancel();
       _audioVisualizerTimer = null;
       if (!mounted) return;
@@ -887,6 +897,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         // This avoids unnecessary full-screen rebuilds while attachments upload.
         _audioHandler.onLevelsChanged = () {
           if (mounted && _audioHandler.isMicActive) {
+            // Also flush any deferred attachment rebuild so both
+            // the visualizer and attachment previews update together.
+            _pendingAttachmentRebuild = false;
             setState(() {});
           }
         };
