@@ -1,6 +1,7 @@
 // lib/widgets/attachment_preview_bar.dart
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:chuk_chat/utils/io_helper.dart';
 
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
@@ -114,6 +115,9 @@ class _ImageAttachmentCard extends StatelessWidget {
 
   final AttachedFile file;
   final AttachmentRemoveCallback onRemove;
+  static final Map<String, Uint8List> _localThumbnailCache =
+      <String, Uint8List>{};
+  static const int _kLocalThumbnailCacheLimit = 24;
 
   @override
   Widget build(BuildContext context) {
@@ -225,10 +229,26 @@ class _ImageAttachmentCard extends StatelessWidget {
 
     // Local file image (during/before upload)
     if (!kIsWeb && file.localPath != null) {
-      final localFile = File(file.localPath!);
-      if (localFile.existsSync()) {
+      final localPath = file.localPath!;
+      final cachedBytes = _localThumbnailCache[localPath];
+      if (cachedBytes != null) {
         return Image.memory(
-          localFile.readAsBytesSync(),
+          cachedBytes,
+          fit: BoxFit.cover,
+          cacheWidth: (_kImageCardSize * 2).toInt(),
+          cacheHeight: (_kImageCardSize * 2).toInt(),
+        );
+      }
+
+      final localFile = File(localPath);
+      if (localFile.existsSync()) {
+        final bytes = localFile.readAsBytesSync();
+        if (_localThumbnailCache.length >= _kLocalThumbnailCacheLimit) {
+          _localThumbnailCache.remove(_localThumbnailCache.keys.first);
+        }
+        _localThumbnailCache[localPath] = bytes;
+        return Image.memory(
+          bytes,
           fit: BoxFit.cover,
           cacheWidth: (_kImageCardSize * 2).toInt(),
           cacheHeight: (_kImageCardSize * 2).toInt(),
