@@ -37,6 +37,7 @@ import 'package:chuk_chat/platform_specific/chat/widgets/fullscreen_composer.dar
 import 'package:chuk_chat/services/project_storage_service.dart';
 import 'package:chuk_chat/services/project_message_service.dart';
 import 'package:chuk_chat/services/artifact_context_service.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
 
 class ChukChatUIMobile extends StatefulWidget {
   final VoidCallback onToggleSidebar;
@@ -253,6 +254,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   void _showPaymentRequiredDialog() {
     if (!mounted) return;
     final theme = Theme.of(context);
+    final l = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -265,7 +267,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
               size: 28,
             ),
             const SizedBox(width: 12),
-            const Expanded(child: Text('Free Messages Used')),
+            Expanded(child: Text(l.freeMessagesUsed)),
           ],
         ),
         content: Column(
@@ -315,7 +317,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('OK'),
+            child: Text(l.ok),
           ),
         ],
       ),
@@ -961,7 +963,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     }
 
     if (!result.success) {
-      _showSnackBar(result.error ?? 'Transcription failed');
+      _showSnackBar(result.error ?? AppLocalizations.of(context)!.transcriptionFailed);
       setState(() {}); // Trigger UI update to hide loading icon
       return;
     }
@@ -1060,7 +1062,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                     buildAttachmentSheetOption(
                       context: sheetContext,
                       icon: Icons.photo_camera_outlined,
-                      label: 'Camera',
+                      label: AppLocalizations.of(sheetContext)!.camera,
                       isEnabled: supportsImages,
                       onTap: () {
                         if (!supportsImages) return;
@@ -1077,7 +1079,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                     buildAttachmentSheetOption(
                       context: sheetContext,
                       icon: Icons.photo_library_outlined,
-                      label: 'Photos',
+                      label: AppLocalizations.of(sheetContext)!.photos,
                       isEnabled: supportsImages,
                       onTap: () {
                         if (!supportsImages) return;
@@ -1093,7 +1095,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                     buildAttachmentSheetOption(
                       context: sheetContext,
                       icon: Icons.attach_file,
-                      label: 'Files',
+                      label: AppLocalizations.of(sheetContext)!.files,
                       isEnabled: true,
                       onTap: () {
                         Navigator.of(sheetContext).pop();
@@ -2300,13 +2302,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     }
 
     if (sourceIndex < 0 || sourceIndex >= _messages.length) {
-      _showSnackBar('Nothing to resend');
+      _showSnackBar(AppLocalizations.of(context)!.nothingToResend);
       return;
     }
 
     final String text = (_messages[sourceIndex]['text'] ?? '').trim();
     if (text.isEmpty) {
-      _showSnackBar('Nothing to resend');
+      _showSnackBar(AppLocalizations.of(context)!.nothingToResend);
       return;
     }
     await _submitEditedMessage(
@@ -3227,8 +3229,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                   maxLines: 6,
                                   decoration: InputDecoration(
                                     hintText: _messageActionsHandler.isEditing
-                                        ? 'Edit your message...'
-                                        : 'Ask me anything',
+                                        ? AppLocalizations.of(context)!.editYourMessage
+                                        : AppLocalizations.of(context)!.askMeAnything,
                                     hintStyle: TextStyle(
                                       color: theme.colorScheme.onSurface
                                           .withValues(alpha: 0.5),

@@ -15,6 +15,7 @@ import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/api_status_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
 
 // --- Data Models (Mirroring your FastAPI Pydantic Models) ---
 
@@ -490,6 +491,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     // Access theme colors dynamically
     final Color scaffoldBg = Theme.of(context).scaffoldBackgroundColor;
     final Color accent = Theme.of(context).colorScheme.primary;
@@ -502,7 +504,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
       backgroundColor: scaffoldBg,
       appBar: AppBar(
         title: Text(
-          'Models',
+          l.models,
           style: titleTextStyle,
         ), // Use theme's title text style
         backgroundColor: scaffoldBg,
@@ -525,7 +527,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'Error: $_error',
+                      l.modelError(_error ?? ''),
                       textAlign: TextAlign.center,
                       style: TextStyle(color: iconFg, fontSize: 18),
                     ),
@@ -536,7 +538,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                         Icons.refresh,
                         color: scaffoldBg,
                       ), // Text color on button
-                      label: Text('Retry', style: TextStyle(color: scaffoldBg)),
+                      label: Text(l.retry, style: TextStyle(color: scaffoldBg)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: iconFg, // Button background color
                         padding: const EdgeInsets.symmetric(
@@ -559,7 +561,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                     controller: _searchController,
                     style: TextStyle(color: iconFg, fontSize: 14),
                     decoration: InputDecoration(
-                      hintText: 'Search models...',
+                      hintText: l.searchModels,
                       hintStyle: TextStyle(
                         color: iconFg.withValues(alpha: 0.5),
                         fontSize: 14,

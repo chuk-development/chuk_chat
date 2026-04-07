@@ -13,6 +13,7 @@ import 'package:chuk_chat/constants/file_constants.dart';
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/widgets/encrypted_image_widget.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
 
 typedef AttachmentRemoveCallback = void Function(String fileId);
 typedef AttachmentCopyCallback = Future<void> Function(AttachedFile file);
@@ -205,7 +206,7 @@ class _ImageAttachmentCard extends StatelessWidget {
                     right: 3,
                     child: _RemoveButton(
                       onTap: isUploading ? null : () => onRemove(file.id),
-                      tooltip: 'Remove ${file.fileName}',
+                      tooltip: AppLocalizations.of(context)!.removeFile(file.fileName),
                       size: 18,
                     ),
                   ),
@@ -454,7 +455,7 @@ class _DocumentAttachmentTile extends StatelessWidget {
                       right: 3,
                       child: _RemoveButton(
                         onTap: isUploading ? null : () => onRemove(file.id),
-                        tooltip: 'Remove ${file.fileName}',
+                        tooltip: AppLocalizations.of(context)!.removeFile(file.fileName),
                         size: 18,
                       ),
                     ),
@@ -710,7 +711,7 @@ class _DocumentPreviewDialogState extends State<_DocumentPreviewDialog> {
                     if (_isEditing) ...[
                       IconButton(
                         icon: Icon(Icons.check_rounded, color: accent),
-                        tooltip: 'Save',
+                        tooltip: AppLocalizations.of(context)!.save,
                         onPressed: _saveEdits,
                       ),
                       IconButton(
@@ -718,7 +719,7 @@ class _DocumentPreviewDialogState extends State<_DocumentPreviewDialog> {
                           Icons.close_rounded,
                           color: textColor.withValues(alpha: 0.5),
                         ),
-                        tooltip: 'Cancel',
+                        tooltip: AppLocalizations.of(context)!.cancel,
                         onPressed: _cancelEditing,
                       ),
                     ] else
@@ -727,7 +728,7 @@ class _DocumentPreviewDialogState extends State<_DocumentPreviewDialog> {
                           Icons.edit_rounded,
                           color: textColor.withValues(alpha: 0.7),
                         ),
-                        tooltip: 'Edit',
+                        tooltip: AppLocalizations.of(context)!.edit,
                         onPressed: _startEditing,
                       ),
                   ],
@@ -737,7 +738,7 @@ class _DocumentPreviewDialogState extends State<_DocumentPreviewDialog> {
                       Icons.close,
                       color: textColor.withValues(alpha: 0.7),
                     ),
-                    tooltip: 'Close',
+                    tooltip: AppLocalizations.of(context)!.close,
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ],

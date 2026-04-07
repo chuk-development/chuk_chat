@@ -24,6 +24,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/platform_config.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:flutter/foundation.dart';
 
 /// Document attachment data
@@ -1163,7 +1164,7 @@ class _MessageBubbleState extends State<MessageBubble>
               child: FilledButton.icon(
                 onPressed: () => _openMailto(to, subject, body, cc, bcc),
                 icon: const Icon(Icons.open_in_new, size: 16),
-                label: const Text('Open in Mail App'),
+                label: Text(AppLocalizations.of(context)!.openInMailApp),
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   textStyle: const TextStyle(fontSize: 13),
@@ -2473,20 +2474,20 @@ class _MessageBubbleState extends State<MessageBubble>
               children: [
                 _imageActionIcon(
                   icon: Icons.copy,
-                  tooltip: 'Copy image',
+                  tooltip: AppLocalizations.of(context)!.copyImage,
                   color: iconFgColor,
                   onPressed: _copyFirstImageToClipboard,
                 ),
                 _imageActionIcon(
                   icon: Icons.download,
-                  tooltip: 'Download image',
+                  tooltip: AppLocalizations.of(context)!.downloadImage,
                   color: iconFgColor,
                   onPressed: _downloadFirstImage,
                 ),
                 Builder(
                   builder: (btnContext) => _imageActionIcon(
                     icon: Icons.more_vert,
-                    tooltip: 'Image details',
+                    tooltip: AppLocalizations.of(context)!.imageDetails,
                     color: iconFgColor,
                     onPressed: () {
                       final renderBox =
@@ -2505,12 +2506,12 @@ class _MessageBubbleState extends State<MessageBubble>
                             PopupMenuItem<String>(
                               enabled: false,
                               value: 'cost',
-                              child: Text('Cost: $costLabel'),
+                              child: Text(AppLocalizations.of(btnContext)!.costLabel(costLabel)),
                             ),
                           PopupMenuItem<String>(
                             enabled: false,
                             value: 'time',
-                            child: Text('Generated: $generatedLabel'),
+                            child: Text(AppLocalizations.of(btnContext)!.generatedLabel(generatedLabel)),
                           ),
                         ],
                       );
@@ -2569,16 +2570,17 @@ class _MessageBubbleState extends State<MessageBubble>
       if (bytes == null) return;
       final copied = await ImageClipboardService.copyImageBytes(bytes);
       if (!mounted) return;
+      final l = AppLocalizations.of(context)!;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(copied ? 'Image copied' : 'Unable to copy image'),
+          content: Text(copied ? l.imageCopied : l.unableToCopyImage),
         ),
       );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Unable to copy image')));
+      ).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.unableToCopyImage)));
     }
   }
 
@@ -2597,12 +2599,12 @@ class _MessageBubbleState extends State<MessageBubble>
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Saved to ${file.path}')));
+      ).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.savedToPath(file.path))));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Unable to save image')));
+      ).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.unableToSaveImage)));
     }
   }
 

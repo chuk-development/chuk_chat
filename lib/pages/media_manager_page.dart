@@ -9,6 +9,7 @@ import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
 
 class MediaManagerPage extends StatefulWidget {
   final bool embedded;
@@ -100,20 +101,22 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
 
     bool shouldDelete = false;
 
+    final l = AppLocalizations.of(context)!;
+
     if (chatsUsingImage.isNotEmpty) {
       // Show warning dialog with chat names
       shouldDelete =
           await showDialog<bool>(
             context: context,
             builder: (context) => AlertDialog(
-              title: const Text('Image Used in Chats'),
+              title: Text(l.imageUsedInChats),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'This image is used in the following chats:',
-                    style: TextStyle(fontWeight: FontWeight.w500),
+                  Text(
+                    l.imageUsedInChatsBody,
+                    style: const TextStyle(fontWeight: FontWeight.w500),
                   ),
                   const SizedBox(height: 12),
                   Container(
@@ -149,26 +152,26 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Text(
-                    'If you delete this image, it will show as "Image deleted" in those chats.',
-                    style: TextStyle(
+                  Text(
+                    l.deleteImageShowDeleted,
+                    style: const TextStyle(
                       color: Colors.orange,
                       fontStyle: FontStyle.italic,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text('Are you sure you want to delete this image?'),
+                  Text(l.deleteImageConfirm),
                 ],
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Cancel'),
+                  child: Text(l.cancel),
                 ),
                 TextButton(
                   onPressed: () => Navigator.pop(context, true),
                   style: TextButton.styleFrom(foregroundColor: Colors.red),
-                  child: const Text('Delete Anyway'),
+                  child: Text(l.deleteAnyway),
                 ),
               ],
             ),
@@ -180,19 +183,17 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
           await showDialog<bool>(
             context: context,
             builder: (context) => AlertDialog(
-              title: const Text('Delete Image'),
-              content: const Text(
-                'Are you sure you want to delete this image? This action cannot be undone.',
-              ),
+              title: Text(l.deleteImageTitle),
+              content: Text(l.deleteImageBody),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Cancel'),
+                  child: Text(l.cancel),
                 ),
                 TextButton(
                   onPressed: () => Navigator.pop(context, true),
                   style: TextButton.styleFrom(foregroundColor: Colors.red),
-                  child: const Text('Delete'),
+                  child: Text(l.delete),
                 ),
               ],
             ),
@@ -213,13 +214,13 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Image deleted')));
+        ).showSnackBar(SnackBar(content: Text(l.imageDeleted)));
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Failed to delete image: $e')));
+        ).showSnackBar(SnackBar(content: Text(l.failedToDeleteImage(e.toString()))));
       }
     }
   }
@@ -240,13 +241,15 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
 
     bool shouldDelete = false;
 
+    final l = AppLocalizations.of(context)!;
+
     if (usageMap.isNotEmpty) {
       // Show warning about images used in chats
       shouldDelete =
           await showDialog<bool>(
             context: context,
             builder: (context) => AlertDialog(
-              title: const Text('Some Images Are Used in Chats'),
+              title: Text(l.someImagesUsedInChats),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -256,26 +259,26 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
                     style: const TextStyle(fontWeight: FontWeight.w500),
                   ),
                   const SizedBox(height: 12),
-                  const Text(
-                    'Deleted images will show as "Image deleted" in those chats.',
-                    style: TextStyle(
+                  Text(
+                    l.deletedImagesWarning,
+                    style: const TextStyle(
                       color: Colors.orange,
                       fontStyle: FontStyle.italic,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text('Delete all ${_selectedImages.length} selected images?'),
+                  Text(l.deleteAllCount(_selectedImages.length)),
                 ],
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Cancel'),
+                  child: Text(l.cancel),
                 ),
                 TextButton(
                   onPressed: () => Navigator.pop(context, true),
                   style: TextButton.styleFrom(foregroundColor: Colors.red),
-                  child: const Text('Delete All'),
+                  child: Text(l.deleteAll),
                 ),
               ],
             ),
@@ -286,19 +289,17 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
           await showDialog<bool>(
             context: context,
             builder: (context) => AlertDialog(
-              title: const Text('Delete Selected Images'),
-              content: Text(
-                'Delete ${_selectedImages.length} selected images? This action cannot be undone.',
-              ),
+              title: Text(l.deleteSelectedImages),
+              content: Text(l.deleteSelectedCount(_selectedImages.length)),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Cancel'),
+                  child: Text(l.cancel),
                 ),
                 TextButton(
                   onPressed: () => Navigator.pop(context, true),
                   style: TextButton.styleFrom(foregroundColor: Colors.red),
-                  child: const Text('Delete'),
+                  child: Text(l.delete),
                 ),
               ],
             ),
@@ -331,13 +332,13 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
       if (failedCount > 0) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Deleted $deletedCount images, $failedCount failed'),
+            content: Text(l.deletedImagesResult(deletedCount, failedCount)),
           ),
         );
       } else {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Deleted $deletedCount images')));
+        ).showSnackBar(SnackBar(content: Text(l.deletedImagesSuccess(deletedCount))));
       }
     }
   }
@@ -381,13 +382,14 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
       );
       await file.writeAsBytes(bytes, flush: true);
       if (!mounted) return;
+      final l = AppLocalizations.of(context)!;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Saved to ${file.path}')),
+        SnackBar(content: Text(l.savedToPath(file.path))),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to save image')),
+        SnackBar(content: Text(AppLocalizations.of(context)!.unableToSaveImage)),
       );
     }
   }
@@ -447,6 +449,7 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     final iconFg = Theme.of(context).resolvedIconColor;
     final isMobile = MediaQuery.of(context).size.width < 800;
 
@@ -472,17 +475,17 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
                     IconButton(
                       icon: Icon(Icons.download, color: iconFg),
                       onPressed: _downloadSelectedImages,
-                      tooltip: 'Download selected',
+                      tooltip: l.downloadSelected,
                     ),
                   IconButton(
                     icon: const Icon(Icons.delete, color: Colors.red),
                     onPressed: _deleteSelectedImages,
-                    tooltip: 'Delete selected',
+                    tooltip: l.deleteSelected,
                   ),
                   IconButton(
                     icon: Icon(Icons.close, color: iconFg),
                     onPressed: _exitSelectionMode,
-                    tooltip: 'Cancel',
+                    tooltip: l.cancel,
                   ),
                 ] else ...[
                   Text(
@@ -493,13 +496,13 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
                   IconButton(
                     icon: Icon(Icons.refresh, color: iconFg),
                     onPressed: _loadImages,
-                    tooltip: 'Refresh',
+                    tooltip: l.refresh,
                   ),
                 ],
               ],
             ),
           ),
-          Expanded(child: _buildBody(isMobile, iconFg)),
+          Expanded(child: _buildBody(isMobile, iconFg, l)),
         ],
       );
     }
@@ -509,7 +512,7 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
         title: Text(
           _isSelectionMode
               ? '${_selectedImages.length} selected'
-              : 'Media Manager',
+              : l.mediaManager,
         ),
         leading: _isSelectionMode
             ? IconButton(
@@ -526,26 +529,26 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
               IconButton(
                 icon: Icon(Icons.download, color: iconFg),
                 onPressed: _downloadSelectedImages,
-                tooltip: 'Download selected',
+                tooltip: l.downloadSelected,
               ),
             IconButton(
               icon: const Icon(Icons.delete, color: Colors.red),
               onPressed: _deleteSelectedImages,
-              tooltip: 'Delete selected',
+              tooltip: l.deleteSelected,
             ),
           ] else
             IconButton(
               icon: Icon(Icons.refresh, color: iconFg),
               onPressed: _loadImages,
-              tooltip: 'Refresh',
+              tooltip: l.refresh,
             ),
         ],
       ),
-      body: _buildBody(isMobile, iconFg),
+      body: _buildBody(isMobile, iconFg, l),
     );
   }
 
-  Widget _buildBody(bool isMobile, Color iconFg) {
+  Widget _buildBody(bool isMobile, Color iconFg, AppLocalizations l) {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -557,12 +560,12 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
           children: [
             Icon(Icons.error_outline, size: 64, color: Colors.red.shade300),
             const SizedBox(height: 16),
-            Text('Error loading images', style: TextStyle(color: iconFg)),
+            Text(l.errorLoadingImages, style: TextStyle(color: iconFg)),
             const SizedBox(height: 8),
             TextButton.icon(
               onPressed: _loadImages,
               icon: const Icon(Icons.refresh),
-              label: const Text('Retry'),
+              label: Text(l.retry),
             ),
           ],
         ),
@@ -581,12 +584,12 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
             ),
             const SizedBox(height: 16),
             Text(
-              'No images stored',
+              l.noImagesStored,
               style: TextStyle(color: iconFg.withValues(alpha: 0.5)),
             ),
             const SizedBox(height: 8),
             Text(
-              'Images you send in chats will appear here',
+              l.imagesAppearHere,
               style: TextStyle(
                 color: iconFg.withValues(alpha: 0.3),
                 fontSize: 12,
@@ -771,7 +774,7 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
                         ),
                       ),
                       onPressed: () => _downloadImage(image),
-                      tooltip: 'Download',
+                      tooltip: AppLocalizations.of(context)!.download,
                     ),
                   IconButton(
                     icon: Container(
@@ -787,7 +790,7 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
                       ),
                     ),
                     onPressed: () => _deleteImage(image),
-                    tooltip: 'Delete',
+                    tooltip: AppLocalizations.of(context)!.delete,
                   ),
                 ],
               ),

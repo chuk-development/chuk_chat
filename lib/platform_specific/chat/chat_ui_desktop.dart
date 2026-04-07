@@ -43,6 +43,7 @@ import 'package:chuk_chat/platform_specific/chat/handlers/chat_persistence_handl
 import 'package:chuk_chat/utils/desktop_drop_stub.dart'
     if (dart.library.io) 'package:desktop_drop/desktop_drop.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/desktop_clipboard_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/desktop_file_handler.dart';
 
@@ -1025,7 +1026,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           },
         );
       } else {
-        _showSnackBar('Mic access failed');
+        _showSnackBar(AppLocalizations.of(context)!.micAccessFailed);
       }
     }
     if (kDebugMode) {
@@ -1047,7 +1048,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     final session = SupabaseService.auth.currentSession;
     if (session == null) {
-      _showSnackBar('Session expired. Please sign in again.');
+      _showSnackBar(AppLocalizations.of(context)!.sessionExpired);
       return;
     }
 
@@ -1062,7 +1063,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     if (!mounted) return;
 
     if (!result.success) {
-      _showSnackBar(result.error ?? 'Transcription failed');
+      _showSnackBar(result.error ?? AppLocalizations.of(context)!.transcriptionFailed);
       setState(() {});
       return;
     }
@@ -1448,7 +1449,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       );
     });
     _textFieldFocusNode.requestFocus();
-    _showSnackBar('Reply target selected');
+    _showSnackBar(AppLocalizations.of(context)!.replyTargetSelected);
   }
 
   @override
@@ -1916,7 +1917,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                           ),
                         ),
                         IconButton(
-                          tooltip: 'Clear reply',
+                          tooltip: AppLocalizations.of(context)!.clearReply,
                           onPressed: _clearPendingReplyContext,
                           icon: Icon(
                             Icons.close_rounded,
@@ -2009,10 +2010,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                       ),
                       decoration: InputDecoration(
                         hintText: _messageActionsHandler.isEditing
-                            ? 'Edit your message...'
+                            ? AppLocalizations.of(context)!.editYourMessage
                             : hasAttachments
-                            ? 'Add a message or send documents'
-                            : 'Ask me anything !',
+                            ? AppLocalizations.of(context)!.addMessageOrDocs
+                            : AppLocalizations.of(context)!.askMeAnything,
                         hintStyle: TextStyle(
                           color: iconFg.withValues(alpha: 0.8),
                           fontWeight: FontWeight.w600,
