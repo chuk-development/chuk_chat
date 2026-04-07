@@ -26,6 +26,7 @@ class ToolLoopSession {
     required this.allowMarkdownToolCalls,
     this.baseSystemPrompt,
     this.discoveryContextKey,
+    this.skipIdentity = false,
   });
 
   String latestUserMessage;
@@ -37,6 +38,10 @@ class ToolLoopSession {
   final bool allowMarkdownToolCalls;
   final String? baseSystemPrompt;
   final String? discoveryContextKey;
+
+  /// When true, the identity section (Soul/User/Memory) is not injected
+  /// into the system prompt. Used for assistants with memory disabled.
+  final bool skipIdentity;
 
   final List<Map<String, dynamic>> discoveredTools = [];
   final Set<String> discoveredToolNames = {};
@@ -131,6 +136,7 @@ class ToolCallHandler {
     bool toolCallingEnabled = true,
     bool discoveryMode = true,
     bool allowMarkdownToolCalls = true,
+    bool skipIdentity = false,
   }) {
     final enforcer = ToolEnforcer(maxIterations: 24)..resetIteration();
 
@@ -157,6 +163,7 @@ class ToolCallHandler {
       allowMarkdownToolCalls: allowMarkdownToolCalls,
       baseSystemPrompt: baseSystemPrompt,
       discoveryContextKey: discoveryContextKey,
+      skipIdentity: skipIdentity,
     );
 
     if (toolCallingEnabled && discoveryMode) {
@@ -176,6 +183,7 @@ class ToolCallHandler {
       isToolResult: false,
       discoveryMode: session.discoveryMode,
       discoveredTools: session.discoveredTools,
+      skipIdentity: session.skipIdentity,
     );
   }
 
@@ -463,9 +471,11 @@ class ToolCallHandler {
     required bool isToolResult,
     required bool discoveryMode,
     required List<Map<String, dynamic>> discoveredTools,
+    bool skipIdentity = false,
   }) async {
     // Check if identity system is enabled before loading Soul/User/Memory.
-    final identityOn = await isIdentityEnabled();
+    // When skipIdentity is true (assistant with memory disabled), skip entirely.
+    final identityOn = !skipIdentity && await isIdentityEnabled();
 
     String? soulText;
     String? userInfoText;

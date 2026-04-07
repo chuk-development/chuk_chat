@@ -328,6 +328,8 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       }
 
       final String? systemPrompt = await _resolveSystemPromptForSend();
+      final assistant = _resolveAssistantForCurrentChat();
+      final skipIdentity = assistant != null && !assistant.memoryEnabled;
 
       if (_isSendOperationCancelled(sendOperationId)) {
         return;
@@ -342,6 +344,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         toolCallingEnabled: widget.toolCallingEnabled,
         discoveryMode: widget.toolDiscoveryMode,
         allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
+        skipIdentity: skipIdentity,
       );
       final initialSystemPrompt = await _toolCallHandler
           .buildInitialSystemPrompt(toolSession);
@@ -539,6 +542,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     toolCallingEnabled: widget.toolCallingEnabled,
                     discoveryMode: widget.toolDiscoveryMode,
                     allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
+                    skipIdentity: skipIdentity,
                   );
                   final retryPrompt = await _toolCallHandler
                       .buildInitialSystemPrompt(toolSession);
@@ -1128,6 +1132,8 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       final String providerSlug = result.providerSlug!;
       final int maxResponseTokens = result.maxResponseTokens!;
       final String? systemPrompt = result.effectiveSystemPrompt;
+      final assistantForChat = _resolveAssistantForCurrentChat();
+      final skipIdentity = assistantForChat != null && !assistantForChat.memoryEnabled;
       final List<String>? imageDataUrls = result.images;
 
       final bool hasAttachments = _fileHandler.attachedFiles.any(
@@ -1172,26 +1178,36 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         _activeChatId = _uuid.v4();
         if (kDebugMode) {
           debugPrint('');
-        }
-        if (kDebugMode) {
           debugPrint(
             '┌─────────────────────────────────────────────────────────────',
           );
-        }
-        if (kDebugMode) {
           debugPrint(
             '│ 🆔 [SEND-DESKTOP] PRE-GENERATED Chat ID: $_activeChatId',
           );
-        }
-        if (kDebugMode) {
           debugPrint(
             '│ 🆔 [SEND-DESKTOP] This ID will be used for all persist calls',
           );
-        }
-        if (kDebugMode) {
           debugPrint(
             '└─────────────────────────────────────────────────────────────',
           );
+        }
+
+        // Link new chat to assistant if one is pending
+        if (_pendingAssistantId != null) {
+          final assistantId = _pendingAssistantId!;
+          _pendingAssistantId = null;
+          // Fire-and-forget — the link is created in the background
+          unawaited(
+            AssistantStorageService.linkChatToAssistant(
+              assistantId,
+              _activeChatId!,
+            ),
+          );
+          if (kDebugMode) {
+            debugPrint(
+              '🤖 [SEND-DESKTOP] Linked chat $_activeChatId to assistant $assistantId',
+            );
+          }
         }
       }
 
@@ -1323,6 +1339,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         toolCallingEnabled: widget.toolCallingEnabled,
         discoveryMode: widget.toolDiscoveryMode,
         allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
+        skipIdentity: skipIdentity,
       );
       final initialSystemPrompt = await _toolCallHandler
           .buildInitialSystemPrompt(toolSession);
@@ -1528,6 +1545,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                       toolCallingEnabled: widget.toolCallingEnabled,
                       discoveryMode: widget.toolDiscoveryMode,
                       allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
+                      skipIdentity: skipIdentity,
                     );
                     final retryPrompt = await _toolCallHandler
                         .buildInitialSystemPrompt(toolSession);

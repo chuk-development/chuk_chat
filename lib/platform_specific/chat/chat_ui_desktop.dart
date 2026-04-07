@@ -46,6 +46,8 @@ import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/desktop_clipboard_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/desktop_file_handler.dart';
+import 'package:chuk_chat/services/assistant_storage_service.dart';
+import 'package:chuk_chat/models/assistant_model.dart';
 
 part 'desktop_send_logic.dart';
 
@@ -147,6 +149,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   String? _pendingMessageReplyPreviewText;
   String? _pendingReplyContext;
   String? _pendingReplyPreviewText;
+
+  /// When a new chat is started from an assistant, this holds the assistant ID
+  /// until the chat is created and linked in the database.
+  String? _pendingAssistantId;
   String _pendingReplyPreviewLabel = 'Reply to AI';
 
   bool _showScrollToBottom = false;
@@ -471,6 +477,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   }
 
   void _loadChatById(String? chatId) {
+    _pendingAssistantId = null;
     if (kDebugMode) {
       debugPrint('');
     }
@@ -756,6 +763,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _messages.map((m) => Map<String, String>.from(m)).toList();
 
   void newChat() {
+    _pendingAssistantId = null;
+    AssistantStorageService.selectedAssistantId = null;
+
     // Capture current chat data for background persistence
     final chatIdToSave = _activeChatId;
     final messagesToSave = _messages.isNotEmpty
@@ -815,22 +825,19 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     }
   }
 
-  /// Start a new chat with a specific assistant
+  /// Start a new chat with a specific assistant.
+  /// The assistant's system prompt will replace the user's global prompt,
+  /// and the chat will be linked to the assistant after the first message.
   void newChatWithAssistant(String assistantId) {
-    // First, create a new chat normally
     newChat();
 
-    // Store the assistant ID for use when the first message is sent
-    // The actual linking happens when the chat is saved after first message
+    _pendingAssistantId = assistantId;
+    AssistantStorageService.selectedAssistantId = assistantId;
+
     if (kDebugMode) {
-      debugPrint('[NEW-CHAT] Will create chat with assistant: $assistantId');
+      debugPrint('[NEW-CHAT] Starting chat with assistant: $assistantId');
     }
-
-    // TODO: Implement full assistant integration with system prompt
-    // _pendingAssistantId = assistantId;
   }
-
-  // String? _pendingAssistantId;
 
   void _openComingSoonFeature(String featureName) {
     if (!mounted) return;
@@ -928,25 +935,51 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     }
   }
 
+  /// Resolve the assistant for the current chat, if any.
+  /// Checks pending assistant first, then looks up by chat ID.
+  Assistant? _resolveAssistantForCurrentChat() {
+    if (_pendingAssistantId != null) {
+      return AssistantStorageService.getAssistant(_pendingAssistantId!);
+    }
+    final chatId = _activeChatId ?? ChatStorageService.selectedChatId;
+    if (chatId != null) {
+      return AssistantStorageService.getAssistantForChat(chatId);
+    }
+    return null;
+  }
+
   Future<String?> _resolveSystemPromptForSend() async {
-    // Always reload the system prompt from the database so that changes
-    // made in SystemPromptPage take effect without restarting the app.
+    // Check if this chat belongs to an assistant.
+    // If so, use the assistant's system prompt instead of the user's global one.
+    final assistant = _resolveAssistantForCurrentChat();
+
     String? basePrompt;
-    try {
-      basePrompt = await UserPreferencesService.loadSystemPrompt();
-      if (mounted) {
-        setState(() {
-          _systemPrompt = basePrompt;
-        });
-      } else {
-        _systemPrompt = basePrompt;
-      }
-    } catch (error) {
+    if (assistant != null) {
+      // Assistant's system prompt REPLACES the user's global prompt and Soul.
+      basePrompt = assistant.systemPrompt;
       if (kDebugMode) {
-        debugPrint('Error resolving system prompt for send: $error');
+        debugPrint(
+          '[ASSISTANT] Using system prompt from "${assistant.name}" '
+          '(${basePrompt.length} chars)',
+        );
       }
-      // Fall back to cached value if reload fails (e.g. offline).
-      basePrompt = _systemPrompt;
+    } else {
+      // Normal flow: load user's global system prompt.
+      try {
+        basePrompt = await UserPreferencesService.loadSystemPrompt();
+        if (mounted) {
+          setState(() {
+            _systemPrompt = basePrompt;
+          });
+        } else {
+          _systemPrompt = basePrompt;
+        }
+      } catch (error) {
+        if (kDebugMode) {
+          debugPrint('Error resolving system prompt for send: $error');
+        }
+        basePrompt = _systemPrompt;
+      }
     }
 
     var resolvedPrompt = basePrompt;
