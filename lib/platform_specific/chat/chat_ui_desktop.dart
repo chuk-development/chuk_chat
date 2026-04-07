@@ -815,6 +815,23 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     }
   }
 
+  /// Start a new chat with a specific assistant
+  void newChatWithAssistant(String assistantId) {
+    // First, create a new chat normally
+    newChat();
+
+    // Store the assistant ID for use when the first message is sent
+    // The actual linking happens when the chat is saved after first message
+    if (kDebugMode) {
+      debugPrint('[NEW-CHAT] Will create chat with assistant: $assistantId');
+    }
+
+    // TODO: Implement full assistant integration with system prompt
+    // _pendingAssistantId = assistantId;
+  }
+
+  // String? _pendingAssistantId;
+
   void _openComingSoonFeature(String featureName) {
     if (!mounted) return;
     ChatUiHelpers.openComingSoonFeature(context, featureName);
@@ -1063,7 +1080,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     if (!mounted) return;
 
     if (!result.success) {
-      _showSnackBar(result.error ?? AppLocalizations.of(context)!.transcriptionFailed);
+      _showSnackBar(
+        result.error ?? AppLocalizations.of(context)!.transcriptionFailed,
+      );
       setState(() {});
       return;
     }

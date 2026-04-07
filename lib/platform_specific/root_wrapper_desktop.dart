@@ -10,11 +10,11 @@ import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_desktop.dart';
-import 'package:chuk_chat/platform_specific/sidebar_desktop.dart'; // UPDATED
+import 'package:chuk_chat/platform_specific/sidebar_desktop.dart';
 import 'package:chuk_chat/pages/projects_page.dart';
+import 'package:chuk_chat/pages/assistants_page.dart';
 import 'package:chuk_chat/pages/media_manager_page.dart';
 import 'package:chuk_chat/pages/settings_page.dart';
-import 'package:chuk_chat/pages/coming_soon_page.dart';
 import 'package:chuk_chat/services/developer_options_service.dart';
 import 'package:chuk_chat/widgets/artifact_panel.dart';
 import 'package:chuk_chat/utils/debug_chat_formatter.dart';
@@ -150,9 +150,12 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     if (_isSidebarExpanded) _toggleSidebar();
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => const ComingSoonPage(
-          title: 'Assistants',
-          message: 'Assistants are coming soon.',
+        builder: (_) => AssistantsPage(
+          onOpenAssistant: (assistantId) {
+            // Start a new chat with this assistant
+            _chatUIKey.currentState?.newChatWithAssistant(assistantId);
+            Navigator.of(context).pop();
+          },
         ),
       ),
     );

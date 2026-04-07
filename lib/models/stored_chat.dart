@@ -15,6 +15,7 @@ class StoredChat {
     this.updatedAt,
     this.keyVersion,
     this.isLocked = false,
+    this.assistantId,
   }) : _messages = messages != null
            ? List<ChatMessage>.unmodifiable(messages)
            : null;
@@ -29,6 +30,7 @@ class StoredChat {
     DateTime? updatedAt,
     int? keyVersion,
     bool isLocked = false,
+    String? assistantId,
   }) {
     return StoredChat(
       id: id,
@@ -40,6 +42,7 @@ class StoredChat {
       updatedAt: updatedAt,
       keyVersion: keyVersion,
       isLocked: isLocked,
+      assistantId: assistantId,
     );
   }
 
@@ -56,6 +59,10 @@ class StoredChat {
   /// The encryption key version that was used to encrypt this chat.
   /// null means legacy (before key versioning was introduced).
   final int? keyVersion;
+
+  /// Optional ID of the assistant this chat belongs to.
+  /// Null means a regular chat without an assistant.
+  final String? assistantId;
 
   /// Get messages - throws if not fully loaded
   List<ChatMessage> get messages {
@@ -77,6 +84,9 @@ class StoredChat {
 
   /// Get messages or null if not loaded (safe access)
   List<ChatMessage>? get messagesOrNull => _messages;
+
+  /// Check if this chat is associated with an assistant
+  bool get hasAssistant => assistantId != null && assistantId!.isNotEmpty;
 
   /// Get a preview of the chat (first user message or first message text)
   /// Falls back to title if messages not loaded
@@ -109,6 +119,7 @@ class StoredChat {
     String? title,
     int? keyVersion,
     bool isLocked = false,
+    String? assistantId,
   }) {
     return StoredChat(
       id: row['id'] as String,
@@ -122,6 +133,7 @@ class StoredChat {
       title: title,
       keyVersion: keyVersion,
       isLocked: isLocked,
+      assistantId: assistantId,
     );
   }
 
@@ -131,6 +143,7 @@ class StoredChat {
     String? title,
     int? keyVersion,
     bool isLocked = false,
+    String? assistantId,
   }) {
     return StoredChat.forSidebar(
       id: row['id'] as String,
@@ -142,6 +155,7 @@ class StoredChat {
       title: title,
       keyVersion: keyVersion,
       isLocked: isLocked,
+      assistantId: assistantId,
     );
   }
 
@@ -155,6 +169,7 @@ class StoredChat {
     String? title,
     int? keyVersion,
     bool? isLocked,
+    String? assistantId,
   }) {
     return StoredChat(
       id: id ?? this.id,
@@ -166,6 +181,7 @@ class StoredChat {
       title: title ?? this.title,
       keyVersion: keyVersion ?? this.keyVersion,
       isLocked: isLocked ?? this.isLocked,
+      assistantId: assistantId ?? this.assistantId,
     );
   }
 
@@ -180,6 +196,8 @@ class StoredChat {
       customName: customName ?? this.customName,
       title: title,
       keyVersion: keyVersion,
+      isLocked: isLocked,
+      assistantId: assistantId,
     );
   }
 }
