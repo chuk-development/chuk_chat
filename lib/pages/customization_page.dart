@@ -420,8 +420,17 @@ class _CustomizationPageState extends State<CustomizationPage> {
               underline: const SizedBox.shrink(),
               dropdownColor: scaffoldBg.lighten(0.08),
               items: [
-                DropdownMenuItem(value: 'en', child: Text(l.english)),
-                DropdownMenuItem(value: 'de', child: Text(l.german)),
+                const DropdownMenuItem(value: 'en', child: Text('English')),
+                const DropdownMenuItem(value: 'de', child: Text('Deutsch')),
+                const DropdownMenuItem(value: 'zh', child: Text('中文')),
+                const DropdownMenuItem(value: 'hi', child: Text('हिन्दी')),
+                const DropdownMenuItem(value: 'es', child: Text('Español')),
+                const DropdownMenuItem(value: 'fr', child: Text('Français')),
+                const DropdownMenuItem(value: 'ar', child: Text('العربية')),
+                const DropdownMenuItem(value: 'bn', child: Text('বাংলা')),
+                const DropdownMenuItem(value: 'pt', child: Text('Português')),
+                const DropdownMenuItem(value: 'ru', child: Text('Русский')),
+                const DropdownMenuItem(value: 'ja', child: Text('日本語')),
               ],
               onChanged: (String? value) {
                 if (value != null && value != _selectedLocale) {

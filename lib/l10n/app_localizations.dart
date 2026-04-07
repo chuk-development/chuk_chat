@@ -4,6 +4,15 @@
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/l10n/strings_en.dart';
 import 'package:chuk_chat/l10n/strings_de.dart';
+import 'package:chuk_chat/l10n/strings_zh.dart';
+import 'package:chuk_chat/l10n/strings_hi.dart';
+import 'package:chuk_chat/l10n/strings_es.dart';
+import 'package:chuk_chat/l10n/strings_fr.dart';
+import 'package:chuk_chat/l10n/strings_ar.dart';
+import 'package:chuk_chat/l10n/strings_bn.dart';
+import 'package:chuk_chat/l10n/strings_pt.dart';
+import 'package:chuk_chat/l10n/strings_ru.dart';
+import 'package:chuk_chat/l10n/strings_ja.dart';
 
 /// Holds all translated UI strings for the current locale.
 ///
@@ -23,10 +32,43 @@ class AppLocalizations {
   static const List<Locale> supportedLocales = [
     Locale('en'),
     Locale('de'),
+    Locale('zh'),
+    Locale('hi'),
+    Locale('es'),
+    Locale('fr'),
+    Locale('ar'),
+    Locale('bn'),
+    Locale('pt'),
+    Locale('ru'),
+    Locale('ja'),
   ];
 
+  static const Map<String, Map<String, String> Function()> _localeMap = {
+    'de': _getDe,
+    'zh': _getZh,
+    'hi': _getHi,
+    'es': _getEs,
+    'fr': _getFr,
+    'ar': _getAr,
+    'bn': _getBn,
+    'pt': _getPt,
+    'ru': _getRu,
+    'ja': _getJa,
+  };
+
+  static Map<String, String> _getDe() => stringsDe;
+  static Map<String, String> _getZh() => stringsZh;
+  static Map<String, String> _getHi() => stringsHi;
+  static Map<String, String> _getEs() => stringsEs;
+  static Map<String, String> _getFr() => stringsFr;
+  static Map<String, String> _getAr() => stringsAr;
+  static Map<String, String> _getBn() => stringsBn;
+  static Map<String, String> _getPt() => stringsPt;
+  static Map<String, String> _getRu() => stringsRu;
+  static Map<String, String> _getJa() => stringsJa;
+
   late final Map<String, String> _strings =
-      locale.languageCode == 'de' ? stringsDe : stringsEn;
+      _localeMap[locale.languageCode]?.call() ?? stringsEn;
 
   String _get(String key) => _strings[key] ?? stringsEn[key] ?? key;
 
@@ -459,6 +501,79 @@ class AppLocalizations {
   String deleteFailed(String error) => _get('deleteFailed').replaceAll('{error}', error);
   String uploadedFile(String name) => _get('uploadedFile').replaceAll('{name}', name);
   String get freeMessagePlaceholder => _get('freeMessagePlaceholder');
+
+  // ── Chat UI ────────────────────────────────────────────────
+  String get askMeAnything => _get('askMeAnything');
+  String get editYourMessage => _get('editYourMessage');
+  String get addMessageOrDocs => _get('addMessageOrDocs');
+  String get micAccessFailed => _get('micAccessFailed');
+  String get transcriptionFailed => _get('transcriptionFailed');
+  String get replyTargetSelected => _get('replyTargetSelected');
+  String get clearReply => _get('clearReply');
+  String get nothingToResend => _get('nothingToResend');
+  String get freeMessagesUsed => _get('freeMessagesUsed');
+  String get ok => _get('ok');
+  String get camera => _get('camera');
+  String get photos => _get('photos');
+  String get files => _get('files');
+
+  // ── Model selector ─────────────────────────────────────────
+  String get models => _get('models');
+  String get searchModels => _get('searchModels');
+  String modelError(String error) => _get('modelError').replaceAll('{error}', error);
+
+  // ── Message bubble extras ──────────────────────────────────
+  String get copyImage => _get('copyImage');
+  String get downloadImage => _get('downloadImage');
+  String get imageDetails => _get('imageDetails');
+  String get imageCopied => _get('imageCopied');
+
+  // ── Free message display ───────────────────────────────────
+  String get freeMessages => _get('freeMessages');
+  String freeUsed(String count) => _get('freeUsed').replaceAll('{count}', count);
+  String freeTotal(String count) => _get('freeTotal').replaceAll('{count}', count);
+  String get subscribeToContinue => _get('subscribeToContinue');
+  String freeRemaining(String remaining, String total) =>
+      _get('freeRemaining').replaceAll('{remaining}', remaining).replaceAll('{total}', total);
+
+  // ── Model selection dropdown ───────────────────────────────
+  String get selectModel => _get('selectModel');
+  String get noEnabledModels => _get('noEnabledModels');
+
+  // ── Media manager ──────────────────────────────────────────
+  String get mediaManager => _get('mediaManager');
+  String get imageUsedInChats => _get('imageUsedInChats');
+  String get imageUsedInChatsBody => _get('imageUsedInChatsBody');
+  String get deleteImageShowDeleted => _get('deleteImageShowDeleted');
+  String get deleteImageConfirm => _get('deleteImageConfirm');
+  String get deleteAnyway => _get('deleteAnyway');
+  String get deleteImageTitle => _get('deleteImageTitle');
+  String get deleteImageBody => _get('deleteImageBody');
+  String get imageDeleted => _get('imageDeleted');
+  String failedToDeleteImage(String error) => _get('failedToDeleteImage').replaceAll('{error}', error);
+  String get someImagesUsedInChats => _get('someImagesUsedInChats');
+  String get deletedImagesWarning => _get('deletedImagesWarning');
+  String deleteAllCount(int count) => _get('deleteAllCount').replaceAll('{count}', count.toString());
+  String get deleteAll => _get('deleteAll');
+  String get deleteSelectedImages => _get('deleteSelectedImages');
+  String deleteSelectedCount(int count) => _get('deleteSelectedCount').replaceAll('{count}', count.toString());
+  String deletedImagesResult(int deleted, int failed) =>
+      _get('deletedImagesResult').replaceAll('{deleted}', deleted.toString()).replaceAll('{failed}', failed.toString());
+  String deletedImagesSuccess(int count) => _get('deletedImagesSuccess').replaceAll('{count}', count.toString());
+  String get downloadSelected => _get('downloadSelected');
+  String get deleteSelected => _get('deleteSelected');
+  String get errorLoadingImages => _get('errorLoadingImages');
+  String get noImagesStored => _get('noImagesStored');
+  String get imagesAppearHere => _get('imagesAppearHere');
+  String get download => _get('download');
+
+  // ── Attachment preview bar ─────────────────────────────────
+  String removeFile(String name) => _get('removeFile').replaceAll('{name}', name);
+  String get edit => _get('edit');
+  String get close => _get('close');
+
+  // ── Subscription dialogs ───────────────────────────────────
+  String get maybeLater => _get('maybeLater');
 }
 
 class _AppLocalizationsDelegate
@@ -467,7 +582,8 @@ class _AppLocalizationsDelegate
 
   @override
   bool isSupported(Locale locale) =>
-      ['en', 'de'].contains(locale.languageCode);
+      ['en', 'de', 'zh', 'hi', 'es', 'fr', 'ar', 'bn', 'pt', 'ru', 'ja']
+          .contains(locale.languageCode);
 
   @override
   Future<AppLocalizations> load(Locale locale) async =>

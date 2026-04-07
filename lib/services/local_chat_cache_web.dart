@@ -37,14 +37,21 @@ class LocalChatCacheService {
     String? updatedAt,
     String? title,
   }) {
-    return <String, dynamic>{
+    final row = <String, dynamic>{
       'id': id,
       'payload': payload,
       'created_at': createdAt,
       'is_starred': isStarred,
-      if (updatedAt != null) 'updated_at': updatedAt,
-      if (title != null) 'title': title,
     };
+
+    if (updatedAt != null) {
+      row['updated_at'] = updatedAt;
+    }
+    if (title != null) {
+      row['title'] = title;
+    }
+
+    return row;
   }
 
   static Future<void> replaceAll(
@@ -95,6 +102,56 @@ class LocalChatCacheService {
 
   static Future<List<Map<String, dynamic>>> load(String userId) async {
     return _loadChats(userId);
+  }
+
+  /// Count cached chats for one user.
+  static Future<int> count(String userId) async {
+    final chats = await _loadChats(userId);
+    return chats.length;
+  }
+
+  /// Load one cached chat row by chat ID.
+  static Future<Map<String, dynamic>?> loadById(
+    String userId,
+    String chatId,
+  ) async {
+    final chats = await _loadChats(userId);
+    for (final chat in chats) {
+      if (chat['id'] == chatId) {
+        return chat;
+      }
+    }
+    return null;
+  }
+
+  /// Case-insensitive search over title + plaintext payload.
+  static Future<List<Map<String, dynamic>>> search(
+    String userId,
+    String query, {
+    int limit = 100,
+  }) async {
+    final trimmed = query.trim().toLowerCase();
+    if (trimmed.isEmpty) return const <Map<String, dynamic>>[];
+
+    final chats = await _loadChats(userId);
+    final filtered = chats
+        .where((chat) {
+          final title = (chat['title'] as String? ?? '').toLowerCase();
+          final payload = (chat['payload'] as String? ?? '').toLowerCase();
+          return title.contains(trimmed) || payload.contains(trimmed);
+        })
+        .toList(growable: false);
+
+    filtered.sort((a, b) {
+      final aUpdated =
+          (a['updated_at'] as String?) ?? (a['created_at'] as String? ?? '');
+      final bUpdated =
+          (b['updated_at'] as String?) ?? (b['created_at'] as String? ?? '');
+      return bUpdated.compareTo(aUpdated);
+    });
+
+    final cappedLimit = limit.clamp(1, 500).toInt();
+    return filtered.take(cappedLimit).toList(growable: false);
   }
 
   /// No-op on web (no migration needed).
@@ -159,8 +216,9 @@ class LocalChatCacheService {
     createdAt ??= DateTime.now().toUtc().toIso8601String();
 
     final starred = row['is_starred'];
-    final isStarred =
-        starred is bool ? starred : (starred is num ? starred != 0 : false);
+    final isStarred = starred is bool
+        ? starred
+        : (starred is num ? starred != 0 : false);
 
     return <String, dynamic>{
       'id': id,

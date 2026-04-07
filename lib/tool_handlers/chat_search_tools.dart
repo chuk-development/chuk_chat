@@ -4,16 +4,23 @@
 // 1) find_chats: broad search and return candidate chat IDs.
 // 2) search_in_chat: focused search inside one selected chat.
 
+import 'dart:convert';
+import 'dart:math' as math;
+
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/services/local_chat_cache_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 
 const int _defaultChatLimit = 10;
 const int _maxChatLimit = 50;
 const int _defaultMessageLimit = 8;
 const int _maxMessageLimit = 50;
-const int _maxDeepScanChats = 12;
 const int _snippetRadius = 120;
+const int _minLocalScanChats = 60;
+const int _maxLocalScanChats = 250;
+const int _localScanMultiplier = 6;
 
 const String _actionFindChats = 'find_chats';
 const String _actionSearchInChat = 'search_in_chat';
@@ -29,11 +36,6 @@ Future<String> executeSearchChats(Map<String, dynamic> args) async {
     final action = _resolveAction(args['action'], chatId: chatId);
     if (action == null) {
       return 'Error: Invalid action. Use "find_chats" or "search_in_chat"';
-    }
-
-    if (!await _ensureEncryptionKey()) {
-      return 'Error: Encryption key not available. '
-          'The user needs to sign in first.';
     }
 
     if (action == _actionSearchInChat) {
@@ -85,162 +87,144 @@ Future<bool> _ensureEncryptionKey() async {
   return EncryptionService.tryLoadKey();
 }
 
+String? _currentUserId() {
+  try {
+    return SupabaseService.auth.currentUser?.id;
+  } catch (_) {
+    return null;
+  }
+}
+
 Future<String> _findChats({required String query, required int limit}) async {
-  final chats = ChatStorageState.chatsById.values.toList();
-  if (chats.isEmpty) {
-    return 'No chats are available for searching yet.';
-  }
-
   final queryLower = query.toLowerCase();
-  final candidates = <_ChatCandidate>[];
-  final includedChatIds = <String>{};
+  final candidatesById = <String, _ChatCandidate>{};
+  var totalSearched = ChatStorageState.chatsById.length;
 
-  for (final chat in chats) {
-    final messages = chat.messagesOrNull;
-    final title = _chatTitle(chat, messages);
-    final titleMatch = title.toLowerCase().contains(queryLower);
+  final userId = _currentUserId();
+  if (userId != null) {
+    final cachedCount = await LocalChatCacheService.count(userId);
+    totalSearched = math.max(totalSearched, cachedCount);
 
-    var matchCount = 0;
-    String? firstSnippet;
-    if (messages != null && messages.isNotEmpty) {
-      for (final message in messages) {
-        if (message.text.toLowerCase().contains(queryLower)) {
-          matchCount++;
-          firstSnippet ??= _extractSnippet(message.text, queryLower);
-        }
-      }
-    }
-
-    if (titleMatch && firstSnippet == null) {
-      firstSnippet = title;
-    }
-
-    if (!titleMatch && matchCount == 0) {
-      continue;
-    }
-
-    candidates.add(
-      _ChatCandidate(
-        chatId: chat.id,
-        title: title,
-        titleMatch: titleMatch,
-        matchCount: matchCount,
-        previewSnippet: firstSnippet ?? '',
-        messageCount: messages?.length ?? 0,
-        updatedAt: chat.updatedAt ?? chat.createdAt,
-      ),
+    final localScanLimit = (limit * _localScanMultiplier)
+        .clamp(_minLocalScanChats, _maxLocalScanChats)
+        .toInt();
+    final rows = await LocalChatCacheService.search(
+      userId,
+      query,
+      limit: localScanLimit,
     );
-    includedChatIds.add(chat.id);
-  }
-
-  if (candidates.length < limit) {
-    final deepMatches = await _scanUnloadedChatsForQuery(
-      chats: chats,
-      queryLower: queryLower,
-      remaining: limit - candidates.length,
-      excludedChatIds: includedChatIds,
-    );
-    for (final candidate in deepMatches) {
-      if (includedChatIds.contains(candidate.chatId)) {
-        continue;
+    for (final row in rows) {
+      final candidate = _candidateFromCacheRow(row, queryLower);
+      if (candidate != null) {
+        _upsertCandidate(candidatesById, candidate);
       }
-      candidates.add(candidate);
-      includedChatIds.add(candidate.chatId);
     }
   }
 
-  if (candidates.isEmpty) {
+  // Include in-memory chats (covers unsynced/new chats).
+  for (final chat in ChatStorageState.chatsById.values) {
+    final candidate = _candidateFromStoredChat(chat, queryLower);
+    if (candidate != null) {
+      _upsertCandidate(candidatesById, candidate);
+    }
+  }
+
+  if (candidatesById.isEmpty) {
     return 'No chats found for "$query".';
   }
 
-  candidates.sort((a, b) {
-    final titleCompare = (b.titleMatch ? 1 : 0).compareTo(a.titleMatch ? 1 : 0);
-    if (titleCompare != 0) {
-      return titleCompare;
-    }
-
-    final countCompare = b.matchCount.compareTo(a.matchCount);
-    if (countCompare != 0) {
-      return countCompare;
-    }
-
-    return b.updatedAt.compareTo(a.updatedAt);
-  });
-
-  final selected = candidates.take(limit).toList();
+  final candidates = candidatesById.values.toList()..sort(_compareCandidates);
+  final selected = candidates.take(limit).toList(growable: false);
   return _formatChatCandidates(
     query: query,
-    totalSearched: chats.length,
+    totalSearched: totalSearched,
     candidates: selected,
   );
 }
 
-Future<List<_ChatCandidate>> _scanUnloadedChatsForQuery({
-  required List<StoredChat> chats,
-  required String queryLower,
-  required int remaining,
-  required Set<String> excludedChatIds,
-}) async {
-  if (remaining <= 0) {
-    return const <_ChatCandidate>[];
+_ChatCandidate? _candidateFromStoredChat(StoredChat chat, String queryLower) {
+  final messages = chat.messagesOrNull;
+  final title = _chatTitle(chat, messages);
+  final titleMatch = title.toLowerCase().contains(queryLower);
+  final idMatch = chat.id.toLowerCase().contains(queryLower);
+
+  var matchCount = 0;
+  String? firstSnippet;
+  if (messages != null && messages.isNotEmpty) {
+    final summary = _summarizeMatches(messages, queryLower);
+    matchCount = summary.matchCount;
+    firstSnippet = summary.firstSnippet;
   }
 
-  final unloaded = chats.where((chat) => !chat.isFullyLoaded).toList()
-    ..sort(
-      (a, b) =>
-          (b.updatedAt ?? b.createdAt).compareTo(a.updatedAt ?? a.createdAt),
-    );
+  if (!idMatch && !titleMatch && matchCount == 0) {
+    return null;
+  }
 
-  final candidates = <_ChatCandidate>[];
-  var scanned = 0;
-
-  for (final chat in unloaded) {
-    if (scanned >= _maxDeepScanChats || candidates.length >= remaining) {
-      break;
-    }
-    if (excludedChatIds.contains(chat.id)) {
-      continue;
-    }
-    scanned++;
-
-    final loaded = await ChatStorageService.loadFullChat(chat.id);
-    final messages = loaded?.messagesOrNull;
-    if (loaded == null || messages == null || messages.isEmpty) {
-      continue;
-    }
-
-    var matchCount = 0;
-    String? firstSnippet;
-    for (final message in messages) {
-      if (message.text.toLowerCase().contains(queryLower)) {
-        matchCount++;
-        firstSnippet ??= _extractSnippet(message.text, queryLower);
-      }
-    }
-
-    final title = _chatTitle(loaded, messages);
-    final titleMatch = title.toLowerCase().contains(queryLower);
-    if (!titleMatch && matchCount == 0) {
-      continue;
-    }
-    if (titleMatch && firstSnippet == null) {
+  if (firstSnippet == null) {
+    if (titleMatch) {
       firstSnippet = title;
+    } else if (idMatch) {
+      firstSnippet = 'chat_id: ${chat.id}';
     }
-
-    candidates.add(
-      _ChatCandidate(
-        chatId: loaded.id,
-        title: title,
-        titleMatch: titleMatch,
-        matchCount: matchCount,
-        previewSnippet: firstSnippet ?? '',
-        messageCount: messages.length,
-        updatedAt: loaded.updatedAt ?? loaded.createdAt,
-      ),
-    );
   }
 
-  return candidates;
+  return _ChatCandidate(
+    chatId: chat.id,
+    title: title,
+    idMatch: idMatch,
+    titleMatch: titleMatch,
+    matchCount: matchCount,
+    previewSnippet: firstSnippet ?? '',
+    messageCount: messages?.length ?? 0,
+    updatedAt: chat.updatedAt ?? chat.createdAt,
+  );
+}
+
+_ChatCandidate? _candidateFromCacheRow(
+  Map<String, dynamic> row,
+  String queryLower,
+) {
+  final chatId = (row['id'] as String? ?? '').trim();
+  if (chatId.isEmpty) {
+    return null;
+  }
+
+  final parsed = _parsePayload(row['payload'] as String?);
+  final messages = parsed?.messages;
+  final title = _rowTitle(row, messages, customName: parsed?.customName);
+  final titleMatch = title.toLowerCase().contains(queryLower);
+  final idMatch = chatId.toLowerCase().contains(queryLower);
+
+  var matchCount = 0;
+  String? firstSnippet;
+  if (messages != null && messages.isNotEmpty) {
+    final summary = _summarizeMatches(messages, queryLower);
+    matchCount = summary.matchCount;
+    firstSnippet = summary.firstSnippet;
+  }
+
+  if (!idMatch && !titleMatch && matchCount == 0) {
+    return null;
+  }
+
+  if (firstSnippet == null) {
+    if (titleMatch) {
+      firstSnippet = title;
+    } else if (idMatch) {
+      firstSnippet = 'chat_id: $chatId';
+    }
+  }
+
+  return _ChatCandidate(
+    chatId: chatId,
+    title: title,
+    idMatch: idMatch,
+    titleMatch: titleMatch,
+    matchCount: matchCount,
+    previewSnippet: firstSnippet ?? '',
+    messageCount: messages?.length ?? 0,
+    updatedAt: _rowTimestamp(row),
+  );
 }
 
 Future<String> _searchInChat({
@@ -248,17 +232,13 @@ Future<String> _searchInChat({
   required String chatId,
   required int messageLimit,
 }) async {
-  var chat = ChatStorageState.chatsById[chatId];
-  if (chat == null || !chat.isFullyLoaded) {
-    final loaded = await ChatStorageService.loadFullChat(chatId);
-    if (loaded == null || !loaded.isFullyLoaded) {
-      return 'Error: Chat "$chatId" not found or could not be loaded';
-    }
-    chat = loaded;
+  final loaded = await _loadChatContent(chatId);
+  if (loaded == null) {
+    return 'Error: Chat "$chatId" not found or could not be loaded';
   }
 
-  final messages = chat.messagesOrNull;
-  if (messages == null || messages.isEmpty) {
+  final messages = loaded.messages;
+  if (messages.isEmpty) {
     return 'No messages found in chat "$chatId".';
   }
 
@@ -267,36 +247,233 @@ Future<String> _searchInChat({
   var totalMatches = 0;
 
   for (int i = 0; i < messages.length; i++) {
-    final message = messages[i];
-    if (!message.text.toLowerCase().contains(queryLower)) {
+    final match = _buildMessageMatch(
+      message: messages[i],
+      queryLower: queryLower,
+      index: i,
+    );
+    if (match == null) {
       continue;
     }
 
     totalMatches++;
     if (shownMatches.length < messageLimit) {
-      shownMatches.add(
-        _MessageMatch(
-          index: i,
-          role: message.role,
-          snippet: _extractSnippet(message.text, queryLower),
-        ),
-      );
+      shownMatches.add(match);
     }
   }
 
-  final title = _chatTitle(chat, messages);
   if (totalMatches == 0) {
-    return 'No matches for "$query" in chat "$title" (chat_id: $chatId).';
+    return 'No matches for "$query" in chat "${loaded.title}" '
+        '(chat_id: $chatId).';
   }
 
   return _formatChatDetails(
     query: query,
     chatId: chatId,
-    title: title,
+    title: loaded.title,
     messageCount: messages.length,
     totalMatches: totalMatches,
     shownMatches: shownMatches,
   );
+}
+
+Future<_LoadedChatContent?> _loadChatContent(String chatId) async {
+  final inMemory = ChatStorageState.chatsById[chatId];
+  if (inMemory != null && inMemory.isFullyLoaded) {
+    final messages = inMemory.messagesOrNull ?? const <ChatMessage>[];
+    return _LoadedChatContent(
+      title: _chatTitle(inMemory, messages),
+      messages: messages,
+    );
+  }
+
+  final userId = _currentUserId();
+  if (userId != null) {
+    final cached = await LocalChatCacheService.loadById(userId, chatId);
+    if (cached != null) {
+      final parsed = _parsePayload(cached['payload'] as String?);
+      if (parsed != null) {
+        final title = _rowTitle(
+          cached,
+          parsed.messages,
+          customName: parsed.customName,
+        );
+        return _LoadedChatContent(title: title, messages: parsed.messages);
+      }
+    }
+  }
+
+  if (!await _ensureEncryptionKey()) {
+    return null;
+  }
+
+  final loaded = await ChatStorageService.loadFullChat(chatId);
+  if (loaded == null || !loaded.isFullyLoaded) {
+    return null;
+  }
+
+  final messages = loaded.messagesOrNull ?? const <ChatMessage>[];
+  return _LoadedChatContent(
+    title: _chatTitle(loaded, messages),
+    messages: messages,
+  );
+}
+
+_ParsedPayload? _parsePayload(String? payload) {
+  if (payload == null || payload.isEmpty) {
+    return null;
+  }
+
+  try {
+    final decoded = jsonDecode(payload);
+    if (decoded is! Map) {
+      return null;
+    }
+
+    final map = _coerceStringMap(decoded);
+    final customName = (map['customName'] as String?)?.trim();
+    final rawMessages = map['messages'];
+    if (rawMessages is! List) {
+      return const _ParsedPayload(messages: <ChatMessage>[]);
+    }
+
+    final messages = <ChatMessage>[];
+    for (final rawMessage in rawMessages) {
+      if (rawMessage is! Map) {
+        continue;
+      }
+      messages.add(ChatMessage.fromJson(_coerceStringMap(rawMessage)));
+    }
+
+    return _ParsedPayload(messages: messages, customName: customName);
+  } catch (_) {
+    return null;
+  }
+}
+
+Map<String, dynamic> _coerceStringMap(Map raw) {
+  final map = <String, dynamic>{};
+  for (final entry in raw.entries) {
+    final key = entry.key?.toString();
+    if (key == null || key.isEmpty) {
+      continue;
+    }
+    map[key] = entry.value;
+  }
+  return map;
+}
+
+DateTime _rowTimestamp(Map<String, dynamic> row) {
+  final updated = _parseDate(row['updated_at']);
+  if (updated != null) {
+    return updated;
+  }
+  final created = _parseDate(row['created_at']);
+  if (created != null) {
+    return created;
+  }
+  return DateTime.fromMillisecondsSinceEpoch(0);
+}
+
+DateTime? _parseDate(dynamic value) {
+  if (value is! String || value.isEmpty) {
+    return null;
+  }
+  try {
+    return DateTime.parse(value);
+  } catch (_) {
+    return null;
+  }
+}
+
+_MessageMatchSummary _summarizeMatches(
+  List<ChatMessage> messages,
+  String queryLower,
+) {
+  var matchCount = 0;
+  String? firstSnippet;
+
+  for (int i = 0; i < messages.length; i++) {
+    final match = _buildMessageMatch(
+      message: messages[i],
+      queryLower: queryLower,
+      index: i,
+    );
+    if (match == null) {
+      continue;
+    }
+
+    matchCount++;
+    firstSnippet ??= match.snippet;
+  }
+
+  return _MessageMatchSummary(
+    matchCount: matchCount,
+    firstSnippet: firstSnippet,
+  );
+}
+
+_MessageMatch? _buildMessageMatch({
+  required ChatMessage message,
+  required String queryLower,
+  required int index,
+}) {
+  for (final field in _messageFields(message)) {
+    if (!field.text.toLowerCase().contains(queryLower)) {
+      continue;
+    }
+
+    var snippet = _extractSnippet(field.text, queryLower);
+    if (field.label != 'text') {
+      snippet = '[${field.label}] $snippet';
+    }
+
+    return _MessageMatch(index: index, role: message.role, snippet: snippet);
+  }
+
+  return null;
+}
+
+List<_SearchField> _messageFields(ChatMessage message) {
+  final fields = <_SearchField>[];
+
+  void add(String label, String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return;
+    }
+    fields.add(_SearchField(label: label, text: value));
+  }
+
+  add('text', message.text);
+  add('reasoning', message.reasoning);
+  add('replyContext', message.replyContext);
+  add('images', message.images);
+  add('attachments', message.attachments);
+  add('attachedFilesJson', message.attachedFilesJson);
+  add('toolCalls', message.toolCalls);
+  add('contentBlocks', message.contentBlocks);
+  add('modelId', message.modelId);
+  add('provider', message.provider);
+
+  return fields;
+}
+
+String _rowTitle(
+  Map<String, dynamic> row,
+  List<ChatMessage>? messages, {
+  String? customName,
+}) {
+  final explicitCustom = (customName ?? '').trim();
+  if (explicitCustom.isNotEmpty) {
+    return explicitCustom;
+  }
+
+  final explicitTitle = (row['title'] as String? ?? '').trim();
+  if (explicitTitle.isNotEmpty) {
+    return explicitTitle;
+  }
+
+  return _titleFromMessages(messages);
 }
 
 String _chatTitle(StoredChat chat, [List<ChatMessage>? messages]) {
@@ -305,7 +482,11 @@ String _chatTitle(StoredChat chat, [List<ChatMessage>? messages]) {
     return explicit;
   }
 
-  if (messages == null) {
+  return _titleFromMessages(messages);
+}
+
+String _titleFromMessages(List<ChatMessage>? messages) {
+  if (messages == null || messages.isEmpty) {
     return '(untitled chat)';
   }
 
@@ -336,6 +517,35 @@ String _extractSnippet(String text, String queryLower) {
   return '$prefix${text.substring(start, end)}$suffix';
 }
 
+void _upsertCandidate(
+  Map<String, _ChatCandidate> candidatesById,
+  _ChatCandidate candidate,
+) {
+  final existing = candidatesById[candidate.chatId];
+  if (existing == null || _compareCandidates(candidate, existing) < 0) {
+    candidatesById[candidate.chatId] = candidate;
+  }
+}
+
+int _compareCandidates(_ChatCandidate a, _ChatCandidate b) {
+  final idCompare = (b.idMatch ? 1 : 0).compareTo(a.idMatch ? 1 : 0);
+  if (idCompare != 0) {
+    return idCompare;
+  }
+
+  final titleCompare = (b.titleMatch ? 1 : 0).compareTo(a.titleMatch ? 1 : 0);
+  if (titleCompare != 0) {
+    return titleCompare;
+  }
+
+  final countCompare = b.matchCount.compareTo(a.matchCount);
+  if (countCompare != 0) {
+    return countCompare;
+  }
+
+  return b.updatedAt.compareTo(a.updatedAt);
+}
+
 String _formatChatCandidates({
   required String query,
   required int totalSearched,
@@ -357,6 +567,7 @@ String _formatChatCandidates({
     final item = candidates[i];
     buffer.writeln(
       '${i + 1}) chat_id=${item.chatId} | title="${item.title}" | '
+      'id_match=${item.idMatch ? "yes" : "no"} | '
       'title_match=${item.titleMatch ? "yes" : "no"} | '
       'message_matches=${item.matchCount} | '
       'messages=${item.messageCount} | '
@@ -409,10 +620,39 @@ int _coerceInt(dynamic value, {required int fallback}) {
   return parsed ?? fallback;
 }
 
+class _LoadedChatContent {
+  const _LoadedChatContent({required this.title, required this.messages});
+
+  final String title;
+  final List<ChatMessage> messages;
+}
+
+class _ParsedPayload {
+  const _ParsedPayload({required this.messages, this.customName});
+
+  final List<ChatMessage> messages;
+  final String? customName;
+}
+
+class _SearchField {
+  const _SearchField({required this.label, required this.text});
+
+  final String label;
+  final String text;
+}
+
+class _MessageMatchSummary {
+  const _MessageMatchSummary({required this.matchCount, this.firstSnippet});
+
+  final int matchCount;
+  final String? firstSnippet;
+}
+
 class _ChatCandidate {
   const _ChatCandidate({
     required this.chatId,
     required this.title,
+    required this.idMatch,
     required this.titleMatch,
     required this.matchCount,
     required this.previewSnippet,
@@ -422,6 +662,7 @@ class _ChatCandidate {
 
   final String chatId;
   final String title;
+  final bool idMatch;
   final bool titleMatch;
   final int matchCount;
   final String previewSnippet;

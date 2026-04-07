@@ -32,6 +32,8 @@ class ToolPromptBuilder {
     String? memoryText,
     Map<String, dynamic>? notesToolDef,
     Map<String, dynamic>? askUserToolDef,
+    Map<String, dynamic>? webSearchToolDef,
+    Map<String, dynamic>? webCrawlToolDef,
     Map<String, dynamic>? projectToolDef,
     Map<String, dynamic>? artifactToolDef,
     bool includeMapVisualOutput = true,
@@ -80,12 +82,25 @@ class ToolPromptBuilder {
           discoveredTools != null && discoveredTools.isNotEmpty;
 
       // Tools that bypass discovery and are always shown.
-      final List<Map<String, dynamic>> alwaysAvailableTools = [
-        if (notesToolDef != null) notesToolDef,
-        if (askUserToolDef != null) askUserToolDef,
-        if (projectToolDef != null) projectToolDef,
-        if (artifactToolDef != null) artifactToolDef,
-      ];
+      final List<Map<String, dynamic>> alwaysAvailableTools = [];
+      if (notesToolDef != null) {
+        alwaysAvailableTools.add(notesToolDef);
+      }
+      if (askUserToolDef != null) {
+        alwaysAvailableTools.add(askUserToolDef);
+      }
+      if (webSearchToolDef != null) {
+        alwaysAvailableTools.add(webSearchToolDef);
+      }
+      if (webCrawlToolDef != null) {
+        alwaysAvailableTools.add(webCrawlToolDef);
+      }
+      if (projectToolDef != null) {
+        alwaysAvailableTools.add(projectToolDef);
+      }
+      if (artifactToolDef != null) {
+        alwaysAvailableTools.add(artifactToolDef);
+      }
 
       if (discoveryMode && hasDiscoveredTools) {
         final findToolDef = tools
@@ -156,17 +171,18 @@ class ToolPromptBuilder {
           // System
           'bash',
         ];
-        final allToolNames = tools
-            .map((t) => t['name']?.toString() ?? '')
-            .where((n) => n.isNotEmpty && n != 'find_tools')
-            .toList()
-          ..sort((a, b) {
-            final ai = toolDisplayOrder.indexOf(a);
-            final bi = toolDisplayOrder.indexOf(b);
-            final aPrio = ai >= 0 ? ai : 999;
-            final bPrio = bi >= 0 ? bi : 999;
-            return aPrio.compareTo(bPrio);
-          });
+        final allToolNames =
+            tools
+                .map((t) => t['name']?.toString() ?? '')
+                .where((n) => n.isNotEmpty && n != 'find_tools')
+                .toList()
+              ..sort((a, b) {
+                final ai = toolDisplayOrder.indexOf(a);
+                final bi = toolDisplayOrder.indexOf(b);
+                final aPrio = ai >= 0 ? ai : 999;
+                final bPrio = bi >= 0 ? bi : 999;
+                return aPrio.compareTo(bPrio);
+              });
         buffer.writeln(
           _buildDiscoveryPrompt(
             alwaysAvailableTools,
@@ -310,6 +326,17 @@ class ToolPromptBuilder {
     final discoverableNames = allToolNames
         .where((n) => !alwaysAvailableNames.contains(n))
         .toList();
+    final hasWebSearch = alwaysAvailableNames.contains('web_search');
+    final hasWebCrawl = alwaysAvailableNames.contains('web_crawl');
+    final webToolNames = [
+      if (hasWebSearch) '`web_search`',
+      if (hasWebCrawl) '`web_crawl`',
+    ];
+    final webToolsException = webToolNames.isEmpty
+        ? ''
+        : 'Exception: ${webToolNames.join(' and ')} '
+              '${webToolNames.length == 1 ? 'is' : 'are'} always available '
+              'with full details below and can be used directly.\n';
 
     final catalogSection = discoverableNames.isNotEmpty
         ? '''
@@ -337,6 +364,7 @@ $catalogSection
 You can see the tool names above but you do NOT have their descriptions or parameters yet.
 **You MUST call find_tools to get the full description of a tool before you can use it.**
 Do NOT guess what a tool does or what parameters it takes based on the name alone.
+$webToolsException
 
 $toolCallStart
 {"name": "find_tools", "arguments": {"query": "restaurant"}}
@@ -656,7 +684,9 @@ Charts and maps are disabled for this session. Do NOT emit <chart> or <map> tags
     buffer.writeln('**Email fields:**');
     buffer.writeln('- "to": recipient email address (required)');
     buffer.writeln('- "subject": email subject line (optional)');
-    buffer.writeln('- "body": email body text, use \\n for newlines (optional)');
+    buffer.writeln(
+      '- "body": email body text, use \\n for newlines (optional)',
+    );
     buffer.writeln('- "cc": CC addresses, comma-separated (optional)');
     buffer.writeln('- "bcc": BCC addresses, comma-separated (optional)');
 

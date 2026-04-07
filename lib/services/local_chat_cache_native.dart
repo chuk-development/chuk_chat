@@ -15,7 +15,7 @@ import 'package:chuk_chat/services/encryption_service.dart';
 
 class LocalChatCacheService {
   static const String _dbName = 'chat_cache.db';
-  static const int _dbVersion = 2;
+  static const int _dbVersion = 3;
 
   /// Old SharedPreferences key prefixes (for migration).
   static const String _oldV2PrefsKey = 'cached_chats_v2-';
@@ -69,6 +69,10 @@ class LocalChatCacheService {
         await db.execute(
           'CREATE INDEX idx_chat_cache_user ON chat_cache (user_id)',
         );
+        await db.execute(
+          'CREATE INDEX idx_chat_cache_user_updated '
+          'ON chat_cache (user_id, updated_at DESC, created_at DESC)',
+        );
         // Generic key-value store for larger cached data (projects, etc.)
         await db.execute('''
           CREATE TABLE kv_cache (
@@ -85,6 +89,12 @@ class LocalChatCacheService {
               value TEXT NOT NULL
             )
           ''');
+        }
+        if (oldVersion < 3) {
+          await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_chat_cache_user_updated '
+            'ON chat_cache (user_id, updated_at DESC, created_at DESC)',
+          );
         }
       },
     );
@@ -110,11 +120,10 @@ class LocalChatCacheService {
   /// Write a cached value by key.
   static Future<void> kvSet(String key, String value) async {
     final db = await _getDb();
-    await db.insert(
-      'kv_cache',
-      {'key': key, 'value': value},
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await db.insert('kv_cache', {
+      'key': key,
+      'value': value,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   /// Delete a cached value by key.
@@ -133,14 +142,21 @@ class LocalChatCacheService {
     String? updatedAt,
     String? title,
   }) {
-    return <String, dynamic>{
+    final row = <String, dynamic>{
       'id': id,
       'payload': payload,
       'created_at': createdAt,
       'is_starred': isStarred,
-      if (updatedAt != null) 'updated_at': updatedAt,
-      if (title != null) 'title': title,
     };
+
+    if (updatedAt != null) {
+      row['updated_at'] = updatedAt;
+    }
+    if (title != null) {
+      row['title'] = title;
+    }
+
+    return row;
   }
 
   // ─── Public API ───────────────────────────────────────────────────────
@@ -206,6 +222,72 @@ class LocalChatCacheService {
     );
 
     return rows.map(_fromDbRow).toList();
+  }
+
+  /// Count cached chats for one user.
+  static Future<int> count(String userId) async {
+    await _runMigrations(userId);
+    final db = await _getDb();
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) AS count FROM chat_cache WHERE user_id = ?',
+      [userId],
+    );
+    if (result.isEmpty) return 0;
+    final value = result.first['count'];
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  /// Load one cached chat row by chat ID.
+  static Future<Map<String, dynamic>?> loadById(
+    String userId,
+    String chatId,
+  ) async {
+    await _runMigrations(userId);
+    final db = await _getDb();
+    final rows = await db.query(
+      'chat_cache',
+      where: 'user_id = ? AND id = ?',
+      whereArgs: [userId, chatId],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return _fromDbRow(rows.first);
+  }
+
+  /// Fast case-insensitive search over title + plaintext payload.
+  /// Uses parameterized SQL to avoid injection.
+  static Future<List<Map<String, dynamic>>> search(
+    String userId,
+    String query, {
+    int limit = 100,
+  }) async {
+    await _runMigrations(userId);
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return const <Map<String, dynamic>>[];
+
+    final db = await _getDb();
+    final cappedLimit = limit.clamp(1, 500).toInt();
+    final escaped = _escapeLikePattern(trimmed.toLowerCase());
+    final pattern = '%$escaped%';
+
+    final rows = await db.rawQuery(
+      '''
+      SELECT id, payload, title, created_at, updated_at, is_starred
+      FROM chat_cache
+      WHERE user_id = ?
+        AND (
+          LOWER(COALESCE(title, '')) LIKE ? ESCAPE '\\'
+          OR LOWER(payload) LIKE ? ESCAPE '\\'
+        )
+      ORDER BY COALESCE(updated_at, created_at) DESC
+      LIMIT ?
+      ''',
+      [userId, pattern, pattern, cappedLimit],
+    );
+
+    return rows.map(_fromDbRow).toList(growable: false);
   }
 
   /// Run all pending migrations (v1/v2/v3 → SQLite).
@@ -330,8 +412,9 @@ class LocalChatCacheService {
         return false;
       }
 
-      final decPayloads =
-          await EncryptionService.decryptBatchInBackground(encPayloads);
+      final decPayloads = await EncryptionService.decryptBatchInBackground(
+        encPayloads,
+      );
 
       final titleTexts = <String>[];
       final titleIdx = <int>[];
@@ -356,15 +439,18 @@ class LocalChatCacheService {
         final dec = decPayloads[i];
         if (dec == null) continue;
         final e = entries[i];
-        rows.add(buildPlaintextRow(
-          id: e['id'] as String,
-          payload: dec,
-          createdAt: e['created_at'] as String? ??
-              DateTime.now().toUtc().toIso8601String(),
-          isStarred: (e['is_starred'] as bool?) ?? false,
-          updatedAt: e['updated_at'] as String?,
-          title: titleMap[i],
-        ));
+        rows.add(
+          buildPlaintextRow(
+            id: e['id'] as String,
+            payload: dec,
+            createdAt:
+                e['created_at'] as String? ??
+                DateTime.now().toUtc().toIso8601String(),
+            isStarred: (e['is_starred'] as bool?) ?? false,
+            updatedAt: e['updated_at'] as String?,
+            title: titleMap[i],
+          ),
+        );
       }
 
       await replaceAll(userId, rows);
@@ -527,8 +613,9 @@ class LocalChatCacheService {
     createdAt ??= DateTime.now().toUtc().toIso8601String();
 
     final starred = row['is_starred'];
-    final isStarred =
-        starred is bool ? starred : (starred is num ? starred != 0 : false);
+    final isStarred = starred is bool
+        ? starred
+        : (starred is num ? starred != 0 : false);
 
     return <String, dynamic>{
       'id': id,
@@ -538,6 +625,13 @@ class LocalChatCacheService {
       if (row['updated_at'] is String) 'updated_at': row['updated_at'],
       if (row['title'] is String) 'title': row['title'],
     };
+  }
+
+  static String _escapeLikePattern(String value) {
+    return value
+        .replaceAll('\\', '\\\\')
+        .replaceAll('%', r'\%')
+        .replaceAll('_', r'\_');
   }
 }
 
