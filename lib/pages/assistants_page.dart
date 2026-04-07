@@ -4,7 +4,9 @@ import 'dart:async';
 import 'package:chuk_chat/models/assistant_model.dart';
 import 'package:chuk_chat/pages/assistant_editor_page.dart';
 import 'package:chuk_chat/services/assistant_storage_service.dart';
+import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 /// Sort options for assistant list
@@ -112,7 +114,7 @@ class _AssistantsPageState extends State<AssistantsPage> {
 
     if (result != null && mounted) {
       try {
-        final assistant = await AssistantStorageService.createAssistant(
+        var assistant = await AssistantStorageService.createAssistant(
           name: result['name'] as String,
           systemPrompt: result['systemPrompt'] as String,
           description: result['description'] as String?,
@@ -121,6 +123,16 @@ class _AssistantsPageState extends State<AssistantsPage> {
           avatarColor: result['avatarColor'] as String?,
           avatarIcon: result['avatarIcon'] as String?,
         );
+
+        // Upload avatar image if one was picked
+        final imageBytes = result['pickedImageBytes'] as Uint8List?;
+        if (imageBytes != null) {
+          assistant = await AssistantStorageService.uploadAvatar(
+            assistant.id,
+            imageBytes,
+          );
+        }
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Created "${assistant.name}"')),
@@ -156,6 +168,19 @@ class _AssistantsPageState extends State<AssistantsPage> {
           avatarColor: result['avatarColor'] as String?,
           avatarIcon: result['avatarIcon'] as String?,
         );
+
+        // Handle avatar image changes
+        final imageBytes = result['pickedImageBytes'] as Uint8List?;
+        final removeImage = result['removeImage'] as bool? ?? false;
+        if (imageBytes != null) {
+          await AssistantStorageService.uploadAvatar(
+            assistant.id,
+            imageBytes,
+          );
+        } else if (removeImage) {
+          await AssistantStorageService.deleteAvatar(assistant.id);
+        }
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Updated "${assistant.name}"')),
@@ -252,9 +277,12 @@ class _AssistantsPageState extends State<AssistantsPage> {
     if (widget.onOpenAssistant != null) {
       widget.onOpenAssistant!(assistant.id);
     } else {
-      // Navigate to assistant chat
-      // This will be implemented when we create the chat UI
-      Navigator.pushNamed(context, '/assistant-chat', arguments: assistant.id);
+      if (kDebugMode) {
+        debugPrint(
+          '⚠️ [Assistants] onOpenAssistant callback not provided — '
+          'cannot start chat with ${assistant.id}',
+        );
+      }
     }
   }
 
@@ -658,20 +686,11 @@ class _AssistantCard extends StatelessWidget {
                     Row(
                       children: [
                         // Assistant avatar
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: assistantColor.withValues(
-                              alpha: isDark ? 0.2 : 0.12,
-                            ),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(
-                            assistant.displayIcon,
-                            color: assistantColor,
-                            size: 22,
-                          ),
+                        _AssistantAvatar(
+                          assistant: assistant,
+                          size: 40,
+                          iconSize: 22,
+                          borderRadius: 10,
                         ),
                         const SizedBox(width: 10),
                         Expanded(
@@ -868,6 +887,115 @@ class _AssistantCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Reusable avatar widget that shows uploaded image or fallback icon.
+/// Uses StatefulWidget to cache the download future across rebuilds.
+class _AssistantAvatar extends StatefulWidget {
+  final Assistant assistant;
+  final double size;
+  final double iconSize;
+  final double borderRadius;
+
+  const _AssistantAvatar({
+    required this.assistant,
+    required this.size,
+    required this.iconSize,
+    required this.borderRadius,
+  });
+
+  @override
+  State<_AssistantAvatar> createState() => _AssistantAvatarState();
+}
+
+class _AssistantAvatarState extends State<_AssistantAvatar> {
+  Future<Uint8List>? _imageFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadImage();
+  }
+
+  @override
+  void didUpdateWidget(_AssistantAvatar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.assistant.avatarImagePath !=
+        widget.assistant.avatarImagePath) {
+      _loadImage();
+    }
+  }
+
+  void _loadImage() {
+    if (widget.assistant.hasCustomImage) {
+      _imageFuture = ImageStorageService.downloadAndDecryptImage(
+        widget.assistant.avatarImagePath!,
+      );
+    } else {
+      _imageFuture = null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = widget.assistant.displayColor;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    if (_imageFuture != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(widget.borderRadius),
+        child: FutureBuilder<Uint8List>(
+          future: _imageFuture,
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return _buildFallbackIcon(color, isDark);
+            }
+            if (snapshot.hasData) {
+              return Image.memory(
+                snapshot.data!,
+                width: widget.size,
+                height: widget.size,
+                fit: BoxFit.cover,
+              );
+            }
+            return Container(
+              width: widget.size,
+              height: widget.size,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: isDark ? 0.2 : 0.12),
+                borderRadius: BorderRadius.circular(widget.borderRadius),
+              ),
+              child: Center(
+                child: SizedBox(
+                  width: widget.iconSize * 0.7,
+                  height: widget.iconSize * 0.7,
+                  child: const CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            );
+          },
+        ),
+      );
+    }
+
+    return _buildFallbackIcon(color, isDark);
+  }
+
+  Widget _buildFallbackIcon(Color color, bool isDark) {
+    return Container(
+      width: widget.size,
+      height: widget.size,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: isDark ? 0.2 : 0.12),
+        borderRadius: BorderRadius.circular(widget.borderRadius),
+      ),
+      child: Icon(
+        widget.assistant.displayIcon,
+        color: color,
+        size: widget.iconSize,
       ),
     );
   }

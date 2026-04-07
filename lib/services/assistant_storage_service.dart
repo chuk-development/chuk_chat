@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 import 'package:chuk_chat/models/assistant_model.dart';
+import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
@@ -284,6 +285,7 @@ class AssistantStorageService {
     String? modelId,
     String? avatarColor,
     String? avatarIcon,
+    String? avatarImagePath,
   }) async {
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
@@ -293,13 +295,17 @@ class AssistantStorageService {
     try {
       final Map<String, dynamic> updateData = {};
       if (name != null) updateData['name'] = name.trim();
-      if (systemPrompt != null)
+      if (systemPrompt != null) {
         updateData['system_prompt'] = systemPrompt.trim();
+      }
       if (description != null) updateData['description'] = description.trim();
       if (memoryEnabled != null) updateData['memory_enabled'] = memoryEnabled;
       if (modelId != null) updateData['model_id'] = modelId.trim();
       if (avatarColor != null) updateData['avatar_color'] = avatarColor.trim();
       if (avatarIcon != null) updateData['avatar_icon'] = avatarIcon.trim();
+      if (avatarImagePath != null) {
+        updateData['avatar_image_path'] = avatarImagePath.trim();
+      }
 
       if (updateData.isEmpty) {
         throw ArgumentError('At least one field must be updated');
@@ -527,6 +533,100 @@ class AssistantStorageService {
         debugPrint('⚠️ [AssistantStorage] Failed to load chat links: $e');
       }
     }
+  }
+
+  // ============ AVATAR IMAGE MANAGEMENT ============
+
+  /// Upload an avatar image for an assistant.
+  /// Compresses, encrypts, and stores in the images bucket.
+  /// Returns the updated assistant.
+  static Future<Assistant> uploadAvatar(
+    String assistantId,
+    Uint8List imageBytes,
+  ) async {
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) {
+      throw StateError('User must be signed in to upload avatar.');
+    }
+
+    try {
+      // Delete existing avatar if present
+      final existing = _assistantsById[assistantId];
+      if (existing?.avatarImagePath != null) {
+        try {
+          await ImageStorageService.deleteEncryptedImage(
+            existing!.avatarImagePath!,
+          );
+        } catch (e) {
+          if (kDebugMode) {
+            debugPrint('⚠️ [AssistantStorage] Failed to delete old avatar: $e');
+          }
+        }
+      }
+
+      // Upload new avatar using existing encrypted image pipeline
+      final storagePath =
+          await ImageStorageService.uploadEncryptedImage(imageBytes);
+
+      // Update the assistant record with the new path
+      try {
+        return await updateAssistant(
+          assistantId,
+          avatarImagePath: storagePath,
+        );
+      } catch (e) {
+        // Clean up uploaded image if DB update fails
+        try {
+          await ImageStorageService.deleteEncryptedImage(storagePath);
+        } catch (_) {
+          // Best-effort cleanup
+        }
+        rethrow;
+      }
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('❌ [AssistantStorage] Failed to upload avatar: $e\n$st');
+      }
+      rethrow;
+    }
+  }
+
+  /// Delete the avatar image for an assistant.
+  static Future<Assistant> deleteAvatar(String assistantId) async {
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) {
+      throw StateError('User must be signed in to delete avatar.');
+    }
+
+    final existing = _assistantsById[assistantId];
+    if (existing?.avatarImagePath != null) {
+      try {
+        await ImageStorageService.deleteEncryptedImage(
+          existing!.avatarImagePath!,
+        );
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('⚠️ [AssistantStorage] Failed to delete avatar file: $e');
+        }
+      }
+    }
+
+    final updated = await SupabaseService.client
+        .from('assistants')
+        .update({'avatar_image_path': null})
+        .eq('id', assistantId)
+        .eq('user_id', user.id)
+        .select()
+        .single();
+
+    final assistant = Assistant.fromJson(updated);
+    _assistantsById[assistantId] = assistant;
+    _notifyChanges();
+
+    if (kDebugMode) {
+      debugPrint('🗑️ [AssistantStorage] Deleted avatar for: $assistantId');
+    }
+    return assistant;
   }
 
   // ============ SYSTEM PROMPT SELF-UPDATE ============

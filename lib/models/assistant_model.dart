@@ -13,6 +13,7 @@ class Assistant {
   final String? modelId; // Optional preferred model
   final String? avatarColor; // Hex color string
   final String? avatarIcon; // Icon identifier
+  final String? avatarImagePath; // Encrypted image storage path
   final DateTime createdAt;
   final DateTime updatedAt;
   final bool isArchived;
@@ -26,6 +27,7 @@ class Assistant {
     this.modelId,
     this.avatarColor,
     this.avatarIcon,
+    this.avatarImagePath,
     required this.createdAt,
     required this.updatedAt,
     this.isArchived = false,
@@ -41,6 +43,7 @@ class Assistant {
       modelId: json['model_id'] as String?,
       avatarColor: json['avatar_color'] as String?,
       avatarIcon: json['avatar_icon'] as String?,
+      avatarImagePath: json['avatar_image_path'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
       isArchived: (json['is_archived'] as bool?) ?? false,
@@ -56,6 +59,7 @@ class Assistant {
     if (modelId != null) 'model_id': modelId,
     if (avatarColor != null) 'avatar_color': avatarColor,
     if (avatarIcon != null) 'avatar_icon': avatarIcon,
+    if (avatarImagePath != null) 'avatar_image_path': avatarImagePath,
     'created_at': createdAt.toIso8601String(),
     'updated_at': updatedAt.toIso8601String(),
     'is_archived': isArchived,
@@ -70,6 +74,7 @@ class Assistant {
     if (modelId != null) 'model_id': modelId,
     if (avatarColor != null) 'avatar_color': avatarColor,
     if (avatarIcon != null) 'avatar_icon': avatarIcon,
+    if (avatarImagePath != null) 'avatar_image_path': avatarImagePath,
     'is_archived': isArchived,
   };
 
@@ -82,6 +87,7 @@ class Assistant {
     String? modelId,
     String? avatarColor,
     String? avatarIcon,
+    String? avatarImagePath,
     DateTime? createdAt,
     DateTime? updatedAt,
     bool? isArchived,
@@ -95,6 +101,7 @@ class Assistant {
       modelId: modelId ?? this.modelId,
       avatarColor: avatarColor ?? this.avatarColor,
       avatarIcon: avatarIcon ?? this.avatarIcon,
+      avatarImagePath: avatarImagePath ?? this.avatarImagePath,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       isArchived: isArchived ?? this.isArchived,
@@ -113,8 +120,8 @@ class Assistant {
       }
     }
     // Deterministic color based on name hash
-    final index = name.hashCode.abs() % _kAssistantColors.length;
-    return _kAssistantColors[index];
+    final index = name.hashCode.abs() % kAssistantColors.length;
+    return kAssistantColors[index];
   }
 
   /// Get the display icon for this assistant
@@ -127,8 +134,8 @@ class Assistant {
       }
     }
     // Deterministic icon based on name hash
-    final index = (name.hashCode.abs() ~/ 7) % _kAssistantIcons.length;
-    return _kAssistantIcons[index];
+    final index = (name.hashCode.abs() ~/ 7) % kAssistantIcons.length;
+    return kAssistantIcons[index];
   }
 
   /// Get relative time string for updatedAt (e.g., "2h ago", "3d ago")
@@ -158,6 +165,10 @@ class Assistant {
     return trimmed.characters.take(2).toString().toUpperCase();
   }
 
+  /// Check if this assistant has a custom uploaded image
+  bool get hasCustomImage =>
+      avatarImagePath != null && avatarImagePath!.isNotEmpty;
+
   /// Check if this assistant has a description
   bool get hasDescription =>
       description != null && description!.trim().isNotEmpty;
@@ -167,7 +178,7 @@ class Assistant {
       memoryEnabled ? 'Memory enabled' : 'Memory disabled';
 
   /// Predefined assistant colors - vibrant but balanced for both themes
-  static const List<Color> _kAssistantColors = [
+  static const List<Color> kAssistantColors = [
     Color(0xFF6366F1), // Indigo
     Color(0xFF8B5CF6), // Violet
     Color(0xFFEC4899), // Pink
@@ -183,7 +194,7 @@ class Assistant {
   ];
 
   /// Predefined assistant icons
-  static const List<IconData> _kAssistantIcons = [
+  static const List<IconData> kAssistantIcons = [
     Icons.smart_toy_outlined,
     Icons.psychology_outlined,
     Icons.lightbulb_outline,
@@ -237,7 +248,7 @@ class Assistant {
 
   /// Get hex color string from Color
   static String colorToHex(Color color) {
-    return '#${color.value.toRadixString(16).substring(2).toUpperCase()}';
+    return '#${color.toARGB32().toRadixString(16).substring(2).toUpperCase()}';
   }
 }
 

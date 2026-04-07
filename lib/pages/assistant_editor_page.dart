@@ -1,7 +1,10 @@
 // lib/pages/assistant_editor_page.dart
 import 'package:chuk_chat/models/assistant_model.dart';
+import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 /// Page for creating or editing an AI assistant
 class AssistantEditorPage extends StatefulWidget {
@@ -24,53 +27,13 @@ class _AssistantEditorPageState extends State<AssistantEditorPage> {
   String? _selectedAvatarColor;
   String? _selectedAvatarIcon;
 
+  // Avatar image state
+  Uint8List? _pickedImageBytes; // Newly picked image (not yet saved)
+  String? _existingImagePath; // Already uploaded image path
+  bool _removeImage = false; // User wants to remove existing image
+  Future<Uint8List>? _existingImageFuture;
+
   bool get _isEditing => widget.assistant != null;
-
-  // Predefined colors for selection
-  final List<Color> _colorOptions = const [
-    Color(0xFF6366F1), // Indigo
-    Color(0xFF8B5CF6), // Violet
-    Color(0xFFEC4899), // Pink
-    Color(0xFFEF4444), // Red
-    Color(0xFFF97316), // Orange
-    Color(0xFFEAB308), // Yellow
-    Color(0xFF22C55E), // Green
-    Color(0xFF14B8A6), // Teal
-    Color(0xFF06B6D4), // Cyan
-    Color(0xFF3B82F6), // Blue
-    Color(0xFF8B5E3C), // Brown
-    Color(0xFF64748B), // Slate
-  ];
-
-  // Predefined icon options
-  final Map<String, IconData> _iconOptions = const {
-    'smart_toy': Icons.smart_toy_outlined,
-    'psychology': Icons.psychology_outlined,
-    'lightbulb': Icons.lightbulb_outline,
-    'auto_awesome': Icons.auto_awesome_outlined,
-    'chat': Icons.chat_bubble_outline,
-    'support': Icons.support_agent_outlined,
-    'person': Icons.person_outline,
-    'face': Icons.face_outlined,
-    'mood': Icons.mood_outlined,
-    'star': Icons.star_outline,
-    'favorite': Icons.favorite_outline,
-    'code': Icons.code,
-    'school': Icons.school_outlined,
-    'work': Icons.work_outline,
-    'science': Icons.science_outlined,
-    'book': Icons.auto_stories_outlined,
-    'palette': Icons.palette_outlined,
-    'terminal': Icons.terminal,
-    'rocket': Icons.rocket_launch_outlined,
-    'cloud': Icons.cloud_outlined,
-    'robot': Icons.smart_toy,
-    'brain': Icons.psychology,
-    'idea': Icons.lightbulb,
-    'assistant': Icons.support_agent,
-    'bot': Icons.smart_toy_outlined,
-    'ai': Icons.auto_awesome,
-  };
 
   @override
   void initState() {
@@ -83,6 +46,11 @@ class _AssistantEditorPageState extends State<AssistantEditorPage> {
       _modelIdController.text = widget.assistant!.modelId ?? '';
       _selectedAvatarColor = widget.assistant!.avatarColor;
       _selectedAvatarIcon = widget.assistant!.avatarIcon;
+      _existingImagePath = widget.assistant!.avatarImagePath;
+      if (_existingImagePath != null) {
+        _existingImageFuture =
+            ImageStorageService.downloadAndDecryptImage(_existingImagePath!);
+      }
     }
   }
 
@@ -110,9 +78,44 @@ class _AssistantEditorPageState extends State<AssistantEditorPage> {
           : null,
       'avatarColor': _selectedAvatarColor,
       'avatarIcon': _selectedAvatarIcon,
+      'pickedImageBytes': _pickedImageBytes,
+      'removeImage': _removeImage,
     };
 
     Navigator.pop(context, result);
+  }
+
+  Future<void> _pickImage() async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 85,
+      );
+      if (picked == null) return;
+
+      final bytes = await picked.readAsBytes();
+      setState(() {
+        _pickedImageBytes = bytes;
+        _removeImage = false;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to pick image: $e')));
+      }
+    }
+  }
+
+  void _removeCurrentImage() {
+    setState(() {
+      _pickedImageBytes = null;
+      _existingImageFuture = null;
+      _removeImage = true;
+    });
   }
 
   Color _getCurrentColor() {
@@ -127,27 +130,106 @@ class _AssistantEditorPageState extends State<AssistantEditorPage> {
       }
     }
     if (_nameController.text.isNotEmpty) {
-      final index = _nameController.text.hashCode.abs() % _colorOptions.length;
-      return _colorOptions[index];
+      final index =
+          _nameController.text.hashCode.abs() % Assistant.kAssistantColors.length;
+      return Assistant.kAssistantColors[index];
     }
-    return _colorOptions[0];
+    return Assistant.kAssistantColors[0];
   }
 
   IconData _getCurrentIcon() {
     if (_selectedAvatarIcon != null &&
-        _iconOptions.containsKey(_selectedAvatarIcon)) {
-      return _iconOptions[_selectedAvatarIcon]!;
+        Assistant.availableIcons.containsKey(_selectedAvatarIcon)) {
+      return Assistant.availableIcons[_selectedAvatarIcon]!;
     }
     if (_nameController.text.isNotEmpty) {
-      final index =
-          (_nameController.text.hashCode.abs() ~/ 7) % _iconOptions.length;
-      return _iconOptions.values.toList()[index];
+      final index = (_nameController.text.hashCode.abs() ~/ 7) %
+          Assistant.availableIcons.length;
+      return Assistant.availableIcons.values.toList()[index];
     }
-    return _iconOptions.values.first;
+    return Assistant.availableIcons.values.first;
   }
 
-  String _colorToHex(Color color) {
-    return '#${color.value.toRadixString(16).substring(2).toUpperCase()}';
+  /// Whether we have an image to show (either picked or existing)
+  bool get _hasImage =>
+      (_pickedImageBytes != null) ||
+      (_existingImageFuture != null && !_removeImage);
+
+  /// Build the avatar widget — show image if available, otherwise icon
+  Widget _buildAvatarPreview(Color currentColor, bool isDark) {
+    if (_pickedImageBytes != null) {
+      // Show newly picked image
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Image.memory(
+          _pickedImageBytes!,
+          width: 80,
+          height: 80,
+          fit: BoxFit.cover,
+        ),
+      );
+    }
+
+    if (_existingImageFuture != null && !_removeImage) {
+      // Show existing uploaded image
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: FutureBuilder<Uint8List>(
+          future: _existingImageFuture,
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: currentColor.withValues(alpha: isDark ? 0.25 : 0.15),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Icon(
+                  Icons.error_outline,
+                  color: Colors.red.withValues(alpha: 0.6),
+                  size: 32,
+                ),
+              );
+            }
+            if (snapshot.hasData) {
+              return Image.memory(
+                snapshot.data!,
+                width: 80,
+                height: 80,
+                fit: BoxFit.cover,
+              );
+            }
+            return Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: currentColor.withValues(alpha: isDark ? 0.25 : 0.15),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Center(
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            );
+          },
+        ),
+      );
+    }
+
+    // Default: icon avatar
+    return Container(
+      width: 80,
+      height: 80,
+      decoration: BoxDecoration(
+        color: currentColor.withValues(alpha: isDark ? 0.25 : 0.15),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Icon(_getCurrentIcon(), color: currentColor, size: 40),
+    );
   }
 
   @override
@@ -158,7 +240,6 @@ class _AssistantEditorPageState extends State<AssistantEditorPage> {
     final isWide = screenWidth > 600;
 
     final currentColor = _getCurrentColor();
-    final currentIcon = _getCurrentIcon();
 
     return Scaffold(
       appBar: AppBar(
@@ -194,23 +275,47 @@ class _AssistantEditorPageState extends State<AssistantEditorPage> {
                       ),
                       child: Column(
                         children: [
-                          // Avatar
-                          Container(
-                            width: 80,
-                            height: 80,
-                            decoration: BoxDecoration(
-                              color: currentColor.withValues(
-                                alpha: isDark ? 0.25 : 0.15,
+                          // Avatar with upload overlay
+                          Stack(
+                            children: [
+                              _buildAvatarPreview(currentColor, isDark),
+                              Positioned(
+                                right: -4,
+                                bottom: -4,
+                                child: Material(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(12),
+                                    onTap: _pickImage,
+                                    child: const Padding(
+                                      padding: EdgeInsets.all(4),
+                                      child: Icon(
+                                        Icons.camera_alt,
+                                        size: 16,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ),
                               ),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Icon(
-                              currentIcon,
-                              color: currentColor,
-                              size: 40,
-                            ),
+                            ],
                           ),
-                          const SizedBox(height: 16),
+                          if (_hasImage) ...[
+                            const SizedBox(height: 8),
+                            TextButton.icon(
+                              onPressed: _removeCurrentImage,
+                              icon: const Icon(Icons.close, size: 16),
+                              label: const Text('Remove image'),
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.red.withValues(
+                                  alpha: 0.8,
+                                ),
+                                textStyle: const TextStyle(fontSize: 12),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 12),
                           // Preview name
                           Text(
                             _nameController.text.isEmpty
@@ -335,7 +440,8 @@ class _AssistantEditorPageState extends State<AssistantEditorPage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'When memory is enabled, the assistant can see previous messages in the conversation. When disabled, each message is processed independently.',
+                    'When memory is enabled, the assistant can access your Soul, User info, and Memory notes. '
+                    'When disabled, the assistant operates with only its own system prompt.',
                     style: TextStyle(
                       fontSize: 13,
                       color: iconFg.withValues(alpha: 0.5),
@@ -347,8 +453,8 @@ class _AssistantEditorPageState extends State<AssistantEditorPage> {
                     title: const Text('Enable Memory'),
                     subtitle: Text(
                       _memoryEnabled
-                          ? 'Assistant remembers conversation history'
-                          : 'Assistant treats each message independently',
+                          ? 'Assistant can access Soul, User, and Memory'
+                          : 'Assistant uses only its own system prompt',
                     ),
                     value: _memoryEnabled,
                     onChanged: (value) =>
@@ -406,8 +512,8 @@ class _AssistantEditorPageState extends State<AssistantEditorPage> {
                   Wrap(
                     spacing: 10,
                     runSpacing: 10,
-                    children: _colorOptions.map((color) {
-                      final hexColor = _colorToHex(color);
+                    children: Assistant.kAssistantColors.map((color) {
+                      final hexColor = Assistant.colorToHex(color);
                       final isSelected = _selectedAvatarColor == hexColor;
                       return InkWell(
                         onTap: () =>
@@ -453,7 +559,7 @@ class _AssistantEditorPageState extends State<AssistantEditorPage> {
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: _iconOptions.entries.map((entry) {
+                    children: Assistant.availableIcons.entries.map((entry) {
                       final isSelected = _selectedAvatarIcon == entry.key;
                       return InkWell(
                         onTap: () =>
