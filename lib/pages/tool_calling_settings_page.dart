@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/models/client_tool.dart';
 import 'package:chuk_chat/pages/connector_detail_page.dart';
@@ -48,29 +49,29 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
     'whoop': Icons.monitor_heart_outlined,
   };
 
-  static const Map<String, String> _toolDisplayNames = {
-    'web_search': 'Web Search',
-    'web_crawl': 'Web Crawl',
-    'generate_image': 'Image Generation',
-    'fetch_image': 'Fetch Image',
-    'view_chat_images': 'View Chat Images',
-    'crypto_data': 'Crypto Data',
-    'weather': 'Weather',
-    'search_places': 'Place Search',
-    'search_restaurants': 'Restaurant Search',
-    'geocode': 'Geocoding',
-    'get_route': 'Routing',
-    'calculate': 'Calculator',
-    'get_time': 'Clock',
-    'random_number': 'Random Number',
-    'flip_coin': 'Coin Flip',
-    'roll_dice': 'Dice Roll',
-    'countdown': 'Countdown',
-    'password_generator': 'Password Generator',
-    'uuid_generator': 'UUID Generator',
-    'notes': 'Notes',
-    'generate_qr': 'QR Generator',
-    'whoop': 'WHOOP Health',
+  static Map<String, String> _toolDisplayNames(AppLocalizations l) => {
+    'web_search': l.toolWebSearch,
+    'web_crawl': l.toolWebCrawl,
+    'generate_image': l.toolImageGen,
+    'fetch_image': l.toolFetchImage,
+    'view_chat_images': l.toolViewChatImages,
+    'crypto_data': l.toolCryptoData,
+    'weather': l.toolWeather,
+    'search_places': l.toolPlaceSearch,
+    'search_restaurants': l.toolRestaurantSearch,
+    'geocode': l.toolGeocoding,
+    'get_route': l.toolRouting,
+    'calculate': l.toolCalculator,
+    'get_time': l.toolClock,
+    'random_number': l.toolRandomNumber,
+    'flip_coin': l.toolCoinFlip,
+    'roll_dice': l.toolDiceRoll,
+    'countdown': l.toolCountdown,
+    'password_generator': l.toolPasswordGen,
+    'uuid_generator': l.toolUuidGen,
+    'notes': l.toolNotes,
+    'generate_qr': l.toolQrGen,
+    'whoop': l.toolWhoopHealth,
   };
 
   late bool _toolCallingEnabled;
@@ -174,31 +175,32 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
   }
 
   String _categoryLabel(ToolCategory category) {
+    final l = AppLocalizations.of(context)!;
     switch (category) {
       case ToolCategory.search:
-        return 'Search and Web';
+        return l.catSearchWeb;
       case ToolCategory.basic:
-        return 'Utilities';
+        return l.catUtilities;
       case ToolCategory.map:
-        return 'Maps and Location';
+        return l.catMapsLocation;
       case ToolCategory.device:
-        return 'Device';
+        return l.catDevice;
       case ToolCategory.spotify:
-        return 'Spotify';
+        return l.catSpotify;
       case ToolCategory.bash:
-        return 'Bash / Terminal';
+        return l.catBashTerminal;
       case ToolCategory.github:
-        return 'GitHub';
+        return l.catGitHub;
       case ToolCategory.slack:
-        return 'Slack';
+        return l.catSlack;
       case ToolCategory.google:
-        return 'Google (Calendar / Gmail)';
+        return l.catGoogleCalGmail;
       case ToolCategory.email:
-        return 'Email (IMAP/SMTP)';
+        return l.catEmailImapSmtp;
       case ToolCategory.whoop:
-        return 'WHOOP';
+        return l.catWhoop;
       case ToolCategory.nextcloud:
-        return 'Nextcloud';
+        return l.catNextcloud;
     }
   }
 
@@ -232,31 +234,32 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
   }
 
   String _categoryDescription(ToolCategory category) {
+    final l = AppLocalizations.of(context)!;
     switch (category) {
       case ToolCategory.search:
-        return 'Search the web, fetch pages, generate images, and look up data';
+        return l.catSearchWebDesc;
       case ToolCategory.basic:
-        return 'Calculator, clock, notes, QR codes, and other utilities';
+        return l.catUtilitiesDesc;
       case ToolCategory.map:
-        return 'Find places, geocode addresses, and calculate routes';
+        return l.catMapsLocationDesc;
       case ToolCategory.device:
-        return 'Access device features like GPS, calendar, and reminders';
+        return l.catDeviceDesc;
       case ToolCategory.spotify:
-        return 'Control playback and browse your Spotify library';
+        return l.catSpotifyDesc;
       case ToolCategory.bash:
-        return 'Run sandboxed shell commands on the desktop';
+        return l.catBashTerminalDesc;
       case ToolCategory.github:
-        return 'Access repos, issues, PRs, and commits from GitHub';
+        return l.catGitHubDesc;
       case ToolCategory.slack:
-        return 'Send messages, search channels, and fetch Slack data';
+        return l.catSlackDesc;
       case ToolCategory.google:
-        return 'Manage your schedule and email via Google Calendar and Gmail';
+        return l.catGoogleCalGmailDesc;
       case ToolCategory.email:
-        return 'Send and receive email via IMAP and SMTP';
+        return l.catEmailImapSmtpDesc;
       case ToolCategory.whoop:
-        return 'View recovery, strain, sleep, and workout data from WHOOP';
+        return l.catWhoopDesc;
       case ToolCategory.nextcloud:
-        return 'Browse files, calendar, and contacts on Nextcloud';
+        return l.catNextcloudDesc;
     }
   }
 
@@ -335,22 +338,23 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
   }
 
   Future<void> _disconnectService(ToolCategory category) async {
+    final l = AppLocalizations.of(context)!;
     final name = _categoryServiceName(category);
     if (name == null) return;
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text('Disconnect ${_categoryLabel(category)}?'),
-        content: const Text('This will remove your saved credentials.'),
+        title: Text(l.disconnectCategory(_categoryLabel(category))),
+        content: Text(l.removeCredentialsWarning),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
+            child: Text(l.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Disconnect'),
+            child: Text(l.disconnect),
           ),
         ],
       ),
@@ -376,7 +380,7 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
   }
 
   String _displayName(String toolName) {
-    final mapped = _toolDisplayNames[toolName];
+    final mapped = _toolDisplayNames(AppLocalizations.of(context)!)[toolName];
     if (mapped != null) {
       return mapped;
     }
@@ -426,12 +430,13 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
   }
 
   List<Widget> _buildConnectorCards(Color scaffoldBg, Color iconFg) {
+    final l = AppLocalizations.of(context)!;
     final tools = _visibleTools();
     if (tools.isEmpty) {
       return [
         _buildInfoCard(
           context,
-          'No tools are registered yet.',
+          l.noToolsRegistered,
           scaffoldBg,
           iconFg,
         ),
@@ -527,7 +532,7 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
                         child: Text(
-                          'Disconnect',
+                          l.disconnect,
                           style: TextStyle(
                             fontSize: 12,
                             color: iconFg.withValues(alpha: 0.6),
@@ -541,8 +546,8 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
                           minimumSize: const Size(0, 28),
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
-                        child: const Text(
-                          'Connect',
+                        child: Text(
+                          l.connect,
                           style: TextStyle(fontSize: 12),
                         ),
                       ),
@@ -652,21 +657,20 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
   }
 
   Future<void> _resetAllToolPreferences() async {
+    final l = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Reset Tool Settings?'),
-        content: const Text(
-          'This will re-enable all tools and reset all custom tool prompts.',
-        ),
+        title: Text(l.resetToolSettingsTitle),
+        content: Text(l.resetToolSettingsBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
+            child: Text(l.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Reset'),
+            child: Text(l.reset),
           ),
         ],
       ),
@@ -687,6 +691,7 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l = AppLocalizations.of(context)!;
     final scaffoldBg = theme.scaffoldBackgroundColor;
     final iconFg = theme.resolvedIconColor;
     final titleTextStyle = theme.appBarTheme.titleTextStyle;
@@ -694,7 +699,7 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
     return Scaffold(
       backgroundColor: scaffoldBg,
       appBar: AppBar(
-        title: Text('Tool Calling', style: titleTextStyle),
+        title: Text(l.toolCalling, style: titleTextStyle),
         backgroundColor: scaffoldBg,
         elevation: 0,
         iconTheme: IconThemeData(color: iconFg),
@@ -704,16 +709,15 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         children: [
           _buildSectionHeader(
             context,
-            'Engine',
+            l.engine,
             Icons.precision_manufacturing_outlined,
             iconFg,
           ),
           const SizedBox(height: 12),
           _buildToggleCard(
             context,
-            title: 'Enable tool calling',
-            subtitle:
-                'Allow the assistant to discover and execute built-in tools',
+            title: l.enableToolCalling,
+            subtitle: l.enableToolCallingSubtitle,
             value: _toolCallingEnabled,
             onChanged: (value) {
               setState(() {
@@ -725,13 +729,12 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
             iconFg: iconFg,
           ),
           const SizedBox(height: 24),
-          _buildSectionHeader(context, 'Behavior', Icons.tune, iconFg),
+          _buildSectionHeader(context, l.behavior, Icons.tune, iconFg),
           const SizedBox(height: 12),
           _buildToggleCard(
             context,
-            title: 'Require discovery first',
-            subtitle:
-                'Force find_tools before other tools are allowed in a turn',
+            title: l.requireDiscoveryFirst,
+            subtitle: l.requireDiscoverySubtitle,
             value: _toolDiscoveryMode,
             onChanged: _toolCallingEnabled
                 ? (value) {
@@ -747,9 +750,8 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
           const SizedBox(height: 12),
           _buildToggleCard(
             context,
-            title: 'Markdown tool-call fallback',
-            subtitle:
-                'Accept ```tool_call code blocks when models do not emit XML tags',
+            title: l.markdownToolCallFallback,
+            subtitle: l.markdownFallbackSubtitle,
             value: _allowMarkdownToolCalls,
             onChanged: _toolCallingEnabled
                 ? (value) {
@@ -765,16 +767,15 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
           const SizedBox(height: 24),
           _buildSectionHeader(
             context,
-            'Display',
+            l.display,
             Icons.visibility_outlined,
             iconFg,
           ),
           const SizedBox(height: 12),
           _buildToggleCard(
             context,
-            title: 'Show tool activity in chat',
-            subtitle:
-                'Display running/completed tool chips in assistant messages',
+            title: l.showToolActivity,
+            subtitle: l.showToolActivitySubtitle,
             value: _showToolCalls,
             onChanged: (value) {
               setState(() {
@@ -788,24 +789,22 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
           const SizedBox(height: 8),
           _buildInfoCard(
             context,
-            'Tip: Leave markdown fallback enabled for best compatibility. '
-            'Disable it only if you want strict XML-only tool calls.',
+            l.toolCallingTip,
             scaffoldBg,
             iconFg,
           ),
           const SizedBox(height: 24),
           _buildSectionHeader(
             context,
-            'Visual Output (Non-Tool)',
+            l.visualOutputNonTool,
             Icons.insights_outlined,
             iconFg,
           ),
           const SizedBox(height: 12),
           _buildToggleCard(
             context,
-            title: 'Enable map blocks (<map>)',
-            subtitle:
-                'Allow the model prompt to include map rendering instructions',
+            title: l.enableMapBlocks,
+            subtitle: l.enableMapBlocksSubtitle,
             value: _mapVisualOutputEnabled,
             onChanged: _toolCallingEnabled
                 ? (value) async {
@@ -824,9 +823,8 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
           const SizedBox(height: 12),
           _buildToggleCard(
             context,
-            title: 'Enable chart blocks (<chart>)',
-            subtitle:
-                'Allow the model prompt to include chart rendering instructions',
+            title: l.enableChartBlocks,
+            subtitle: l.enableChartBlocksSubtitle,
             value: _chartVisualOutputEnabled,
             onChanged: _toolCallingEnabled
                 ? (value) async {
@@ -845,7 +843,7 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
           const SizedBox(height: 24),
           _buildSectionHeader(
             context,
-            'Connectors',
+            l.connectors,
             Icons.extension_outlined,
             iconFg,
           ),
@@ -853,7 +851,7 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
           if (_isLoadingToolPreferences)
             _buildInfoCard(
               context,
-              'Loading tool settings...',
+              l.loadingToolSettings,
               scaffoldBg,
               iconFg,
             )
@@ -867,7 +865,7 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
                   ? null
                   : _resetAllToolPreferences,
               icon: const Icon(Icons.restore),
-              label: const Text('Reset All Tool Preferences'),
+              label: Text(l.resetAllToolPrefs),
             ),
           ),
         ],

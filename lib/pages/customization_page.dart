@@ -3,6 +3,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
@@ -26,6 +27,8 @@ class _CustomizationPageState extends State<CustomizationPage> {
   late bool _selectedIncludeRecentImagesInHistory;
   late bool _selectedIncludeAllImagesInHistory;
   late bool _selectedIncludeReasoningInHistory;
+  // Language selection state
+  late String _selectedLocale;
   // Auto title generation state
   bool _autoGenerateTitles = false;
   bool _isLoadingTitleSetting = true;
@@ -47,6 +50,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
         widget.config.includeAllImagesInHistory;
     _selectedIncludeReasoningInHistory =
         widget.config.includeReasoningInHistory;
+    _selectedLocale = widget.config.uiLocale;
     _loadAutoTitleSetting();
   }
 
@@ -159,7 +163,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('System prompt saved'),
+          content: Text(AppLocalizations.of(context)?.systemPromptSaved ?? 'System prompt saved'),
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 2),
         ),
@@ -176,7 +180,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('System prompt reset to default'),
+          content: Text(AppLocalizations.of(context)?.systemPromptResetToDefault ?? 'System prompt reset to default'),
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 2),
         ),
@@ -196,11 +200,12 @@ class _CustomizationPageState extends State<CustomizationPage> {
     final Color scaffoldBg = theme.scaffoldBackgroundColor;
     final Color iconFg = theme.resolvedIconColor;
     final TextStyle? titleTextStyle = theme.appBarTheme.titleTextStyle;
+    final l = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: scaffoldBg,
       appBar: AppBar(
-        title: Text('Customization', style: titleTextStyle),
+        title: Text(l.customization, style: titleTextStyle),
         backgroundColor: scaffoldBg,
         elevation: 0,
         iconTheme: IconThemeData(color: iconFg),
@@ -208,19 +213,24 @@ class _CustomizationPageState extends State<CustomizationPage> {
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
+          // Language Section
+          _buildSectionHeader(context, l.language, Icons.language, iconFg),
+          const SizedBox(height: 12),
+          _buildLanguageSelector(scaffoldBg, iconFg, l),
+          const SizedBox(height: 24),
+
           // Voice Transcription Section
           _buildSectionHeader(
             context,
-            'Voice Transcription',
+            l.voiceTranscription,
             Icons.mic,
             iconFg,
           ),
           const SizedBox(height: 12),
           _buildToggleCard(
             context,
-            title: 'Auto-send voice messages',
-            subtitle:
-                'Automatically send transcribed voice messages without confirmation',
+            title: l.autoSendVoice,
+            subtitle: l.autoSendVoiceSubtitle,
             value: _selectedAutoSendVoiceTranscription,
             onChanged: (bool value) {
               setState(() {
@@ -232,26 +242,21 @@ class _CustomizationPageState extends State<CustomizationPage> {
             iconFg: iconFg,
           ),
           const SizedBox(height: 8),
-          _buildInfoCard(
-            context,
-            'When enabled, voice transcriptions are sent immediately. When disabled (default), transcriptions appear in the text field for review before sending.',
-            scaffoldBg,
-            iconFg,
-          ),
+          _buildInfoCard(context, l.autoSendVoiceInfo, scaffoldBg, iconFg),
           const SizedBox(height: 24),
 
           // Message Display Section
           _buildSectionHeader(
             context,
-            'Message Display',
+            l.messageDisplay,
             Icons.chat_bubble_outline,
             iconFg,
           ),
           const SizedBox(height: 12),
           _buildToggleCard(
             context,
-            title: 'Show reasoning tokens',
-            subtitle: 'Display reasoning process tokens in AI responses',
+            title: l.showReasoningTokens,
+            subtitle: l.showReasoningTokensSubtitle,
             value: _selectedShowReasoningTokens,
             onChanged: (bool value) {
               setState(() {
@@ -265,8 +270,8 @@ class _CustomizationPageState extends State<CustomizationPage> {
           const SizedBox(height: 12),
           _buildToggleCard(
             context,
-            title: 'Show model info',
-            subtitle: 'Display model name and information in chat messages',
+            title: l.showModelInfo,
+            subtitle: l.showModelInfoSubtitle,
             value: _selectedShowModelInfo,
             onChanged: (bool value) {
               setState(() {
@@ -280,8 +285,8 @@ class _CustomizationPageState extends State<CustomizationPage> {
           const SizedBox(height: 12),
           _buildToggleCard(
             context,
-            title: 'Show tokens per second',
-            subtitle: 'Display AI response generation speed (TPS)',
+            title: l.showTps,
+            subtitle: l.showTpsSubtitle,
             value: _selectedShowTps,
             onChanged: (bool value) {
               setState(() {
@@ -295,12 +300,12 @@ class _CustomizationPageState extends State<CustomizationPage> {
           const SizedBox(height: 24),
 
           // AI Context Section
-          _buildSectionHeader(context, 'AI Context', Icons.psychology, iconFg),
+          _buildSectionHeader(context, l.aiContext, Icons.psychology, iconFg),
           const SizedBox(height: 12),
           _buildToggleCard(
             context,
-            title: 'Recent images in context',
-            subtitle: 'Send images from recent messages to the AI model',
+            title: l.recentImagesInContext,
+            subtitle: l.recentImagesInContextSubtitle,
             value: _selectedIncludeRecentImagesInHistory,
             onChanged: (bool value) {
               setState(() {
@@ -314,9 +319,8 @@ class _CustomizationPageState extends State<CustomizationPage> {
           const SizedBox(height: 12),
           _buildToggleCard(
             context,
-            title: 'All images in context',
-            subtitle:
-                'Send all conversation images to the AI (uses more tokens)',
+            title: l.allImagesInContext,
+            subtitle: l.allImagesInContextSubtitle,
             value: _selectedIncludeAllImagesInHistory,
             onChanged: (bool value) {
               setState(() {
@@ -330,8 +334,8 @@ class _CustomizationPageState extends State<CustomizationPage> {
           const SizedBox(height: 12),
           _buildToggleCard(
             context,
-            title: 'Reasoning in context',
-            subtitle: 'Include AI thinking process in conversation history',
+            title: l.reasoningInContext,
+            subtitle: l.reasoningInContextSubtitle,
             value: _selectedIncludeReasoningInHistory,
             onChanged: (bool value) {
               setState(() {
@@ -343,21 +347,16 @@ class _CustomizationPageState extends State<CustomizationPage> {
             iconFg: iconFg,
           ),
           const SizedBox(height: 8),
-          _buildInfoCard(
-            context,
-            'Recent images sends the last 6 messages\' images. All images sends every image in the conversation. Reasoning includes the AI\'s thinking process as context for follow-up messages.',
-            scaffoldBg,
-            iconFg,
-          ),
+          _buildInfoCard(context, l.aiContextInfo, scaffoldBg, iconFg),
           const SizedBox(height: 24),
 
           // Auto Chat Titles Section
-          _buildSectionHeader(context, 'Chat Titles', Icons.title, iconFg),
+          _buildSectionHeader(context, l.chatTitles, Icons.title, iconFg),
           const SizedBox(height: 12),
           _buildToggleCard(
             context,
-            title: 'Auto-generate chat titles',
-            subtitle: 'Use AI to generate titles for new chats',
+            title: l.autoGenerateTitles,
+            subtitle: l.autoGenerateTitlesSubtitle,
             value: _isLoadingTitleSetting ? false : _autoGenerateTitles,
             onChanged: _isLoadingTitleSetting
                 ? null
@@ -376,12 +375,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
             _buildSystemPromptEditor(scaffoldBg, iconFg),
           ],
           const SizedBox(height: 8),
-          _buildInfoCard(
-            context,
-            'When enabled, a short title will be automatically generated for new chats based on your first message. Uses a fast, lightweight AI model (qwen3-8b).',
-            scaffoldBg,
-            iconFg,
-          ),
+          _buildInfoCard(context, l.titleGenInfo, scaffoldBg, iconFg),
 
           // Image generation is now handled via tool calling (generate_image tool)
         ],
@@ -389,8 +383,64 @@ class _CustomizationPageState extends State<CustomizationPage> {
     );
   }
 
+  Widget _buildLanguageSelector(Color scaffoldBg, Color iconFg, AppLocalizations l) {
+    return Card(
+      color: scaffoldBg.lighten(0.05),
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: iconFg.withValues(alpha: 0.3), width: 1),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    l.language,
+                    style: TextStyle(
+                      color: Theme.of(context).textTheme.titleMedium?.color,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    l.languageSubtitle,
+                    style: TextStyle(color: iconFg.lighten(0.3), fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+            DropdownButton<String>(
+              value: _selectedLocale,
+              underline: const SizedBox.shrink(),
+              dropdownColor: scaffoldBg.lighten(0.08),
+              items: [
+                DropdownMenuItem(value: 'en', child: Text(l.english)),
+                DropdownMenuItem(value: 'de', child: Text(l.german)),
+              ],
+              onChanged: (String? value) {
+                if (value != null && value != _selectedLocale) {
+                  setState(() {
+                    _selectedLocale = value;
+                  });
+                  widget.config.setUiLocale(value);
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildSystemPromptEditor(Color scaffoldBg, Color iconFg) {
     final theme = Theme.of(context);
+    final l = AppLocalizations.of(context)!;
     return Card(
       color: scaffoldBg.lighten(0.05),
       margin: EdgeInsets.zero,
@@ -420,7 +470,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Title Generation Prompt',
+                          l.titleGenerationPrompt,
                           style: theme.textTheme.bodyLarge?.copyWith(
                             fontWeight: FontWeight.w500,
                           ),
@@ -428,8 +478,8 @@ class _CustomizationPageState extends State<CustomizationPage> {
                         const SizedBox(height: 2),
                         Text(
                           _hasCustomPrompt
-                              ? 'Using custom prompt'
-                              : 'Using default prompt',
+                              ? l.usingCustomPrompt
+                              : l.usingDefaultPrompt,
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: iconFg.withValues(alpha: 0.7),
                           ),
@@ -498,7 +548,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
                       TextButton.icon(
                         onPressed: _resetSystemPrompt,
                         icon: Icon(Icons.restore, size: 18),
-                        label: const Text('Reset'),
+                        label: Text(l.reset),
                         style: TextButton.styleFrom(
                           foregroundColor: iconFg.withValues(alpha: 0.7),
                         ),
@@ -507,7 +557,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
                       FilledButton.icon(
                         onPressed: _saveSystemPrompt,
                         icon: Icon(Icons.save, size: 18),
-                        label: const Text('Save'),
+                        label: Text(l.save),
                       ),
                     ],
                   ),

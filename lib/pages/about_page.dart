@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/developer_options_service.dart';
 import 'package:chuk_chat/services/update_check_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
@@ -58,11 +59,13 @@ class _AboutPageState extends State<AboutPage> {
     await DeveloperOptionsService.initialize();
     if (!mounted) return;
 
+    final l = AppLocalizations.of(context)!;
+
     if (DeveloperOptionsService.enabledNotifier.value) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Developer options already enabled'),
-          duration: Duration(seconds: 1),
+        SnackBar(
+          content: Text(l.devOptionsAlreadyEnabled),
+          duration: const Duration(seconds: 1),
         ),
       );
       return;
@@ -83,9 +86,9 @@ class _AboutPageState extends State<AboutPage> {
         _remainingDeveloperTaps = 3;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Developer options enabled'),
-          duration: Duration(seconds: 2),
+        SnackBar(
+          content: Text(l.devOptionsEnabled),
+          duration: const Duration(seconds: 2),
         ),
       );
       return;
@@ -95,9 +98,7 @@ class _AboutPageState extends State<AboutPage> {
     final taps = _remainingDeveloperTaps;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          '$taps more tap${taps == 1 ? '' : 's'} for Developer options',
-        ),
+        content: Text(l.devOptionsTaps(taps)),
         duration: const Duration(seconds: 1),
       ),
     );
@@ -109,11 +110,12 @@ class _AboutPageState extends State<AboutPage> {
     final scaffoldBg = theme.scaffoldBackgroundColor;
     final accent = theme.colorScheme.primary;
     final iconColor = theme.iconTheme.color ?? theme.colorScheme.onSurface;
+    final l = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: scaffoldBg,
       appBar: AppBar(
-        title: Text('About', style: theme.appBarTheme.titleTextStyle),
+        title: Text(l.about, style: theme.appBarTheme.titleTextStyle),
         backgroundColor: scaffoldBg,
         elevation: 0,
         iconTheme: IconThemeData(color: iconColor),
@@ -144,7 +146,7 @@ class _AboutPageState extends State<AboutPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      info?.appName ?? 'Chuk Chat',
+                      info?.appName ?? l.chukChat,
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
@@ -163,14 +165,14 @@ class _AboutPageState extends State<AboutPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Open Source Licenses',
+                      l.openSourceLicenses,
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Review the licenses for every dependency included in this build.',
+                      l.openSourceLicensesSubtitle,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: iconColor.withValues(alpha: 0.75),
                       ),
@@ -186,7 +188,7 @@ class _AboutPageState extends State<AboutPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Legal Documents',
+                      l.legalDocuments,
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
@@ -206,7 +208,7 @@ class _AboutPageState extends State<AboutPage> {
                               ),
                               padding: const EdgeInsets.symmetric(vertical: 12),
                             ),
-                            child: const Text('Terms of Service'),
+                            child: Text(l.termsOfService),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -222,7 +224,7 @@ class _AboutPageState extends State<AboutPage> {
                               ),
                               padding: const EdgeInsets.symmetric(vertical: 12),
                             ),
-                            child: const Text('Privacy Policy'),
+                            child: Text(l.privacyPolicy),
                           ),
                         ),
                       ],
@@ -245,7 +247,7 @@ class _AboutPageState extends State<AboutPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Version $versionText',
+                            l.versionText(versionText),
                             style: theme.textTheme.bodyMedium?.copyWith(
                               fontWeight: FontWeight.w600,
                               color: iconColor.withValues(alpha: 0.85),
@@ -256,7 +258,7 @@ class _AboutPageState extends State<AboutPage> {
                             GestureDetector(
                               onTap: UpdateCheckService.launchDownload,
                               child: Text(
-                                'Update available: v${updateInfo.latestVersion} — tap to download',
+                                l.updateAvailable(updateInfo.latestVersion),
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   color: theme.colorScheme.primary,
                                   fontWeight: FontWeight.w500,
@@ -274,7 +276,7 @@ class _AboutPageState extends State<AboutPage> {
                   icon: Icons.help_outline,
                   iconColor: accent,
                   child: Text(
-                    'Version information unavailable.',
+                    l.versionUnavailable,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: iconColor.withValues(alpha: 0.7),
                     ),
@@ -285,7 +287,7 @@ class _AboutPageState extends State<AboutPage> {
                 icon: Icons.balance,
                 iconColor: accent,
                 child: Text(
-                  '© ${DateTime.now().year} Chuk Chat\nAll rights reserved.',
+                  l.copyrightYear(DateTime.now().year.toString()),
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: iconColor.withValues(alpha: 0.75),
                   ),
@@ -402,10 +404,12 @@ class _ThemedLicensePageState extends State<_ThemedLicensePage> {
     final cardBg = scaffoldBg.lighten(0.05);
     final BorderRadius borderRadius = BorderRadius.circular(12);
 
+    final l = AppLocalizations.of(context)!;
+
     return Scaffold(
       backgroundColor: scaffoldBg,
       appBar: AppBar(
-        title: Text('Licenses', style: theme.appBarTheme.titleTextStyle),
+        title: Text(l.licenses, style: theme.appBarTheme.titleTextStyle),
         backgroundColor: scaffoldBg,
         elevation: 0,
         iconTheme: IconThemeData(color: iconColor),
@@ -426,7 +430,7 @@ class _ThemedLicensePageState extends State<_ThemedLicensePage> {
           if (snapshot.hasError) {
             return Center(
               child: Text(
-                'Unable to load licenses.',
+                l.unableToLoadLicenses,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: iconColor.withValues(alpha: 0.7),
                 ),
@@ -533,7 +537,7 @@ class _LicenseListTile extends StatelessWidget {
               ],
               const SizedBox(height: 8),
               Text(
-                'Tap to view full license text',
+                AppLocalizations.of(context)!.tapToViewLicense,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: iconColor.withValues(alpha: 0.6),
                 ),

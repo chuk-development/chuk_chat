@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/pages/recover_chats_page.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/auth_service.dart';
@@ -83,7 +84,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _errorMessage = 'Failed to load profile: $error';
+        _errorMessage = AppLocalizations.of(context)!.failedToLoadProfile(error.toString());
         _isLoading = false;
       });
     }
@@ -108,13 +109,12 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       String? emailNotice;
 
       if (newEmail.isEmpty) {
-        throw const ProfileServiceException('Email cannot be empty.');
+        throw ProfileServiceException(AppLocalizations.of(context)!.emailCannotBeEmpty);
       }
 
       if (newEmail != _profile!.email) {
         await SupabaseService.auth.updateUser(UserAttributes(email: newEmail));
-        emailNotice =
-            'Email updated. Confirm the change using the link Supabase sent to $newEmail.';
+        emailNotice = AppLocalizations.of(context)!.emailUpdated(newEmail);
       }
 
       if (!mounted) return;
@@ -127,7 +127,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            emailNotice ?? 'Saved',
+            emailNotice ?? AppLocalizations.of(context)!.saved,
             style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
           ),
           backgroundColor: Theme.of(context).colorScheme.primary,
@@ -157,12 +157,13 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       if (!mounted) return;
       setState(() {
         _isSaving = false;
-        _errorMessage = 'Failed to save profile: $error';
+        _errorMessage = AppLocalizations.of(context)!.failedToSaveProfile(error.toString());
       });
     }
   }
 
-  Widget _buildRecoverChatsSection(ThemeData theme, Color iconFg) {
+  Widget _buildRecoverChatsSection(ThemeData theme, Color iconFg, [AppLocalizations? localizations]) {
+    final l = localizations ?? AppLocalizations.of(context)!;
     final user = SupabaseService.auth.currentUser;
     if (user == null || !KeyVersionService.hasPreviousKeys(user)) {
       return const SizedBox.shrink();
@@ -192,7 +193,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                   Icon(Icons.lock, size: 20, color: theme.colorScheme.primary),
                   const SizedBox(width: 8),
                   Text(
-                    'Encrypted Chat Recovery',
+                    l.encryptedChatRecovery,
                     style: theme.textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w600,
                       color: iconFg,
@@ -202,7 +203,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
               ),
               const SizedBox(height: 8),
               Text(
-                '$lockedCount chat${lockedCount == 1 ? '' : 's'} encrypted with a previous password.',
+                l.lockedChatsCount(lockedCount),
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: iconFg.withValues(alpha: 0.7),
                 ),
@@ -219,7 +220,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                     );
                   },
                   icon: const Icon(Icons.lock_open, size: 18),
-                  label: const Text('Recover chats'),
+                  label: Text(l.recoverChats),
                 ),
               ),
             ],
@@ -236,7 +237,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     final confirmPassword = _confirmPasswordCtrl.text;
     if (newPassword.trim() != confirmPassword.trim()) {
       setState(() {
-        _passwordChangeError = 'New passwords do not match.';
+        _passwordChangeError = AppLocalizations.of(context)!.passwordsDoNotMatch;
         _passwordChangeNotice = null;
       });
       return;
@@ -290,42 +291,35 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       if (!mounted) return;
       setState(() {
         _isChangingPassword = false;
-        _passwordChangeError = 'Failed to change password: $error';
+        _passwordChangeError = AppLocalizations.of(context)!.failedToChangePassword(error.toString());
       });
     }
   }
 
   Future<void> _deleteAccount() async {
+    final l = AppLocalizations.of(context)!;
     // ── Step 1: First warning ──
     final step1 = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
-            SizedBox(width: 10),
-            Text('Delete Account?'),
+            const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
+            const SizedBox(width: 10),
+            Text(l.deleteAccountQuestion),
           ],
         ),
-        content: const Text(
-          'Are you sure you want to delete your account?\n\n'
-          'This will permanently erase:\n'
-          '  - All your chats and messages\n'
-          '  - All stored memories\n'
-          '  - Your profile and settings\n'
-          '  - Any active subscriptions\n\n'
-          'This action is irreversible. Your data cannot be recovered.',
-        ),
+        content: Text(l.deleteAccountConfirmBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
+            child: Text(l.cancel),
           ),
           TextButton(
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Yes, I want to delete'),
+            child: Text(l.yesDelete),
           ),
         ],
       ),
@@ -338,29 +332,23 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.delete_forever, color: Colors.red, size: 28),
-            SizedBox(width: 10),
-            Text('This is permanent'),
+            const Icon(Icons.delete_forever, color: Colors.red, size: 28),
+            const SizedBox(width: 10),
+            Text(l.thisIsPermanent),
           ],
         ),
-        content: const Text(
-          'This is your last chance to turn back.\n\n'
-          'Once deleted, there is absolutely no way to recover '
-          'your account, chats, memories, or any associated data.\n\n'
-          'Everything will be gone forever.\n\n'
-          'Do you still want to proceed?',
-        ),
+        content: Text(l.finalDeleteWarning),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('No, keep my account'),
+            child: Text(l.noKeepMyAccount),
           ),
           TextButton(
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Delete everything'),
+            child: Text(l.deleteEverything),
           ),
         ],
       ),
@@ -378,21 +366,19 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         bool isVerifying = false;
         return StatefulBuilder(
           builder: (ctx, setDialogState) => AlertDialog(
-            title: const Text('Confirm your password'),
+            title: Text(l.confirmYourPassword),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'To confirm account deletion, please enter your password.',
-                ),
+                Text(l.confirmPasswordBody),
                 const SizedBox(height: 16),
                 TextField(
                   controller: passwordController,
                   obscureText: true,
                   autofocus: true,
                   decoration: InputDecoration(
-                    labelText: 'Password',
+                    labelText: l.password,
                     errorText: errorText,
                     border: const OutlineInputBorder(),
                     prefixIcon: const Icon(Icons.lock_outline),
@@ -403,7 +389,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                           final password = passwordController.text.trim();
                           if (password.isEmpty) {
                             setDialogState(
-                              () => errorText = 'Password is required',
+                              () => errorText = l.passwordRequired,
                             );
                             return;
                           }
@@ -435,7 +421,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                           } catch (e) {
                             setDialogState(() {
                               isVerifying = false;
-                              errorText = 'Verification failed: $e';
+                              errorText = l.verificationFailed(e.toString());
                             });
                           }
                         },
@@ -447,7 +433,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                 onPressed: isVerifying
                     ? null
                     : () => Navigator.of(ctx).pop(false),
-                child: const Text('Cancel'),
+                child: Text(l.cancel),
               ),
               TextButton(
                 style: TextButton.styleFrom(foregroundColor: Colors.red),
@@ -457,7 +443,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                         final password = passwordController.text.trim();
                         if (password.isEmpty) {
                           setDialogState(
-                            () => errorText = 'Password is required',
+                            () => errorText = l.passwordRequired,
                           );
                           return;
                         }
@@ -485,7 +471,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                         } catch (e) {
                           setDialogState(() {
                             isVerifying = false;
-                            errorText = 'Verification failed: $e';
+                            errorText = l.verificationFailed(e.toString());
                           });
                         }
                       },
@@ -495,7 +481,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                         height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Text('Verify & Delete'),
+                    : Text(l.verifyAndDelete),
               ),
             ],
           ),
@@ -531,7 +517,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            'Failed to delete account: $error',
+            l.failedToDeleteAccount(error.toString()),
             style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
           ),
           behavior: SnackBarBehavior.floating,
@@ -549,6 +535,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final Color scaffoldBg = theme.scaffoldBackgroundColor;
     final Color iconFg = theme.resolvedIconColor;
@@ -566,14 +553,14 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                _errorMessage ?? 'Unable to load your profile right now.',
+                _errorMessage ?? l.unableToLoadProfile,
                 style: theme.textTheme.bodyMedium,
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: _loadProfile,
-                child: const Text('Retry'),
+                child: Text(l.retry),
               ),
             ],
           ),
@@ -600,25 +587,24 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
               ),
             ),
           _AccountSectionCard(
-            title: 'Profile',
-            description:
-                'Update how your name and email appear inside Chuk Chat.',
+            title: l.profile,
+            description: l.profileSubtitle,
             child: Column(
               children: [
                 TextFormField(
                   controller: _displayNameCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Display name',
-                    hintText: 'How other people see you',
+                  decoration: InputDecoration(
+                    labelText: l.displayName,
+                    hintText: l.displayNameHint,
                   ),
                   textCapitalization: TextCapitalization.words,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _emailCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Email address',
-                    hintText: 'Where we send notifications',
+                  decoration: InputDecoration(
+                    labelText: l.emailAddress,
+                    hintText: l.emailAddressHint,
                   ),
                   keyboardType: TextInputType.emailAddress,
                 ),
@@ -627,15 +613,15 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
           ),
           const SizedBox(height: 24),
           _AccountSectionCard(
-            title: 'Security',
-            description: 'Reassure yourself everything is protected.',
+            title: l.security,
+            description: l.securitySubtitle,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Change password', style: theme.textTheme.titleMedium),
+                Text(l.changePassword, style: theme.textTheme.titleMedium),
                 const SizedBox(height: 6),
                 Text(
-                  'Update your Supabase password and re-encrypt your saved chats.',
+                  l.changePasswordSubtitle,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: iconFg.withValues(alpha: 0.7),
                   ),
@@ -682,7 +668,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                 TextField(
                   controller: _currentPasswordCtrl,
                   decoration: InputDecoration(
-                    labelText: 'Current password',
+                    labelText: l.currentPassword,
                     suffixIcon: IconButton(
                       icon: Icon(
                         _obscureCurrentPassword
@@ -703,8 +689,8 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                 TextField(
                   controller: _newPasswordCtrl,
                   decoration: InputDecoration(
-                    labelText: 'New password',
-                    helperText: 'Minimum 8 characters.',
+                    labelText: l.newPassword,
+                    helperText: l.minCharsPassword,
                     suffixIcon: IconButton(
                       icon: Icon(
                         _obscureNewPassword
@@ -725,7 +711,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                 TextField(
                   controller: _confirmPasswordCtrl,
                   decoration: InputDecoration(
-                    labelText: 'Confirm new password',
+                    labelText: l.confirmNewPassword,
                     suffixIcon: IconButton(
                       icon: Icon(
                         _obscureConfirmPassword
@@ -771,7 +757,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                               strokeWidth: 2,
                             ),
                           )
-                        : const Text('Update password'),
+                        : Text(l.updatePassword),
                   ),
                 ),
               ],
@@ -796,7 +782,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                       ),
                     )
                   : const Icon(Icons.check),
-              label: Text(_isSaving ? 'Saving…' : 'Save changes'),
+              label: Text(_isSaving ? l.saving : l.saveChanges),
               onPressed: _isSaving || _profile == null
                   ? null
                   : _saveAccountSettings,
@@ -813,15 +799,13 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
           const Divider(),
           const SizedBox(height: 16),
           _AccountSectionCard(
-            title: 'Danger Zone',
-            description:
-                'Irreversible actions that affect your entire account.',
+            title: l.dangerZone,
+            description: l.dangerZoneSubtitle,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Deleting your account will cancel all subscriptions, '
-                  'remove your data, and cannot be undone.',
+                  l.deleteAccountWarning,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: iconFg.withValues(alpha: 0.7),
                   ),
@@ -850,9 +834,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                               strokeWidth: 2,
                             ),
                           )
-                        : const Text(
-                            'Delete Account',
-                            style: TextStyle(
+                        : Text(
+                            l.deleteAccount,
+                            style: const TextStyle(
                               fontWeight: FontWeight.w600,
                               fontSize: 16,
                             ),
@@ -870,7 +854,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     return Scaffold(
       backgroundColor: scaffoldBg,
       appBar: AppBar(
-        title: Text('Account Settings', style: titleTextStyle),
+        title: Text(l.accountSettings, style: titleTextStyle),
         backgroundColor: scaffoldBg,
         elevation: 0,
         iconTheme: IconThemeData(color: iconFg),

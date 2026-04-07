@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/tool_handlers/notes_tools.dart';
@@ -557,6 +558,7 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
     final Color scaffoldBg = theme.scaffoldBackgroundColor;
     final Color iconFg = theme.resolvedIconColor;
     final TextStyle? titleTextStyle = theme.appBarTheme.titleTextStyle;
+    final l = AppLocalizations.of(context)!;
 
     Widget bodyContent;
 
@@ -609,7 +611,7 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Identity System',
+                        l.identitySystem,
                         style: theme.textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.w600,
                           color: iconFg,
@@ -617,8 +619,8 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                       ),
                       Text(
                         _identityEnabled
-                            ? 'Soul, User, and Memory are active'
-                            : 'Disabled — AI has no persistent identity',
+                            ? l.identityActive
+                            : l.identityDisabled,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: iconFg.withValues(alpha: 0.6),
                         ),
@@ -648,16 +650,14 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                 children: [
                   // ── Soul ──────────────────────────────────────────
                   _SectionCard(
-                    title: 'Soul',
+                    title: l.soul,
                     scaffoldBg: scaffoldBg,
                     iconFg: iconFg,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Define the AI\'s personality, tone, and '
-                          'boundaries. This shapes how it communicates '
-                          'across all conversations.',
+                          l.soulHint,
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: iconFg.lighten(0.2),
                           ),
@@ -671,12 +671,7 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                               : null,
                           style: theme.textTheme.bodyMedium,
                           decoration: _fieldDecoration(
-                            hintText:
-                                'Example:\n'
-                                '- Be direct and concise\n'
-                                '- Match the user\'s language and energy\n'
-                                '- Have opinions, don\'t hedge everything\n'
-                                '- Privacy first: ask before external actions',
+                            hintText: l.soulExample,
                             iconFg: iconFg,
                             scaffoldBg: scaffoldBg,
                             theme: theme,
@@ -689,16 +684,14 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
 
                   // ── User ──────────────────────────────────────────
                   _SectionCard(
-                    title: 'User',
+                    title: l.user,
                     scaffoldBg: scaffoldBg,
                     iconFg: iconFg,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Facts about you. The AI reads this every message '
-                          'and can also update it when it learns new things '
-                          'about you.',
+                          l.userHint,
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: iconFg.lighten(0.2),
                           ),
@@ -712,12 +705,7 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                               : null,
                           style: theme.textTheme.bodyMedium,
                           decoration: _fieldDecoration(
-                            hintText:
-                                'Example:\n'
-                                '- Name: Alex\n'
-                                '- Timezone: Europe/Berlin\n'
-                                '- Language: German/English mix\n'
-                                '- Prefers concise, technical answers',
+                            hintText: l.userExample,
                             iconFg: iconFg,
                             scaffoldBg: scaffoldBg,
                             theme: theme,
@@ -730,16 +718,14 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
 
                   // ── Memory ─────────────────────────────────────────
                   _SectionCard(
-                    title: 'Memory',
+                    title: l.memory,
                     scaffoldBg: scaffoldBg,
                     iconFg: iconFg,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Long-term knowledge the AI remembers across '
-                          'conversations. The AI can also update this '
-                          'when it learns important facts or decisions.',
+                          l.memoryHint,
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: iconFg.lighten(0.2),
                           ),
@@ -753,12 +739,7 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                               : null,
                           style: theme.textTheme.bodyMedium,
                           decoration: _fieldDecoration(
-                            hintText:
-                                'Example:\n'
-                                '- Prefers Dart/Flutter for mobile\n'
-                                '- License: BSL for all projects\n'
-                                '- Current project: chuk_chat\n'
-                                '- Dark mode enthusiast',
+                            hintText: l.memoryExample,
                             iconFg: iconFg,
                             scaffoldBg: scaffoldBg,
                             theme: theme,
@@ -767,7 +748,7 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                         const SizedBox(height: 12),
                         OutlinedButton.icon(
                           icon: const Icon(Icons.upload, size: 18),
-                          label: const Text('Import from another AI'),
+                          label: Text(l.importFromAnotherAi),
                           onPressed: _importMemory,
                           style: OutlinedButton.styleFrom(
                             shape: RoundedRectangleBorder(
@@ -786,15 +767,14 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
 
           // ── System Prompt ─────────────────────────────────────────
           _SectionCard(
-            title: 'System Prompt',
+            title: l.systemPrompt,
             scaffoldBg: scaffoldBg,
             iconFg: iconFg,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Custom instructions sent with every conversation. '
-                  'Encrypted with your chat encryption key.',
+                  l.systemPromptHint,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: iconFg.lighten(0.2),
                   ),
@@ -808,9 +788,7 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                       : null,
                   style: theme.textTheme.bodyMedium,
                   decoration: _fieldDecoration(
-                    hintText:
-                        'Example: You are a helpful assistant. Provide '
-                        'concise, accurate responses.',
+                    hintText: l.systemPromptExample,
                     iconFg: iconFg,
                     scaffoldBg: scaffoldBg,
                     theme: theme,
@@ -818,7 +796,7 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '${_systemPromptCtrl.text.length} characters',
+                  '${_systemPromptCtrl.text.length} ${l.characters}',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: iconFg.withValues(alpha: 0.6),
                   ),
@@ -845,7 +823,7 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                       ),
                     )
                   : const Icon(Icons.check),
-              label: Text(_isSaving ? 'Saving...' : 'Save changes'),
+              label: Text(_isSaving ? l.saving : l.saveChanges),
               onPressed: _isSaving || !_hasAnyChanges ? null : _saveAll,
               style: ElevatedButton.styleFrom(
                 backgroundColor: theme.colorScheme.primary,
@@ -864,7 +842,7 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
     return Scaffold(
       backgroundColor: scaffoldBg,
       appBar: AppBar(
-        title: Text('AI Identity & Memory', style: titleTextStyle),
+        title: Text(l.aiIdentityMemory, style: titleTextStyle),
         backgroundColor: scaffoldBg,
         elevation: 0,
         iconTheme: IconThemeData(color: iconFg),

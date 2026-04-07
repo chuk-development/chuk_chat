@@ -63,6 +63,10 @@ class AppShellConfig {
   final bool allowMarkdownToolCalls;
   final Function(bool) setAllowMarkdownToolCalls;
 
+  // ── UI locale ──────────────────────────────────────────────
+  final String uiLocale;
+  final Function(String) setUiLocale;
+
   const AppShellConfig({
     required this.currentThemeMode,
     required this.currentAccentColor,
@@ -106,5 +110,7 @@ class AppShellConfig {
     required this.setShowToolCalls,
     required this.allowMarkdownToolCalls,
     required this.setAllowMarkdownToolCalls,
+    required this.uiLocale,
+    required this.setUiLocale,
   });
 }

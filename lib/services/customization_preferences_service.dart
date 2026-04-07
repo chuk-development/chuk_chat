@@ -20,6 +20,7 @@ class CustomizationPreferences {
     required this.toolDiscoveryMode,
     required this.showToolCalls,
     required this.allowMarkdownToolCalls,
+    required this.uiLocale,
   });
 
   final String userId;
@@ -42,6 +43,8 @@ class CustomizationPreferences {
   final bool toolDiscoveryMode;
   final bool showToolCalls;
   final bool allowMarkdownToolCalls;
+  // UI locale ('en' or 'de')
+  final String uiLocale;
 
   CustomizationPreferences copyWith({
     bool? autoSendVoiceTranscription,
@@ -60,6 +63,7 @@ class CustomizationPreferences {
     bool? toolDiscoveryMode,
     bool? showToolCalls,
     bool? allowMarkdownToolCalls,
+    String? uiLocale,
   }) {
     return CustomizationPreferences(
       userId: userId,
@@ -85,6 +89,7 @@ class CustomizationPreferences {
       showToolCalls: showToolCalls ?? this.showToolCalls,
       allowMarkdownToolCalls:
           allowMarkdownToolCalls ?? this.allowMarkdownToolCalls,
+      uiLocale: uiLocale ?? this.uiLocale,
     );
   }
 
@@ -107,6 +112,7 @@ class CustomizationPreferences {
       'tool_discovery_mode': toolDiscoveryMode,
       'show_tool_calls': showToolCalls,
       'allow_markdown_tool_calls': allowMarkdownToolCalls,
+      'ui_locale': uiLocale,
     };
   }
 
@@ -129,6 +135,7 @@ class CustomizationPreferences {
       toolDiscoveryMode: true,
       showToolCalls: true,
       allowMarkdownToolCalls: true,
+      uiLocale: 'en',
     );
   }
 
@@ -161,6 +168,7 @@ class CustomizationPreferences {
       showToolCalls: (map['show_tool_calls'] as bool?) ?? true,
       allowMarkdownToolCalls:
           (map['allow_markdown_tool_calls'] as bool?) ?? true,
+      uiLocale: (map['ui_locale'] as String?) ?? 'en',
     );
   }
 }

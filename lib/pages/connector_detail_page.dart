@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/client_tool.dart';
 import 'package:chuk_chat/services/tool_executor.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
@@ -61,6 +62,7 @@ class _ConnectorDetailPageState extends State<ConnectorDetailPage> {
     final iconFg = theme.resolvedIconColor;
     final primary = theme.colorScheme.primary;
     final titleColor = theme.textTheme.titleMedium?.color;
+    final l = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: scaffoldBg,
@@ -74,7 +76,7 @@ class _ConnectorDetailPageState extends State<ConnectorDetailPage> {
         ),
         leadingWidth: 40,
         title: Text(
-          'Back',
+          l.back,
           style: TextStyle(color: iconFg, fontSize: 14),
         ),
         titleSpacing: 0,
@@ -115,7 +117,7 @@ class _ConnectorDetailPageState extends State<ConnectorDetailPage> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      _isEnabled ? 'Enabled' : 'Disabled',
+                      _isEnabled ? l.enabled : l.disabled,
                       style: TextStyle(
                         color: _isEnabled
                             ? Colors.green.shade400
@@ -147,7 +149,7 @@ class _ConnectorDetailPageState extends State<ConnectorDetailPage> {
 
           // --- Model Prompt ---
           Text(
-            'Model Prompt',
+            l.modelPrompt,
             style: TextStyle(
               color: titleColor,
               fontWeight: FontWeight.w600,
@@ -156,7 +158,7 @@ class _ConnectorDetailPageState extends State<ConnectorDetailPage> {
           ),
           const SizedBox(height: 4),
           Text(
-            'This description is shown to the model after tool discovery.',
+            l.modelPromptHint,
             style: TextStyle(color: iconFg.lighten(0.2), fontSize: 12),
           ),
           const SizedBox(height: 12),
@@ -186,7 +188,7 @@ class _ConnectorDetailPageState extends State<ConnectorDetailPage> {
             children: [
               if (_hasCustomPrompt)
                 Text(
-                  'Custom prompt active',
+                  l.customPromptActive,
                   style: TextStyle(
                     color: primary,
                     fontSize: 11,
@@ -211,7 +213,7 @@ class _ConnectorDetailPageState extends State<ConnectorDetailPage> {
                     minimumSize: const Size(0, 34),
                   ),
                   child:
-                      const Text('Reset', style: TextStyle(fontSize: 13)),
+                      Text(l.reset, style: const TextStyle(fontSize: 13)),
                 ),
               const SizedBox(width: 6),
               FilledButton(
@@ -230,8 +232,8 @@ class _ConnectorDetailPageState extends State<ConnectorDetailPage> {
                   padding: const EdgeInsets.symmetric(horizontal: 18),
                   minimumSize: const Size(0, 34),
                 ),
-                child: const Text('Save Prompt',
-                    style: TextStyle(fontSize: 13)),
+                child: Text(l.savePrompt,
+                    style: const TextStyle(fontSize: 13)),
               ),
             ],
           ),
@@ -245,7 +247,7 @@ class _ConnectorDetailPageState extends State<ConnectorDetailPage> {
             Row(
               children: [
                 Text(
-                  'Parameters',
+                  l.parameters,
                   style: TextStyle(
                     color: titleColor,
                     fontWeight: FontWeight.w600,
