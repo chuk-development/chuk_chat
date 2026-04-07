@@ -18,6 +18,7 @@ import 'package:chuk_chat/services/api_status_service.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
 
 const double _menuHorizontalPadding = 32.0; // 16 left + 16 right
 const double _menuTrailingAllowance = 64.0; // Checkmark + internal spacing
@@ -862,10 +863,11 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
 
   void _updateSelectedModelName() {
     final bool hasModels = _allModels.isNotEmpty;
+    final l = AppLocalizations.of(context)!;
     final ModelItem selectedItem = _allModels.firstWhere(
       (model) => model.value == _selectedModelId,
       orElse: () => ModelItem(
-        name: hasModels ? 'Select Model' : 'No Enabled Models',
+        name: hasModels ? l.selectModel : l.noEnabledModels,
         value: '',
       ),
     );
@@ -1196,7 +1198,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
                               ),
                             ),
                             const SizedBox(width: 6),
-                            Text('Best', style: TextStyle(color: iconFgColor)),
+                            Text(AppLocalizations.of(context)!.best, style: TextStyle(color: iconFgColor)),
                           ],
                         )
                       else ...[

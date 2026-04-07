@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:flutter/foundation.dart';
 
 final SupabaseClient _supabase = Supabase.instance.client;
@@ -230,6 +231,7 @@ class _FreeMessageDisplayState extends State<FreeMessageDisplay>
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final Color iconFg = theme.resolvedIconColor;
     final Color accent = theme.colorScheme.primary;
@@ -260,7 +262,7 @@ class _FreeMessageDisplayState extends State<FreeMessageDisplay>
                     Icon(Icons.chat_bubble_outline, color: accent),
                     const SizedBox(width: 8),
                     Text(
-                      'Free Messages',
+                      l.freeMessages,
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -300,14 +302,14 @@ class _FreeMessageDisplayState extends State<FreeMessageDisplay>
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Used: ${freeMessageQuota.used}',
+                  l.freeUsed(freeMessageQuota.used.toString()),
                   style: TextStyle(
                     fontSize: 12,
                     color: iconFg.withValues(alpha: 0.7),
                   ),
                 ),
                 Text(
-                  'Total: ${freeMessageQuota.total}',
+                  l.freeTotal(freeMessageQuota.total.toString()),
                   style: TextStyle(
                     fontSize: 12,
                     color: iconFg.withValues(alpha: 0.7),
@@ -333,7 +335,7 @@ class _FreeMessageDisplayState extends State<FreeMessageDisplay>
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Subscribe to continue chatting',
+                        l.subscribeToContinue,
                         style: TextStyle(
                           color: Colors.red.shade700,
                           fontSize: 12,
@@ -392,6 +394,7 @@ class _FreeMessageBadgeState extends State<FreeMessageBadge>
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     final TextStyle resolvedTextStyle =
         widget.textStyle ??
         Theme.of(
@@ -414,7 +417,7 @@ class _FreeMessageBadgeState extends State<FreeMessageBadge>
 
       return Padding(
         padding: resolvedPadding,
-        child: Text('Free: --', style: placeholderStyle),
+        child: Text(l.freeMessagePlaceholder, style: placeholderStyle),
       );
     }
 
@@ -424,8 +427,8 @@ class _FreeMessageBadgeState extends State<FreeMessageBadge>
       return const SizedBox.shrink();
     }
 
-    final String formatted =
-        'Free: ${freeMessageQuota.remaining}/${freeMessageQuota.total}';
+    final String formatted = l.freeRemaining(
+        freeMessageQuota.remaining.toString(), freeMessageQuota.total.toString());
 
     // Color based on remaining messages
     Color badgeColor;
