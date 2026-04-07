@@ -63,7 +63,7 @@ const Map<String, ToolCategory> toolCategoryMap = {
 };
 
 /// Discovery catalog: category labels -> human-readable descriptions.
-/// NO tool names exposed -- model must call find_tools to discover them.
+/// Tool names are shown in discovery mode; detailed descriptions stay gated.
 const Map<String, String> discoveryCatalog = {
   'Maps / Karten':
       'Find places and restaurants, geocode addresses and calculate routes / '
@@ -219,7 +219,8 @@ final List<ClientTool> builtinTools = [
         'Two-step chat history search. Step 1 (find_chats): search across '
         'saved chats and return matching chat IDs. Step 2 '
         '(search_in_chat): search inside one chat_id with a more specific '
-        'query. Decrypts chats on-demand if they are not already loaded.',
+        'query. Uses local plaintext cache for fast lookup and falls back to '
+        'chat loading when needed.',
     parameters: {
       'action':
           'string (optional: find_chats or search_in_chat; defaults to '
@@ -696,7 +697,8 @@ final List<ClientTool> builtinTools = [
     parameters: {
       'action':
           'string (status, week, days, sleep, recovery, strain, workouts)',
-      'days': 'int (optional, default 7 — number of days for days/sleep/'
+      'days':
+          'int (optional, default 7 — number of days for days/sleep/'
           'recovery/strain/workouts)',
     },
     type: ToolType.builtin,
@@ -1033,8 +1035,7 @@ final List<ClientTool> builtinTools = [
       'action':
           'string (optional, default "set_alarm": set_alarm, set_timer, cancel, list)',
       'title': 'string (alarm/timer name)',
-      'time':
-          'string (ISO datetime for alarm, e.g. "2026-03-20T08:00:00")',
+      'time': 'string (ISO datetime for alarm, e.g. "2026-03-20T08:00:00")',
       'minutes': 'int (timer duration in minutes)',
       'seconds': 'int (timer duration in seconds)',
       'alarm_id': 'int (for cancel action)',
@@ -1051,7 +1052,6 @@ final List<ClientTool> builtinTools = [
       'benachrichtigung',
     ],
   ),
-
 
   // -- Weather --
   ClientTool(

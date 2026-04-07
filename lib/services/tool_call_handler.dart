@@ -495,6 +495,16 @@ class ToolCallHandler {
         .map((t) => t.toJson())
         .firstOrNull;
 
+    // web_search and web_crawl are always available in discovery mode.
+    final webSearchToolDef = _toolExecutor.allTools
+        .where((t) => t.name == 'web_search')
+        .map((t) => t.toJson())
+        .firstOrNull;
+    final webCrawlToolDef = _toolExecutor.allTools
+        .where((t) => t.name == 'web_crawl')
+        .map((t) => t.toJson())
+        .firstOrNull;
+
     // update_project is always available when a project is active.
     Map<String, dynamic>? projectToolDef;
     if (ProjectStorageService.selectedProjectId != null) {
@@ -526,6 +536,8 @@ class ToolCallHandler {
           memoryText: memoryText,
           notesToolDef: notesToolDef,
           askUserToolDef: askUserToolDef,
+          webSearchToolDef: webSearchToolDef,
+          webCrawlToolDef: webCrawlToolDef,
           projectToolDef: projectToolDef,
           artifactToolDef: artifactToolDef,
           includeMapVisualOutput: _toolExecutor.mapVisualOutputEnabled,

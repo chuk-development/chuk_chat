@@ -522,4 +522,81 @@ const Map<String, String> stringsDe = {
   'deleteFailed': 'Löschen fehlgeschlagen: {error}',
   'uploadedFile': 'Hochgeladen: {name}',
   'freeMessagePlaceholder': 'Kostenlos: --',
+
+  // ── Chat UI ────────────────────────────────────────────────
+  'askMeAnything': 'Frag mich alles!',
+  'editYourMessage': 'Nachricht bearbeiten...',
+  'addMessageOrDocs': 'Nachricht oder Dokumente senden',
+  'micAccessFailed': 'Mikrofonzugriff fehlgeschlagen',
+  'transcriptionFailed': 'Transkription fehlgeschlagen',
+  'replyTargetSelected': 'Antwortziel ausgewählt',
+  'clearReply': 'Antwort löschen',
+  'nothingToResend': 'Nichts zum erneuten Senden',
+  'freeMessagesUsed': 'Kostenlose Nachrichten aufgebraucht',
+  'ok': 'OK',
+  'camera': 'Kamera',
+  'photos': 'Fotos',
+  'files': 'Dateien',
+
+  // ── Model selector ─────────────────────────────────────────
+  'models': 'Modelle',
+  'searchModels': 'Modelle suchen...',
+  'modelError': 'Fehler: {error}',
+
+  // ── Message bubble extras ──────────────────────────────────
+  'copyImage': 'Bild kopieren',
+  'downloadImage': 'Bild herunterladen',
+  'imageDetails': 'Bilddetails',
+  'imageCopied': 'Bild kopiert',
+
+  // ── Free message display ───────────────────────────────────
+  'freeMessages': 'Kostenlose Nachrichten',
+  'freeUsed': 'Verwendet: {count}',
+  'freeTotal': 'Gesamt: {count}',
+  'subscribeToContinue': 'Abonnieren, um weiterzuchatten',
+  'freeRemaining': 'Kostenlos: {remaining}/{total}',
+
+  // ── Model selection dropdown ───────────────────────────────
+  'selectModel': 'Modell wählen',
+  'noEnabledModels': 'Keine aktivierten Modelle',
+
+  // ── Media manager ──────────────────────────────────────────
+  'mediaManager': 'Medienverwaltung',
+  'imageUsedInChats': 'Bild in Chats verwendet',
+  'imageUsedInChatsBody':
+      'Dieses Bild wird in folgenden Chats verwendet:',
+  'deleteImageShowDeleted':
+      'Wenn Sie dieses Bild löschen, wird es in diesen Chats als „Bild gelöscht" angezeigt.',
+  'deleteImageConfirm':
+      'Möchten Sie dieses Bild wirklich löschen?',
+  'deleteAnyway': 'Trotzdem löschen',
+  'deleteImageTitle': 'Bild löschen',
+  'deleteImageBody':
+      'Möchten Sie dieses Bild wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.',
+  'imageDeleted': 'Bild gelöscht',
+  'failedToDeleteImage': 'Bild konnte nicht gelöscht werden: {error}',
+  'someImagesUsedInChats': 'Einige Bilder werden in Chats verwendet',
+  'deletedImagesWarning':
+      'Gelöschte Bilder werden in diesen Chats als „Bild gelöscht" angezeigt.',
+  'deleteAllCount': 'Alle {count} ausgewählten Bilder löschen?',
+  'deleteAll': 'Alle löschen',
+  'deleteSelectedImages': 'Ausgewählte Bilder löschen',
+  'deleteSelectedCount':
+      '{count} ausgewählte Bilder löschen? Diese Aktion kann nicht rückgängig gemacht werden.',
+  'deletedImagesResult': '{deleted} Bilder gelöscht, {failed} fehlgeschlagen',
+  'deletedImagesSuccess': '{deleted} Bilder gelöscht',
+  'downloadSelected': 'Ausgewählte herunterladen',
+  'deleteSelected': 'Ausgewählte löschen',
+  'errorLoadingImages': 'Fehler beim Laden der Bilder',
+  'noImagesStored': 'Keine Bilder gespeichert',
+  'imagesAppearHere': 'Bilder, die Sie in Chats senden, erscheinen hier',
+  'download': 'Herunterladen',
+
+  // ── Attachment preview bar ─────────────────────────────────
+  'removeFile': '{name} entfernen',
+  'edit': 'Bearbeiten',
+  'close': 'Schließen',
+
+  // ── Subscription dialogs ───────────────────────────────────
+  'maybeLater': 'Vielleicht später',
 };

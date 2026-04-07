@@ -497,4 +497,81 @@ const Map<String, String> stringsEn = {
   'deleteFailed': 'Delete failed: {error}',
   'uploadedFile': 'Uploaded: {name}',
   'freeMessagePlaceholder': 'Free: --',
+
+  // ── Chat UI ────────────────────────────────────────────────
+  'askMeAnything': 'Ask me anything !',
+  'editYourMessage': 'Edit your message...',
+  'addMessageOrDocs': 'Add a message or send documents',
+  'micAccessFailed': 'Mic access failed',
+  'transcriptionFailed': 'Transcription failed',
+  'replyTargetSelected': 'Reply target selected',
+  'clearReply': 'Clear reply',
+  'nothingToResend': 'Nothing to resend',
+  'freeMessagesUsed': 'Free Messages Used',
+  'ok': 'OK',
+  'camera': 'Camera',
+  'photos': 'Photos',
+  'files': 'Files',
+
+  // ── Model selector ─────────────────────────────────────────
+  'models': 'Models',
+  'searchModels': 'Search models...',
+  'modelError': 'Error: {error}',
+
+  // ── Message bubble extras ──────────────────────────────────
+  'copyImage': 'Copy image',
+  'downloadImage': 'Download image',
+  'imageDetails': 'Image details',
+  'imageCopied': 'Image copied',
+
+  // ── Free message display ───────────────────────────────────
+  'freeMessages': 'Free Messages',
+  'freeUsed': 'Used: {count}',
+  'freeTotal': 'Total: {count}',
+  'subscribeToContinue': 'Subscribe to continue chatting',
+  'freeRemaining': 'Free: {remaining}/{total}',
+
+  // ── Model selection dropdown ───────────────────────────────
+  'selectModel': 'Select Model',
+  'noEnabledModels': 'No Enabled Models',
+
+  // ── Media manager ──────────────────────────────────────────
+  'mediaManager': 'Media Manager',
+  'imageUsedInChats': 'Image Used in Chats',
+  'imageUsedInChatsBody':
+      'This image is used in the following chats:',
+  'deleteImageShowDeleted':
+      'If you delete this image, it will show as "Image deleted" in those chats.',
+  'deleteImageConfirm':
+      'Are you sure you want to delete this image?',
+  'deleteAnyway': 'Delete Anyway',
+  'deleteImageTitle': 'Delete Image',
+  'deleteImageBody':
+      'Are you sure you want to delete this image? This action cannot be undone.',
+  'imageDeleted': 'Image deleted',
+  'failedToDeleteImage': 'Failed to delete image: {error}',
+  'someImagesUsedInChats': 'Some Images Are Used in Chats',
+  'deletedImagesWarning':
+      'Deleted images will show as "Image deleted" in those chats.',
+  'deleteAllCount': 'Delete all {count} selected images?',
+  'deleteAll': 'Delete All',
+  'deleteSelectedImages': 'Delete Selected Images',
+  'deleteSelectedCount':
+      'Delete {count} selected images? This action cannot be undone.',
+  'deletedImagesResult': 'Deleted {deleted} images, {failed} failed',
+  'deletedImagesSuccess': 'Deleted {deleted} images',
+  'downloadSelected': 'Download selected',
+  'deleteSelected': 'Delete selected',
+  'errorLoadingImages': 'Error loading images',
+  'noImagesStored': 'No images stored',
+  'imagesAppearHere': 'Images you send in chats will appear here',
+  'download': 'Download',
+
+  // ── Attachment preview bar ─────────────────────────────────
+  'removeFile': 'Remove {name}',
+  'edit': 'Edit',
+  'close': 'Close',
+
+  // ── Subscription dialogs ───────────────────────────────────
+  'maybeLater': 'Maybe Later',
 };

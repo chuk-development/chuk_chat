@@ -32,13 +32,24 @@ class ToolEnforcer {
 
   /// Tools that bypass discovery (always available without find_tools).
   /// Populated by the handler based on prompt configuration.
-  Set<String> _alwaysAllowedTools = const {'notes', 'ask_user'};
+  Set<String> _alwaysAllowedTools = const {
+    'notes',
+    'ask_user',
+    'web_search',
+    'web_crawl',
+  };
 
   ToolEnforcer({this.maxIterations = 100});
 
   /// Set the tools that bypass discovery mode (always callable).
   set alwaysAllowedTools(Set<String> tools) {
-    _alwaysAllowedTools = {'notes', 'ask_user', ...tools};
+    _alwaysAllowedTools = {
+      'notes',
+      'ask_user',
+      'web_search',
+      'web_crawl',
+      ...tools,
+    };
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -76,7 +87,12 @@ class ToolEnforcer {
     _toolSchemas = {};
     discoveryMode = false;
     discoveredToolNames = {};
-    _alwaysAllowedTools = const {'notes', 'ask_user'};
+    _alwaysAllowedTools = const {
+      'notes',
+      'ask_user',
+      'web_search',
+      'web_crawl',
+    };
   }
 
   // ─────────────────────────────────────────────────────────────────────────
