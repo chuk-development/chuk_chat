@@ -23,6 +23,7 @@ import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
 
 class SettingsPage extends StatefulWidget {
   final AppShellConfig config;
@@ -97,6 +98,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final Color scaffoldBg = theme.scaffoldBackgroundColor;
     final Color accent = theme.colorScheme.primary;
@@ -106,7 +108,7 @@ class _SettingsPageState extends State<SettingsPage> {
     return Scaffold(
       backgroundColor: scaffoldBg,
       appBar: AppBar(
-        title: Text('Settings', style: titleTextStyle),
+        title: Text(l.settings, style: titleTextStyle),
         backgroundColor: scaffoldBg,
         elevation: 0,
         iconTheme: IconThemeData(color: iconFg),
@@ -117,8 +119,8 @@ class _SettingsPageState extends State<SettingsPage> {
           // Theme Settings
           _buildSettingsCard(
             context,
-            title: 'Theme Settings',
-            subtitle: 'Adjust app theme, colors, and appearance',
+            title: l.themeSettings,
+            subtitle: l.themeSettingsSubtitle,
             icon: Icons.palette,
             onTap: () {
               Navigator.push(
@@ -137,8 +139,8 @@ class _SettingsPageState extends State<SettingsPage> {
           // Customization Settings
           _buildSettingsCard(
             context,
-            title: 'Customization',
-            subtitle: 'Configure app behavior and preferences',
+            title: l.customization,
+            subtitle: l.customizationSubtitle,
             icon: Icons.tune,
             onTap: () {
               Navigator.push(
@@ -157,8 +159,8 @@ class _SettingsPageState extends State<SettingsPage> {
           // Tool Calling Settings
           _buildSettingsCard(
             context,
-            title: 'Tool Calling',
-            subtitle: 'Control tool usage, discovery, and tool-call display',
+            title: l.toolCalling,
+            subtitle: l.toolCallingSubtitle,
             icon: Icons.build_circle_outlined,
             onTap: () {
               Navigator.push(
@@ -178,8 +180,8 @@ class _SettingsPageState extends State<SettingsPage> {
           if (_developerOptionsEnabled) ...[
             _buildSettingsCard(
               context,
-              title: 'Developer Options',
-              subtitle: 'Diagnostics logs and debug tools',
+              title: l.developerOptions,
+              subtitle: l.developerOptionsSubtitle,
               icon: Icons.developer_mode,
               onTap: () {
                 Navigator.push(
@@ -199,8 +201,8 @@ class _SettingsPageState extends State<SettingsPage> {
           // Model Selection
           _buildSettingsCard(
             context,
-            title: 'Model Selection',
-            subtitle: 'Choose and configure your AI models',
+            title: l.modelSelection,
+            subtitle: l.modelSelectionSubtitle,
             icon: Icons.psychology_alt,
             onTap: () {
               Navigator.push(
@@ -217,8 +219,8 @@ class _SettingsPageState extends State<SettingsPage> {
           // AI Identity & Memory
           _buildSettingsCard(
             context,
-            title: 'AI Identity & Memory',
-            subtitle: 'Soul, user profile, memory, and system prompt',
+            title: l.aiIdentityMemory,
+            subtitle: l.aiIdentityMemorySubtitle,
             icon: Icons.psychology,
             onTap: () {
               Navigator.push(
@@ -235,8 +237,8 @@ class _SettingsPageState extends State<SettingsPage> {
           // Pricing Plans
           _buildSettingsCard(
             context,
-            title: 'Pricing Plans',
-            subtitle: 'View our subscription plans and pricing',
+            title: l.pricingPlans,
+            subtitle: l.pricingPlansSubtitle,
             icon: Icons.credit_card,
             onTap: () {
               Navigator.push(
@@ -253,8 +255,8 @@ class _SettingsPageState extends State<SettingsPage> {
           // Account Settings
           _buildSettingsCard(
             context,
-            title: 'Account Settings',
-            subtitle: 'Manage your profile and account',
+            title: l.accountSettings,
+            subtitle: l.accountSettingsSubtitle,
             icon: Icons.person_outline,
             onTap: () {
               Navigator.push(
@@ -269,8 +271,8 @@ class _SettingsPageState extends State<SettingsPage> {
           const SizedBox(height: 32),
           _buildSettingsCard(
             context,
-            title: 'Export Chats',
-            subtitle: 'Download your conversations as JSON',
+            title: l.exportChats,
+            subtitle: l.exportChatsSubtitle,
             icon: Icons.download_outlined,
             onTap: () => _exportChats(context),
             accentColor: accent,
@@ -280,8 +282,8 @@ class _SettingsPageState extends State<SettingsPage> {
           const SizedBox(height: 32),
           _buildSettingsCard(
             context,
-            title: 'About',
-            subtitle: 'Version details and open source licenses',
+            title: l.about,
+            subtitle: l.aboutSubtitle,
             icon: Icons.info_outline,
             onTap: () {
               Navigator.push(
@@ -362,9 +364,9 @@ class _SettingsPageState extends State<SettingsPage> {
                   );
                 }
               },
-              child: const Text(
-                'Logout',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+              child: Text(
+                l.logout,
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
               ),
             ),
           ),
@@ -374,14 +376,15 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _exportChats(BuildContext context) async {
+    final l = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
     try {
       await ChatStorageService.loadSavedChatsForSidebar();
       if (ChatStorageService.savedChats.isEmpty) {
         messenger.showSnackBar(
           SnackBar(
-            content: const Text(
-              'No chats to export',
+            content: Text(
+              l.noChatsToExport,
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
             ),
             behavior: SnackBarBehavior.floating,
@@ -405,8 +408,8 @@ class _SettingsPageState extends State<SettingsPage> {
         await Clipboard.setData(ClipboardData(text: jsonPayload));
         messenger.showSnackBar(
           SnackBar(
-            content: const Text(
-              'Copied to clipboard',
+            content: Text(
+              l.copiedToClipboard,
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
             ),
             behavior: SnackBarBehavior.floating,
@@ -428,7 +431,7 @@ class _SettingsPageState extends State<SettingsPage> {
           messenger.showSnackBar(
             SnackBar(
               content: Text(
-                'Saved to $savedPath',
+                l.savedToPath(savedPath),
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
@@ -447,8 +450,8 @@ class _SettingsPageState extends State<SettingsPage> {
         } else {
           messenger.showSnackBar(
             SnackBar(
-              content: const Text(
-                'Export cancelled',
+              content: Text(
+                l.exportCancelled,
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
               ),
               behavior: SnackBarBehavior.floating,
@@ -480,8 +483,8 @@ class _SettingsPageState extends State<SettingsPage> {
         );
         messenger.showSnackBar(
           SnackBar(
-            content: const Text(
-              'Share opened',
+            content: Text(
+              l.shareOpened,
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
             ),
             behavior: SnackBarBehavior.floating,
@@ -498,8 +501,8 @@ class _SettingsPageState extends State<SettingsPage> {
         await Clipboard.setData(ClipboardData(text: jsonPayload));
         messenger.showSnackBar(
           SnackBar(
-            content: const Text(
-              'Copied to clipboard',
+            content: Text(
+              l.copiedToClipboard,
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
             ),
             behavior: SnackBarBehavior.floating,
@@ -534,7 +537,7 @@ class _SettingsPageState extends State<SettingsPage> {
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            'Export failed: $error',
+            l.exportFailed(error.toString()),
             style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
           ),
           behavior: SnackBarBehavior.floating,
@@ -552,8 +555,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<String?> _saveExportToLinux(Uint8List data, String fileName) async {
     final Directory? initialDirectory = await _linuxInitialDirectory();
+    final l = AppLocalizations.of(context)!;
     final String? outputPath = await FilePicker.platform.saveFile(
-      dialogTitle: 'Save chat export',
+      dialogTitle: l.saveChatExport,
       fileName: fileName,
       initialDirectory: initialDirectory?.path,
       type: FileType.custom,

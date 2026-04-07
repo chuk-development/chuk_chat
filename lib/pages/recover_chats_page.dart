@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/password_reset_service.dart';
 
 /// Page for recovering or deleting chats encrypted with old passwords.
@@ -45,16 +46,17 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
   }
 
   Future<void> _recoverVersion(int version) async {
+    final l = AppLocalizations.of(context)!;
     final password = _passwordControllers[version]?.text.trim() ?? '';
     if (password.isEmpty) {
-      setState(() => _messages[version] = 'Please enter your old password.');
+      setState(() => _messages[version] = l.pleaseEnterOldPassword);
       return;
     }
 
     setState(() {
       _isRecovering[version] = true;
       _messages[version] = null;
-      _progressMessage = 'Deriving encryption key...';
+      _progressMessage = l.derivingKey;
     });
 
     try {
@@ -68,7 +70,7 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
 
       if (!mounted) return;
       setState(() {
-        _messages[version] = 'Successfully recovered $count chat${count == 1 ? '' : 's'}.';
+        _messages[version] = l.recoveredChats(count);
         _progressMessage = null;
       });
 
@@ -83,7 +85,7 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _messages[version] = 'Recovery failed. Please try again.';
+        _messages[version] = l.recoveryFailed;
         _progressMessage = null;
       });
     } finally {
@@ -94,6 +96,7 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
   }
 
   Future<void> _deleteVersion(int version) async {
+    final l = AppLocalizations.of(context)!;
     final count = _lockedInfo[version] ?? 0;
     final confirmed = await _showDeleteConfirmation(count);
     if (confirmed != true) return;
@@ -107,7 +110,7 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
     setState(() {
       _isRecovering[version] = true;
       _messages[version] = null;
-      _progressMessage = 'Deleting...';
+      _progressMessage = l.deleting;
     });
 
     try {
@@ -120,14 +123,14 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
 
       if (!mounted) return;
       setState(() {
-        _messages[version] = 'Deleted $deleted chat${deleted == 1 ? '' : 's'}.';
+        _messages[version] = l.deletedChats(deleted);
         _progressMessage = null;
       });
       _loadLockedInfo();
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _messages[version] = 'Deletion failed. Please try again.';
+        _messages[version] = l.deletionFailed;
         _progressMessage = null;
       });
     } finally {
@@ -138,25 +141,21 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
   }
 
   Future<bool?> _showDeleteConfirmation(int count) {
+    final l = AppLocalizations.of(context)!;
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete locked chats?'),
-        content: Text(
-          'This will permanently delete $count chat${count == 1 ? '' : 's'} '
-          'that are encrypted with your old password.\n\n'
-          'These chats cannot be recovered after deletion. '
-          'You will lose all messages, images, and attachments.',
-        ),
+        title: Text(l.deleteLockedChatsTitle),
+        content: Text(l.deleteLockedChatsBody(count)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
+            child: Text(l.cancel),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete permanently'),
+            child: Text(l.deletePermanently),
           ),
         ],
       ),
@@ -164,29 +163,30 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
   }
 
   Future<bool?> _showTypeDeleteConfirmation(int count) async {
+    final l = AppLocalizations.of(context)!;
     final controller = TextEditingController();
     try {
       return await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Are you sure?'),
+          title: Text(l.areYouSure),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('You are about to delete $count chats. Type DELETE to confirm.'),
+              Text(l.confirmDeleteChats(count)),
               const SizedBox(height: 16),
               TextField(
                 controller: controller,
                 autofocus: true,
-                decoration: const InputDecoration(hintText: 'Type DELETE'),
+                decoration: InputDecoration(hintText: l.typeDelete),
               ),
             ],
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Cancel'),
+              child: Text(l.cancel),
             ),
             TextButton(
               onPressed: () {
@@ -195,7 +195,7 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
                 }
               },
               style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('Confirm delete'),
+              child: Text(l.confirmDelete),
             ),
           ],
         ),
@@ -209,9 +209,10 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final iconFg = theme.iconTheme.color ?? Colors.white;
+    final l = AppLocalizations.of(context)!;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Recover Encrypted Chats')),
+      appBar: AppBar(title: Text(l.recoverEncryptedChats)),
       body: _lockedInfo.isEmpty
           ? Center(
               child: Column(
@@ -220,14 +221,14 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
                   Icon(Icons.lock_open, size: 48, color: iconFg.withValues(alpha: 0.3)),
                   const SizedBox(height: 16),
                   Text(
-                    'No locked chats',
+                    l.noLockedChats,
                     style: theme.textTheme.titleMedium?.copyWith(
                       color: iconFg.withValues(alpha: 0.5),
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'All your chats are accessible.',
+                    l.allChatsAccessible,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: iconFg.withValues(alpha: 0.4),
                     ),
@@ -239,8 +240,7 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
               padding: const EdgeInsets.all(16),
               children: [
                 Text(
-                  'Some chats are encrypted with a previous password. '
-                  'Enter your old password to recover them, or delete them permanently.',
+                  l.recoverChatsInfo,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: iconFg.withValues(alpha: 0.7),
                   ),
@@ -261,8 +261,11 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
   ) {
     final isWorking = _isRecovering[version] ?? false;
     final message = _messages[version];
-    final isSuccess = message != null && message.startsWith('Successfully');
-    final isDeleted = message != null && message.startsWith('Deleted');
+    final l = AppLocalizations.of(context)!;
+    final isError = message == l.recoveryFailed ||
+        message == l.deletionFailed ||
+        message == l.pleaseEnterOldPassword;
+    final isSuccess = message != null && !isError;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
@@ -277,7 +280,7 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    '$count locked chat${count == 1 ? '' : 's'}',
+                    l.lockedChatCount(count),
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
@@ -287,7 +290,7 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Encrypted with password version $version',
+              l.encryptedWithVersion(version),
               style: theme.textTheme.bodySmall?.copyWith(
                 color: iconFg.withValues(alpha: 0.5),
               ),
@@ -298,8 +301,8 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
               obscureText: _obscurePasswords[version] ?? true,
               enabled: !isWorking,
               decoration: InputDecoration(
-                labelText: 'Old password',
-                hintText: 'Enter the password you used before',
+                labelText: l.oldPassword,
+                hintText: l.enterOldPassword,
                 suffixIcon: IconButton(
                   icon: Icon(
                     (_obscurePasswords[version] ?? true)
@@ -323,7 +326,7 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
               Text(
                 message,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: (isSuccess || isDeleted)
+                  color: isSuccess
                       ? Colors.green
                       : Colors.redAccent,
                 ),
@@ -355,14 +358,14 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
                   child: ElevatedButton.icon(
                     onPressed: isWorking ? null : () => _recoverVersion(version),
                     icon: const Icon(Icons.lock_open, size: 18),
-                    label: const Text('Recover'),
+                    label: Text(l.recover),
                   ),
                 ),
                 const SizedBox(width: 12),
                 OutlinedButton.icon(
                   onPressed: isWorking ? null : () => _deleteVersion(version),
                   icon: const Icon(Icons.delete_forever, size: 18),
-                  label: const Text('Delete'),
+                  label: Text(l.delete),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.red,
                     side: const BorderSide(color: Colors.red),

@@ -10,6 +10,7 @@ import 'package:chuk_chat/utils/input_validator.dart';
 import 'package:chuk_chat/widgets/password_strength_meter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/foundation.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -62,11 +63,12 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
+    final l = AppLocalizations.of(context)!;
+
     // Check if user agreed to terms when signing up
     if (!_isSignInMode && !_agreedToTerms) {
       setState(() {
-        _errorMessage =
-            'You must agree to the Terms of Service and Privacy Policy to create an account.';
+        _errorMessage = l.mustAgreeToTerms;
       });
       return;
     }
@@ -74,8 +76,7 @@ class _LoginPageState extends State<LoginPage> {
     // Check if user confirmed minimum age when signing up
     if (!_isSignInMode && !_confirmedAge) {
       setState(() {
-        _errorMessage =
-            'You must be at least 16 years old to use this service.';
+        _errorMessage = l.mustBe16;
       });
       return;
     }
@@ -148,7 +149,7 @@ class _LoginPageState extends State<LoginPage> {
       });
     } catch (error) {
       setState(() {
-        _errorMessage = 'Unexpected error: $error';
+        _errorMessage = l.unexpectedError(error.toString());
       });
     } finally {
       if (mounted) {
@@ -175,7 +176,7 @@ class _LoginPageState extends State<LoginPage> {
     // For sign-in mode, allow any password (backend will validate)
     // For sign-up mode, enforce strong password requirements
     if (value == null || value.isEmpty) {
-      return 'Enter your password.';
+      return AppLocalizations.of(context)!.enterYourPassword;
     }
 
     if (!_isSignInMode) {
@@ -201,6 +202,7 @@ class _LoginPageState extends State<LoginPage> {
     final theme = Theme.of(context);
     final scaffoldBg = theme.scaffoldBackgroundColor;
     final iconFg = theme.iconTheme.color ?? Colors.white;
+    final l = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: scaffoldBg,
@@ -222,7 +224,7 @@ class _LoginPageState extends State<LoginPage> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'Welcome to Chuk Chat',
+                      l.welcomeToChukChat,
                       style: theme.textTheme.headlineSmall?.copyWith(
                         color: iconFg,
                       ),
@@ -231,8 +233,8 @@ class _LoginPageState extends State<LoginPage> {
                     const SizedBox(height: 8),
                     Text(
                       _isSignInMode
-                          ? 'Sign in with your email'
-                          : 'Create an account with email & password',
+                          ? l.signInWithEmail
+                          : l.createAccountWithEmail,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: iconFg.withValues(alpha: 0.7),
                       ),
@@ -250,7 +252,7 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                         ),
                         child: Text(
-                          'Supabase credentials are not configured. Update them before running a production build.',
+                          l.supabaseNotConfigured,
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: Colors.orange.shade200,
                           ),
@@ -287,7 +289,7 @@ class _LoginPageState extends State<LoginPage> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Confirm your email to continue',
+                                    l.confirmEmailToContinue,
                                     style: theme.textTheme.bodyMedium?.copyWith(
                                       color: theme.colorScheme.primary,
                                       fontWeight: FontWeight.w600,
@@ -295,8 +297,7 @@ class _LoginPageState extends State<LoginPage> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    'We sent a confirmation link to your email address. '
-                                    'Please open it and click the link before signing in.',
+                                    l.confirmEmailBody,
                                     style: theme.textTheme.bodySmall?.copyWith(
                                       color: iconFg.withValues(alpha: 0.8),
                                     ),
@@ -312,9 +313,9 @@ class _LoginPageState extends State<LoginPage> {
                     if (!_isSignInMode) ...[
                       TextFormField(
                         controller: _displayNameCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Display name',
-                          hintText: 'How other people will see you',
+                        decoration: InputDecoration(
+                          labelText: l.displayName,
+                          hintText: l.howOthersSeeYou,
                         ),
                         textCapitalization: TextCapitalization.words,
                       ),
@@ -324,9 +325,9 @@ class _LoginPageState extends State<LoginPage> {
                       identifier: 'login_email_field',
                       child: TextFormField(
                         controller: _emailCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Email',
-                          hintText: 'you@example.com',
+                        decoration: InputDecoration(
+                          labelText: l.email,
+                          hintText: l.emailPlaceholder,
                         ),
                         keyboardType: TextInputType.emailAddress,
                         textInputAction: TextInputAction.next,
@@ -341,7 +342,7 @@ class _LoginPageState extends State<LoginPage> {
                       child: TextFormField(
                         controller: _passwordCtrl,
                         decoration: InputDecoration(
-                          labelText: 'Password',
+                          labelText: l.password,
                           suffixIcon: IconButton(
                             icon: Icon(
                               _obscurePassword
@@ -383,7 +384,7 @@ class _LoginPageState extends State<LoginPage> {
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
                           ),
                           child: Text(
-                            'Forgot password?',
+                            l.forgotPassword,
                             style: TextStyle(
                               fontSize: 13,
                               color: Theme.of(context).colorScheme.primary,
@@ -404,7 +405,7 @@ class _LoginPageState extends State<LoginPage> {
                         child: TextFormField(
                           controller: _confirmPasswordCtrl,
                           decoration: InputDecoration(
-                            labelText: 'Confirm password',
+                            labelText: l.confirmPassword,
                             suffixIcon: IconButton(
                               icon: Icon(
                                 _obscureConfirmPassword
@@ -428,10 +429,10 @@ class _LoginPageState extends State<LoginPage> {
                           },
                           validator: (value) {
                             if (value == null || value.isEmpty) {
-                              return 'Please confirm your password.';
+                              return l.pleaseConfirmPassword;
                             }
                             if (value.trim() != _passwordCtrl.text.trim()) {
-                              return 'Passwords do not match.';
+                              return l.passwordsDoNotMatch;
                             }
                             return null;
                           },
@@ -482,9 +483,9 @@ class _LoginPageState extends State<LoginPage> {
                                     color: iconFg.withValues(alpha: 0.7),
                                   ),
                                   children: [
-                                    const TextSpan(text: 'I agree to the '),
+                                    TextSpan(text: l.agreeToTerms),
                                     TextSpan(
-                                      text: 'Terms of Service',
+                                      text: l.termsOfService,
                                       style: TextStyle(
                                         color: theme.colorScheme.primary,
                                         decoration: TextDecoration.underline,
@@ -496,9 +497,9 @@ class _LoginPageState extends State<LoginPage> {
                                           );
                                         },
                                     ),
-                                    const TextSpan(text: ' and '),
+                                    TextSpan(text: l.andText),
                                     TextSpan(
-                                      text: 'Privacy Policy',
+                                      text: l.privacyPolicy,
                                       style: TextStyle(
                                         color: theme.colorScheme.primary,
                                         decoration: TextDecoration.underline,
@@ -544,7 +545,7 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                           Expanded(
                             child: Text(
-                              'I confirm that I am at least 16 years old',
+                              l.confirmAge16,
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: iconFg.withValues(alpha: 0.7),
                               ),
@@ -574,7 +575,7 @@ class _LoginPageState extends State<LoginPage> {
                                   ),
                                 )
                               : Text(
-                                  _isSignInMode ? 'Sign in' : 'Create account',
+                                  _isSignInMode ? l.signIn : l.createAccount,
                                 ),
                         ),
                       ),
@@ -584,8 +585,8 @@ class _LoginPageState extends State<LoginPage> {
                       onPressed: _isSubmitting ? null : _toggleMode,
                       child: Text(
                         _isSignInMode
-                            ? "Don't have an account? Sign up"
-                            : 'Already have an account? Sign in',
+                            ? l.noAccountSignUp
+                            : l.haveAccountSignIn,
                       ),
                     ),
                   ],

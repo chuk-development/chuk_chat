@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/usage_logs_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 
@@ -108,6 +109,7 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
     final Color scaffoldBg = theme.scaffoldBackgroundColor;
     final Color onSurface = theme.colorScheme.onSurface;
     final TextStyle? titleTextStyle = theme.appBarTheme.titleTextStyle;
+    final l = AppLocalizations.of(context)!;
 
     final UsageOverview? overview = _overview;
 
@@ -115,7 +117,7 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
       return Scaffold(
         backgroundColor: scaffoldBg,
         appBar: AppBar(
-          title: Text('Usage Details', style: titleTextStyle),
+          title: Text(l.usageDetails, style: titleTextStyle),
           backgroundColor: scaffoldBg,
           elevation: 0,
           iconTheme: IconThemeData(color: onSurface),
@@ -128,7 +130,7 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
       return Scaffold(
         backgroundColor: scaffoldBg,
         appBar: AppBar(
-          title: Text('Usage Details', style: titleTextStyle),
+          title: Text(l.usageDetails, style: titleTextStyle),
           backgroundColor: scaffoldBg,
           elevation: 0,
           iconTheme: IconThemeData(color: onSurface),
@@ -140,14 +142,14 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  _errorMessage ?? 'Unable to load usage details right now.',
+                  _errorMessage ?? l.unableToLoadUsage,
                   style: theme.textTheme.bodyMedium,
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: _loadUsageOverview,
-                  child: const Text('Retry'),
+                  child: Text(l.retry),
                 ),
               ],
             ),
@@ -198,7 +200,7 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Image and audio requests are treated as media requests and excluded from text-token totals.',
+                      l.mediaRequestsNote,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: onSurface.withValues(alpha: 0.72),
                       ),
@@ -236,7 +238,7 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
                   child: _buildSectionCard(
                     context,
                     child: Text(
-                      'No requests found for this period.',
+                      l.noRequestsFound,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: onSurface.withValues(alpha: 0.75),
                       ),
@@ -292,7 +294,7 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
               Icon(Icons.query_stats, color: accent),
               const SizedBox(width: 8),
               Text(
-                'Usage and Billing',
+                AppLocalizations.of(context)!.usageAndBilling,
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w800,
                   color: onSurface,
@@ -309,7 +311,7 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
           ),
           const SizedBox(height: 4),
           Text(
-            'This screen is read-only and pulled from your usage logs.',
+            AppLocalizations.of(context)!.usageReadOnly,
             style: theme.textTheme.bodySmall?.copyWith(
               color: onSurface.withValues(alpha: 0.7),
             ),
@@ -333,7 +335,7 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Period',
+            AppLocalizations.of(context)!.period,
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w700,
               color: onSurface,
@@ -391,7 +393,7 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Totals',
+            AppLocalizations.of(context)!.totals,
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w700,
               color: onSurface,

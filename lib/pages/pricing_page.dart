@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
 
 final SupabaseClient _supabase = Supabase.instance.client;
 
@@ -185,9 +186,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
     if (_isProcessing) return;
 
     if (!_agreedToTerms) {
-      _showError(
-        'Please agree to the terms and acknowledge loss of withdrawal rights.',
-      );
+      _showError(AppLocalizations.of(context)!.agreeToTermsFirst);
       return;
     }
 
@@ -202,7 +201,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
           _userStatus = freshStatus;
           _isProcessing = false;
         });
-        _showError('You already have an active subscription.');
+        _showError(AppLocalizations.of(context)!.alreadySubscribed);
         return;
       }
 
@@ -277,12 +276,13 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
     final TextStyle? titleTextStyle = theme.appBarTheme.titleTextStyle;
     final bool isMobile =
         kPlatformMobile || MediaQuery.of(context).size.width < 720;
+    final l = AppLocalizations.of(context)!;
 
     if (_isLoading) {
       return Scaffold(
         backgroundColor: scaffoldBg,
         appBar: AppBar(
-          title: Text('Subscription', style: titleTextStyle),
+          title: Text(l.subscription, style: titleTextStyle),
           backgroundColor: scaffoldBg,
           elevation: 0,
           iconTheme: IconThemeData(color: iconFg),
@@ -297,7 +297,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
     return Scaffold(
       backgroundColor: scaffoldBg,
       appBar: AppBar(
-        title: Text('Subscription', style: titleTextStyle),
+        title: Text(l.subscription, style: titleTextStyle),
         backgroundColor: scaffoldBg,
         elevation: 0,
         iconTheme: IconThemeData(color: iconFg),
@@ -328,7 +328,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          'Open Usage Details to see every request, monthly totals, and model costs.',
+                          l.openUsageDetailsInfo,
                           style: TextStyle(
                             color: iconFg.withValues(alpha: 0.82),
                             fontSize: 13,
@@ -351,9 +351,9 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                         ),
                       ),
                       icon: const Icon(Icons.query_stats),
-                      label: const Text(
-                        'Open Usage Details',
-                        style: TextStyle(fontWeight: FontWeight.w700),
+                      label: Text(
+                        l.openUsageDetails,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
                     ),
                   ),
@@ -380,7 +380,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                         Icon(Icons.check_circle, color: accent, size: 24),
                         const SizedBox(width: 8),
                         Text(
-                          'Current Plan',
+                          l.currentPlan,
                           style: TextStyle(
                             color: accent,
                             fontSize: 16,
@@ -391,7 +391,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      currentPlan ?? 'Plus',
+                      currentPlan ?? l.plus,
                       style: TextStyle(
                         color: iconFg,
                         fontSize: 28,
@@ -400,7 +400,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '€20/month',
+                      l.pricePerMonth,
                       style: TextStyle(
                         color: iconFg.withValues(alpha: 0.7),
                         fontSize: 18,
@@ -408,7 +408,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      'Monthly AI credits: €16.00',
+                      l.monthlyCredits,
                       style: TextStyle(
                         color: iconFg.withValues(alpha: 0.7),
                         fontSize: 14,
@@ -416,7 +416,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                       ),
                     ),
                     Text(
-                      'Unused credits expire at the end of each month.',
+                      l.unusedCreditsExpire,
                       style: TextStyle(
                         color: iconFg.withValues(alpha: 0.6),
                         fontSize: 12,
@@ -451,7 +451,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                                 )
                               : const Icon(Icons.credit_card),
                           label: Text(
-                            _isProcessing ? 'Opening...' : 'Manage Billing',
+                            _isProcessing ? l.opening : l.manageBilling,
                             style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
                         ),
@@ -472,7 +472,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'Use the billing portal to cancel your subscription or update payment methods.',
+                                l.manageBillingSubtitle,
                                 style: TextStyle(
                                   color: iconFg.withValues(alpha: 0.8),
                                   fontSize: 12,
@@ -492,8 +492,8 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
             // Plan Header
             Text(
               hasSubscription
-                  ? 'Subscription Plan'
-                  : 'Subscribe to Get AI Credits',
+                  ? l.subscription
+                  : l.subscribeToGetCredits,
               style: TextStyle(
                 color: iconFg,
                 fontSize: 24,
@@ -519,7 +519,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Subscription management is only available on desktop.',
+                        l.subscriptionDesktopOnly,
                         style: TextStyle(
                           color: iconFg.withValues(alpha: 0.7),
                           fontSize: 14,
@@ -561,8 +561,8 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                           color: accent,
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Text(
-                          'ACTIVE',
+                        child: Text(
+                          l.active,
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 10,
@@ -572,7 +572,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                       ),
                     const SizedBox(height: 12),
                     Text(
-                      'Plus',
+                      l.plus,
                       style: TextStyle(
                         color: iconFg,
                         fontSize: 24,
@@ -613,12 +613,12 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                     _buildFeature(
                       accent,
                       iconFg,
-                      'Get €16 in AI credits monthly',
+                      l.getCreditsMonthly,
                     ),
-                    _buildFeature(accent, iconFg, 'Access to all AI models'),
-                    _buildFeature(accent, iconFg, 'Image generation'),
-                    _buildFeature(accent, iconFg, 'Voice mode'),
-                    _buildFeature(accent, iconFg, 'Text chat with reasoning'),
+                    _buildFeature(accent, iconFg, l.accessAllModels),
+                    _buildFeature(accent, iconFg, l.imageGeneration),
+                    _buildFeature(accent, iconFg, l.voiceMode),
+                    _buildFeature(accent, iconFg, l.textChatReasoning),
                     const SizedBox(height: 16),
                     Container(
                       padding: const EdgeInsets.all(12),
@@ -627,7 +627,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        'Your €16 in AI credits are used per token based on the model you choose. Unused credits expire at the end of each month.',
+                        l.creditsExplanation,
                         style: TextStyle(
                           color: iconFg.withValues(alpha: 0.8),
                           fontSize: 12,
@@ -667,12 +667,11 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                                     height: 1.4,
                                   ),
                                   children: [
-                                    const TextSpan(
-                                      text:
-                                          'I want immediate access to Chuk Chat and acknowledge that I lose my ',
+                                    TextSpan(
+                                      text: l.immediateAccessAck,
                                     ),
                                     TextSpan(
-                                      text: 'right of withdrawal',
+                                      text: l.rightOfWithdrawal,
                                       style: TextStyle(
                                         color: accent,
                                         decoration: TextDecoration.underline,
@@ -682,12 +681,11 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                                           'https://chuk.chat/en/cancellation/',
                                         ),
                                     ),
-                                    const TextSpan(
-                                      text:
-                                          ' once the service begins. I agree to the ',
+                                    TextSpan(
+                                      text: l.onceServiceBegins,
                                     ),
                                     TextSpan(
-                                      text: 'Terms of Service',
+                                      text: l.termsOfService,
                                       style: TextStyle(
                                         color: accent,
                                         decoration: TextDecoration.underline,
@@ -697,7 +695,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                                           'https://chuk.chat/en/terms/',
                                         ),
                                     ),
-                                    const TextSpan(text: '.'),
+                                    const TextSpan(text: '.'), // period after Terms of Service
                                   ],
                                 ),
                               ),
@@ -732,9 +730,9 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                                     ),
                                   ),
                                 )
-                              : const Text(
-                                  'Subscribe Now',
-                                  style: TextStyle(
+                              : Text(
+                                  l.subscribeNow,
+                                  style: const TextStyle(
                                     fontWeight: FontWeight.w600,
                                     fontSize: 16,
                                   ),

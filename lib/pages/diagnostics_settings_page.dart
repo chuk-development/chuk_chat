@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/developer_options_service.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
@@ -56,10 +57,11 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
     setState(() => _busy = false);
 
     if (!mounted) return;
+    final l = AppLocalizations.of(context)!;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          value ? 'Developer options enabled' : 'Developer options disabled',
+          value ? l.devOptionsEnabled : l.devOptionsDisabledMsg,
         ),
         behavior: SnackBarBehavior.floating,
       ),
@@ -76,12 +78,11 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
     await _load();
     if (!mounted) return;
     setState(() => _busy = false);
+    final l = AppLocalizations.of(context)!;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          value
-              ? 'Diagnostics logging enabled'
-              : 'Diagnostics logging disabled',
+          value ? l.diagnosticsEnabled : l.diagnosticsDisabled,
         ),
         behavior: SnackBarBehavior.floating,
       ),
@@ -104,9 +105,10 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
     if (_logPreview.trim().isEmpty) return;
     await Clipboard.setData(ClipboardData(text: _logPreview));
     if (!mounted) return;
+    final l = AppLocalizations.of(context)!;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Copied recent logs to clipboard'),
+      SnackBar(
+        content: Text(l.copiedRecentLogs),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -118,10 +120,11 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
     try {
       final report = await DiagnosticsLogService.readModelMenuDebugReport();
       if (!mounted) return;
+      final l = AppLocalizations.of(context)!;
       if (report.trim().isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No focused debug data available yet'),
+          SnackBar(
+            content: Text(l.noFocusedDebugData),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -131,8 +134,8 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
       await Clipboard.setData(ClipboardData(text: report));
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Copied focused model-menu debug report'),
+        SnackBar(
+          content: Text(l.copiedFocusedDebug),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -140,9 +143,10 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
     } catch (error) {
       if (!mounted) return;
       setState(() => _busy = false);
+      final l = AppLocalizations.of(context)!;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to create focused debug report: $error'),
+          content: Text(l.failedFocusedDebug(error.toString())),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -153,9 +157,10 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
     final path = await DiagnosticsLogService.getLogFilePath();
     if (path == null) {
       if (!mounted) return;
+      final l = AppLocalizations.of(context)!;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No diagnostics log available'),
+        SnackBar(
+          content: Text(l.noDiagnosticsLog),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -164,9 +169,10 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
     final file = File(path);
     if (!await file.exists()) {
       if (!mounted) return;
+      final l = AppLocalizations.of(context)!;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Diagnostics log file not found'),
+        SnackBar(
+          content: Text(l.diagnosticsLogNotFound),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -179,9 +185,10 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
       );
     } catch (error) {
       if (!mounted) return;
+      final l = AppLocalizations.of(context)!;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to share diagnostics log: $error'),
+          content: Text(l.failedToShareLog(error.toString())),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -201,18 +208,20 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
         _logPreview = preview;
         _busy = false;
       });
+      final l = AppLocalizations.of(context)!;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Diagnostics log cleared'),
+        SnackBar(
+          content: Text(l.diagnosticsLogCleared),
           behavior: SnackBarBehavior.floating,
         ),
       );
     } catch (error) {
       if (!mounted) return;
       setState(() => _busy = false);
+      final l = AppLocalizations.of(context)!;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to clear diagnostics log: $error'),
+          content: Text(l.failedToClearLog(error.toString())),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -225,10 +234,12 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
     final scaffoldBg = theme.scaffoldBackgroundColor;
     final iconFg = theme.resolvedIconColor;
 
+    final l = AppLocalizations.of(context)!;
+
     return Scaffold(
       backgroundColor: scaffoldBg,
       appBar: AppBar(
-        title: const Text('Developer Options'),
+        title: Text(l.developerOptions),
         backgroundColor: scaffoldBg,
         elevation: 0,
         iconTheme: IconThemeData(color: iconFg),
@@ -247,10 +258,8 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
                   child: SwitchListTile(
                     value: _developerOptionsEnabled,
                     onChanged: _busy ? null : _setDeveloperOptionsEnabled,
-                    title: const Text('Developer options'),
-                    subtitle: const Text(
-                      'Unlock diagnostics and debug tools. Disable to hide all developer-only settings.',
-                    ),
+                    title: Text(l.devOptionsToggle),
+                    subtitle: Text(l.devOptionsToggleSubtitle),
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -265,10 +274,8 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
                     onChanged: _busy || !_developerOptionsEnabled
                         ? null
                         : _setEnabled,
-                    title: const Text('Enable diagnostics logging'),
-                    subtitle: const Text(
-                      'Works in release builds. Logs app/runtime metadata for troubleshooting lag and tray issues.',
-                    ),
+                    title: Text(l.enableDiagnosticsLogging),
+                    subtitle: Text(l.enableDiagnosticsSubtitle),
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -283,13 +290,13 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Log file',
-                          style: TextStyle(fontWeight: FontWeight.w600),
+                        Text(
+                          l.logFile,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
                         ),
                         const SizedBox(height: 6),
                         SelectableText(
-                          _logPath ?? 'Not initialized yet',
+                          _logPath ?? l.notInitializedYet,
                           style: TextStyle(
                             fontSize: 12,
                             color: iconFg.withValues(alpha: 0.75),
@@ -305,7 +312,7 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
                                   ? null
                                   : _refreshLogs,
                               icon: const Icon(Icons.refresh, size: 18),
-                              label: const Text('Refresh'),
+                              label: Text(l.refresh),
                             ),
                             OutlinedButton.icon(
                               onPressed:
@@ -315,7 +322,7 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
                                   ? null
                                   : _copyRecentLogs,
                               icon: const Icon(Icons.copy, size: 18),
-                              label: const Text('Copy Recent'),
+                              label: Text(l.copyRecent),
                             ),
                             OutlinedButton.icon(
                               onPressed: _busy || !_developerOptionsEnabled
@@ -325,21 +332,21 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
                                 Icons.bug_report_outlined,
                                 size: 18,
                               ),
-                              label: const Text('Copy Focused Debug'),
+                              label: Text(l.copyFocusedDebug),
                             ),
                             OutlinedButton.icon(
                               onPressed: _busy || !_developerOptionsEnabled
                                   ? null
                                   : _shareLogFile,
                               icon: const Icon(Icons.ios_share, size: 18),
-                              label: const Text('Share File'),
+                              label: Text(l.shareFile),
                             ),
                             OutlinedButton.icon(
                               onPressed: _busy || !_developerOptionsEnabled
                                   ? null
                                   : _clearLogs,
                               icon: const Icon(Icons.delete_outline, size: 18),
-                              label: const Text('Clear'),
+                              label: Text(l.clear),
                             ),
                           ],
                         ),
@@ -359,9 +366,9 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Recent log lines',
-                          style: TextStyle(fontWeight: FontWeight.w600),
+                        Text(
+                          l.recentLogLines,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
                         ),
                         const SizedBox(height: 8),
                         Container(
@@ -377,9 +384,9 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
                           ),
                           child: SelectableText(
                             !_developerOptionsEnabled
-                                ? 'Developer options disabled.'
+                                ? l.devOptionsDisabledMsg
                                 : _logPreview.isEmpty
-                                ? 'No logs yet. Enable diagnostics logging and use the app to collect data.'
+                                ? l.noLogsYet
                                 : _logPreview,
                             style: TextStyle(
                               fontFamily: 'monospace',

@@ -3,6 +3,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+
+import 'package:chuk_chat/l10n/app_localizations.dart';
 
 import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/platform_config.dart';
@@ -276,6 +279,14 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
       title: 'Chuk Chat',
       debugShowCheckedModeBanner: false,
       theme: _themeService.buildTheme(),
+      locale: Locale(_themeService.uiLocale),
+      supportedLocales: AppLocalizations.supportedLocales,
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       builder: (context, child) {
         if (child == null) return const SizedBox.shrink();
         // Linux: skip film-grain overlay to avoid startup and interaction jank.
@@ -367,6 +378,8 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
         setShowToolCalls: _themeService.setShowToolCalls,
         allowMarkdownToolCalls: _themeService.allowMarkdownToolCalls,
         setAllowMarkdownToolCalls: _themeService.setAllowMarkdownToolCalls,
+        uiLocale: _themeService.uiLocale,
+        setUiLocale: _themeService.setUiLocale,
       ),
     );
   }

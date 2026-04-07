@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
@@ -110,11 +111,12 @@ class _ThemePageState extends State<ThemePage> {
     final Color iconFg = theme.resolvedIconColor;
     final TextStyle? titleTextStyle = theme.appBarTheme.titleTextStyle;
     final bool isDarkMode = _selectedThemeMode == Brightness.dark;
+    final l = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: scaffoldBg,
       appBar: AppBar(
-        title: Text('Theme Settings', style: titleTextStyle),
+        title: Text(l.themeSettings, style: titleTextStyle),
         backgroundColor: scaffoldBg,
         elevation: 0,
         iconTheme: IconThemeData(color: iconFg),
@@ -127,11 +129,11 @@ class _ThemePageState extends State<ThemePage> {
             context,
             child: ListTile(
               title: Text(
-                'Dark Mode',
+                l.darkMode,
                 style: TextStyle(color: iconFg, fontWeight: FontWeight.w600),
               ),
               subtitle: Text(
-                'Toggle between dark and light themes',
+                l.darkModeSubtitle,
                 style: TextStyle(color: iconFg.withValues(alpha: 0.6)),
               ),
               trailing: Switch(
@@ -147,8 +149,9 @@ class _ThemePageState extends State<ThemePage> {
 
           // Accent Color
           _colorSection(
-            title: 'Accent Color',
-            description: 'Choose your primary accent color',
+            title: l.accentColor,
+            description: l.accentColorSubtitle,
+            hexLabel: l.customHexColor,
             currentColor: _selectedAccentColor,
             options: _accentColorOptions,
             hexController: _accentHexController,
@@ -176,8 +179,9 @@ class _ThemePageState extends State<ThemePage> {
 
           // Icon / Foreground Color
           _colorSection(
-            title: 'Icon/Foreground Color',
-            description: 'Choose the color for icons and key text',
+            title: l.iconFgColor,
+            description: l.iconFgColorSubtitle,
+            hexLabel: l.customHexColor,
             currentColor: _selectedIconFgColor,
             options: _iconFgColorOptions,
             hexController: _iconFgHexController,
@@ -205,8 +209,9 @@ class _ThemePageState extends State<ThemePage> {
 
           // Background Color
           _colorSection(
-            title: 'Background Color',
-            description: 'Choose the main background color for the app',
+            title: l.backgroundColor,
+            description: l.backgroundColorSubtitle,
+            hexLabel: l.customHexColor,
             currentColor: _selectedBgColor,
             options: _bgColorOptions,
             hexController: _bgHexController,
@@ -237,11 +242,11 @@ class _ThemePageState extends State<ThemePage> {
             context,
             child: ListTile(
               title: Text(
-                'Film Grain Effect',
+                l.filmGrainEffect,
                 style: TextStyle(color: iconFg, fontWeight: FontWeight.w600),
               ),
               subtitle: Text(
-                'Add a subtle shot-on-film texture',
+                l.filmGrainSubtitle,
                 style: TextStyle(color: iconFg.withValues(alpha: 0.6)),
               ),
               trailing: Switch(
@@ -286,6 +291,7 @@ class _ThemePageState extends State<ThemePage> {
     required Color iconFg,
     required Color accent,
     required Color scaffoldBg,
+    required String hexLabel,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -311,7 +317,7 @@ class _ThemePageState extends State<ThemePage> {
           child: TextField(
             controller: hexController,
             decoration: InputDecoration(
-              labelText: 'Custom Hex Color (#RRGGBB)',
+              labelText: hexLabel,
               prefixIcon: Icon(
                 Icons.colorize,
                 color: iconFg.withValues(alpha: 0.7),

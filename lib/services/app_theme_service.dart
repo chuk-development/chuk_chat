@@ -56,6 +56,9 @@ class AppThemeService extends ChangeNotifier {
   bool _showToolCalls = kDefaultShowToolCalls;
   bool _allowMarkdownToolCalls = kDefaultAllowMarkdownToolCalls;
 
+  // UI locale
+  String _uiLocale = kDefaultUiLocale;
+
   // Keys for SharedPreferences
   static const String _kThemeModeKey = 'themeMode';
   static const String _kAccentColorKey = 'accentColor';
@@ -82,6 +85,7 @@ class AppThemeService extends ChangeNotifier {
   static const String _kToolDiscoveryModeKey = 'toolDiscoveryMode';
   static const String _kShowToolCallsKey = 'showToolCalls';
   static const String _kAllowMarkdownToolCallsKey = 'allowMarkdownToolCalls';
+  static const String _kUiLocaleKey = 'uiLocale';
 
   // Performance optimizations
   SharedPreferences? _cachedPrefs;
@@ -114,6 +118,7 @@ class AppThemeService extends ChangeNotifier {
   bool get toolDiscoveryMode => _toolDiscoveryMode;
   bool get showToolCalls => _showToolCalls;
   bool get allowMarkdownToolCalls => _allowMarkdownToolCalls;
+  String get uiLocale => _uiLocale;
   bool get hasAppliedSupabaseTheme => _hasAppliedSupabaseTheme;
 
   ThemeData? get cachedThemeData => _cachedThemeData;
@@ -170,6 +175,7 @@ class AppThemeService extends ChangeNotifier {
     _allowMarkdownToolCalls =
         prefs.getBool(_kAllowMarkdownToolCallsKey) ??
         kDefaultAllowMarkdownToolCalls;
+    _uiLocale = prefs.getString(_kUiLocaleKey) ?? kDefaultUiLocale;
 
     _cachedThemeData = null;
     notifyListeners();
@@ -241,7 +247,8 @@ class AppThemeService extends ChangeNotifier {
         _toolCallingEnabled != customizationPrefs.toolCallingEnabled ||
         _toolDiscoveryMode != customizationPrefs.toolDiscoveryMode ||
         _showToolCalls != customizationPrefs.showToolCalls ||
-        _allowMarkdownToolCalls != customizationPrefs.allowMarkdownToolCalls;
+        _allowMarkdownToolCalls != customizationPrefs.allowMarkdownToolCalls ||
+        _uiLocale != customizationPrefs.uiLocale;
 
     _themeMode = settings.themeMode;
     _accentColor = settings.accentColor;
@@ -265,6 +272,7 @@ class AppThemeService extends ChangeNotifier {
     _toolDiscoveryMode = customizationPrefs.toolDiscoveryMode;
     _showToolCalls = customizationPrefs.showToolCalls;
     _allowMarkdownToolCalls = customizationPrefs.allowMarkdownToolCalls;
+    _uiLocale = customizationPrefs.uiLocale;
     _hasAppliedSupabaseTheme = true;
     _cachedThemeData = null;
 
@@ -309,6 +317,7 @@ class AppThemeService extends ChangeNotifier {
       prefs.setBool(_kToolDiscoveryModeKey, _toolDiscoveryMode),
       prefs.setBool(_kShowToolCallsKey, _showToolCalls),
       prefs.setBool(_kAllowMarkdownToolCallsKey, _allowMarkdownToolCalls),
+      prefs.setString(_kUiLocaleKey, _uiLocale),
     ]);
   }
 
@@ -370,6 +379,7 @@ class AppThemeService extends ChangeNotifier {
       toolDiscoveryMode: _toolDiscoveryMode,
       showToolCalls: _showToolCalls,
       allowMarkdownToolCalls: _allowMarkdownToolCalls,
+      uiLocale: _uiLocale,
     );
 
     try {
@@ -510,6 +520,12 @@ class AppThemeService extends ChangeNotifier {
 
   void setAllowMarkdownToolCalls(bool value) {
     _allowMarkdownToolCalls = value;
+    notifyListeners();
+    _debouncedSyncCustomization();
+  }
+
+  void setUiLocale(String locale) {
+    _uiLocale = locale;
     notifyListeners();
     _debouncedSyncCustomization();
   }

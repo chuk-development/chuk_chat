@@ -1,7 +1,7 @@
 -- ============================================================
 -- Migration: Default Model & Provider for New Users
 -- ============================================================
--- Sets moonshotai/kimi-k2.5 on baseten as the default model
+-- Sets qwen/qwen3.5-397b-a17b on together as the default model
 -- for every new user, so they can chat immediately without
 -- having to visit the Model Selector Page first.
 --
@@ -22,12 +22,12 @@ RETURNS TRIGGER AS $$
 BEGIN
   -- Insert default selected model into user_preferences
   INSERT INTO user_preferences (user_id, selected_model_id)
-  VALUES (NEW.id, 'moonshotai/kimi-k2.5')
+  VALUES (NEW.id, 'qwen/qwen3.5-397b-a17b')
   ON CONFLICT (user_id) DO NOTHING;
 
   -- Insert default provider preference for the model
   INSERT INTO user_model_providers (user_id, model_id, provider_slug)
-  VALUES (NEW.id, 'moonshotai/kimi-k2.5', 'baseten')
+  VALUES (NEW.id, 'qwen/qwen3.5-397b-a17b', 'together')
   ON CONFLICT (user_id, model_id) DO NOTHING;
 
   RETURN NEW;
@@ -47,7 +47,7 @@ CREATE TRIGGER trigger_set_default_model
 
 -- Give existing users the default selected model if they don't have one
 INSERT INTO user_preferences (user_id, selected_model_id)
-SELECT p.id, 'moonshotai/kimi-k2.5'
+SELECT p.id, 'qwen/qwen3.5-397b-a17b'
 FROM profiles p
 WHERE NOT EXISTS (
   SELECT 1 FROM user_preferences up WHERE up.user_id = p.id
@@ -56,7 +56,7 @@ ON CONFLICT (user_id) DO NOTHING;
 
 -- Give existing users the default provider if they have no providers at all
 INSERT INTO user_model_providers (user_id, model_id, provider_slug)
-SELECT p.id, 'moonshotai/kimi-k2.5', 'baseten'
+SELECT p.id, 'qwen/qwen3.5-397b-a17b', 'together'
 FROM profiles p
 WHERE NOT EXISTS (
   SELECT 1 FROM user_model_providers ump WHERE ump.user_id = p.id
@@ -68,8 +68,8 @@ ON CONFLICT (user_id, model_id) DO NOTHING;
 -- ============================================================
 --
 -- New users: Trigger fires on profiles INSERT, auto-creates
---   user_preferences.selected_model_id = 'moonshotai/kimi-k2.5'
---   user_model_providers(model_id, provider_slug) = ('moonshotai/kimi-k2.5', 'baseten')
+--   user_preferences.selected_model_id = 'qwen/qwen3.5-397b-a17b'
+--   user_model_providers(model_id, provider_slug) = ('qwen/qwen3.5-397b-a17b', 'together')
 --
 -- Existing users without preferences: Backfilled with same defaults
 --

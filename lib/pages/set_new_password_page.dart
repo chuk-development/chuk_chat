@@ -6,6 +6,7 @@ import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/key_version_service.dart';
 import 'package:chuk_chat/services/password_revision_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/input_validator.dart';
 import 'package:chuk_chat/widgets/password_strength_meter.dart';
@@ -68,7 +69,7 @@ class _SetNewPasswordPageState extends State<SetNewPasswordPage> {
       // 2. Get the current user (now authenticated via reset link)
       final user = SupabaseService.auth.currentUser;
       if (user == null) {
-        throw StateError('No authenticated user after password update.');
+        throw StateError(AppLocalizations.of(context)!.noAuthenticatedUser);
       }
 
       // 3. Preserve old encryption key metadata before creating new key
@@ -79,8 +80,7 @@ class _SetNewPasswordPageState extends State<SetNewPasswordPage> {
         final promoted = await KeyVersionService.promoteCurrentToPrevious(user);
         if (promoted == null) {
           throw StateError(
-            'Failed to preserve old encryption data. '
-            'Please check your connection and try again.',
+            AppLocalizations.of(context)!.failedToPreserveEncryption,
           );
         }
       }
@@ -103,7 +103,7 @@ class _SetNewPasswordPageState extends State<SetNewPasswordPage> {
       }
       if (!mounted) return;
       setState(() {
-        _errorMessage = 'Failed to set new password. Please try again.';
+        _errorMessage = AppLocalizations.of(context)!.failedToSetNewPassword;
       });
     } finally {
       if (mounted) {
@@ -117,6 +117,7 @@ class _SetNewPasswordPageState extends State<SetNewPasswordPage> {
     final theme = Theme.of(context);
     final scaffoldBg = theme.scaffoldBackgroundColor;
     final iconFg = theme.iconTheme.color ?? Colors.white;
+    final l = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: scaffoldBg,
@@ -144,7 +145,7 @@ class _SetNewPasswordPageState extends State<SetNewPasswordPage> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'Set a new password',
+                      l.setNewPassword,
                       style: theme.textTheme.headlineSmall?.copyWith(
                         color: iconFg,
                       ),
@@ -152,9 +153,7 @@ class _SetNewPasswordPageState extends State<SetNewPasswordPage> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Choose a strong password for your account. '
-                      'Your old chats will remain accessible if you '
-                      'remember your previous password.',
+                      l.setNewPasswordInfo,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: iconFg.withValues(alpha: 0.6),
                       ),
@@ -164,7 +163,7 @@ class _SetNewPasswordPageState extends State<SetNewPasswordPage> {
                     TextFormField(
                       controller: _passwordCtrl,
                       decoration: InputDecoration(
-                        labelText: 'New password',
+                        labelText: l.newPassword,
                         suffixIcon: IconButton(
                           icon: Icon(
                             _obscurePassword
@@ -191,7 +190,7 @@ class _SetNewPasswordPageState extends State<SetNewPasswordPage> {
                     TextFormField(
                       controller: _confirmCtrl,
                       decoration: InputDecoration(
-                        labelText: 'Confirm new password',
+                        labelText: l.confirmNewPassword,
                         suffixIcon: IconButton(
                           icon: Icon(
                             _obscureConfirm
@@ -212,10 +211,10 @@ class _SetNewPasswordPageState extends State<SetNewPasswordPage> {
                       },
                       validator: (value) {
                         if (value == null || value.isEmpty) {
-                          return 'Please confirm your password.';
+                          return l.pleaseConfirmPassword;
                         }
                         if (value.trim() != _passwordCtrl.text.trim()) {
-                          return 'Passwords do not match.';
+                          return l.passwordsDoNotMatch;
                         }
                         return null;
                       },
@@ -242,7 +241,7 @@ class _SetNewPasswordPageState extends State<SetNewPasswordPage> {
                                   strokeWidth: 2,
                                 ),
                               )
-                            : const Text('Set new password'),
+                            : Text(l.setNewPasswordButton),
                       ),
                     ),
                   ],

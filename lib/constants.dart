@@ -20,6 +20,9 @@ const bool kDefaultShowModelInfo = false;
 /* ---------- TPS (TOKENS PER SECOND) DEFAULT ---------- */
 const bool kDefaultShowTps = false;
 
+/* ---------- UI LOCALE DEFAULT ---------- */
+const String kDefaultUiLocale = 'en';
+
 /* ---------- TOOL CALLING DEFAULTS ---------- */
 const bool kDefaultToolCallingEnabled = true;
 const bool kDefaultToolDiscoveryMode = true;
