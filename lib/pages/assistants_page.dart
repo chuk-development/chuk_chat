@@ -32,6 +32,8 @@ class _AssistantsPageState extends State<AssistantsPage> {
   List<Assistant> _filteredAssistants = [];
   StreamSubscription<void>? _assistantUpdatesSub;
   bool _isLoading = true;
+  bool _isLoadingPublic = false;
+  bool _showPublic = false;
   AssistantSortMode _sortMode = AssistantSortMode.recentlyUpdated;
 
   @override
@@ -79,9 +81,9 @@ class _AssistantsPageState extends State<AssistantsPage> {
   void _filterAssistants() {
     if (!mounted) return;
     setState(() {
-      var assistants = List<Assistant>.from(
-        AssistantStorageService.activeAssistants,
-      );
+      var assistants = _showPublic
+          ? List<Assistant>.from(AssistantStorageService.publicAssistants)
+          : List<Assistant>.from(AssistantStorageService.activeAssistants);
       if (_searchQuery.isNotEmpty) {
         final query = _searchQuery.toLowerCase();
         assistants = assistants.where((a) {
@@ -99,11 +101,40 @@ class _AssistantsPageState extends State<AssistantsPage> {
             (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
           );
         case AssistantSortMode.mostChats:
-          // This would need chat count - for now sort by updated
           assistants.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
       }
       _filteredAssistants = assistants;
     });
+  }
+
+  Future<void> _loadPublicAssistants() async {
+    if (_isLoadingPublic) return;
+    setState(() => _isLoadingPublic = true);
+    try {
+      await AssistantStorageService.loadPublicAssistants();
+      _filterAssistants();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load public assistants: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoadingPublic = false);
+    }
+  }
+
+  void _switchTab(bool showPublic) {
+    setState(() {
+      _showPublic = showPublic;
+      _searchController.clear();
+      _searchQuery = '';
+    });
+    if (showPublic) {
+      _loadPublicAssistants();
+    } else {
+      _filterAssistants();
+    }
   }
 
   Future<void> _createAssistant() async {
@@ -131,6 +162,12 @@ class _AssistantsPageState extends State<AssistantsPage> {
             assistant.id,
             imageBytes,
           );
+        }
+
+        // Make public if requested
+        final isPublic = result['isPublic'] as bool? ?? false;
+        if (isPublic) {
+          await AssistantStorageService.makePublic(assistant.id);
         }
 
         if (mounted) {
@@ -179,6 +216,16 @@ class _AssistantsPageState extends State<AssistantsPage> {
           );
         } else if (removeImage) {
           await AssistantStorageService.deleteAvatar(assistant.id);
+        }
+
+        // Handle public/private toggle
+        final isPublic = result['isPublic'] as bool? ?? false;
+        if (isPublic != assistant.isPublic) {
+          if (isPublic) {
+            await AssistantStorageService.makePublic(assistant.id);
+          } else {
+            await AssistantStorageService.makePrivate(assistant.id);
+          }
         }
 
         if (mounted) {
@@ -291,11 +338,43 @@ class _AssistantsPageState extends State<AssistantsPage> {
     final iconFg = Theme.of(context).resolvedIconColor;
     final isMobile = MediaQuery.of(context).size.width < 800;
 
+    final isLoading = _showPublic ? _isLoadingPublic : _isLoading;
+
     final body = Column(
       children: [
-        // Header row: search + sort + create
+        // Tab selector: My Assistants / Public
         Padding(
           padding: EdgeInsets.fromLTRB(16, widget.embedded ? 12 : 16, 16, 8),
+          child: SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment(
+                  value: false,
+                  label: Text('My Assistants'),
+                  icon: Icon(Icons.person_outline, size: 18),
+                ),
+                ButtonSegment(
+                  value: true,
+                  label: Text('Public'),
+                  icon: Icon(Icons.public, size: 18),
+                ),
+              ],
+              selected: {_showPublic},
+              onSelectionChanged: (sel) => _switchTab(sel.first),
+              style: ButtonStyle(
+                visualDensity: VisualDensity.compact,
+                textStyle: WidgetStatePropertyAll(
+                  const TextStyle(fontSize: 13),
+                ),
+              ),
+            ),
+          ),
+        ),
+
+        // Header row: search + sort + create
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           child: Row(
             children: [
               // Search field
@@ -305,7 +384,9 @@ class _AssistantsPageState extends State<AssistantsPage> {
                   child: TextField(
                     controller: _searchController,
                     decoration: InputDecoration(
-                      hintText: 'Search assistants...',
+                      hintText: _showPublic
+                          ? 'Search public assistants...'
+                          : 'Search assistants...',
                       prefixIcon: Icon(Icons.search, color: iconFg, size: 20),
                       suffixIcon: _searchQuery.isNotEmpty
                           ? IconButton(
@@ -345,32 +426,34 @@ class _AssistantsPageState extends State<AssistantsPage> {
                   });
                 },
               ),
-              const SizedBox(width: 8),
-              // Create button
-              SizedBox(
-                height: 42,
-                child: FilledButton.icon(
-                  onPressed: _createAssistant,
-                  icon: const Icon(Icons.add, size: 18),
-                  label: isMobile || widget.embedded
-                      ? const SizedBox.shrink()
-                      : const Text('New Assistant'),
-                  style: FilledButton.styleFrom(
-                    padding: isMobile || widget.embedded
-                        ? const EdgeInsets.symmetric(horizontal: 12)
-                        : const EdgeInsets.symmetric(horizontal: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+              // Create button (only on My Assistants tab)
+              if (!_showPublic) ...[
+                const SizedBox(width: 8),
+                SizedBox(
+                  height: 42,
+                  child: FilledButton.icon(
+                    onPressed: _createAssistant,
+                    icon: const Icon(Icons.add, size: 18),
+                    label: isMobile || widget.embedded
+                        ? const SizedBox.shrink()
+                        : const Text('New Assistant'),
+                    style: FilledButton.styleFrom(
+                      padding: isMobile || widget.embedded
+                          ? const EdgeInsets.symmetric(horizontal: 12)
+                          : const EdgeInsets.symmetric(horizontal: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
 
         // Stats bar
-        if (!_isLoading && _filteredAssistants.isNotEmpty)
+        if (!isLoading && _filteredAssistants.isNotEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
@@ -398,12 +481,14 @@ class _AssistantsPageState extends State<AssistantsPage> {
 
         // Assistant list/grid
         Expanded(
-          child: _isLoading
+          child: isLoading
               ? const Center(child: CircularProgressIndicator())
               : _filteredAssistants.isEmpty
               ? _buildEmptyState(iconFg)
               : RefreshIndicator(
-                  onRefresh: _loadAssistants,
+                  onRefresh: _showPublic
+                      ? _loadPublicAssistants
+                      : _loadAssistants,
                   child: isMobile && !widget.embedded
                       ? _buildMobileList()
                       : _buildDesktopGrid(),
@@ -470,9 +555,11 @@ class _AssistantsPageState extends State<AssistantsPage> {
               ),
               const SizedBox(height: 20),
               Text(
-                _searchQuery.isEmpty
-                    ? 'No assistants yet'
-                    : 'No assistants found',
+                _searchQuery.isNotEmpty
+                    ? 'No assistants found'
+                    : _showPublic
+                        ? 'No public assistants yet'
+                        : 'No assistants yet',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
@@ -481,9 +568,11 @@ class _AssistantsPageState extends State<AssistantsPage> {
               ),
               const SizedBox(height: 8),
               Text(
-                _searchQuery.isEmpty
-                    ? 'Create custom AI assistants with unique personalities,\nsystem prompts, and isolated memory settings.'
-                    : 'Try a different search term.',
+                _searchQuery.isNotEmpty
+                    ? 'Try a different search term.'
+                    : _showPublic
+                        ? 'Public assistants shared by other users\nwill appear here.'
+                        : 'Create custom AI assistants with unique personalities,\nsystem prompts, and isolated memory settings.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,
@@ -491,7 +580,7 @@ class _AssistantsPageState extends State<AssistantsPage> {
                   height: 1.5,
                 ),
               ),
-              if (_searchQuery.isEmpty) ...[
+              if (_searchQuery.isEmpty && !_showPublic) ...[
                 const SizedBox(height: 24),
                 FilledButton.icon(
                   onPressed: _createAssistant,
@@ -526,12 +615,14 @@ class _AssistantsPageState extends State<AssistantsPage> {
       ),
       itemCount: _filteredAssistants.length,
       itemBuilder: (context, index) {
+        final a = _filteredAssistants[index];
         return _AssistantCard(
-          assistant: _filteredAssistants[index],
-          onTap: () => _startChatWithAssistant(_filteredAssistants[index]),
-          onEdit: () => _editAssistant(_filteredAssistants[index]),
-          onDelete: () => _deleteAssistant(_filteredAssistants[index]),
-          onArchive: () => _archiveAssistant(_filteredAssistants[index]),
+          assistant: a,
+          isReadOnly: _showPublic,
+          onTap: () => _startChatWithAssistant(a),
+          onEdit: _showPublic ? null : () => _editAssistant(a),
+          onDelete: _showPublic ? null : () => _deleteAssistant(a),
+          onArchive: _showPublic ? null : () => _archiveAssistant(a),
         );
       },
     );
@@ -541,14 +632,16 @@ class _AssistantsPageState extends State<AssistantsPage> {
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
       itemCount: _filteredAssistants.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
+        final a = _filteredAssistants[index];
         return _AssistantCard(
-          assistant: _filteredAssistants[index],
-          onTap: () => _startChatWithAssistant(_filteredAssistants[index]),
-          onEdit: () => _editAssistant(_filteredAssistants[index]),
-          onDelete: () => _deleteAssistant(_filteredAssistants[index]),
-          onArchive: () => _archiveAssistant(_filteredAssistants[index]),
+          assistant: a,
+          isReadOnly: _showPublic,
+          onTap: () => _startChatWithAssistant(a),
+          onEdit: _showPublic ? null : () => _editAssistant(a),
+          onDelete: _showPublic ? null : () => _deleteAssistant(a),
+          onArchive: _showPublic ? null : () => _archiveAssistant(a),
         );
       },
     );
@@ -631,16 +724,18 @@ class _SortButton extends StatelessWidget {
 class _AssistantCard extends StatelessWidget {
   final Assistant assistant;
   final VoidCallback onTap;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-  final VoidCallback onArchive;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+  final VoidCallback? onArchive;
+  final bool isReadOnly;
 
   const _AssistantCard({
     required this.assistant,
     required this.onTap,
-    required this.onEdit,
-    required this.onDelete,
-    required this.onArchive,
+    this.onEdit,
+    this.onDelete,
+    this.onArchive,
+    this.isReadOnly = false,
   });
 
   @override
@@ -709,7 +804,9 @@ class _AssistantCard extends StatelessWidget {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                assistant.updatedAgo,
+                                isReadOnly && assistant.ownerDisplayName != null
+                                    ? 'by ${assistant.ownerDisplayName}'
+                                    : assistant.updatedAgo,
                                 style: TextStyle(
                                   fontSize: 11,
                                   color: iconFg.withValues(alpha: 0.45),
@@ -718,66 +815,67 @@ class _AssistantCard extends StatelessWidget {
                             ],
                           ),
                         ),
-                        // Menu
-                        PopupMenuButton<String>(
-                          icon: Icon(
-                            Icons.more_horiz,
-                            color: iconFg.withValues(alpha: 0.5),
-                            size: 20,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(
-                            minWidth: 28,
-                            minHeight: 28,
-                          ),
-                          onSelected: (value) {
-                            if (value == 'edit') onEdit();
-                            if (value == 'delete') onDelete();
-                            if (value == 'archive') onArchive();
-                          },
-                          itemBuilder: (context) => [
-                            const PopupMenuItem(
-                              value: 'edit',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.edit_outlined, size: 18),
-                                  SizedBox(width: 10),
-                                  Text('Edit'),
-                                ],
-                              ),
+                        // Menu (hidden for public/read-only cards)
+                        if (!isReadOnly)
+                          PopupMenuButton<String>(
+                            icon: Icon(
+                              Icons.more_horiz,
+                              color: iconFg.withValues(alpha: 0.5),
+                              size: 20,
                             ),
-                            const PopupMenuItem(
-                              value: 'archive',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.archive_outlined, size: 18),
-                                  SizedBox(width: 10),
-                                  Text('Archive'),
-                                ],
-                              ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                            PopupMenuItem(
-                              value: 'delete',
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.delete_outline,
-                                    color: Colors.red,
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: 10),
-                                  const Text(
-                                    'Delete',
-                                    style: TextStyle(color: Colors.red),
-                                  ),
-                                ],
-                              ),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                              minWidth: 28,
+                              minHeight: 28,
                             ),
-                          ],
-                        ),
+                            onSelected: (value) {
+                              if (value == 'edit') onEdit?.call();
+                              if (value == 'delete') onDelete?.call();
+                              if (value == 'archive') onArchive?.call();
+                            },
+                            itemBuilder: (context) => [
+                              const PopupMenuItem(
+                                value: 'edit',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.edit_outlined, size: 18),
+                                    SizedBox(width: 10),
+                                    Text('Edit'),
+                                  ],
+                                ),
+                              ),
+                              const PopupMenuItem(
+                                value: 'archive',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.archive_outlined, size: 18),
+                                    SizedBox(width: 10),
+                                    Text('Archive'),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.delete_outline,
+                                      color: Colors.red,
+                                      size: 18,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    const Text(
+                                      'Delete',
+                                      style: TextStyle(color: Colors.red),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                       ],
                     ),
 
@@ -826,6 +924,14 @@ class _AssistantCard extends StatelessWidget {
                               ? Colors.green
                               : Colors.orange,
                         ),
+                        if (assistant.isPublic) ...[
+                          const SizedBox(width: 12),
+                          _StatChip(
+                            icon: Icons.public,
+                            label: 'Public',
+                            color: Colors.blue,
+                          ),
+                        ],
                         if (assistant.modelId != null) ...[
                           const SizedBox(width: 12),
                           _StatChip(

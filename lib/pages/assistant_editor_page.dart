@@ -33,6 +33,9 @@ class _AssistantEditorPageState extends State<AssistantEditorPage> {
   bool _removeImage = false; // User wants to remove existing image
   Future<Uint8List>? _existingImageFuture;
 
+  // Public sharing
+  bool _isPublic = false;
+
   bool get _isEditing => widget.assistant != null;
 
   @override
@@ -47,6 +50,7 @@ class _AssistantEditorPageState extends State<AssistantEditorPage> {
       _selectedAvatarColor = widget.assistant!.avatarColor;
       _selectedAvatarIcon = widget.assistant!.avatarIcon;
       _existingImagePath = widget.assistant!.avatarImagePath;
+      _isPublic = widget.assistant!.isPublic;
       if (_existingImagePath != null) {
         _existingImageFuture =
             ImageStorageService.downloadAndDecryptImage(_existingImagePath!);
@@ -80,6 +84,7 @@ class _AssistantEditorPageState extends State<AssistantEditorPage> {
       'avatarIcon': _selectedAvatarIcon,
       'pickedImageBytes': _pickedImageBytes,
       'removeImage': _removeImage,
+      'isPublic': _isPublic,
     };
 
     Navigator.pop(context, result);
@@ -108,6 +113,57 @@ class _AssistantEditorPageState extends State<AssistantEditorPage> {
         ).showSnackBar(SnackBar(content: Text('Failed to pick image: $e')));
       }
     }
+  }
+
+  Future<void> _togglePublic(bool value) async {
+    if (value) {
+      // First confirmation
+      final first = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Make Public?'),
+          content: const Text(
+            'Making this assistant public will allow anyone to see '
+            'your system prompt and use this assistant.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Continue'),
+            ),
+          ],
+        ),
+      );
+      if (first != true || !mounted) return;
+
+      // Second confirmation
+      final second = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Are you sure?'),
+          content: const Text(
+            'Your system prompt will be visible to all users. '
+            'You can make it private again later from this page.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Make Public'),
+            ),
+          ],
+        ),
+      );
+      if (second != true || !mounted) return;
+    }
+    setState(() => _isPublic = value);
   }
 
   void _removeCurrentImage() {
@@ -470,6 +526,81 @@ class _AssistantEditorPageState extends State<AssistantEditorPage> {
                       side: BorderSide(color: iconFg.withValues(alpha: 0.1)),
                     ),
                   ),
+
+                  const SizedBox(height: 32),
+
+                  // Sharing settings
+                  _SectionTitle(
+                    icon: Icons.public,
+                    title: 'Sharing',
+                    iconFg: iconFg,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Public assistants can be seen and used by all users. '
+                    'Your system prompt will be visible to everyone.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: iconFg.withValues(alpha: 0.5),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  SwitchListTile(
+                    title: const Text('Make Public'),
+                    subtitle: Text(
+                      _isPublic
+                          ? 'Anyone can see and use this assistant'
+                          : 'Only you can see this assistant',
+                    ),
+                    value: _isPublic,
+                    onChanged: _togglePublic,
+                    secondary: Icon(
+                      _isPublic ? Icons.public : Icons.lock_outline,
+                      color: _isPublic ? Colors.blue : iconFg.withValues(alpha: 0.5),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(
+                        color: _isPublic
+                            ? Colors.blue.withValues(alpha: 0.3)
+                            : iconFg.withValues(alpha: 0.1),
+                      ),
+                    ),
+                  ),
+
+                  if (_isPublic) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: Colors.orange.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            size: 18,
+                            color: Colors.orange.withValues(alpha: 0.8),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Your system prompt is visible to all users.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.orange.withValues(alpha: 0.9),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
 
                   const SizedBox(height: 32),
 
