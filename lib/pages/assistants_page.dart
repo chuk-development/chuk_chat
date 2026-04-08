@@ -489,7 +489,7 @@ class _AssistantsPageState extends State<AssistantsPage> {
                   onRefresh: _showPublic
                       ? _loadPublicAssistants
                       : _loadAssistants,
-                  child: isMobile && !widget.embedded
+                  child: (isMobile || widget.embedded)
                       ? _buildMobileList()
                       : _buildDesktopGrid(),
                 ),
@@ -742,7 +742,6 @@ class _AssistantCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final iconFg = Theme.of(context).resolvedIconColor;
     final assistantColor = assistant.displayColor;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Card(
       elevation: 0,
@@ -941,50 +940,6 @@ class _AssistantCard extends StatelessWidget {
                           ),
                         ],
                         const Spacer(),
-                        // Memory toggle indicator
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: assistant.memoryEnabled
-                                ? Colors.green.withValues(
-                                    alpha: isDark ? 0.15 : 0.1,
-                                  )
-                                : Colors.orange.withValues(
-                                    alpha: isDark ? 0.15 : 0.1,
-                                  ),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                assistant.memoryEnabled
-                                    ? Icons.check_circle_outline
-                                    : Icons.do_not_disturb_on_outlined,
-                                size: 12,
-                                color: assistant.memoryEnabled
-                                    ? Colors.green
-                                    : Colors.orange,
-                              ),
-                              const SizedBox(width: 3),
-                              Text(
-                                assistant.memoryEnabled
-                                    ? 'Memory'
-                                    : 'No memory',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: assistant.memoryEnabled
-                                      ? Colors.green
-                                      : Colors.orange,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
                       ],
                     ),
                   ],

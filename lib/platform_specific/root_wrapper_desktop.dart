@@ -147,18 +147,13 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   }
 
   void _openAssistantsPage() {
-    if (_isSidebarExpanded) _toggleSidebar();
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => AssistantsPage(
-          onOpenAssistant: (assistantId) {
-            // Start a new chat with this assistant
-            _chatUIKey.currentState?.newChatWithAssistant(assistantId);
-            Navigator.of(context).pop();
-          },
-        ),
-      ),
-    );
+    setState(() {
+      if (_activePanel == 'assistants') {
+        _activePanel = null;
+      } else {
+        _activePanel = 'assistants';
+      }
+    });
   }
 
   void _openMediaPage() {
@@ -409,6 +404,8 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                                 ? Icons.folder_open
                                 : effectivePanel == 'media'
                                 ? Icons.photo_library_outlined
+                                : effectivePanel == 'assistants'
+                                ? Icons.auto_awesome
                                 : Icons.auto_fix_high,
                             color: iconFg,
                           ),
@@ -418,6 +415,8 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                                 ? 'Projects'
                                 : effectivePanel == 'media'
                                 ? 'Media'
+                                : effectivePanel == 'assistants'
+                                ? 'Assistants'
                                 : 'Artifact',
                             style: TextStyle(
                               color: iconFg,
@@ -444,6 +443,15 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                             )
                           : effectivePanel == 'media'
                           ? const MediaManagerPage(embedded: true)
+                          : effectivePanel == 'assistants'
+                          ? AssistantsPage(
+                              embedded: true,
+                              onOpenAssistant: (assistantId) {
+                                _chatUIKey.currentState
+                                    ?.newChatWithAssistant(assistantId);
+                                _closePanel();
+                              },
+                            )
                           : ArtifactPanel(
                               artifact: _activeArtifact!,
                               showHeader: false,

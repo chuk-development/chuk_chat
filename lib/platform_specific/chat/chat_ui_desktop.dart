@@ -1913,6 +1913,50 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           Column(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              // Active assistant indicator
+              Builder(
+                builder: (context) {
+                  final assistant = _resolveAssistantForCurrentChat();
+                  if (assistant == null) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: assistant.displayColor.withValues(
+                          alpha: 0.12,
+                        ),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: assistant.displayColor.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            assistant.displayIcon,
+                            size: 14,
+                            color: assistant.displayColor,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            assistant.name,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: assistant.displayColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
               if (_pendingReplyPreviewText != null &&
                   _pendingReplyPreviewText!.isNotEmpty)
                 Padding(
