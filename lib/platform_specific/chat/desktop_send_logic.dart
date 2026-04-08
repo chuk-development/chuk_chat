@@ -1132,8 +1132,8 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       final String providerSlug = result.providerSlug!;
       final int maxResponseTokens = result.maxResponseTokens!;
       final String? systemPrompt = result.effectiveSystemPrompt;
-      final assistantForChat = _resolveWorkspaceForCurrentChat();
-      final skipIdentity = assistantForChat != null && !assistantForChat.memoryEnabled;
+      final workspaceForChat = _resolveWorkspaceForCurrentChat();
+      final skipIdentity = workspaceForChat != null && !workspaceForChat.memoryEnabled;
       final List<String>? imageDataUrls = result.images;
 
       final bool hasAttachments = _fileHandler.attachedFiles.any(
@@ -1192,20 +1192,20 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           );
         }
 
-        // Link new chat to assistant if one is pending
+        // Link new chat to workspace if one is pending
         if (_pendingWorkspaceId != null) {
-          final assistantId = _pendingWorkspaceId!;
+          final workspaceId = _pendingWorkspaceId!;
           _pendingWorkspaceId = null;
           // Fire-and-forget — the link is created in the background
           unawaited(
             WorkspaceStorageService.linkChatToWorkspace(
-              assistantId,
+              workspaceId,
               _activeChatId!,
             ),
           );
           if (kDebugMode) {
             debugPrint(
-              '🤖 [SEND-DESKTOP] Linked chat $_activeChatId to assistant $assistantId',
+              '🤖 [SEND-DESKTOP] Linked chat to workspace $workspaceId',
             );
           }
         }

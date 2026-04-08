@@ -150,7 +150,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   String? _pendingReplyContext;
   String? _pendingReplyPreviewText;
 
-  /// When a new chat is started from an assistant, this holds the assistant ID
+  /// When a new chat is started from a workspace, this holds the assistant ID
   /// until the chat is created and linked in the database.
   String? _pendingWorkspaceId;
   String _pendingReplyPreviewLabel = 'Reply to AI';
@@ -826,8 +826,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   }
 
   /// Start a new chat with a specific assistant.
-  /// The assistant's system prompt will replace the user's global prompt,
-  /// and the chat will be linked to the assistant after the first message.
+  /// The workspace's system prompt will replace the user's global prompt,
+  /// and the chat will be linked to the workspace after the first message.
   void newChatWithWorkspace(String assistantId) {
     newChat();
 
@@ -835,7 +835,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     WorkspaceStorageService.selectedWorkspaceId = assistantId;
 
     if (kDebugMode) {
-      debugPrint('[NEW-CHAT] Starting chat with assistant: $assistantId');
+      debugPrint('[NEW-CHAT] Starting chat with workspace: $assistantId');
     }
   }
 
@@ -935,8 +935,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     }
   }
 
-  /// Resolve the assistant for the current chat, if any.
-  /// Checks pending assistant first, then looks up by chat ID.
+  /// Resolve the workspace for the current chat, if any.
+  /// Checks pending workspace first, then looks up by chat ID.
   Workspace? _resolveWorkspaceForCurrentChat() {
     if (_pendingWorkspaceId != null) {
       return WorkspaceStorageService.getWorkspace(_pendingWorkspaceId!);
@@ -951,15 +951,15 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   Future<String?> _resolveSystemPromptForSend() async {
     // Check if this chat belongs to an assistant.
     // If so, use the assistant's system prompt instead of the user's global one.
-    final assistant = _resolveWorkspaceForCurrentChat();
+    final workspace = _resolveWorkspaceForCurrentChat();
 
     String? basePrompt;
-    if (assistant != null && assistant.hasCustomPrompt) {
+    if (workspace != null && workspace.hasCustomPrompt) {
       // Workspace's system prompt REPLACES the user's global prompt and Soul.
-      basePrompt = assistant.customSystemPrompt;
+      basePrompt = workspace.customSystemPrompt;
       if (kDebugMode) {
         debugPrint(
-          '[WORKSPACE] Using system prompt from "${assistant.name}" '
+          '[WORKSPACE] Using system prompt from "${workspace.name}" '
           '(${basePrompt!.length} chars)',
         );
       }

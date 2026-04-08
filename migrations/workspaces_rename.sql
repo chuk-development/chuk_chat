@@ -1,14 +1,11 @@
 -- ============================================================
--- Workspaces Migration: Merge Projects + Assistants
+-- Workspaces Migration: Add assistant fields + migrate data
 -- ============================================================
--- This migration renames the projects tables to workspaces and
--- adds the assistant persona fields. Run AFTER the original
--- projects migration and assistants migration.
---
 -- Run this in Supabase Dashboard > SQL Editor
+-- Prerequisite: projects, project_chats, project_files tables exist
 -- ============================================================
 
--- Step 1: Add assistant fields to projects table
+-- Step 1: Add assistant persona fields to projects table
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS memory_enabled BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS model_id TEXT;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS avatar_color TEXT;
@@ -21,26 +18,62 @@ CREATE INDEX IF NOT EXISTS idx_projects_public ON projects(is_public) WHERE is_p
 
 -- Step 3: Update SELECT policy to include public workspaces
 DROP POLICY IF EXISTS "Users can view own projects" ON projects;
+DROP POLICY IF EXISTS "Users can view own or public workspaces" ON projects;
 CREATE POLICY "Users can view own or public workspaces"
   ON projects FOR SELECT
   USING (auth.uid() = user_id OR is_public = true);
 
--- Step 4: Migrate assistant data into projects table (if assistants exist)
--- This copies each assistant as a new workspace/project entry
+-- Step 4: Migrate assistant data into projects table
+-- Each assistant becomes a workspace with its system_prompt, avatar, etc.
 DO $$
 BEGIN
-  IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'assistants') THEN
-    INSERT INTO projects (user_id, name, description, custom_system_prompt, memory_enabled, model_id, avatar_color, avatar_icon, avatar_image_path, is_public, is_archived)
-    SELECT user_id, name, description, system_prompt, memory_enabled, model_id, avatar_color, avatar_icon, avatar_image_path, is_public, is_archived
-    FROM assistants
-    ON CONFLICT DO NOTHING;
+  IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'assistants') THEN
+    INSERT INTO projects (
+      user_id, name, description, custom_system_prompt,
+      memory_enabled, model_id, avatar_color, avatar_icon,
+      avatar_image_path, is_public, is_archived
+    )
+    SELECT
+      user_id, name, description, system_prompt,
+      memory_enabled, model_id, avatar_color, avatar_icon,
+      avatar_image_path, is_public, is_archived
+    FROM assistants;
+
+    RAISE NOTICE 'Migrated % assistants to workspaces', (SELECT count(*) FROM assistants);
+  ELSE
+    RAISE NOTICE 'No assistants table found — skipping migration';
   END IF;
 END $$;
 
+-- Step 5: Migrate assistant_chats links to project_chats
+-- Maps old assistant-chat relationships to workspace-chat relationships
+DO $$
+BEGIN
+  IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'assistant_chats') THEN
+    -- For each assistant_chat, find the corresponding migrated workspace
+    INSERT INTO project_chats (project_id, chat_id)
+    SELECT p.id, ac.chat_id
+    FROM assistant_chats ac
+    JOIN assistants a ON a.id = ac.assistant_id
+    JOIN projects p ON p.user_id = a.user_id
+      AND p.name = a.name
+      AND p.custom_system_prompt = a.system_prompt
+    ON CONFLICT DO NOTHING;
+
+    RAISE NOTICE 'Migrated assistant-chat links to workspace-chat links';
+  END IF;
+END $$;
+
+-- Step 6: Clean up old tables (optional — uncomment when ready)
+-- DROP TABLE IF EXISTS assistant_chats CASCADE;
+-- DROP TABLE IF EXISTS assistants CASCADE;
+
 -- ============================================================
--- NOTE: The Dart code now references these tables as "workspaces"
--- but the actual Postgres table names remain "projects",
--- "project_chats", and "project_files". This is intentional —
--- renaming tables in production requires careful coordination.
--- The Dart code uses the old table names in SQL queries.
+-- Migration Complete
+-- ============================================================
+-- The Dart code references tables as:
+--   projects → "workspaces" in code
+--   project_chats → workspace chat links
+--   project_files → workspace files
+-- Table names in Postgres remain unchanged for safety.
 -- ============================================================
