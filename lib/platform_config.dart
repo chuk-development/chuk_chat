@@ -45,10 +45,10 @@ const bool kFeatureProjects = bool.fromEnvironment(
   defaultValue: false,
 );
 
-/// Assistants - custom AI assistants (future feature)
+/// Assistants - custom AI assistants with isolated system prompts
 const bool kFeatureAssistants = bool.fromEnvironment(
   'FEATURE_ASSISTANTS',
-  defaultValue: false,
+  defaultValue: true,
 );
 
 /// Artifacts - editable code/markdown/HTML panels alongside chat
