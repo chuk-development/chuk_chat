@@ -38,6 +38,10 @@ class AssistantStorageService {
   // Cache of assistant-chat relationships (chatId -> assistantId)
   static final Map<String, String> _chatToAssistantMap = <String, String>{};
 
+  // Public assistants from other users (separate cache)
+  static final Map<String, Assistant> _publicAssistantsById =
+      <String, Assistant>{};
+
   // Get assistants as a sorted list (most recent first)
   static List<Assistant> get assistants {
     final list = _assistantsById.values.toList();
@@ -53,6 +57,13 @@ class AssistantStorageService {
   // Get archived assistants
   static List<Assistant> get archivedAssistants {
     return assistants.where((a) => a.isArchived).toList();
+  }
+
+  // Get public assistants from other users
+  static List<Assistant> get publicAssistants {
+    final list = _publicAssistantsById.values.toList();
+    list.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    return List.unmodifiable(list);
   }
 
   static Stream<void> get changes => _changesController.stream;
@@ -220,6 +231,106 @@ class AssistantStorageService {
       _loadingCompleter?.complete();
       _loadingCompleter = null;
     }
+  }
+
+  /// Load public assistants from other users
+  static Future<void> loadPublicAssistants() async {
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) return;
+
+    try {
+      // Fetch public assistants that aren't owned by the current user
+      // and join with profiles to get owner display name
+      final rows = await SupabaseService.client
+          .from('assistants')
+          .select('*, profiles!inner(display_name)')
+          .eq('is_public', true)
+          .neq('user_id', user.id)
+          .eq('is_archived', false)
+          .order('updated_at', ascending: false);
+
+      _publicAssistantsById.clear();
+      for (final row in rows) {
+        // Extract owner display name from the joined profiles table
+        String? ownerName;
+        final profiles = row['profiles'];
+        if (profiles is Map<String, dynamic>) {
+          ownerName = profiles['display_name'] as String?;
+        }
+
+        // Inject owner_display_name into the row for fromJson
+        final enrichedRow = Map<String, dynamic>.from(row);
+        enrichedRow['owner_display_name'] = ownerName;
+        enrichedRow.remove('profiles'); // Remove the join data
+
+        final assistant = Assistant.fromJson(enrichedRow);
+        _publicAssistantsById[assistant.id] = assistant;
+      }
+
+      _notifyChangesImmediate();
+
+      if (kDebugMode) {
+        debugPrint(
+          '✅ [AssistantStorage] Loaded ${_publicAssistantsById.length} public assistants',
+        );
+      }
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint(
+          '❌ [AssistantStorage] Failed to load public assistants: $e\n$st',
+        );
+      }
+    }
+  }
+
+  /// Make an assistant public (visible to all users)
+  static Future<Assistant> makePublic(String assistantId) async {
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) {
+      throw StateError('User must be signed in.');
+    }
+
+    final updated = await SupabaseService.client
+        .from('assistants')
+        .update({'is_public': true})
+        .eq('id', assistantId)
+        .eq('user_id', user.id)
+        .select()
+        .single();
+
+    final assistant = Assistant.fromJson(updated);
+    _assistantsById[assistantId] = assistant;
+    _notifyChanges();
+
+    if (kDebugMode) {
+      debugPrint('🌐 [AssistantStorage] Made assistant public: $assistantId');
+    }
+    return assistant;
+  }
+
+  /// Make an assistant private again
+  static Future<Assistant> makePrivate(String assistantId) async {
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) {
+      throw StateError('User must be signed in.');
+    }
+
+    final updated = await SupabaseService.client
+        .from('assistants')
+        .update({'is_public': false})
+        .eq('id', assistantId)
+        .eq('user_id', user.id)
+        .select()
+        .single();
+
+    final assistant = Assistant.fromJson(updated);
+    _assistantsById[assistantId] = assistant;
+    _notifyChanges();
+
+    if (kDebugMode) {
+      debugPrint('🔒 [AssistantStorage] Made assistant private: $assistantId');
+    }
+    return assistant;
   }
 
   /// Create a new assistant
@@ -408,9 +519,10 @@ class AssistantStorageService {
     }
   }
 
-  /// Get a specific assistant by ID
+  /// Get a specific assistant by ID (checks own + public cache)
   static Assistant? getAssistant(String assistantId) {
-    return _assistantsById[assistantId];
+    return _assistantsById[assistantId] ??
+        _publicAssistantsById[assistantId];
   }
 
   /// Get assistant for a specific chat
@@ -644,6 +756,7 @@ class AssistantStorageService {
   /// Reset all state (on logout)
   static Future<void> reset() async {
     _assistantsById.clear();
+    _publicAssistantsById.clear();
     _chatToAssistantMap.clear();
     selectedAssistantId = null;
     _cacheLoaded = false;

@@ -17,6 +17,9 @@ class Assistant {
   final DateTime createdAt;
   final DateTime updatedAt;
   final bool isArchived;
+  final bool isPublic;
+  final String? userId; // Owner's user ID (for public assistants)
+  final String? ownerDisplayName; // Owner's display name (for public cards)
 
   Assistant({
     required this.id,
@@ -31,6 +34,9 @@ class Assistant {
     required this.createdAt,
     required this.updatedAt,
     this.isArchived = false,
+    this.isPublic = false,
+    this.userId,
+    this.ownerDisplayName,
   });
 
   factory Assistant.fromJson(Map<String, dynamic> json) {
@@ -47,6 +53,9 @@ class Assistant {
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
       isArchived: (json['is_archived'] as bool?) ?? false,
+      isPublic: (json['is_public'] as bool?) ?? false,
+      userId: json['user_id'] as String?,
+      ownerDisplayName: json['owner_display_name'] as String?,
     );
   }
 
@@ -63,6 +72,9 @@ class Assistant {
     'created_at': createdAt.toIso8601String(),
     'updated_at': updatedAt.toIso8601String(),
     'is_archived': isArchived,
+    'is_public': isPublic,
+    if (userId != null) 'user_id': userId,
+    if (ownerDisplayName != null) 'owner_display_name': ownerDisplayName,
   };
 
   /// Convert to Supabase insert/update format (snake_case, no id/timestamps for insert)
@@ -76,6 +88,7 @@ class Assistant {
     if (avatarIcon != null) 'avatar_icon': avatarIcon,
     if (avatarImagePath != null) 'avatar_image_path': avatarImagePath,
     'is_archived': isArchived,
+    'is_public': isPublic,
   };
 
   Assistant copyWith({
@@ -91,6 +104,9 @@ class Assistant {
     DateTime? createdAt,
     DateTime? updatedAt,
     bool? isArchived,
+    bool? isPublic,
+    String? userId,
+    String? ownerDisplayName,
   }) {
     return Assistant(
       id: id ?? this.id,
@@ -105,6 +121,9 @@ class Assistant {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       isArchived: isArchived ?? this.isArchived,
+      isPublic: isPublic ?? this.isPublic,
+      userId: userId ?? this.userId,
+      ownerDisplayName: ownerDisplayName ?? this.ownerDisplayName,
     );
   }
 
@@ -168,6 +187,10 @@ class Assistant {
   /// Check if this assistant has a custom uploaded image
   bool get hasCustomImage =>
       avatarImagePath != null && avatarImagePath!.isNotEmpty;
+
+  /// Check if this is someone else's public assistant (not owned by current user)
+  bool isOwnedBy(String? currentUserId) =>
+      userId != null && userId == currentUserId;
 
   /// Check if this assistant has a description
   bool get hasDescription =>
