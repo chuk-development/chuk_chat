@@ -292,7 +292,9 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       sidebarVisibleWidth,
     );
 
-    final bool showContent = !isCompactMode || !_isSidebarExpanded;
+    final bool isAssistantsFullPage = _activePanel == 'assistants';
+    final bool showContent =
+        (!isCompactMode || !_isSidebarExpanded) && !isAssistantsFullPage;
     final Widget chatArea = ChukChatUIDesktop(
       key: _chatUIKey,
       onToggleSidebar: _toggleSidebar,
@@ -342,8 +344,10 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
         ? math.min(400.0, availableForPanel)
         : 0;
     final bool hasArtifact = kFeatureArtifacts && _activeArtifact != null;
-    final String? effectivePanel =
-        _activePanel ?? (hasArtifact ? 'artifact' : null);
+    // Assistants is full-page, not a side panel
+    final String? effectivePanel = _activePanel == 'assistants'
+        ? null
+        : (_activePanel ?? (hasArtifact ? 'artifact' : null));
     final bool showPanel =
         effectivePanel != null && !isCompactMode && panelWidth > 0;
 
@@ -361,7 +365,8 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
         children: [
           // Always keep chatArea in the tree to avoid GlobalKey
           // removal/insertion conflicts.  Hide via Offstage when the
-          // sidebar covers the full screen in compact mode.
+          // sidebar covers the full screen in compact mode or assistants
+          // is showing full-page.
           Positioned.fill(
             left: (!isCompactMode && _isSidebarExpanded)
                 ? effectiveSidebarWidth
@@ -369,6 +374,21 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
             right: showPanel ? panelWidth : 0,
             child: Offstage(offstage: !showContent, child: chatArea),
           ),
+
+          // Full-page assistants view (replaces chat area)
+          if (isAssistantsFullPage)
+            Positioned.fill(
+              left: (!isCompactMode && _isSidebarExpanded)
+                  ? effectiveSidebarWidth
+                  : 0,
+              child: AssistantsPage(
+                onOpenAssistant: (assistantId) {
+                  _chatUIKey.currentState?.newChatWithAssistant(assistantId);
+                  setState(() => _activePanel = null);
+                },
+                onClose: () => setState(() => _activePanel = null),
+              ),
+            ),
 
           // Right Panel (Projects/Media/Artifact)
           if (showPanel)
@@ -404,8 +424,6 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                                 ? Icons.folder_open
                                 : effectivePanel == 'media'
                                 ? Icons.photo_library_outlined
-                                : effectivePanel == 'assistants'
-                                ? Icons.auto_awesome
                                 : Icons.auto_fix_high,
                             color: iconFg,
                           ),
@@ -415,8 +433,6 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                                 ? 'Projects'
                                 : effectivePanel == 'media'
                                 ? 'Media'
-                                : effectivePanel == 'assistants'
-                                ? 'Assistants'
                                 : 'Artifact',
                             style: TextStyle(
                               color: iconFg,
@@ -443,15 +459,6 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                             )
                           : effectivePanel == 'media'
                           ? const MediaManagerPage(embedded: true)
-                          : effectivePanel == 'assistants'
-                          ? AssistantsPage(
-                              embedded: true,
-                              onOpenAssistant: (assistantId) {
-                                _chatUIKey.currentState
-                                    ?.newChatWithAssistant(assistantId);
-                                _closePanel();
-                              },
-                            )
                           : ArtifactPanel(
                               artifact: _activeArtifact!,
                               showHeader: false,

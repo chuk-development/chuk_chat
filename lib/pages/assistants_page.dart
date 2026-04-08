@@ -14,11 +14,13 @@ enum AssistantSortMode { recentlyUpdated, name, mostChats }
 
 class AssistantsPage extends StatefulWidget {
   final void Function(String assistantId)? onOpenAssistant;
+  final VoidCallback? onClose;
   final bool embedded;
 
   const AssistantsPage({
     super.key,
     this.onOpenAssistant,
+    this.onClose,
     this.embedded = false,
   });
 
@@ -337,178 +339,233 @@ class _AssistantsPageState extends State<AssistantsPage> {
   Widget build(BuildContext context) {
     final iconFg = Theme.of(context).resolvedIconColor;
     final isMobile = MediaQuery.of(context).size.width < 800;
-
     final isLoading = _showPublic ? _isLoadingPublic : _isLoading;
 
-    final body = Column(
-      children: [
-        // Tab selector: My Assistants / Public
-        Padding(
-          padding: EdgeInsets.fromLTRB(16, widget.embedded ? 12 : 16, 16, 8),
-          child: SizedBox(
-            width: double.infinity,
-            child: SegmentedButton<bool>(
-              segments: const [
-                ButtonSegment(
-                  value: false,
-                  label: Text('My Assistants'),
-                  icon: Icon(Icons.person_outline, size: 18),
-                ),
-                ButtonSegment(
-                  value: true,
-                  label: Text('Public'),
-                  icon: Icon(Icons.public, size: 18),
-                ),
-              ],
-              selected: {_showPublic},
-              onSelectionChanged: (sel) => _switchTab(sel.first),
-              style: ButtonStyle(
-                visualDensity: VisualDensity.compact,
-                textStyle: WidgetStatePropertyAll(
-                  const TextStyle(fontSize: 13),
-                ),
-              ),
-            ),
-          ),
-        ),
-
-        // Header row: search + sort + create
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Row(
-            children: [
-              // Search field
-              Expanded(
-                child: SizedBox(
-                  height: 42,
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: _showPublic
-                          ? 'Search public assistants...'
-                          : 'Search assistants...',
-                      prefixIcon: Icon(Icons.search, color: iconFg, size: 20),
-                      suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
-                              icon: Icon(Icons.clear, color: iconFg, size: 18),
-                              onPressed: () => _searchController.clear(),
-                            )
-                          : null,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: iconFg.withValues(alpha: 0.2),
-                        ),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: iconFg.withValues(alpha: 0.15),
-                        ),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                      ),
-                      isDense: true,
-                    ),
-                    style: const TextStyle(fontSize: 14),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              // Sort button
-              _SortButton(
-                sortMode: _sortMode,
-                onChanged: (mode) {
-                  setState(() {
-                    _sortMode = mode;
-                    _filterAssistants();
-                  });
-                },
-              ),
-              // Create button (only on My Assistants tab)
-              if (!_showPublic) ...[
-                const SizedBox(width: 8),
-                SizedBox(
-                  height: 42,
-                  child: FilledButton.icon(
-                    onPressed: _createAssistant,
-                    icon: const Icon(Icons.add, size: 18),
-                    label: isMobile || widget.embedded
-                        ? const SizedBox.shrink()
-                        : const Text('New Assistant'),
-                    style: FilledButton.styleFrom(
-                      padding: isMobile || widget.embedded
-                          ? const EdgeInsets.symmetric(horizontal: 12)
-                          : const EdgeInsets.symmetric(horizontal: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-
-        // Stats bar
-        if (!isLoading && _filteredAssistants.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                Text(
-                  '${_filteredAssistants.length} assistant${_filteredAssistants.length == 1 ? '' : 's'}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: iconFg.withValues(alpha: 0.5),
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  _sortModeLabel(_sortMode),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: iconFg.withValues(alpha: 0.4),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-        const SizedBox(height: 8),
-
-        // Assistant list/grid
-        Expanded(
-          child: isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _filteredAssistants.isEmpty
-              ? _buildEmptyState(iconFg)
-              : RefreshIndicator(
-                  onRefresh: _showPublic
-                      ? _loadPublicAssistants
-                      : _loadAssistants,
-                  child: (isMobile || widget.embedded)
-                      ? _buildMobileList()
-                      : _buildDesktopGrid(),
-                ),
-        ),
-      ],
-    );
-
-    // In embedded mode (desktop panel), just return the body
-    if (widget.embedded) return body;
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Assistants'),
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: iconFg),
-          onPressed: () => Navigator.pop(context),
-        ),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: CustomScrollView(
+        slivers: [
+          // Top bar with back button and create
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+              child: Row(
+                children: [
+                  if (widget.onClose != null)
+                    IconButton(
+                      icon: Icon(
+                        Icons.arrow_back,
+                        color: iconFg,
+                        size: 20,
+                      ),
+                      onPressed: widget.onClose,
+                    )
+                  else if (Navigator.canPop(context))
+                    IconButton(
+                      icon: Icon(
+                        Icons.arrow_back,
+                        color: iconFg,
+                        size: 20,
+                      ),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  const Spacer(),
+                  // My Assistants / Public toggle
+                  TextButton(
+                    onPressed: () => _switchTab(!_showPublic),
+                    child: Text(
+                      _showPublic ? 'My Assistants' : 'Public',
+                      style: TextStyle(
+                        color: iconFg.withValues(alpha: 0.6),
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                  if (!_showPublic) ...[
+                    const SizedBox(width: 8),
+                    FilledButton.icon(
+                      onPressed: _createAssistant,
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('Create'),
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+
+          // Hero header
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Column(
+                children: [
+                  Text(
+                    'Assistants',
+                    style: TextStyle(
+                      fontSize: isMobile ? 28 : 36,
+                      fontWeight: FontWeight.bold,
+                      color: iconFg,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _showPublic
+                        ? 'Discover assistants shared by other users.'
+                        : 'Custom AI personalities with their own system prompts and memory settings.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: iconFg.withValues(alpha: 0.5),
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Search bar
+          SliverToBoxAdapter(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 600),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+                  child: SizedBox(
+                    height: 46,
+                    child: TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: _showPublic
+                            ? 'Search public assistants...'
+                            : 'Search assistants...',
+                        prefixIcon:
+                            Icon(Icons.search, color: iconFg, size: 20),
+                        suffixIcon: _searchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: Icon(
+                                  Icons.clear,
+                                  color: iconFg,
+                                  size: 18,
+                                ),
+                                onPressed: () => _searchController.clear(),
+                              )
+                            : null,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide(
+                            color: iconFg.withValues(alpha: 0.2),
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide(
+                            color: iconFg.withValues(alpha: 0.15),
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide(
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                        ),
+                      ),
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // Tab row
+          SliverToBoxAdapter(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 900),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+                  child: Row(
+                    children: [
+                      _TabChip(
+                        label: _showPublic ? 'All' : 'All',
+                        isSelected: true,
+                        onTap: () {},
+                      ),
+                      if (!_showPublic) ...[
+                        const SizedBox(width: 8),
+                        _TabChip(
+                          label:
+                              '${_filteredAssistants.length} assistant${_filteredAssistants.length == 1 ? '' : 's'}',
+                          isSelected: false,
+                          onTap: null,
+                        ),
+                      ],
+                      const Spacer(),
+                      // Sort
+                      _SortButton(
+                        sortMode: _sortMode,
+                        onChanged: (mode) {
+                          setState(() {
+                            _sortMode = mode;
+                            _filterAssistants();
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // Content
+          if (isLoading)
+            const SliverFillRemaining(
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_filteredAssistants.isEmpty)
+            SliverFillRemaining(child: _buildEmptyState(iconFg))
+          else
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+              sliver: SliverGrid(
+                gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: isMobile ? 400 : 420,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  childAspectRatio: isMobile ? 1.2 : 1.4,
+                ),
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final a = _filteredAssistants[index];
+                    return _AssistantCard(
+                      assistant: a,
+                      isReadOnly: _showPublic,
+                      onTap: () => _startChatWithAssistant(a),
+                      onEdit: _showPublic ? null : () => _editAssistant(a),
+                      onDelete:
+                          _showPublic ? null : () => _deleteAssistant(a),
+                      onArchive:
+                          _showPublic ? null : () => _archiveAssistant(a),
+                    );
+                  },
+                  childCount: _filteredAssistants.length,
+                ),
+              ),
+            ),
+        ],
       ),
-      body: body,
     );
   }
 
@@ -604,59 +661,8 @@ class _AssistantsPageState extends State<AssistantsPage> {
     );
   }
 
-  Widget _buildDesktopGrid() {
-    return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 400,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        childAspectRatio: 1.3,
-      ),
-      itemCount: _filteredAssistants.length,
-      itemBuilder: (context, index) {
-        final a = _filteredAssistants[index];
-        return _AssistantCard(
-          assistant: a,
-          isReadOnly: _showPublic,
-          onTap: () => _startChatWithAssistant(a),
-          onEdit: _showPublic ? null : () => _editAssistant(a),
-          onDelete: _showPublic ? null : () => _deleteAssistant(a),
-          onArchive: _showPublic ? null : () => _archiveAssistant(a),
-        );
-      },
-    );
-  }
 
-  Widget _buildMobileList() {
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-      itemCount: _filteredAssistants.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (context, index) {
-        final a = _filteredAssistants[index];
-        return _AssistantCard(
-          assistant: a,
-          isReadOnly: _showPublic,
-          onTap: () => _startChatWithAssistant(a),
-          onEdit: _showPublic ? null : () => _editAssistant(a),
-          onDelete: _showPublic ? null : () => _deleteAssistant(a),
-          onArchive: _showPublic ? null : () => _archiveAssistant(a),
-        );
-      },
-    );
-  }
 
-  String _sortModeLabel(AssistantSortMode mode) {
-    switch (mode) {
-      case AssistantSortMode.recentlyUpdated:
-        return 'Recently updated';
-      case AssistantSortMode.name:
-        return 'By name';
-      case AssistantSortMode.mostChats:
-        return 'Most chats';
-    }
-  }
 }
 
 // ---------- Sort Button ----------
@@ -1057,6 +1063,47 @@ class _AssistantAvatarState extends State<_AssistantAvatar> {
         widget.assistant.displayIcon,
         color: color,
         size: widget.iconSize,
+      ),
+    );
+  }
+}
+
+class _TabChip extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback? onTap;
+
+  const _TabChip({
+    required this.label,
+    required this.isSelected,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final iconFg = Theme.of(context).resolvedIconColor;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          border: isSelected
+              ? Border(
+                  bottom: BorderSide(
+                    color: iconFg,
+                    width: 2,
+                  ),
+                )
+              : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            color: iconFg.withValues(alpha: isSelected ? 0.9 : 0.5),
+          ),
+        ),
       ),
     );
   }
