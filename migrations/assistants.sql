@@ -1,17 +1,15 @@
 -- ============================================================
--- Assistants Feature Migration
+-- Assistants Feature Migration (Complete)
 -- ============================================================
--- This migration adds support for custom AI assistants with
--- configurable system prompts and isolated memory settings.
+-- Creates the assistants system: custom AI assistants with
+-- configurable system prompts, isolated memory, avatar images,
+-- and public sharing.
 --
--- Run this in Supabase Dashboard → SQL Editor
+-- Run this in Supabase Dashboard > SQL Editor
 -- ============================================================
 
 -- ============================================================
 -- Table: assistants
--- ============================================================
--- Stores custom AI assistant configurations.
--- Each assistant has its own system prompt and memory settings.
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS assistants (
@@ -22,9 +20,11 @@ CREATE TABLE IF NOT EXISTS assistants (
   system_prompt TEXT NOT NULL,
   memory_enabled BOOLEAN NOT NULL DEFAULT true,
   model_id TEXT,                    -- Optional: preferred model for this assistant
-  avatar_color TEXT,                -- Optional: hex color for UI
-  avatar_icon TEXT,               -- Optional: icon name for UI
+  avatar_color TEXT,                -- Optional: hex color for UI (#RRGGBB)
+  avatar_icon TEXT,                 -- Optional: icon name for UI (e.g., "smart_toy")
+  avatar_image_path TEXT,           -- Optional: encrypted image storage path
   is_archived BOOLEAN NOT NULL DEFAULT FALSE,
+  is_public BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
@@ -37,14 +37,16 @@ CREATE TABLE IF NOT EXISTS assistants (
 CREATE INDEX IF NOT EXISTS idx_assistants_user_id ON assistants(user_id);
 CREATE INDEX IF NOT EXISTS idx_assistants_created_at ON assistants(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_assistants_archived ON assistants(is_archived) WHERE is_archived = FALSE;
+CREATE INDEX IF NOT EXISTS idx_assistants_public ON assistants(is_public) WHERE is_public = TRUE;
 
 -- Enable Row Level Security
 ALTER TABLE assistants ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for assistants table
-CREATE POLICY "Users can view their own assistants"
+-- Users can see their own assistants AND any public assistants
+CREATE POLICY "Users can view own or public assistants"
   ON assistants FOR SELECT
-  USING (auth.uid() = user_id);
+  USING (auth.uid() = user_id OR is_public = true);
 
 CREATE POLICY "Users can create their own assistants"
   ON assistants FOR INSERT
@@ -64,8 +66,8 @@ CREATE POLICY "Users can delete their own assistants"
 -- ============================================================
 -- Links chats to specific assistants.
 -- A chat can optionally be associated with one assistant.
--- When memory_enabled is false for the assistant, history is
--- stored but not sent to the model.
+-- When memory_enabled is false for the assistant, the identity
+-- system (Soul/User/Memory) is not injected into the prompt.
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS assistant_chats (
@@ -92,21 +94,30 @@ CREATE POLICY "Users can view assistant chats for their own assistants"
     EXISTS (
       SELECT 1 FROM assistants
       WHERE assistants.id = assistant_chats.assistant_id
-      AND assistants.user_id = auth.uid()
+      AND (assistants.user_id = auth.uid() OR assistants.is_public = true)
     )
   );
 
 CREATE POLICY "Users can link chats to their own assistants"
   ON assistant_chats FOR INSERT
   WITH CHECK (
-    -- User must own the assistant
-    EXISTS (
-      SELECT 1 FROM assistants
-      WHERE assistants.id = assistant_chats.assistant_id
-      AND assistants.user_id = auth.uid()
+    (
+      -- User owns the assistant
+      EXISTS (
+        SELECT 1 FROM assistants
+        WHERE assistants.id = assistant_chats.assistant_id
+        AND assistants.user_id = auth.uid()
+      )
+      OR
+      -- Or the assistant is public
+      EXISTS (
+        SELECT 1 FROM assistants
+        WHERE assistants.id = assistant_chats.assistant_id
+        AND assistants.is_public = true
+      )
     )
     AND
-    -- User must also own the chat being linked
+    -- User must own the chat being linked
     EXISTS (
       SELECT 1 FROM encrypted_chats
       WHERE encrypted_chats.id = assistant_chats.chat_id
@@ -118,9 +129,9 @@ CREATE POLICY "Users can unlink chats from their own assistants"
   ON assistant_chats FOR DELETE
   USING (
     EXISTS (
-      SELECT 1 FROM assistants
-      WHERE assistants.id = assistant_chats.assistant_id
-      AND assistants.user_id = auth.uid()
+      SELECT 1 FROM encrypted_chats
+      WHERE encrypted_chats.id = assistant_chats.chat_id
+      AND encrypted_chats.user_id = auth.uid()
     )
   );
 
@@ -137,7 +148,6 @@ CREATE TRIGGER trigger_assistants_updated_at
 -- Helper Views (Optional - for analytics/debugging)
 -- ============================================================
 
--- View: Assistant statistics
 CREATE OR REPLACE VIEW assistant_stats AS
 SELECT
   a.id,
@@ -145,32 +155,17 @@ SELECT
   a.name,
   a.memory_enabled,
   a.is_archived,
+  a.is_public,
   COUNT(DISTINCT ac.chat_id) AS chat_count,
   a.created_at,
   a.updated_at
 FROM assistants a
 LEFT JOIN assistant_chats ac ON a.id = ac.assistant_id
-GROUP BY a.id, a.user_id, a.name, a.memory_enabled, a.is_archived, a.created_at, a.updated_at;
+GROUP BY a.id, a.user_id, a.name, a.memory_enabled, a.is_archived, a.is_public, a.created_at, a.updated_at;
 
 -- RLS for view
 ALTER VIEW assistant_stats SET (security_invoker = true);
 
 -- ============================================================
 -- Migration Complete
--- ============================================================
---
--- Tables created:
---   - assistants (with RLS)
---   - assistant_chats (with RLS)
---
--- Indexes created for optimal query performance
--- Triggers created for auto-updating timestamps
--- Views created for analytics
---
--- Next steps:
---   1. Verify tables in Supabase Dashboard → Database → Tables
---   2. Test RLS policies with sample data
---   3. Implement Flutter services (AssistantStorageService)
---   4. Implement UI pages (AssistantsListPage, AssistantEditorPage)
---
 -- ============================================================
