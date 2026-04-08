@@ -544,7 +544,7 @@ class _AssistantsPageState extends State<AssistantsPage> {
                   maxCrossAxisExtent: isMobile ? 400 : 420,
                   mainAxisSpacing: 12,
                   crossAxisSpacing: 12,
-                  childAspectRatio: isMobile ? 1.2 : 1.4,
+                  childAspectRatio: isMobile ? 1.6 : 2.0,
                 ),
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
