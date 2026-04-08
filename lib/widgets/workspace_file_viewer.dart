@@ -1,41 +1,41 @@
-// lib/widgets/project_file_viewer.dart
+// lib/widgets/workspace_file_viewer.dart
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:markdown_widget/markdown_widget.dart';
 import 'package:pdfx/pdfx.dart';
-import 'package:chuk_chat/models/project_model.dart';
-import 'package:chuk_chat/services/project_storage_service.dart';
+import 'package:chuk_chat/models/workspace_model.dart';
+import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 
-/// Dialog to view and edit project files and their markdown summaries
-class ProjectFileViewer extends StatefulWidget {
-  final ProjectFile file;
-  final String projectId;
+/// Dialog to view and edit workspace files and their markdown summaries
+class WorkspaceFileViewer extends StatefulWidget {
+  final WorkspaceFile file;
+  final String workspaceId;
 
-  const ProjectFileViewer({
+  const WorkspaceFileViewer({
     super.key,
     required this.file,
-    required this.projectId,
+    required this.workspaceId,
   });
 
   static Future<void> show(
     BuildContext context,
-    ProjectFile file,
-    String projectId,
+    WorkspaceFile file,
+    String workspaceId,
   ) {
     return showDialog(
       context: context,
-      builder: (context) => ProjectFileViewer(file: file, projectId: projectId),
+      builder: (context) => WorkspaceFileViewer(file: file, workspaceId: workspaceId),
     );
   }
 
   @override
-  State<ProjectFileViewer> createState() => _ProjectFileViewerState();
+  State<WorkspaceFileViewer> createState() => _WorkspaceFileViewerState();
 }
 
-class _ProjectFileViewerState extends State<ProjectFileViewer>
+class _WorkspaceFileViewerState extends State<WorkspaceFileViewer>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
@@ -85,8 +85,8 @@ class _ProjectFileViewerState extends State<ProjectFileViewer>
     });
 
     try {
-      final bytes = await ProjectStorageService.downloadFile(
-        widget.projectId,
+      final bytes = await WorkspaceStorageService.downloadFile(
+        widget.workspaceId,
         widget.file.id,
       );
 
@@ -132,8 +132,8 @@ class _ProjectFileViewerState extends State<ProjectFileViewer>
       final newContent = _contentController.text;
       final newBytes = Uint8List.fromList(utf8.encode(newContent));
 
-      await ProjectStorageService.updateFileContent(
-        widget.projectId,
+      await WorkspaceStorageService.updateFileContent(
+        widget.workspaceId,
         widget.file.id,
         newBytes,
       );
@@ -165,8 +165,8 @@ class _ProjectFileViewerState extends State<ProjectFileViewer>
     try {
       final newMarkdown = _markdownController.text.trim();
 
-      await ProjectStorageService.updateFileMarkdown(
-        widget.projectId,
+      await WorkspaceStorageService.updateFileMarkdown(
+        widget.workspaceId,
         widget.file.id,
         newMarkdown.isEmpty ? null : newMarkdown,
       );

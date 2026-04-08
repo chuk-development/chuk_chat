@@ -53,7 +53,7 @@ class _RouteMapWidgetState extends State<RouteMapWidget> {
   Future<void> _fetchRouteGeometry() async {
     try {
       final url =
-          'https://router.project-osrm.org/route/v1/driving/'
+          'https://router.workspace-osrm.org/route/v1/driving/'
           '${widget.fromLon},${widget.fromLat};${widget.toLon},${widget.toLat}'
           '?overview=full&geometries=geojson';
       final response = await http

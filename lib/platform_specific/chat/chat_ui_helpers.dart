@@ -16,7 +16,7 @@ import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/services/artifact_context_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/model_capabilities_service.dart';
-import 'package:chuk_chat/services/project_message_service.dart';
+import 'package:chuk_chat/services/workspace_message_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart' show DocumentAttachment;
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
@@ -157,10 +157,10 @@ class ChatUiHelpers {
     }
   }
 
-  /// Resolve system prompt with project + artifact context.
+  /// Resolve system prompt with workspace + artifact context.
   static Future<String?> resolveSystemPromptForSend({
     required String? cachedSystemPrompt,
-    required String? selectedProjectId,
+    required String? selectedWorkspaceId,
     required String? activeChatId,
   }) async {
     String? basePrompt;
@@ -175,12 +175,12 @@ class ChatUiHelpers {
 
     var resolvedPrompt = basePrompt;
 
-    // If a project is active, prepend project context.
-    if (selectedProjectId != null) {
+    // If a workspace is active, prepend workspace context.
+    if (selectedWorkspaceId != null) {
       try {
         final projectContext =
-            await ProjectMessageService.buildProjectSystemMessage(
-              selectedProjectId,
+            await WorkspaceMessageService.buildProjectSystemMessage(
+              selectedWorkspaceId,
             );
         if (resolvedPrompt != null && resolvedPrompt.isNotEmpty) {
           resolvedPrompt =
@@ -190,7 +190,7 @@ class ChatUiHelpers {
         }
       } catch (error) {
         if (kDebugMode) {
-          debugPrint('Error building project system message: $error');
+          debugPrint('Error building workspace system message: $error');
         }
       }
     }

@@ -24,7 +24,7 @@ class SupabaseConfig {
   static const String _envUrl = String.fromEnvironment('SUPABASE_URL');
   static const String _envAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 
-  static const String _placeholderUrl = 'https://your-project.supabase.co';
+  static const String _placeholderUrl = 'https://your-workspace.supabase.co';
   static const String _placeholderKey = 'your-anon-key-here';
 
   static bool _initialized = false;

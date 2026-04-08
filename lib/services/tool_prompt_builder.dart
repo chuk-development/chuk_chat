@@ -163,7 +163,7 @@ class ToolPromptBuilder {
           'calendar',
           'reminder',
           'weather',
-          // Project
+          // Workspace
           'update_project',
           'artifact_manager',
           // Finance
@@ -245,7 +245,7 @@ class ToolPromptBuilder {
       '"never do Y", "speak German") → update User or Memory.',
     );
     buffer.writeln(
-      '- User mentions a project, tool, framework, or ongoing topic '
+      '- User mentions a workspace, tool, framework, or ongoing topic '
       'worth remembering → update Memory.',
     );
     buffer.writeln(

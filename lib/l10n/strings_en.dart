@@ -262,7 +262,7 @@ const Map<String, String> stringsEn = {
   'memoryHint':
       'Long-term knowledge the AI remembers across conversations. The AI can also update this when it learns important facts or decisions.',
   'memoryExample':
-      'Example:\n\u2022 Prefers Dart/Flutter for mobile\n\u2022 License: BSL for all projects\n\u2022 Current project: chuk_chat\n\u2022 Dark mode enthusiast',
+      'Example:\n\u2022 Prefers Dart/Flutter for mobile\n\u2022 License: BSL for all projects\n\u2022 Current workspace: chuk_chat\n\u2022 Dark mode enthusiast',
   'importFromAnotherAi': 'Import from another AI',
   'systemPrompt': 'System Prompt',
   'systemPromptHint':

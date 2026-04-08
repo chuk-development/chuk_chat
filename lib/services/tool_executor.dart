@@ -27,7 +27,7 @@ import 'package:chuk_chat/tool_handlers/chat_search_tools.dart'
     as chat_search_tools;
 import 'package:chuk_chat/tool_handlers/nextcloud_tools.dart'
     as nextcloud_tools;
-import 'package:chuk_chat/services/project_storage_service.dart';
+import 'package:chuk_chat/services/workspace_storage_service.dart';
 
 class ToolExecutionResult {
   const ToolExecutionResult({required this.output, required this.isError});
@@ -743,7 +743,7 @@ class ToolExecutor {
       case 'nextcloud':
         return _wrapOutput(await nextcloud_tools.executeNextcloud(args));
 
-      // -- Project management --
+      // -- Workspace management --
       case 'artifact_manager':
         return _wrapOutput(await _executeArtifactManager(args));
       case 'update_project':
@@ -872,12 +872,12 @@ class ToolExecutor {
     }
   }
 
-  /// Update the active project's instructions, name, or description.
+  /// Update the active workspace's instructions, name, or description.
   Future<String> _executeUpdateProject(Map<String, dynamic> args) async {
-    final projectId = ProjectStorageService.selectedProjectId;
-    if (projectId == null) {
-      return 'Error: No project is currently active. '
-          'The user must select a project first.';
+    final workspaceId = WorkspaceStorageService.selectedWorkspaceId;
+    if (workspaceId == null) {
+      return 'Error: No workspace is currently active. '
+          'The user must select a workspace first.';
     }
 
     final instructions = (args['instructions'] as String?)?.trim();
@@ -892,8 +892,8 @@ class ToolExecutor {
     }
 
     try {
-      await ProjectStorageService.updateProject(
-        projectId,
+      await WorkspaceStorageService.updateProject(
+        workspaceId,
         name: (name != null && name.isNotEmpty) ? name : null,
         description: (description != null && description.isNotEmpty)
             ? description
@@ -913,10 +913,10 @@ class ToolExecutor {
       if (description != null && description.isNotEmpty) {
         parts.add('description updated');
       }
-      return 'Project updated successfully: ${parts.join(', ')}. '
+      return 'Workspace updated successfully: ${parts.join(', ')}. '
           'Changes take effect in the next message.';
     } catch (e) {
-      return 'Error: Failed to update project: $e';
+      return 'Error: Failed to update workspace: $e';
     }
   }
 

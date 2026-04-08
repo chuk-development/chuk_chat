@@ -1,37 +1,37 @@
-// lib/pages/project_management_page.dart
+// lib/pages/workspace_management_page.dart
 import 'dart:async';
 
 import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/constants/file_constants.dart';
-import 'package:chuk_chat/models/project_model.dart';
+import 'package:chuk_chat/models/workspace_model.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
-import 'package:chuk_chat/services/project_storage_service.dart';
-import 'package:chuk_chat/services/project_message_service.dart';
+import 'package:chuk_chat/services/workspace_storage_service.dart';
+import 'package:chuk_chat/services/workspace_message_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
-import 'package:chuk_chat/widgets/project_file_viewer.dart';
+import 'package:chuk_chat/widgets/workspace_file_viewer.dart';
 
-/// Mobile-friendly project management page
-/// Allows managing files, instructions, chats, and starting new chats with project context
-class ProjectManagementPage extends StatefulWidget {
-  final String projectId;
-  final Function(String? projectId)? onStartNewChat;
+/// Mobile-friendly workspace management page
+/// Allows managing files, instructions, chats, and starting new chats with workspace context
+class WorkspaceManagementPage extends StatefulWidget {
+  final String workspaceId;
+  final Function(String? workspaceId)? onStartNewChat;
 
-  const ProjectManagementPage({
+  const WorkspaceManagementPage({
     super.key,
-    required this.projectId,
+    required this.workspaceId,
     this.onStartNewChat,
   });
 
   @override
-  State<ProjectManagementPage> createState() => _ProjectManagementPageState();
+  State<WorkspaceManagementPage> createState() => _WorkspaceManagementPageState();
 }
 
-class _ProjectManagementPageState extends State<ProjectManagementPage>
+class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  Project? _project;
+  Workspace? _project;
   List<StoredChat> _projectChats = [];
   StreamSubscription<void>? _projectSub;
   bool _isLoading = true;
@@ -51,7 +51,7 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _loadProject();
-    _projectSub = ProjectStorageService.changes.listen((_) {
+    _projectSub = WorkspaceStorageService.changes.listen((_) {
       if (mounted) _loadProject();
     });
   }
@@ -66,18 +66,18 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
 
   Future<void> _loadProject() async {
     try {
-      final project = ProjectStorageService.getProject(widget.projectId);
-      if (project == null) {
-        throw StateError('Project not found');
+      final workspace = WorkspaceStorageService.getWorkspace(widget.workspaceId);
+      if (workspace == null) {
+        throw StateError('Workspace not found');
       }
-      final chats = await ProjectStorageService.getProjectChats(
-        widget.projectId,
+      final chats = await WorkspaceStorageService.getProjectChats(
+        widget.workspaceId,
       );
       if (mounted) {
         setState(() {
-          _project = project;
+          _project = workspace;
           _projectChats = chats;
-          _instructionsController.text = project.customSystemPrompt ?? '';
+          _instructionsController.text = workspace.customSystemPrompt ?? '';
           _isLoading = false;
         });
       }
@@ -86,7 +86,7 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Failed to load project: $e')));
+        ).showSnackBar(SnackBar(content: Text('Failed to load workspace: $e')));
         Navigator.pop(context);
       }
     }
@@ -95,8 +95,8 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
   Future<void> _saveInstructions() async {
     if (_project == null) return;
     try {
-      await ProjectStorageService.updateProject(
-        widget.projectId,
+      await WorkspaceStorageService.updateProject(
+        widget.workspaceId,
         customSystemPrompt: _instructionsController.text.trim(),
       );
       if (mounted) {
@@ -140,8 +140,8 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
 
       final fileBytes = await File(filePath).readAsBytes();
 
-      await ProjectStorageService.uploadFile(
-        widget.projectId,
+      await WorkspaceStorageService.uploadFile(
+        widget.workspaceId,
         fileName,
         fileBytes,
         fileType,
@@ -188,7 +188,7 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
     }
   }
 
-  Future<void> _deleteFile(ProjectFile file) async {
+  Future<void> _deleteFile(WorkspaceFile file) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -210,7 +210,7 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
 
     if (confirmed == true) {
       try {
-        await ProjectStorageService.deleteFile(widget.projectId, file.id);
+        await WorkspaceStorageService.deleteFile(widget.workspaceId, file.id);
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(
@@ -245,14 +245,14 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
 
     if (selected != null && mounted) {
       try {
-        await ProjectStorageService.addChatToProject(
-          widget.projectId,
+        await WorkspaceStorageService.addChatToProject(
+          widget.workspaceId,
           selected.id,
         );
         if (!mounted) return;
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Chat added to project')));
+        ).showSnackBar(const SnackBar(content: Text('Chat added to workspace')));
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(
@@ -264,13 +264,13 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
 
   Future<void> _removeChat(String chatId) async {
     try {
-      await ProjectStorageService.removeChatFromProject(
-        widget.projectId,
+      await WorkspaceStorageService.removeChatFromProject(
+        widget.workspaceId,
         chatId,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Chat removed from project')),
+        const SnackBar(content: Text('Chat removed from workspace')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -282,11 +282,11 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
 
   void _startNewChatWithProject() {
     if (widget.onStartNewChat != null) {
-      widget.onStartNewChat!(widget.projectId);
+      widget.onStartNewChat!(widget.workspaceId);
       Navigator.pop(context);
     } else {
-      // Return project ID for parent to handle
-      Navigator.pop(context, widget.projectId);
+      // Return workspace ID for parent to handle
+      Navigator.pop(context, widget.workspaceId);
     }
   }
 
@@ -304,14 +304,14 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
 
     if (_project == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Project Not Found')),
-        body: const Center(child: Text('Project not found')),
+        appBar: AppBar(title: const Text('Workspace Not Found')),
+        body: const Center(child: Text('Workspace not found')),
       );
     }
 
-    final projectColor = _project!.projectColor;
+    final displayColor = _project!.displayColor;
     final onProjectColor =
-        ThemeData.estimateBrightnessForColor(projectColor) == Brightness.dark
+        ThemeData.estimateBrightnessForColor(displayColor) == Brightness.dark
         ? Colors.white
         : Colors.black;
     final isDark = theme.brightness == Brightness.dark;
@@ -325,10 +325,10 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
               width: 30,
               height: 30,
               decoration: BoxDecoration(
-                color: projectColor.withValues(alpha: isDark ? 0.2 : 0.12),
+                color: displayColor.withValues(alpha: isDark ? 0.2 : 0.12),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(_project!.projectIcon, color: projectColor, size: 16),
+              child: Icon(_project!.displayIcon, color: displayColor, size: 16),
             ),
             const SizedBox(width: 10),
             Flexible(
@@ -344,13 +344,13 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
           IconButton(
             icon: Icon(Icons.edit, color: iconFg),
             onPressed: _showEditProjectDialog,
-            tooltip: 'Edit project',
+            tooltip: 'Edit workspace',
           ),
         ],
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: projectColor,
-          labelColor: projectColor,
+          indicatorColor: displayColor,
+          labelColor: displayColor,
           tabs: [
             Tab(
               child: Row(
@@ -364,7 +364,7 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
                       padding: const EdgeInsets.only(left: 6),
                       child: _CountBadge(
                         count: _project!.fileCount,
-                        color: projectColor,
+                        color: displayColor,
                       ),
                     ),
                 ],
@@ -382,7 +382,7 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
                       padding: const EdgeInsets.only(left: 6),
                       child: _CountBadge(
                         count: _project!.chatCount,
-                        color: projectColor,
+                        color: displayColor,
                       ),
                     ),
                 ],
@@ -409,9 +409,9 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
         onPressed: _startNewChatWithProject,
         icon: const Icon(Icons.add_comment),
         label: const Text('New Chat'),
-        backgroundColor: projectColor,
+        backgroundColor: displayColor,
         foregroundColor: onProjectColor,
-        tooltip: 'Start new chat with this project',
+        tooltip: 'Start new chat with this workspace',
       ),
     );
   }
@@ -419,7 +419,7 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
   Widget _buildFilesTab() {
     final theme = Theme.of(context);
     final iconFg = theme.resolvedIconColor;
-    final projectColor = _project!.projectColor;
+    final displayColor = _project!.displayColor;
     final isDark = theme.brightness == Brightness.dark;
 
     return Column(
@@ -438,7 +438,7 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
-                side: BorderSide(color: projectColor.withValues(alpha: 0.5)),
+                side: BorderSide(color: displayColor.withValues(alpha: 0.5)),
               ),
             ),
           ),
@@ -459,7 +459,7 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.insert_drive_file, color: projectColor),
+                        Icon(Icons.insert_drive_file, color: displayColor),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -486,12 +486,12 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
                           ? LinearProgressIndicator(
                               value: _uploadProgress,
                               valueColor: AlwaysStoppedAnimation<Color>(
-                                projectColor,
+                                displayColor,
                               ),
                             )
                           : LinearProgressIndicator(
                               valueColor: AlwaysStoppedAnimation<Color>(
-                                projectColor,
+                                displayColor,
                               ),
                             ),
                     ),
@@ -515,7 +515,7 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        'No files in this project',
+                        'No files in this workspace',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
@@ -539,7 +539,7 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
                   itemCount: _project!.files.length,
                   itemBuilder: (context, index) {
                     final file = _project!.files[index];
-                    return _buildFileCard(file, projectColor, isDark);
+                    return _buildFileCard(file, displayColor, isDark);
                   },
                 ),
         ),
@@ -573,7 +573,7 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
     );
   }
 
-  Widget _buildFileCard(ProjectFile file, Color projectColor, bool isDark) {
+  Widget _buildFileCard(WorkspaceFile file, Color displayColor, bool isDark) {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -583,10 +583,10 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
           width: 40,
           height: 40,
           decoration: BoxDecoration(
-            color: projectColor.withValues(alpha: isDark ? 0.15 : 0.1),
+            color: displayColor.withValues(alpha: isDark ? 0.15 : 0.1),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(file.fileIcon, color: projectColor, size: 20),
+          child: Icon(file.fileIcon, color: displayColor, size: 20),
         ),
         title: Text(
           file.fileName,
@@ -625,10 +625,10 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
                 final currentContext = context;
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (!mounted) return;
-                  ProjectFileViewer.show(
+                  WorkspaceFileViewer.show(
                     currentContext,
                     file,
-                    widget.projectId,
+                    widget.workspaceId,
                   );
                 });
               },
@@ -646,14 +646,14 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
             ),
           ],
         ),
-        onTap: () => ProjectFileViewer.show(context, file, widget.projectId),
+        onTap: () => WorkspaceFileViewer.show(context, file, widget.workspaceId),
       ),
     );
   }
 
   Widget _buildChatsTab() {
     final iconFg = Theme.of(context).resolvedIconColor;
-    final projectColor = _project!.projectColor;
+    final displayColor = _project!.displayColor;
 
     return Column(
       children: [
@@ -670,7 +670,7 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
-                side: BorderSide(color: projectColor.withValues(alpha: 0.5)),
+                side: BorderSide(color: displayColor.withValues(alpha: 0.5)),
               ),
             ),
           ),
@@ -688,7 +688,7 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        'No chats in this project',
+                        'No chats in this workspace',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
@@ -735,7 +735,7 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
                           icon: const Icon(Icons.remove_circle_outline),
                           color: Colors.red.withValues(alpha: 0.7),
                           onPressed: () => _removeChat(chat.id),
-                          tooltip: 'Remove from project',
+                          tooltip: 'Remove from workspace',
                         ),
                       ),
                     );
@@ -749,9 +749,9 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
   Widget _buildSettingsTab() {
     final theme = Theme.of(context);
     final iconFg = theme.resolvedIconColor;
-    final projectColor = _project!.projectColor;
+    final displayColor = _project!.displayColor;
     final onProjectColor =
-        ThemeData.estimateBrightnessForColor(projectColor) == Brightness.dark
+        ThemeData.estimateBrightnessForColor(displayColor) == Brightness.dark
         ? Colors.white
         : Colors.black;
     final isDark = theme.brightness == Brightness.dark;
@@ -761,7 +761,7 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Project summary card
+          // Workspace summary card
           Card(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
@@ -777,14 +777,14 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
-                          color: projectColor.withValues(
+                          color: displayColor.withValues(
                             alpha: isDark ? 0.2 : 0.12,
                           ),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(
-                          _project!.projectIcon,
-                          color: projectColor,
+                          _project!.displayIcon,
+                          color: displayColor,
                           size: 20,
                         ),
                       ),
@@ -794,14 +794,14 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Project Summary',
+                              'Workspace Summary',
                               style: theme.textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              ProjectMessageService.getProjectContextSummary(
+                              WorkspaceMessageService.getProjectContextSummary(
                                 _project!,
                               ),
                               style: TextStyle(
@@ -843,7 +843,7 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.tune, color: projectColor, size: 18),
+                          Icon(Icons.tune, color: displayColor, size: 18),
                           const SizedBox(width: 8),
                           Text(
                             'Custom Instructions',
@@ -897,7 +897,7 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
                         FilledButton(
                           onPressed: _saveInstructions,
                           style: FilledButton.styleFrom(
-                            backgroundColor: projectColor,
+                            backgroundColor: displayColor,
                             foregroundColor: onProjectColor,
                           ),
                           child: const Text('Save'),
@@ -959,7 +959,7 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
                     child: OutlinedButton.icon(
                       onPressed: _showDeleteProjectDialog,
                       icon: const Icon(Icons.delete_outline, size: 18),
-                      label: const Text('Delete Project'),
+                      label: const Text('Delete Workspace'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.red,
                         side: const BorderSide(color: Colors.red),
@@ -988,7 +988,7 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Edit Project'),
+        title: const Text('Edit Workspace'),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -996,7 +996,7 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
             TextField(
               controller: nameController,
               decoration: InputDecoration(
-                labelText: 'Project Name',
+                labelText: 'Workspace Name',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -1030,15 +1030,15 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
 
     if (result == true && mounted) {
       try {
-        await ProjectStorageService.updateProject(
-          widget.projectId,
+        await WorkspaceStorageService.updateProject(
+          widget.workspaceId,
           name: nameController.text.trim(),
           description: descController.text.trim(),
         );
         if (!mounted) return;
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Project updated')));
+        ).showSnackBar(const SnackBar(content: Text('Workspace updated')));
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(
@@ -1052,10 +1052,10 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Project'),
+        title: const Text('Delete Workspace'),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         content: const Text(
-          'Are you sure? This will remove the project workspace. '
+          'Are you sure? This will remove the workspace workspace. '
           'Chats and files will not be deleted.',
         ),
         actions: [
@@ -1074,7 +1074,7 @@ class _ProjectManagementPageState extends State<ProjectManagementPage>
 
     if (confirmed == true && mounted) {
       _projectSub?.cancel(); // Stop listener before delete to prevent race
-      await ProjectStorageService.deleteProject(widget.projectId);
+      await WorkspaceStorageService.deleteProject(widget.workspaceId);
       if (mounted) Navigator.pop(context);
     }
   }
@@ -1108,7 +1108,7 @@ class _CountBadge extends StatelessWidget {
   }
 }
 
-/// Bottom sheet for selecting a chat to add to project
+/// Bottom sheet for selecting a chat to add to workspace
 class _ChatSelectorSheet extends StatelessWidget {
   final List<StoredChat> chats;
 

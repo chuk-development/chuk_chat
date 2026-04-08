@@ -1,11 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:chuk_chat/models/project_model.dart';
+import 'package:chuk_chat/models/workspace_model.dart';
 
 void main() {
   final testDate = DateTime(2025, 6, 15, 10, 30);
-  final testFile = ProjectFile(
+  final testFile = WorkspaceFile(
     id: 'file-1',
-    projectId: 'proj-1',
+    workspaceId: 'proj-1',
     fileName: 'readme.md',
     storagePath: 'user/proj/readme.md',
     fileType: 'md',
@@ -14,16 +14,16 @@ void main() {
     markdownSummary: '# Summary',
   );
 
-  group('Project constructor', () {
+  group('Workspace constructor', () {
     test('required fields', () {
-      final project = Project(
+      final project = Workspace(
         id: 'proj-1',
-        name: 'My Project',
+        name: 'My Workspace',
         createdAt: testDate,
         updatedAt: testDate,
       );
       expect(project.id, equals('proj-1'));
-      expect(project.name, equals('My Project'));
+      expect(project.name, equals('My Workspace'));
       expect(project.description, isNull);
       expect(project.customSystemPrompt, isNull);
       expect(project.isArchived, isFalse);
@@ -32,9 +32,9 @@ void main() {
     });
 
     test('all fields', () {
-      final project = Project(
+      final project = Workspace(
         id: 'proj-2',
-        name: 'Full Project',
+        name: 'Full Workspace',
         description: 'A test project',
         customSystemPrompt: 'You are a code reviewer',
         createdAt: testDate,
@@ -51,9 +51,9 @@ void main() {
     });
   });
 
-  group('Project computed properties', () {
+  group('Workspace computed properties', () {
     test('chatCount', () {
-      final project = Project(
+      final project = Workspace(
         id: 'p',
         name: 'P',
         createdAt: testDate,
@@ -64,7 +64,7 @@ void main() {
     });
 
     test('fileCount', () {
-      final project = Project(
+      final project = Workspace(
         id: 'p',
         name: 'P',
         createdAt: testDate,
@@ -75,7 +75,7 @@ void main() {
     });
 
     test('hasCustomPrompt true', () {
-      final project = Project(
+      final project = Workspace(
         id: 'p',
         name: 'P',
         createdAt: testDate,
@@ -86,7 +86,7 @@ void main() {
     });
 
     test('hasCustomPrompt false when null', () {
-      final project = Project(
+      final project = Workspace(
         id: 'p',
         name: 'P',
         createdAt: testDate,
@@ -96,7 +96,7 @@ void main() {
     });
 
     test('hasCustomPrompt false when empty/whitespace', () {
-      final project = Project(
+      final project = Workspace(
         id: 'p',
         name: 'P',
         createdAt: testDate,
@@ -107,16 +107,16 @@ void main() {
     });
 
     test('totalFileSize', () {
-      final file2 = ProjectFile(
+      final file2 = WorkspaceFile(
         id: 'f2',
-        projectId: 'p',
+        workspaceId: 'p',
         fileName: 'data.csv',
         storagePath: 'path',
         fileType: 'csv',
         fileSize: 4096,
         uploadedAt: testDate,
       );
-      final project = Project(
+      final project = Workspace(
         id: 'p',
         name: 'P',
         createdAt: testDate,
@@ -127,7 +127,7 @@ void main() {
     });
 
     test('totalFileSize empty', () {
-      final project = Project(
+      final project = Workspace(
         id: 'p',
         name: 'P',
         createdAt: testDate,
@@ -137,7 +137,7 @@ void main() {
     });
 
     test('totalFileSizeFormatted', () {
-      final project = Project(
+      final project = Workspace(
         id: 'p',
         name: 'P',
         createdAt: testDate,
@@ -148,9 +148,9 @@ void main() {
     });
   });
 
-  group('Project fromJson', () {
+  group('Workspace fromJson', () {
     test('basic fields', () {
-      final project = Project.fromJson({
+      final project = Workspace.fromJson({
         'id': 'p1',
         'name': 'Test',
         'created_at': '2025-06-15T10:30:00.000',
@@ -162,7 +162,7 @@ void main() {
     });
 
     test('with nested files', () {
-      final project = Project.fromJson({
+      final project = Workspace.fromJson({
         'id': 'p1',
         'name': 'Test',
         'created_at': '2025-06-15T10:30:00.000',
@@ -184,7 +184,7 @@ void main() {
     });
 
     test('with chatIds', () {
-      final project = Project.fromJson({
+      final project = Workspace.fromJson({
         'id': 'p1',
         'name': 'Test',
         'created_at': '2025-06-15T10:30:00.000',
@@ -195,9 +195,9 @@ void main() {
     });
   });
 
-  group('Project toJson', () {
+  group('Workspace toJson', () {
     test('includes required fields', () {
-      final project = Project(
+      final project = Workspace(
         id: 'p1',
         name: 'Test',
         createdAt: testDate,
@@ -212,7 +212,7 @@ void main() {
     });
 
     test('omits null optional fields', () {
-      final project = Project(
+      final project = Workspace(
         id: 'p1',
         name: 'Test',
         createdAt: testDate,
@@ -224,7 +224,7 @@ void main() {
     });
 
     test('includes non-null optional fields', () {
-      final project = Project(
+      final project = Workspace(
         id: 'p1',
         name: 'Test',
         description: 'Desc',
@@ -238,9 +238,9 @@ void main() {
     });
   });
 
-  group('Project fromJson/toJson roundtrip', () {
+  group('Workspace fromJson/toJson roundtrip', () {
     test('preserves all data', () {
-      final original = Project(
+      final original = Workspace(
         id: 'roundtrip',
         name: 'Round Trip',
         description: 'Testing roundtrip',
@@ -251,7 +251,7 @@ void main() {
         chatIds: ['c1'],
         files: [testFile],
       );
-      final restored = Project.fromJson(original.toJson());
+      final restored = Workspace.fromJson(original.toJson());
       expect(restored.id, equals(original.id));
       expect(restored.name, equals(original.name));
       expect(restored.description, equals(original.description));
@@ -262,9 +262,9 @@ void main() {
     });
   });
 
-  group('Project copyWith', () {
+  group('Workspace copyWith', () {
     test('changes specific fields', () {
-      final original = Project(
+      final original = Workspace(
         id: 'p1',
         name: 'Original',
         createdAt: testDate,
@@ -278,10 +278,10 @@ void main() {
     });
   });
 
-  group('ProjectFile', () {
+  group('WorkspaceFile', () {
     test('constructor', () {
       expect(testFile.id, equals('file-1'));
-      expect(testFile.projectId, equals('proj-1'));
+      expect(testFile.workspaceId, equals('proj-1'));
       expect(testFile.fileName, equals('readme.md'));
       expect(testFile.storagePath, equals('user/proj/readme.md'));
       expect(testFile.fileType, equals('md'));
@@ -294,9 +294,9 @@ void main() {
     });
 
     test('hasMarkdownSummary false when null', () {
-      final file = ProjectFile(
+      final file = WorkspaceFile(
         id: 'f',
-        projectId: 'p',
+        workspaceId: 'p',
         fileName: 'test.txt',
         storagePath: 'path',
         fileType: 'txt',
@@ -307,9 +307,9 @@ void main() {
     });
 
     test('hasMarkdownSummary false when empty', () {
-      final file = ProjectFile(
+      final file = WorkspaceFile(
         id: 'f',
-        projectId: 'p',
+        workspaceId: 'p',
         fileName: 'test.txt',
         storagePath: 'path',
         fileType: 'txt',
@@ -325,9 +325,9 @@ void main() {
     });
 
     test('isPdf', () {
-      final pdf = ProjectFile(
+      final pdf = WorkspaceFile(
         id: 'f',
-        projectId: 'p',
+        workspaceId: 'p',
         fileName: 'doc.pdf',
         storagePath: 'path',
         fileType: 'pdf',
@@ -339,9 +339,9 @@ void main() {
     });
 
     test('fileSizeFormatted bytes', () {
-      final file = ProjectFile(
+      final file = WorkspaceFile(
         id: 'f',
-        projectId: 'p',
+        workspaceId: 'p',
         fileName: 'tiny.txt',
         storagePath: 'path',
         fileType: 'txt',
@@ -356,9 +356,9 @@ void main() {
     });
 
     test('fileSizeFormatted MB', () {
-      final file = ProjectFile(
+      final file = WorkspaceFile(
         id: 'f',
-        projectId: 'p',
+        workspaceId: 'p',
         fileName: 'big.zip',
         storagePath: 'path',
         fileType: 'zip',
@@ -369,12 +369,12 @@ void main() {
     });
   });
 
-  group('ProjectFile fromJson/toJson', () {
+  group('WorkspaceFile fromJson/toJson', () {
     test('roundtrip', () {
       final json = testFile.toJson();
-      final restored = ProjectFile.fromJson(json);
+      final restored = WorkspaceFile.fromJson(json);
       expect(restored.id, equals(testFile.id));
-      expect(restored.projectId, equals(testFile.projectId));
+      expect(restored.workspaceId, equals(testFile.workspaceId));
       expect(restored.fileName, equals(testFile.fileName));
       expect(restored.storagePath, equals(testFile.storagePath));
       expect(restored.fileType, equals(testFile.fileType));
@@ -383,9 +383,9 @@ void main() {
     });
 
     test('toJson omits null markdown_summary', () {
-      final file = ProjectFile(
+      final file = WorkspaceFile(
         id: 'f',
-        projectId: 'p',
+        workspaceId: 'p',
         fileName: 'test.txt',
         storagePath: 'path',
         fileType: 'txt',
@@ -397,21 +397,21 @@ void main() {
     });
   });
 
-  group('ProjectFile copyWith', () {
+  group('WorkspaceFile copyWith', () {
     test('changes specific fields', () {
       final copy = testFile.copyWith(fileName: 'updated.md', fileSize: 4096);
       expect(copy.fileName, equals('updated.md'));
       expect(copy.fileSize, equals(4096));
       expect(copy.id, equals(testFile.id));
-      expect(copy.projectId, equals(testFile.projectId));
+      expect(copy.workspaceId, equals(testFile.workspaceId));
     });
   });
 
-  group('ProjectFile estimatedTokens', () {
+  group('WorkspaceFile estimatedTokens', () {
     test('text file uses fileSize-based estimate', () {
-      final file = ProjectFile(
+      final file = WorkspaceFile(
         id: 'f',
-        projectId: 'p',
+        workspaceId: 'p',
         fileName: 'code.dart',
         storagePath: 'path',
         fileType: 'dart',
@@ -423,9 +423,9 @@ void main() {
     });
 
     test('file with markdown summary uses summary length', () {
-      final file = ProjectFile(
+      final file = WorkspaceFile(
         id: 'f',
-        projectId: 'p',
+        workspaceId: 'p',
         fileName: 'doc.pdf',
         storagePath: 'path',
         fileType: 'pdf',
@@ -438,9 +438,9 @@ void main() {
     });
 
     test('PDF without summary uses minimal estimate', () {
-      final file = ProjectFile(
+      final file = WorkspaceFile(
         id: 'f',
-        projectId: 'p',
+        workspaceId: 'p',
         fileName: 'doc.pdf',
         storagePath: 'path',
         fileType: 'pdf',
@@ -452,9 +452,9 @@ void main() {
     });
 
     test('image uses minimal estimate', () {
-      final file = ProjectFile(
+      final file = WorkspaceFile(
         id: 'f',
-        projectId: 'p',
+        workspaceId: 'p',
         fileName: 'photo.png',
         storagePath: 'path',
         fileType: 'png',
@@ -466,9 +466,9 @@ void main() {
     });
 
     test('estimatedTokensFormatted small', () {
-      final file = ProjectFile(
+      final file = WorkspaceFile(
         id: 'f',
-        projectId: 'p',
+        workspaceId: 'p',
         fileName: 'tiny.txt',
         storagePath: 'path',
         fileType: 'txt',
@@ -480,9 +480,9 @@ void main() {
     });
 
     test('estimatedTokensFormatted thousands', () {
-      final file = ProjectFile(
+      final file = WorkspaceFile(
         id: 'f',
-        projectId: 'p',
+        workspaceId: 'p',
         fileName: 'big.dart',
         storagePath: 'path',
         fileType: 'dart',

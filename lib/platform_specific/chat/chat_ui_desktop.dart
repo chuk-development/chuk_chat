@@ -27,10 +27,12 @@ import 'package:chuk_chat/services/streaming_manager.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/services/tool_image_result_service.dart';
 import 'package:chuk_chat/pages/pricing_page.dart';
-import 'package:chuk_chat/widgets/project_panel.dart';
+import 'package:chuk_chat/widgets/workspace_panel.dart';
 import 'package:chuk_chat/utils/shift_key_tracker.dart';
-import 'package:chuk_chat/widgets/project_selection_dropdown.dart';
-import 'package:chuk_chat/services/project_message_service.dart';
+import 'package:chuk_chat/widgets/workspace_selection_dropdown.dart';
+import 'package:chuk_chat/services/workspace_message_service.dart';
+import 'package:chuk_chat/services/workspace_storage_service.dart';
+import 'package:chuk_chat/models/workspace_model.dart';
 import 'package:chuk_chat/services/artifact_context_service.dart';
 import 'package:chuk_chat/services/title_generation_service.dart';
 import 'package:chuk_chat/services/round_content_block_service.dart';
@@ -46,8 +48,6 @@ import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/desktop_clipboard_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/desktop_file_handler.dart';
-import 'package:chuk_chat/services/assistant_storage_service.dart';
-import 'package:chuk_chat/models/assistant_model.dart';
 
 part 'desktop_send_logic.dart';
 
@@ -61,7 +61,7 @@ class ChukChatUIDesktop extends StatefulWidget {
   final bool showReasoningTokens;
   final bool showModelInfo;
   final bool showTps;
-  final String? projectId;
+  final String? workspaceId;
   final VoidCallback? onExitProject;
   // Image generation settings
   final bool imageGenEnabled;
@@ -92,7 +92,7 @@ class ChukChatUIDesktop extends StatefulWidget {
     required this.showReasoningTokens,
     required this.showModelInfo,
     required this.showTps,
-    this.projectId,
+    this.workspaceId,
     this.onExitProject,
     this.imageGenEnabled = false,
     this.imageGenDefaultSize = 'landscape_4_3',
@@ -131,7 +131,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   bool _reasoningEnabled =
       true; // true = default (reasoning on for reasoning models)
   String? _systemPrompt;
-  String? _selectedProjectId;
+  String? _selectedWorkspaceId;
   late final VoidCallback _modelSelectionListener;
 
   late final AudioRecordingHandler _audioHandler;
@@ -152,7 +152,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   /// When a new chat is started from an assistant, this holds the assistant ID
   /// until the chat is created and linked in the database.
-  String? _pendingAssistantId;
+  String? _pendingWorkspaceId;
   String _pendingReplyPreviewLabel = 'Reply to AI';
 
   bool _showScrollToBottom = false;
@@ -311,7 +311,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       onProcessFilePaths: _fileHandler.processFilePaths,
     );
     _scrollController.addListener(_onScrollChanged);
-    _selectedProjectId = widget.projectId;
+    _selectedWorkspaceId = widget.workspaceId;
     _loadChatById(widget.selectedChatId);
     unawaited(_clipboardHandler.cleanupOldPasteTempDirectories());
 
@@ -360,10 +360,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // RENAMED WIDGET TYPE
     super.didUpdateWidget(oldWidget);
 
-    // Sync project ID from parent if it changes
-    if (widget.projectId != oldWidget.projectId) {
+    // Sync workspace ID from parent if it changes
+    if (widget.workspaceId != oldWidget.workspaceId) {
       setState(() {
-        _selectedProjectId = widget.projectId;
+        _selectedWorkspaceId = widget.workspaceId;
       });
     }
 
@@ -477,7 +477,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   }
 
   void _loadChatById(String? chatId) {
-    _pendingAssistantId = null;
+    _pendingWorkspaceId = null;
     if (kDebugMode) {
       debugPrint('');
     }
@@ -763,8 +763,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _messages.map((m) => Map<String, String>.from(m)).toList();
 
   void newChat() {
-    _pendingAssistantId = null;
-    AssistantStorageService.selectedAssistantId = null;
+    _pendingWorkspaceId = null;
+    WorkspaceStorageService.selectedWorkspaceId = null;
 
     // Capture current chat data for background persistence
     final chatIdToSave = _activeChatId;
@@ -828,11 +828,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   /// Start a new chat with a specific assistant.
   /// The assistant's system prompt will replace the user's global prompt,
   /// and the chat will be linked to the assistant after the first message.
-  void newChatWithAssistant(String assistantId) {
+  void newChatWithWorkspace(String assistantId) {
     newChat();
 
-    _pendingAssistantId = assistantId;
-    AssistantStorageService.selectedAssistantId = assistantId;
+    _pendingWorkspaceId = assistantId;
+    WorkspaceStorageService.selectedWorkspaceId = assistantId;
 
     if (kDebugMode) {
       debugPrint('[NEW-CHAT] Starting chat with assistant: $assistantId');
@@ -937,13 +937,13 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   /// Resolve the assistant for the current chat, if any.
   /// Checks pending assistant first, then looks up by chat ID.
-  Assistant? _resolveAssistantForCurrentChat() {
-    if (_pendingAssistantId != null) {
-      return AssistantStorageService.getAssistant(_pendingAssistantId!);
+  Workspace? _resolveWorkspaceForCurrentChat() {
+    if (_pendingWorkspaceId != null) {
+      return WorkspaceStorageService.getWorkspace(_pendingWorkspaceId!);
     }
     final chatId = _activeChatId ?? ChatStorageService.selectedChatId;
     if (chatId != null) {
-      return AssistantStorageService.getAssistantForChat(chatId);
+      return WorkspaceStorageService.getWorkspaceForChat(chatId);
     }
     return null;
   }
@@ -951,16 +951,16 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   Future<String?> _resolveSystemPromptForSend() async {
     // Check if this chat belongs to an assistant.
     // If so, use the assistant's system prompt instead of the user's global one.
-    final assistant = _resolveAssistantForCurrentChat();
+    final assistant = _resolveWorkspaceForCurrentChat();
 
     String? basePrompt;
-    if (assistant != null) {
-      // Assistant's system prompt REPLACES the user's global prompt and Soul.
-      basePrompt = assistant.systemPrompt;
+    if (assistant != null && assistant.hasCustomPrompt) {
+      // Workspace's system prompt REPLACES the user's global prompt and Soul.
+      basePrompt = assistant.customSystemPrompt;
       if (kDebugMode) {
         debugPrint(
-          '[ASSISTANT] Using system prompt from "${assistant.name}" '
-          '(${basePrompt.length} chars)',
+          '[WORKSPACE] Using system prompt from "${assistant.name}" '
+          '(${basePrompt!.length} chars)',
         );
       }
     } else {
@@ -984,14 +984,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     var resolvedPrompt = basePrompt;
 
-    // If a project is active, prepend project context
-    if (_selectedProjectId != null) {
+    // If a workspace is active, prepend workspace context
+    if (_selectedWorkspaceId != null) {
       try {
         final projectContext =
-            await ProjectMessageService.buildProjectSystemMessage(
-              _selectedProjectId!,
+            await WorkspaceMessageService.buildProjectSystemMessage(
+              _selectedWorkspaceId!,
             );
-        // Combine project context with user's system prompt
+        // Combine workspace context with user's system prompt
         if (resolvedPrompt != null && resolvedPrompt.isNotEmpty) {
           resolvedPrompt =
               '$projectContext\n\n---\n\nAdditional User Instructions:\n$resolvedPrompt';
@@ -1000,9 +1000,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         }
       } catch (error) {
         if (kDebugMode) {
-          debugPrint('Error building project system message: $error');
+          debugPrint('Error building workspace system message: $error');
         }
-        // Fall back to base prompt if project context fails
+        // Fall back to base prompt if workspace context fails
       }
     }
 
@@ -1549,8 +1549,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         ? centeredInputWidth
         : expandedInputWidth;
 
-    // Check if we're in project mode
-    final bool isProjectMode = widget.projectId != null;
+    // Check if we're in workspace mode
+    final bool isProjectMode = widget.workspaceId != null;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -1874,10 +1874,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               ),
             ),
           ),
-          // Project panel (right side) - only shown in project mode
-          if (isProjectMode && widget.projectId != null)
-            ProjectPanel(
-              projectId: widget.projectId!,
+          // Workspace panel (right side) - only shown in workspace mode
+          if (isProjectMode && widget.workspaceId != null)
+            WorkspacePanel(
+              workspaceId: widget.workspaceId!,
               onClose: widget.onExitProject,
             ),
         ],
@@ -2122,23 +2122,23 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                   isActive: false,
                                   debugLabel: 'Add button',
                                 ),
-                                // Project Selection Dropdown (only when feature enabled)
-                                if (kFeatureProjects) ...[
+                                // Workspace Selection Dropdown (only when feature enabled)
+                                if (kFeatureWorkspaces) ...[
                                   const SizedBox(width: 8),
-                                  ProjectSelectionDropdown(
-                                    selectedProjectId: _selectedProjectId,
-                                    onProjectSelected: (projectId) {
+                                  WorkspaceSelectionDropdown(
+                                    selectedWorkspaceId: _selectedWorkspaceId,
+                                    onWorkspaceSelected: (workspaceId) {
                                       if (kDebugMode) {
                                         debugPrint(
-                                          '📁 onProjectSelected callback: $projectId (was: $_selectedProjectId)',
+                                          '📁 onWorkspaceSelected callback: $workspaceId (was: $_selectedWorkspaceId)',
                                         );
                                       }
                                       setState(() {
-                                        _selectedProjectId = projectId;
+                                        _selectedWorkspaceId = workspaceId;
                                       });
                                       if (kDebugMode) {
                                         debugPrint(
-                                          '📁 After setState: $_selectedProjectId',
+                                          '📁 After setState: $_selectedWorkspaceId',
                                         );
                                       }
                                     },
@@ -2154,12 +2154,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                       // Active assistant indicator
                                       Builder(
                                         builder: (context) {
-                                          final a = _resolveAssistantForCurrentChat();
+                                          final a = _resolveWorkspaceForCurrentChat();
                                           if (a == null) return const SizedBox.shrink();
                                           return Padding(
                                             padding: const EdgeInsets.only(right: 6),
                                             child: Tooltip(
-                                              message: 'Assistant: ${a.name}',
+                                              message: 'Workspace: ${a.name}',
                                               child: _buildIconBtn(
                                                 icon: a.displayIcon,
                                                 onTap: () {},

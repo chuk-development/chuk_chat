@@ -1,28 +1,28 @@
-// lib/widgets/project_panel.dart
+// lib/widgets/workspace_panel.dart
 import 'dart:async';
 
 import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/constants/file_constants.dart';
-import 'package:chuk_chat/models/project_model.dart';
-import 'package:chuk_chat/services/project_storage_service.dart';
+import 'package:chuk_chat/models/workspace_model.dart';
+import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
-import 'package:chuk_chat/widgets/project_file_viewer.dart';
+import 'package:chuk_chat/widgets/workspace_file_viewer.dart';
 
-/// Right-side panel for project settings (Instructions + Files)
-class ProjectPanel extends StatefulWidget {
-  final String projectId;
+/// Right-side panel for workspace settings (Instructions + Files)
+class WorkspacePanel extends StatefulWidget {
+  final String workspaceId;
   final VoidCallback? onClose;
 
-  const ProjectPanel({super.key, required this.projectId, this.onClose});
+  const WorkspacePanel({super.key, required this.workspaceId, this.onClose});
 
   @override
-  State<ProjectPanel> createState() => _ProjectPanelState();
+  State<WorkspacePanel> createState() => _WorkspacePanelState();
 }
 
-class _ProjectPanelState extends State<ProjectPanel> {
-  Project? _project;
+class _WorkspacePanelState extends State<WorkspacePanel> {
+  Workspace? _project;
   StreamSubscription<void>? _projectSub;
   bool _isInstructionsExpanded = false;
   bool _isFilesExpanded = true;
@@ -39,7 +39,7 @@ class _ProjectPanelState extends State<ProjectPanel> {
   void initState() {
     super.initState();
     _loadProject();
-    _projectSub = ProjectStorageService.changes.listen((_) {
+    _projectSub = WorkspaceStorageService.changes.listen((_) {
       if (mounted) _loadProject();
     });
   }
@@ -52,11 +52,11 @@ class _ProjectPanelState extends State<ProjectPanel> {
   }
 
   void _loadProject() {
-    final project = ProjectStorageService.getProject(widget.projectId);
+    final workspace = WorkspaceStorageService.getWorkspace(widget.workspaceId);
     if (mounted) {
       setState(() {
-        _project = project;
-        _instructionsController.text = project?.customSystemPrompt ?? '';
+        _project = workspace;
+        _instructionsController.text = workspace?.customSystemPrompt ?? '';
       });
     }
   }
@@ -65,8 +65,8 @@ class _ProjectPanelState extends State<ProjectPanel> {
     if (_project == null) return;
 
     try {
-      await ProjectStorageService.updateProject(
-        widget.projectId,
+      await WorkspaceStorageService.updateProject(
+        widget.workspaceId,
         customSystemPrompt: _instructionsController.text.trim(),
       );
       if (mounted) {
@@ -109,8 +109,8 @@ class _ProjectPanelState extends State<ProjectPanel> {
       final fileBytes = await File(filePath).readAsBytes();
 
       // Upload with progress callback
-      await ProjectStorageService.uploadFile(
-        widget.projectId,
+      await WorkspaceStorageService.uploadFile(
+        widget.workspaceId,
         fileName,
         fileBytes,
         fileType,
@@ -162,7 +162,7 @@ class _ProjectPanelState extends State<ProjectPanel> {
     }
   }
 
-  Future<void> _deleteFile(ProjectFile file) async {
+  Future<void> _deleteFile(WorkspaceFile file) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -184,7 +184,7 @@ class _ProjectPanelState extends State<ProjectPanel> {
 
     if (confirmed == true) {
       try {
-        await ProjectStorageService.deleteFile(widget.projectId, file.id);
+        await WorkspaceStorageService.deleteFile(widget.workspaceId, file.id);
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(
@@ -213,7 +213,7 @@ class _ProjectPanelState extends State<ProjectPanel> {
       );
     }
 
-    final projectColor = _project!.projectColor;
+    final displayColor = _project!.displayColor;
 
     return Container(
       width: 300,
@@ -224,25 +224,25 @@ class _ProjectPanelState extends State<ProjectPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header with project color accent
+          // Header with workspace color accent
           Container(
             decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: projectColor, width: 3)),
+              border: Border(top: BorderSide(color: displayColor, width: 3)),
             ),
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                // Project avatar
+                // Workspace avatar
                 Container(
                   width: 32,
                   height: 32,
                   decoration: BoxDecoration(
-                    color: projectColor.withValues(alpha: isDark ? 0.2 : 0.12),
+                    color: displayColor.withValues(alpha: isDark ? 0.2 : 0.12),
                     borderRadius: BorderRadius.circular(9),
                   ),
                   child: Icon(
-                    _project!.projectIcon,
-                    color: projectColor,
+                    _project!.displayIcon,
+                    color: displayColor,
                     size: 18,
                   ),
                 ),
@@ -263,7 +263,7 @@ class _ProjectPanelState extends State<ProjectPanel> {
                   IconButton(
                     icon: Icon(Icons.close, color: iconFg, size: 20),
                     onPressed: widget.onClose,
-                    tooltip: 'Close project panel',
+                    tooltip: 'Close workspace panel',
                   ),
               ],
             ),
@@ -292,7 +292,7 @@ class _ProjectPanelState extends State<ProjectPanel> {
                     }),
                     hasContent: _project!.hasCustomPrompt,
                     child: _buildInstructionsContent(),
-                    accentColor: projectColor,
+                    accentColor: displayColor,
                   ),
 
                   const SizedBox(height: 16),
@@ -300,14 +300,14 @@ class _ProjectPanelState extends State<ProjectPanel> {
                   // Files Section
                   _buildSection(
                     title: 'Files',
-                    subtitle: 'Add documents to reference in this project',
+                    subtitle: 'Add documents to reference in this workspace',
                     isExpanded: _isFilesExpanded,
                     onToggle: () =>
                         setState(() => _isFilesExpanded = !_isFilesExpanded),
                     onAdd: _isUploadingFile ? null : _pickAndUploadFile,
                     hasContent: _project!.files.isNotEmpty,
                     child: _buildFilesContent(),
-                    accentColor: projectColor,
+                    accentColor: displayColor,
                     badge: _project!.fileCount > 0
                         ? '${_project!.fileCount}'
                         : null,
@@ -488,10 +488,10 @@ class _ProjectPanelState extends State<ProjectPanel> {
               FilledButton(
                 onPressed: _saveInstructions,
                 style: FilledButton.styleFrom(
-                  backgroundColor: _project!.projectColor,
+                  backgroundColor: _project!.displayColor,
                   foregroundColor:
                       ThemeData.estimateBrightnessForColor(
-                            _project!.projectColor,
+                            _project!.displayColor,
                           ) ==
                           Brightness.dark
                       ? Colors.white
@@ -532,7 +532,7 @@ class _ProjectPanelState extends State<ProjectPanel> {
 
   Widget _buildFilesContent() {
     final iconFg = Theme.of(context).resolvedIconColor;
-    final accentColor = _project!.projectColor;
+    final accentColor = _project!.displayColor;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     if (_isUploadingFile) {
@@ -627,7 +627,7 @@ class _ProjectPanelState extends State<ProjectPanel> {
             Icon(Icons.upload_file, size: 40, color: iconFg.withAlpha(100)),
             const SizedBox(height: 8),
             Text(
-              'Add PDFs, documents, or other text\nto reference in this project.',
+              'Add PDFs, documents, or other text\nto reference in this workspace.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 12, color: iconFg.withAlpha(150)),
             ),
@@ -665,13 +665,13 @@ class _ProjectPanelState extends State<ProjectPanel> {
     );
   }
 
-  void _openFileViewer(ProjectFile file) {
-    ProjectFileViewer.show(context, file, widget.projectId);
+  void _openFileViewer(WorkspaceFile file) {
+    WorkspaceFileViewer.show(context, file, widget.workspaceId);
   }
 
-  Widget _buildFileItem(ProjectFile file, bool isDark) {
+  Widget _buildFileItem(WorkspaceFile file, bool isDark) {
     final iconFg = Theme.of(context).resolvedIconColor;
-    final accentColor = _project!.projectColor;
+    final accentColor = _project!.displayColor;
 
     return InkWell(
       onTap: () => _openFileViewer(file),
