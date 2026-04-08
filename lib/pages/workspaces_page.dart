@@ -1,29 +1,29 @@
-// lib/pages/projects_page.dart
+// lib/pages/workspaces_page.dart
 import 'dart:async';
 
-import 'package:chuk_chat/models/project_model.dart';
-import 'package:chuk_chat/pages/project_detail_page.dart';
-import 'package:chuk_chat/services/project_storage_service.dart';
+import 'package:chuk_chat/models/workspace_model.dart';
+import 'package:chuk_chat/pages/workspace_detail_page.dart';
+import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:flutter/material.dart';
 
-/// Sort options for project list
+/// Sort options for workspace list
 enum ProjectSortMode { recentlyUpdated, name, mostFiles, mostChats }
 
-class ProjectsPage extends StatefulWidget {
-  final void Function(String projectId)? onOpenProject;
+class WorkspacesPage extends StatefulWidget {
+  final void Function(String workspaceId)? onOpenWorkspace;
   final bool embedded;
 
-  const ProjectsPage({super.key, this.onOpenProject, this.embedded = false});
+  const WorkspacesPage({super.key, this.onOpenWorkspace, this.embedded = false});
 
   @override
-  State<ProjectsPage> createState() => _ProjectsPageState();
+  State<WorkspacesPage> createState() => _WorkspacesPageState();
 }
 
-class _ProjectsPageState extends State<ProjectsPage> {
+class _WorkspacesPageState extends State<WorkspacesPage> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  List<Project> _filteredProjects = [];
+  List<Workspace> _filteredProjects = [];
   StreamSubscription<void>? _projectUpdatesSub;
   bool _isLoading = true;
   ProjectSortMode _sortMode = ProjectSortMode.recentlyUpdated;
@@ -33,7 +33,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
     super.initState();
     _loadProjects();
     _searchController.addListener(_onSearchChanged);
-    _projectUpdatesSub = ProjectStorageService.changes.listen((_) {
+    _projectUpdatesSub = WorkspaceStorageService.changes.listen((_) {
       if (!mounted) return;
       _filterProjects();
     });
@@ -57,7 +57,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
   Future<void> _loadProjects() async {
     setState(() => _isLoading = true);
     try {
-      await ProjectStorageService.loadProjects();
+      await WorkspaceStorageService.loadProjects();
       _filterProjects();
     } catch (e) {
       if (mounted) {
@@ -73,7 +73,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
   void _filterProjects() {
     if (!mounted) return;
     setState(() {
-      var projects = List<Project>.from(ProjectStorageService.activeProjects);
+      var projects = List<Workspace>.from(WorkspaceStorageService.activeProjects);
       if (_searchQuery.isNotEmpty) {
         final query = _searchQuery.toLowerCase();
         projects = projects.where((p) {
@@ -106,7 +106,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
 
     if (result != null && mounted) {
       try {
-        final project = await ProjectStorageService.createProject(
+        final workspace = await WorkspaceStorageService.createProject(
           result['name']!,
           description: result['description'],
           customSystemPrompt: result['systemPrompt'],
@@ -114,26 +114,26 @@ class _ProjectsPageState extends State<ProjectsPage> {
         if (mounted) {
           ScaffoldMessenger.of(
             context,
-          ).showSnackBar(SnackBar(content: Text('Created "${project.name}"')));
+          ).showSnackBar(SnackBar(content: Text('Created "${workspace.name}"')));
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to create project: $e')),
+            SnackBar(content: Text('Failed to create workspace: $e')),
           );
         }
       }
     }
   }
 
-  Future<void> _deleteProject(Project project) async {
+  Future<void> _deleteProject(Workspace workspace) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Project'),
+        title: const Text('Delete Workspace'),
         content: Text(
-          'Are you sure you want to delete "${project.name}"?\n\n'
-          'This will remove the project workspace. '
+          'Are you sure you want to delete "${workspace.name}"?\n\n'
+          'This will remove the workspace workspace. '
           'Chats and uploaded files will not be deleted.',
         ),
         actions: [
@@ -152,38 +152,38 @@ class _ProjectsPageState extends State<ProjectsPage> {
 
     if (confirmed == true && mounted) {
       try {
-        await ProjectStorageService.deleteProject(project.id);
+        await WorkspaceStorageService.deleteProject(workspace.id);
         if (mounted) {
           ScaffoldMessenger.of(
             context,
-          ).showSnackBar(const SnackBar(content: Text('Project deleted')));
+          ).showSnackBar(const SnackBar(content: Text('Workspace deleted')));
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to delete project: $e')),
+            SnackBar(content: Text('Failed to delete workspace: $e')),
           );
         }
       }
     }
   }
 
-  Future<void> _archiveProject(Project project) async {
+  Future<void> _archiveProject(Workspace workspace) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      await ProjectStorageService.archiveProject(project.id, true);
+      await WorkspaceStorageService.archiveProject(workspace.id, true);
       if (mounted) {
         messenger.showSnackBar(
           SnackBar(
-            content: Text('Archived "${project.name}"'),
+            content: Text('Archived "${workspace.name}"'),
             action: SnackBarAction(
               label: 'Undo',
               onPressed: () async {
                 try {
-                  await ProjectStorageService.archiveProject(project.id, false);
+                  await WorkspaceStorageService.archiveProject(workspace.id, false);
                 } catch (e) {
                   messenger.showSnackBar(
-                    SnackBar(content: Text('Failed to restore project: $e')),
+                    SnackBar(content: Text('Failed to restore workspace: $e')),
                   );
                 }
               },
@@ -268,7 +268,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
                   icon: const Icon(Icons.add, size: 18),
                   label: isMobile || widget.embedded
                       ? const SizedBox.shrink()
-                      : const Text('New Project'),
+                      : const Text('New Workspace'),
                   style: FilledButton.styleFrom(
                     padding: isMobile || widget.embedded
                         ? const EdgeInsets.symmetric(horizontal: 12)
@@ -290,7 +290,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
             child: Row(
               children: [
                 Text(
-                  '${_filteredProjects.length} project${_filteredProjects.length == 1 ? '' : 's'}',
+                  '${_filteredProjects.length} workspace${_filteredProjects.length == 1 ? '' : 's'}',
                   style: TextStyle(
                     fontSize: 12,
                     color: iconFg.withValues(alpha: 0.5),
@@ -310,7 +310,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
 
         const SizedBox(height: 8),
 
-        // Project list/grid
+        // Workspace list/grid
         Expanded(
           child: _isLoading
               ? const Center(child: CircularProgressIndicator())
@@ -342,8 +342,8 @@ class _ProjectsPageState extends State<ProjectsPage> {
   }
 
   Widget _buildEmptyState(Color iconFg) {
-    Color projectColorOrFallback(int index, double alpha) {
-      final colors = Project.kProjectColors;
+    Color displayColorOrFallback(int index, double alpha) {
+      final colors = Workspace.kWorkspaceColors;
       if (colors.isEmpty) {
         return iconFg.withValues(alpha: alpha);
       }
@@ -370,7 +370,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
                       child: Icon(
                         Icons.folder_rounded,
                         size: 48,
-                        color: projectColorOrFallback(0, 0.2),
+                        color: displayColorOrFallback(0, 0.2),
                       ),
                     ),
                     Positioned(
@@ -379,13 +379,13 @@ class _ProjectsPageState extends State<ProjectsPage> {
                       child: Icon(
                         Icons.folder_rounded,
                         size: 48,
-                        color: projectColorOrFallback(3, 0.2),
+                        color: displayColorOrFallback(3, 0.2),
                       ),
                     ),
                     Icon(
                       Icons.folder_rounded,
                       size: 56,
-                      color: projectColorOrFallback(9, 0.3),
+                      color: displayColorOrFallback(9, 0.3),
                     ),
                   ],
                 ),
@@ -402,7 +402,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
               const SizedBox(height: 8),
               Text(
                 _searchQuery.isEmpty
-                    ? 'Organize your chats, files, and system prompts\ninto focused project workspaces.'
+                    ? 'Organize your chats, files, and system prompts\ninto focused workspace workspaces.'
                     : 'Try a different search term.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
@@ -416,7 +416,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
                 FilledButton.icon(
                   onPressed: _createProject,
                   icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Create your first project'),
+                  label: const Text('Create your first workspace'),
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 24,
@@ -447,7 +447,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
       itemCount: _filteredProjects.length,
       itemBuilder: (context, index) {
         return _ProjectCard(
-          project: _filteredProjects[index],
+          workspace: _filteredProjects[index],
           onTap: () => _openProjectDetail(_filteredProjects[index]),
           onDelete: () => _deleteProject(_filteredProjects[index]),
           onArchive: () => _archiveProject(_filteredProjects[index]),
@@ -463,7 +463,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
       separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
         return _ProjectCard(
-          project: _filteredProjects[index],
+          workspace: _filteredProjects[index],
           onTap: () => _openProjectDetail(_filteredProjects[index]),
           onDelete: () => _deleteProject(_filteredProjects[index]),
           onArchive: () => _archiveProject(_filteredProjects[index]),
@@ -472,14 +472,14 @@ class _ProjectsPageState extends State<ProjectsPage> {
     );
   }
 
-  void _openProjectDetail(Project project) {
-    if (widget.onOpenProject != null) {
-      widget.onOpenProject!(project.id);
+  void _openProjectDetail(Workspace workspace) {
+    if (widget.onOpenWorkspace != null) {
+      widget.onOpenWorkspace!(workspace.id);
     } else {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => ProjectDetailPage(projectId: project.id),
+          builder: (context) => WorkspaceDetailPage(workspaceId: workspace.id),
         ),
       );
     }
@@ -556,16 +556,16 @@ class _SortButton extends StatelessWidget {
   }
 }
 
-// ---------- Project Card ----------
+// ---------- Workspace Card ----------
 
 class _ProjectCard extends StatelessWidget {
-  final Project project;
+  final Workspace workspace;
   final VoidCallback onTap;
   final VoidCallback onDelete;
   final VoidCallback onArchive;
 
   const _ProjectCard({
-    required this.project,
+    required this.workspace,
     required this.onTap,
     required this.onDelete,
     required this.onArchive,
@@ -574,7 +574,7 @@ class _ProjectCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final iconFg = Theme.of(context).resolvedIconColor;
-    final projectColor = project.projectColor;
+    final displayColor = workspace.displayColor;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Card(
@@ -595,7 +595,7 @@ class _ProjectCard extends StatelessWidget {
               height: 6,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [projectColor, projectColor.withValues(alpha: 0.6)],
+                  colors: [displayColor, displayColor.withValues(alpha: 0.6)],
                 ),
               ),
             ),
@@ -610,19 +610,19 @@ class _ProjectCard extends StatelessWidget {
                     // Title row with avatar and menu
                     Row(
                       children: [
-                        // Project avatar
+                        // Workspace avatar
                         Container(
                           width: 36,
                           height: 36,
                           decoration: BoxDecoration(
-                            color: projectColor.withValues(
+                            color: displayColor.withValues(
                               alpha: isDark ? 0.2 : 0.12,
                             ),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Icon(
-                            project.projectIcon,
-                            color: projectColor,
+                            workspace.displayIcon,
+                            color: displayColor,
                             size: 20,
                           ),
                         ),
@@ -632,7 +632,7 @@ class _ProjectCard extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                project.name,
+                                workspace.name,
                                 style: const TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w600,
@@ -643,7 +643,7 @@ class _ProjectCard extends StatelessWidget {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                project.updatedAgo,
+                                workspace.updatedAgo,
                                 style: TextStyle(
                                   fontSize: 11,
                                   color: iconFg.withValues(alpha: 0.45),
@@ -707,11 +707,11 @@ class _ProjectCard extends StatelessWidget {
                     const SizedBox(height: 8),
 
                     // Description
-                    if (project.description != null &&
-                        project.description!.isNotEmpty)
+                    if (workspace.description != null &&
+                        workspace.description!.isNotEmpty)
                       Expanded(
                         child: Text(
-                          project.description!,
+                          workspace.description!,
                           style: TextStyle(
                             fontSize: 13,
                             color: iconFg.withValues(alpha: 0.6),
@@ -729,32 +729,32 @@ class _ProjectCard extends StatelessWidget {
                       children: [
                         _StatChip(
                           icon: Icons.chat_bubble_outline,
-                          label: '${project.chatCount}',
+                          label: '${workspace.chatCount}',
                           color: iconFg,
                         ),
                         const SizedBox(width: 12),
                         _StatChip(
                           icon: Icons.description_outlined,
-                          label: '${project.fileCount}',
+                          label: '${workspace.fileCount}',
                           color: iconFg,
                         ),
-                        if (project.totalFileSize > 0) ...[
+                        if (workspace.totalFileSize > 0) ...[
                           const SizedBox(width: 12),
                           _StatChip(
                             icon: Icons.storage_outlined,
-                            label: project.totalFileSizeFormatted,
+                            label: workspace.totalFileSizeFormatted,
                             color: iconFg,
                           ),
                         ],
                         const Spacer(),
-                        if (project.hasCustomPrompt)
+                        if (workspace.hasCustomPrompt)
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 6,
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: projectColor.withValues(
+                              color: displayColor.withValues(
                                 alpha: isDark ? 0.15 : 0.1,
                               ),
                               borderRadius: BorderRadius.circular(6),
@@ -762,13 +762,13 @@ class _ProjectCard extends StatelessWidget {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.tune, size: 12, color: projectColor),
+                                Icon(Icons.tune, size: 12, color: displayColor),
                                 const SizedBox(width: 3),
                                 Text(
                                   'Custom',
                                   style: TextStyle(
                                     fontSize: 10,
-                                    color: projectColor,
+                                    color: displayColor,
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),
@@ -815,7 +815,7 @@ class _StatChip extends StatelessWidget {
   }
 }
 
-// ---------- Create Project Dialog ----------
+// ---------- Create Workspace Dialog ----------
 
 class _CreateProjectDialog extends StatefulWidget {
   const _CreateProjectDialog();
@@ -862,8 +862,8 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
 
     // Preview color/icon based on current name
     final previewName = _nameController.text.trim();
-    final colors = Project.kProjectColors;
-    final icons = Project.kProjectIcons;
+    final colors = Workspace.kWorkspaceColors;
+    final icons = Workspace.kWorkspaceIcons;
     final previewColor = colors.isEmpty
         ? Theme.of(context).colorScheme.primary
         : colors[previewName.isEmpty
@@ -897,7 +897,7 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
                   ),
                   child: Column(
                     children: [
-                      // Project icon preview
+                      // Workspace icon preview
                       AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
                         width: 56,
@@ -912,7 +912,7 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'New Project',
+                        'New Workspace',
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w600,
@@ -941,7 +941,7 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
                       TextFormField(
                         controller: _nameController,
                         decoration: InputDecoration(
-                          labelText: 'Project Name',
+                          labelText: 'Workspace Name',
                           hintText: 'e.g., AI Research, Website Redesign',
                           prefixIcon: const Icon(Icons.folder_outlined),
                           border: OutlineInputBorder(
@@ -952,7 +952,7 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
                         textInputAction: TextInputAction.next,
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
-                            return 'Project name is required';
+                            return 'Workspace name is required';
                           }
                           return null;
                         },
@@ -965,7 +965,7 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
                         controller: _descriptionController,
                         decoration: InputDecoration(
                           labelText: 'Description (optional)',
-                          hintText: 'What is this project about?',
+                          hintText: 'What is this workspace about?',
                           prefixIcon: const Icon(Icons.notes_outlined),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -1030,7 +1030,7 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
                             decoration: InputDecoration(
                               labelText: 'Custom System Prompt',
                               hintText:
-                                  'Special instructions for AI in this project...',
+                                  'Special instructions for AI in this workspace...',
                               alignLabelWithHint: true,
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
@@ -1071,7 +1071,7 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        child: const Text('Create Project'),
+                        child: const Text('Create Workspace'),
                       ),
                     ],
                   ),

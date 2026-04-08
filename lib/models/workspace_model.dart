@@ -1,9 +1,10 @@
-// lib/models/project_model.dart
+// lib/models/workspace_model.dart
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/constants/file_constants.dart';
 
-/// Represents a project workspace that groups chats, files, and custom system prompts
-class Project {
+/// Represents a workspace that combines AI persona, system prompts, files,
+/// and chat organization. Unifies the former "Projects" and "Assistants" features.
+class Workspace {
   final String id;
   final String name;
   final String? description;
@@ -12,11 +13,21 @@ class Project {
   final DateTime updatedAt;
   final bool isArchived;
 
+  // Workspace persona fields
+  final bool memoryEnabled;
+  final String? modelId;
+  final String? avatarColor;
+  final String? avatarIcon;
+  final String? avatarImagePath;
+  final bool isPublic;
+  final String? userId;
+  final String? ownerDisplayName;
+
   // Relationships (loaded separately via joins)
   final List<String> chatIds;
-  final List<ProjectFile> files;
+  final List<WorkspaceFile> files;
 
-  Project({
+  Workspace({
     required this.id,
     required this.name,
     this.description,
@@ -24,12 +35,20 @@ class Project {
     required this.createdAt,
     required this.updatedAt,
     this.isArchived = false,
+    this.memoryEnabled = true,
+    this.modelId,
+    this.avatarColor,
+    this.avatarIcon,
+    this.avatarImagePath,
+    this.isPublic = false,
+    this.userId,
+    this.ownerDisplayName,
     this.chatIds = const [],
     this.files = const [],
   });
 
-  factory Project.fromJson(Map<String, dynamic> json) {
-    return Project(
+  factory Workspace.fromJson(Map<String, dynamic> json) {
+    return Workspace(
       id: json['id'] as String,
       name: json['name'] as String,
       description: json['description'] as String?,
@@ -37,12 +56,20 @@ class Project {
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
       isArchived: (json['is_archived'] as bool?) ?? false,
+      memoryEnabled: (json['memory_enabled'] as bool?) ?? true,
+      modelId: json['model_id'] as String?,
+      avatarColor: json['avatar_color'] as String?,
+      avatarIcon: json['avatar_icon'] as String?,
+      avatarImagePath: json['avatar_image_path'] as String?,
+      isPublic: (json['is_public'] as bool?) ?? false,
+      userId: json['user_id'] as String?,
+      ownerDisplayName: json['owner_display_name'] as String?,
       chatIds: json['chatIds'] != null
           ? List<String>.from(json['chatIds'] as List)
           : const [],
       files: json['files'] != null
           ? (json['files'] as List)
-                .map((f) => ProjectFile.fromJson(f as Map<String, dynamic>))
+                .map((f) => WorkspaceFile.fromJson(f as Map<String, dynamic>))
                 .toList()
           : const [],
     );
@@ -56,11 +83,19 @@ class Project {
     'created_at': createdAt.toIso8601String(),
     'updated_at': updatedAt.toIso8601String(),
     'is_archived': isArchived,
+    'memory_enabled': memoryEnabled,
+    if (modelId != null) 'model_id': modelId,
+    if (avatarColor != null) 'avatar_color': avatarColor,
+    if (avatarIcon != null) 'avatar_icon': avatarIcon,
+    if (avatarImagePath != null) 'avatar_image_path': avatarImagePath,
+    'is_public': isPublic,
+    if (userId != null) 'user_id': userId,
+    if (ownerDisplayName != null) 'owner_display_name': ownerDisplayName,
     'chatIds': chatIds,
     'files': files.map((f) => f.toJson()).toList(),
   };
 
-  Project copyWith({
+  Workspace copyWith({
     String? id,
     String? name,
     String? description,
@@ -68,10 +103,18 @@ class Project {
     DateTime? createdAt,
     DateTime? updatedAt,
     bool? isArchived,
+    bool? memoryEnabled,
+    String? modelId,
+    String? avatarColor,
+    String? avatarIcon,
+    String? avatarImagePath,
+    bool? isPublic,
+    String? userId,
+    String? ownerDisplayName,
     List<String>? chatIds,
-    List<ProjectFile>? files,
+    List<WorkspaceFile>? files,
   }) {
-    return Project(
+    return Workspace(
       id: id ?? this.id,
       name: name ?? this.name,
       description: description ?? this.description,
@@ -79,18 +122,26 @@ class Project {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       isArchived: isArchived ?? this.isArchived,
+      memoryEnabled: memoryEnabled ?? this.memoryEnabled,
+      modelId: modelId ?? this.modelId,
+      avatarColor: avatarColor ?? this.avatarColor,
+      avatarIcon: avatarIcon ?? this.avatarIcon,
+      avatarImagePath: avatarImagePath ?? this.avatarImagePath,
+      isPublic: isPublic ?? this.isPublic,
+      userId: userId ?? this.userId,
+      ownerDisplayName: ownerDisplayName ?? this.ownerDisplayName,
       chatIds: chatIds ?? this.chatIds,
       files: files ?? this.files,
     );
   }
 
-  /// Get number of chats in this project
+  /// Get number of chats in this workspace
   int get chatCount => chatIds.length;
 
-  /// Get number of files in this project
+  /// Get number of files in this workspace
   int get fileCount => files.length;
 
-  /// Check if project has a custom system prompt
+  /// Check if workspace has a custom system prompt
   bool get hasCustomPrompt =>
       customSystemPrompt != null && customSystemPrompt!.trim().isNotEmpty;
 
@@ -100,17 +151,56 @@ class Project {
   /// Get formatted total file size (e.g., "2.5 MB")
   String get totalFileSizeFormatted => _formatFileSize(totalFileSize);
 
-  /// Deterministic project color based on name hash
-  Color get projectColor {
-    final index = name.hashCode.abs() % kProjectColors.length;
-    return kProjectColors[index];
+  /// Display color — uses custom avatar color if set, otherwise deterministic
+  Color get displayColor {
+    if (avatarColor != null) {
+      try {
+        return Color(
+          int.parse(avatarColor!.replaceFirst('#', ''), radix: 16) |
+              0xFF000000,
+        );
+      } catch (_) {}
+    }
+    final index = name.hashCode.abs() % kWorkspaceColors.length;
+    return kWorkspaceColors[index];
   }
 
-  /// Deterministic project icon based on name hash
-  IconData get projectIcon {
-    final index = (name.hashCode.abs() ~/ 7) % kProjectIcons.length;
-    return kProjectIcons[index];
+  /// Display icon — uses custom avatar icon if set, otherwise deterministic
+  IconData get displayIcon {
+    if (avatarIcon != null) {
+      final iconName = avatarIcon!.toLowerCase();
+      if (_iconMap.containsKey(iconName)) return _iconMap[iconName]!;
+    }
+    final index = (name.hashCode.abs() ~/ 7) % kWorkspaceIcons.length;
+    return kWorkspaceIcons[index];
   }
+
+  /// Check if this workspace has a custom uploaded image
+  bool get hasCustomImage =>
+      avatarImagePath != null && avatarImagePath!.isNotEmpty;
+
+  /// Check if this is owned by a specific user
+  bool isOwnedBy(String? currentUserId) =>
+      userId != null && userId == currentUserId;
+
+  static final Map<String, IconData> _iconMap = {
+    'smart_toy': Icons.smart_toy_outlined,
+    'psychology': Icons.psychology_outlined,
+    'lightbulb': Icons.lightbulb_outline,
+    'auto_awesome': Icons.auto_awesome_outlined,
+    'chat': Icons.chat_bubble_outline,
+    'support': Icons.support_agent_outlined,
+    'code': Icons.code,
+    'school': Icons.school_outlined,
+    'work': Icons.work_outline,
+    'science': Icons.science_outlined,
+    'book': Icons.auto_stories_outlined,
+    'terminal': Icons.terminal,
+    'rocket': Icons.rocket_launch_outlined,
+    'folder': Icons.folder_outlined,
+  };
+
+  static Map<String, IconData> get availableIcons => _iconMap;
 
   /// Get relative time string for updatedAt (e.g., "2h ago", "3d ago")
   String get updatedAgo {
@@ -139,8 +229,8 @@ class Project {
     return trimmed.characters.take(2).toString().toUpperCase();
   }
 
-  /// Predefined project colors - vibrant but balanced for both themes
-  static const List<Color> kProjectColors = [
+  /// Predefined workspace colors - vibrant but balanced for both themes
+  static const List<Color> kWorkspaceColors = [
     Color(0xFF6366F1), // Indigo
     Color(0xFF8B5CF6), // Violet
     Color(0xFFEC4899), // Pink
@@ -155,8 +245,8 @@ class Project {
     Color(0xFF64748B), // Slate
   ];
 
-  /// Predefined project icons
-  static const List<IconData> kProjectIcons = [
+  /// Predefined workspace icons
+  static const List<IconData> kWorkspaceIcons = [
     Icons.folder_outlined,
     Icons.code,
     Icons.science_outlined,
@@ -185,10 +275,10 @@ class Project {
   }
 }
 
-/// Represents a file attached to a project
-class ProjectFile {
+/// Represents a file attached to a workspace
+class WorkspaceFile {
   final String id;
-  final String projectId;
+  final String workspaceId;
   final String fileName;
   final String storagePath;
   final String fileType;
@@ -196,9 +286,9 @@ class ProjectFile {
   final DateTime uploadedAt;
   final String? markdownSummary;
 
-  ProjectFile({
+  WorkspaceFile({
     required this.id,
-    required this.projectId,
+    required this.workspaceId,
     required this.fileName,
     required this.storagePath,
     required this.fileType,
@@ -207,10 +297,10 @@ class ProjectFile {
     this.markdownSummary,
   });
 
-  factory ProjectFile.fromJson(Map<String, dynamic> json) {
-    return ProjectFile(
+  factory WorkspaceFile.fromJson(Map<String, dynamic> json) {
+    return WorkspaceFile(
       id: json['id'] as String,
-      projectId: json['project_id'] as String,
+      workspaceId: json['project_id'] as String,
       fileName: json['file_name'] as String,
       storagePath: json['storage_path'] as String,
       fileType: json['file_type'] as String,
@@ -222,7 +312,7 @@ class ProjectFile {
 
   Map<String, dynamic> toJson() => {
     'id': id,
-    'project_id': projectId,
+    'project_id': workspaceId,
     'file_name': fileName,
     'storage_path': storagePath,
     'file_type': fileType,
@@ -231,9 +321,9 @@ class ProjectFile {
     if (markdownSummary != null) 'markdown_summary': markdownSummary,
   };
 
-  ProjectFile copyWith({
+  WorkspaceFile copyWith({
     String? id,
-    String? projectId,
+    String? workspaceId,
     String? fileName,
     String? storagePath,
     String? fileType,
@@ -241,9 +331,9 @@ class ProjectFile {
     DateTime? uploadedAt,
     String? markdownSummary,
   }) {
-    return ProjectFile(
+    return WorkspaceFile(
       id: id ?? this.id,
-      projectId: projectId ?? this.projectId,
+      workspaceId: workspaceId ?? this.workspaceId,
       fileName: fileName ?? this.fileName,
       storagePath: storagePath ?? this.storagePath,
       fileType: fileType ?? this.fileType,
@@ -352,7 +442,7 @@ class ProjectFile {
   bool get isPdf => extension == 'pdf';
 
   /// Estimate how many tokens this file will consume in context.
-  /// Uses the same logic as ProjectMessageService._estimateContentLength
+  /// Uses the same logic as WorkspaceMessageService._estimateContentLength
   /// but converts chars to tokens (~4 chars per token).
   int get estimatedTokens {
     int chars;

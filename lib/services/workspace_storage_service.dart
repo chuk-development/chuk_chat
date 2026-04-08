@@ -1,4 +1,4 @@
-// lib/services/project_storage_service.dart
+// lib/services/workspace_storage_service.dart
 import 'dart:async';
 import 'dart:convert';
 
@@ -6,21 +6,21 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import 'package:chuk_chat/constants/file_constants.dart';
-import 'package:chuk_chat/models/project_model.dart';
+import 'package:chuk_chat/models/workspace_model.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/file_conversion_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
-/// Service for managing project workspaces, chat assignments, and file attachments
-class ProjectStorageService {
-  static const String bucketName = 'project-files';
+/// Service for managing workspace workspaces, chat assignments, and file attachments
+class WorkspaceStorageService {
+  static const String bucketName = 'workspace-files';
   static const String _cacheKey = 'cached_projects';
   static const Uuid _uuid = Uuid();
 
   // SINGLE SOURCE OF TRUTH - all projects stored here
-  static final Map<String, Project> _projectsById = <String, Project>{};
+  static final Map<String, Workspace> _projectsById = <String, Workspace>{};
   static bool _cacheLoaded = false;
   static bool _isLoadingFromNetwork = false;
 
@@ -37,23 +37,23 @@ class ProjectStorageService {
   static bool _hasPendingNotification = false;
   static const Duration _notifyDebounceDelay = Duration(milliseconds: 100);
 
-  // Currently selected project (for chat UI context)
-  static String? selectedProjectId;
+  // Currently selected workspace (for chat UI context)
+  static String? selectedWorkspaceId;
 
   // Get projects as a sorted list (most recent first)
-  static List<Project> get projects {
+  static List<Workspace> get projects {
     final list = _projectsById.values.toList();
     list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return List.unmodifiable(list);
   }
 
   // Get non-archived projects
-  static List<Project> get activeProjects {
+  static List<Workspace> get activeProjects {
     return projects.where((p) => !p.isArchived).toList();
   }
 
   // Get archived projects
-  static List<Project> get archivedProjects {
+  static List<Workspace> get archivedProjects {
     return projects.where((p) => p.isArchived).toList();
   }
 
@@ -103,8 +103,8 @@ class ProjectStorageService {
         final List<dynamic> jsonList = jsonDecode(cached);
         _projectsById.clear();
         for (final json in jsonList) {
-          final project = Project.fromJson(json);
-          _projectsById[project.id] = project;
+          final workspace = Workspace.fromJson(json);
+          _projectsById[workspace.id] = workspace;
         }
         if (kDebugMode) {
           debugPrint(
@@ -192,48 +192,48 @@ class ProjectStorageService {
         return;
       }
 
-      // Load project-chat relationships AND project files in PARALLEL
-      final projectIds = projectRows.map((p) => p['id'] as String).toList();
+      // Load workspace-chat relationships AND workspace files in PARALLEL
+      final workspaceIds = projectRows.map((p) => p['id'] as String).toList();
       final chatsFuture = SupabaseService.client
           .from('project_chats')
           .select('project_id, chat_id')
-          .inFilter('project_id', projectIds);
+          .inFilter('project_id', workspaceIds);
       final filesFuture = SupabaseService.client
           .from('project_files')
           .select('*')
-          .inFilter('project_id', projectIds);
+          .inFilter('project_id', workspaceIds);
 
       final results = await Future.wait<dynamic>([chatsFuture, filesFuture]);
       final projectChatRows = results[0] as List<dynamic>;
       final fileRows = results[1] as List<dynamic>;
 
-      // Group chat IDs by project ID
+      // Group chat IDs by workspace ID
       final Map<String, List<String>> chatIdsByProject = {};
       for (final row in projectChatRows) {
-        final projectId = row['project_id'] as String;
+        final workspaceId = row['project_id'] as String;
         final chatId = row['chat_id'] as String;
-        chatIdsByProject.putIfAbsent(projectId, () => []).add(chatId);
+        chatIdsByProject.putIfAbsent(workspaceId, () => []).add(chatId);
       }
 
-      // Group files by project ID
-      final Map<String, List<ProjectFile>> filesByProject = {};
+      // Group files by workspace ID
+      final Map<String, List<WorkspaceFile>> filesByProject = {};
       for (final row in fileRows) {
-        final projectId = row['project_id'] as String;
-        final file = ProjectFile.fromJson(row);
-        filesByProject.putIfAbsent(projectId, () => []).add(file);
+        final workspaceId = row['project_id'] as String;
+        final file = WorkspaceFile.fromJson(row);
+        filesByProject.putIfAbsent(workspaceId, () => []).add(file);
       }
 
-      // Build Project objects
+      // Build Workspace objects
       _projectsById.clear();
       for (final row in projectRows) {
-        final projectId = row['id'] as String;
-        final project = Project.fromJson({
+        final workspaceId = row['id'] as String;
+        final workspace = Workspace.fromJson({
           ...row,
-          'chatIds': chatIdsByProject[projectId] ?? [],
+          'chatIds': chatIdsByProject[workspaceId] ?? [],
           'files':
-              filesByProject[projectId]?.map((f) => f.toJson()).toList() ?? [],
+              filesByProject[workspaceId]?.map((f) => f.toJson()).toList() ?? [],
         });
-        _projectsById[projectId] = project;
+        _projectsById[workspaceId] = workspace;
       }
 
       // Save to cache for next time (only once, not via _notifyChanges)
@@ -253,8 +253,8 @@ class ProjectStorageService {
     }
   }
 
-  /// Create a new project
-  static Future<Project> createProject(
+  /// Create a new workspace
+  static Future<Workspace> createProject(
     String name, {
     String? description,
     String? customSystemPrompt,
@@ -280,25 +280,25 @@ class ProjectStorageService {
           .select()
           .single();
 
-      final project = Project.fromJson(inserted);
-      _projectsById[project.id] = project;
+      final workspace = Workspace.fromJson(inserted);
+      _projectsById[workspace.id] = workspace;
       _notifyChanges();
 
       if (kDebugMode) {
-        debugPrint('✅ [ProjectStorage] Created project: ${project.id}');
+        debugPrint('✅ [ProjectStorage] Created workspace: ${workspace.id}');
       }
-      return project;
+      return workspace;
     } catch (e, st) {
       if (kDebugMode) {
-        debugPrint('❌ [ProjectStorage] Failed to create project: $e\n$st');
+        debugPrint('❌ [ProjectStorage] Failed to create workspace: $e\n$st');
       }
       rethrow;
     }
   }
 
-  /// Update an existing project
-  static Future<Project> updateProject(
-    String projectId, {
+  /// Update an existing workspace
+  static Future<Workspace> updateProject(
+    String workspaceId, {
     String? name,
     String? description,
     String? customSystemPrompt,
@@ -323,35 +323,35 @@ class ProjectStorageService {
       final updated = await SupabaseService.client
           .from('projects')
           .update(updateData)
-          .eq('id', projectId)
+          .eq('id', workspaceId)
           .eq('user_id', user.id)
           .select()
           .single();
 
-      final existingProject = _projectsById[projectId];
-      final project = Project.fromJson({
+      final existingProject = _projectsById[workspaceId];
+      final workspace = Workspace.fromJson({
         ...updated,
         'chatIds': existingProject?.chatIds ?? [],
         'files': existingProject?.files.map((f) => f.toJson()).toList() ?? [],
       });
 
-      _projectsById[projectId] = project;
+      _projectsById[workspaceId] = workspace;
       _notifyChanges();
 
       if (kDebugMode) {
-        debugPrint('✅ [ProjectStorage] Updated project: $projectId');
+        debugPrint('✅ [ProjectStorage] Updated workspace: $workspaceId');
       }
-      return project;
+      return workspace;
     } catch (e, st) {
       if (kDebugMode) {
-        debugPrint('❌ [ProjectStorage] Failed to update project: $e\n$st');
+        debugPrint('❌ [ProjectStorage] Failed to update workspace: $e\n$st');
       }
       rethrow;
     }
   }
 
-  /// Delete a project (cascades to project_chats and project_files via DB)
-  static Future<void> deleteProject(String projectId) async {
+  /// Delete a workspace (cascades to project_chats and project_files via DB)
+  static Future<void> deleteProject(String workspaceId) async {
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
       throw StateError('User must be signed in to delete projects.');
@@ -361,28 +361,28 @@ class ProjectStorageService {
       await SupabaseService.client
           .from('projects')
           .delete()
-          .eq('id', projectId)
+          .eq('id', workspaceId)
           .eq('user_id', user.id);
 
-      _projectsById.remove(projectId);
-      if (selectedProjectId == projectId) {
-        selectedProjectId = null;
+      _projectsById.remove(workspaceId);
+      if (selectedWorkspaceId == workspaceId) {
+        selectedWorkspaceId = null;
       }
       _notifyChanges();
 
       if (kDebugMode) {
-        debugPrint('🗑️ [ProjectStorage] Deleted project: $projectId');
+        debugPrint('🗑️ [ProjectStorage] Deleted workspace: $workspaceId');
       }
     } catch (e, st) {
       if (kDebugMode) {
-        debugPrint('❌ [ProjectStorage] Failed to delete project: $e\n$st');
+        debugPrint('❌ [ProjectStorage] Failed to delete workspace: $e\n$st');
       }
       rethrow;
     }
   }
 
-  /// Archive or unarchive a project
-  static Future<void> archiveProject(String projectId, bool archived) async {
+  /// Archive or unarchive a workspace
+  static Future<void> archiveProject(String workspaceId, bool archived) async {
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
       throw StateError('User must be signed in to archive projects.');
@@ -392,12 +392,12 @@ class ProjectStorageService {
       await SupabaseService.client
           .from('projects')
           .update({'is_archived': archived})
-          .eq('id', projectId)
+          .eq('id', workspaceId)
           .eq('user_id', user.id);
 
-      final existingProject = _projectsById[projectId];
+      final existingProject = _projectsById[workspaceId];
       if (existingProject != null) {
-        _projectsById[projectId] = existingProject.copyWith(
+        _projectsById[workspaceId] = existingProject.copyWith(
           isArchived: archived,
         );
         _notifyChanges();
@@ -405,130 +405,144 @@ class ProjectStorageService {
 
       if (kDebugMode) {
         debugPrint(
-          '📦 [ProjectStorage] ${archived ? 'Archived' : 'Unarchived'} project: $projectId',
+          '📦 [ProjectStorage] ${archived ? 'Archived' : 'Unarchived'} workspace: $workspaceId',
         );
       }
     } catch (e, st) {
       if (kDebugMode) {
-        debugPrint('❌ [ProjectStorage] Failed to archive project: $e\n$st');
+        debugPrint('❌ [ProjectStorage] Failed to archive workspace: $e\n$st');
       }
       rethrow;
     }
   }
 
-  /// Get a specific project by ID
-  static Project? getProject(String projectId) {
-    return _projectsById[projectId];
+  /// Get a specific workspace by ID
+  static Workspace? getWorkspace(String workspaceId) {
+    return _projectsById[workspaceId];
   }
+
+  /// Get the workspace associated with a specific chat (if any)
+  static Workspace? getWorkspaceForChat(String chatId) {
+    for (final ws in _projectsById.values) {
+      if (ws.chatIds.contains(chatId)) return ws;
+    }
+    return null;
+  }
+
+  /// Link a chat to a workspace (alias for addChatToProject)
+  static Future<void> linkChatToWorkspace(
+    String workspaceId,
+    String chatId,
+  ) => addChatToProject(workspaceId, chatId);
 
   // ============ CHAT MANAGEMENT ============
 
-  /// Add a chat to a project
-  static Future<void> addChatToProject(String projectId, String chatId) async {
+  /// Add a chat to a workspace
+  static Future<void> addChatToProject(String workspaceId, String chatId) async {
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
-      throw StateError('User must be signed in to manage project chats.');
+      throw StateError('User must be signed in to manage workspace chats.');
     }
 
     try {
       await SupabaseService.client.from('project_chats').insert({
-        'project_id': projectId,
+        'project_id': workspaceId,
         'chat_id': chatId,
       });
 
-      final project = _projectsById[projectId];
-      if (project != null && !project.chatIds.contains(chatId)) {
-        _projectsById[projectId] = project.copyWith(
-          chatIds: [...project.chatIds, chatId],
+      final workspace = _projectsById[workspaceId];
+      if (workspace != null && !workspace.chatIds.contains(chatId)) {
+        _projectsById[workspaceId] = workspace.copyWith(
+          chatIds: [...workspace.chatIds, chatId],
         );
         _notifyChanges();
       }
 
       if (kDebugMode) {
         debugPrint(
-          '✅ [ProjectStorage] Added chat $chatId to project $projectId',
+          '✅ [ProjectStorage] Added chat $chatId to workspace $workspaceId',
         );
       }
     } catch (e, st) {
-      // Ignore unique constraint violations (chat already in project)
+      // Ignore unique constraint violations (chat already in workspace)
       if (e.toString().contains('unique_project_chat')) {
         if (kDebugMode) {
-          debugPrint('⚠️ [ProjectStorage] Chat already in project');
+          debugPrint('⚠️ [ProjectStorage] Chat already in workspace');
         }
         return;
       }
       if (kDebugMode) {
-        debugPrint('❌ [ProjectStorage] Failed to add chat to project: $e\n$st');
+        debugPrint('❌ [ProjectStorage] Failed to add chat to workspace: $e\n$st');
       }
       rethrow;
     }
   }
 
-  /// Remove a chat from a project
+  /// Remove a chat from a workspace
   static Future<void> removeChatFromProject(
-    String projectId,
+    String workspaceId,
     String chatId,
   ) async {
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
-      throw StateError('User must be signed in to manage project chats.');
+      throw StateError('User must be signed in to manage workspace chats.');
     }
 
     try {
       await SupabaseService.client
           .from('project_chats')
           .delete()
-          .eq('project_id', projectId)
+          .eq('project_id', workspaceId)
           .eq('chat_id', chatId);
 
-      final project = _projectsById[projectId];
-      if (project != null) {
-        _projectsById[projectId] = project.copyWith(
-          chatIds: project.chatIds.where((id) => id != chatId).toList(),
+      final workspace = _projectsById[workspaceId];
+      if (workspace != null) {
+        _projectsById[workspaceId] = workspace.copyWith(
+          chatIds: workspace.chatIds.where((id) => id != chatId).toList(),
         );
         _notifyChanges();
       }
 
       if (kDebugMode) {
         debugPrint(
-          '✅ [ProjectStorage] Removed chat $chatId from project $projectId',
+          '✅ [ProjectStorage] Removed chat $chatId from workspace $workspaceId',
         );
       }
     } catch (e, st) {
       if (kDebugMode) {
         debugPrint(
-          '❌ [ProjectStorage] Failed to remove chat from project: $e\n$st',
+          '❌ [ProjectStorage] Failed to remove chat from workspace: $e\n$st',
         );
       }
       rethrow;
     }
   }
 
-  /// Get all chats in a project
-  static Future<List<StoredChat>> getProjectChats(String projectId) async {
-    final project = _projectsById[projectId];
-    if (project == null) return [];
+  /// Get all chats in a workspace
+  static Future<List<StoredChat>> getProjectChats(String workspaceId) async {
+    final workspace = _projectsById[workspaceId];
+    if (workspace == null) return [];
 
     // Get chats from ChatStorageService
     final allChats = ChatStorageService.savedChats;
-    return allChats.where((chat) => project.chatIds.contains(chat.id)).toList();
+    return allChats.where((chat) => workspace.chatIds.contains(chat.id)).toList();
   }
 
   /// Get all projects that contain a specific chat
-  static List<Project> getChatProjects(String chatId) {
+  static List<Workspace> getChatProjects(String chatId) {
     return projects.where((p) => p.chatIds.contains(chatId)).toList();
   }
 
   // ============ FILE MANAGEMENT ============
 
-  /// Upload a file to a project (encrypted in Supabase Storage)
+  /// Upload a file to a workspace (encrypted in Supabase Storage)
   /// If [filePath] is provided and [generateMarkdown] is true, will also generate
   /// an AI markdown summary of the file content.
   ///
   /// [onUploadProgress] is called with progress (0.0-1.0) during upload
   /// [onConversionStart] is called when markdown conversion begins
-  static Future<ProjectFile> uploadFile(
-    String projectId,
+  static Future<WorkspaceFile> uploadFile(
+    String workspaceId,
     String fileName,
     Uint8List fileBytes,
     String fileType, {
@@ -659,7 +673,7 @@ class ProjectStorageService {
 
       // Step 4: Save metadata to database
       final insertData = {
-        'project_id': projectId,
+        'project_id': workspaceId,
         'file_name': fileName,
         'storage_path': storagePath,
         'file_type': fileType,
@@ -675,19 +689,19 @@ class ProjectStorageService {
           .select()
           .single();
 
-      final projectFile = ProjectFile.fromJson(inserted);
+      final projectFile = WorkspaceFile.fromJson(inserted);
 
-      // Update project in cache
-      final project = _projectsById[projectId];
-      if (project != null) {
-        _projectsById[projectId] = project.copyWith(
-          files: [...project.files, projectFile],
+      // Update workspace in cache
+      final workspace = _projectsById[workspaceId];
+      if (workspace != null) {
+        _projectsById[workspaceId] = workspace.copyWith(
+          files: [...workspace.files, projectFile],
         );
         _notifyChanges();
       }
 
       if (kDebugMode) {
-        debugPrint('✅ [ProjectStorage] Uploaded file: $fileName to $projectId');
+        debugPrint('✅ [ProjectStorage] Uploaded file: $fileName to $workspaceId');
       }
       return projectFile;
     } catch (e, st) {
@@ -698,8 +712,8 @@ class ProjectStorageService {
     }
   }
 
-  /// Delete a file from a project (also deletes from storage)
-  static Future<void> deleteFile(String projectId, String fileId) async {
+  /// Delete a file from a workspace (also deletes from storage)
+  static Future<void> deleteFile(String workspaceId, String fileId) async {
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
       throw StateError('User must be signed in to delete files.');
@@ -707,8 +721,8 @@ class ProjectStorageService {
 
     try {
       // Find file to get storage path
-      final project = _projectsById[projectId];
-      final file = project?.files.firstWhere((f) => f.id == fileId);
+      final workspace = _projectsById[workspaceId];
+      final file = workspace?.files.firstWhere((f) => f.id == fileId);
 
       // Delete from database first
       await SupabaseService.client
@@ -733,9 +747,9 @@ class ProjectStorageService {
       }
 
       // Update cache
-      if (project != null) {
-        _projectsById[projectId] = project.copyWith(
-          files: project.files.where((f) => f.id != fileId).toList(),
+      if (workspace != null) {
+        _projectsById[workspaceId] = workspace.copyWith(
+          files: workspace.files.where((f) => f.id != fileId).toList(),
         );
         _notifyChanges();
       }
@@ -751,10 +765,10 @@ class ProjectStorageService {
     }
   }
 
-  /// Get all files for a project
-  static List<ProjectFile> getProjectFiles(String projectId) {
-    final project = _projectsById[projectId];
-    return project?.files ?? [];
+  /// Get all files for a workspace
+  static List<WorkspaceFile> getProjectFiles(String workspaceId) {
+    final workspace = _projectsById[workspaceId];
+    return workspace?.files ?? [];
   }
 
   /// Download and decrypt a file's content from Supabase Storage
@@ -773,13 +787,13 @@ class ProjectStorageService {
 
     try {
       // Find file in all projects to get storage path
-      ProjectFile? file;
-      for (final project in _projectsById.values) {
+      WorkspaceFile? file;
+      for (final workspace in _projectsById.values) {
         try {
-          file = project.files.firstWhere((f) => f.id == fileId);
+          file = workspace.files.firstWhere((f) => f.id == fileId);
           break;
         } catch (_) {
-          // File not in this project, continue searching
+          // File not in this workspace, continue searching
         }
       }
 
@@ -810,7 +824,7 @@ class ProjectStorageService {
   }
 
   /// Download and decrypt a file, returning raw bytes
-  static Future<Uint8List> downloadFile(String projectId, String fileId) async {
+  static Future<Uint8List> downloadFile(String workspaceId, String fileId) async {
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
       throw StateError('User must be signed in to download files.');
@@ -824,9 +838,9 @@ class ProjectStorageService {
     }
 
     try {
-      // Find file in project
-      final project = _projectsById[projectId];
-      final file = project?.files.firstWhere((f) => f.id == fileId);
+      // Find file in workspace
+      final workspace = _projectsById[workspaceId];
+      final file = workspace?.files.firstWhere((f) => f.id == fileId);
 
       if (file == null) {
         throw StateError('File not found');
@@ -855,7 +869,7 @@ class ProjectStorageService {
 
   /// Update a file's encrypted content
   static Future<void> updateFileContent(
-    String projectId,
+    String workspaceId,
     String fileId,
     Uint8List newBytes,
   ) async {
@@ -872,9 +886,9 @@ class ProjectStorageService {
     }
 
     try {
-      // Find file in project
-      final project = _projectsById[projectId];
-      final file = project?.files.firstWhere((f) => f.id == fileId);
+      // Find file in workspace
+      final workspace = _projectsById[workspaceId];
+      final file = workspace?.files.firstWhere((f) => f.id == fileId);
 
       if (file == null) {
         throw StateError('File not found');
@@ -904,12 +918,12 @@ class ProjectStorageService {
           .eq('id', fileId);
 
       // Update cache
-      if (project != null) {
-        final updatedFiles = project.files.map((f) {
+      if (workspace != null) {
+        final updatedFiles = workspace.files.map((f) {
           if (f.id == fileId) {
-            return ProjectFile(
+            return WorkspaceFile(
               id: f.id,
-              projectId: f.projectId,
+              workspaceId: f.workspaceId,
               fileName: f.fileName,
               storagePath: f.storagePath,
               fileType: f.fileType,
@@ -921,7 +935,7 @@ class ProjectStorageService {
           return f;
         }).toList();
 
-        _projectsById[projectId] = project.copyWith(files: updatedFiles);
+        _projectsById[workspaceId] = workspace.copyWith(files: updatedFiles);
         _notifyChanges();
       }
 
@@ -938,7 +952,7 @@ class ProjectStorageService {
 
   /// Update a file's markdown summary
   static Future<void> updateFileMarkdown(
-    String projectId,
+    String workspaceId,
     String fileId,
     String? markdown,
   ) async {
@@ -955,16 +969,16 @@ class ProjectStorageService {
           .eq('id', fileId);
 
       // Update cache
-      final project = _projectsById[projectId];
-      if (project != null) {
-        final updatedFiles = project.files.map((f) {
+      final workspace = _projectsById[workspaceId];
+      if (workspace != null) {
+        final updatedFiles = workspace.files.map((f) {
           if (f.id == fileId) {
             return f.copyWith(markdownSummary: markdown);
           }
           return f;
         }).toList();
 
-        _projectsById[projectId] = project.copyWith(files: updatedFiles);
+        _projectsById[workspaceId] = workspace.copyWith(files: updatedFiles);
         _notifyChanges();
       }
 
@@ -984,7 +998,7 @@ class ProjectStorageService {
   /// Reset all state (on logout)
   static Future<void> reset() async {
     _projectsById.clear();
-    selectedProjectId = null;
+    selectedWorkspaceId = null;
     _cacheLoaded = false;
     _isLoadingFromNetwork = false;
     _loadingCompleter = null;

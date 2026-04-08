@@ -28,7 +28,7 @@ const bool kAutoDetectPlatform = !kPlatformMobile && !kPlatformDesktop;
 // Set to true to enable, false to disable (hide from UI).
 //
 // Build with features enabled:
-// flutter build apk --dart-define=FEATURE_VOICE_MODE=true --dart-define=FEATURE_PROJECTS=true
+// flutter build apk --dart-define=FEATURE_VOICE_MODE=true --dart-define=FEATURE_WORKSPACES=true
 //
 // Build with features disabled (default for production):
 // flutter build apk  (all features disabled by default)
@@ -39,15 +39,9 @@ const bool kFeatureVoiceMode = bool.fromEnvironment(
   defaultValue: false,
 );
 
-/// Projects - workspace organization with custom system prompts
-const bool kFeatureProjects = bool.fromEnvironment(
-  'FEATURE_PROJECTS',
-  defaultValue: false,
-);
-
-/// Assistants - custom AI assistants with isolated system prompts
-const bool kFeatureAssistants = bool.fromEnvironment(
-  'FEATURE_ASSISTANTS',
+/// Workspaces — custom AI personas with system prompts, files, and memory settings
+const bool kFeatureWorkspaces = bool.fromEnvironment(
+  'FEATURE_WORKSPACES',
   defaultValue: true,
 );
 

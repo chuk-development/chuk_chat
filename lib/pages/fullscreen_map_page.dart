@@ -49,7 +49,7 @@ class FullscreenMapPage extends StatefulWidget {
 class _FullscreenMapPageState extends State<FullscreenMapPage> {
   static const String _kMapStyleUrl =
       'https://tiles.openfreemap.org/styles/bright';
-  static const String _kOsrmBaseUrl = 'https://router.project-osrm.org';
+  static const String _kOsrmBaseUrl = 'https://router.workspace-osrm.org';
   static const Map<String, String> _kApiHeaders = {
     'Accept': 'application/json',
     'User-Agent': 'chuk-chat/1.0',

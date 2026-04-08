@@ -20,23 +20,23 @@ import 'package:flutter/foundation.dart';
 class SidebarDesktop extends StatefulWidget {
   final Function(String? chatId) onChatSelected;
   final Function() onSettingsTapped;
-  final Function() onProjectsTapped;
+  final Function() onWorkspacesTapped;
   final Function() onMediaTapped;
   final Future<void> Function(String chatId)? onChatDeleted;
   final String? selectedChatId;
   final bool isCompactMode;
-  final bool showAssistantsButton;
+  final bool showWorkspacesButton;
 
   const SidebarDesktop({
     super.key,
     required this.onChatSelected,
     required this.onSettingsTapped,
-    required this.onProjectsTapped,
+    required this.onWorkspacesTapped,
     required this.onMediaTapped,
     this.onChatDeleted,
     required this.selectedChatId,
     required this.isCompactMode,
-    required this.showAssistantsButton,
+    required this.showWorkspacesButton,
   });
 
   @override
@@ -358,7 +358,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
         kButtonVisualHeight + // Projects button
         kSpacingBetweenTopButtons;
 
-    if (widget.showAssistantsButton) {
+    if (widget.showWorkspacesButton) {
       topSpacingForSidebarContent +=
           kButtonVisualHeight + // Assistants button
           kSpacingBetweenTopButtons;

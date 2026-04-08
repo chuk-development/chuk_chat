@@ -1,40 +1,40 @@
-// lib/platform_specific/chat/handlers/mobile_project_handler.dart
+// lib/platform_specific/chat/handlers/mobile_workspace_handler.dart
 import 'package:flutter/material.dart';
 
-import 'package:chuk_chat/pages/project_management_page.dart';
-import 'package:chuk_chat/services/project_message_service.dart';
-import 'package:chuk_chat/services/project_storage_service.dart';
+import 'package:chuk_chat/pages/workspace_management_page.dart';
+import 'package:chuk_chat/services/workspace_message_service.dart';
+import 'package:chuk_chat/services/workspace_storage_service.dart';
 
-/// Handles mobile-specific project selection UI and project–chat linking.
+/// Handles mobile-specific workspace selection UI and workspace–chat linking.
 ///
 /// All methods are static because they build standalone widgets or show
 /// dialogs/sheets that receive the required state via parameters and
 /// communicate mutations back through callbacks.
-class MobileProjectHandler {
-  const MobileProjectHandler._();
+class MobileWorkspaceHandler {
+  const MobileWorkspaceHandler._();
 
   // ---------------------------------------------------------------------------
-  // Bottom sheet – project selection
+  // Bottom sheet – workspace selection
   // ---------------------------------------------------------------------------
 
   /// Shows a modal bottom sheet listing available projects.
   ///
-  /// [selectedProjectId] – the currently selected project (nullable).
+  /// [selectedWorkspaceId] – the currently selected workspace (nullable).
   /// [activeChatId] – the chat that is currently open (nullable).
-  /// [onProjectSelected] – called when the user taps a project (or "No Project").
+  /// [onWorkspaceSelected] – called when the user taps a workspace (or "No Workspace").
   /// [onShowSnackBar] – helper for displaying transient messages.
   /// [onStateChanged] – called when any mutation requires a rebuild.
   static void showProjectSelectionSheet({
     required BuildContext context,
-    required String? selectedProjectId,
+    required String? selectedWorkspaceId,
     required String? activeChatId,
-    required ValueChanged<String?> onProjectSelected,
+    required ValueChanged<String?> onWorkspaceSelected,
     required ValueChanged<String> onShowSnackBar,
     required VoidCallback onStateChanged,
-    required void Function(String projectId) onOpenProjectManagement,
+    required void Function(String workspaceId) onOpenWorkspaceManagement,
   }) {
     final theme = Theme.of(context);
-    final projects = ProjectStorageService.activeProjects;
+    final projects = WorkspaceStorageService.activeProjects;
 
     showModalBottomSheet<void>(
       context: context,
@@ -72,19 +72,19 @@ class MobileProjectHandler {
                   ],
                 ),
                 const SizedBox(height: 16),
-                // No project option
+                // No workspace option
                 buildProjectOption(
                   sheetContext: sheetContext,
                   theme: theme,
-                  projectId: null,
-                  name: 'No Project',
+                  workspaceId: null,
+                  name: 'No Workspace',
                   icon: Icons.close,
-                  selectedProjectId: selectedProjectId,
+                  selectedWorkspaceId: selectedWorkspaceId,
                   activeChatId: activeChatId,
-                  onProjectSelected: onProjectSelected,
+                  onWorkspaceSelected: onWorkspaceSelected,
                   onShowSnackBar: onShowSnackBar,
                   onStateChanged: onStateChanged,
-                  onOpenProjectManagement: onOpenProjectManagement,
+                  onOpenWorkspaceManagement: onOpenWorkspaceManagement,
                 ),
                 if (projects.isEmpty)
                   Padding(
@@ -114,11 +114,11 @@ class MobileProjectHandler {
                             createNewProject(
                               context: context,
                               onShowSnackBar: onShowSnackBar,
-                              onOpenProjectManagement: onOpenProjectManagement,
+                              onOpenWorkspaceManagement: onOpenWorkspaceManagement,
                             );
                           },
                           icon: const Icon(Icons.add),
-                          label: const Text('Create Project'),
+                          label: const Text('Create Workspace'),
                         ),
                       ],
                     ),
@@ -141,32 +141,32 @@ class MobileProjectHandler {
                                 createNewProject(
                                   context: context,
                                   onShowSnackBar: onShowSnackBar,
-                                  onOpenProjectManagement:
-                                      onOpenProjectManagement,
+                                  onOpenWorkspaceManagement:
+                                      onOpenWorkspaceManagement,
                                 );
                               },
                               icon: const Icon(Icons.add),
-                              label: const Text('Create New Project'),
+                              label: const Text('Create New Workspace'),
                             ),
                           );
                         }
-                        final project = projects[index];
+                        final workspace = projects[index];
                         return buildProjectOption(
                           sheetContext: sheetContext,
                           theme: theme,
-                          projectId: project.id,
-                          name: project.name,
+                          workspaceId: workspace.id,
+                          name: workspace.name,
                           icon: Icons.folder,
                           subtitle:
-                              ProjectMessageService.getProjectContextSummary(
-                                project,
+                              WorkspaceMessageService.getProjectContextSummary(
+                                workspace,
                               ),
-                          selectedProjectId: selectedProjectId,
+                          selectedWorkspaceId: selectedWorkspaceId,
                           activeChatId: activeChatId,
-                          onProjectSelected: onProjectSelected,
+                          onWorkspaceSelected: onWorkspaceSelected,
                           onShowSnackBar: onShowSnackBar,
                           onStateChanged: onStateChanged,
-                          onOpenProjectManagement: onOpenProjectManagement,
+                          onOpenWorkspaceManagement: onOpenWorkspaceManagement,
                         );
                       },
                     ),
@@ -180,18 +180,18 @@ class MobileProjectHandler {
   }
 
   // ---------------------------------------------------------------------------
-  // Dialog – create new project
+  // Dialog – create new workspace
   // ---------------------------------------------------------------------------
 
-  /// Shows a dialog that lets the user create a new project.
+  /// Shows a dialog that lets the user create a new workspace.
   ///
-  /// On success the [onOpenProjectManagement] callback is invoked with the
-  /// newly created project's id so the caller can navigate to the management
+  /// On success the [onOpenWorkspaceManagement] callback is invoked with the
+  /// newly created workspace's id so the caller can navigate to the management
   /// page.
   static Future<void> createNewProject({
     required BuildContext context,
     required ValueChanged<String> onShowSnackBar,
-    required void Function(String projectId) onOpenProjectManagement,
+    required void Function(String workspaceId) onOpenWorkspaceManagement,
   }) async {
     final nameController = TextEditingController();
     final descController = TextEditingController();
@@ -199,7 +199,7 @@ class MobileProjectHandler {
     final result = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Create Project'),
+        title: const Text('Create Workspace'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -207,7 +207,7 @@ class MobileProjectHandler {
               controller: nameController,
               autofocus: true,
               decoration: const InputDecoration(
-                labelText: 'Project Name',
+                labelText: 'Workspace Name',
                 border: OutlineInputBorder(),
               ),
             ),
@@ -237,49 +237,49 @@ class MobileProjectHandler {
 
     if (result == true && nameController.text.trim().isNotEmpty) {
       try {
-        final project = await ProjectStorageService.createProject(
+        final workspace = await WorkspaceStorageService.createProject(
           nameController.text.trim(),
           description: descController.text.trim().isEmpty
               ? null
               : descController.text.trim(),
         );
-        onShowSnackBar('Project "${project.name}" created');
-        onOpenProjectManagement(project.id);
+        onShowSnackBar('Workspace "${workspace.name}" created');
+        onOpenWorkspaceManagement(workspace.id);
       } catch (e) {
-        onShowSnackBar('Failed to create project: $e');
+        onShowSnackBar('Failed to create workspace: $e');
       }
     }
   }
 
   // ---------------------------------------------------------------------------
-  // Widget builder – single project option in the selection sheet
+  // Widget builder – single workspace option in the selection sheet
   // ---------------------------------------------------------------------------
 
-  /// Builds a [ListTile] for a single project inside the selection sheet.
+  /// Builds a [ListTile] for a single workspace inside the selection sheet.
   ///
-  /// When [projectId] is `null` this renders the "No Project" option.
+  /// When [workspaceId] is `null` this renders the "No Workspace" option.
   static Widget buildProjectOption({
     required BuildContext sheetContext,
     required ThemeData theme,
-    required String? projectId,
+    required String? workspaceId,
     required String name,
     required IconData icon,
     String? subtitle,
-    required String? selectedProjectId,
+    required String? selectedWorkspaceId,
     required String? activeChatId,
-    required ValueChanged<String?> onProjectSelected,
+    required ValueChanged<String?> onWorkspaceSelected,
     required ValueChanged<String> onShowSnackBar,
     required VoidCallback onStateChanged,
-    required void Function(String projectId) onOpenProjectManagement,
+    required void Function(String workspaceId) onOpenWorkspaceManagement,
   }) {
-    final isSelected = selectedProjectId == projectId;
-    final project = projectId != null
-        ? ProjectStorageService.getProject(projectId)
+    final isSelected = selectedWorkspaceId == workspaceId;
+    final workspace = workspaceId != null
+        ? WorkspaceStorageService.getWorkspace(workspaceId)
         : null;
     final bool chatInProject =
-        project != null &&
+        workspace != null &&
         activeChatId != null &&
-        project.chatIds.contains(activeChatId);
+        workspace.chatIds.contains(activeChatId);
 
     return ListTile(
       leading: Icon(icon, color: isSelected ? theme.colorScheme.primary : null),
@@ -295,7 +295,7 @@ class MobileProjectHandler {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (isSelected) Icon(Icons.check, color: theme.colorScheme.primary),
-          if (projectId != null) ...[
+          if (workspaceId != null) ...[
             // Link / unlink chat button
             if (activeChatId != null) ...[
               const SizedBox(width: 4),
@@ -308,20 +308,20 @@ class MobileProjectHandler {
                       : theme.colorScheme.primary.withValues(alpha: 0.7),
                 ),
                 tooltip: chatInProject
-                    ? 'Remove chat from project'
-                    : 'Add chat to project',
+                    ? 'Remove chat from workspace'
+                    : 'Add chat to workspace',
                 onPressed: () async {
                   Navigator.of(sheetContext).pop();
                   if (chatInProject) {
                     await removeChatFromProject(
-                      projectId: projectId,
+                      workspaceId: workspaceId,
                       activeChatId: activeChatId,
                       onShowSnackBar: onShowSnackBar,
                       onStateChanged: onStateChanged,
                     );
                   } else {
                     await addChatToProject(
-                      projectId: projectId,
+                      workspaceId: workspaceId,
                       activeChatId: activeChatId,
                       onShowSnackBar: onShowSnackBar,
                       onStateChanged: onStateChanged,
@@ -330,17 +330,17 @@ class MobileProjectHandler {
                 },
               ),
             ],
-            // Manage project button
+            // Manage workspace button
             IconButton(
               icon: Icon(
                 Icons.settings,
                 size: 20,
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
               ),
-              tooltip: 'Manage project',
+              tooltip: 'Manage workspace',
               onPressed: () {
                 Navigator.of(sheetContext).pop();
-                onOpenProjectManagement(projectId);
+                onOpenWorkspaceManagement(workspaceId);
               },
             ),
           ],
@@ -348,29 +348,29 @@ class MobileProjectHandler {
       ),
       onTap: () {
         Navigator.of(sheetContext).pop();
-        onProjectSelected(projectId);
-        if (projectId != null) {
-          onShowSnackBar('Project selected: $name');
+        onWorkspaceSelected(workspaceId);
+        if (workspaceId != null) {
+          onShowSnackBar('Workspace selected: $name');
         } else {
-          onShowSnackBar('Project cleared');
+          onShowSnackBar('Workspace cleared');
         }
       },
     );
   }
 
   // ---------------------------------------------------------------------------
-  // Widget builder – selected project badge (used above the message list)
+  // Widget builder – selected workspace badge (used above the message list)
   // ---------------------------------------------------------------------------
 
-  /// Builds a compact badge showing the currently selected project name with a
+  /// Builds a compact badge showing the currently selected workspace name with a
   /// close button to deselect it.
   static Widget buildSelectedProjectBadge({
     required ThemeData theme,
-    required String selectedProjectId,
+    required String selectedWorkspaceId,
     required VoidCallback onClearProject,
   }) {
-    final project = ProjectStorageService.getProject(selectedProjectId);
-    if (project == null) return const SizedBox.shrink();
+    final workspace = WorkspaceStorageService.getWorkspace(selectedWorkspaceId);
+    if (workspace == null) return const SizedBox.shrink();
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -388,7 +388,7 @@ class MobileProjectHandler {
           ),
           const SizedBox(width: 6),
           Text(
-            project.name,
+            workspace.name,
             style: TextStyle(
               fontSize: 12,
               color: theme.colorScheme.onPrimaryContainer,
@@ -410,19 +410,19 @@ class MobileProjectHandler {
   }
 
   // ---------------------------------------------------------------------------
-  // Widget builder – compact project indicator (for the input area)
+  // Widget builder – compact workspace indicator (for the input area)
   // ---------------------------------------------------------------------------
 
-  /// Builds a row showing the project name, context summary, and a close
+  /// Builds a row showing the workspace name, context summary, and a close
   /// button. Intended for the area just above the text input field.
   static Widget buildProjectIndicator({
     required ThemeData theme,
-    required String selectedProjectId,
+    required String selectedWorkspaceId,
     required VoidCallback onClearProject,
     required ValueChanged<String> onShowSnackBar,
   }) {
-    final project = ProjectStorageService.getProject(selectedProjectId);
-    if (project == null) return const SizedBox.shrink();
+    final workspace = WorkspaceStorageService.getWorkspace(selectedWorkspaceId);
+    if (workspace == null) return const SizedBox.shrink();
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -442,7 +442,7 @@ class MobileProjectHandler {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  project.name,
+                  workspace.name,
                   style: TextStyle(
                     fontSize: 13,
                     color: theme.colorScheme.onSurface,
@@ -451,7 +451,7 @@ class MobileProjectHandler {
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  ProjectMessageService.getProjectContextSummary(project),
+                  WorkspaceMessageService.getProjectContextSummary(workspace),
                   style: TextStyle(
                     fontSize: 11,
                     color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
@@ -463,7 +463,7 @@ class MobileProjectHandler {
           GestureDetector(
             onTap: () {
               onClearProject();
-              onShowSnackBar('Project cleared');
+              onShowSnackBar('Workspace cleared');
             },
             child: Padding(
               padding: const EdgeInsets.all(4),
@@ -480,12 +480,12 @@ class MobileProjectHandler {
   }
 
   // ---------------------------------------------------------------------------
-  // Project–chat linking
+  // Workspace–chat linking
   // ---------------------------------------------------------------------------
 
-  /// Adds the chat identified by [activeChatId] to the given project.
+  /// Adds the chat identified by [activeChatId] to the given workspace.
   static Future<void> addChatToProject({
-    required String projectId,
+    required String workspaceId,
     required String? activeChatId,
     required ValueChanged<String> onShowSnackBar,
     required VoidCallback onStateChanged,
@@ -495,28 +495,28 @@ class MobileProjectHandler {
       return;
     }
     try {
-      await ProjectStorageService.addChatToProject(projectId, activeChatId);
-      onShowSnackBar('Chat added to project');
+      await WorkspaceStorageService.addChatToProject(workspaceId, activeChatId);
+      onShowSnackBar('Chat added to workspace');
       onStateChanged();
     } catch (e) {
       onShowSnackBar('Failed to add chat: $e');
     }
   }
 
-  /// Removes the chat identified by [activeChatId] from the given project.
+  /// Removes the chat identified by [activeChatId] from the given workspace.
   static Future<void> removeChatFromProject({
-    required String projectId,
+    required String workspaceId,
     required String? activeChatId,
     required ValueChanged<String> onShowSnackBar,
     required VoidCallback onStateChanged,
   }) async {
     if (activeChatId == null) return;
     try {
-      await ProjectStorageService.removeChatFromProject(
-        projectId,
+      await WorkspaceStorageService.removeChatFromProject(
+        workspaceId,
         activeChatId,
       );
-      onShowSnackBar('Chat removed from project');
+      onShowSnackBar('Chat removed from workspace');
       onStateChanged();
     } catch (e) {
       onShowSnackBar('Failed to remove chat: $e');
@@ -527,22 +527,22 @@ class MobileProjectHandler {
   // Navigation helper
   // ---------------------------------------------------------------------------
 
-  /// Pushes the [ProjectManagementPage] for the given [projectId].
+  /// Pushes the [WorkspaceManagementPage] for the given [workspaceId].
   ///
   /// [onStartNewChat] is forwarded to the management page so the user can
-  /// start a new chat with the project's context.
+  /// start a new chat with the workspace's context.
   static void openProjectManagement({
     required BuildContext context,
-    required String projectId,
-    required void Function(String? projectId) onStartNewChat,
+    required String workspaceId,
+    required void Function(String? workspaceId) onStartNewChat,
   }) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => ProjectManagementPage(
-          projectId: projectId,
-          onStartNewChat: (selectedProjectId) {
-            onStartNewChat(selectedProjectId);
+        builder: (context) => WorkspaceManagementPage(
+          workspaceId: workspaceId,
+          onStartNewChat: (selectedWorkspaceId) {
+            onStartNewChat(selectedWorkspaceId);
           },
         ),
       ),

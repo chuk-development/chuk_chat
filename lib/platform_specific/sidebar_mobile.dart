@@ -18,9 +18,8 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 class SidebarMobile extends StatefulWidget {
   final Function(String? chatId) onChatSelected;
   final Function() onSettingsTapped;
-  final Function() onProjectsTapped;
+  final Function() onWorkspacesTapped;
   final Function() onMediaTapped;
-  final Function() onAssistantsTapped;
   final Future<void> Function(String chatId)? onChatDeleted;
   final String? selectedChatId;
   final bool isCompactMode; // Not directly used in the UI, but kept for context
@@ -29,9 +28,8 @@ class SidebarMobile extends StatefulWidget {
     super.key,
     required this.onChatSelected,
     required this.onSettingsTapped,
-    required this.onProjectsTapped,
+    required this.onWorkspacesTapped,
     required this.onMediaTapped,
-    required this.onAssistantsTapped,
     this.onChatDeleted,
     required this.selectedChatId,
     required this.isCompactMode,
@@ -573,21 +571,11 @@ class _SidebarMobileState extends State<SidebarMobile> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (kFeatureProjects) ...[
-                  _buildQuickActionButton(
-                    icon: Icons.folder_open_outlined,
-                    label: 'Projects',
-                    onTap: widget.onProjectsTapped,
-                    iconColor: iconColorDefault,
-                    textColor: textColorDefault,
-                  ),
-                  const SizedBox(height: 6),
-                ],
-                if (kFeatureAssistants) ...[
+                if (kFeatureWorkspaces) ...[
                   _buildQuickActionButton(
                     icon: Icons.auto_awesome,
-                    label: 'Assistants',
-                    onTap: widget.onAssistantsTapped,
+                    label: 'Workspaces',
+                    onTap: widget.onWorkspacesTapped,
                     iconColor: iconColorDefault,
                     textColor: textColorDefault,
                   ),

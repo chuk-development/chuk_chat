@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
-import 'package:chuk_chat/services/project_storage_service.dart';
+import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/tool_enforcer.dart';
 import 'package:chuk_chat/services/tool_executor.dart';
 import 'package:chuk_chat/services/tool_prompt_builder.dart';
@@ -142,7 +142,7 @@ class ToolCallHandler {
 
     // Tell the enforcer which tools bypass discovery.
     final bypass = <String>{};
-    if (ProjectStorageService.selectedProjectId != null) {
+    if (WorkspaceStorageService.selectedWorkspaceId != null) {
       bypass.add('update_project');
     }
     if (kFeatureArtifacts &&
@@ -515,9 +515,9 @@ class ToolCallHandler {
         .map((t) => t.toJson())
         .firstOrNull;
 
-    // update_project is always available when a project is active.
+    // update_project is always available when a workspace is active.
     Map<String, dynamic>? projectToolDef;
-    if (ProjectStorageService.selectedProjectId != null) {
+    if (WorkspaceStorageService.selectedWorkspaceId != null) {
       projectToolDef = _toolExecutor.allTools
           .where((t) => t.name == 'update_project')
           .map((t) => t.toJson())

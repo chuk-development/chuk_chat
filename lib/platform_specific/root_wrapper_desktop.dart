@@ -11,8 +11,7 @@ import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_desktop.dart';
 import 'package:chuk_chat/platform_specific/sidebar_desktop.dart';
-import 'package:chuk_chat/pages/projects_page.dart';
-import 'package:chuk_chat/pages/assistants_page.dart';
+import 'package:chuk_chat/pages/workspaces_page.dart';
 import 'package:chuk_chat/pages/media_manager_page.dart';
 import 'package:chuk_chat/pages/settings_page.dart';
 import 'package:chuk_chat/services/developer_options_service.dart';
@@ -111,22 +110,20 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     );
   }
 
-  void _openProjectsPage() {
-    // Toggle projects panel - don't close sidebar
+  void _openWorkspacesPage() {
     setState(() {
-      if (_activePanel == 'projects') {
+      if (_activePanel == 'workspaces') {
         _activePanel = null;
       } else {
-        _activePanel = 'projects';
+        _activePanel = 'workspaces';
       }
     });
   }
 
-  void _openProject(String projectId) {
+  void _openWorkspace(String workspaceId) {
     setState(() {
-      _activeProjectId = projectId;
-      _activePanel = null; // Close projects panel
-      // Start a new chat for this project
+      _activeProjectId = workspaceId;
+      _activePanel = null;
       _chatUIKey.currentState?.newChat();
     });
     if (kFeatureArtifacts) {
@@ -143,16 +140,6 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   void _closePanel() {
     setState(() {
       _activePanel = null;
-    });
-  }
-
-  void _openAssistantsPage() {
-    setState(() {
-      if (_activePanel == 'assistants') {
-        _activePanel = null;
-      } else {
-        _activePanel = 'assistants';
-      }
     });
   }
 
@@ -292,9 +279,9 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       sidebarVisibleWidth,
     );
 
-    final bool isAssistantsFullPage = _activePanel == 'assistants';
+    final bool isWorkspacesFullPage = _activePanel == 'workspaces';
     final bool showContent =
-        (!isCompactMode || !_isSidebarExpanded) && !isAssistantsFullPage;
+        (!isCompactMode || !_isSidebarExpanded) && !isWorkspacesFullPage;
     final Widget chatArea = ChukChatUIDesktop(
       key: _chatUIKey,
       onToggleSidebar: _toggleSidebar,
@@ -316,7 +303,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       showReasoningTokens: widget.config.showReasoningTokens,
       showModelInfo: widget.config.showModelInfo,
       showTps: widget.config.showTps,
-      projectId: _activeProjectId,
+      workspaceId: _activeProjectId,
       onExitProject: _exitProject,
       // Image generation settings
       imageGenEnabled: widget.config.imageGenEnabled,
@@ -345,7 +332,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
         : 0;
     final bool hasArtifact = kFeatureArtifacts && _activeArtifact != null;
     // Assistants is full-page, not a side panel
-    final String? effectivePanel = _activePanel == 'assistants'
+    final String? effectivePanel = _activePanel == 'workspaces'
         ? null
         : (_activePanel ?? (hasArtifact ? 'artifact' : null));
     final bool showPanel =
@@ -376,17 +363,16 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
           ),
 
           // Full-page assistants view (replaces chat area)
-          if (isAssistantsFullPage)
+          if (isWorkspacesFullPage)
             Positioned.fill(
               left: (!isCompactMode && _isSidebarExpanded)
                   ? effectiveSidebarWidth
                   : 0,
-              child: AssistantsPage(
-                onOpenAssistant: (assistantId) {
-                  _chatUIKey.currentState?.newChatWithAssistant(assistantId);
+              child: WorkspacesPage(
+                onOpenWorkspace: (assistantId) {
+                  _chatUIKey.currentState?.newChatWithWorkspace(assistantId);
                   setState(() => _activePanel = null);
                 },
-                onClose: () => setState(() => _activePanel = null),
               ),
             ),
 
@@ -453,8 +439,8 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                     // Panel content
                     Expanded(
                       child: effectivePanel == 'projects'
-                          ? ProjectsPage(
-                              onOpenProject: _openProject,
+                          ? WorkspacesPage(
+                              onOpenWorkspace: _openWorkspace,
                               embedded: true,
                             )
                           : effectivePanel == 'media'
@@ -484,12 +470,12 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                   child: SidebarDesktop(
                     onChatSelected: _handleChatSelected,
                     onSettingsTapped: _openSettingsPage,
-                    onProjectsTapped: _openProjectsPage,
+                    onWorkspacesTapped: _openWorkspacesPage,
                     onMediaTapped: _openMediaPage,
                     onChatDeleted: _handleChatDeleted,
                     selectedChatId: ChatStorageService.selectedChatId,
                     isCompactMode: isCompactMode,
-                    showAssistantsButton: !isCompactMode || _isSidebarExpanded,
+                    showWorkspacesButton: !isCompactMode || _isSidebarExpanded,
                   ),
                 ),
               ),
@@ -608,7 +594,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
             ),
 
           // Layer 6: Projects (External for Desktop) - Feature Flag
-          if (kFeatureProjects && (!isCompactMode || _isSidebarExpanded))
+          if (kFeatureWorkspaces && (!isCompactMode || _isSidebarExpanded))
             Positioned(
               top:
                   kTopInitialSpacing +
@@ -618,7 +604,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                   kSpacingBetweenTopButtons,
               left: kFixedLeftPadding,
               child: InkWell(
-                onTap: _openProjectsPage,
+                onTap: _openWorkspacesPage,
                 borderRadius: BorderRadius.circular(8),
                 child: Container(
                   height: kButtonVisualHeight,
@@ -656,7 +642,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
             ),
 
           // Layer 7: Assistants (External for Desktop) - Feature Flag
-          if (kFeatureAssistants && (!isCompactMode || _isSidebarExpanded))
+          if (kFeatureWorkspaces && (!isCompactMode || _isSidebarExpanded))
             Positioned(
               top:
                   kTopInitialSpacing +
@@ -664,12 +650,12 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                   kSpacingBetweenTopButtons +
                   kButtonVisualHeight +
                   kSpacingBetweenTopButtons +
-                  (kFeatureProjects
+                  (kFeatureWorkspaces
                       ? kButtonVisualHeight + kSpacingBetweenTopButtons
                       : 0),
               left: kFixedLeftPadding,
               child: InkWell(
-                onTap: _openAssistantsPage,
+                onTap: _openWorkspacesPage,
                 borderRadius: BorderRadius.circular(8),
                 child: Container(
                   height: kButtonVisualHeight,
@@ -727,10 +713,10 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                   kSpacingBetweenTopButtons +
                   kButtonVisualHeight +
                   kSpacingBetweenTopButtons +
-                  (kFeatureProjects
+                  (kFeatureWorkspaces
                       ? kButtonVisualHeight + kSpacingBetweenTopButtons
                       : 0) +
-                  (kFeatureAssistants
+                  (kFeatureWorkspaces
                       ? kButtonVisualHeight + kSpacingBetweenTopButtons
                       : 0),
               left: kFixedLeftPadding,

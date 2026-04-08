@@ -1085,7 +1085,7 @@ final List<ClientTool> builtinTools = [
     ],
   ),
 
-  // ── Project management ─────────────────────────────────────────────
+  // ── Workspace management ─────────────────────────────────────────────
   ClientTool(
     name: 'artifact_manager',
     description:
@@ -1130,20 +1130,20 @@ final List<ClientTool> builtinTools = [
   ClientTool(
     name: 'update_project',
     description:
-        'Update the active project\'s custom instructions/system prompt. '
+        'Update the active workspace\'s custom instructions/system prompt. '
         'Use this to save new or revised instructions that will apply to '
-        'all future chats in this project. Can also update the project '
+        'all future chats in this workspace. Can also update the workspace '
         'name and description. At least one of instructions, name, or '
         'description must be provided.',
     parameters: {
       'instructions':
-          'string (optional: new custom system prompt / instructions for the project)',
-      'name': 'string (optional: new project name)',
-      'description': 'string (optional: new project description)',
+          'string (optional: new custom system prompt / instructions for the workspace)',
+      'name': 'string (optional: new workspace name)',
+      'description': 'string (optional: new workspace description)',
     },
     type: ToolType.builtin,
     tags: [
-      'project',
+      'workspace',
       'instructions',
       'system prompt',
       'update',

@@ -2,7 +2,7 @@
 // Runtime .env file loader for desktop platforms
 //
 // This allows running `flutter run` directly without --dart-define flags
-// during local development. The .env file is read from the project root.
+// during local development. The .env file is read from the workspace root.
 
 import 'package:chuk_chat/utils/io_helper.dart';
 
@@ -14,7 +14,7 @@ class EnvLoader {
   static final Map<String, String> _values = {};
   static bool _loaded = false;
 
-  /// Load .env file from the current directory or project root.
+  /// Load .env file from the current directory or workspace root.
   /// Safe to call multiple times - only loads once.
   static Future<void> load() async {
     if (_loaded) return;
@@ -33,7 +33,7 @@ class EnvLoader {
     try {
       // Try multiple possible locations for the .env file
       final possiblePaths = [
-        '.env', // Current directory (when running from project root)
+        '.env', // Current directory (when running from workspace root)
         '../../../.env', // When running from build directory
         '${Platform.environment['HOME']}/git/chuk_chat/.env', // Absolute fallback
       ];

@@ -32,10 +32,10 @@ import 'package:chuk_chat/platform_specific/chat/handlers/chat_persistence_handl
 import 'package:chuk_chat/platform_specific/chat/handlers/streaming_message_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/widgets/mobile_chat_widgets.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
-import 'package:chuk_chat/platform_specific/chat/handlers/mobile_project_handler.dart';
+import 'package:chuk_chat/platform_specific/chat/handlers/mobile_workspace_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/widgets/fullscreen_composer.dart';
-import 'package:chuk_chat/services/project_storage_service.dart';
-import 'package:chuk_chat/services/project_message_service.dart';
+import 'package:chuk_chat/services/workspace_storage_service.dart';
+import 'package:chuk_chat/services/workspace_message_service.dart';
 import 'package:chuk_chat/services/artifact_context_service.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 
@@ -142,8 +142,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   late final VoidCallback _networkStatusListener;
   Timer? _audioVisualizerTimer;
 
-  // Project state
-  String? _selectedProjectId;
+  // Workspace state
+  String? _selectedWorkspaceId;
 
   // Computed property - checks if CURRENT chat is streaming
   bool get _isCurrentChatStreaming =>
@@ -413,9 +413,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       // These can load in parallel after UI is shown
       unawaited(_loadSystemPrompt());
       unawaited(NetworkStatusService.quickCheck());
-      // Load projects for project selection feature
-      if (kFeatureProjects) {
-        unawaited(ProjectStorageService.loadFromCache());
+      // Load projects for workspace selection feature
+      if (kFeatureWorkspaces) {
+        unawaited(WorkspaceStorageService.loadFromCache());
       }
     });
   }
@@ -1144,17 +1144,17 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                     const Spacer(),
                   ],
                 ),
-                // Project selection row (when feature enabled)
-                if (kFeatureProjects) ...[
+                // Workspace selection row (when feature enabled)
+                if (kFeatureWorkspaces) ...[
                   const SizedBox(height: 12),
                   Row(
                     children: [
                       buildAttachmentSheetOption(
                         context: sheetContext,
-                        icon: _selectedProjectId != null
+                        icon: _selectedWorkspaceId != null
                             ? Icons.folder_open
                             : Icons.folder_outlined,
-                        label: 'Project',
+                        label: 'Workspace',
                         isEnabled: true,
                         onTap: () {
                           Navigator.of(sheetContext).pop();
@@ -1163,7 +1163,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                       ),
                     ],
                   ),
-                  if (_selectedProjectId != null) ...[
+                  if (_selectedWorkspaceId != null) ...[
                     const SizedBox(height: 8),
                     _buildSelectedProjectBadge(theme),
                   ],
@@ -1176,71 +1176,71 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     );
   }
 
-  /// Show project selection bottom sheet
+  /// Show workspace selection bottom sheet
   void _showProjectSelectionSheet() {
-    MobileProjectHandler.showProjectSelectionSheet(
+    MobileWorkspaceHandler.showProjectSelectionSheet(
       context: context,
-      selectedProjectId: _selectedProjectId,
+      selectedWorkspaceId: _selectedWorkspaceId,
       activeChatId: _activeChatId,
-      onProjectSelected: (projectId) {
+      onWorkspaceSelected: (workspaceId) {
         if (!mounted) return;
         setState(() {
-          _selectedProjectId = projectId;
+          _selectedWorkspaceId = workspaceId;
         });
       },
       onShowSnackBar: _showSnackBar,
       onStateChanged: () {
         if (mounted) setState(() {});
       },
-      onOpenProjectManagement: _openProjectManagement,
+      onOpenWorkspaceManagement: _openProjectManagement,
     );
   }
 
-  void _openProjectManagement(String projectId) {
-    MobileProjectHandler.openProjectManagement(
+  void _openProjectManagement(String workspaceId) {
+    MobileWorkspaceHandler.openProjectManagement(
       context: context,
-      projectId: projectId,
+      workspaceId: workspaceId,
       onStartNewChat: _startNewChatWithProject,
     );
   }
 
-  void _startNewChatWithProject(String? projectId) {
-    // Clear current chat and set project
+  void _startNewChatWithProject(String? workspaceId) {
+    // Clear current chat and set workspace
     setState(() {
       _activeChatId = null;
       _messages.clear();
-      _selectedProjectId = projectId;
+      _selectedWorkspaceId = workspaceId;
       _controller.clear();
     });
     widget.onChatIdChanged(null);
-    if (projectId != null) {
-      final project = ProjectStorageService.getProject(projectId);
-      if (project != null) {
-        _showSnackBar('New chat with project: ${project.name}');
+    if (workspaceId != null) {
+      final workspace = WorkspaceStorageService.getWorkspace(workspaceId);
+      if (workspace != null) {
+        _showSnackBar('New chat with workspace: ${workspace.name}');
       }
     }
   }
 
   Widget _buildSelectedProjectBadge(ThemeData theme) {
-    return MobileProjectHandler.buildSelectedProjectBadge(
+    return MobileWorkspaceHandler.buildSelectedProjectBadge(
       theme: theme,
-      selectedProjectId: _selectedProjectId!,
+      selectedWorkspaceId: _selectedWorkspaceId!,
       onClearProject: () {
         setState(() {
-          _selectedProjectId = null;
+          _selectedWorkspaceId = null;
         });
       },
     );
   }
 
-  /// Build a compact project indicator for the input area
+  /// Build a compact workspace indicator for the input area
   Widget _buildProjectIndicator(ThemeData theme) {
-    return MobileProjectHandler.buildProjectIndicator(
+    return MobileWorkspaceHandler.buildProjectIndicator(
       theme: theme,
-      selectedProjectId: _selectedProjectId!,
+      selectedWorkspaceId: _selectedWorkspaceId!,
       onClearProject: () {
         setState(() {
-          _selectedProjectId = null;
+          _selectedWorkspaceId = null;
         });
       },
       onShowSnackBar: _showSnackBar,
@@ -1899,7 +1899,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       }
     }
 
-    // Resolve system prompt with project context (if any)
+    // Resolve system prompt with workspace context (if any)
     final resolvedSystemPrompt = await _resolveSystemPromptForSend();
 
     // Send with streaming handler using the CAPTURED chatId, not _activeChatId
@@ -1914,10 +1914,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         '📤 [ChatDebug] Sending ${attachedFilesForApi.length} attached files to API',
       );
     }
-    if (_selectedProjectId != null) {
+    if (_selectedWorkspaceId != null) {
       if (kDebugMode) {
         debugPrint(
-          '📁 [ChatDebug] Project context included: $_selectedProjectId',
+          '📁 [ChatDebug] Workspace context included: $_selectedWorkspaceId',
         );
       }
     }
@@ -1963,7 +1963,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     return history;
   }
 
-  /// Resolve system prompt with project context (if any)
+  /// Resolve system prompt with workspace context (if any)
   Future<String?> _resolveSystemPromptForSend() async {
     // Always reload the system prompt from the database so that changes
     // made in SystemPromptPage take effect without restarting the app.
@@ -1987,14 +1987,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
     var resolvedPrompt = basePrompt;
 
-    // If a project is active, prepend project context
-    if (_selectedProjectId != null && kFeatureProjects) {
+    // If a workspace is active, prepend workspace context
+    if (_selectedWorkspaceId != null && kFeatureWorkspaces) {
       try {
         final projectContext =
-            await ProjectMessageService.buildProjectSystemMessage(
-              _selectedProjectId!,
+            await WorkspaceMessageService.buildProjectSystemMessage(
+              _selectedWorkspaceId!,
             );
-        // Combine project context with user's system prompt
+        // Combine workspace context with user's system prompt
         if (resolvedPrompt != null && resolvedPrompt.isNotEmpty) {
           resolvedPrompt =
               '$projectContext\n\n---\n\nAdditional User Instructions:\n$resolvedPrompt';
@@ -2003,9 +2003,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         }
       } catch (error) {
         if (kDebugMode) {
-          debugPrint('Error building project system message: $error');
+          debugPrint('Error building workspace system message: $error');
         }
-        // Fall back to base prompt if project context fails
+        // Fall back to base prompt if workspace context fails
       }
     }
 
@@ -2180,7 +2180,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     _persistChat();
     _scrollChatToBottom(force: true);
 
-    // Resolve system prompt with project context (if any)
+    // Resolve system prompt with workspace context (if any)
     final resolvedSystemPrompt = await _resolveSystemPromptForSend();
 
     // Send using streaming handler with preserved model/provider and attached files
@@ -2902,9 +2902,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              // Project indicator
-                              if (kFeatureProjects &&
-                                  _selectedProjectId != null)
+                              // Workspace indicator
+                              if (kFeatureWorkspaces &&
+                                  _selectedWorkspaceId != null)
                                 Padding(
                                   padding: const EdgeInsets.only(bottom: 8),
                                   child: _buildProjectIndicator(theme),

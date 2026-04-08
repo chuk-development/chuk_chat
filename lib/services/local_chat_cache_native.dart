@@ -327,7 +327,7 @@ class LocalChatCacheService {
       }
 
       // Remove ALL v1 encrypted caches (current user + any old test accounts).
-      // Also remove stale model cache and old project cache.
+      // Also remove stale model cache and old workspace cache.
       final keysToRemove = prefs
           .getKeys()
           .where(

@@ -328,7 +328,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       }
 
       final String? systemPrompt = await _resolveSystemPromptForSend();
-      final assistant = _resolveAssistantForCurrentChat();
+      final assistant = _resolveWorkspaceForCurrentChat();
       final skipIdentity = assistant != null && !assistant.memoryEnabled;
 
       if (_isSendOperationCancelled(sendOperationId)) {
@@ -1132,7 +1132,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       final String providerSlug = result.providerSlug!;
       final int maxResponseTokens = result.maxResponseTokens!;
       final String? systemPrompt = result.effectiveSystemPrompt;
-      final assistantForChat = _resolveAssistantForCurrentChat();
+      final assistantForChat = _resolveWorkspaceForCurrentChat();
       final skipIdentity = assistantForChat != null && !assistantForChat.memoryEnabled;
       final List<String>? imageDataUrls = result.images;
 
@@ -1193,12 +1193,12 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         }
 
         // Link new chat to assistant if one is pending
-        if (_pendingAssistantId != null) {
-          final assistantId = _pendingAssistantId!;
-          _pendingAssistantId = null;
+        if (_pendingWorkspaceId != null) {
+          final assistantId = _pendingWorkspaceId!;
+          _pendingWorkspaceId = null;
           // Fire-and-forget — the link is created in the background
           unawaited(
-            AssistantStorageService.linkChatToAssistant(
+            WorkspaceStorageService.linkChatToWorkspace(
               assistantId,
               _activeChatId!,
             ),

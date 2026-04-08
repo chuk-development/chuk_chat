@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 const String _nominatimBaseUrl = 'https://nominatim.openstreetmap.org';
-const String _osrmBaseUrl = 'https://router.project-osrm.org';
+const String _osrmBaseUrl = 'https://router.workspace-osrm.org';
 const Map<String, String> _defaultHeaders = {
   'Accept': 'application/json',
   'User-Agent': 'chuk-chat/1.0',

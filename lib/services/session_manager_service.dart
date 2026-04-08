@@ -12,7 +12,7 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_sync_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/password_revision_service.dart';
-import 'package:chuk_chat/services/project_storage_service.dart';
+import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
@@ -213,7 +213,7 @@ class SessionManagerService extends ChangeNotifier {
 
     await EncryptionService.clearKey();
     await ChatStorageService.reset();
-    await ProjectStorageService.reset();
+    await WorkspaceStorageService.reset();
     await PasswordRevisionService.clearCachedRevision();
 
     // Reset theme to local prefs

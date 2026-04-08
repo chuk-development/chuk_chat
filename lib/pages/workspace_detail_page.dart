@@ -1,36 +1,36 @@
-// lib/pages/project_detail_page.dart
+// lib/pages/workspace_detail_page.dart
 import 'dart:async';
 
 import 'package:chuk_chat/constants/file_constants.dart';
-import 'package:chuk_chat/models/project_model.dart';
+import 'package:chuk_chat/models/workspace_model.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
-import 'package:chuk_chat/services/project_message_service.dart';
-import 'package:chuk_chat/services/project_storage_service.dart';
+import 'package:chuk_chat/services/workspace_message_service.dart';
+import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
-import 'package:chuk_chat/widgets/project_file_viewer.dart';
+import 'package:chuk_chat/widgets/workspace_file_viewer.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
-class ProjectDetailPage extends StatefulWidget {
-  final String projectId;
-  final Function(String? projectId)? onStartNewChat;
+class WorkspaceDetailPage extends StatefulWidget {
+  final String workspaceId;
+  final Function(String? workspaceId)? onStartNewChat;
 
-  const ProjectDetailPage({
+  const WorkspaceDetailPage({
     super.key,
-    required this.projectId,
+    required this.workspaceId,
     this.onStartNewChat,
   });
 
   @override
-  State<ProjectDetailPage> createState() => _ProjectDetailPageState();
+  State<WorkspaceDetailPage> createState() => _WorkspaceDetailPageState();
 }
 
-class _ProjectDetailPageState extends State<ProjectDetailPage>
+class _WorkspaceDetailPageState extends State<WorkspaceDetailPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  Project? _project;
+  Workspace? _project;
   List<StoredChat> _projectChats = [];
   StreamSubscription<void>? _projectUpdatesSub;
   bool _isLoading = true;
@@ -56,7 +56,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
     _tabController = TabController(length: 3, vsync: this);
     _loadProject();
     _loadModelId();
-    _projectUpdatesSub = ProjectStorageService.changes.listen((_) {
+    _projectUpdatesSub = WorkspaceStorageService.changes.listen((_) {
       if (!mounted) return;
       _loadProject();
     });
@@ -82,22 +82,22 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
   Future<void> _loadProject() async {
     setState(() => _isLoading = true);
     try {
-      final project = ProjectStorageService.getProject(widget.projectId);
-      if (project == null) {
-        throw StateError('Project not found');
+      final workspace = WorkspaceStorageService.getWorkspace(widget.workspaceId);
+      if (workspace == null) {
+        throw StateError('Workspace not found');
       }
-      final chats = await ProjectStorageService.getProjectChats(
-        widget.projectId,
+      final chats = await WorkspaceStorageService.getProjectChats(
+        widget.workspaceId,
       );
       if (mounted) {
         setState(() {
-          _project = project;
+          _project = workspace;
           _projectChats = chats;
           // Only update text controllers if not actively editing
           if (!_hasSettingsChanges) {
-            _nameController.text = project.name;
-            _descriptionController.text = project.description ?? '';
-            _systemPromptController.text = project.customSystemPrompt ?? '';
+            _nameController.text = workspace.name;
+            _descriptionController.text = workspace.description ?? '';
+            _systemPromptController.text = workspace.customSystemPrompt ?? '';
           }
           _isLoading = false;
         });
@@ -107,7 +107,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Failed to load project: $e')));
+        ).showSnackBar(SnackBar(content: Text('Failed to load workspace: $e')));
         Navigator.pop(context);
       }
     }
@@ -118,14 +118,14 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
     final name = _nameController.text.trim();
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Project name cannot be empty')),
+        const SnackBar(content: Text('Workspace name cannot be empty')),
       );
       return;
     }
 
     try {
-      await ProjectStorageService.updateProject(
-        widget.projectId,
+      await WorkspaceStorageService.updateProject(
+        widget.workspaceId,
         name: name,
         description: _descriptionController.text.trim(),
         customSystemPrompt: _systemPromptController.text.trim(),
@@ -165,13 +165,13 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
 
     if (selected != null && mounted) {
       try {
-        await ProjectStorageService.addChatToProject(
-          widget.projectId,
+        await WorkspaceStorageService.addChatToProject(
+          widget.workspaceId,
           selected.id,
         );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Chat added to project')),
+            const SnackBar(content: Text('Chat added to workspace')),
           );
         }
       } catch (e) {
@@ -186,13 +186,13 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
 
   Future<void> _removeChat(String chatId) async {
     try {
-      await ProjectStorageService.removeChatFromProject(
-        widget.projectId,
+      await WorkspaceStorageService.removeChatFromProject(
+        widget.workspaceId,
         chatId,
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Chat removed from project')),
+          const SnackBar(content: Text('Chat removed from workspace')),
         );
       }
     } catch (e) {
@@ -243,7 +243,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
 
       // Check context budget before uploading
       final estimatedNewTokens = (fileBytes.length / 4).ceil();
-      final remaining = ProjectMessageService.remainingFileTokenBudget(
+      final remaining = WorkspaceMessageService.remainingFileTokenBudget(
         _project!,
         _selectedModelId,
       );
@@ -256,7 +256,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
               content: Text(
                 'This file (~${_formatTokenCount(estimatedNewTokens)} tokens) '
                 'would exceed the context budget for your current model. '
-                'The AI may not be able to use all project files.\n\n'
+                'The AI may not be able to use all workspace files.\n\n'
                 'Upload anyway?',
               ),
               actions: [
@@ -277,8 +277,8 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
 
       if (!mounted || _project == null) return;
 
-      await ProjectStorageService.uploadFile(
-        widget.projectId,
+      await WorkspaceStorageService.uploadFile(
+        widget.workspaceId,
         fileName,
         fileBytes,
         fileType,
@@ -325,7 +325,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
     }
   }
 
-  Future<void> _deleteFile(ProjectFile file) async {
+  Future<void> _deleteFile(WorkspaceFile file) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -347,7 +347,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
 
     if (confirmed == true) {
       try {
-        await ProjectStorageService.deleteFile(widget.projectId, file.id);
+        await WorkspaceStorageService.deleteFile(widget.workspaceId, file.id);
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(
@@ -371,12 +371,12 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
 
     if (_project == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Project Not Found')),
-        body: const Center(child: Text('Project not found')),
+        appBar: AppBar(title: const Text('Workspace Not Found')),
+        body: const Center(child: Text('Workspace not found')),
       );
     }
 
-    final projectColor = _project!.projectColor;
+    final displayColor = _project!.displayColor;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -388,10 +388,10 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
               width: 30,
               height: 30,
               decoration: BoxDecoration(
-                color: projectColor.withValues(alpha: isDark ? 0.2 : 0.12),
+                color: displayColor.withValues(alpha: isDark ? 0.2 : 0.12),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(_project!.projectIcon, color: projectColor, size: 16),
+              child: Icon(_project!.displayIcon, color: displayColor, size: 16),
             ),
             const SizedBox(width: 10),
             Flexible(
@@ -405,8 +405,8 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
         ),
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: projectColor,
-          labelColor: projectColor,
+          indicatorColor: displayColor,
+          labelColor: displayColor,
           tabs: [
             Tab(
               child: Row(
@@ -420,7 +420,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
                       padding: const EdgeInsets.only(left: 6),
                       child: _CountBadge(
                         count: _project!.fileCount,
-                        color: projectColor,
+                        color: displayColor,
                       ),
                     ),
                 ],
@@ -438,7 +438,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
                       padding: const EdgeInsets.only(left: 6),
                       child: _CountBadge(
                         count: _project!.chatCount,
-                        color: projectColor,
+                        color: displayColor,
                       ),
                     ),
                 ],
@@ -464,12 +464,12 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
       floatingActionButton: widget.onStartNewChat != null
           ? FloatingActionButton.extended(
               onPressed: () {
-                widget.onStartNewChat!(widget.projectId);
+                widget.onStartNewChat!(widget.workspaceId);
                 Navigator.pop(context);
               },
               icon: const Icon(Icons.add_comment),
               label: const Text('New Chat'),
-              backgroundColor: projectColor,
+              backgroundColor: displayColor,
               foregroundColor: Colors.white,
             )
           : null,
@@ -480,21 +480,21 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
 
   Widget _buildFilesTab() {
     final iconFg = Theme.of(context).resolvedIconColor;
-    final projectColor = _project!.projectColor;
+    final displayColor = _project!.displayColor;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // Context budget calculations
-    final contextRatio = ProjectMessageService.contextUsageRatio(
+    final contextRatio = WorkspaceMessageService.contextUsageRatio(
       _project!,
       _selectedModelId,
     );
-    final contextWindow = ProjectMessageService.getModelContextWindow(
+    final contextWindow = WorkspaceMessageService.getModelContextWindow(
       _selectedModelId,
     );
-    final totalFileTokens = ProjectMessageService.estimateTotalFileTokens(
+    final totalFileTokens = WorkspaceMessageService.estimateTotalFileTokens(
       _project!,
     );
-    final remaining = ProjectMessageService.remainingFileTokenBudget(
+    final remaining = WorkspaceMessageService.remainingFileTokenBudget(
       _project!,
       _selectedModelId,
     );
@@ -510,7 +510,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
               ratio: contextRatio,
               totalTokens: totalFileTokens,
               contextWindow: contextWindow ?? 0,
-              projectColor: projectColor,
+              displayColor: displayColor,
               isOverBudget: isOverBudget,
             ),
           ),
@@ -532,7 +532,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
                 side: BorderSide(
                   color: isOverBudget
                       ? Colors.orange.withValues(alpha: 0.5)
-                      : projectColor.withValues(alpha: 0.5),
+                      : displayColor.withValues(alpha: 0.5),
                 ),
               ),
             ),
@@ -554,7 +554,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.insert_drive_file, color: projectColor),
+                        Icon(Icons.insert_drive_file, color: displayColor),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -581,12 +581,12 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
                           ? LinearProgressIndicator(
                               value: _uploadProgress,
                               valueColor: AlwaysStoppedAnimation<Color>(
-                                projectColor,
+                                displayColor,
                               ),
                             )
                           : LinearProgressIndicator(
                               valueColor: AlwaysStoppedAnimation<Color>(
-                                projectColor,
+                                displayColor,
                               ),
                             ),
                     ),
@@ -634,7 +634,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
                   itemCount: _project!.files.length,
                   itemBuilder: (context, index) {
                     final file = _project!.files[index];
-                    final fileRatio = ProjectMessageService.fileContextRatio(
+                    final fileRatio = WorkspaceMessageService.fileContextRatio(
                       file,
                       _selectedModelId,
                     );
@@ -651,14 +651,14 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
                           width: 40,
                           height: 40,
                           decoration: BoxDecoration(
-                            color: projectColor.withValues(
+                            color: displayColor.withValues(
                               alpha: isDark ? 0.15 : 0.1,
                             ),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Icon(
                             file.fileIcon,
-                            color: projectColor,
+                            color: displayColor,
                             size: 20,
                           ),
                         ),
@@ -734,10 +734,10 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
                                   _,
                                 ) {
                                   if (!mounted) return;
-                                  ProjectFileViewer.show(
+                                  WorkspaceFileViewer.show(
                                     currentContext,
                                     file,
-                                    widget.projectId,
+                                    widget.workspaceId,
                                   );
                                 });
                               },
@@ -764,10 +764,10 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
                             ),
                           ],
                         ),
-                        onTap: () => ProjectFileViewer.show(
+                        onTap: () => WorkspaceFileViewer.show(
                           context,
                           file,
-                          widget.projectId,
+                          widget.workspaceId,
                         ),
                       ),
                     );
@@ -820,7 +820,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
 
   Widget _buildChatsTab() {
     final iconFg = Theme.of(context).resolvedIconColor;
-    final projectColor = _project!.projectColor;
+    final displayColor = _project!.displayColor;
 
     return Column(
       children: [
@@ -838,7 +838,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
-                side: BorderSide(color: projectColor.withValues(alpha: 0.5)),
+                side: BorderSide(color: displayColor.withValues(alpha: 0.5)),
               ),
             ),
           ),
@@ -857,7 +857,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        'No chats in this project',
+                        'No chats in this workspace',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
@@ -908,7 +908,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
                             size: 20,
                           ),
                           onPressed: () => _removeChat(chat.id),
-                          tooltip: 'Remove from project',
+                          tooltip: 'Remove from workspace',
                         ),
                       ),
                     );
@@ -924,7 +924,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
   Widget _buildSettingsTab() {
     final theme = Theme.of(context);
     final iconFg = theme.resolvedIconColor;
-    final projectColor = _project!.projectColor;
+    final displayColor = _project!.displayColor;
     final isDark = theme.brightness == Brightness.dark;
 
     return SingleChildScrollView(
@@ -932,7 +932,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Project identity card
+          // Workspace identity card
           Card(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
@@ -942,21 +942,21 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Project avatar + stats header
+                  // Workspace avatar + stats header
                   Row(
                     children: [
                       Container(
                         width: 48,
                         height: 48,
                         decoration: BoxDecoration(
-                          color: projectColor.withValues(
+                          color: displayColor.withValues(
                             alpha: isDark ? 0.2 : 0.12,
                           ),
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: Icon(
-                          _project!.projectIcon,
-                          color: projectColor,
+                          _project!.displayIcon,
+                          color: displayColor,
                           size: 24,
                         ),
                       ),
@@ -990,7 +990,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
 
                   // Name
                   Text(
-                    'Project Name',
+                    'Workspace Name',
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 13,
@@ -1004,7 +1004,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      hintText: 'Project name',
+                      hintText: 'Workspace name',
                     ),
                     onChanged: (_) =>
                         setState(() => _hasSettingsChanges = true),
@@ -1027,7 +1027,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      hintText: 'What is this project about?',
+                      hintText: 'What is this workspace about?',
                     ),
                     maxLines: 3,
                     onChanged: (_) =>
@@ -1052,7 +1052,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.tune, color: projectColor, size: 20),
+                      Icon(Icons.tune, color: displayColor, size: 20),
                       const SizedBox(width: 8),
                       Text(
                         'Custom System Prompt',
@@ -1067,7 +1067,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
                   const SizedBox(height: 4),
                   Text(
                     'These instructions are sent to the AI at the start of '
-                    'every chat in this project.',
+                    'every chat in this workspace.',
                     style: TextStyle(
                       fontSize: 12,
                       color: iconFg.withValues(alpha: 0.5),
@@ -1082,7 +1082,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
                       ),
                       hintText:
                           'e.g., You are a senior developer helping with a '
-                          'Flutter project. Use Dart best practices...',
+                          'Flutter workspace. Use Dart best practices...',
                       hintMaxLines: 3,
                     ),
                     maxLines: 6,
@@ -1104,7 +1104,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
                 icon: const Icon(Icons.save, size: 18),
                 label: const Text('Save Changes'),
                 style: FilledButton.styleFrom(
-                  backgroundColor: projectColor,
+                  backgroundColor: displayColor,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
@@ -1152,9 +1152,9 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
                         final confirmed = await showDialog<bool>(
                           context: context,
                           builder: (context) => AlertDialog(
-                            title: const Text('Delete Project'),
+                            title: const Text('Delete Workspace'),
                             content: const Text(
-                              'Are you sure? This will remove the project '
+                              'Are you sure? This will remove the workspace '
                               'workspace. Chats and files will not be deleted.',
                             ),
                             actions: [
@@ -1174,22 +1174,22 @@ class _ProjectDetailPageState extends State<ProjectDetailPage>
                         );
                         if (confirmed == true && mounted) {
                           try {
-                            await ProjectStorageService.deleteProject(
-                              widget.projectId,
+                            await WorkspaceStorageService.deleteProject(
+                              widget.workspaceId,
                             );
                             if (mounted) Navigator.pop(context);
                           } catch (e) {
                             if (!mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text('Failed to delete project: $e'),
+                                content: Text('Failed to delete workspace: $e'),
                               ),
                             );
                           }
                         }
                       },
                       icon: const Icon(Icons.delete_outline, size: 18),
-                      label: const Text('Delete Project'),
+                      label: const Text('Delete Workspace'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.red,
                         side: const BorderSide(color: Colors.red),
@@ -1218,14 +1218,14 @@ class _ContextUsageBar extends StatelessWidget {
   final double ratio;
   final int totalTokens;
   final int contextWindow;
-  final Color projectColor;
+  final Color displayColor;
   final bool isOverBudget;
 
   const _ContextUsageBar({
     required this.ratio,
     required this.totalTokens,
     required this.contextWindow,
-    required this.projectColor,
+    required this.displayColor,
     required this.isOverBudget,
   });
 
@@ -1240,7 +1240,7 @@ class _ContextUsageBar extends StatelessWidget {
         ? Colors.red
         : ratio > 0.50
         ? Colors.orange
-        : projectColor;
+        : displayColor;
 
     String tokenLabel;
     if (totalTokens < 1000) {

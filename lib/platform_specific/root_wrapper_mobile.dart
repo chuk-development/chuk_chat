@@ -10,7 +10,7 @@ import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/models/artifact.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/constants.dart';
-import 'package:chuk_chat/pages/projects_page.dart';
+import 'package:chuk_chat/pages/workspaces_page.dart';
 import 'package:chuk_chat/pages/media_manager_page.dart';
 import 'package:chuk_chat/pages/settings_page.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_mobile.dart';
@@ -21,7 +21,6 @@ import 'package:chuk_chat/services/developer_options_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/widgets/artifact_panel.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:chuk_chat/pages/coming_soon_page.dart';
 import 'package:chuk_chat/utils/debug_chat_formatter.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:flutter/foundation.dart';
@@ -225,23 +224,11 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     );
   }
 
-  void _openProjectsPage() {
+  void _openWorkspacesPage() {
     if (_isSidebarExpanded) _toggleSidebar();
     Navigator.of(
       context,
-    ).push(MaterialPageRoute(builder: (_) => const ProjectsPage()));
-  }
-
-  void _openAssistantsPage() {
-    if (_isSidebarExpanded) _toggleSidebar();
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const ComingSoonPage(
-          title: 'Assistants',
-          message: 'Assistants are coming soon.',
-        ),
-      ),
-    );
+    ).push(MaterialPageRoute(builder: (_) => const WorkspacesPage()));
   }
 
   void _openMediaPage() {
@@ -537,9 +524,8 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                   child: SidebarMobile(
                     onChatSelected: _handleChatSelected,
                     onSettingsTapped: _openSettingsPage,
-                    onProjectsTapped: _openProjectsPage,
+                    onWorkspacesTapped: _openWorkspacesPage,
                     onMediaTapped: _openMediaPage,
-                    onAssistantsTapped: _openAssistantsPage,
                     onChatDeleted: _handleChatDeleted,
                     selectedChatId: ChatStorageService.selectedChatId,
                     isCompactMode: true,

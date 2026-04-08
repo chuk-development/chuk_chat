@@ -12,7 +12,7 @@ import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/chat_sync_service.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
-import 'package:chuk_chat/services/project_storage_service.dart';
+import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/settings_sync_service.dart';
 import 'package:chuk_chat/services/streaming_foreground_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -287,9 +287,9 @@ class AppInitializationService {
 
     // Load projects in parallel
     unawaited(
-      ProjectStorageService.loadProjects().catchError((error) {
+      WorkspaceStorageService.loadProjects().catchError((error) {
         if (kDebugMode) {
-          debugPrint('⚠️ [AppInit] Project loading failed: $error');
+          debugPrint('⚠️ [AppInit] Workspace loading failed: $error');
         }
       }),
     );
@@ -399,7 +399,7 @@ class AppInitializationService {
     await EncryptionService.clearKey();
     await Future.wait([
       ChatStorageService.reset(),
-      ProjectStorageService.reset(),
+      WorkspaceStorageService.reset(),
     ]);
   }
 }

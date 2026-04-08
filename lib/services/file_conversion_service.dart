@@ -16,7 +16,7 @@ import 'package:chuk_chat/utils/certificate_pinning.dart';
 /// archives, e-books, and email files.
 ///
 /// Note: Plain text files (code, config, etc.) are handled directly by
-/// ChatApiService and ProjectStorageService without using this API.
+/// ChatApiService and WorkspaceStorageService without using this API.
 /// This service is only used for binary files (PDF, Office docs, audio, etc.)
 class FileConversionService {
   static String get _apiBaseUrl => ApiConfigService.apiBaseUrl;

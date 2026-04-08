@@ -1,12 +1,12 @@
-// lib/services/project_message_service.dart
-import 'package:chuk_chat/models/project_model.dart';
-import 'package:chuk_chat/services/project_storage_service.dart';
+// lib/services/workspace_message_service.dart
+import 'package:chuk_chat/models/workspace_model.dart';
+import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:flutter/foundation.dart';
 
-/// Service for composing AI messages with project context
-class ProjectMessageService {
+/// Service for composing AI messages with workspace context
+class WorkspaceMessageService {
   // Maximum total content length to include in context (to avoid token limits)
   // This is for the actual text sent to LLM, not raw file sizes
   static const int maxTotalContentLength = 500000; // ~500KB of text content
@@ -14,7 +14,7 @@ class ProjectMessageService {
       100000; // ~100KB for chat history
 
   /// Estimate how much content a file will add to the context
-  static int _estimateContentLength(ProjectFile file) {
+  static int _estimateContentLength(WorkspaceFile file) {
     // For files with markdown summaries (PDFs, etc.), use summary length
     if (file.hasMarkdownSummary) {
       return file.markdownSummary!.length + 200; // +200 for headers
@@ -31,43 +31,43 @@ class ProjectMessageService {
     return file.fileSize + 200; // +200 for code block markers
   }
 
-  /// Build a system message with project context
-  static Future<String> buildProjectSystemMessage(String projectId) async {
-    final project = ProjectStorageService.getProject(projectId);
-    if (project == null) {
-      throw StateError('Project not found: $projectId');
+  /// Build a system message with workspace context
+  static Future<String> buildProjectSystemMessage(String workspaceId) async {
+    final workspace = WorkspaceStorageService.getWorkspace(workspaceId);
+    if (workspace == null) {
+      throw StateError('Workspace not found: $workspaceId');
     }
 
     final buffer = StringBuffer();
 
-    // Project name and description
-    buffer.writeln('You are working in the project: "${project.name}"');
-    if (project.description != null && project.description!.trim().isNotEmpty) {
+    // Workspace name and description
+    buffer.writeln('You are working in the workspace: "${workspace.name}"');
+    if (workspace.description != null && workspace.description!.trim().isNotEmpty) {
       buffer.writeln();
-      buffer.writeln('Project Description:');
-      buffer.writeln(project.description!.trim());
+      buffer.writeln('Workspace Description:');
+      buffer.writeln(workspace.description!.trim());
     }
 
     // Custom system prompt
-    if (project.hasCustomPrompt) {
+    if (workspace.hasCustomPrompt) {
       buffer.writeln();
-      buffer.writeln('Custom System Prompt for this Project:');
-      buffer.writeln(project.customSystemPrompt!.trim());
+      buffer.writeln('Custom System Prompt for this Workspace:');
+      buffer.writeln(workspace.customSystemPrompt!.trim());
     }
 
     // File context
-    if (project.files.isNotEmpty) {
+    if (workspace.files.isNotEmpty) {
       buffer.writeln();
       buffer.writeln('---');
       buffer.writeln();
-      buffer.writeln('Available Files in this Project:');
+      buffer.writeln('Available Files in this Workspace:');
       buffer.writeln();
 
       int totalContentLength = 0;
-      final includedFiles = <ProjectFile>[];
+      final includedFiles = <WorkspaceFile>[];
 
       // Sort files by upload date (most recent first)
-      final sortedFiles = List<ProjectFile>.from(project.files)
+      final sortedFiles = List<WorkspaceFile>.from(workspace.files)
         ..sort((a, b) => b.uploadedAt.compareTo(a.uploadedAt));
 
       // Include files until we hit the size limit
@@ -124,7 +124,7 @@ class ProjectMessageService {
             }
           } else {
             // Text-based file - include actual content
-            final content = await ProjectStorageService.decryptFile(file.id);
+            final content = await WorkspaceStorageService.decryptFile(file.id);
             buffer.writeln('**File Content:**');
             buffer.writeln('```${file.extension}');
             buffer.writeln(content);
@@ -147,7 +147,7 @@ class ProjectMessageService {
       }
 
       // Note about excluded files
-      final excludedCount = project.files.length - includedFiles.length;
+      final excludedCount = workspace.files.length - includedFiles.length;
       if (excludedCount > 0) {
         buffer.writeln(
           'Note: $excludedCount additional file(s) excluded due to size limits.',
@@ -157,16 +157,16 @@ class ProjectMessageService {
     }
 
     // Include chat history from associated chats
-    if (project.chatIds.isNotEmpty) {
+    if (workspace.chatIds.isNotEmpty) {
       buffer.writeln('---');
       buffer.writeln();
-      buffer.writeln('Previous Conversations in this Project:');
+      buffer.writeln('Previous Conversations in this Workspace:');
       buffer.writeln();
 
       int chatContentLength = 0;
       int includedChats = 0;
 
-      for (final chatId in project.chatIds) {
+      for (final chatId in workspace.chatIds) {
         if (chatContentLength >= maxChatHistoryContentLength) {
           if (kDebugMode) {
             debugPrint(
@@ -207,7 +207,7 @@ class ProjectMessageService {
         }
       }
 
-      final excludedChats = project.chatIds.length - includedChats;
+      final excludedChats = workspace.chatIds.length - includedChats;
       if (excludedChats > 0) {
         buffer.writeln(
           'Note: $excludedChats additional chat(s) excluded due to size limits.',
@@ -219,7 +219,7 @@ class ProjectMessageService {
     buffer.writeln('---');
     buffer.writeln();
     buffer.writeln(
-      'Please use the above project context, files, chat history, and custom instructions when responding to the user.',
+      'Please use the above workspace context, files, chat history, and custom instructions when responding to the user.',
     );
 
     return buffer.toString();
@@ -230,7 +230,7 @@ class ProjectMessageService {
     final buffer = StringBuffer();
 
     for (final message in chat.messages) {
-      final role = message.role == 'user' ? 'User' : 'Assistant';
+      final role = message.role == 'user' ? 'User' : 'Workspace';
       final content = message.text.trim();
       if (content.isEmpty) continue;
 
@@ -268,14 +268,14 @@ class ProjectMessageService {
     }
   }
 
-  /// Inject project context into message list
-  /// Prepends a system message with project context to the conversation
+  /// Inject workspace context into message list
+  /// Prepends a system message with workspace context to the conversation
   static Future<List<Map<String, dynamic>>> injectProjectContext(
-    String projectId,
+    String workspaceId,
     List<Map<String, dynamic>> messages,
   ) async {
     try {
-      final projectSystemMessage = await buildProjectSystemMessage(projectId);
+      final projectSystemMessage = await buildProjectSystemMessage(workspaceId);
 
       // Create system message
       final systemMessage = {'role': 'system', 'text': projectSystemMessage};
@@ -291,23 +291,23 @@ class ProjectMessageService {
     }
   }
 
-  /// Get a summary of project context (for UI display)
-  static String getProjectContextSummary(Project project) {
+  /// Get a summary of workspace context (for UI display)
+  static String getProjectContextSummary(Workspace workspace) {
     final parts = <String>[];
 
-    if (project.hasCustomPrompt) {
+    if (workspace.hasCustomPrompt) {
       parts.add('Custom prompt');
     }
 
-    if (project.fileCount > 0) {
+    if (workspace.fileCount > 0) {
       parts.add(
-        '${project.fileCount} file${project.fileCount == 1 ? '' : 's'}',
+        '${workspace.fileCount} file${workspace.fileCount == 1 ? '' : 's'}',
       );
     }
 
-    if (project.chatCount > 0) {
+    if (workspace.chatCount > 0) {
       parts.add(
-        '${project.chatCount} chat${project.chatCount == 1 ? '' : 's'}',
+        '${workspace.chatCount} chat${workspace.chatCount == 1 ? '' : 's'}',
       );
     }
 
@@ -318,43 +318,43 @@ class ProjectMessageService {
     return parts.join(' • ');
   }
 
-  /// Check if a project has meaningful context
-  static bool hasContext(Project project) {
-    return project.hasCustomPrompt ||
-        project.fileCount > 0 ||
-        project.chatCount > 0;
+  /// Check if a workspace has meaningful context
+  static bool hasContext(Workspace workspace) {
+    return workspace.hasCustomPrompt ||
+        workspace.fileCount > 0 ||
+        workspace.chatCount > 0;
   }
 
   // ============ CONTEXT BUDGET ============
 
-  /// Estimate total tokens for all files in a project.
-  static int estimateTotalFileTokens(Project project) {
+  /// Estimate total tokens for all files in a workspace.
+  static int estimateTotalFileTokens(Workspace workspace) {
     int total = 0;
-    for (final file in project.files) {
+    for (final file in workspace.files) {
       total += file.estimatedTokens;
     }
     return total;
   }
 
-  /// Estimate total tokens used by the project context (files + chats + prompt).
+  /// Estimate total tokens used by the workspace context (files + chats + prompt).
   /// This is an approximate upper bound of what buildProjectSystemMessage produces.
-  static int estimateProjectContextTokens(Project project) {
+  static int estimateProjectContextTokens(Workspace workspace) {
     int total = 0;
 
-    // Project header (~50 tokens for name + description)
+    // Workspace header (~50 tokens for name + description)
     total += 50;
 
     // Custom system prompt
-    if (project.hasCustomPrompt) {
-      total += (project.customSystemPrompt!.length / 4).ceil() + 10;
+    if (workspace.hasCustomPrompt) {
+      total += (workspace.customSystemPrompt!.length / 4).ceil() + 10;
     }
 
     // Files
-    total += estimateTotalFileTokens(project);
+    total += estimateTotalFileTokens(workspace);
 
     // Chat history estimate aligned to actual prompt cap:
     // up to ~100k chars (~25k tokens) total across linked chats.
-    final estimatedChatTokens = project.chatCount * 2000;
+    final estimatedChatTokens = workspace.chatCount * 2000;
     final chatTokenCap = maxChatHistoryContentLength ~/ 4;
     total += estimatedChatTokens > chatTokenCap
         ? chatTokenCap
@@ -371,35 +371,35 @@ class ProjectMessageService {
     return limits?.contextLength;
   }
 
-  /// Calculate what % of the model's context window the project would use.
+  /// Calculate what % of the model's context window the workspace would use.
   /// Returns null if model context window is unknown.
   /// Value is 0.0 to 1.0+.
-  static double? contextUsageRatio(Project project, String? modelId) {
+  static double? contextUsageRatio(Workspace workspace, String? modelId) {
     final contextWindow = getModelContextWindow(modelId);
     if (contextWindow == null || contextWindow <= 0) return null;
-    final projectTokens = estimateProjectContextTokens(project);
+    final projectTokens = estimateProjectContextTokens(workspace);
     return projectTokens / contextWindow;
   }
 
   /// Calculate what % of the model's context a single file would use.
   /// Returns null if model context window is unknown.
-  static double? fileContextRatio(ProjectFile file, String? modelId) {
+  static double? fileContextRatio(WorkspaceFile file, String? modelId) {
     final contextWindow = getModelContextWindow(modelId);
     if (contextWindow == null || contextWindow <= 0) return null;
     return file.estimatedTokens / contextWindow;
   }
 
   /// Check whether adding [newFileTokens] additional tokens would exceed
-  /// a reasonable budget (e.g. 75% of context reserved for project files).
+  /// a reasonable budget (e.g. 75% of context reserved for workspace files).
   /// Returns remaining token capacity, or negative if over budget.
-  static int remainingFileTokenBudget(Project project, String? modelId) {
+  static int remainingFileTokenBudget(Workspace workspace, String? modelId) {
     final contextWindow = getModelContextWindow(modelId);
     if (contextWindow == null || contextWindow <= 0) {
       // Unknown context window - use the service's hard limit
-      return maxTotalContentLength ~/ 4 - estimateTotalFileTokens(project);
+      return maxTotalContentLength ~/ 4 - estimateTotalFileTokens(workspace);
     }
     // Reserve 25% of context for conversation + response
     final fileBudget = (contextWindow * 0.75).round();
-    return fileBudget - estimateTotalFileTokens(project);
+    return fileBudget - estimateTotalFileTokens(workspace);
   }
 }
