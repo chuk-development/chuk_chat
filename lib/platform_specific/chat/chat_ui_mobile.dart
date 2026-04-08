@@ -119,6 +119,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   String _selectedModelId = ''; // Will be loaded from user preferences
   String? _selectedProviderSlug;
   String? _systemPrompt;
+  bool _reasoningEnabled = true;
   late final VoidCallback _modelSelectionListener;
 
   // Stream subscriptions
@@ -1572,6 +1573,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   }
 
   Future<void> _sendMessage() async {
+    // Prevent double-send on slow network (user tapping send repeatedly)
+    if (_isSendingMessage) return;
+
     // SET GLOBAL LOCK IMMEDIATELY - before any async operations or early returns
     // This prevents didUpdateWidget from loading a different chat during send
     ChatStorageService.isMessageOperationInProgress = true;
@@ -1937,6 +1941,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       toolCallingEnabled: widget.toolCallingEnabled,
       toolDiscoveryMode: widget.toolDiscoveryMode,
       allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
+      reasoningEffort: _reasoningEnabled ? null : 'none',
     );
   }
 
@@ -2196,6 +2201,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       toolCallingEnabled: widget.toolCallingEnabled,
       toolDiscoveryMode: widget.toolDiscoveryMode,
       allowMarkdownToolCalls: widget.allowMarkdownToolCalls,
+      reasoningEffort: _reasoningEnabled ? null : 'none',
     );
   }
 
@@ -3101,6 +3107,28 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           const SizedBox(width: 1),
+                          if (ModelSelectionDropdown.modelSupportsReasoning(
+                            _selectedModelId,
+                          ))
+                            GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _reasoningEnabled = !_reasoningEnabled;
+                                });
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                ),
+                                child: Icon(
+                                  Icons.psychology,
+                                  size: 20,
+                                  color: _reasoningEnabled
+                                      ? Theme.of(context).colorScheme.primary
+                                      : iconFg.withValues(alpha: 0.3),
+                                ),
+                              ),
+                            ),
                           ModelSelectionDropdown(
                             key: const ValueKey<String>(
                               'mobile-model-selection-dropdown',

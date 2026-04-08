@@ -2,6 +2,7 @@
 import 'package:chuk_chat/models/assistant_model.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -21,7 +22,8 @@ class _AssistantEditorPageState extends State<AssistantEditorPage> {
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _systemPromptController = TextEditingController();
-  final _modelIdController = TextEditingController();
+  String? _selectedModelId;
+  final FocusNode _dummyFocusNode = FocusNode();
 
   bool _memoryEnabled = true;
   String? _selectedAvatarColor;
@@ -46,7 +48,7 @@ class _AssistantEditorPageState extends State<AssistantEditorPage> {
       _descriptionController.text = widget.assistant!.description ?? '';
       _systemPromptController.text = widget.assistant!.systemPrompt;
       _memoryEnabled = widget.assistant!.memoryEnabled;
-      _modelIdController.text = widget.assistant!.modelId ?? '';
+      _selectedModelId = widget.assistant!.modelId;
       _selectedAvatarColor = widget.assistant!.avatarColor;
       _selectedAvatarIcon = widget.assistant!.avatarIcon;
       _existingImagePath = widget.assistant!.avatarImagePath;
@@ -63,7 +65,7 @@ class _AssistantEditorPageState extends State<AssistantEditorPage> {
     _nameController.dispose();
     _descriptionController.dispose();
     _systemPromptController.dispose();
-    _modelIdController.dispose();
+    _dummyFocusNode.dispose();
     super.dispose();
   }
 
@@ -77,8 +79,8 @@ class _AssistantEditorPageState extends State<AssistantEditorPage> {
           : null,
       'systemPrompt': _systemPromptController.text.trim(),
       'memoryEnabled': _memoryEnabled,
-      'modelId': _modelIdController.text.trim().isNotEmpty
-          ? _modelIdController.text.trim()
+      'modelId': (_selectedModelId != null && _selectedModelId!.isNotEmpty)
+          ? _selectedModelId
           : null,
       'avatarColor': _selectedAvatarColor,
       'avatarIcon': _selectedAvatarIcon,
@@ -458,26 +460,25 @@ class _AssistantEditorPageState extends State<AssistantEditorPage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Define how the assistant behaves, its personality, and capabilities.',
+                    'This replaces the global system prompt when chatting with this assistant.',
                     style: TextStyle(
                       fontSize: 13,
                       color: iconFg.withValues(alpha: 0.5),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
 
                   TextFormField(
                     controller: _systemPromptController,
                     decoration: InputDecoration(
-                      labelText: 'System Prompt *',
                       hintText:
-                          'You are a helpful coding assistant. You provide clear, concise code explanations...',
+                          'You are a marketing expert. You help with copywriting, campaigns, and growth strategies...',
                       alignLabelWithHint: true,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    maxLines: 8,
+                    maxLines: 6,
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) {
                         return 'System prompt is required';
@@ -491,13 +492,12 @@ class _AssistantEditorPageState extends State<AssistantEditorPage> {
                   // Memory settings
                   _SectionTitle(
                     icon: Icons.memory_outlined,
-                    title: 'Memory Settings',
+                    title: 'Memory',
                     iconFg: iconFg,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'When memory is enabled, the assistant can access your Soul, User info, and Memory notes. '
-                    'When disabled, the assistant operates with only its own system prompt.',
+                    'Controls whether this assistant can access your Soul, User, and Memory.',
                     style: TextStyle(
                       fontSize: 13,
                       color: iconFg.withValues(alpha: 0.5),
@@ -604,28 +604,31 @@ class _AssistantEditorPageState extends State<AssistantEditorPage> {
 
                   const SizedBox(height: 32),
 
-                  // Advanced settings
+                  // Model selection
                   _SectionTitle(
-                    icon: Icons.tune_outlined,
-                    title: 'Advanced Settings',
+                    icon: Icons.model_training_outlined,
+                    title: 'Model',
                     iconFg: iconFg,
                   ),
-                  const SizedBox(height: 16),
-
-                  // Model preference
-                  TextFormField(
-                    controller: _modelIdController,
-                    decoration: InputDecoration(
-                      labelText: 'Preferred Model (optional)',
-                      hintText: 'e.g., gpt-4o, claude-3-opus',
-                      prefixIcon: const Icon(Icons.model_training_outlined),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      helperText:
-                          'Leave empty to use the user\'s default model selection',
+                  const SizedBox(height: 8),
+                  Text(
+                    'Leave on default to use whatever model you select in chat.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: iconFg.withValues(alpha: 0.5),
                     ),
-                    textInputAction: TextInputAction.done,
+                  ),
+                  const SizedBox(height: 12),
+                  ModelSelectionDropdown(
+                    key: ValueKey('assistant-model-$_selectedModelId'),
+                    initialSelectedModelId: _selectedModelId ?? '',
+                    onModelSelected: (newModelId) {
+                      setState(() {
+                        _selectedModelId =
+                            newModelId.isEmpty ? null : newModelId;
+                      });
+                    },
+                    textFieldFocusNode: _dummyFocusNode,
                   ),
 
                   const SizedBox(height: 24),
