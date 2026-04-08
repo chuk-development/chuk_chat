@@ -356,6 +356,8 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
         kButtonVisualHeight + // New Chat button
         kSpacingBetweenTopButtons +
         kButtonVisualHeight + // Workspaces button
+        kSpacingBetweenTopButtons +
+        kButtonVisualHeight + // Media button
         kSpacingBetweenTopButtons;
 
     return Container(
