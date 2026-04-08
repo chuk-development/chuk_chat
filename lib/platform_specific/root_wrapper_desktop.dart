@@ -123,7 +123,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   void _openWorkspace(String workspaceId) {
     setState(() {
       _activeProjectId = workspaceId;
-      _activePanel = null;
+      _activePanel = 'projects'; // Show workspace detail panel alongside chat
       _chatUIKey.currentState?.newChat();
     });
     if (kFeatureArtifacts) {
@@ -370,8 +370,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                   : 48, // Leave space for collapsed sidebar buttons
               child: WorkspacesPage(
                 onOpenWorkspace: (workspaceId) {
-                  _chatUIKey.currentState?.newChatWithWorkspace(workspaceId);
-                  setState(() => _activePanel = null);
+                  _openWorkspace(workspaceId);
                 },
               ),
             ),
