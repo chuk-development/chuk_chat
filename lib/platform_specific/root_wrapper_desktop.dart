@@ -123,7 +123,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   void _openWorkspace(String workspaceId) {
     setState(() {
       _activeProjectId = workspaceId;
-      _activePanel = 'projects'; // Show workspace detail panel alongside chat
+      _activePanel = null; // Close workspace list, detail shown by chat UI
       _chatUIKey.currentState?.newChat();
     });
     if (kFeatureArtifacts) {
@@ -415,7 +415,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                           const SizedBox(width: 12),
                           Text(
                             effectivePanel == 'projects'
-                                ? 'Projects'
+                                ? 'Workspaces'
                                 : effectivePanel == 'media'
                                 ? 'Media'
                                 : 'Artifact',

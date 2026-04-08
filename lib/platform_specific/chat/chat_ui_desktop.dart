@@ -1874,8 +1874,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               ),
             ),
           ),
-          // Workspace panel (right side) - only shown in workspace mode
-          if (isProjectMode && widget.workspaceId != null)
+          // Workspace panel (right side) - shown in workspace mode until first message
+          if (isProjectMode && widget.workspaceId != null && _messages.isEmpty)
             WorkspacePanel(
               workspaceId: widget.workspaceId!,
               onClose: widget.onExitProject,
