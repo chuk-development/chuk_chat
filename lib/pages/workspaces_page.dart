@@ -582,16 +582,6 @@ class _ProjectCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Colored accent header
-            Container(
-              height: 6,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [displayColor, displayColor.withValues(alpha: 0.6)],
-                ),
-              ),
-            ),
-
             // Content
             Expanded(
               child: Padding(

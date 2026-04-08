@@ -362,15 +362,15 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
             child: Offstage(offstage: !showContent, child: chatArea),
           ),
 
-          // Full-page assistants view (replaces chat area)
+          // Full-page workspaces view (replaces chat area)
           if (isWorkspacesFullPage)
             Positioned.fill(
-              left: (!isCompactMode && _isSidebarExpanded)
+              left: _isSidebarExpanded
                   ? effectiveSidebarWidth
-                  : 0,
+                  : 48, // Leave space for collapsed sidebar buttons
               child: WorkspacesPage(
-                onOpenWorkspace: (assistantId) {
-                  _chatUIKey.currentState?.newChatWithWorkspace(assistantId);
+                onOpenWorkspace: (workspaceId) {
+                  _chatUIKey.currentState?.newChatWithWorkspace(workspaceId);
                   setState(() => _activePanel = null);
                 },
               ),
