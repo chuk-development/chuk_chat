@@ -219,7 +219,7 @@ class _WorkspacesPageState extends State<WorkspacesPage> {
                   child: TextField(
                     controller: _searchController,
                     decoration: InputDecoration(
-                      hintText: 'Search projects...',
+                      hintText: 'Search workspaces...',
                       prefixIcon: Icon(Icons.search, color: iconFg, size: 20),
                       suffixIcon: _searchQuery.isNotEmpty
                           ? IconButton(
@@ -326,19 +326,11 @@ class _WorkspacesPageState extends State<WorkspacesPage> {
       ],
     );
 
-    // In embedded mode (desktop panel), just return the body
+    // In embedded mode, just return the body without Scaffold
     if (widget.embedded) return body;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Projects'),
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: iconFg),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      body: body,
-    );
+    // Full-page mode — no back button (sidebar handles navigation)
+    return Scaffold(body: body);
   }
 
   Widget _buildEmptyState(Color iconFg) {

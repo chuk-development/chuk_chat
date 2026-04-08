@@ -593,7 +593,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
               ),
             ),
 
-          // Layer 6: Projects (External for Desktop) - Feature Flag
+          // Layer 6: Workspaces (External for Desktop) - Feature Flag
           if (kFeatureWorkspaces && (!isCompactMode || _isSidebarExpanded))
             Positioned(
               top:
@@ -627,58 +627,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                           child: Padding(
                             padding: const EdgeInsets.only(left: 12.0),
                             child: Text(
-                              'Projects',
-                              style: TextStyle(color: iconFg, fontSize: 16),
-                              softWrap: false,
-                              overflow: TextOverflow.clip,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-          // Layer 7: Assistants (External for Desktop) - Feature Flag
-          if (kFeatureWorkspaces && (!isCompactMode || _isSidebarExpanded))
-            Positioned(
-              top:
-                  kTopInitialSpacing +
-                  kMenuButtonHeight +
-                  kSpacingBetweenTopButtons +
-                  kButtonVisualHeight +
-                  kSpacingBetweenTopButtons +
-                  (kFeatureWorkspaces
-                      ? kButtonVisualHeight + kSpacingBetweenTopButtons
-                      : 0),
-              left: kFixedLeftPadding,
-              child: InkWell(
-                onTap: _openWorkspacesPage,
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  height: kButtonVisualHeight,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.auto_awesome, color: iconFg),
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        curve: Curves.easeOut,
-                        width: _isSidebarExpanded ? 100 : 0,
-                        constraints: BoxConstraints(
-                          minWidth: _isSidebarExpanded ? 100 : 0,
-                        ),
-                        child: ClipRect(
-                          child: Padding(
-                            padding: const EdgeInsets.only(left: 12.0),
-                            child: Text(
-                              'Assistants',
+                              'Workspaces',
                               style: TextStyle(color: iconFg, fontSize: 16),
                               softWrap: false,
                               overflow: TextOverflow.clip,
@@ -713,9 +662,6 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                   kSpacingBetweenTopButtons +
                   kButtonVisualHeight +
                   kSpacingBetweenTopButtons +
-                  (kFeatureWorkspaces
-                      ? kButtonVisualHeight + kSpacingBetweenTopButtons
-                      : 0) +
                   (kFeatureWorkspaces
                       ? kButtonVisualHeight + kSpacingBetweenTopButtons
                       : 0),
