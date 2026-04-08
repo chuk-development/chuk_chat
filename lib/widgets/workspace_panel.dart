@@ -466,13 +466,30 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
             maxLines: 6,
             decoration: InputDecoration(
               hintText: 'Enter custom instructions for the AI...',
-              hintStyle: TextStyle(color: iconFg.withAlpha(100)),
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.zero,
+              hintStyle: TextStyle(color: iconFg.withValues(alpha: 0.4)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(
+                  color: iconFg.withValues(alpha: 0.15),
+                ),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(
+                  color: iconFg.withValues(alpha: 0.15),
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(
+                  color: iconFg.withValues(alpha: 0.3),
+                ),
+              ),
+              contentPadding: const EdgeInsets.all(12),
             ),
-            style: TextStyle(fontSize: 13, color: iconFg),
+            style: TextStyle(fontSize: 13, color: iconFg, height: 1.5),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
@@ -482,21 +499,14 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
                       _project?.customSystemPrompt ?? '';
                   setState(() => _isEditingInstructions = false);
                 },
-                child: const Text('Cancel'),
+                child: Text(
+                  'Cancel',
+                  style: TextStyle(color: iconFg.withValues(alpha: 0.6)),
+                ),
               ),
               const SizedBox(width: 8),
               FilledButton(
                 onPressed: _saveInstructions,
-                style: FilledButton.styleFrom(
-                  backgroundColor: _project!.displayColor,
-                  foregroundColor:
-                      ThemeData.estimateBrightnessForColor(
-                            _project!.displayColor,
-                          ) ==
-                          Brightness.dark
-                      ? Colors.white
-                      : Colors.black,
-                ),
                 child: const Text('Save'),
               ),
             ],
