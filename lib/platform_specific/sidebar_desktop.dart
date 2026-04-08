@@ -346,7 +346,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
         .toList();
 
     // The height of the top bar is calculated dynamically for desktop.
-    // "New Chat" and "Projects" buttons are positioned *outside* this sidebar widget
+    // "New Chat" and "Workspaces" buttons are positioned *outside* this sidebar widget
     // in `root_wrapper_desktop.dart`. This spacing accounts for them so sidebar
     // content doesn't overlap those fixed overlay buttons.
     double topSpacingForSidebarContent =
@@ -355,14 +355,8 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
         kSpacingBetweenTopButtons +
         kButtonVisualHeight + // New Chat button
         kSpacingBetweenTopButtons +
-        kButtonVisualHeight + // Projects button
+        kButtonVisualHeight + // Workspaces button
         kSpacingBetweenTopButtons;
-
-    if (widget.showWorkspacesButton) {
-      topSpacingForSidebarContent +=
-          kButtonVisualHeight + // Assistants button
-          kSpacingBetweenTopButtons;
-    }
 
     return Container(
       color: sidebarBg,
