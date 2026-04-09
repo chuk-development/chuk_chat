@@ -643,6 +643,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       }
       _messages.clear();
       _fileHandler.clearAll();
+      _messageActionsHandler.cancelEdit();
       _activeChatId = null;
     } else {
       // Find chat by ID
@@ -764,6 +765,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           }
           _messages.clear();
           _fileHandler.clearAll();
+          _messageActionsHandler.cancelEdit();
           _activeChatId = null;
         }
       } else {
@@ -783,6 +785,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         }
         _messages.clear();
         _fileHandler.clearAll();
+        _messageActionsHandler.cancelEdit();
         _activeChatId = null;
       }
     }
@@ -1209,6 +1212,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     setState(() {
       _activeChatId = null;
       _messages.clear();
+      _messageActionsHandler.cancelEdit();
       _selectedWorkspaceId = workspaceId;
       _controller.clear();
     });

@@ -329,8 +329,17 @@ class _WorkspacesPageState extends State<WorkspacesPage> {
     // In embedded mode, just return the body without Scaffold
     if (widget.embedded) return body;
 
-    // Full-page mode — no back button (sidebar handles navigation)
-    return Scaffold(body: body);
+    // Full-page mode with AppBar for proper navigation
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Workspaces'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: body,
+    );
   }
 
   Widget _buildEmptyState(Color iconFg) {

@@ -577,6 +577,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _messages.clear();
       _animCtrl.reset();
       _fileHandler.attachedFiles.clear();
+      _messageActionsHandler.cancelEdit();
     } else {
       // Find chat by ID
       StoredChat? storedChat = ChatStorageService.getChatById(chatId);
@@ -646,6 +647,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           _messages.clear();
           _animCtrl.reset();
           _fileHandler.attachedFiles.clear();
+          _messageActionsHandler.cancelEdit();
           _activeChatId = null;
         }
       } else {
@@ -666,6 +668,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         _messages.clear();
         _animCtrl.reset();
         _fileHandler.attachedFiles.clear();
+        _messageActionsHandler.cancelEdit();
         _activeChatId = null;
       }
     }
@@ -801,6 +804,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _activeChatId = null;
       _isSending = false; // Reset for new chat
       _fileHandler.attachedFiles.clear();
+      _messageActionsHandler.cancelEdit();
     });
 
     // Notify parent that we're now on a new chat (null ID)
