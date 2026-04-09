@@ -28,36 +28,42 @@ CREATE POLICY "Users can view own or public workspaces"
 DO $$
 BEGIN
   IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'assistants') THEN
+    -- Only insert assistants not already migrated (idempotent)
     INSERT INTO projects (
       user_id, name, description, custom_system_prompt,
       memory_enabled, model_id, avatar_color, avatar_icon,
       avatar_image_path, is_public, is_archived
     )
     SELECT
-      user_id, name, description, system_prompt,
-      memory_enabled, model_id, avatar_color, avatar_icon,
-      avatar_image_path, is_public, is_archived
-    FROM assistants;
+      a.user_id, a.name, a.description, a.system_prompt,
+      a.memory_enabled, a.model_id, a.avatar_color, a.avatar_icon,
+      a.avatar_image_path, a.is_public, a.is_archived
+    FROM assistants a
+    WHERE NOT EXISTS (
+      SELECT 1 FROM projects p
+      WHERE p.user_id = a.user_id
+        AND p.name IS NOT DISTINCT FROM a.name
+        AND p.custom_system_prompt IS NOT DISTINCT FROM a.system_prompt
+    );
 
-    RAISE NOTICE 'Migrated % assistants to workspaces', (SELECT count(*) FROM assistants);
+    RAISE NOTICE 'Migrated assistants to workspaces (skipped duplicates)';
   ELSE
     RAISE NOTICE 'No assistants table found — skipping migration';
   END IF;
 END $$;
 
 -- Step 5: Migrate assistant_chats links to project_chats
--- Maps old assistant-chat relationships to workspace-chat relationships
 DO $$
 BEGIN
-  IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'assistant_chats') THEN
-    -- For each assistant_chat, find the corresponding migrated workspace
+  IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'assistant_chats')
+     AND EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'assistants') THEN
     INSERT INTO project_chats (project_id, chat_id)
     SELECT p.id, ac.chat_id
     FROM assistant_chats ac
     JOIN assistants a ON a.id = ac.assistant_id
     JOIN projects p ON p.user_id = a.user_id
-      AND p.name = a.name
-      AND p.custom_system_prompt = a.system_prompt
+      AND p.name IS NOT DISTINCT FROM a.name
+      AND p.custom_system_prompt IS NOT DISTINCT FROM a.system_prompt
     ON CONFLICT DO NOTHING;
 
     RAISE NOTICE 'Migrated assistant-chat links to workspace-chat links';

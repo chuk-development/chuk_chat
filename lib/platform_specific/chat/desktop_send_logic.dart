@@ -1201,7 +1201,13 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
             WorkspaceStorageService.linkChatToWorkspace(
               workspaceId,
               _activeChatId!,
-            ),
+            ).catchError((error) {
+              if (kDebugMode) {
+                debugPrint(
+                  '⚠️ [SEND-DESKTOP] Failed to link chat to workspace: $error',
+                );
+              }
+            }),
           );
           if (kDebugMode) {
             debugPrint(

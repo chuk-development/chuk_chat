@@ -30,8 +30,8 @@ const bool kAutoDetectPlatform = !kPlatformMobile && !kPlatformDesktop;
 // Build with features enabled:
 // flutter build apk --dart-define=FEATURE_VOICE_MODE=true --dart-define=FEATURE_WORKSPACES=true
 //
-// Build with features disabled (default for production):
-// flutter build apk  (all features disabled by default)
+// Build with defaults (workspaces enabled, others off):
+// flutter build apk
 
 /// Voice mode - audio recording and transcription
 const bool kFeatureVoiceMode = bool.fromEnvironment(
