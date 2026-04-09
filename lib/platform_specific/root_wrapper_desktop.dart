@@ -641,7 +641,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
             ),
 
           // Layer: Copy full chat button (top-right of chat area)
-          if (showContent)
+          if (showContent && _activeProjectId == null)
             Positioned(
               top: kTopInitialSpacing,
               right: (showPanel ? panelWidth : 0) + 12,
