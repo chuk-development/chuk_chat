@@ -1,6 +1,7 @@
 // lib/pages/workspaces_page.dart
 import 'dart:async';
 
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/workspace_model.dart';
 import 'package:chuk_chat/pages/workspace_detail_page.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
@@ -329,17 +330,22 @@ class _WorkspacesPageState extends State<WorkspacesPage> {
     // In embedded mode, just return the body without Scaffold
     if (widget.embedded) return body;
 
-    // Full-page mode with AppBar for proper navigation
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Workspaces'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
+    // Mobile: AppBar with back button (pushed via Navigator)
+    // Desktop: plain Scaffold (sidebar handles navigation)
+    if (isMobile) {
+      final l = AppLocalizations.of(context);
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(l.workspaces),
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back, color: iconFg),
+            onPressed: () => Navigator.pop(context),
+          ),
         ),
-      ),
-      body: body,
-    );
+        body: body,
+      );
+    }
+    return Scaffold(body: body);
   }
 
   Widget _buildEmptyState(Color iconFg) {

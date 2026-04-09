@@ -477,6 +477,11 @@ const Map<String, String> stringsZh = {
   'selectModel': '选择模型',
   'noEnabledModels': '没有启用的模型',
 
+  // ── Navigation / sidebar ────────────────────────────────────
+  'newChat': '新对话',
+  'workspaces': '工作区',
+  'media': '媒体',
+
   // ── Media manager ──────────────────────────────────────────
   'mediaManager': '媒体管理器',
   'imageUsedInChats': '图片在聊天中使用',

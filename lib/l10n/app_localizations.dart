@@ -540,6 +540,11 @@ class AppLocalizations {
   String get selectModel => _get('selectModel');
   String get noEnabledModels => _get('noEnabledModels');
 
+  // ── Navigation / sidebar ────────────────────────────────────
+  String get newChat => _get('newChat');
+  String get workspaces => _get('workspaces');
+  String get media => _get('media');
+
   // ── Media manager ──────────────────────────────────────────
   String get mediaManager => _get('mediaManager');
   String get imageUsedInChats => _get('imageUsedInChats');

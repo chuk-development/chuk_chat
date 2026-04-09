@@ -549,6 +549,11 @@ const Map<String, String> stringsPt = {
   'selectModel': 'Selecionar Modelo',
   'noEnabledModels': 'Nenhum Modelo Habilitado',
 
+  // ── Navigation / sidebar ────────────────────────────────────
+  'newChat': 'Novo chat',
+  'workspaces': 'Espaços de trabalho',
+  'media': 'Mídia',
+
   // ── Media manager ──────────────────────────────────────────
   'mediaManager': 'Gerenciador de Mídia',
   'imageUsedInChats': 'Imagem Usada em Conversas',

@@ -535,6 +535,11 @@ const Map<String, String> stringsAr = {
   'selectModel': 'اختر النموذج',
   'noEnabledModels': 'لا توجد نماذج مفعّلة',
 
+  // ── Navigation / sidebar ────────────────────────────────────
+  'newChat': 'محادثة جديدة',
+  'workspaces': 'مساحات العمل',
+  'media': 'الوسائط',
+
   // ── Media manager ──────────────────────────────────────────
   'mediaManager': 'مدير الوسائط',
   'imageUsedInChats': 'الصورة مستخدمة في محادثات',

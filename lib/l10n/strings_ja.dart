@@ -531,6 +531,11 @@ const Map<String, String> stringsJa = {
   'selectModel': 'モデルを選択',
   'noEnabledModels': '有効なモデルがありません',
 
+  // ── Navigation / sidebar ────────────────────────────────────
+  'newChat': '新しいチャット',
+  'workspaces': 'ワークスペース',
+  'media': 'メディア',
+
   // ── Media manager ──────────────────────────────────────────
   'mediaManager': 'メディアマネージャー',
   'imageUsedInChats': 'チャットで使用されている画像',

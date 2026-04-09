@@ -544,6 +544,11 @@ const Map<String, String> stringsRu = {
   'selectModel': 'Выбрать модель',
   'noEnabledModels': 'Нет включённых моделей',
 
+  // ── Navigation / sidebar ────────────────────────────────────
+  'newChat': 'Новый чат',
+  'workspaces': 'Рабочие области',
+  'media': 'Медиа',
+
   // ── Media manager ──────────────────────────────────────────
   'mediaManager': 'Менеджер медиа',
   'imageUsedInChats': 'Изображение используется в чатах',

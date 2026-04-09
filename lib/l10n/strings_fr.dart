@@ -623,6 +623,11 @@ const Map<String, String> stringsFr = {
   'selectModel': 'Sélectionner un modèle',
   'noEnabledModels': 'Aucun modèle activé',
 
+  // ── Navigation / sidebar ────────────────────────────────────
+  'newChat': 'Nouveau chat',
+  'workspaces': 'Espaces de travail',
+  'media': 'Médias',
+
   // ── Media manager ──────────────────────────────────────────
   'mediaManager': 'Gestionnaire de médias',
   'imageUsedInChats':
