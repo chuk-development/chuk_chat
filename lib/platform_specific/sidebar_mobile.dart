@@ -544,7 +544,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final l = AppLocalizations.of(context);
+    final l = AppLocalizations.of(context)!;
     final Color iconColorDefault = theme.resolvedIconColor.withValues(
       alpha: 0.7,
     );

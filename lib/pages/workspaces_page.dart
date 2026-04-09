@@ -333,7 +333,7 @@ class _WorkspacesPageState extends State<WorkspacesPage> {
     // Mobile: AppBar with back button (pushed via Navigator)
     // Desktop: plain Scaffold (sidebar handles navigation)
     if (isMobile) {
-      final l = AppLocalizations.of(context);
+      final l = AppLocalizations.of(context)!;
       return Scaffold(
         appBar: AppBar(
           title: Text(l.workspaces),
