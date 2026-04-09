@@ -384,7 +384,7 @@ class _WorkspacesPageState extends State<WorkspacesPage> {
               ),
               const SizedBox(height: 20),
               Text(
-                _searchQuery.isEmpty ? 'No projects yet' : 'No projects found',
+                _searchQuery.isEmpty ? 'No workspaces yet' : 'No workspaces found',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
