@@ -355,7 +355,7 @@ class _MessageBubbleState extends State<MessageBubble>
             ),
           ),
           padding: EdgeInsets.symmetric(
-            horizontal: kPlatformMobile ? 2 : 8,
+            horizontal: kPlatformMobile ? 4 : 8,
             vertical: kPlatformMobile ? 0 : 4,
           ),
           child: Row(
@@ -369,16 +369,18 @@ class _MessageBubbleState extends State<MessageBubble>
                     color: action.isEnabled
                         ? iconFgColor
                         : iconFgColor.withValues(alpha: 0.38),
-                    size: kPlatformMobile ? 15 : 18,
+                    size: kPlatformMobile ? 18 : 18,
                   ),
-                  padding: EdgeInsets.all(kPlatformMobile ? 4 : 8),
+                  padding: EdgeInsets.all(kPlatformMobile ? 5 : 8),
                   visualDensity: VisualDensity.compact,
                   constraints: BoxConstraints(
-                    minWidth: kPlatformMobile ? 24 : 30,
-                    minHeight: kPlatformMobile ? 24 : 30,
+                    minWidth: kPlatformMobile ? 28 : 30,
+                    minHeight: kPlatformMobile ? 28 : 30,
                   ),
                   style: kPlatformMobile
-                      ? null
+                      ? IconButton.styleFrom(
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        )
                       : IconButton.styleFrom(
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
