@@ -269,7 +269,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
     final Color iconFg = Theme.of(context).resolvedIconColor;
-    final l = AppLocalizations.of(context);
+    final l = AppLocalizations.of(context)!;
 
     final bool isCompactMode = screenWidth < kCompactModeBreakpoint;
 
