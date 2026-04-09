@@ -556,7 +556,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<String?> _saveExportToLinux(Uint8List data, String fileName) async {
     final Directory? initialDirectory = await _linuxInitialDirectory();
     final l = AppLocalizations.of(context)!;
-    final String? outputPath = await FilePicker.platform.saveFile(
+    final String? outputPath = await FilePicker.saveFile(
       dialogTitle: l.saveChatExport,
       fileName: fileName,
       initialDirectory: initialDirectory?.path,

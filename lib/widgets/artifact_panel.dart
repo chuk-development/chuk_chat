@@ -114,7 +114,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
       }
 
       String? selectedPath;
-      selectedPath = await FilePicker.platform.saveFile(
+      selectedPath = await FilePicker.saveFile(
         dialogTitle: 'Save Artifact',
         fileName: suggestedName,
         type: FileType.custom,
