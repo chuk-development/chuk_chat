@@ -1207,6 +1207,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     );
   }
 
+  /// Public entry point for starting a new chat with a workspace context.
+  void startNewChatWithWorkspace(String workspaceId) =>
+      _startNewChatWithProject(workspaceId);
+
   void _startNewChatWithProject(String? workspaceId) {
     // Clear current chat and set workspace
     setState(() {

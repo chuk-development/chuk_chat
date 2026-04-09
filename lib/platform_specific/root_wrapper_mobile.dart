@@ -227,9 +227,16 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
 
   void _openWorkspacesPage() {
     if (_isSidebarExpanded) _toggleSidebar();
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const WorkspacesPage()));
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => WorkspacesPage(
+          onOpenWorkspace: (workspaceId) {
+            Navigator.pop(context); // Close workspaces page
+            _chatUIMobileKey.currentState?.startNewChatWithWorkspace(workspaceId);
+          },
+        ),
+      ),
+    );
   }
 
   void _openMediaPage() {
