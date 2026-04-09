@@ -384,7 +384,6 @@ class _MessageBubbleState extends State<MessageBubble>
                         ),
                   onPressed: action.isEnabled
                       ? () {
-                          setState(() => _showUserActions = false);
                           action.onPressed();
                         }
                       : null,
