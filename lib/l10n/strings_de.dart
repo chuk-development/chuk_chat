@@ -560,6 +560,11 @@ const Map<String, String> stringsDe = {
   'selectModel': 'Modell wählen',
   'noEnabledModels': 'Keine aktivierten Modelle',
 
+  // ── Navigation / sidebar ────────────────────────────────────
+  'newChat': 'Neuer Chat',
+  'workspaces': 'Arbeitsbereiche',
+  'media': 'Medien',
+
   // ── Media manager ──────────────────────────────────────────
   'mediaManager': 'Medienverwaltung',
   'imageUsedInChats': 'Bild in Chats verwendet',

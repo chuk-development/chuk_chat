@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/models/artifact.dart';
 import 'package:chuk_chat/platform_config.dart';
@@ -268,6 +269,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
     final Color iconFg = Theme.of(context).resolvedIconColor;
+    final l = AppLocalizations.of(context);
 
     final bool isCompactMode = screenWidth < kCompactModeBreakpoint;
 
@@ -415,9 +417,9 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                           const SizedBox(width: 12),
                           Text(
                             effectivePanel == 'projects'
-                                ? 'Workspaces'
+                                ? l.workspaces
                                 : effectivePanel == 'media'
-                                ? 'Media'
+                                ? l.media
                                 : 'Artifact',
                             style: TextStyle(
                               color: iconFg,
@@ -513,7 +515,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                             padding: const EdgeInsets.only(left: 10.0),
                             child: Text(
                               'Chuk Chat',
-                              style: TextStyle(color: iconFg, fontSize: 16),
+                              style: TextStyle(color: iconFg, fontSize: 20, fontWeight: FontWeight.w700),
                               softWrap: false,
                               overflow: TextOverflow.clip,
                             ),
@@ -578,7 +580,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                           child: Padding(
                             padding: const EdgeInsets.only(left: 12.0),
                             child: Text(
-                              'New chat',
+                              l.newChat,
                               style: TextStyle(color: iconFg, fontSize: 16),
                               softWrap: false,
                               overflow: TextOverflow.clip,
@@ -626,7 +628,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                           child: Padding(
                             padding: const EdgeInsets.only(left: 12.0),
                             child: Text(
-                              'Workspaces',
+                              l.workspaces,
                               style: TextStyle(color: iconFg, fontSize: 16),
                               softWrap: false,
                               overflow: TextOverflow.clip,
@@ -689,7 +691,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                           child: Padding(
                             padding: const EdgeInsets.only(left: 12.0),
                             child: Text(
-                              'Media',
+                              l.media,
                               style: TextStyle(color: iconFg, fontSize: 16),
                               softWrap: false,
                               overflow: TextOverflow.clip,

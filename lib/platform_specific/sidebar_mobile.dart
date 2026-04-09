@@ -3,6 +3,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_sync_service.dart';
@@ -543,6 +544,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l = AppLocalizations.of(context);
     final Color iconColorDefault = theme.resolvedIconColor.withValues(
       alpha: 0.7,
     );
@@ -573,8 +575,8 @@ class _SidebarMobileState extends State<SidebarMobile> {
               children: [
                 if (kFeatureWorkspaces) ...[
                   _buildQuickActionButton(
-                    icon: Icons.auto_awesome,
-                    label: 'Workspaces',
+                    icon: Icons.folder_open,
+                    label: l.workspaces,
                     onTap: widget.onWorkspacesTapped,
                     iconColor: iconColorDefault,
                     textColor: textColorDefault,
@@ -584,7 +586,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
                 if (kFeatureMediaManager)
                   _buildQuickActionButton(
                     icon: Icons.photo_library_outlined,
-                    label: 'Media',
+                    label: l.media,
                     onTap: widget.onMediaTapped,
                     iconColor: iconColorDefault,
                     textColor: textColorDefault,

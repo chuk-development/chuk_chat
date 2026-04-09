@@ -6,6 +6,7 @@ import 'dart:math' as math;
 
 
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/models/artifact.dart';
 import 'package:chuk_chat/platform_config.dart';

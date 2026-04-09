@@ -535,6 +535,11 @@ const Map<String, String> stringsEn = {
   'selectModel': 'Select Model',
   'noEnabledModels': 'No Enabled Models',
 
+  // ── Navigation / sidebar ────────────────────────────────────
+  'newChat': 'New chat',
+  'workspaces': 'Workspaces',
+  'media': 'Media',
+
   // ── Media manager ──────────────────────────────────────────
   'mediaManager': 'Media Manager',
   'imageUsedInChats': 'Image Used in Chats',

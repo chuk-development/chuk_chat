@@ -535,6 +535,11 @@ const Map<String, String> stringsHi = {
   'selectModel': 'मॉडल चुनें',
   'noEnabledModels': 'कोई सक्षम मॉडल नहीं',
 
+  // ── Navigation / sidebar ────────────────────────────────────
+  'newChat': 'नई चैट',
+  'workspaces': 'कार्यस्थान',
+  'media': 'मीडिया',
+
   // ── Media manager ──────────────────────────────────────────
   'mediaManager': 'मीडिया प्रबंधक',
   'imageUsedInChats': 'चैट में उपयोग की गई छवि',

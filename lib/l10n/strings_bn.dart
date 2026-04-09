@@ -535,6 +535,11 @@ const Map<String, String> stringsBn = {
   'selectModel': 'মডেল নির্বাচন করুন',
   'noEnabledModels': 'কোনো সক্রিয় মডেল নেই',
 
+  // ── Navigation / sidebar ────────────────────────────────────
+  'newChat': 'নতুন চ্যাট',
+  'workspaces': 'ওয়ার্কস্পেস',
+  'media': 'মিডিয়া',
+
   // ── Media manager ──────────────────────────────────────────
   'mediaManager': 'মিডিয়া ম্যানেজার',
   'imageUsedInChats': 'চ্যাটে ব্যবহৃত ছবি',
