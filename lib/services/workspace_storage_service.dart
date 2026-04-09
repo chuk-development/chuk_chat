@@ -9,6 +9,7 @@ import 'package:chuk_chat/constants/file_constants.dart';
 import 'package:chuk_chat/models/workspace_model.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/file_conversion_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -531,6 +532,79 @@ class WorkspaceStorageService {
   /// Get all projects that contain a specific chat
   static List<Workspace> getChatProjects(String chatId) {
     return projects.where((p) => p.chatIds.contains(chatId)).toList();
+  }
+
+  // ============ AVATAR IMAGE MANAGEMENT ============
+
+  /// Upload an avatar image for a workspace.
+  static Future<void> uploadAvatar(
+    String workspaceId,
+    Uint8List imageBytes,
+  ) async {
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) throw StateError('User must be signed in.');
+
+    // Delete existing avatar if present
+    final existing = _projectsById[workspaceId];
+    if (existing?.avatarImagePath != null) {
+      try {
+        await ImageStorageService.deleteEncryptedImage(
+          existing!.avatarImagePath!,
+        );
+      } catch (_) {}
+    }
+
+    final storagePath =
+        await ImageStorageService.uploadEncryptedImage(imageBytes);
+
+    try {
+      await SupabaseService.client
+          .from('projects')
+          .update({'avatar_image_path': storagePath})
+          .eq('id', workspaceId)
+          .eq('user_id', user.id);
+
+      if (_projectsById.containsKey(workspaceId)) {
+        _projectsById[workspaceId] = _projectsById[workspaceId]!.copyWith(
+          avatarImagePath: storagePath,
+        );
+        _notifyChanges();
+      }
+    } catch (e) {
+      // Clean up uploaded image on DB failure
+      try {
+        await ImageStorageService.deleteEncryptedImage(storagePath);
+      } catch (_) {}
+      rethrow;
+    }
+  }
+
+  /// Delete the avatar image for a workspace.
+  static Future<void> deleteAvatar(String workspaceId) async {
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) throw StateError('User must be signed in.');
+
+    final existing = _projectsById[workspaceId];
+    if (existing?.avatarImagePath != null) {
+      try {
+        await ImageStorageService.deleteEncryptedImage(
+          existing!.avatarImagePath!,
+        );
+      } catch (_) {}
+    }
+
+    await SupabaseService.client
+        .from('projects')
+        .update({'avatar_image_path': null})
+        .eq('id', workspaceId)
+        .eq('user_id', user.id);
+
+    if (_projectsById.containsKey(workspaceId)) {
+      _projectsById[workspaceId] = _projectsById[workspaceId]!.copyWith(
+        avatarImagePath: null,
+      );
+      _notifyChanges();
+    }
   }
 
   // ============ FILE MANAGEMENT ============

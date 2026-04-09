@@ -3,12 +3,15 @@ import 'dart:async';
 
 import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/constants/file_constants.dart';
 import 'package:chuk_chat/models/workspace_model.dart';
+import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/workspace_file_viewer.dart';
+import 'package:image_picker/image_picker.dart';
 
 /// Right-side panel for workspace settings (Instructions + Files)
 class WorkspacePanel extends StatefulWidget {
@@ -35,6 +38,10 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
   String _uploadStatus = ''; // 'uploading', 'converting', ''
   double _uploadProgress = 0.0;
 
+  // Avatar image state
+  Future<Uint8List>? _avatarImageFuture;
+  bool _isUploadingAvatar = false;
+
   @override
   void initState() {
     super.initState();
@@ -51,12 +58,56 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
     super.dispose();
   }
 
+  Future<void> _pickAvatarImage() async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 85,
+      );
+      if (picked == null || !mounted) return;
+
+      setState(() => _isUploadingAvatar = true);
+      final bytes = await picked.readAsBytes();
+      await WorkspaceStorageService.uploadAvatar(widget.workspaceId, bytes);
+      if (mounted) setState(() => _isUploadingAvatar = false);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isUploadingAvatar = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to upload image: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _removeAvatarImage() async {
+    try {
+      await WorkspaceStorageService.deleteAvatar(widget.workspaceId);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to remove image: $e')),
+        );
+      }
+    }
+  }
+
   void _loadProject() {
     final workspace = WorkspaceStorageService.getWorkspace(widget.workspaceId);
     if (mounted) {
       setState(() {
         _project = workspace;
         _instructionsController.text = workspace?.customSystemPrompt ?? '';
+        if (workspace?.hasCustomImage == true) {
+          _avatarImageFuture = ImageStorageService.downloadAndDecryptImage(
+            workspace!.avatarImagePath!,
+          );
+        } else {
+          _avatarImageFuture = null;
+        }
       });
     }
   }
@@ -232,18 +283,86 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                // Workspace avatar
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: displayColor.withValues(alpha: isDark ? 0.2 : 0.12),
-                    borderRadius: BorderRadius.circular(9),
-                  ),
-                  child: Icon(
-                    _project!.displayIcon,
-                    color: displayColor,
-                    size: 18,
+                // Workspace avatar (tap to change image)
+                GestureDetector(
+                  onTap: _pickAvatarImage,
+                  child: Stack(
+                    children: [
+                      if (_avatarImageFuture != null)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(9),
+                          child: FutureBuilder<Uint8List>(
+                            future: _avatarImageFuture,
+                            builder: (context, snap) {
+                              if (snap.hasData) {
+                                return Image.memory(
+                                  snap.data!,
+                                  width: 32,
+                                  height: 32,
+                                  fit: BoxFit.cover,
+                                );
+                              }
+                              return Container(
+                                width: 32,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  color: displayColor.withValues(
+                                    alpha: isDark ? 0.2 : 0.12,
+                                  ),
+                                  borderRadius: BorderRadius.circular(9),
+                                ),
+                                child: const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        )
+                      else
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: displayColor.withValues(
+                              alpha: isDark ? 0.2 : 0.12,
+                            ),
+                            borderRadius: BorderRadius.circular(9),
+                          ),
+                          child: _isUploadingAvatar
+                              ? const Padding(
+                                  padding: EdgeInsets.all(8),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : Icon(
+                                  _project!.displayIcon,
+                                  color: displayColor,
+                                  size: 18,
+                                ),
+                        ),
+                      // Camera overlay
+                      Positioned(
+                        right: -2,
+                        bottom: -2,
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: BoxDecoration(
+                            color: iconFg.withValues(alpha: 0.7),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Icon(
+                            Icons.camera_alt,
+                            size: 10,
+                            color: bgColor,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(width: 10),
