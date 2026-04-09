@@ -509,7 +509,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                   children: [
                     if (_isSidebarExpanded)
                       SizedBox(
-                        width: 100,
+                        width: 140,
                         child: ClipRect(
                           child: Padding(
                             padding: const EdgeInsets.only(left: 10.0),
