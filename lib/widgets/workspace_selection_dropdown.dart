@@ -256,14 +256,14 @@ class _WorkspaceSelectionDropdownState extends State<WorkspaceSelectionDropdown>
             );
           }
         } else {
-          // No projects yet
+          // No workspaces yet
           items.add(
             PopupMenuItem<String?>(
               enabled: false,
               height: 44,
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
-                'No projects yet',
+                'No workspaces yet',
                 style: TextStyle(
                   color: iconFgColor.withValues(alpha: 0.5),
                   fontStyle: FontStyle.italic,

@@ -100,7 +100,7 @@ class MobileWorkspaceHandler {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          'No projects yet',
+                          'No workspaces yet',
                           style: TextStyle(
                             color: theme.colorScheme.onSurface.withValues(
                               alpha: 0.6,
