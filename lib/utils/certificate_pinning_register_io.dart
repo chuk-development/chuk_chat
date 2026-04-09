@@ -23,7 +23,7 @@ const Set<String> _trustedToolApiHosts = {
   // OpenStreetMap / Nominatim (maps, geocoding)
   'nominatim.openstreetmap.org',
   // OSRM (routing)
-  'router.workspace-osrm.org',
+  'router.project-osrm.org',
   // Yahoo Finance (stock data — behind feature flag, but kept for future use)
   'query1.finance.yahoo.com',
 };
