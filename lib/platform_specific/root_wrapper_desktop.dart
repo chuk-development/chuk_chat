@@ -209,6 +209,10 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     }
     setState(() {
       ChatStorageService.selectedChatId = chatId;
+      // Close workspaces full-page view when a chat is selected
+      if (_activePanel == 'workspaces') {
+        _activePanel = null;
+      }
     });
     if (kFeatureArtifacts) {
       unawaited(
