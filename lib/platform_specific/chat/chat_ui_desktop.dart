@@ -11,6 +11,7 @@ import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/core/model_selection_events.dart';
@@ -811,7 +812,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // CRITICAL: Use silent=true to prevent persistence handler from changing
     // _activeChatId or calling widget.onChatIdChanged - we're now on a NEW chat!
     // Sidebar auto-updates via ChatStorageService.changes stream
-    if (messagesToSave != null && chatIdToSave != null) {
+    //
+    // Also: skip persisting if the old chat was just deleted. Without this,
+    // `_handleChatDeleted` → `newChat()` would schedule a save of the chat
+    // we just removed, and any race against the persistence handler's own
+    // `wasRecentlyDeleted` guard could resurrect it in Supabase.
+    if (messagesToSave != null &&
+        chatIdToSave != null &&
+        !ChatStorageState.wasRecentlyDeleted(chatIdToSave)) {
       unawaited(
         _persistenceHandler.persistChat(
           messages: messagesToSave

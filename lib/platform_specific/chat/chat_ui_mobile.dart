@@ -8,6 +8,7 @@ import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
@@ -880,7 +881,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     // No need to call loadSavedChatsForSidebar() — persistChat() updates
     // local state and fires notifyChanges(), which the sidebar picks up
     // via its changes stream listener.
-    if (messagesToSave != null && chatIdToSave != null) {
+    //
+    // Also: skip persisting if the old chat was just deleted. Without this,
+    // `_handleChatDeleted` → `newChat()` would schedule a save of the chat
+    // we just removed, and any race against the persistence handler's own
+    // `wasRecentlyDeleted` guard could resurrect it in Supabase.
+    if (messagesToSave != null &&
+        chatIdToSave != null &&
+        !ChatStorageState.wasRecentlyDeleted(chatIdToSave)) {
       unawaited(
         _persistenceHandler.persistChat(
           messages: messagesToSave,
@@ -967,7 +975,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     }
 
     if (!result.success) {
-      _showSnackBar(result.error ?? AppLocalizations.of(context)!.transcriptionFailed);
+      _showSnackBar(
+        result.error ?? AppLocalizations.of(context)!.transcriptionFailed,
+      );
       setState(() {}); // Trigger UI update to hide loading icon
       return;
     }
@@ -3264,8 +3274,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                   maxLines: 6,
                                   decoration: InputDecoration(
                                     hintText: _messageActionsHandler.isEditing
-                                        ? AppLocalizations.of(context)!.editYourMessage
-                                        : AppLocalizations.of(context)!.askMeAnything,
+                                        ? AppLocalizations.of(
+                                            context,
+                                          )!.editYourMessage
+                                        : AppLocalizations.of(
+                                            context,
+                                          )!.askMeAnything,
                                     hintStyle: TextStyle(
                                       color: theme.colorScheme.onSurface
                                           .withValues(alpha: 0.5),
