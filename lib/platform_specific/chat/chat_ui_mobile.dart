@@ -978,13 +978,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         _controller.selection = TextSelection.fromPosition(
           TextPosition(offset: result.text!.length),
         );
-        // Set sending flag instantly so loading indicator shows without gap
-        if (widget.autoSendVoiceTranscription) {
-          _isSendingMessage = true;
-        }
       });
 
-      // If auto-send is enabled, send the message immediately
+      // If auto-send is enabled, send the message immediately.
+      // Do NOT set _isSendingMessage here — _sendMessage() guards on that flag
+      // at its top and would bail before doing any work. _sendMessage() sets
+      // the flag itself once it passes the guard.
       if (widget.autoSendVoiceTranscription) {
         await _sendMessage();
       } else {
