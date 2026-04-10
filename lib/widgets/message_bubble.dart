@@ -346,6 +346,9 @@ class _MessageBubbleState extends State<MessageBubble>
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         Container(
+          // Match the AI action bar's fixed height on mobile so the two button
+          // strips are visually the same size (AI row uses this constant too).
+          height: kPlatformMobile ? _mobileBottomBarHeight : null,
           decoration: BoxDecoration(
             color: bgColor.lighten(0.05),
             borderRadius: BorderRadius.circular(100),
@@ -2507,12 +2510,20 @@ class _MessageBubbleState extends State<MessageBubble>
                             PopupMenuItem<String>(
                               enabled: false,
                               value: 'cost',
-                              child: Text(AppLocalizations.of(btnContext)!.costLabel(costLabel)),
+                              child: Text(
+                                AppLocalizations.of(
+                                  btnContext,
+                                )!.costLabel(costLabel),
+                              ),
                             ),
                           PopupMenuItem<String>(
                             enabled: false,
                             value: 'time',
-                            child: Text(AppLocalizations.of(btnContext)!.generatedLabel(generatedLabel)),
+                            child: Text(
+                              AppLocalizations.of(
+                                btnContext,
+                              )!.generatedLabel(generatedLabel),
+                            ),
                           ),
                         ],
                       );
@@ -2573,15 +2584,15 @@ class _MessageBubbleState extends State<MessageBubble>
       if (!mounted) return;
       final l = AppLocalizations.of(context)!;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(copied ? l.imageCopied : l.unableToCopyImage),
-        ),
+        SnackBar(content: Text(copied ? l.imageCopied : l.unableToCopyImage)),
       );
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.unableToCopyImage)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.unableToCopyImage),
+        ),
+      );
     }
   }
 
@@ -2598,14 +2609,18 @@ class _MessageBubbleState extends State<MessageBubble>
       );
       await file.writeAsBytes(bytes, flush: true);
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.savedToPath(file.path))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.savedToPath(file.path)),
+        ),
+      );
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.unableToSaveImage)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.unableToSaveImage),
+        ),
+      );
     }
   }
 
