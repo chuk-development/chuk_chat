@@ -237,17 +237,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       onKeyEvent: (node, event) {
         if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
-        // Ctrl+V / Cmd+V: handle paste (images, text, long text → attachment)
-        // On web, let the browser handle paste natively — smart paste uses
-        // dart:io APIs (File, Directory, Pasteboard) that aren't available.
-        if (!kIsWeb &&
-            event.logicalKey == LogicalKeyboardKey.keyV &&
-            (HardwareKeyboard.instance.isControlPressed ||
-                HardwareKeyboard.instance.isMetaPressed)) {
-          _fileHandler.modelSupportsImageInput = _modelSupportsImageInput;
-          unawaited(_clipboardHandler.handleSmartPaste(_controller));
-          return KeyEventResult.handled;
-        }
+        // Note: Cmd+V / Ctrl+V is NOT intercepted here. It's handled via an
+        // `Actions` override of `PasteTextIntent` wrapped around the TextField
+        // below. That routes through Flutter's normal text-input pipeline, so
+        // external text-insertion tools (macOS dictation, WhisperFlow, etc.)
+        // keep working whether they simulate Cmd+V or use NSTextInputClient
+        // directly.
 
         // Escape: cancel editing mode
         if (event.logicalKey == LogicalKeyboardKey.escape &&
@@ -1294,6 +1289,29 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     );
   }
 
+  /// Wraps the composer text field so that any `PasteTextIntent` (Cmd+V,
+  /// Ctrl+V, macOS dictation Cmd+V, external dictation tools like WhisperFlow,
+  /// context-menu paste) is routed to our smart-paste handler, which supports
+  /// image pastes and long-text-as-attachment. Flutter's default
+  /// `PasteTextAction` is marked overridable, so this `Actions` override wins
+  /// over the built-in behavior. Skipped on web because `handleSmartPaste`
+  /// relies on `dart:io` APIs (File, Directory, Pasteboard).
+  Widget _wrapWithSmartPasteActions(Widget child) {
+    if (kIsWeb) return child;
+    return Actions(
+      actions: <Type, Action<Intent>>{
+        PasteTextIntent: CallbackAction<PasteTextIntent>(
+          onInvoke: (PasteTextIntent intent) {
+            _fileHandler.modelSupportsImageInput = _modelSupportsImageInput;
+            unawaited(_clipboardHandler.handleSmartPaste(_controller));
+            return null;
+          },
+        ),
+      },
+      child: child,
+    );
+  }
+
   Widget _buildAudioVisualizer({required Color accent, required Color iconFg}) {
     const int barCount = 40;
     final levels = _audioHandler.audioLevels;
@@ -2045,52 +2063,54 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 padding: EdgeInsets.only(right: btnW + 8),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxHeight: 160),
-                  child: Scrollbar(
-                    controller: _composerScrollController,
-                    child: TextField(
-                      controller: _controller,
-                      focusNode: _textFieldFocusNode,
-                      contextMenuBuilder: _buildComposerContextMenu,
-                      autofocus: true,
-                      showCursor: true,
-                      minLines: 1,
-                      maxLines: null,
-                      keyboardType: TextInputType.multiline,
-                      textInputAction: TextInputAction.done,
-                      scrollController: _composerScrollController,
-                      textAlignVertical: TextAlignVertical.top,
-                      style: TextStyle(
-                        color: iconFg,
-                        fontWeight: FontWeight.w600,
-                        height: 1.4,
-                      ),
-                      decoration: InputDecoration(
-                        hintText: _messageActionsHandler.isEditing
-                            ? AppLocalizations.of(context)!.editYourMessage
-                            : hasAttachments
-                            ? AppLocalizations.of(context)!.addMessageOrDocs
-                            : AppLocalizations.of(context)!.askMeAnything,
-                        hintStyle: TextStyle(
-                          color: iconFg.withValues(alpha: 0.8),
+                  child: _wrapWithSmartPasteActions(
+                    Scrollbar(
+                      controller: _composerScrollController,
+                      child: TextField(
+                        controller: _controller,
+                        focusNode: _textFieldFocusNode,
+                        contextMenuBuilder: _buildComposerContextMenu,
+                        autofocus: true,
+                        showCursor: true,
+                        minLines: 1,
+                        maxLines: null,
+                        keyboardType: TextInputType.multiline,
+                        textInputAction: TextInputAction.done,
+                        scrollController: _composerScrollController,
+                        textAlignVertical: TextAlignVertical.top,
+                        style: TextStyle(
+                          color: iconFg,
                           fontWeight: FontWeight.w600,
+                          height: 1.4,
                         ),
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        errorBorder: InputBorder.none,
-                        focusedErrorBorder: InputBorder.none,
-                        disabledBorder: InputBorder.none,
-                        filled: false,
-                        fillColor: Colors.transparent,
-                        contentPadding: const EdgeInsets.symmetric(
-                          vertical: 8,
-                          horizontal: 0,
+                        decoration: InputDecoration(
+                          hintText: _messageActionsHandler.isEditing
+                              ? AppLocalizations.of(context)!.editYourMessage
+                              : hasAttachments
+                              ? AppLocalizations.of(context)!.addMessageOrDocs
+                              : AppLocalizations.of(context)!.askMeAnything,
+                          hintStyle: TextStyle(
+                            color: iconFg.withValues(alpha: 0.8),
+                            fontWeight: FontWeight.w600,
+                          ),
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          errorBorder: InputBorder.none,
+                          focusedErrorBorder: InputBorder.none,
+                          disabledBorder: InputBorder.none,
+                          filled: false,
+                          fillColor: Colors.transparent,
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 8,
+                            horizontal: 0,
+                          ),
+                          isDense: true,
                         ),
-                        isDense: true,
+                        cursorColor: accent,
+                        cursorWidth: 2,
+                        cursorRadius: const Radius.circular(1),
                       ),
-                      cursorColor: accent,
-                      cursorWidth: 2,
-                      cursorRadius: const Radius.circular(1),
                     ),
                   ),
                 ),
@@ -2158,10 +2178,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                       // Active assistant indicator
                                       Builder(
                                         builder: (context) {
-                                          final a = _resolveWorkspaceForCurrentChat();
-                                          if (a == null) return const SizedBox.shrink();
+                                          final a =
+                                              _resolveWorkspaceForCurrentChat();
+                                          if (a == null)
+                                            return const SizedBox.shrink();
                                           return Padding(
-                                            padding: const EdgeInsets.only(right: 6),
+                                            padding: const EdgeInsets.only(
+                                              right: 6,
+                                            ),
                                             child: Tooltip(
                                               message: 'Workspace: ${a.name}',
                                               child: _buildIconBtn(
