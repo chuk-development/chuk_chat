@@ -43,10 +43,6 @@ class SidebarMobile extends StatefulWidget {
 class _SidebarMobileState extends State<SidebarMobile> {
   // Common padding for sidebar list items and headers
   static const double _sidebarHorizontalPadding = 16.0;
-  // Standard icon width for alignment (originally in main.dart's Drawer)
-  static const double _iconLeadingWidth = 24.0;
-  // Spacing between icon and text (originally in main.dart's Drawer)
-  static const double _iconTextSpacing = 16.0;
   static const Duration _searchDebounceDuration = Duration(milliseconds: 300);
   static const int _searchMessageLimit = 50;
   static const int _kPageSize = 20;
@@ -290,30 +286,6 @@ class _SidebarMobileState extends State<SidebarMobile> {
     }
   }
 
-  void _openChat(StoredChat chat) {
-    if (kDebugMode) {
-      debugPrint('');
-    }
-    if (kDebugMode) {
-      debugPrint('═══════════════════════════════════════════════════════════');
-    }
-    if (kDebugMode) {
-      debugPrint('👆 [SIDEBAR-MOBILE] User clicked chat');
-    }
-    if (kDebugMode) {
-      debugPrint('👆 [SIDEBAR-MOBILE] Chat ID: ${chat.id}');
-    }
-    if (kDebugMode) {
-      debugPrint(
-        '👆 [SIDEBAR-MOBILE] Preview: "${chat.previewText.substring(0, chat.previewText.length > 40 ? 40 : chat.previewText.length)}..."',
-      );
-    }
-    if (kDebugMode) {
-      debugPrint('═══════════════════════════════════════════════════════════');
-    }
-    widget.onChatSelected(chat.id);
-  }
-
   void _showDebouncedDeleteNotification(String chatTitle) {
     _lastDeletedChatTitle = chatTitle;
     _deleteNotificationTimer?.cancel();
@@ -553,9 +525,13 @@ class _SidebarMobileState extends State<SidebarMobile> {
     final Color accentColor = theme.colorScheme.primary;
     final Color sidebarBg = theme.cardColor.darken(0.02);
     final Color dividerColor = theme.dividerColor.withValues(alpha: 0.5);
-    final List<StoredChat> starredChats = ChatStorageService.savedChats
-        .where((chat) => chat.isStarred)
-        .toList();
+    // Pinned chats float to the top of the recents list instead of living in
+    // their own section. A stable partition keeps original (recency) order
+    // within each group.
+    final List<StoredChat> displayChats = <StoredChat>[
+      ..._filteredRecentChats.where((c) => c.isStarred),
+      ..._filteredRecentChats.where((c) => !c.isStarred),
+    ];
 
     const double topQuickActionSpacing =
         40.0; // ~1cm offset to clear the phone status bar comfortably
@@ -699,31 +675,6 @@ class _SidebarMobileState extends State<SidebarMobile> {
             ),
           ),
           const SizedBox(height: 16), // Spacing after search bar
-          // Starred Section - Fixed
-          _buildSectionHeader('Starred', textColor: textColorDefault),
-          if (starredChats.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: _sidebarHorizontalPadding,
-                vertical: 8.0,
-              ),
-              child: Text(
-                'No starred chats yet.',
-                style: TextStyle(
-                  color: iconColorDefault.withValues(alpha: 0.4),
-                ),
-              ),
-            )
-          else
-            ...starredChats.map(
-              (chat) => _buildStarredItem(chat, textColorDefault, accentColor),
-            ),
-          Divider(
-            color: dividerColor,
-            indent: _sidebarHorizontalPadding,
-            endIndent: _sidebarHorizontalPadding,
-          ),
-
           // Recents Section - Scrollable with floating bottom profile/update cards
           Expanded(
             child: Stack(
@@ -759,9 +710,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
                           ),
                         ),
                       ),
-                    ..._filteredRecentChats.take(_displayLimit).map((
-                      storedChat,
-                    ) {
+                    ...displayChats.take(_displayLimit).map((storedChat) {
                       return _buildRecentItem(
                         storedChat,
                         onTap: () {
@@ -924,17 +873,6 @@ class _SidebarMobileState extends State<SidebarMobile> {
     );
   }
 
-  // Helper for consistent leading alignment in ListTiles
-  Widget _leadingIconPlaceholder(IconData icon, {required Color iconColor}) {
-    return SizedBox(
-      width: _iconLeadingWidth + _iconTextSpacing,
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Icon(icon, color: iconColor),
-      ),
-    );
-  }
-
   Widget _buildQuickActionButton({
     required IconData icon,
     required String label,
@@ -1004,37 +942,6 @@ class _SidebarMobileState extends State<SidebarMobile> {
     );
   }
 
-  Widget _buildStarredItem(
-    StoredChat chat,
-    Color textColor,
-    Color accentColor,
-  ) {
-    final String title = _deriveChatTitle(chat);
-    return ListTile(
-      leading: _leadingIconPlaceholder(Icons.star, iconColor: accentColor),
-      title: Text(
-        title,
-        style: TextStyle(color: textColor, fontWeight: FontWeight.w600),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      onTap: () => _openChat(chat),
-      dense: true,
-      tileColor: Colors.transparent,
-      contentPadding: const EdgeInsets.only(
-        left: _sidebarHorizontalPadding,
-        right: 16.0,
-      ),
-      iconColor: accentColor,
-      textColor: textColor,
-      trailing: IconButton(
-        icon: Icon(Icons.star, color: accentColor),
-        tooltip: 'Remove from starred',
-        onPressed: () => _toggleStarred(chat),
-      ),
-    );
-  }
-
   Widget _buildRecentItem(
     StoredChat chat, {
     bool isLast = false,
@@ -1046,10 +953,13 @@ class _SidebarMobileState extends State<SidebarMobile> {
   }) {
     bool isSelected = chat.id == widget.selectedChatId;
     final bool isLocked = chat.isLocked;
+    final bool isPinned = chat.isStarred;
     final String title = isLocked ? 'Locked chat' : _deriveChatTitle(chat);
     return ListTile(
       leading: isLocked
           ? Icon(Icons.lock, size: 16, color: textColor.withValues(alpha: 0.4))
+          : isPinned
+          ? Icon(Icons.push_pin, size: 16, color: accentColor)
           : null,
       title: Text(
         title,
@@ -1124,7 +1034,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
     required Color iconColor,
     required Color textColor,
   }) {
-    final bool isStarred = chat.isStarred;
+    final bool isPinned = chat.isStarred;
 
     showModalBottomSheet(
       context: context,
@@ -1138,12 +1048,10 @@ class _SidebarMobileState extends State<SidebarMobile> {
             children: [
               ListTile(
                 leading: Icon(
-                  isStarred ? Icons.star : Icons.star_border,
-                  color: isStarred ? accentColor : iconColor,
+                  isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                  color: isPinned ? accentColor : iconColor,
                 ),
-                title: Text(
-                  isStarred ? 'Remove from starred' : 'Add to starred',
-                ),
+                title: Text(isPinned ? 'Unpin chat' : 'Pin chat'),
                 onTap: () {
                   Navigator.pop(sheetContext);
                   _toggleStarred(chat);

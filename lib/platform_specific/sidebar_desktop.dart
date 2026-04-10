@@ -46,9 +46,6 @@ class SidebarDesktop extends StatefulWidget {
 class _SidebarDesktopState extends State<SidebarDesktop> {
   // Common padding for sidebar list items and headers
   static const double _sidebarHorizontalPadding = 16.0;
-  static const double _iconLeadingWidth =
-      24.0; // Standard icon width for alignment
-  static const double _iconTextSpacing = 16.0; // Spacing between icon and text
 
   static const int _kPageSize = 20;
 
@@ -283,56 +280,6 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
     }
   }
 
-  void _openChat(StoredChat chat) {
-    // CRITICAL: Block rapid chat switching while another chat is loading
-    // This prevents race conditions that cause data corruption
-    if (ChatStorageService.isLoadingChat) {
-      if (kDebugMode) {
-        debugPrint('');
-      }
-      if (kDebugMode) {
-        debugPrint(
-          '═══════════════════════════════════════════════════════════',
-        );
-      }
-      if (kDebugMode) {
-        debugPrint('🚫 [SIDEBAR] BLOCKED - Chat is still loading');
-      }
-      if (kDebugMode) {
-        debugPrint(
-          '🚫 [SIDEBAR] User tried to click: "${chat.previewText.substring(0, chat.previewText.length > 30 ? 30 : chat.previewText.length)}..."',
-        );
-      }
-      if (kDebugMode) {
-        debugPrint(
-          '═══════════════════════════════════════════════════════════',
-        );
-      }
-      return;
-    }
-    if (kDebugMode) {
-      debugPrint('');
-    }
-    if (kDebugMode) {
-      debugPrint('═══════════════════════════════════════════════════════════');
-    }
-    if (kDebugMode) {
-      debugPrint(
-        '👆 [SIDEBAR] User clicked chat: "${chat.previewText.substring(0, chat.previewText.length > 30 ? 30 : chat.previewText.length)}..."',
-      );
-    }
-    if (kDebugMode) {
-      debugPrint('👆 [SIDEBAR] Chat ID: ${chat.id}');
-    }
-    if (kDebugMode) {
-      debugPrint('👆 [SIDEBAR] Calling onChatSelected(${chat.id})');
-    }
-    if (kDebugMode) {
-      debugPrint('═══════════════════════════════════════════════════════════');
-    }
-    widget.onChatSelected(chat.id);
-  }
-
   @override
   Widget build(BuildContext context) {
     final Color iconFg = Theme.of(context).resolvedIconColor;
@@ -341,9 +288,13 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
     final Color dividerColor = Theme.of(
       context,
     ).dividerColor.withValues(alpha: 0.5);
-    final List<StoredChat> starredChats = ChatStorageService.savedChats
-        .where((chat) => chat.isStarred)
-        .toList();
+    // Pinned chats float to the top of the recents list instead of living in
+    // their own section. A stable partition keeps original (recency) order
+    // within each group.
+    final List<StoredChat> displayChats = <StoredChat>[
+      ..._filteredRecentChats.where((c) => c.isStarred),
+      ..._filteredRecentChats.where((c) => !c.isStarred),
+    ];
 
     // The height of the top bar is calculated dynamically for desktop.
     // "New Chat" and "Workspaces" buttons are positioned *outside* this sidebar widget
@@ -481,29 +432,6 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
           const SizedBox(
             height: 8,
           ), // Spacing after search bar or offline indicator
-          // Starred Section - Fixed
-          _buildSectionHeader('Starred', iconFg: iconFg),
-          if (starredChats.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: _sidebarHorizontalPadding,
-                vertical: 8.0,
-              ),
-              child: Text(
-                'No starred chats yet.',
-                style: TextStyle(color: iconFg.withValues(alpha: 0.5)),
-              ),
-            )
-          else
-            ...starredChats.map(
-              (chat) => _buildStarredItem(chat, iconFg: iconFg, accent: accent),
-            ),
-          Divider(
-            color: dividerColor,
-            indent: _sidebarHorizontalPadding,
-            endIndent: _sidebarHorizontalPadding,
-          ),
-
           // Recents Section - Scrollable with floating bottom profile/update cards
           Expanded(
             child: Stack(
@@ -514,16 +442,15 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
                   addRepaintBoundaries: false,
                   cacheExtent: 200.0,
                   itemCount:
-                      math.min(_filteredRecentChats.length, _displayLimit) +
+                      math.min(displayChats.length, _displayLimit) +
                       2 +
-                      (_filteredRecentChats.length > _displayLimit ? 1 : 0),
+                      (displayChats.length > _displayLimit ? 1 : 0),
                   itemBuilder: (context, index) {
                     if (index == 0) {
                       return _buildSectionHeader('Recents', iconFg: iconFg);
                     }
                     if (index == 1) {
-                      if (_filteredRecentChats.isEmpty &&
-                          _searchQuery.isEmpty) {
+                      if (displayChats.isEmpty && _searchQuery.isEmpty) {
                         return Padding(
                           padding: const EdgeInsets.symmetric(
                             horizontal: _sidebarHorizontalPadding,
@@ -536,7 +463,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
                             ),
                           ),
                         );
-                      } else if (_filteredRecentChats.isEmpty &&
+                      } else if (displayChats.isEmpty &&
                           _searchQuery.isNotEmpty) {
                         return Padding(
                           padding: const EdgeInsets.symmetric(
@@ -553,14 +480,13 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
                       }
                     }
                     final visibleCount = math.min(
-                      _filteredRecentChats.length,
+                      displayChats.length,
                       _displayLimit,
                     );
                     // "Show more" button at the end
                     if (index == visibleCount + 2 &&
-                        _filteredRecentChats.length > _displayLimit) {
-                      final remaining =
-                          _filteredRecentChats.length - _displayLimit;
+                        displayChats.length > _displayLimit) {
+                      final remaining = displayChats.length - _displayLimit;
                       return Padding(
                         padding: const EdgeInsets.symmetric(
                           horizontal: _sidebarHorizontalPadding,
@@ -586,7 +512,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
                     if (chatIndex < 0 || chatIndex >= visibleCount) {
                       return const SizedBox(height: 10);
                     }
-                    final storedChat = _filteredRecentChats[chatIndex];
+                    final storedChat = displayChats[chatIndex];
                     return _buildRecentItem(
                       storedChat,
                       onTap: () {
@@ -742,17 +668,6 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
     );
   }
 
-  // Helper for consistent leading alignment in ListTiles
-  Widget _leadingIconPlaceholder(IconData icon, {required Color iconFgColor}) {
-    return SizedBox(
-      width: _iconLeadingWidth + _iconTextSpacing,
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Icon(icon, color: iconFgColor),
-      ),
-    );
-  }
-
   Widget _buildSectionHeader(String title, {required Color iconFg}) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -772,50 +687,6 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
     );
   }
 
-  Widget _buildStarredItem(
-    StoredChat chat, {
-    required Color iconFg,
-    required Color accent,
-  }) {
-    final String title = _deriveChatTitle(chat);
-    return RepaintBoundary(
-      child: GestureDetector(
-        onSecondaryTapDown: (details) {
-          _showChatContextMenu(
-            context,
-            details.globalPosition,
-            chat,
-            accentColor: accent,
-            iconFgColor: iconFg,
-            onDelete: () => _confirmAndDeleteChat(chat),
-          );
-        },
-        child: ListTile(
-          leading: _leadingIconPlaceholder(Icons.star, iconFgColor: accent),
-          title: Text(
-            title,
-            style: TextStyle(color: iconFg, fontWeight: FontWeight.w600),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          onTap: () => _openChat(chat),
-          dense: true,
-          contentPadding: const EdgeInsets.only(
-            left: _sidebarHorizontalPadding,
-            right: 8.0,
-          ),
-          iconColor: accent,
-          textColor: iconFg,
-          trailing: IconButton(
-            icon: Icon(Icons.star, color: accent),
-            tooltip: 'Remove from starred',
-            onPressed: () => _toggleStarred(chat),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildRecentItem(
     StoredChat chat, {
     bool isLast = false,
@@ -828,6 +699,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
     final bool isStreaming = StreamingManager().isStreaming(chat.id);
     final String title = chat.isLocked ? 'Locked chat' : _deriveChatTitle(chat);
     final bool isLocked = chat.isLocked;
+    final bool isPinned = chat.isStarred;
     return RepaintBoundary(
       child: GestureDetector(
         onSecondaryTapDown: (details) {
@@ -848,6 +720,8 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
                   size: 16,
                   color: iconFgColor.withValues(alpha: 0.4),
                 )
+              : isPinned
+              ? Icon(Icons.push_pin, size: 16, color: accentColor)
               : null,
           title: Text(
             title,
@@ -954,12 +828,12 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
         child: Row(
           children: [
             Icon(
-              isStarred ? Icons.star : Icons.star_border,
+              isStarred ? Icons.push_pin : Icons.push_pin_outlined,
               color: isStarred ? accentColor : iconFgColor,
               size: 20,
             ),
             const SizedBox(width: 12),
-            Text(isStarred ? 'Remove from starred' : 'Add to starred'),
+            Text(isStarred ? 'Unpin chat' : 'Pin chat'),
           ],
         ),
       ),
