@@ -10,6 +10,8 @@ import 'package:latlong2/latlong.dart';
 import 'package:maplibre/maplibre.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:chuk_chat/utils/input_validator.dart';
+
 class FullscreenMapPage extends StatefulWidget {
   final LatLng center;
   final double zoom;
@@ -1236,7 +1238,8 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
                           label: phone,
                           color: Colors.green,
                           onTap: () async {
-                            final uri = Uri.tryParse('tel:$phone');
+                            // AI-controlled input — validate before launch.
+                            final uri = InputValidator.safeTelUri(phone);
                             if (uri != null) {
                               await launchUrl(uri);
                             }
@@ -1251,10 +1254,8 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
                           label: 'Website',
                           color: Colors.blue,
                           onTap: () async {
-                            final urlStr = website.startsWith('http')
-                                ? website
-                                : 'https://$website';
-                            final uri = Uri.tryParse(urlStr);
+                            // AI-controlled input — validate before launch.
+                            final uri = InputValidator.safeHttpUri(website);
                             if (uri != null) {
                               await launchUrl(uri);
                             }
