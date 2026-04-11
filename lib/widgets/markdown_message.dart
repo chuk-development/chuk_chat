@@ -61,7 +61,42 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
     }
   }
 
+  /// URL schemes the markdown renderer is allowed to open. Anything else
+  /// (javascript:, file:, intent:, data:, etc.) is rejected regardless of
+  /// whether the user taps "Open" on the confirmation dialog — AI-rendered
+  /// markdown must not be able to launch arbitrary URI handlers.
+  static const Set<String> _allowedLinkSchemes = {
+    'http',
+    'https',
+    'mailto',
+    'tel',
+    'sms',
+  };
+
   Future<void> _onTapLink(String href) async {
+    final Uri? parsed = Uri.tryParse(href);
+    if (parsed == null ||
+        !_allowedLinkSchemes.contains(parsed.scheme.toLowerCase())) {
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Link blocked'),
+          content: Text(
+            'This link uses an unsupported URL scheme and was blocked '
+            'for your safety:\n\n$href',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     final bool? shouldOpen = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -81,9 +116,8 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
     );
 
     if (shouldOpen == true) {
-      final Uri uri = Uri.parse(href);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri);
+      if (await canLaunchUrl(parsed)) {
+        await launchUrl(parsed);
       }
     }
   }

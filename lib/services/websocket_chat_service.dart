@@ -222,9 +222,14 @@ class WebSocketChatService {
           } on FormatException catch (e) {
             // JSON parse error — likely a proxy error page or garbled data.
             // Surface to the user so they know data was lost.
+            // Privacy: never log the raw `message` body. It may contain the
+            // model's streaming chat output (per CLAUDE.md "Privacy: Logging":
+            // "NEVER log message content"). Log only length + error class.
             if (kDebugMode) {
-              debugPrint('Failed to parse WebSocket message: $message');
-              debugPrint('Error: $e');
+              debugPrint(
+                'Failed to parse WebSocket message: '
+                'len=${message.length} err=${e.runtimeType}',
+              );
             }
             yield ChatStreamEvent.error(
               'Received invalid response from server. '

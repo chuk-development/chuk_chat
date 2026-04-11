@@ -596,17 +596,37 @@ class DeviceServices {
       };
     }
 
+    // Reject phone numbers that contain anything other than digits,
+    // `+`, spaces, dashes, or parentheses. AI tool calls flow into here
+    // unvalidated — without this check, a payload like
+    // `+49?body=malicious` would inject its own `body` query parameter
+    // (or `#` could split off the query entirely), so what the user sees
+    // in the dialog can disagree with what the SMS app displays.
+    final sanitizedPhone = phoneNumber.trim();
+    if (!RegExp(r'^[+0-9()\- ]+$').hasMatch(sanitizedPhone)) {
+      return {
+        'success': false,
+        'error':
+            'Invalid phone number: only digits, spaces, and '
+            '"+", "-", "(", ")" are allowed.',
+      };
+    }
+
     try {
-      final encodedBody = body != null ? Uri.encodeComponent(body) : '';
-      final uri = Uri.parse(
-        'sms:$phoneNumber${body != null ? '?body=$encodedBody' : ''}',
-      );
+      // Phone number is already validated against a strict allow-list so we
+      // can safely interpolate it. `Uri(path:)` would percent-encode `+` as
+      // `%2B`, which some SMS apps don't recognize. The body IS untrusted
+      // (free-form text from the AI), so it must always go through
+      // Uri.encodeComponent.
+      final uri = body != null && body.isNotEmpty
+          ? Uri.parse('sms:$sanitizedPhone?body=${Uri.encodeComponent(body)}')
+          : Uri.parse('sms:$sanitizedPhone');
 
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri);
         return {
           'success': true,
-          'message': 'SMS draft opened for $phoneNumber',
+          'message': 'SMS draft opened for $sanitizedPhone',
         };
       }
       return {'success': false, 'error': 'Could not open SMS application'};

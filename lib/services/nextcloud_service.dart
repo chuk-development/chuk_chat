@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Nextcloud Service - Credential-based (WebDAV/CalDAV/CardDAV)
@@ -66,6 +67,65 @@ class NextcloudService {
     'OCS-APIRequest': 'true',
   };
 
+  /// Build a WebDAV URL for a file inside the current user's Nextcloud root.
+  ///
+  /// Rejects AI-supplied paths that escape the user's own directory:
+  /// * collapses `..`/`.` segments via `path.posix.normalize`,
+  /// * forbids any remaining `..` segment (defence in depth),
+  /// * percent-encodes each segment so `?`, `#`, `%`, spaces, and other
+  ///   reserved characters can't split off a query or fragment,
+  /// * throws [FormatException] on anything unsafe so every caller
+  ///   (`downloadFile`, `uploadFile`, `deleteFile`, `createDirectory`,
+  ///   `listFiles`) funnels through the same guard.
+  Uri _buildUserFileUri(String remotePath) {
+    if (_serverUrl == null || _username == null) {
+      throw StateError('Nextcloud is not configured');
+    }
+
+    // Reject NULs and CR/LF up front — these don't belong in any URL path.
+    if (remotePath.contains('\x00') ||
+        remotePath.contains('\r') ||
+        remotePath.contains('\n')) {
+      throw const FormatException('remotePath contains control characters');
+    }
+
+    // Normalize using POSIX rules (Nextcloud DAV is '/'-separated
+    // regardless of the client's OS) and strip any leading slash so the
+    // result is always relative to the user's root.
+    final normalized = p.posix.normalize(
+      remotePath.startsWith('/') ? remotePath.substring(1) : remotePath,
+    );
+
+    // After normalization, a leading `..` means the caller tried to
+    // escape — p.normalize preserves those rather than eating them.
+    if (normalized == '..' || normalized.startsWith('../')) {
+      throw const FormatException('remotePath escapes the user root');
+    }
+
+    // Build the segments: user root + the normalized path, each segment
+    // percent-encoded. `''` from a trailing slash is dropped so `MKCOL`
+    // and `PROPFIND` see a clean URL.
+    final userRootSegments = ['remote.php', 'dav', 'files', _username!];
+    final relativeSegments = normalized == '.'
+        ? const <String>[]
+        : normalized.split('/').where((s) => s.isNotEmpty);
+    final allSegments = [...userRootSegments, ...relativeSegments];
+
+    final base = Uri.parse(_serverUrl!);
+    return base.replace(
+      pathSegments: [
+        ...base.pathSegments.where((s) => s.isNotEmpty),
+        ...allSegments,
+      ],
+    );
+  }
+
+  /// Error payload returned when [_buildUserFileUri] rejects a path.
+  Map<String, dynamic> _invalidPathError(Object e) => {
+    'success': false,
+    'error': 'Invalid remote path: $e',
+  };
+
   Future<Map<String, dynamic>> testConnection() async {
     if (!isConfigured) {
       return {'success': false, 'error': 'Nextcloud is not configured'};
@@ -112,13 +172,16 @@ class NextcloudService {
       return {'success': false, 'error': 'Nextcloud is not configured'};
     }
 
+    final Uri uri;
     try {
-      if (!path.startsWith('/')) path = '/$path';
+      uri = _buildUserFileUri(path);
+    } on FormatException catch (e) {
+      return _invalidPathError(e.message);
+    }
+    if (!path.startsWith('/')) path = '/$path';
 
-      final request = http.Request(
-        'PROPFIND',
-        Uri.parse('$_serverUrl/remote.php/dav/files/$_username$path'),
-      );
+    try {
+      final request = http.Request('PROPFIND', uri);
       request.headers.addAll(_authHeaders);
       request.headers['Depth'] = '1';
       request.headers['Content-Type'] = 'application/xml';
@@ -211,13 +274,16 @@ class NextcloudService {
       return {'success': false, 'error': 'Nextcloud is not configured'};
     }
 
+    final Uri uri;
     try {
-      if (!remotePath.startsWith('/')) remotePath = '/$remotePath';
+      uri = _buildUserFileUri(remotePath);
+    } on FormatException catch (e) {
+      return _invalidPathError(e.message);
+    }
+    if (!remotePath.startsWith('/')) remotePath = '/$remotePath';
 
-      final response = await http.get(
-        Uri.parse('$_serverUrl/remote.php/dav/files/$_username$remotePath'),
-        headers: _authHeaders,
-      );
+    try {
+      final response = await http.get(uri, headers: _authHeaders);
 
       if (response.statusCode == 200) {
         return {
@@ -246,11 +312,17 @@ class NextcloudService {
       return {'success': false, 'error': 'Nextcloud is not configured'};
     }
 
+    final Uri uri;
     try {
-      if (!remotePath.startsWith('/')) remotePath = '/$remotePath';
+      uri = _buildUserFileUri(remotePath);
+    } on FormatException catch (e) {
+      return _invalidPathError(e.message);
+    }
+    if (!remotePath.startsWith('/')) remotePath = '/$remotePath';
 
+    try {
       final response = await http.put(
-        Uri.parse('$_serverUrl/remote.php/dav/files/$_username$remotePath'),
+        uri,
         headers: {..._authHeaders, 'Content-Type': 'application/octet-stream'},
         body: utf8.encode(content),
       );
@@ -277,13 +349,16 @@ class NextcloudService {
       return {'success': false, 'error': 'Nextcloud is not configured'};
     }
 
+    final Uri uri;
     try {
-      if (!remotePath.startsWith('/')) remotePath = '/$remotePath';
+      uri = _buildUserFileUri(remotePath);
+    } on FormatException catch (e) {
+      return _invalidPathError(e.message);
+    }
+    if (!remotePath.startsWith('/')) remotePath = '/$remotePath';
 
-      final request = http.Request(
-        'DELETE',
-        Uri.parse('$_serverUrl/remote.php/dav/files/$_username$remotePath'),
-      );
+    try {
+      final request = http.Request('DELETE', uri);
       request.headers.addAll(_authHeaders);
 
       final streamedResponse = await request.send();
@@ -311,13 +386,16 @@ class NextcloudService {
       return {'success': false, 'error': 'Nextcloud is not configured'};
     }
 
+    final Uri uri;
     try {
-      if (!remotePath.startsWith('/')) remotePath = '/$remotePath';
+      uri = _buildUserFileUri(remotePath);
+    } on FormatException catch (e) {
+      return _invalidPathError(e.message);
+    }
+    if (!remotePath.startsWith('/')) remotePath = '/$remotePath';
 
-      final request = http.Request(
-        'MKCOL',
-        Uri.parse('$_serverUrl/remote.php/dav/files/$_username$remotePath'),
-      );
+    try {
+      final request = http.Request('MKCOL', uri);
       request.headers.addAll(_authHeaders);
 
       final streamedResponse = await request.send();

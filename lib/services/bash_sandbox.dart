@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io' as io;
 
+import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Callback type for approval dialogs
@@ -68,6 +69,29 @@ class BashSandbox {
     'exec',
   ];
 
+  /// Characters that the shell interprets specially and that must never appear
+  /// in a sandboxed command, even if the command is otherwise whitelisted.
+  ///
+  /// This catches gaps that the substring-based `dangerousPatterns` list
+  /// misses — notably newlines (statement separators for `sh -c`),
+  /// tilde (home-directory expansion), globs, brace expansion, and
+  /// square-bracket character classes.
+  static const List<String> forbiddenMetaCharacters = [
+    '\n',
+    '\r',
+    '\t',
+    '~',
+    '*',
+    '?',
+    '{',
+    '}',
+    '[',
+    ']',
+    '\\',
+    '"',
+    "'",
+  ];
+
   String? _sandboxFolder;
   final ApprovalCallback? _approvalCallback;
 
@@ -115,6 +139,10 @@ class BashSandbox {
     final trimmedCommand = command.trim();
     if (trimmedCommand.isEmpty) return false;
 
+    for (final meta in forbiddenMetaCharacters) {
+      if (trimmedCommand.contains(meta)) return false;
+    }
+
     for (final pattern in dangerousPatterns) {
       if (trimmedCommand.contains(pattern)) return false;
     }
@@ -128,6 +156,13 @@ class BashSandbox {
 
   String getUnsafeReason(String command) {
     final trimmedCommand = command.trim();
+
+    for (final meta in forbiddenMetaCharacters) {
+      if (trimmedCommand.contains(meta)) {
+        final label = _metaCharLabel(meta);
+        return 'Command contains forbidden shell metacharacter ($label)';
+      }
+    }
 
     for (final pattern in dangerousPatterns) {
       if (trimmedCommand.contains(pattern)) {
@@ -158,47 +193,107 @@ class BashSandbox {
     return 'Unknown safety concern';
   }
 
+  String _metaCharLabel(String meta) {
+    switch (meta) {
+      case '\n':
+        return 'newline';
+      case '\r':
+        return 'carriage return';
+      case '\t':
+        return 'tab';
+      default:
+        return meta;
+    }
+  }
+
   bool isWithinSandbox(String command) {
     if (_sandboxFolder == null) return false;
 
+    // Reject anything with a shell metacharacter up front. isSafeCommand
+    // enforces this too, but we also guard here because `execute()` calls
+    // `isWithinSandbox` on the unsafe/approval path.
+    for (final meta in forbiddenMetaCharacters) {
+      if (command.contains(meta)) return false;
+    }
+
     final parts = command.trim().split(RegExp(r'\s+'));
+    final normalizedSandbox = p.canonicalize(_sandboxFolder!);
 
     for (final arg in parts.skip(1)) {
-      if (arg.startsWith('-')) continue;
-      if (!arg.contains('/') && !arg.startsWith('.')) continue;
+      // Validate every argument that could be a path — including flags that
+      // bundle a path via `=` (e.g. `--output=/etc/passwd`). Plain tokens
+      // without `/`, `.` or `=` are treated as sub-commands / literals and
+      // skipped.
+      final candidates = _extractPathCandidates(arg);
+      if (candidates.isEmpty) continue;
 
-      try {
-        String resolvedPath;
-        if (arg.startsWith('/')) {
-          resolvedPath = arg;
-        } else {
-          resolvedPath = io.File('$_sandboxFolder/$arg').absolute.path;
-        }
-
-        resolvedPath = _normalizePath(resolvedPath);
-        final normalizedSandbox = _normalizePath(_sandboxFolder!);
-
-        if (!resolvedPath.startsWith(normalizedSandbox)) {
+      for (final candidate in candidates) {
+        if (!_isPathInsideSandbox(candidate, normalizedSandbox)) {
           return false;
         }
-      } catch (_) {
-        return false;
       }
     }
 
     return true;
   }
 
-  String _normalizePath(String path) {
-    final segments = <String>[];
-    for (final segment in path.split('/')) {
-      if (segment == '..') {
-        if (segments.isNotEmpty) segments.removeLast();
-      } else if (segment != '.' && segment.isNotEmpty) {
-        segments.add(segment);
-      }
+  /// Extract the file-path portion of an argument. Handles `--flag=path`,
+  /// `-f=path`, and bare paths. Returns an empty list for arguments that
+  /// clearly aren't paths.
+  List<String> _extractPathCandidates(String arg) {
+    // `--flag=/path` or `-f=/path`
+    if (arg.startsWith('-')) {
+      final eq = arg.indexOf('=');
+      if (eq < 0) return const [];
+      final value = arg.substring(eq + 1);
+      if (value.isEmpty) return const [];
+      return [value];
     }
-    return '/${segments.join('/')}';
+    // Bare token that looks like a path.
+    if (arg.contains('/') || arg.startsWith('.')) {
+      return [arg];
+    }
+    return const [];
+  }
+
+  /// Canonicalize [candidate] (resolving symlinks when it already exists)
+  /// and verify it is contained in [normalizedSandbox]. Uses a segment-aware
+  /// prefix check so `/home/user/safe_secrets` is NOT treated as living
+  /// inside `/home/user/safe`.
+  bool _isPathInsideSandbox(String candidate, String normalizedSandbox) {
+    try {
+      // 1. Resolve to an absolute path anchored at the sandbox.
+      final absolute = p.isAbsolute(candidate)
+          ? candidate
+          : p.join(_sandboxFolder!, candidate);
+
+      // 2. Collapse `..`, `.`, and duplicate separators.
+      var canonical = p.canonicalize(absolute);
+
+      // 3. If the path exists as a symlink (or lives inside one), follow
+      //    it so we compare the real target, not the link's own location.
+      final entityType = io.FileSystemEntity.typeSync(
+        canonical,
+        followLinks: false,
+      );
+      if (entityType != io.FileSystemEntityType.notFound) {
+        try {
+          canonical = p.canonicalize(
+            io.File(canonical).resolveSymbolicLinksSync(),
+          );
+        } on io.FileSystemException {
+          // Broken symlink or permission error — refuse it.
+          return false;
+        }
+      }
+
+      // 4. Segment-aware containment check. Exact match or a strict
+      //    descendant only — no `startsWith` prefix confusion.
+      if (canonical == normalizedSandbox) return true;
+      return p.isWithin(normalizedSandbox, canonical);
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<Map<String, dynamic>> execute(String command) async {
@@ -252,10 +347,35 @@ class BashSandbox {
   }
 
   Future<Map<String, dynamic>> _executeDirectly(String command) async {
+    // Re-validate: we never want to hit Process.run with a command that
+    // carries shell metacharacters, even if a caller constructed it from
+    // multiple sources.
+    for (final meta in forbiddenMetaCharacters) {
+      if (command.contains(meta)) {
+        return {
+          'success': false,
+          'error':
+              'Command contains forbidden shell metacharacter '
+              '(${_metaCharLabel(meta)})',
+        };
+      }
+    }
+
+    final parts = command.trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty) {
+      return {'success': false, 'error': 'Empty command'};
+    }
+    final executable = parts.first;
+    final args = parts.sublist(1);
+
     try {
+      // Execute argv directly — no shell interpreter. This means `~`, `$VAR`,
+      // globs, and statement separators are passed verbatim as arguments
+      // rather than being re-interpreted by sh. Combined with the
+      // metacharacter block above, there is no shell layer to escape from.
       final result = await io.Process.run(
-        'sh',
-        ['-c', command],
+        executable,
+        args,
         workingDirectory: _sandboxFolder,
         runInShell: false,
         stdoutEncoding: utf8,

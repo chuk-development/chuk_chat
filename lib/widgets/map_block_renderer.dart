@@ -12,6 +12,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:chuk_chat/pages/fullscreen_map_page.dart';
+import 'package:chuk_chat/utils/input_validator.dart';
 import 'package:chuk_chat/widgets/route_map_widget.dart';
 
 /// Regex to find <map> blocks in message content.
@@ -792,25 +793,31 @@ class _PlaceCard extends StatelessWidget {
                     spacing: 10,
                     children: [
                       if (phone != null)
-                        _buildInfoChip(
-                          Icons.phone,
-                          phone,
-                          onTap: () => launchUrl(Uri.parse('tel:$phone')),
-                        ),
+                        () {
+                          // AI-controlled input — validate before launching.
+                          final uri = InputValidator.safeTelUri(phone);
+                          return _buildInfoChip(
+                            Icons.phone,
+                            phone,
+                            onTap: uri == null
+                                ? null
+                                : () => launchUrl(uri),
+                          );
+                        }(),
                       if (hours != null)
                         _buildInfoChip(Icons.access_time, hours),
                       if (website != null)
-                        _buildInfoChip(
-                          Icons.language,
-                          'Website',
-                          onTap: () => launchUrl(
-                            Uri.parse(
-                              website.startsWith('http')
-                                  ? website
-                                  : 'https://$website',
-                            ),
-                          ),
-                        ),
+                        () {
+                          // AI-controlled input — validate before launching.
+                          final uri = InputValidator.safeHttpUri(website);
+                          return _buildInfoChip(
+                            Icons.language,
+                            'Website',
+                            onTap: uri == null
+                                ? null
+                                : () => launchUrl(uri),
+                          );
+                        }(),
                     ],
                   ),
                 ),

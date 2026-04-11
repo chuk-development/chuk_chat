@@ -286,4 +286,63 @@ class InputValidator {
     final result = validatePasswordStrength(password);
     return result.errorMessage;
   }
+
+  /// Build a safe `Uri` from an AI-supplied website string for use with
+  /// `launchUrl`. Accepts only `http://` / `https://`. If the string has no
+  /// scheme, `https://` is prepended and the result must still parse to an
+  /// http(s) URL. Anything else (e.g. `javascript:`, `file:`, `http:foo`)
+  /// returns `null`.
+  ///
+  /// This is the single entry point the `<map>` / place-card widgets use —
+  /// never hand-roll `Uri.parse(website.startsWith('http') ? ...)` again,
+  /// because `'http'` matches `'http:malicious'` and `'httpX://...'`.
+  static Uri? safeHttpUri(String? raw) {
+    if (raw == null) return null;
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return null;
+
+    final lower = trimmed.toLowerCase();
+    final String candidate;
+    if (lower.startsWith('http://') || lower.startsWith('https://')) {
+      candidate = trimmed;
+    } else {
+      // Detect an explicit scheme (RFC 3986: ALPHA followed by
+      // ALPHA / DIGIT / "+" / "-" / ".") at the start of the string. This
+      // correctly distinguishes `javascript:` / `file:` (must reject) from
+      // `example.com:8080` (valid host:port, must accept).
+      final schemeMatch = RegExp(
+        r'^([a-z][a-z0-9+\-.]*):',
+      ).firstMatch(lower);
+      if (schemeMatch != null) {
+        // Explicit non-http scheme — refuse; callers that want those go
+        // through dedicated launchers.
+        return null;
+      }
+      candidate = 'https://$trimmed';
+    }
+
+    final uri = Uri.tryParse(candidate);
+    if (uri == null) return null;
+    final scheme = uri.scheme.toLowerCase();
+    if (scheme != 'http' && scheme != 'https') return null;
+    if (uri.host.isEmpty) return null;
+    return uri;
+  }
+
+  /// Build a safe `tel:` URI from an AI-supplied phone number. Accepts only
+  /// digits, spaces, and the characters `+`, `-`, `(`, `)`. Returns `null`
+  /// on anything else so callers never splice `?body=…` or `#frag` into
+  /// their URI via string interpolation.
+  ///
+  /// Uses `Uri.parse('tel:...')` rather than `Uri(scheme:'tel', path:...)`
+  /// because the latter percent-encodes `+` as `%2B`, which some dialers
+  /// reject. Because the input is already whitelisted to a safe character
+  /// set, string interpolation is safe here.
+  static Uri? safeTelUri(String? raw) {
+    if (raw == null) return null;
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return null;
+    if (!RegExp(r'^[+0-9()\- ]+$').hasMatch(trimmed)) return null;
+    return Uri.parse('tel:$trimmed');
+  }
 }
