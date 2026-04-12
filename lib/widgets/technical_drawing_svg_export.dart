@@ -23,39 +23,96 @@ String? technicalDrawingToSvg(String jsonString) {
   final rawElems = data['elements'] as List? ?? [];
   final elements = rawElems.whereType<Map<String, dynamic>>().toList();
 
-  // Derive sheet size (same rules as renderer).
-  double maxX = 297.0, maxY = 210.0;
+  double minX = double.infinity, minY = double.infinity;
+  double maxX = double.negativeInfinity, maxY = double.negativeInfinity;
+
+  void include(double x, double y) {
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  }
+
+  const dimPad = 6.0;
+  const notePadAbove = 4.0;
+  const noteCharW = 2.0;
+
   for (final e in elements) {
     final t = e['type'] as String? ?? '';
     switch (t) {
       case 'rect':
-        maxX = math.max(maxX, _d(e['x']) + _d(e['w']));
-        maxY = math.max(maxY, _d(e['y']) + _d(e['h']));
+        include(_d(e['x']), _d(e['y']));
+        include(_d(e['x']) + _d(e['w']), _d(e['y']) + _d(e['h']));
       case 'circle':
-        maxX = math.max(maxX, _d(e['cx']) + _d(e['r']));
-        maxY = math.max(maxY, _d(e['cy']) + _d(e['r']));
+        final cx = _d(e['cx']);
+        final cy = _d(e['cy']);
+        final r = _d(e['r']);
+        include(cx - r, cy - r);
+        include(cx + r, cy + r);
       case 'line':
-        maxX = math.max(maxX, math.max(_d(e['x1']), _d(e['x2'])));
-        maxY = math.max(maxY, math.max(_d(e['y1']), _d(e['y2'])));
+        include(_d(e['x1']), _d(e['y1']));
+        include(_d(e['x2']), _d(e['y2']));
       case 'dimension':
         final sub = e['subtype'] as String? ?? '';
         if (sub == 'linear_h') {
-          maxX = math.max(maxX, math.max(_d(e['x1']), _d(e['x2'])));
-          maxY = math.max(maxY, _d(e['y']) + _d(e['offset']).abs() + 10);
+          final y = _d(e['y']);
+          final off = _d(e['offset']);
+          final dimY = y + off;
+          final sign = off >= 0 ? 1.0 : -1.0;
+          final extY = dimY + sign * dimPad;
+          include(_d(e['x1']), y);
+          include(_d(e['x2']), y);
+          include(_d(e['x1']), extY);
+          include(_d(e['x2']), extY);
         } else if (sub == 'linear_v') {
-          maxX = math.max(maxX, _d(e['x']) + _d(e['offset']).abs() + 10);
-          maxY = math.max(maxY, math.max(_d(e['y1']), _d(e['y2'])));
+          final x = _d(e['x']);
+          final off = _d(e['offset']);
+          final dimX = x + off;
+          final sign = off >= 0 ? 1.0 : -1.0;
+          final extX = dimX + sign * dimPad;
+          include(x, _d(e['y1']));
+          include(x, _d(e['y2']));
+          include(extX, _d(e['y1']));
+          include(extX, _d(e['y2']));
+        } else if (sub == 'diameter') {
+          final cx = _d(e['cx']);
+          final cy = _d(e['cy']);
+          final r = _d(e['r']);
+          include(cx - r, cy - r);
+          include(cx + r, cy + r);
         }
       case 'note':
-        maxX = math.max(maxX, _d(e['x']) + 30);
-        maxY = math.max(maxY, _d(e['y']));
+        final x = _d(e['x']);
+        final y = _d(e['y']);
+        final text = e['text'] as String? ?? '';
+        include(x, y - notePadAbove);
+        include(x + text.length * noteCharW, y);
     }
   }
 
+  if (!minX.isFinite) {
+    minX = 0;
+    minY = 0;
+    maxX = 297;
+    maxY = 210;
+  }
+
+  const leftMargin = 20.0;
+  const topMargin = 15.0;
+  const rightMargin = 15.0;
+  const bottomMargin = 10.0;
   const titleBlockH = 40.0;
-  const margin = 25.0;
-  final sheetW = maxX + margin + 10;
-  final sheetH = maxY + margin + titleBlockH;
+
+  final contentW = maxX - minX;
+  final contentH = maxY - minY;
+
+  var sheetW = contentW + leftMargin + rightMargin;
+  var sheetH = contentH + topMargin + bottomMargin + titleBlockH;
+  if (sheetW < 210) sheetW = 210;
+  if (sheetH < 150) sheetH = 150;
+
+  final originX = leftMargin - minX;
+  final originY = topMargin - minY;
 
   final sb = StringBuffer()
     ..writeln(
@@ -64,14 +121,16 @@ String? technicalDrawingToSvg(String jsonString) {
       'width="${_f(sheetW)}mm" height="${_f(sheetH)}mm">',
     )
     ..writeln('<rect width="${_f(sheetW)}" height="${_f(sheetH)}" fill="white"/>')
-    // Border frame (5mm margin).
     ..writeln(
       '<rect x="5" y="5" width="${_f(sheetW - 10)}" height="${_f(sheetH - 10)}" '
       'fill="none" stroke="black" stroke-width="0.5"/>',
+    )
+    // Content group: all element coordinates get shifted by origin so
+    // negative JSON coords (dim text past x=0) land inside the frame.
+    ..writeln(
+      '<g transform="translate(${_f(originX)},${_f(originY)})">',
     );
 
-  // Draw priority (match widget renderer): construction → thin → thick →
-  // dimensions → notes last so overlays read correctly.
   final ordered = [...elements]..sort(
       (a, b) => _priority(a).compareTo(_priority(b)),
     );
@@ -79,7 +138,8 @@ String? technicalDrawingToSvg(String jsonString) {
     _writeElement(sb, e);
   }
 
-  // Title block (DIN — bottom right).
+  sb.writeln('</g>');
+
   _writeTitleBlock(sb, meta, sheetW, sheetH);
 
   sb.writeln('</svg>');
