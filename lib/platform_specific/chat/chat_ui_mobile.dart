@@ -385,7 +385,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     // Provider refresh listener
     _providerRefreshSubscription = ModelSelectionEventBus().refreshStream
         .listen((_) {
-          unawaited(_loadProviderSlugForModel(_selectedModelId));
+          // Skip dropdown cache (may be stale) and read from prefs directly
+          unawaited(_loadProviderSlugForModel(_selectedModelId, forceFromPrefs: true));
         });
 
     // Network status listener
@@ -2361,7 +2362,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
   // --- UTILITY METHODS ---
 
-  Future<void> _loadProviderSlugForModel(String modelId) async {
+  Future<void> _loadProviderSlugForModel(String modelId, {bool forceFromPrefs = false}) async {
     if (modelId.isEmpty) {
       if (_selectedProviderSlug != null) {
         setState(() {
@@ -2371,16 +2372,18 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       return;
     }
 
-    final String? dropdownSlug = ModelSelectionDropdown.providerSlugForModel(
-      modelId,
-    );
-    if (dropdownSlug != null && dropdownSlug.isNotEmpty) {
-      if (_selectedProviderSlug != dropdownSlug) {
-        setState(() {
-          _selectedProviderSlug = dropdownSlug;
-        });
+    if (!forceFromPrefs) {
+      final String? dropdownSlug = ModelSelectionDropdown.providerSlugForModel(
+        modelId,
+      );
+      if (dropdownSlug != null && dropdownSlug.isNotEmpty) {
+        if (_selectedProviderSlug != dropdownSlug) {
+          setState(() {
+            _selectedProviderSlug = dropdownSlug;
+          });
+        }
+        return;
       }
-      return;
     }
 
     final String? loadedSlug =
