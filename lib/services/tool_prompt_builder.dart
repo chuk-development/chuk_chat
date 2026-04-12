@@ -577,6 +577,7 @@ Artifact rules:
 3. Keep update edits small (max ~5 edits). If many structural changes are needed, use rewrite.
 4. Create at most ONE artifact per assistant response.
 5. Reuse the same artifact_id across follow-up edits so version history stays intact.
+6. When recreating an artifact in a different format (e.g. SVG → technical_drawing), use action="rewrite" with the SAME artifact_id and set the new type. Do NOT create a new artifact_id — this keeps version history.
 
 ### Technical Drawings (type: technical_drawing)
 
