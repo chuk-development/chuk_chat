@@ -46,14 +46,9 @@ class TechnicalDrawingWidget extends StatelessWidget {
         final paintH = data.sheetH * scale;
 
         return Center(
-          child: InteractiveViewer(
-            minScale: 0.5,
-            maxScale: 5.0,
-            boundaryMargin: const EdgeInsets.all(80),
-            child: CustomPaint(
-              size: Size(paintW, paintH),
-              painter: TechDrawPainter(data: data, scale: scale),
-            ),
+          child: CustomPaint(
+            size: Size(paintW, paintH),
+            painter: TechDrawPainter(data: data, scale: scale),
           ),
         );
       },
