@@ -399,6 +399,7 @@ VISUAL OUTPUT NOTE:
 - Never call find_tools for "chart", "graph", "plot", "map", or "email".
 - If user asks for a chart/map, discover DATA tools first, then emit <chart>/<map> directly in your final response text.
 - To draft an email, emit <email>{"to":"...","subject":"...","body":"..."}</email> in your response. The app renders it as a card with an "Open in Mail App" button.
+- For "technische Zeichnung" / "technical drawing" / "engineering drawing" / DIN-style blueprints: use artifact_manager with type="technical_drawing" and JSON content. This is a RENDERED drawing with dimensions, NOT an AI-generated image. Do NOT use generate_image for technical drawings.
 
 VISUAL OUTPUT SWITCHES (current):
 - chart tags: ${includeChartVisualOutput ? 'enabled' : 'disabled'}
@@ -406,7 +407,9 @@ VISUAL OUTPUT SWITCHES (current):
 - email tags: enabled
 
 STOP after $toolCallEnd -- wait for real results. Never fabricate outputs.
-${_buildAlwaysAvailableSection(alwaysAvailableTools)}''';
+${_buildAlwaysAvailableSection(alwaysAvailableTools)}
+${alwaysAvailableNames.contains('artifact_manager') ? _artifactToolProtocol() : ''}
+${_visualOutputProtocol(includeMaps: includeMapVisualOutput, includeCharts: includeChartVisualOutput)}''';
   }
 
   /// Renders tool definitions that are always available (bypass discovery).
