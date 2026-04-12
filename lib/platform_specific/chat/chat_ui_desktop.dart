@@ -346,8 +346,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // Listen for provider changes from model selector page
     _providerRefreshSubscription = ModelSelectionEventBus().refreshStream
         .listen((_) {
-          // Reload provider slug when settings are changed
-          unawaited(_loadProviderSlugForModel(_selectedModelId));
+          // Reload provider slug when settings are changed —
+          // skip dropdown cache (may be stale) and read from prefs directly
+          unawaited(_loadProviderSlugForModel(_selectedModelId, forceFromPrefs: true));
         });
   }
 
@@ -851,7 +852,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     ChatUiHelpers.openComingSoonFeature(context, featureName);
   }
 
-  Future<void> _loadProviderSlugForModel(String modelId) async {
+  Future<void> _loadProviderSlugForModel(String modelId, {bool forceFromPrefs = false}) async {
     if (modelId.isEmpty) {
       if (_selectedProviderSlug != null) {
         setState(() {
@@ -861,16 +862,18 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       return;
     }
 
-    final String? dropdownSlug = ModelSelectionDropdown.providerSlugForModel(
-      modelId,
-    );
-    if (dropdownSlug != null && dropdownSlug.isNotEmpty) {
-      if (_selectedProviderSlug != dropdownSlug) {
-        setState(() {
-          _selectedProviderSlug = dropdownSlug;
-        });
+    if (!forceFromPrefs) {
+      final String? dropdownSlug = ModelSelectionDropdown.providerSlugForModel(
+        modelId,
+      );
+      if (dropdownSlug != null && dropdownSlug.isNotEmpty) {
+        if (_selectedProviderSlug != dropdownSlug) {
+          setState(() {
+            _selectedProviderSlug = dropdownSlug;
+          });
+        }
+        return;
       }
-      return;
     }
 
     final String? loadedSlug =
