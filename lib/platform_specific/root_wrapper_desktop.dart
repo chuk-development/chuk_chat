@@ -38,6 +38,9 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   String? _activeProjectId;
   String? _activePanel; // 'projects', 'media', or null
   ArtifactDocument? _activeArtifact;
+  bool _panelOpen = true;
+  /// User-preferred artifact panel width. Null = default 50%.
+  double? _userArtifactPanelWidth;
 
   final GlobalKey<ChukChatUIDesktopState> _chatUIKey = GlobalKey();
 
@@ -46,9 +49,11 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     super.initState();
     if (kFeatureArtifacts) {
       _activeArtifact = ArtifactStorageService.activeArtifactNotifier.value;
+      _panelOpen = ArtifactStorageService.panelOpenNotifier.value;
       ArtifactStorageService.activeArtifactNotifier.addListener(
         _onArtifactChanged,
       );
+      ArtifactStorageService.panelOpenNotifier.addListener(_onPanelOpenChanged);
     }
     // Defer non-critical startup work to keep first interactions responsive.
     unawaited(
@@ -93,15 +98,35 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       ArtifactStorageService.activeArtifactNotifier.removeListener(
         _onArtifactChanged,
       );
+      ArtifactStorageService.panelOpenNotifier.removeListener(
+        _onPanelOpenChanged,
+      );
     }
     super.dispose();
   }
 
   void _onArtifactChanged() {
     if (!mounted) return;
+    final newArtifact = ArtifactStorageService.activeArtifactNotifier.value;
     setState(() {
-      _activeArtifact = ArtifactStorageService.activeArtifactNotifier.value;
+      _activeArtifact = newArtifact;
     });
+    // Re-open panel when a new artifact is created.
+    if (newArtifact != null &&
+        !ArtifactStorageService.panelOpenNotifier.value) {
+      ArtifactStorageService.panelOpenNotifier.value = true;
+    }
+  }
+
+  void _onPanelOpenChanged() {
+    if (!mounted) return;
+    setState(() {
+      _panelOpen = ArtifactStorageService.panelOpenNotifier.value;
+    });
+  }
+
+  void _closeArtifactPanel() {
+    ArtifactStorageService.panelOpenNotifier.value = false;
   }
 
   void _openSettingsPage() {
@@ -333,11 +358,19 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     const double minPanelWidth = 320.0;
     final double sidebarWidth = _isSidebarExpanded ? effectiveSidebarWidth : 0;
     final double availableForPanel = screenWidth - sidebarWidth - minChatWidth;
-    final bool hasArtifact = kFeatureArtifacts && _activeArtifact != null;
-    // Artifacts get 50% of content area; other panels cap at 400px.
+    final bool hasArtifact =
+        kFeatureArtifacts && _activeArtifact != null && _panelOpen;
+    // Artifacts use user-dragged width (default 50%); other panels cap at 400px.
     final double contentWidth = screenWidth - sidebarWidth;
+    final double defaultArtifactWidth = (contentWidth * 0.5).clamp(
+      minPanelWidth,
+      math.max(minPanelWidth, contentWidth - minChatWidth),
+    );
     final double maxPanelWidth = hasArtifact
-        ? (contentWidth * 0.5).clamp(minPanelWidth, contentWidth - minChatWidth)
+        ? (_userArtifactPanelWidth ?? defaultArtifactWidth).clamp(
+            minPanelWidth,
+            math.max(minPanelWidth, contentWidth - minChatWidth),
+          )
         : 400.0;
     final double panelWidth = availableForPanel >= minPanelWidth
         ? math.min(maxPanelWidth, availableForPanel)
@@ -405,6 +438,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                     ? ArtifactPanel(
                         artifact: _activeArtifact!,
                         showHeader: true,
+                        onClose: _closeArtifactPanel,
                       )
                     : Column(
                         children: [
@@ -458,6 +492,38 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                           ),
                         ],
                       ),
+              ),
+            ),
+
+          // Draggable divider — only for artifact panel (user can resize).
+          if (showPanel && effectivePanel == 'artifact')
+            Positioned(
+              right: panelWidth - 3,
+              top: 0,
+              bottom: 0,
+              width: 6,
+              child: MouseRegion(
+                cursor: SystemMouseCursors.resizeColumn,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onHorizontalDragUpdate: (details) {
+                    setState(() {
+                      final newW =
+                          (_userArtifactPanelWidth ?? panelWidth) -
+                              details.delta.dx;
+                      _userArtifactPanelWidth = newW.clamp(
+                        minPanelWidth,
+                        math.max(minPanelWidth, contentWidth - minChatWidth),
+                      );
+                    });
+                  },
+                  child: Center(
+                    child: Container(
+                      width: 1,
+                      color: iconFg.withValues(alpha: 0.15),
+                    ),
+                  ),
+                ),
               ),
             ),
 

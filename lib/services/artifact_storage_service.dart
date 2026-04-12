@@ -29,6 +29,11 @@ class ArtifactStorageService {
   static final ValueNotifier<ArtifactDocument?> activeArtifactNotifier =
       ValueNotifier<ArtifactDocument?>(null);
 
+  /// Controls whether the artifact panel is visible in the UI. Decoupled from
+  /// activeArtifactNotifier so users can close the panel without losing the
+  /// active artifact (inline card in chat can reopen it).
+  static final ValueNotifier<bool> panelOpenNotifier = ValueNotifier<bool>(true);
+
   static String? _activeChatId;
   static String? _cacheUserId;
   static bool _artifactStorageAvailable = true;
