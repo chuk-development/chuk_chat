@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:chuk_chat/utils/artifact_tag_parser.dart';
+
 const String toolCallStart = '<tool_call>';
 const String toolCallEnd = '</tool_call>';
 
@@ -272,6 +274,14 @@ String stripToolCallBlocksForDisplay(
   var cleaned = content
       .replaceAll(_xmlToolCallBlockPattern, '')
       .replaceAll(_markdownToolCallBlockPattern, '');
+
+  // Also strip inline <artifact> blocks — they are rendered as inline
+  // artifact cards (mirroring artifact_manager tool-call output), not as
+  // raw text. Keeping them in view would show the protocol XML.
+  cleaned = stripArtifactTagsForDisplay(
+    cleaned,
+    stripIncomplete: stripIncomplete,
+  );
 
   if (stripIncomplete) {
     final xmlStart = _xmlToolCallStartPattern.firstMatch(cleaned)?.start;

@@ -582,6 +582,20 @@ Artifact rules:
 5. Reuse the same artifact_id across follow-up edits so version history stays intact.
 6. When recreating an artifact in a different format (e.g. SVG → technical_drawing), use action="rewrite" with the SAME artifact_id and set the new type. Do NOT create a new artifact_id — this keeps version history.
 
+### Inline <artifact> tag (alternative to artifact_manager)
+
+As a shorthand, you may also emit the artifact directly in your message text using this tag shape:
+
+    <artifact id="my-id" type="technical_drawing" title="Optional Title">
+    {...content JSON or code...}
+    </artifact>
+
+The UI parses these tags on message finalization and routes them through the same storage path as artifact_manager — so versioning still works:
+- If the id is new → creates a fresh artifact (equivalent to action="create").
+- If the id already exists → bumps the version (equivalent to action="rewrite").
+
+Use the tag form when you want to produce an artifact as part of a normal answer. For targeted text edits (small old_str → new_str swaps) you still MUST use artifact_manager with action="update" — inline tags only support create/rewrite.
+
 ### Technical Drawings (type: technical_drawing)
 
 For engineering/mechanical drawings, use type="technical_drawing". Content is JSON:

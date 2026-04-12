@@ -586,6 +586,20 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                   }
                 }
 
+                // Process inline <artifact> tags emitted in assistant text.
+                // Each tag becomes a synthetic artifact_manager ToolCall so
+                // the existing inline-card render path picks it up, and the
+                // tag is persisted via ArtifactStorageService (create or
+                // rewrite) for version history.
+                final syntheticArtifactCalls = await ArtifactTagProcessor
+                    .processTags(
+                      content: effectiveContent,
+                      chatId: chatIdForStream,
+                    );
+                if (syntheticArtifactCalls.isNotEmpty) {
+                  finalToolCalls.addAll(syntheticArtifactCalls);
+                }
+
                 // Notify UI with finalized tool calls.
                 if (finalToolCalls.isNotEmpty) {
                   _updateToolCallsForMessage(
@@ -1593,6 +1607,21 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                       finalizeStaleToolCalls(block.toolCalls!);
                     }
                   }
+
+                  // Process inline <artifact> tags emitted in assistant text.
+                  // Each tag becomes a synthetic artifact_manager ToolCall so
+                  // the existing inline-card render path picks it up, and
+                  // the tag is persisted via ArtifactStorageService (create
+                  // or rewrite) for version history.
+                  final syntheticArtifactCalls = await ArtifactTagProcessor
+                      .processTags(
+                        content: effectiveContent,
+                        chatId: chatIdForStream,
+                      );
+                  if (syntheticArtifactCalls.isNotEmpty) {
+                    finalToolCalls.addAll(syntheticArtifactCalls);
+                  }
+
                   if (finalToolCalls.isNotEmpty) {
                     _updateToolCallsForMessage(
                       placeholderIndex,
