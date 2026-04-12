@@ -759,7 +759,10 @@ class ToolExecutor {
 
   Future<String> _executeArtifactManager(Map<String, dynamic> args) async {
     final action = (args['action'] as String? ?? '').trim().toLowerCase();
-    final chatId = ChatStorageService.selectedChatId;
+    // Fall back to activeMessageChatId when selectedChatId isn't committed yet
+    // (race condition on first message of a new chat).
+    final chatId = ChatStorageService.selectedChatId ??
+        ChatStorageService.activeMessageChatId;
 
     if (chatId == null || chatId.isEmpty) {
       return 'Error: No active chat. Start or select a chat first.';
