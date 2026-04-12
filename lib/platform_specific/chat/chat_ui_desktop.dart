@@ -16,6 +16,7 @@ import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
+import 'package:chuk_chat/services/artifact_tag_processor.dart';
 import 'package:chuk_chat/services/message_composition_service.dart';
 import 'package:chuk_chat/services/tool_call_handler.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart'
@@ -761,6 +762,21 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   /// Returns the current messages list for debug export.
   List<Map<String, String>> get debugMessages =>
       _messages.map((m) => Map<String, String>.from(m)).toList();
+
+  /// Current resolved system prompt (workspace or user default). Debug only.
+  String? get debugSystemPrompt => _systemPrompt;
+
+  /// Current model id used for outgoing requests. Debug only.
+  String get debugModelId => _selectedModelId;
+
+  /// Current provider slug used for outgoing requests. Debug only.
+  String? get debugProviderSlug => _selectedProviderSlug;
+
+  /// Current workspace id, if any. Debug only.
+  String? get debugWorkspaceId => _selectedWorkspaceId;
+
+  /// Whether reasoning is enabled for the current model. Debug only.
+  bool get debugReasoningEnabled => _reasoningEnabled;
 
   void newChat() {
     _pendingWorkspaceId = null;

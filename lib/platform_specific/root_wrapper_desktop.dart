@@ -259,14 +259,19 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   }
 
   void _copyDebugChat() {
-    final messages = _chatUIKey.currentState?.debugMessages;
+    final state = _chatUIKey.currentState;
+    final messages = state?.debugMessages;
     if (messages == null || messages.isEmpty) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('No messages to copy')));
       return;
     }
-    final text = DebugChatFormatter.format(messages);
+    final text = DebugChatFormatter.format(
+      messages,
+      systemPrompt: state?.debugSystemPrompt,
+      context: _debugContext(state),
+    );
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -276,6 +281,17 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
         duration: const Duration(seconds: 2),
       ),
     );
+  }
+
+  Map<String, String> _debugContext(ChukChatUIDesktopState? state) {
+    if (state == null) return const {};
+    return {
+      'Model': state.debugModelId,
+      'Provider': state.debugProviderSlug ?? '',
+      'Workspace': state.debugWorkspaceId ?? '',
+      'Reasoning': state.debugReasoningEnabled.toString(),
+      'Platform': 'desktop',
+    };
   }
 
   Future<void> _handleChatDeleted(String deletedChatId) async {
