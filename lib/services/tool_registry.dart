@@ -1090,16 +1090,16 @@ final List<ClientTool> builtinTools = [
     name: 'artifact_manager',
     description:
         'Create and update rich chat artifacts (code, markdown docs, HTML, '
-        'Mermaid diagrams, SVG). Actions: create, update (old_str/new_str '
-        'edits), rewrite (full content replace). Use for substantial outputs '
-        'that should stay editable across messages.',
+        'Mermaid diagrams, SVG, technical drawings). Actions: create, update '
+        '(old_str/new_str edits), rewrite (full content replace). Use for '
+        'substantial outputs that should stay editable across messages.',
     parameters: {
       'action': 'string (required: create | update | rewrite)',
       'artifact_id':
           'string (required: stable artifact id, letters/numbers/hyphens only)',
       'title': 'string (required for create, optional for rewrite)',
       'type':
-          'string (required for create; optional for rewrite: code|markdown|html|mermaid|svg)',
+          'string (required for create; optional for rewrite: code|markdown|html|mermaid|svg|technical_drawing)',
       'language':
           'string (optional for code artifacts, e.g. dart, python, ts, rust)',
       'content':
@@ -1118,6 +1118,8 @@ final List<ClientTool> builtinTools = [
       'html',
       'mermaid',
       'svg',
+      'technical_drawing',
+      'drawing',
       'rewrite',
       'edit',
       'replace',

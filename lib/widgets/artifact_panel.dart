@@ -14,6 +14,7 @@ import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
+import 'package:chuk_chat/widgets/technical_drawing_widget.dart';
 
 class ArtifactPanel extends StatefulWidget {
   const ArtifactPanel({
@@ -497,6 +498,8 @@ class _ArtifactRenderer extends StatelessWidget {
             ),
           ),
         );
+      case ArtifactType.technicalDrawing:
+        return TechnicalDrawingWidget(jsonString: content);
     }
   }
 }
