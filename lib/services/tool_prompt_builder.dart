@@ -567,6 +567,7 @@ Use artifact_manager for substantial outputs such as:
 - HTML apps/pages
 - Mermaid diagrams
 - SVG content
+- technical drawings (type: technical_drawing)
 
 Do NOT use artifacts for short snippets or quick conversational replies.
 
@@ -576,6 +577,50 @@ Artifact rules:
 3. Keep update edits small (max ~5 edits). If many structural changes are needed, use rewrite.
 4. Create at most ONE artifact per assistant response.
 5. Reuse the same artifact_id across follow-up edits so version history stays intact.
+
+### Technical Drawings (type: technical_drawing)
+
+For engineering/mechanical drawings, use type="technical_drawing". Content is JSON:
+
+```json
+{
+  "type": "technical_drawing",
+  "meta": {
+    "title": "Flachplatte",
+    "partNo": "FP-001",
+    "material": "S235JR",
+    "scale": "1:1",
+    "unit": "mm",
+    "tolerance": "ISO 2768-m",
+    "author": "Claude",
+    "date": "12.04.2026",
+    "sheet": "1/1"
+  },
+  "elements": [
+    {"type":"rect","lineStyle":"solid","weight":"thick","x":50,"y":30,"w":120,"h":80},
+    {"type":"circle","lineStyle":"solid","weight":"thick","cx":110,"cy":70,"r":15},
+    {"type":"line","lineStyle":"centerline","weight":"thin","x1":85,"y1":70,"x2":135,"y2":70},
+    {"type":"dimension","subtype":"linear_h","x1":50,"x2":170,"y":110,"offset":14,"value":"120"},
+    {"type":"dimension","subtype":"linear_v","y1":30,"y2":110,"x":50,"offset":-14,"value":"80"},
+    {"type":"dimension","subtype":"diameter","cx":110,"cy":70,"r":15,"angle":45,"value":"\\u00d8 30"},
+    {"type":"note","x":50,"y":22,"text":"t = 10"}
+  ]
+}
+```
+
+Drawing rules:
+- Coordinates in mm, origin top-left, Y-axis down
+- lineStyle: "solid" (visible edges), "dashed" (hidden edges), "centerline" (axes)
+- weight: "thick" (body edges ~0.7mm), "thin" (dimensions/helpers ~0.25mm)
+- Element types: rect (x,y,w,h), circle (cx,cy,r), line (x1,y1,x2,y2)
+- Dimension subtypes: linear_h (horizontal), linear_v (vertical), diameter
+- For linear_h: x1,x2 = endpoints, y = part edge Y, offset = distance to dim line (+ = down, - = up)
+- For linear_v: y1,y2 = endpoints, x = part edge X, offset = distance to dim line (+ = right, - = left)
+- For diameter: cx,cy,r from circle, angle = leader line angle in degrees, value includes \\u00d8 prefix
+- note: freeform text annotation at position
+- meta fields populate DIN title block (Schriftfeld)
+- Always dimension all significant features
+- Use centerlines through circles and symmetry axes
 ''';
   }
 

@@ -45,10 +45,10 @@ const bool kFeatureWorkspaces = bool.fromEnvironment(
   defaultValue: true,
 );
 
-/// Artifacts - editable code/markdown/HTML panels alongside chat
+/// Artifacts - editable code/markdown/HTML/technical drawing panels alongside chat
 const bool kFeatureArtifacts = bool.fromEnvironment(
   'FEATURE_ARTIFACTS',
-  defaultValue: false,
+  defaultValue: true,
 );
 
 /// Image Generation - AI image creation via Z-Image Turbo
