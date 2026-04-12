@@ -41,5 +41,95 @@ void main() {
       expect(formatted.contains('data:image'), isFalse);
       expect(formatted.contains('[image removed]'), isTrue);
     });
+
+    test('renders system prompt when provided', () {
+      final messages = [
+        <String, String>{'sender': 'user', 'text': 'hi'},
+      ];
+
+      final formatted = DebugChatFormatter.format(
+        messages,
+        systemPrompt: 'You are Goggins. Predige immer.',
+      );
+
+      expect(formatted.contains('--- System Prompt ---'), isTrue);
+      expect(formatted.contains('You are Goggins. Predige immer.'), isTrue);
+    });
+
+    test('skips system prompt block when null or blank', () {
+      final messages = [
+        <String, String>{'sender': 'user', 'text': 'hi'},
+      ];
+
+      final emptyPrompt = DebugChatFormatter.format(
+        messages,
+        systemPrompt: '   ',
+      );
+      final nullPrompt = DebugChatFormatter.format(messages);
+
+      expect(emptyPrompt.contains('--- System Prompt ---'), isFalse);
+      expect(nullPrompt.contains('--- System Prompt ---'), isFalse);
+    });
+
+    test('renders context block with provided keys in order', () {
+      final messages = [
+        <String, String>{'sender': 'user', 'text': 'hi'},
+      ];
+
+      final formatted = DebugChatFormatter.format(
+        messages,
+        context: {
+          'Model': 'claude-opus-4-6',
+          'Provider': 'anthropic',
+          'Workspace': '',
+          'Platform': 'desktop',
+        },
+      );
+
+      expect(formatted.contains('--- Context ---'), isTrue);
+      expect(formatted.contains('Model: claude-opus-4-6'), isTrue);
+      expect(formatted.contains('Provider: anthropic'), isTrue);
+      expect(formatted.contains('Platform: desktop'), isTrue);
+      // Blank values are skipped.
+      expect(formatted.contains('Workspace:'), isFalse);
+
+      final modelIdx = formatted.indexOf('Model:');
+      final providerIdx = formatted.indexOf('Provider:');
+      final platformIdx = formatted.indexOf('Platform:');
+      expect(modelIdx < providerIdx, isTrue);
+      expect(providerIdx < platformIdx, isTrue);
+    });
+
+    test('renders header-only export when messages empty but context given',
+        () {
+      final formatted = DebugChatFormatter.format(
+        const [],
+        systemPrompt: 'prompt',
+        context: {'Model': 'x'},
+      );
+
+      expect(formatted.contains('--- System Prompt ---'), isTrue);
+      expect(formatted.contains('Model: x'), isTrue);
+      expect(formatted.contains('Messages: 0'), isTrue);
+    });
+
+    test('returns placeholder when nothing provided', () {
+      final formatted = DebugChatFormatter.format(const []);
+      expect(formatted, equals('(empty chat)'));
+    });
+
+    test('redacts sensitive data inside system prompt', () {
+      final messages = [
+        <String, String>{'sender': 'user', 'text': 'hi'},
+      ];
+
+      final formatted = DebugChatFormatter.format(
+        messages,
+        systemPrompt: 'Attached image: data:image/png;base64,SGVsbG8=',
+      );
+
+      expect(formatted.contains('data:image/png'), isFalse);
+      expect(formatted.contains('[image removed]'), isTrue);
+    });
   });
 }

@@ -29,14 +29,48 @@ class DebugChatFormatter {
   }
 
   /// Format a list of message maps (as used by chat UIs) into a debug string.
-  static String format(List<Map<String, String>> messages) {
-    if (messages.isEmpty) return '(empty chat)';
+  ///
+  /// Optional context — when supplied — is rendered above the message list so
+  /// a pasted debug log is self-contained:
+  /// - [systemPrompt]: the resolved system prompt sent with requests.
+  /// - [context]: ordered key/value pairs (model, provider, workspace, flags).
+  ///   Use a LinkedHashMap (or plain literal) for a stable order.
+  static String format(
+    List<Map<String, String>> messages, {
+    String? systemPrompt,
+    Map<String, String>? context,
+  }) {
+    final hasContext = systemPrompt != null && systemPrompt.trim().isNotEmpty ||
+        (context != null && context.isNotEmpty);
+
+    if (messages.isEmpty && !hasContext) return '(empty chat)';
 
     final buf = StringBuffer();
     buf.writeln('=== Debug Chat Export ===');
     buf.writeln('Messages: ${messages.length}');
     buf.writeln('Exported: ${DateTime.now().toUtc().toIso8601String()}');
     buf.writeln();
+
+    if (context != null && context.isNotEmpty) {
+      buf.writeln('--- Context ---');
+      context.forEach((k, v) {
+        if (v.trim().isEmpty) return;
+        buf.writeln(
+          '$k: ${ClipboardTextSanitizer.sanitize(v).trim()}',
+        );
+      });
+      buf.writeln();
+    }
+
+    if (systemPrompt != null && systemPrompt.trim().isNotEmpty) {
+      buf.writeln('--- System Prompt ---');
+      buf.writeln(ClipboardTextSanitizer.sanitize(systemPrompt).trim());
+      buf.writeln();
+    }
+
+    if (messages.isEmpty) {
+      return ClipboardTextSanitizer.sanitize(buf.toString());
+    }
 
     for (var i = 0; i < messages.length; i++) {
       final m = messages[i];

@@ -358,14 +358,19 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
   }
 
   void _copyDebugChat() {
-    final messages = _chatUIMobileKey.currentState?.debugMessages;
+    final state = _chatUIMobileKey.currentState;
+    final messages = state?.debugMessages;
     if (messages == null || messages.isEmpty) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('No messages to copy')));
       return;
     }
-    final text = DebugChatFormatter.format(messages);
+    final text = DebugChatFormatter.format(
+      messages,
+      systemPrompt: state?.debugSystemPrompt,
+      context: _debugContext(state),
+    );
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -375,6 +380,17 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
         duration: const Duration(seconds: 2),
       ),
     );
+  }
+
+  Map<String, String> _debugContext(ChukChatUIMobileState? state) {
+    if (state == null) return const {};
+    return {
+      'Model': state.debugModelId,
+      'Provider': state.debugProviderSlug ?? '',
+      'Workspace': state.debugWorkspaceId ?? '',
+      'Reasoning': state.debugReasoningEnabled.toString(),
+      'Platform': 'mobile',
+    };
   }
 
   @override
