@@ -70,8 +70,12 @@ String? technicalDrawingToSvg(String jsonString) {
       'fill="none" stroke="black" stroke-width="0.5"/>',
     );
 
-  // Elements.
-  for (final e in elements) {
+  // Draw priority (match widget renderer): construction → thin → thick →
+  // dimensions → notes last so overlays read correctly.
+  final ordered = [...elements]..sort(
+      (a, b) => _priority(a).compareTo(_priority(b)),
+    );
+  for (final e in ordered) {
     _writeElement(sb, e);
   }
 
@@ -152,25 +156,23 @@ void _writeDimension(StringBuffer sb, Map<String, dynamic> e) {
         final y = _d(e['y']);
         final offset = _d(e['offset']);
         final dimY = y + offset;
-        final extEnd = offset > 0 ? dimY + 2 : dimY - 2;
-        // Extension lines.
+        final sign = offset >= 0 ? 1.0 : -1.0;
+        final extStart = y + 1.0 * sign; // DIN gap from part edge
+        final extEnd = dimY + 2.0 * sign;
         sb
           ..writeln(
-            '<line x1="${_f(x1)}" y1="${_f(y)}" x2="${_f(x1)}" y2="${_f(extEnd)}" $thinStroke/>',
+            '<line x1="${_f(x1)}" y1="${_f(extStart)}" x2="${_f(x1)}" y2="${_f(extEnd)}" $thinStroke/>',
           )
           ..writeln(
-            '<line x1="${_f(x2)}" y1="${_f(y)}" x2="${_f(x2)}" y2="${_f(extEnd)}" $thinStroke/>',
+            '<line x1="${_f(x2)}" y1="${_f(extStart)}" x2="${_f(x2)}" y2="${_f(extEnd)}" $thinStroke/>',
           )
-          // Dim line.
           ..writeln(
             '<line x1="${_f(x1)}" y1="${_f(dimY)}" x2="${_f(x2)}" y2="${_f(dimY)}" $thinStroke/>',
           );
-        // Arrows at endpoints.
         _writeArrow(sb, x1, dimY, x2, dimY);
         _writeArrow(sb, x2, dimY, x1, dimY);
-        // Text.
         final midX = (x1 + x2) / 2;
-        _writeDimText(sb, value, midX, dimY, rotate: false);
+        _writeDimTextAbove(sb, value, midX, dimY - 1.8, rotate: false);
       }
     case 'linear_v':
       {
@@ -179,13 +181,15 @@ void _writeDimension(StringBuffer sb, Map<String, dynamic> e) {
         final x = _d(e['x']);
         final offset = _d(e['offset']);
         final dimX = x + offset;
-        final extEnd = offset > 0 ? dimX + 2 : dimX - 2;
+        final sign = offset >= 0 ? 1.0 : -1.0;
+        final extStart = x + 1.0 * sign;
+        final extEnd = dimX + 2.0 * sign;
         sb
           ..writeln(
-            '<line x1="${_f(x)}" y1="${_f(y1)}" x2="${_f(extEnd)}" y2="${_f(y1)}" $thinStroke/>',
+            '<line x1="${_f(extStart)}" y1="${_f(y1)}" x2="${_f(extEnd)}" y2="${_f(y1)}" $thinStroke/>',
           )
           ..writeln(
-            '<line x1="${_f(x)}" y1="${_f(y2)}" x2="${_f(extEnd)}" y2="${_f(y2)}" $thinStroke/>',
+            '<line x1="${_f(extStart)}" y1="${_f(y2)}" x2="${_f(extEnd)}" y2="${_f(y2)}" $thinStroke/>',
           )
           ..writeln(
             '<line x1="${_f(dimX)}" y1="${_f(y1)}" x2="${_f(dimX)}" y2="${_f(y2)}" $thinStroke/>',
@@ -193,7 +197,7 @@ void _writeDimension(StringBuffer sb, Map<String, dynamic> e) {
         _writeArrow(sb, dimX, y1, dimX, y2);
         _writeArrow(sb, dimX, y2, dimX, y1);
         final midY = (y1 + y2) / 2;
-        _writeDimText(sb, value, dimX, midY, rotate: true);
+        _writeDimTextAbove(sb, value, dimX - 1.8, midY, rotate: true);
       }
     case 'diameter':
       {
@@ -212,7 +216,10 @@ void _writeDimension(StringBuffer sb, Map<String, dynamic> e) {
         );
         _writeArrow(sb, p1x, p1y, p2x, p2y);
         _writeArrow(sb, p2x, p2y, p1x, p1y);
-        _writeDimText(sb, value, cx, cy, rotate: false);
+        // Offset text perpendicular to leader.
+        final tx = cx + -math.sin(angle) * 3.0;
+        final ty = cy + math.cos(angle) * 3.0;
+        _writeDimText(sb, value, tx, ty, rotate: false);
       }
   }
 }
@@ -224,8 +231,8 @@ void _writeArrow(
   double fromX,
   double fromY,
 ) {
-  const arrowLen = 3.0;
-  const arrowHalfW = 0.5;
+  const arrowLen = 3.2;
+  const arrowHalfW = 0.6;
   final dx = tipX - fromX;
   final dy = tipY - fromY;
   final len = math.sqrt(dx * dx + dy * dy);
@@ -243,6 +250,8 @@ void _writeArrow(
   );
 }
 
+/// Text with opaque white background — used when text must break through
+/// geometry (e.g. diameter leader).
 void _writeDimText(
   StringBuffer sb,
   String value,
@@ -251,9 +260,8 @@ void _writeDimText(
   required bool rotate,
 }) {
   final escaped = _escapeXml(value);
-  // Approximate text bg for clip (width ~ 6mm per char for DIN 3.5mm font).
-  final estW = value.length * 2.2;
-  const h = 4.5;
+  final estW = value.length * 2.0;
+  const h = 4.0;
   if (rotate) {
     sb
       ..writeln(
@@ -262,7 +270,7 @@ void _writeDimText(
       )
       ..writeln(
         '<text x="${_f(cx)}" y="${_f(cy)}" font-family="sans-serif" '
-        'font-size="3.5" text-anchor="middle" dominant-baseline="middle" '
+        'font-size="3.2" text-anchor="middle" dominant-baseline="middle" '
         'transform="rotate(-90 ${_f(cx)} ${_f(cy)})">$escaped</text>',
       );
   } else {
@@ -273,9 +281,34 @@ void _writeDimText(
       )
       ..writeln(
         '<text x="${_f(cx)}" y="${_f(cy)}" font-family="sans-serif" '
-        'font-size="3.5" text-anchor="middle" dominant-baseline="middle">'
+        'font-size="3.2" text-anchor="middle" dominant-baseline="middle">'
         '$escaped</text>',
       );
+  }
+}
+
+/// DIN-style dim text: placed ABOVE the dim line, no background needed since
+/// line does not cross text.
+void _writeDimTextAbove(
+  StringBuffer sb,
+  String value,
+  double anchorX,
+  double anchorY, {
+  required bool rotate,
+}) {
+  final escaped = _escapeXml(value);
+  if (rotate) {
+    sb.writeln(
+      '<text x="${_f(anchorX)}" y="${_f(anchorY)}" font-family="sans-serif" '
+      'font-size="3.2" text-anchor="middle" dominant-baseline="alphabetic" '
+      'transform="rotate(-90 ${_f(anchorX)} ${_f(anchorY)})">$escaped</text>',
+    );
+  } else {
+    sb.writeln(
+      '<text x="${_f(anchorX)}" y="${_f(anchorY)}" font-family="sans-serif" '
+      'font-size="3.2" text-anchor="middle" dominant-baseline="alphabetic">'
+      '$escaped</text>',
+    );
   }
 }
 
@@ -283,10 +316,30 @@ void _writeNote(StringBuffer sb, Map<String, dynamic> e) {
   final x = _d(e['x']);
   final y = _d(e['y']);
   final text = _escapeXml(e['text'] as String? ?? '');
-  sb.writeln(
-    '<text x="${_f(x)}" y="${_f(y)}" font-family="sans-serif" '
-    'font-size="3.5" fill="black">$text</text>',
-  );
+  // Rough width estimate (3.2mm font ≈ 1.9mm/char).
+  final estW = text.length * 1.9;
+  const h = 4.0;
+  sb
+    ..writeln(
+      '<rect x="${_f(x - 0.8)}" y="${_f(y - h + 0.6)}" '
+      'width="${_f(estW + 1.6)}" height="${_f(h)}" fill="white"/>',
+    )
+    ..writeln(
+      '<text x="${_f(x)}" y="${_f(y)}" font-family="sans-serif" '
+      'font-size="3.2" fill="black">$text</text>',
+    );
+}
+
+int _priority(Map<String, dynamic> e) {
+  final type = e['type'] as String? ?? '';
+  if (type == 'note') return 4;
+  if (type == 'dimension') return 3;
+  final style = e['lineStyle'] as String? ?? 'solid';
+  if (style == 'centerline' || style == 'dashed' || style == 'hidden') {
+    return 0;
+  }
+  final weight = e['weight'] as String? ?? 'thin';
+  return weight == 'thick' ? 2 : 1;
 }
 
 void _writeTitleBlock(
@@ -336,7 +389,7 @@ void _writeTitleBlock(
     );
     sb.writeln(
       '<text x="${_f(bx + labelW + 1)}" y="${_f(ly)}" font-family="sans-serif" '
-      'font-size="3.5" font-weight="bold" dominant-baseline="middle">'
+      'font-size="3.2" dominant-baseline="middle">'
       '${_escapeXml(fields[i][1])}</text>',
     );
   }

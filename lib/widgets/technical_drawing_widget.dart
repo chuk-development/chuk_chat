@@ -165,6 +165,24 @@ class TechDrawPainter extends CustomPainter {
     _drawTitleBlock(canvas, size);
   }
 
+  /// Draw priority so overlays read correctly:
+  ///  0 = construction lines (centerline / dashed / hidden)
+  ///  1 = thin solid geometry (extension, hatch, auxiliary)
+  ///  2 = thick solid geometry (main contours)
+  ///  3 = dimensions
+  ///  4 = notes (always on top, opaque background)
+  int _priority(Map<String, dynamic> e) {
+    final type = e['type'] as String? ?? '';
+    if (type == 'note') return 4;
+    if (type == 'dimension') return 3;
+    final style = e['lineStyle'] as String? ?? 'solid';
+    if (style == 'centerline' || style == 'dashed' || style == 'hidden') {
+      return 0;
+    }
+    final weight = e['weight'] as String? ?? 'thin';
+    return weight == 'thick' ? 2 : 1;
+  }
+
   // ── Sheet ──────────────────────────────────────────────────
 
   void _drawSheet(Canvas canvas, Size size) {
@@ -179,7 +197,8 @@ class TechDrawPainter extends CustomPainter {
     final borderPaint = Paint()
       ..color = Colors.black
       ..style = PaintingStyle.stroke
-      ..strokeWidth = _mm(0.5);
+      ..strokeWidth = _mm(0.5)
+      ..isAntiAlias = true;
     canvas.drawRect(
       Rect.fromLTRB(_mm(m), _mm(m), size.width - _mm(m), size.height - _mm(m)),
       borderPaint,
@@ -189,7 +208,10 @@ class TechDrawPainter extends CustomPainter {
   // ── Elements ───────────────────────────────────────────────
 
   void _drawElements(Canvas canvas) {
-    for (final e in data.elements) {
+    final ordered = [...data.elements]
+      ..sort((a, b) => _priority(a).compareTo(_priority(b)));
+
+    for (final e in ordered) {
       final type = e['type'] as String? ?? '';
       switch (type) {
         case 'rect':
@@ -208,24 +230,21 @@ class TechDrawPainter extends CustomPainter {
 
   Paint _elementPaint(Map<String, dynamic> e) {
     final weight = e['weight'] as String? ?? 'thin';
-    final lineStyle = e['lineStyle'] as String? ?? 'solid';
     final strokeW = weight == 'thick' ? _mm(0.7) : _mm(0.25);
 
-    final paint = Paint()
+    return Paint()
       ..color = Colors.black
       ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeW;
-
-    if (lineStyle == 'dashed') {
-      // 6mm dash, 3mm gap — approximated via path effect not available in
-      // canvas API directly; we draw dashed paths manually where needed.
-      // For shapes we fall back to a visual approximation.
-    } else if (lineStyle == 'centerline') {
-      // 12-3-3-3 pattern — same approach.
-    }
-
-    return paint;
+      ..strokeWidth = strokeW
+      ..strokeCap = StrokeCap.round
+      ..isAntiAlias = true;
   }
+
+  Paint _thinPaint() => Paint()
+    ..color = Colors.black
+    ..strokeWidth = _mm(0.25)
+    ..strokeCap = StrokeCap.round
+    ..isAntiAlias = true;
 
   void _drawRect(Canvas canvas, Map<String, dynamic> e) {
     final x = _d(e['x']);
@@ -385,28 +404,30 @@ class TechDrawPainter extends CustomPainter {
     final offset = _d(e['offset']);
     final value = e['value'] as String? ?? '';
 
-    final dimY = y + offset; // Y of the dimension line
-    final extOvershoot = 2.0; // mm beyond dimension line
+    final dimY = y + offset;
+    const gap = 1.0; // DIN gap from part edge
+    const overshoot = 2.0;
+    final sign = offset >= 0 ? 1.0 : -1.0;
 
-    final thinPaint = Paint()
-      ..color = Colors.black
-      ..strokeWidth = _mm(0.25);
+    final thin = _thinPaint();
 
-    // Extension lines (from part edge to dimension line + overshoot).
-    final extEnd = offset > 0 ? dimY + extOvershoot : dimY - extOvershoot;
-    canvas.drawLine(_pt(x1, y), _pt(x1, extEnd), thinPaint);
-    canvas.drawLine(_pt(x2, y), _pt(x2, extEnd), thinPaint);
+    // Extension lines: start at part edge + gap, end past dim line.
+    canvas.drawLine(_pt(x1, y + gap * sign), _pt(x1, dimY + overshoot * sign), thin);
+    canvas.drawLine(_pt(x2, y + gap * sign), _pt(x2, dimY + overshoot * sign), thin);
 
-    // Dimension line.
-    canvas.drawLine(_pt(x1, dimY), _pt(x2, dimY), thinPaint);
+    canvas.drawLine(_pt(x1, dimY), _pt(x2, dimY), thin);
+    _drawArrow(canvas, _pt(x1, dimY), _pt(x2, dimY), thin);
+    _drawArrow(canvas, _pt(x2, dimY), _pt(x1, dimY), thin);
 
-    // Arrows.
-    _drawArrow(canvas, _pt(x1, dimY), _pt(x2, dimY), thinPaint);
-    _drawArrow(canvas, _pt(x2, dimY), _pt(x1, dimY), thinPaint);
-
-    // Dimension text centered on line.
+    // DIN: text above the dim line (reading bottom-up). Place 1.5mm above.
     final midX = (x1 + x2) / 2;
-    _drawDimText(canvas, value, _pt(midX, dimY), horizontal: true);
+    _drawDimText(
+      canvas,
+      value,
+      _pt(midX, dimY - 1.8),
+      horizontal: true,
+      opaque: false,
+    );
   }
 
   /// Vertical dimension line.
@@ -418,27 +439,28 @@ class TechDrawPainter extends CustomPainter {
     final value = e['value'] as String? ?? '';
 
     final dimX = x + offset;
-    final extOvershoot = 2.0;
+    const gap = 1.0;
+    const overshoot = 2.0;
+    final sign = offset >= 0 ? 1.0 : -1.0;
 
-    final thinPaint = Paint()
-      ..color = Colors.black
-      ..strokeWidth = _mm(0.25);
+    final thin = _thinPaint();
 
-    // Extension lines.
-    final extEnd = offset > 0 ? dimX + extOvershoot : dimX - extOvershoot;
-    canvas.drawLine(_pt(x, y1), _pt(extEnd, y1), thinPaint);
-    canvas.drawLine(_pt(x, y2), _pt(extEnd, y2), thinPaint);
+    canvas.drawLine(_pt(x + gap * sign, y1), _pt(dimX + overshoot * sign, y1), thin);
+    canvas.drawLine(_pt(x + gap * sign, y2), _pt(dimX + overshoot * sign, y2), thin);
 
-    // Dimension line.
-    canvas.drawLine(_pt(dimX, y1), _pt(dimX, y2), thinPaint);
+    canvas.drawLine(_pt(dimX, y1), _pt(dimX, y2), thin);
+    _drawArrow(canvas, _pt(dimX, y1), _pt(dimX, y2), thin);
+    _drawArrow(canvas, _pt(dimX, y2), _pt(dimX, y1), thin);
 
-    // Arrows.
-    _drawArrow(canvas, _pt(dimX, y1), _pt(dimX, y2), thinPaint);
-    _drawArrow(canvas, _pt(dimX, y2), _pt(dimX, y1), thinPaint);
-
-    // Dimension text centered on line, rotated 90 degrees.
+    // DIN vertical dim: text rotated, placed to LEFT of dim line.
     final midY = (y1 + y2) / 2;
-    _drawDimText(canvas, value, _pt(dimX, midY), horizontal: false);
+    _drawDimText(
+      canvas,
+      value,
+      _pt(dimX - 1.8, midY),
+      horizontal: false,
+      opaque: false,
+    );
   }
 
   /// Diameter dimension.
@@ -449,29 +471,34 @@ class TechDrawPainter extends CustomPainter {
     final angle = _d(e['angle']) * math.pi / 180;
     final value = e['value'] as String? ?? '';
 
-    final thinPaint = Paint()
-      ..color = Colors.black
-      ..strokeWidth = _mm(0.25);
+    final thin = _thinPaint();
 
-    // Leader line through center at given angle.
     final dx = r * math.cos(angle);
     final dy = r * math.sin(angle);
     final p1 = _pt(cx - dx, cy - dy);
     final p2 = _pt(cx + dx, cy + dy);
-    canvas.drawLine(p1, p2, thinPaint);
+    canvas.drawLine(p1, p2, thin);
+    _drawArrow(canvas, p1, p2, thin);
+    _drawArrow(canvas, p2, p1, thin);
 
-    // Arrows at both ends.
-    _drawArrow(canvas, p1, p2, thinPaint);
-    _drawArrow(canvas, p2, p1, thinPaint);
-
-    // Text at the midpoint (center).
-    _drawDimText(canvas, value, _pt(cx, cy), horizontal: true);
+    // Place text offset perpendicular to leader so it doesn't break the line
+    // visually — small vertical offset looks cleaner than sitting on the line.
+    final nx = -math.sin(angle) * 3.0; // 3mm perpendicular offset
+    final ny = math.cos(angle) * 3.0;
+    _drawDimText(
+      canvas,
+      value,
+      _pt(cx + nx, cy + ny),
+      horizontal: true,
+      opaque: true,
+    );
   }
 
   /// Draw a filled arrowhead at [tip] pointing toward [tip] from [from].
+  /// DIN proportions: length ~3mm, half-width ~0.6mm (slim elongated).
   void _drawArrow(Canvas canvas, Offset tip, Offset from, Paint paint) {
-    final arrowLen = _mm(3.0);
-    final arrowHalfW = _mm(0.5);
+    final arrowLen = _mm(3.2);
+    final arrowHalfW = _mm(0.6);
 
     final dx = tip.dx - from.dx;
     final dy = tip.dy - from.dy;
@@ -480,11 +507,8 @@ class TechDrawPainter extends CustomPainter {
     final ux = dx / len;
     final uy = dy / len;
 
-    // Base of arrow.
     final bx = tip.dx - ux * arrowLen;
     final by = tip.dy - uy * arrowLen;
-
-    // Perpendicular.
     final px = -uy * arrowHalfW;
     final py = ux * arrowHalfW;
 
@@ -498,18 +522,23 @@ class TechDrawPainter extends CustomPainter {
       path,
       Paint()
         ..color = Colors.black
-        ..style = PaintingStyle.fill,
+        ..style = PaintingStyle.fill
+        ..isAntiAlias = true,
     );
   }
 
-  /// Draw dimension text with white background clip.
+  /// Draw dimension text.
+  /// [opaque] = paint white rectangle behind text (used when text must break
+  /// through geometry, e.g. diameter leader). When false, text is placed above
+  /// the dim line so no background is needed.
   void _drawDimText(
     Canvas canvas,
     String text,
-    Offset center, {
+    Offset anchor, {
     required bool horizontal,
+    bool opaque = false,
   }) {
-    final fontSize = _mm(3.5);
+    final fontSize = _mm(3.2);
     final textStyle = ui.TextStyle(
       color: Colors.black,
       fontSize: fontSize,
@@ -527,20 +556,28 @@ class TechDrawPainter extends CustomPainter {
     final th = paragraph.height;
 
     canvas.save();
-    canvas.translate(center.dx, center.dy);
+    canvas.translate(anchor.dx, anchor.dy);
 
     if (!horizontal) {
       canvas.rotate(-math.pi / 2);
     }
 
-    // White background behind text.
-    final pad = _mm(0.8);
-    canvas.drawRect(
-      Rect.fromCenter(center: Offset.zero, width: tw + pad * 2, height: th + pad * 2),
-      Paint()..color = Colors.white,
-    );
+    if (opaque) {
+      final pad = _mm(0.8);
+      canvas.drawRect(
+        Rect.fromCenter(
+          center: Offset.zero,
+          width: tw + pad * 2,
+          height: th + pad * 2,
+        ),
+        Paint()..color = Colors.white,
+      );
+    }
 
-    canvas.drawParagraph(paragraph, Offset(-tw / 2, -th / 2));
+    // Text baseline sits at anchor; shift up by full height so text reads
+    // ABOVE the anchor point (DIN: dim text above dim line).
+    final dy = opaque ? -th / 2 : -th;
+    canvas.drawParagraph(paragraph, Offset(-tw / 2, dy));
     canvas.restore();
   }
 
@@ -551,7 +588,7 @@ class TechDrawPainter extends CustomPainter {
     final y = _d(e['y']);
     final text = e['text'] as String? ?? '';
 
-    final fontSize = _mm(3.5);
+    final fontSize = _mm(3.2);
     final textStyle = ui.TextStyle(
       color: Colors.black,
       fontSize: fontSize,
@@ -563,9 +600,23 @@ class TechDrawPainter extends CustomPainter {
       ..pushStyle(textStyle)
       ..addText(text);
     final paragraph = builder.build()
-      ..layout(ui.ParagraphConstraints(width: _mm(80)));
+      ..layout(ui.ParagraphConstraints(width: _mm(100)));
 
-    canvas.drawParagraph(paragraph, _pt(x, y - 3.5));
+    final origin = _pt(x, y - 3.2);
+
+    // White background to prevent collision with dim lines / geometry.
+    final pad = _mm(0.8);
+    canvas.drawRect(
+      Rect.fromLTWH(
+        origin.dx - pad,
+        origin.dy - pad * 0.3,
+        paragraph.longestLine + pad * 2,
+        paragraph.height + pad * 0.6,
+      ),
+      Paint()..color = Colors.white,
+    );
+
+    canvas.drawParagraph(paragraph, origin);
   }
 
   // ── Title block ────────────────────────────────────────────
@@ -578,15 +629,20 @@ class TechDrawPainter extends CustomPainter {
     final bx = data.sheetW - margin - blockW;
     final by = data.sheetH - margin - blockH;
 
+    final outerPaint = Paint()
+      ..color = Colors.black
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = _mm(0.5)
+      ..isAntiAlias = true;
     final borderPaint = Paint()
       ..color = Colors.black
       ..style = PaintingStyle.stroke
-      ..strokeWidth = _mm(0.35);
+      ..strokeWidth = _mm(0.25)
+      ..isAntiAlias = true;
 
-    // Outer rect.
     canvas.drawRect(
       Rect.fromLTWH(_mm(bx), _mm(by), _mm(blockW), _mm(blockH)),
-      borderPaint,
+      outerPaint,
     );
 
     // Row heights (mm): 4 rows of 9mm each = 36mm.
@@ -634,8 +690,8 @@ class TechDrawPainter extends CustomPainter {
           _mm(blockW - labelW - 2),
           _mm(rowH - 2),
         ),
-        fontSize: _mm(3.5),
-        bold: true,
+        fontSize: _mm(3.2),
+        bold: false,
       );
     }
   }
