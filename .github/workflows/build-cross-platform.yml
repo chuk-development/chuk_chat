@@ -119,11 +119,37 @@ jobs:
             echo "Created and pushed tag $TAG"
           fi
 
+      - name: Wait for tag visibility on GitHub API
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG=${{ steps.bump.outputs.tag }}
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if gh api "repos/${{ github.repository }}/git/refs/tags/$TAG" >/dev/null 2>&1; then
+              echo "Tag $TAG visible on API (attempt $i)"
+              exit 0
+            fi
+            echo "Tag $TAG not yet visible on API, retrying..."
+            sleep 3
+          done
+          echo "::warning::Tag $TAG still not visible after 30s; proceeding anyway."
+
       - name: Create draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG=${{ steps.bump.outputs.tag }}
+
+          # Heal any existing draft whose tag_name got stuck as "untagged-*".
+          # Happens when the tag wasn't visible to the API at release-create time.
+          BAD_ID=$(gh api "repos/${{ github.repository }}/releases" \
+            --jq ".[] | select(.draft==true and .name==\"Chuk Chat $TAG\" and (.tag_name | startswith(\"untagged-\"))) | .id" \
+            | head -n1)
+          if [ -n "$BAD_ID" ]; then
+            echo "Found broken untagged draft for $TAG (id=$BAD_ID). Deleting."
+            gh api -X DELETE "repos/${{ github.repository }}/releases/$BAD_ID"
+          fi
+
           if gh release view "$TAG" --repo ${{ github.repository }} >/dev/null 2>&1; then
             echo "Release $TAG already exists - keeping current assets."
           else
@@ -155,6 +181,24 @@ jobs:
           - DMG or ZIP — drag to Applications
           EOF
             )"
+          fi
+
+          # Verify the draft has the correct tag_name. If it got stuck as
+          # "untagged-*", delete and recreate — the tag is now definitely
+          # visible to the API.
+          ACTUAL=$(gh api "repos/${{ github.repository }}/releases" \
+            --jq ".[] | select(.draft==true and .name==\"Chuk Chat $TAG\") | .tag_name" \
+            | head -n1)
+          if echo "$ACTUAL" | grep -q '^untagged-'; then
+            echo "::warning::Draft release has untagged tag_name ($ACTUAL). Recreating."
+            BAD_ID=$(gh api "repos/${{ github.repository }}/releases" \
+              --jq ".[] | select(.draft==true and .name==\"Chuk Chat $TAG\") | .id" \
+              | head -n1)
+            gh api -X DELETE "repos/${{ github.repository }}/releases/$BAD_ID"
+            gh release create "$TAG" \
+              --draft \
+              --title "Chuk Chat $TAG" \
+              --notes "See commit history for changes."
           fi
 
   # ──────────────────────────────────────────────
