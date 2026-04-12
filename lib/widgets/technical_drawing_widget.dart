@@ -66,12 +66,16 @@ class TechDrawData {
     required this.elements,
     required this.sheetW,
     required this.sheetH,
+    required this.originX,
+    required this.originY,
   });
 
   final Map<String, dynamic> meta;
   final List<Map<String, dynamic>> elements;
   final double sheetW; // mm
   final double sheetH; // mm
+  final double originX; // mm offset added to every content coordinate
+  final double originY;
 
   static TechDrawData? fromJson(String raw) {
     final parsed = jsonDecode(raw.trim());
@@ -81,58 +85,110 @@ class TechDrawData {
     final rawElems = parsed['elements'] as List? ?? [];
     final elems = rawElems.whereType<Map<String, dynamic>>().toList();
 
-    // Derive sheet size from element bounds + padding, or default A4 landscape.
-    double maxX = 297.0, maxY = 210.0; // A4 landscape minimum (297x210 mm)
+    double minX = double.infinity, minY = double.infinity;
+    double maxX = double.negativeInfinity, maxY = double.negativeInfinity;
+
+    void include(double x, double y) {
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+
+    // Expansion to cover dim overshoot + text (~4mm each side of dim line).
+    const dimPad = 6.0;
+    // Rough note text bounds.
+    const notePadAbove = 4.0;
+    const noteCharW = 2.0;
+
     for (final e in elems) {
       final t = e['type'] as String? ?? '';
       switch (t) {
         case 'rect':
-          final x = _d(e['x']) + _d(e['w']);
-          final y = _d(e['y']) + _d(e['h']);
-          if (x > maxX) maxX = x;
-          if (y > maxY) maxY = y;
+          include(_d(e['x']), _d(e['y']));
+          include(_d(e['x']) + _d(e['w']), _d(e['y']) + _d(e['h']));
         case 'circle':
-          final x = _d(e['cx']) + _d(e['r']);
-          final y = _d(e['cy']) + _d(e['r']);
-          if (x > maxX) maxX = x;
-          if (y > maxY) maxY = y;
+          final cx = _d(e['cx']);
+          final cy = _d(e['cy']);
+          final r = _d(e['r']);
+          include(cx - r, cy - r);
+          include(cx + r, cy + r);
         case 'line':
-          final x = math.max(_d(e['x1']), _d(e['x2']));
-          final y = math.max(_d(e['y1']), _d(e['y2']));
-          if (x > maxX) maxX = x;
-          if (y > maxY) maxY = y;
+          include(_d(e['x1']), _d(e['y1']));
+          include(_d(e['x2']), _d(e['y2']));
         case 'dimension':
           final sub = e['subtype'] as String? ?? '';
           if (sub == 'linear_h') {
-            final x = math.max(_d(e['x1']), _d(e['x2']));
-            final y = _d(e['y']) + _d(e['offset']).abs() + 10;
-            if (x > maxX) maxX = x;
-            if (y > maxY) maxY = y;
+            final y = _d(e['y']);
+            final off = _d(e['offset']);
+            final dimY = y + off;
+            final sign = off >= 0 ? 1.0 : -1.0;
+            final extY = dimY + sign * dimPad;
+            include(_d(e['x1']), y);
+            include(_d(e['x2']), y);
+            include(_d(e['x1']), extY);
+            include(_d(e['x2']), extY);
           } else if (sub == 'linear_v') {
-            final x = _d(e['x']) + _d(e['offset']).abs() + 10;
-            final y = math.max(_d(e['y1']), _d(e['y2']));
-            if (x > maxX) maxX = x;
-            if (y > maxY) maxY = y;
+            final x = _d(e['x']);
+            final off = _d(e['offset']);
+            final dimX = x + off;
+            final sign = off >= 0 ? 1.0 : -1.0;
+            final extX = dimX + sign * dimPad;
+            include(x, _d(e['y1']));
+            include(x, _d(e['y2']));
+            include(extX, _d(e['y1']));
+            include(extX, _d(e['y2']));
+          } else if (sub == 'diameter') {
+            final cx = _d(e['cx']);
+            final cy = _d(e['cy']);
+            final r = _d(e['r']);
+            include(cx - r, cy - r);
+            include(cx + r, cy + r);
           }
         case 'note':
-          final x = _d(e['x']) + 30; // rough text width
+          final x = _d(e['x']);
           final y = _d(e['y']);
-          if (x > maxX) maxX = x;
-          if (y > maxY) maxY = y;
+          final text = e['text'] as String? ?? '';
+          include(x, y - notePadAbove);
+          include(x + text.length * noteCharW, y);
       }
     }
 
-    // Add margins: 20mm top/left drawing area + 10mm padding + title block
+    if (!minX.isFinite) {
+      minX = 0;
+      minY = 0;
+      maxX = 297;
+      maxY = 210;
+    }
+
+    // Margins: DIN A4 style — 20mm left/top, 15mm right, 10mm bottom above
+    // title block. Title block: 40mm reserved at sheet bottom for the frame.
+    const leftMargin = 20.0;
+    const topMargin = 15.0;
+    const rightMargin = 15.0;
+    const bottomMargin = 10.0;
     const titleBlockH = 40.0;
-    const margin = 25.0;
-    final sheetW = maxX + margin + 10;
-    final sheetH = maxY + margin + titleBlockH;
+
+    final contentW = maxX - minX;
+    final contentH = maxY - minY;
+
+    var sheetW = contentW + leftMargin + rightMargin;
+    var sheetH = contentH + topMargin + bottomMargin + titleBlockH;
+
+    // Ensure reasonable minimums so single-element drawings still look OK.
+    if (sheetW < 210) sheetW = 210;
+    if (sheetH < 150) sheetH = 150;
+
+    final originX = leftMargin - minX;
+    final originY = topMargin - minY;
 
     return TechDrawData(
       meta: meta,
       elements: elems,
       sheetW: sheetW,
       sheetH: sheetH,
+      originX: originX,
+      originY: originY,
     );
   }
 
@@ -156,7 +212,14 @@ class TechDrawPainter extends CustomPainter {
   // Convert mm to canvas pixels.
   double _mm(double mm) => mm * scale;
 
-  Offset _pt(double xMm, double yMm) => Offset(_mm(xMm), _mm(yMm));
+  /// Content-space point: applies origin offset so negative JSON coordinates
+  /// (e.g. dim text extending past x=0) still land inside the sheet frame.
+  Offset _pt(double xMm, double yMm) =>
+      Offset(_mm(xMm + data.originX), _mm(yMm + data.originY));
+
+  /// Sheet-space point: raw sheet coordinates, no origin offset. Used by
+  /// frame, title block, and anything positioned relative to the sheet edge.
+  Offset _ptSheet(double xMm, double yMm) => Offset(_mm(xMm), _mm(yMm));
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -653,13 +716,13 @@ class TechDrawPainter extends CustomPainter {
     // Horizontal dividers.
     for (int i = 1; i < 4; i++) {
       final ly = by + rowH * i;
-      canvas.drawLine(_pt(bx, ly), _pt(bx + blockW, ly), borderPaint);
+      canvas.drawLine(_ptSheet(bx, ly), _ptSheet(bx + blockW, ly), borderPaint);
     }
 
     // Vertical divider.
     canvas.drawLine(
-      _pt(bx + labelW, by),
-      _pt(bx + labelW, by + blockH),
+      _ptSheet(bx + labelW, by),
+      _ptSheet(bx + labelW, by + blockH),
       borderPaint,
     );
 
