@@ -385,6 +385,12 @@ RESEARCH DEPTH: Do NOT answer from a single source. A good answer requires multi
 4) If coverage is still incomplete, run another discovery/search pass from a different angle
 5) Only then compile your final answer from real tool outputs
 
+FRESH RELEASES: Search engines take hours/days to index new content. When the user claims something was JUST released (today, hours ago), do NOT rely only on web_search. Use web_crawl to directly check primary sources:
+- HuggingFace org pages (e.g. https://huggingface.co/MiniMaxAI, https://huggingface.co/Qwen)
+- GitHub org pages and release pages
+- Official blogs and announcement pages
+If search results contradict the user's claim about a very recent release, crawl the source directly before concluding it doesn't exist.
+
 After find_tools returns the tool descriptions and parameters, you can use those discovered tools. If no tool is needed, just answer directly.
 DO NOT STALL: Never end with intention-only text like "I will search". Either emit the next tool_call, or provide a complete final answer.
 
