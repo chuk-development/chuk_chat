@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/platform_config.dart';
-import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/tool_enforcer.dart';
 import 'package:chuk_chat/services/tool_executor.dart';
@@ -145,8 +144,7 @@ class ToolCallHandler {
     if (WorkspaceStorageService.selectedWorkspaceId != null) {
       bypass.add('update_project');
     }
-    if (kFeatureArtifacts &&
-        (ChatStorageService.selectedChatId ?? '').isNotEmpty) {
+    if (kFeatureArtifacts) {
       bypass.add('artifact_manager');
     }
     if (bypass.isNotEmpty) {
@@ -524,10 +522,11 @@ class ToolCallHandler {
           .firstOrNull;
     }
 
-    // artifact_manager is available when artifacts are enabled and a chat is active.
+    // artifact_manager is always available when the feature is enabled —
+    // treat it like chart/map/email output, no discovery needed.
+    // Chat scoping happens at execute time (tool_executor.dart).
     Map<String, dynamic>? artifactToolDef;
-    if (kFeatureArtifacts &&
-        (ChatStorageService.selectedChatId ?? '').isNotEmpty) {
+    if (kFeatureArtifacts) {
       artifactToolDef = _toolExecutor.allTools
           .where((t) => t.name == 'artifact_manager')
           .map((t) => t.toJson())
