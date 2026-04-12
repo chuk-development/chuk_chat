@@ -399,9 +399,11 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
           // sidebar covers the full screen in compact mode or assistants
           // is showing full-page.
           Positioned.fill(
+            // Reserve 48px for collapsed sidebar icons when artifact panel
+            // is open, so chat content doesn't slide under the hamburger.
             left: (!isCompactMode && _isSidebarExpanded)
                 ? effectiveSidebarWidth
-                : 0,
+                : (showPanel && effectivePanel == 'artifact' ? 48 : 0),
             right: showPanel ? panelWidth : 0,
             child: Offstage(offstage: !showContent, child: chatArea),
           ),

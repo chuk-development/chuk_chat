@@ -54,6 +54,9 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
       ArtifactStorageService.activeArtifactNotifier.addListener(
         _onArtifactChanged,
       );
+      ArtifactStorageService.panelOpenNotifier.addListener(
+        _onPanelOpenRequested,
+      );
     }
     // Defer non-critical startup work to keep first interactions responsive.
     unawaited(
@@ -113,10 +116,25 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
       ArtifactStorageService.activeArtifactNotifier.removeListener(
         _onArtifactChanged,
       );
+      ArtifactStorageService.panelOpenNotifier.removeListener(
+        _onPanelOpenRequested,
+      );
     }
     _sidebarAnimController.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  void _onPanelOpenRequested() {
+    if (!mounted) return;
+    // Only react to "open" requests on mobile — panel is a modal bottom sheet.
+    // Desktop wrapper handles this via setState on _panelOpen.
+    if (ArtifactStorageService.panelOpenNotifier.value &&
+        _activeArtifact != null) {
+      // Reset so the notifier can fire again if the sheet is dismissed.
+      ArtifactStorageService.panelOpenNotifier.value = false;
+      _openArtifactSheet();
+    }
   }
 
   void _onArtifactChanged() {
