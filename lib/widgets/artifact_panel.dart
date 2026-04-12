@@ -460,18 +460,13 @@ class _ArtifactRenderer extends StatelessWidget {
           ),
         );
       case ArtifactType.svg:
-        return SingleChildScrollView(
-          controller: scrollController,
-          primary: usePrimary,
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(8),
-            child: SvgPicture.string(
-              content,
-              placeholderBuilder: (context) => const Padding(
-                padding: EdgeInsets.all(24),
-                child: CircularProgressIndicator(),
-              ),
+        return _ZoomableVisual(
+          child: SvgPicture.string(
+            content,
+            fit: BoxFit.contain,
+            placeholderBuilder: (context) => const Padding(
+              padding: EdgeInsets.all(24),
+              child: CircularProgressIndicator(),
             ),
           ),
         );
@@ -499,7 +494,100 @@ class _ArtifactRenderer extends StatelessWidget {
           ),
         );
       case ArtifactType.technicalDrawing:
-        return TechnicalDrawingWidget(jsonString: content);
+        return _ZoomableVisual(
+          child: TechnicalDrawingWidget(jsonString: content),
+        );
     }
+  }
+}
+
+/// Zoomable wrapper with +/- buttons for visual artifacts (SVG, drawings).
+class _ZoomableVisual extends StatefulWidget {
+  const _ZoomableVisual({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_ZoomableVisual> createState() => _ZoomableVisualState();
+}
+
+class _ZoomableVisualState extends State<_ZoomableVisual> {
+  final TransformationController _ctrl = TransformationController();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _zoom(double factor) {
+    final size = context.size;
+    if (size == null) return;
+    final current = _ctrl.value.clone();
+    final center = Offset(size.width / 2, size.height / 2);
+    // Scale around center of viewport.
+    current
+      ..translateByDouble(center.dx, center.dy, 0, 1.0)
+      ..scaleByDouble(factor, factor, 1.0, 1.0)
+      ..translateByDouble(-center.dx, -center.dy, 0, 1.0);
+    _ctrl.value = current;
+  }
+
+  void _resetZoom() {
+    _ctrl.value = Matrix4.identity();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: InteractiveViewer(
+            transformationController: _ctrl,
+            minScale: 0.3,
+            maxScale: 5.0,
+            boundaryMargin: const EdgeInsets.all(100),
+            child: Center(child: widget.child),
+          ),
+        ),
+        Positioned(
+          right: 8,
+          bottom: 8,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _ZoomButton(icon: Icons.add, onTap: () => _zoom(1.25)),
+              const SizedBox(height: 4),
+              _ZoomButton(icon: Icons.remove, onTap: () => _zoom(0.8)),
+              const SizedBox(height: 4),
+              _ZoomButton(icon: Icons.fit_screen, onTap: _resetZoom),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ZoomButton extends StatelessWidget {
+  const _ZoomButton({required this.icon, required this.onTap});
+
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(6),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(6),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(6),
+          child: Icon(icon, size: 18),
+        ),
+      ),
+    );
   }
 }

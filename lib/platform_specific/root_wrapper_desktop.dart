@@ -333,10 +333,15 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     const double minPanelWidth = 320.0;
     final double sidebarWidth = _isSidebarExpanded ? effectiveSidebarWidth : 0;
     final double availableForPanel = screenWidth - sidebarWidth - minChatWidth;
-    final double panelWidth = availableForPanel >= minPanelWidth
-        ? math.min(400.0, availableForPanel)
-        : 0;
     final bool hasArtifact = kFeatureArtifacts && _activeArtifact != null;
+    // Artifacts get 50% of content area; other panels cap at 400px.
+    final double contentWidth = screenWidth - sidebarWidth;
+    final double maxPanelWidth = hasArtifact
+        ? (contentWidth * 0.5).clamp(minPanelWidth, contentWidth - minChatWidth)
+        : 400.0;
+    final double panelWidth = availableForPanel >= minPanelWidth
+        ? math.min(maxPanelWidth, availableForPanel)
+        : 0;
     // Assistants is full-page, not a side panel
     final String? effectivePanel = _activePanel == 'workspaces'
         ? null
@@ -395,68 +400,64 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                     left: BorderSide(color: iconFg.withValues(alpha: 0.2)),
                   ),
                 ),
-                child: Column(
-                  children: [
-                    // Panel header with close button
-                    Container(
-                      height: 56,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(
-                            color: iconFg.withValues(alpha: 0.1),
-                          ),
-                        ),
-                      ),
-                      child: Row(
+                child: effectivePanel == 'artifact'
+                    // Artifacts use ArtifactPanel's own header (with copy/download).
+                    ? ArtifactPanel(
+                        artifact: _activeArtifact!,
+                        showHeader: true,
+                      )
+                    : Column(
                         children: [
-                          Icon(
-                            effectivePanel == 'projects'
-                                ? Icons.folder_open
-                                : effectivePanel == 'media'
-                                ? Icons.photo_library_outlined
-                                : Icons.auto_fix_high,
-                            color: iconFg,
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            effectivePanel == 'projects'
-                                ? l.workspaces
-                                : effectivePanel == 'media'
-                                ? l.media
-                                : 'Artifact',
-                            style: TextStyle(
-                              color: iconFg,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w500,
+                          // Panel header with close button
+                          Container(
+                            height: 56,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            decoration: BoxDecoration(
+                              border: Border(
+                                bottom: BorderSide(
+                                  color: iconFg.withValues(alpha: 0.1),
+                                ),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  effectivePanel == 'projects'
+                                      ? Icons.folder_open
+                                      : Icons.photo_library_outlined,
+                                  color: iconFg,
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  effectivePanel == 'projects'
+                                      ? l.workspaces
+                                      : l.media,
+                                  style: TextStyle(
+                                    color: iconFg,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const Spacer(),
+                                IconButton(
+                                  icon: Icon(Icons.close, color: iconFg),
+                                  onPressed: _closePanel,
+                                  tooltip: 'Close',
+                                ),
+                              ],
                             ),
                           ),
-                          const Spacer(),
-                          if (effectivePanel != 'artifact')
-                            IconButton(
-                              icon: Icon(Icons.close, color: iconFg),
-                              onPressed: _closePanel,
-                              tooltip: 'Close',
-                            ),
+                          // Panel content
+                          Expanded(
+                            child: effectivePanel == 'projects'
+                                ? WorkspacesPage(
+                                    onOpenWorkspace: _openWorkspace,
+                                    embedded: true,
+                                  )
+                                : const MediaManagerPage(embedded: true),
+                          ),
                         ],
                       ),
-                    ),
-                    // Panel content
-                    Expanded(
-                      child: effectivePanel == 'projects'
-                          ? WorkspacesPage(
-                              onOpenWorkspace: _openWorkspace,
-                              embedded: true,
-                            )
-                          : effectivePanel == 'media'
-                          ? const MediaManagerPage(embedded: true)
-                          : ArtifactPanel(
-                              artifact: _activeArtifact!,
-                              showHeader: false,
-                            ),
-                    ),
-                  ],
-                ),
               ),
             ),
 
