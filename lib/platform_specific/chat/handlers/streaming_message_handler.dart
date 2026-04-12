@@ -6,6 +6,7 @@ import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/websocket_chat_service.dart';
 import 'package:chuk_chat/services/streaming_manager.dart';
+import 'package:chuk_chat/services/artifact_tag_processor.dart';
 import 'package:chuk_chat/services/message_composition_service.dart';
 import 'package:chuk_chat/services/tool_call_handler.dart';
 import 'package:chuk_chat/services/tool_image_result_service.dart';
@@ -604,6 +605,22 @@ class StreamingMessageHandler {
                 accumulated: accumulatedText.toString(),
                 finalText: rawContent,
               );
+
+              // Process inline <artifact> tags in the finalized text.
+              // Each tag becomes a synthetic artifact_manager ToolCall so the
+              // existing inline-card render path picks it up, and the tag is
+              // persisted via ArtifactStorageService (create or rewrite) for
+              // version history.
+              final syntheticArtifactCalls = await ArtifactTagProcessor
+                  .processTags(content: effectiveContent, chatId: chatId);
+              if (syntheticArtifactCalls.isNotEmpty) {
+                finalToolCalls.addAll(syntheticArtifactCalls);
+                onToolCallsUpdate?.call(
+                  placeholderIndex,
+                  finalToolCalls,
+                  chatId,
+                );
+              }
 
               // --- Build final content blocks ---
               if (contentBlocks.isNotEmpty) {
