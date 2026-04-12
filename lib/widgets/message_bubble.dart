@@ -8,6 +8,7 @@ import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/utils/image_clipboard_service.dart';
@@ -645,6 +646,8 @@ class _MessageBubbleState extends State<MessageBubble>
       ],
       if (hasVisibleToolCalls) ...[
         _buildToolCallsBar(widget.toolCalls!),
+        const SizedBox(height: 6),
+        ..._buildArtifactCards(widget.toolCalls!),
         const SizedBox(height: 8),
       ],
       if (hasImages && placeQrImageAboveResponse) ...[
@@ -774,6 +777,8 @@ class _MessageBubbleState extends State<MessageBubble>
             contentBlockTimeline: timeline,
           ),
         );
+        children.add(const SizedBox(height: 6));
+        children.addAll(_buildArtifactCards(mergedToolCalls));
         children.add(const SizedBox(height: 8));
         // Insert images right after the tool calls bar that produced them.
         if (hasImages && !insertedImage) {
@@ -1583,6 +1588,35 @@ class _MessageBubbleState extends State<MessageBubble>
     final clean = text.replaceAll('\n', ' ').trim();
     if (clean.length <= maxLength) return clean;
     return '${clean.substring(0, maxLength)}...';
+  }
+
+  /// Renders inline artifact cards for artifact_manager tool calls, so users
+  /// can re-open the artifact panel after closing it (Claude.ai style).
+  List<Widget> _buildArtifactCards(List<ToolCall> toolCalls) {
+    if (!kFeatureArtifacts) return const [];
+    final cards = <Widget>[];
+    for (final tc in toolCalls) {
+      if (tc.name != 'artifact_manager') continue;
+      if (tc.status != ToolCallStatus.completed) continue;
+      final args = tc.arguments;
+      final action = args['action'] as String? ?? '';
+      if (action != 'create' && action != 'rewrite') continue;
+      final artifactId = args['artifact_id'] as String? ?? '';
+      if (artifactId.isEmpty) continue;
+      final title = args['title'] as String? ?? artifactId;
+      final type = args['type'] as String? ?? '';
+      cards.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: _ArtifactInlineCard(
+            artifactId: artifactId,
+            title: title,
+            type: type,
+          ),
+        ),
+      );
+    }
+    return cards;
   }
 
   Widget _buildToolCallsBar(
@@ -2790,6 +2824,143 @@ class _CachedImageThumbnailState extends State<_CachedImageThumbnail>
                 child: const Icon(Icons.broken_image, size: 32),
               );
             },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact artifact card shown inline in chat after artifact_manager calls.
+/// Clicking it opens the artifact panel (Claude.ai-style UX).
+class _ArtifactInlineCard extends StatelessWidget {
+  const _ArtifactInlineCard({
+    required this.artifactId,
+    required this.title,
+    required this.type,
+  });
+
+  final String artifactId;
+  final String title;
+  final String type;
+
+  IconData get _icon {
+    switch (type) {
+      case 'code':
+        return Icons.code;
+      case 'markdown':
+        return Icons.article_outlined;
+      case 'html':
+        return Icons.html;
+      case 'mermaid':
+        return Icons.account_tree_outlined;
+      case 'svg':
+        return Icons.image_outlined;
+      case 'technical_drawing':
+        return Icons.architecture;
+      default:
+        return Icons.description_outlined;
+    }
+  }
+
+  String get _typeLabel {
+    switch (type) {
+      case 'code':
+        return 'Code';
+      case 'markdown':
+        return 'Document · MD';
+      case 'html':
+        return 'HTML';
+      case 'mermaid':
+        return 'Diagram · Mermaid';
+      case 'svg':
+        return 'Image · SVG';
+      case 'technical_drawing':
+        return 'Technical drawing';
+      default:
+        return 'Artifact';
+    }
+  }
+
+  Future<void> _open(BuildContext context) async {
+    try {
+      final active = ArtifactStorageService.activeArtifactNotifier.value;
+      if (active?.id != artifactId) {
+        final chatId = ArtifactStorageService.activeChatId;
+        if (chatId != null) {
+          final artifacts =
+              await ArtifactStorageService.loadArtifactsForChat(chatId);
+          final match = artifacts.where((a) => a.id == artifactId).firstOrNull;
+          if (match != null) {
+            ArtifactStorageService.activeArtifactNotifier.value = match;
+          }
+        }
+      }
+      ArtifactStorageService.panelOpenNotifier.value = true;
+    } catch (_) {
+      ArtifactStorageService.panelOpenNotifier.value = true;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final borderColor = theme.colorScheme.outline.withValues(alpha: 0.3);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => _open(context),
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: borderColor),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                alignment: Alignment.center,
+                child: Icon(_icon, size: 20),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _typeLabel,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: () => _open(context),
+                child: const Text('Open'),
+              ),
+            ],
           ),
         ),
       ),

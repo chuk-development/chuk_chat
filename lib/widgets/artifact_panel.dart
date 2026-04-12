@@ -1,9 +1,11 @@
 // lib/widgets/artifact_panel.dart
 import 'dart:convert';
+import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:path_provider/path_provider.dart';
@@ -14,6 +16,7 @@ import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
+import 'package:chuk_chat/widgets/technical_drawing_svg_export.dart';
 import 'package:chuk_chat/widgets/technical_drawing_widget.dart';
 
 class ArtifactPanel extends StatefulWidget {
@@ -38,6 +41,9 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
   List<ArtifactVersionSnapshot> _versions = const [];
   int? _selectedVersion;
   String? _selectedVersionContent;
+
+  /// Captures the visual rendering (SVG / technical drawing) for PNG export.
+  final GlobalKey _visualCaptureKey = GlobalKey();
 
   @override
   void initState() {
@@ -92,17 +98,117 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
     );
   }
 
-  Future<void> _downloadContent() async {
+  /// Formats offered for download based on artifact type.
+  List<_DownloadFormat> _availableFormats() {
+    switch (widget.artifact.type) {
+      case ArtifactType.technicalDrawing:
+        return const [
+          _DownloadFormat('PNG image', 'png'),
+          _DownloadFormat('SVG vector', 'svg'),
+          _DownloadFormat('JSON source', 'json'),
+        ];
+      case ArtifactType.svg:
+        return const [
+          _DownloadFormat('PNG image', 'png'),
+          _DownloadFormat('SVG source', 'svg'),
+        ];
+      case ArtifactType.code:
+      case ArtifactType.markdown:
+      case ArtifactType.html:
+      case ArtifactType.mermaid:
+        return [
+          _DownloadFormat(
+            '${widget.artifact.type.defaultExtension.toUpperCase()} file',
+            _fileExtensionForArtifact(widget.artifact),
+          ),
+        ];
+    }
+  }
+
+  Future<Uint8List?> _bytesForFormat(String ext) async {
+    switch (ext) {
+      case 'png':
+        return _captureVisualAsPng();
+      case 'svg':
+        // Technical drawing → generate SVG from JSON
+        if (widget.artifact.type == ArtifactType.technicalDrawing) {
+          final svg = technicalDrawingToSvg(_effectiveContent);
+          if (svg == null) return null;
+          return Uint8List.fromList(utf8.encode(svg));
+        }
+        // SVG artifact → raw content
+        return Uint8List.fromList(utf8.encode(_effectiveContent));
+      default:
+        return Uint8List.fromList(utf8.encode(_effectiveContent));
+    }
+  }
+
+  Future<Uint8List?> _captureVisualAsPng() async {
+    final ctx = _visualCaptureKey.currentContext;
+    if (ctx == null) return null;
+    final boundary = ctx.findRenderObject() as RenderRepaintBoundary?;
+    if (boundary == null) return null;
+    final image = await boundary.toImage(pixelRatio: 3.0);
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    return byteData?.buffer.asUint8List();
+  }
+
+  Future<void> _showDownloadMenu() async {
+    final formats = _availableFormats();
+    // If only one option, skip the menu.
+    if (formats.length == 1) {
+      await _downloadAs(formats.first.ext);
+      return;
+    }
+    final selected = await showMenu<String>(
+      context: context,
+      position: _downloadMenuPosition(),
+      items: [
+        for (final f in formats)
+          PopupMenuItem<String>(value: f.ext, child: Text(f.label)),
+      ],
+    );
+    if (selected != null) {
+      await _downloadAs(selected);
+    }
+  }
+
+  RelativeRect _downloadMenuPosition() {
+    final overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    if (overlay == null) {
+      return const RelativeRect.fromLTRB(100, 100, 0, 0);
+    }
+    return RelativeRect.fromLTRB(
+      overlay.size.width - 200,
+      80,
+      0,
+      overlay.size.height - 200,
+    );
+  }
+
+  Future<void> _downloadAs(String ext) async {
     if (_busy) return;
     setState(() => _busy = true);
 
     final artifact = widget.artifact;
-    final extension = _fileExtensionForArtifact(artifact);
     final suggestedName =
-        '${artifact.id}-v${_selectedVersion ?? artifact.version}.$extension';
-    final bytes = Uint8List.fromList(utf8.encode(_effectiveContent));
+        '${artifact.id}-v${_selectedVersion ?? artifact.version}.$ext';
 
     try {
+      final bytes = await _bytesForFormat(ext);
+      if (bytes == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Export failed: could not generate $ext'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
+
       if (kIsWeb) {
         await SharePlus.instance.share(
           ShareParams(
@@ -119,7 +225,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
         dialogTitle: 'Save Artifact',
         fileName: suggestedName,
         type: FileType.custom,
-        allowedExtensions: [extension],
+        allowedExtensions: [ext],
       );
 
       if (selectedPath != null && selectedPath.isNotEmpty) {
@@ -133,7 +239,6 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
           ),
         );
       } else {
-        // Fallback: share temp file
         final tempDir = await getTemporaryDirectory();
         final tempPath =
             '${tempDir.path}${Platform.pathSeparator}$suggestedName';
@@ -269,7 +374,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
                 ),
                 IconButton(
                   icon: const Icon(Icons.download_outlined, size: 18),
-                  onPressed: _busy ? null : _downloadContent,
+                  onPressed: _busy ? null : _showDownloadMenu,
                   tooltip: 'Download',
                 ),
                 if (widget.onClose != null)
@@ -289,6 +394,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
               type: _effectiveType,
               language: widget.artifact.language,
               content: _effectiveContent,
+              captureKey: _visualCaptureKey,
             ),
           ),
         ),
@@ -423,11 +529,16 @@ class _ArtifactRenderer extends StatelessWidget {
     required this.type,
     required this.content,
     this.language,
+    this.captureKey,
   });
 
   final ArtifactType type;
   final String content;
   final String? language;
+
+  /// Attached to visual artifacts (SVG, technical drawings) so parent can
+  /// capture a PNG via RenderRepaintBoundary.toImage().
+  final GlobalKey? captureKey;
 
   @override
   Widget build(BuildContext context) {
@@ -461,12 +572,18 @@ class _ArtifactRenderer extends StatelessWidget {
         );
       case ArtifactType.svg:
         return _ZoomableVisual(
-          child: SvgPicture.string(
-            content,
-            fit: BoxFit.contain,
-            placeholderBuilder: (context) => const Padding(
-              padding: EdgeInsets.all(24),
-              child: CircularProgressIndicator(),
+          child: RepaintBoundary(
+            key: captureKey,
+            child: Container(
+              color: Colors.white,
+              child: SvgPicture.string(
+                content,
+                fit: BoxFit.contain,
+                placeholderBuilder: (context) => const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: CircularProgressIndicator(),
+                ),
+              ),
             ),
           ),
         );
@@ -495,7 +612,10 @@ class _ArtifactRenderer extends StatelessWidget {
         );
       case ArtifactType.technicalDrawing:
         return _ZoomableVisual(
-          child: TechnicalDrawingWidget(jsonString: content),
+          child: RepaintBoundary(
+            key: captureKey,
+            child: TechnicalDrawingWidget(jsonString: content),
+          ),
         );
     }
   }
@@ -567,6 +687,12 @@ class _ZoomableVisualState extends State<_ZoomableVisual> {
       ],
     );
   }
+}
+
+class _DownloadFormat {
+  const _DownloadFormat(this.label, this.ext);
+  final String label;
+  final String ext;
 }
 
 class _ZoomButton extends StatelessWidget {
