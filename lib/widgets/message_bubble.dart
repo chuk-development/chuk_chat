@@ -8,6 +8,7 @@ import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/models/artifact.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
@@ -2883,22 +2884,33 @@ class _ArtifactInlineCard extends StatelessWidget {
   }
 
   Future<void> _open(BuildContext context) async {
+    // Always try to resolve and activate the clicked artifact — even when the
+    // panel is already showing something with a matching id. Users may have
+    // multiple cards for the same artifact (e.g. create + rewrite) and expect
+    // each click to refocus that artifact.
     try {
-      final active = ArtifactStorageService.activeArtifactNotifier.value;
-      if (active?.id != artifactId) {
-        final chatId = ArtifactStorageService.activeChatId;
-        if (chatId != null) {
-          final artifacts =
-              await ArtifactStorageService.loadArtifactsForChat(chatId);
-          final match = artifacts.where((a) => a.id == artifactId).firstOrNull;
-          if (match != null) {
-            ArtifactStorageService.activeArtifactNotifier.value = match;
-          }
-        }
+      ArtifactStorageService.panelOpenNotifier.value = true;
+
+      final chatId = ArtifactStorageService.activeChatId;
+      if (chatId == null || chatId.isEmpty) return;
+
+      // Resolve by id. Check cache first, fall back to a cache-populating load,
+      // then a direct by-id lookup as a last resort.
+      ArtifactDocument? match = await ArtifactStorageService.loadArtifactById(
+        artifactId,
+      );
+      match ??= (await ArtifactStorageService.loadArtifactsForChat(chatId))
+          .where((a) => a.id == artifactId)
+          .firstOrNull;
+
+      if (match == null) return;
+
+      final current = ArtifactStorageService.activeArtifactNotifier.value;
+      if (!identical(current, match)) {
+        ArtifactStorageService.activeArtifactNotifier.value = match;
       }
-      ArtifactStorageService.panelOpenNotifier.value = true;
     } catch (_) {
-      ArtifactStorageService.panelOpenNotifier.value = true;
+      // Panel is already opened above; resolution failures are non-fatal.
     }
   }
 
