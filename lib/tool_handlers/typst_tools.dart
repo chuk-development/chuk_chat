@@ -121,7 +121,7 @@ Future<String> executeTypstCompile({
       messageId: messageId,
     );
     return 'Typst artifact "${created.id}" created '
-        '(rendered on demand — PDF is never stored server-side).';
+        '(version: ${created.version}, rendered on demand — PDF is never stored server-side).';
   } on StateError catch (e) {
     // Likely duplicate id — tell the AI to rewrite.
     return 'Error: ${e.message}';
