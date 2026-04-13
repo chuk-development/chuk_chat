@@ -1,6 +1,6 @@
 // lib/models/artifact.dart
 
-enum ArtifactType { code, markdown, html, mermaid, svg, technicalDrawing }
+enum ArtifactType { code, markdown, html, mermaid, svg, technicalDrawing, typst }
 
 extension ArtifactTypeX on ArtifactType {
   String get value => switch (this) {
@@ -10,6 +10,7 @@ extension ArtifactTypeX on ArtifactType {
     ArtifactType.mermaid => 'mermaid',
     ArtifactType.svg => 'svg',
     ArtifactType.technicalDrawing => 'technical_drawing',
+    ArtifactType.typst => 'typst',
   };
 
   static ArtifactType fromValue(String raw) {
@@ -21,6 +22,7 @@ extension ArtifactTypeX on ArtifactType {
       'mermaid' => ArtifactType.mermaid,
       'svg' => ArtifactType.svg,
       'technical_drawing' => ArtifactType.technicalDrawing,
+      'typst' => ArtifactType.typst,
       _ => ArtifactType.markdown,
     };
   }
@@ -32,6 +34,7 @@ extension ArtifactTypeX on ArtifactType {
     ArtifactType.mermaid => 'Mermaid',
     ArtifactType.svg => 'SVG',
     ArtifactType.technicalDrawing => 'Drawing',
+    ArtifactType.typst => 'Typst PDF',
   };
 
   String get defaultExtension => switch (this) {
@@ -41,6 +44,7 @@ extension ArtifactTypeX on ArtifactType {
     ArtifactType.mermaid => 'mmd',
     ArtifactType.svg => 'svg',
     ArtifactType.technicalDrawing => 'json',
+    ArtifactType.typst => 'typ',
   };
 }
 

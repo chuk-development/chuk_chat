@@ -27,6 +27,7 @@ import 'package:chuk_chat/tool_handlers/chat_search_tools.dart'
     as chat_search_tools;
 import 'package:chuk_chat/tool_handlers/nextcloud_tools.dart'
     as nextcloud_tools;
+import 'package:chuk_chat/tool_handlers/typst_tools.dart' as typst_tools;
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 
 class ToolExecutionResult {
@@ -95,6 +96,7 @@ class ToolExecutor {
     'search_chats',
     'artifact_manager',
     'update_project',
+    'typst_compile',
   };
 
   static const Set<String> _defaultDisabledTools = {'whoop'};
@@ -748,6 +750,18 @@ class ToolExecutor {
         return _wrapOutput(await _executeArtifactManager(args));
       case 'update_project':
         return _wrapOutput(await _executeUpdateProject(args));
+
+      // -- Typst compile (server-sandboxed) --
+      case 'typst_compile':
+        return _wrapOutput(
+          await typst_tools.executeTypstCompile(
+            serverHttpUrl: serverHttpUrl,
+            accessToken: accessToken,
+            chatId: ChatStorageService.selectedChatId ??
+                ChatStorageService.activeMessageChatId,
+            args: args,
+          ),
+        );
 
       default:
         return ToolExecutionResult(
