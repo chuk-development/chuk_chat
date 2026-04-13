@@ -506,16 +506,14 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
 }
 
 class ArtifactBottomSheet extends StatelessWidget {
-  const ArtifactBottomSheet({super.key, required this.artifact});
-
-  final ArtifactDocument artifact;
+  const ArtifactBottomSheet({super.key});
 
   @override
   Widget build(BuildContext context) {
     return DraggableScrollableSheet(
-      initialChildSize: 0.9,
+      initialChildSize: 0.92,
       minChildSize: 0.5,
-      maxChildSize: 0.96,
+      maxChildSize: 0.98,
       expand: false,
       builder: (context, scrollController) {
         return PrimaryScrollController(
@@ -523,22 +521,50 @@ class ArtifactBottomSheet extends StatelessWidget {
           child: Material(
             color: Theme.of(context).scaffoldBackgroundColor,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            clipBehavior: Clip.antiAlias,
             child: Column(
               children: [
-                const SizedBox(height: 8),
-                Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.withValues(alpha: 0.4),
-                    borderRadius: BorderRadius.circular(2),
+                // Drag handle — tap/drag to dismiss.
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onVerticalDragEnd: (details) {
+                    if ((details.primaryVelocity ?? 0) > 250) {
+                      Navigator.of(context).maybePop();
+                    }
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Container(
+                      width: 44,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withValues(alpha: 0.25),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 8),
                 Expanded(
-                  child: ArtifactPanel(
-                    artifact: artifact,
-                    onClose: () => Navigator.of(context).pop(),
+                  child: ValueListenableBuilder<ArtifactDocument?>(
+                    valueListenable:
+                        ArtifactStorageService.activeArtifactNotifier,
+                    builder: (context, artifact, _) {
+                      if (artifact == null) {
+                        return const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(24),
+                            child: Text('No artifact selected.'),
+                          ),
+                        );
+                      }
+                      return ArtifactPanel(
+                        artifact: artifact,
+                        onClose: () => Navigator.of(context).maybePop(),
+                      );
+                    },
                   ),
                 ),
               ],
