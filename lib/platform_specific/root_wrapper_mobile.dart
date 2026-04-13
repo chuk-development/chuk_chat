@@ -8,7 +8,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
-import 'package:chuk_chat/models/artifact.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/pages/workspaces_page.dart';
@@ -40,7 +39,6 @@ class RootWrapperMobile extends StatefulWidget {
 class _RootWrapperMobileState extends State<RootWrapperMobile>
     with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   bool _isSidebarExpanded = false;
-  ArtifactDocument? _activeArtifact;
   bool _artifactSheetOpen = false;
   final GlobalKey<ChukChatUIMobileState> _chatUIMobileKey = GlobalKey();
   late AnimationController _sidebarAnimController;
@@ -53,14 +51,14 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     if (kFeatureArtifacts) {
       // The notifier defaults to true (desktop idles with the panel "open").
       // On mobile the panel is a modal sheet, so force the notifier to false
-      // at startup: otherwise the first tap on an artifact chip re-assigns
-      // the same value and no listener fires.
+      // at startup.
       ArtifactStorageService.panelOpenNotifier.value = false;
-      _activeArtifact = ArtifactStorageService.activeArtifactNotifier.value;
       ArtifactStorageService.activeArtifactNotifier.addListener(
         _onArtifactChanged,
       );
-      ArtifactStorageService.panelOpenNotifier.addListener(
+      // Counter-based open event: fires on every tap even when the panel
+      // notifier was already true. This is the primary signal on mobile.
+      ArtifactStorageService.openRequestNotifier.addListener(
         _onPanelOpenRequested,
       );
     }
@@ -122,7 +120,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
       ArtifactStorageService.activeArtifactNotifier.removeListener(
         _onArtifactChanged,
       );
-      ArtifactStorageService.panelOpenNotifier.removeListener(
+      ArtifactStorageService.openRequestNotifier.removeListener(
         _onPanelOpenRequested,
       );
     }
@@ -138,9 +136,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
 
   void _onArtifactChanged() {
     if (!mounted) return;
-    setState(() {
-      _activeArtifact = ArtifactStorageService.activeArtifactNotifier.value;
-    });
+    setState(() {});
     _maybeOpenArtifactSheet();
   }
 
@@ -477,18 +473,6 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                     tooltip: 'Copy full chat',
                   ),
                 ),
-                if (kFeatureArtifacts && _activeArtifact != null)
-                  Semantics(
-                    identifier: 'open_artifact_button',
-                    child: IconButton(
-                      icon: Icon(Icons.article_outlined, color: iconFg),
-                      onPressed: () {
-                        ArtifactStorageService.panelOpenNotifier.value = true;
-                        _maybeOpenArtifactSheet();
-                      },
-                      tooltip: 'Open artifact',
-                    ),
-                  ),
                 Padding(
                   padding: const EdgeInsets.only(right: 12),
                   child: Semantics(

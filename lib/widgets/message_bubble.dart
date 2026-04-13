@@ -1597,15 +1597,44 @@ class _MessageBubbleState extends State<MessageBubble>
     if (!kFeatureArtifacts) return const [];
     final cards = <Widget>[];
     for (final tc in toolCalls) {
-      if (tc.name != 'artifact_manager') continue;
       if (tc.status != ToolCallStatus.completed) continue;
-      final args = tc.arguments;
-      final action = args['action'] as String? ?? '';
-      if (action != 'create' && action != 'rewrite') continue;
-      final artifactId = args['artifact_id'] as String? ?? '';
-      if (artifactId.isEmpty) continue;
-      final title = args['title'] as String? ?? artifactId;
-      final type = args['type'] as String? ?? '';
+
+      String artifactId = '';
+      String title = '';
+      String type = '';
+
+      if (tc.name == 'artifact_manager') {
+        final args = tc.arguments;
+        final action = args['action'] as String? ?? '';
+        if (action != 'create' && action != 'rewrite') continue;
+        artifactId = args['artifact_id'] as String? ?? '';
+        if (artifactId.isEmpty) continue;
+        title = args['title'] as String? ?? artifactId;
+        type = args['type'] as String? ?? '';
+      } else if (tc.name == 'typst_compile') {
+        final args = tc.arguments;
+        artifactId = args['artifact_id'] as String? ?? '';
+        if (artifactId.isEmpty) continue;
+        final rawTitle = args['title'];
+        title = (rawTitle is String && rawTitle.trim().isNotEmpty)
+            ? rawTitle.trim()
+            : artifactId;
+        type = 'typst';
+      } else {
+        continue;
+      }
+
+      // Parse "version: N" from the tool result so each chip can open the
+      // exact snapshot that was produced at this point in the chat.
+      int? version;
+      final result = tc.result;
+      if (result != null) {
+        final match = RegExp(r'version:\s*(\d+)').firstMatch(result);
+        if (match != null) {
+          version = int.tryParse(match.group(1) ?? '');
+        }
+      }
+
       cards.add(
         Padding(
           padding: const EdgeInsets.only(bottom: 6),
@@ -1613,6 +1642,7 @@ class _MessageBubbleState extends State<MessageBubble>
             artifactId: artifactId,
             title: title,
             type: type,
+            version: version,
           ),
         ),
       );
@@ -2839,11 +2869,13 @@ class _ArtifactInlineCard extends StatelessWidget {
     required this.artifactId,
     required this.title,
     required this.type,
+    this.version,
   });
 
   final String artifactId;
   final String title;
   final String type;
+  final int? version;
 
   IconData get _icon {
     switch (type) {
@@ -2859,6 +2891,8 @@ class _ArtifactInlineCard extends StatelessWidget {
         return Icons.image_outlined;
       case 'technical_drawing':
         return Icons.architecture;
+      case 'typst':
+        return Icons.picture_as_pdf;
       default:
         return Icons.description_outlined;
     }
@@ -2878,6 +2912,8 @@ class _ArtifactInlineCard extends StatelessWidget {
         return 'Image · SVG';
       case 'technical_drawing':
         return 'Technical drawing';
+      case 'typst':
+        return 'Typst · PDF';
       default:
         return 'Artifact';
     }
@@ -2887,31 +2923,32 @@ class _ArtifactInlineCard extends StatelessWidget {
     // Always try to resolve and activate the clicked artifact — even when the
     // panel is already showing something with a matching id. Users may have
     // multiple cards for the same artifact (e.g. create + rewrite) and expect
-    // each click to refocus that artifact.
+    // each click to refocus that artifact at the version captured in this
+    // chat bubble.
     try {
-      ArtifactStorageService.panelOpenNotifier.value = true;
-
       final chatId = ArtifactStorageService.activeChatId;
-      if (chatId == null || chatId.isEmpty) return;
+      if (chatId != null && chatId.isNotEmpty) {
+        ArtifactDocument? match = await ArtifactStorageService.loadArtifactById(
+          artifactId,
+        );
+        match ??= (await ArtifactStorageService.loadArtifactsForChat(chatId))
+            .where((a) => a.id == artifactId)
+            .firstOrNull;
 
-      // Resolve by id. Check cache first, fall back to a cache-populating load,
-      // then a direct by-id lookup as a last resort.
-      ArtifactDocument? match = await ArtifactStorageService.loadArtifactById(
-        artifactId,
-      );
-      match ??= (await ArtifactStorageService.loadArtifactsForChat(chatId))
-          .where((a) => a.id == artifactId)
-          .firstOrNull;
-
-      if (match == null) return;
-
-      final current = ArtifactStorageService.activeArtifactNotifier.value;
-      if (!identical(current, match)) {
-        ArtifactStorageService.activeArtifactNotifier.value = match;
+        if (match != null) {
+          final current = ArtifactStorageService.activeArtifactNotifier.value;
+          if (!identical(current, match)) {
+            ArtifactStorageService.activeArtifactNotifier.value = match;
+          }
+        }
       }
     } catch (_) {
-      // Panel is already opened above; resolution failures are non-fatal.
+      // Request open anyway below; resolution failures are non-fatal.
     }
+    // Fire the open-request event last so the listener reads a fresh
+    // active artifact. Using requestOpen() ensures repeated taps reopen the
+    // sheet even when panelOpenNotifier is already true.
+    ArtifactStorageService.requestOpen(version: version);
   }
 
   @override
@@ -2958,7 +2995,7 @@ class _ArtifactInlineCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      _typeLabel,
+                      version != null ? '$_typeLabel · v$version' : _typeLabel,
                       style: TextStyle(
                         fontSize: 12,
                         color: theme.colorScheme.onSurfaceVariant,

@@ -34,6 +34,25 @@ class ArtifactStorageService {
   /// active artifact (inline card in chat can reopen it).
   static final ValueNotifier<bool> panelOpenNotifier = ValueNotifier<bool>(true);
 
+  /// Monotonic counter fired each time the user asks to (re-)open the panel,
+  /// even when `panelOpenNotifier` is already `true`. Mobile listens on this
+  /// so repeated taps on a chip always reopen the modal sheet.
+  static final ValueNotifier<int> openRequestNotifier = ValueNotifier<int>(0);
+
+  /// When set, the artifact panel should open on this specific version after
+  /// it loads its version list. Consumed (reset to null) by the panel after
+  /// use.
+  static final ValueNotifier<int?> pendingInitialVersion =
+      ValueNotifier<int?>(null);
+
+  /// Request the panel to open (without toggling `panelOpenNotifier`).
+  /// Optionally pin to a specific version of the active artifact.
+  static void requestOpen({int? version}) {
+    pendingInitialVersion.value = version;
+    panelOpenNotifier.value = true;
+    openRequestNotifier.value = openRequestNotifier.value + 1;
+  }
+
   static String? _activeChatId;
   static String? _cacheUserId;
   static bool _artifactStorageAvailable = true;

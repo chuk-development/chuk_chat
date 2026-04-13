@@ -98,6 +98,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
         _versions = versions;
         _loadingVersions = false;
       });
+      _applyPendingInitialVersion();
     } catch (error, stackTrace) {
       if (kDebugMode) {
         debugPrint('Failed to load artifact versions: $error\n$stackTrace');
@@ -108,6 +109,20 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
         _loadingVersions = false;
       });
     }
+  }
+
+  void _applyPendingInitialVersion() {
+    final pending = ArtifactStorageService.pendingInitialVersion.value;
+    if (pending == null) return;
+    // Consume regardless of success so stale values don't stick.
+    ArtifactStorageService.pendingInitialVersion.value = null;
+    if (pending == widget.artifact.version) return;
+    final found = _versions.where((v) => v.version == pending).firstOrNull;
+    if (found == null) return;
+    setState(() {
+      _selectedVersion = pending;
+      _selectedVersionContent = found.content;
+    });
   }
 
   Future<void> _copyContent() async {
