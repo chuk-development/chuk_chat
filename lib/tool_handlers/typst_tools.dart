@@ -71,23 +71,29 @@ Future<String> executeTypstCompile({
     return 'Error: Not connected to server.';
   }
 
-  final source = (args['source'] as String? ?? '').trim();
+  final rawSource = args['source'];
+  final source = rawSource is String ? rawSource.trim() : '';
   if (source.isEmpty) {
     return 'Error: "source" parameter required (Typst markup).';
   }
 
-  final artifactId = (args['artifact_id'] as String? ?? '').trim();
+  final rawArtifactId = args['artifact_id'];
+  final artifactId = rawArtifactId is String ? rawArtifactId.trim() : '';
   if (artifactId.isEmpty) {
     return 'Error: "artifact_id" parameter required '
         '(short slug like "report_v1").';
   }
 
-  final title =
-      (args['title'] as String? ?? '').trim().isEmpty
-          ? artifactId
-          : (args['title'] as String).trim();
+  final rawTitle = args['title'];
+  final title = (rawTitle is String && rawTitle.trim().isNotEmpty)
+      ? rawTitle.trim()
+      : artifactId;
 
-  final messageId = (args['message_id'] as String?)?.trim();
+  final rawMessageId = args['message_id'];
+  final messageId =
+      (rawMessageId is String && rawMessageId.trim().isNotEmpty)
+          ? rawMessageId.trim()
+          : null;
 
   // Compile once to validate — bytes are discarded. This round-trip also
   // triggers the backend rate limit, which is what we want: one compile per
@@ -112,7 +118,7 @@ Future<String> executeTypstCompile({
       title: title,
       type: ArtifactType.typst,
       content: source,
-      messageId: (messageId == null || messageId.isEmpty) ? null : messageId,
+      messageId: messageId,
     );
     return 'Typst artifact "${created.id}" created '
         '(rendered on demand — PDF is never stored server-side).';
