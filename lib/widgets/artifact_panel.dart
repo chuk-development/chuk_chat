@@ -12,12 +12,16 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'package:chuk_chat/models/artifact.dart';
+import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/tool_handlers/typst_tools.dart' as typst_tools;
 import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
 import 'package:chuk_chat/widgets/technical_drawing_svg_export.dart';
 import 'package:chuk_chat/widgets/technical_drawing_widget.dart';
+import 'package:pdfx/pdfx.dart';
 
 class ArtifactPanel extends StatefulWidget {
   const ArtifactPanel({
@@ -35,15 +39,34 @@ class ArtifactPanel extends StatefulWidget {
   State<ArtifactPanel> createState() => _ArtifactPanelState();
 }
 
+enum _ArtifactViewMode { preview, code }
+
 class _ArtifactPanelState extends State<ArtifactPanel> {
   bool _loadingVersions = true;
   bool _busy = false;
   List<ArtifactVersionSnapshot> _versions = const [];
   int? _selectedVersion;
   String? _selectedVersionContent;
+  _ArtifactViewMode _viewMode = _ArtifactViewMode.preview;
 
   /// Captures the visual rendering (SVG / technical drawing) for PNG export.
   final GlobalKey _visualCaptureKey = GlobalKey();
+
+  /// Artifact types that have both a rendered preview and a source-code view.
+  static const Set<ArtifactType> _dualViewTypes = {
+    ArtifactType.svg,
+    ArtifactType.technicalDrawing,
+    ArtifactType.typst,
+  };
+
+  bool get _hasDualView => _dualViewTypes.contains(widget.artifact.type);
+
+  String get _codeLanguageHint => switch (widget.artifact.type) {
+    ArtifactType.svg => 'xml',
+    ArtifactType.technicalDrawing => 'json',
+    ArtifactType.typst => 'typst',
+    _ => '',
+  };
 
   @override
   void initState() {
@@ -112,6 +135,11 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
           _DownloadFormat('PNG image', 'png'),
           _DownloadFormat('SVG source', 'svg'),
         ];
+      case ArtifactType.typst:
+        return const [
+          _DownloadFormat('PDF document', 'pdf'),
+          _DownloadFormat('Typst source', 'typ'),
+        ];
       case ArtifactType.code:
       case ArtifactType.markdown:
       case ArtifactType.html:
@@ -138,6 +166,20 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
         }
         // SVG artifact → raw content
         return Uint8List.fromList(utf8.encode(_effectiveContent));
+      case 'pdf':
+        if (widget.artifact.type == ArtifactType.typst) {
+          final baseUrl = ApiConfigService.apiBaseUrl;
+          final token = SupabaseService.auth.currentSession?.accessToken;
+          if (baseUrl.isEmpty) {
+            return null;
+          }
+          return typst_tools.compileTypstToPdf(
+            serverHttpUrl: baseUrl,
+            accessToken: token,
+            source: _effectiveContent,
+          );
+        }
+        return null;
       default:
         return Uint8List.fromList(utf8.encode(_effectiveContent));
     }
@@ -367,10 +409,18 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
                 ),
                 _TypeBadge(type: _effectiveType),
                 const SizedBox(width: 8),
+                if (_hasDualView)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: _ViewModeToggle(
+                      mode: _viewMode,
+                      onChanged: (mode) => setState(() => _viewMode = mode),
+                    ),
+                  ),
                 IconButton(
                   icon: const Icon(Icons.copy_outlined, size: 18),
                   onPressed: _copyContent,
-                  tooltip: 'Copy',
+                  tooltip: 'Copy source',
                 ),
                 IconButton(
                   icon: const Icon(Icons.download_outlined, size: 18),
@@ -395,6 +445,8 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
               language: widget.artifact.language,
               content: _effectiveContent,
               captureKey: _visualCaptureKey,
+              forceCodeView: _hasDualView && _viewMode == _ArtifactViewMode.code,
+              codeLanguageHint: _codeLanguageHint,
             ),
           ),
         ),
@@ -530,18 +582,42 @@ class _ArtifactRenderer extends StatelessWidget {
     required this.content,
     this.language,
     this.captureKey,
+    this.forceCodeView = false,
+    this.codeLanguageHint = '',
   });
 
   final ArtifactType type;
   final String content;
   final String? language;
+  final bool forceCodeView;
+  final String codeLanguageHint;
 
   /// Attached to visual artifacts (SVG, technical drawings) so parent can
   /// capture a PNG via RenderRepaintBoundary.toImage().
   final GlobalKey? captureKey;
 
+  Widget _buildCodeView(BuildContext context) {
+    final iconFg = Theme.of(context).resolvedIconColor;
+    final bg = Theme.of(context).scaffoldBackgroundColor;
+    final scrollController = PrimaryScrollController.maybeOf(context);
+    final usePrimary = scrollController == null;
+    final fenced = '```$codeLanguageHint\n$content\n```';
+    return SingleChildScrollView(
+      controller: scrollController,
+      primary: usePrimary,
+      child: MarkdownMessage(
+        text: fenced,
+        textColor: iconFg,
+        backgroundColor: bg,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (forceCodeView) {
+      return _buildCodeView(context);
+    }
     final iconFg = Theme.of(context).resolvedIconColor;
     final bg = Theme.of(context).scaffoldBackgroundColor;
     final scrollController = PrimaryScrollController.maybeOf(context);
@@ -617,7 +693,224 @@ class _ArtifactRenderer extends StatelessWidget {
             child: TechnicalDrawingWidget(jsonString: content),
           ),
         );
+      case ArtifactType.typst:
+        return _TypstPdfRenderer(source: content);
     }
+  }
+}
+
+/// Compiles the Typst source via the backend and displays the returned PDF.
+/// Nothing is cached on disk — bytes live only in memory for this panel.
+class _TypstPdfRenderer extends StatefulWidget {
+  const _TypstPdfRenderer({required this.source});
+
+  final String source;
+
+  @override
+  State<_TypstPdfRenderer> createState() => _TypstPdfRendererState();
+}
+
+class _TypstPdfRendererState extends State<_TypstPdfRenderer> {
+  PdfControllerPinch? _controller;
+  String? _error;
+  bool _loading = true;
+  bool _pdfUnsupported = false;
+  Uint8List? _pdfBytes;
+
+  @override
+  void initState() {
+    super.initState();
+    _compile();
+  }
+
+  @override
+  void didUpdateWidget(covariant _TypstPdfRenderer old) {
+    super.didUpdateWidget(old);
+    if (old.source != widget.source) {
+      _compile();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _compile() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+      _pdfUnsupported = false;
+    });
+
+    final baseUrl = ApiConfigService.apiBaseUrl;
+    final token = SupabaseService.auth.currentSession?.accessToken;
+
+    if (baseUrl.isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'Not connected to server.';
+      });
+      return;
+    }
+
+    try {
+      final bytes = await typst_tools.compileTypstToPdf(
+        serverHttpUrl: baseUrl,
+        accessToken: token,
+        source: widget.source,
+      );
+      if (!mounted) return;
+
+      PdfControllerPinch? controller;
+      try {
+        final doc = await PdfDocument.openData(bytes);
+        controller = PdfControllerPinch(document: Future.value(doc));
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('pdfx unsupported on this platform: $e');
+        }
+        _pdfUnsupported = true;
+      }
+
+      if (!mounted) {
+        controller?.dispose();
+        return;
+      }
+
+      setState(() {
+        _pdfBytes = bytes;
+        _controller?.dispose();
+        _controller = controller;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e.toString();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 12),
+            Text('Compiling Typst…'),
+          ],
+        ),
+      );
+    }
+
+    if (_error != null) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, size: 36, color: Colors.redAccent),
+            const SizedBox(height: 12),
+            const Text(
+              'Typst compile failed',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            SelectableText(
+              _error!,
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.tonalIcon(
+              onPressed: _compile,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_pdfUnsupported) {
+      final sizeKb = ((_pdfBytes?.length ?? 0) / 1024).toStringAsFixed(1);
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.picture_as_pdf, size: 36),
+            const SizedBox(height: 12),
+            const Text(
+              'PDF preview is not available on this platform.',
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Compiled successfully ($sizeKb KB). Use the download button '
+              'to save the PDF.',
+              style: Theme.of(context).textTheme.bodySmall,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    final controller = _controller;
+    if (controller == null) {
+      return const SizedBox.shrink();
+    }
+    return PdfViewPinch(controller: controller);
+  }
+}
+
+/// Preview / Code toggle shown in the artifact header for types that support
+/// both a rendered preview and a plaintext source view.
+class _ViewModeToggle extends StatelessWidget {
+  const _ViewModeToggle({required this.mode, required this.onChanged});
+
+  final _ArtifactViewMode mode;
+  final ValueChanged<_ArtifactViewMode> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SegmentedButton<_ArtifactViewMode>(
+      showSelectedIcon: false,
+      style: ButtonStyle(
+        visualDensity: VisualDensity.compact,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        padding: WidgetStateProperty.all(
+          const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        ),
+        textStyle: WidgetStateProperty.all(const TextStyle(fontSize: 12)),
+      ),
+      segments: const [
+        ButtonSegment(
+          value: _ArtifactViewMode.preview,
+          icon: Icon(Icons.visibility_outlined, size: 14),
+          label: Text('Preview'),
+        ),
+        ButtonSegment(
+          value: _ArtifactViewMode.code,
+          icon: Icon(Icons.code, size: 14),
+          label: Text('Code'),
+        ),
+      ],
+      selected: {mode},
+      onSelectionChanged: (set) {
+        if (set.isNotEmpty) onChanged(set.first);
+      },
+    );
   }
 }
 

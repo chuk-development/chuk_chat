@@ -60,6 +60,7 @@ const Map<String, ToolCategory> toolCategoryMap = {
   'search_chats': ToolCategory.basic,
   'artifact_manager': ToolCategory.basic,
   'update_project': ToolCategory.basic,
+  'typst_compile': ToolCategory.basic,
 };
 
 /// Discovery catalog: category labels -> human-readable descriptions.
@@ -1126,6 +1127,44 @@ final List<ClientTool> builtinTools = [
       'version',
       'panel',
       'workspace',
+    ],
+  ),
+
+  // -- Typst compile (server-sandboxed) --
+  ClientTool(
+    name: 'typst_compile',
+    description:
+        'Render a Typst document to PDF. Use this for any text with math, '
+        'tables, structured layout, cover pages, or reports — Typst is the '
+        'modern alternative to LaTeX. The source is compiled inside a '
+        'sandbox on the server; the PDF is never stored — the UI re-renders '
+        'it on demand from the source (which IS saved as an artifact). '
+        'Start with `#set page(paper: "a4")` and write normal Typst markup. '
+        r'Math: `$ a^2 + b^2 = c^2 $`. Headings: `= Title`.',
+    parameters: {
+      'source':
+          'string (required: full Typst document source, max ~256KB)',
+      'artifact_id':
+          'string (required: stable artifact slug, letters/numbers/hyphens)',
+      'title': 'string (optional: human-readable title)',
+      'message_id':
+          'string (optional: associate artifact with a specific message)',
+    },
+    type: ToolType.builtin,
+    tags: [
+      'typst',
+      'pdf',
+      'latex',
+      'document',
+      'report',
+      'math',
+      'mathe',
+      'formel',
+      'bericht',
+      'paper',
+      'compile',
+      'render',
+      'dokument',
     ],
   ),
 
