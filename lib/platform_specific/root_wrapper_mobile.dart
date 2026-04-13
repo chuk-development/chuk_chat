@@ -41,6 +41,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   bool _isSidebarExpanded = false;
   ArtifactDocument? _activeArtifact;
+  bool _artifactSheetOpen = false;
   final GlobalKey<ChukChatUIMobileState> _chatUIMobileKey = GlobalKey();
   late AnimationController _sidebarAnimController;
   late Animation<double> _sidebarAnimation;
@@ -50,6 +51,11 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     if (kFeatureArtifacts) {
+      // The notifier defaults to true (desktop idles with the panel "open").
+      // On mobile the panel is a modal sheet, so force the notifier to false
+      // at startup: otherwise the first tap on an artifact chip re-assigns
+      // the same value and no listener fires.
+      ArtifactStorageService.panelOpenNotifier.value = false;
       _activeArtifact = ArtifactStorageService.activeArtifactNotifier.value;
       ArtifactStorageService.activeArtifactNotifier.addListener(
         _onArtifactChanged,
@@ -127,14 +133,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
 
   void _onPanelOpenRequested() {
     if (!mounted) return;
-    // Only react to "open" requests on mobile — panel is a modal bottom sheet.
-    // Desktop wrapper handles this via setState on _panelOpen.
-    if (ArtifactStorageService.panelOpenNotifier.value &&
-        _activeArtifact != null) {
-      // Reset so the notifier can fire again if the sheet is dismissed.
-      ArtifactStorageService.panelOpenNotifier.value = false;
-      _openArtifactSheet();
-    }
+    _maybeOpenArtifactSheet();
   }
 
   void _onArtifactChanged() {
@@ -142,6 +141,15 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     setState(() {
       _activeArtifact = ArtifactStorageService.activeArtifactNotifier.value;
     });
+    _maybeOpenArtifactSheet();
+  }
+
+  void _maybeOpenArtifactSheet() {
+    if (_artifactSheetOpen) return;
+    if (!ArtifactStorageService.panelOpenNotifier.value) return;
+    final artifact = ArtifactStorageService.activeArtifactNotifier.value;
+    if (artifact == null) return;
+    _openArtifactSheet();
   }
 
   @override
@@ -346,15 +354,25 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
   }
 
   void _openArtifactSheet() {
-    final artifact = _activeArtifact;
+    final artifact = ArtifactStorageService.activeArtifactNotifier.value;
     if (artifact == null) return;
+    if (_artifactSheetOpen) return;
 
+    _artifactSheetOpen = true;
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => ArtifactBottomSheet(artifact: artifact),
-    );
+      barrierColor: Colors.black.withValues(alpha: 0.4),
+      builder: (_) => const ArtifactBottomSheet(),
+    ).whenComplete(() {
+      _artifactSheetOpen = false;
+      // Clear the "open" flag so the next tap can re-open via the listener.
+      if (ArtifactStorageService.panelOpenNotifier.value) {
+        ArtifactStorageService.panelOpenNotifier.value = false;
+      }
+    });
   }
 
   void _copyDebugChat() {
@@ -464,7 +482,10 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                     identifier: 'open_artifact_button',
                     child: IconButton(
                       icon: Icon(Icons.article_outlined, color: iconFg),
-                      onPressed: _openArtifactSheet,
+                      onPressed: () {
+                        ArtifactStorageService.panelOpenNotifier.value = true;
+                        _maybeOpenArtifactSheet();
+                      },
                       tooltip: 'Open artifact',
                     ),
                   ),
