@@ -42,7 +42,8 @@ dependencies:
   tray_manager: ^0.5.1
   window_manager: ^0.5.1
   image: ^4.3.0
-  pdfx: ^2.8.0  # PDF viewing
+  pdfx: ^2.8.0  # PDF viewing (mobile/macOS — used by workspace viewer)
+  pdfrx: ^1.3.0  # Cross-platform PDF viewing incl. Linux/Windows (PDFium)
   flutter_foreground_task: ^9.2.1  # Keep streaming alive when app backgrounded
   flutter_local_notifications: ^21.0.0  # Completion notifications with deep linking
   pasteboard: ^0.5.0

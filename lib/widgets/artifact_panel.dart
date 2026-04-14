@@ -21,7 +21,7 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
 import 'package:chuk_chat/widgets/technical_drawing_svg_export.dart';
 import 'package:chuk_chat/widgets/technical_drawing_widget.dart';
-import 'package:pdfx/pdfx.dart';
+import 'package:pdfrx/pdfrx.dart';
 
 class ArtifactPanel extends StatefulWidget {
   const ArtifactPanel({
@@ -73,6 +73,8 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
     super.initState();
     _selectedVersion = widget.artifact.version;
     _loadVersions();
+    ArtifactStorageService.pendingInitialVersion
+        .addListener(_onPendingVersionChanged);
   }
 
   @override
@@ -83,6 +85,22 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
       _selectedVersion = widget.artifact.version;
       _selectedVersionContent = null;
       _loadVersions();
+    }
+  }
+
+  @override
+  void dispose() {
+    ArtifactStorageService.pendingInitialVersion
+        .removeListener(_onPendingVersionChanged);
+    super.dispose();
+  }
+
+  void _onPendingVersionChanged() {
+    if (!mounted) return;
+    // Apply immediately if versions are already loaded; otherwise
+    // _loadVersions() will pick the pending value up after its fetch.
+    if (!_loadingVersions && _versions.isNotEmpty) {
+      _applyPendingInitialVersion();
     }
   }
 
@@ -116,7 +134,17 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
     if (pending == null) return;
     // Consume regardless of success so stale values don't stick.
     ArtifactStorageService.pendingInitialVersion.value = null;
-    if (pending == widget.artifact.version) return;
+    if (pending == widget.artifact.version) {
+      // Requested the latest — drop any pinned snapshot so the main
+      // document is shown.
+      if (_selectedVersion != pending || _selectedVersionContent != null) {
+        setState(() {
+          _selectedVersion = pending;
+          _selectedVersionContent = null;
+        });
+      }
+      return;
+    }
     final found = _versions.where((v) => v.version == pending).firstOrNull;
     if (found == null) return;
     setState(() {
@@ -395,19 +423,90 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
   @override
   Widget build(BuildContext context) {
     final iconFg = Theme.of(context).resolvedIconColor;
+    final isNarrow = MediaQuery.of(context).size.width < 520;
 
-    return Column(
-      children: [
-        if (widget.showHeader)
-          Container(
-            height: 56,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: iconFg.withValues(alpha: 0.12)),
-              ),
-            ),
-            child: Row(
+    final versionDropdown = _loadingVersions
+        ? const SizedBox(
+            width: 70,
+            child: LinearProgressIndicator(minHeight: 2),
+          )
+        : (_versions.length <= 1
+            ? const SizedBox.shrink()
+            : Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                decoration: BoxDecoration(
+                  border: Border.all(color: iconFg.withValues(alpha: 0.2)),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: DropdownButton<int>(
+                  value: _versions.any((v) => v.version == _selectedVersion)
+                      ? _selectedVersion
+                      : null,
+                  isDense: true,
+                  underline: const SizedBox.shrink(),
+                  style: TextStyle(fontSize: 12, color: iconFg),
+                  items: _versions
+                      .map(
+                        (v) => DropdownMenuItem<int>(
+                          value: v.version,
+                          child: Text('v${v.version}'),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: _selectVersion,
+                ),
+              ));
+
+    final actionMenu = PopupMenuButton<String>(
+      icon: const Icon(Icons.more_vert, size: 20),
+      tooltip: 'More',
+      onSelected: (v) {
+        switch (v) {
+          case 'copy':
+            _copyContent();
+          case 'download':
+            if (!_busy) _showDownloadMenu();
+        }
+      },
+      itemBuilder: (_) => const [
+        PopupMenuItem(
+          value: 'copy',
+          child: Row(
+            children: [
+              Icon(Icons.copy_outlined, size: 18),
+              SizedBox(width: 10),
+              Text('Copy source'),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'download',
+          child: Row(
+            children: [
+              Icon(Icons.download_outlined, size: 18),
+              SizedBox(width: 10),
+              Text('Download'),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    Widget header;
+    if (isNarrow) {
+      // Two-row header so everything fits on a phone.
+      header = Container(
+        padding: const EdgeInsets.fromLTRB(12, 6, 4, 6),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: iconFg.withValues(alpha: 0.12)),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
               children: [
                 const Icon(Icons.article_outlined, size: 18),
                 const SizedBox(width: 8),
@@ -417,44 +516,102 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 14,
+                      fontSize: 15,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
+                actionMenu,
+                if (widget.onClose != null)
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 20),
+                    onPressed: widget.onClose,
+                    tooltip: 'Close',
+                    visualDensity: VisualDensity.compact,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
                 _TypeBadge(type: _effectiveType),
                 const SizedBox(width: 8),
                 if (_hasDualView)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
+                  Flexible(
                     child: _ViewModeToggle(
                       mode: _viewMode,
                       onChanged: (mode) => setState(() => _viewMode = mode),
                     ),
                   ),
-                IconButton(
-                  icon: const Icon(Icons.copy_outlined, size: 18),
-                  onPressed: _copyContent,
-                  tooltip: 'Copy source',
-                ),
-                IconButton(
-                  icon: const Icon(Icons.download_outlined, size: 18),
-                  onPressed: _busy ? null : _showDownloadMenu,
-                  tooltip: 'Download',
-                ),
-                if (widget.onClose != null)
-                  IconButton(
-                    icon: const Icon(Icons.close, size: 18),
-                    onPressed: widget.onClose,
-                    tooltip: 'Close',
-                  ),
+                const Spacer(),
+                versionDropdown,
               ],
             ),
+          ],
+        ),
+      );
+    } else {
+      header = Container(
+        height: 56,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: iconFg.withValues(alpha: 0.12)),
           ),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.article_outlined, size: 18),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                widget.artifact.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            _TypeBadge(type: _effectiveType),
+            const SizedBox(width: 8),
+            if (_hasDualView)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: _ViewModeToggle(
+                  mode: _viewMode,
+                  onChanged: (mode) => setState(() => _viewMode = mode),
+                ),
+              ),
+            IconButton(
+              icon: const Icon(Icons.copy_outlined, size: 18),
+              onPressed: _copyContent,
+              tooltip: 'Copy source',
+            ),
+            IconButton(
+              icon: const Icon(Icons.download_outlined, size: 18),
+              onPressed: _busy ? null : _showDownloadMenu,
+              tooltip: 'Download',
+            ),
+            if (widget.onClose != null)
+              IconButton(
+                icon: const Icon(Icons.close, size: 18),
+                onPressed: widget.onClose,
+                tooltip: 'Close',
+              ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        if (widget.showHeader) header,
         Expanded(
           child: Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(12),
+            padding: EdgeInsets.all(isNarrow ? 8 : 12),
             child: _ArtifactRenderer(
               type: _effectiveType,
               language: widget.artifact.language,
@@ -465,56 +622,57 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
             ),
           ),
         ),
-        Container(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-          decoration: BoxDecoration(
-            border: Border(
-              top: BorderSide(color: iconFg.withValues(alpha: 0.12)),
+        if (!isNarrow)
+          Container(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(color: iconFg.withValues(alpha: 0.12)),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Text(
+                  'Version',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _loadingVersions
+                      ? const LinearProgressIndicator(minHeight: 2)
+                      : Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: iconFg.withValues(alpha: 0.2),
+                            ),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: DropdownButton<int>(
+                            value:
+                                _versions.any(
+                                  (v) => v.version == _selectedVersion,
+                                )
+                                ? _selectedVersion
+                                : null,
+                            isDense: true,
+                            isExpanded: true,
+                            underline: const SizedBox.shrink(),
+                            items: _versions
+                                .map(
+                                  (v) => DropdownMenuItem<int>(
+                                    value: v.version,
+                                    child: Text('v${v.version}'),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: _selectVersion,
+                          ),
+                        ),
+                ),
+              ],
             ),
           ),
-          child: Row(
-            children: [
-              const Text(
-                'Version',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _loadingVersions
-                    ? const LinearProgressIndicator(minHeight: 2)
-                    : Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            color: iconFg.withValues(alpha: 0.2),
-                          ),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: DropdownButton<int>(
-                          value:
-                              _versions.any(
-                                (v) => v.version == _selectedVersion,
-                              )
-                              ? _selectedVersion
-                              : null,
-                          isDense: true,
-                          isExpanded: true,
-                          underline: const SizedBox.shrink(),
-                          items: _versions
-                              .map(
-                                (v) => DropdownMenuItem<int>(
-                                  value: v.version,
-                                  child: Text('v${v.version}'),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: _selectVersion,
-                        ),
-                      ),
-              ),
-            ],
-          ),
-        ),
       ],
     );
   }
@@ -526,10 +684,12 @@ class ArtifactBottomSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DraggableScrollableSheet(
-      initialChildSize: 0.92,
-      minChildSize: 0.5,
-      maxChildSize: 0.98,
+      initialChildSize: 1.0,
+      minChildSize: 0.6,
+      maxChildSize: 1.0,
       expand: false,
+      snap: true,
+      snapSizes: const [0.6, 1.0],
       builder: (context, scrollController) {
         return PrimaryScrollController(
           controller: scrollController,
@@ -548,7 +708,7 @@ class ArtifactBottomSheet extends StatelessWidget {
                     }
                   },
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
                     child: Container(
                       width: 44,
                       height: 4,
@@ -752,10 +912,8 @@ class _TypstPdfRenderer extends StatefulWidget {
 }
 
 class _TypstPdfRendererState extends State<_TypstPdfRenderer> {
-  PdfControllerPinch? _controller;
   String? _error;
   bool _loading = true;
-  bool _pdfUnsupported = false;
   Uint8List? _pdfBytes;
 
   @override
@@ -772,17 +930,10 @@ class _TypstPdfRendererState extends State<_TypstPdfRenderer> {
     }
   }
 
-  @override
-  void dispose() {
-    _controller?.dispose();
-    super.dispose();
-  }
-
   Future<void> _compile() async {
     setState(() {
       _loading = true;
       _error = null;
-      _pdfUnsupported = false;
     });
 
     final baseUrl = ApiConfigService.apiBaseUrl;
@@ -804,27 +955,8 @@ class _TypstPdfRendererState extends State<_TypstPdfRenderer> {
         source: widget.source,
       );
       if (!mounted) return;
-
-      PdfControllerPinch? controller;
-      try {
-        final doc = await PdfDocument.openData(bytes);
-        controller = PdfControllerPinch(document: Future.value(doc));
-      } catch (e) {
-        if (kDebugMode) {
-          debugPrint('pdfx unsupported on this platform: $e');
-        }
-        _pdfUnsupported = true;
-      }
-
-      if (!mounted) {
-        controller?.dispose();
-        return;
-      }
-
       setState(() {
         _pdfBytes = bytes;
-        _controller?.dispose();
-        _controller = controller;
         _loading = false;
       });
     } catch (e) {
@@ -882,36 +1014,18 @@ class _TypstPdfRendererState extends State<_TypstPdfRenderer> {
       );
     }
 
-    if (_pdfUnsupported) {
-      final sizeKb = ((_pdfBytes?.length ?? 0) / 1024).toStringAsFixed(1);
-      return Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.picture_as_pdf, size: 36),
-            const SizedBox(height: 12),
-            const Text(
-              'PDF preview is not available on this platform.',
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Compiled successfully ($sizeKb KB). Use the download button '
-              'to save the PDF.',
-              style: Theme.of(context).textTheme.bodySmall,
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      );
-    }
-
-    final controller = _controller;
-    if (controller == null) {
+    final bytes = _pdfBytes;
+    if (bytes == null) {
       return const SizedBox.shrink();
     }
-    return PdfViewPinch(controller: controller);
+    return PdfViewer.data(
+      bytes,
+      sourceName: 'typst.pdf',
+      params: const PdfViewerParams(
+        margin: 12,
+        backgroundColor: Color(0xFF202020),
+      ),
+    );
   }
 }
 
