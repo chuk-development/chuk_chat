@@ -4,10 +4,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
-
+import 'package:chuk_chat/services/file_save_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
-import 'package:chuk_chat/utils/io_helper.dart';
 
 /// Full-screen image viewer with zoom and pan capabilities
 class ImageViewer extends StatefulWidget {
@@ -332,22 +330,41 @@ class _ImageViewerState extends State<ImageViewer> {
           ? widget.allImages![_currentIndex]
           : widget.imageDataUrl;
       final bytes = await _loadImageBytes(source);
-      final dir = await getDownloadsDirectory() ??
-          await getApplicationDocumentsDirectory();
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final file = File(
-        '${dir.path}${Platform.pathSeparator}chuk_chat_image_$timestamp.png',
+      final result = await FileSaveService.save(
+        bytes: bytes,
+        suggestedName: 'chuk_chat_image_$timestamp.png',
+        dialogTitle: 'Save image',
+        allowedExtensions: const ['png'],
       );
-      await file.writeAsBytes(bytes, flush: true);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Saved to ${file.path}')),
-      );
+      _showSaveSnackBar(result);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Unable to save image')),
       );
+    }
+  }
+
+  void _showSaveSnackBar(SaveResult result) {
+    final messenger = ScaffoldMessenger.of(context);
+    switch (result.outcome) {
+      case SaveOutcome.savedToFolder:
+      case SaveOutcome.savedViaPicker:
+        messenger.showSnackBar(
+          SnackBar(content: Text('Saved to ${result.path}')),
+        );
+      case SaveOutcome.savedViaShare:
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Image shared')),
+        );
+      case SaveOutcome.cancelled:
+        break;
+      case SaveOutcome.failed:
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Unable to save image')),
+        );
     }
   }
 
