@@ -2947,8 +2947,13 @@ class _ArtifactInlineCard extends StatelessWidget {
     }
     // Fire the open-request event last so the listener reads a fresh
     // active artifact. Using requestOpen() ensures repeated taps reopen the
-    // sheet even when panelOpenNotifier is already true.
-    ArtifactStorageService.requestOpen(version: version);
+    // sheet even when panelOpenNotifier is already true. The artifact id is
+    // required so a stale panel state for a different artifact cannot
+    // accidentally consume this request and pin the wrong version.
+    ArtifactStorageService.requestOpen(
+      artifactId: artifactId,
+      version: version,
+    );
   }
 
   @override

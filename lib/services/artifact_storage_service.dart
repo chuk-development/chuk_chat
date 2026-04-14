@@ -39,16 +39,19 @@ class ArtifactStorageService {
   /// so repeated taps on a chip always reopen the modal sheet.
   static final ValueNotifier<int> openRequestNotifier = ValueNotifier<int>(0);
 
-  /// When set, the artifact panel should open on this specific version after
-  /// it loads its version list. Consumed (reset to null) by the panel after
-  /// use.
-  static final ValueNotifier<int?> pendingInitialVersion =
-      ValueNotifier<int?>(null);
+  /// When set, the artifact panel should open on this specific artifact +
+  /// version after it loads its version list. The panel only consumes the
+  /// request when its currently displayed artifact id matches `artifactId`,
+  /// so a click targeting a different artifact cannot be mis-applied to the
+  /// panel still showing the previous one.
+  static final ValueNotifier<({String artifactId, int? version})?>
+  pendingInitialOpen =
+      ValueNotifier<({String artifactId, int? version})?>(null);
 
   /// Request the panel to open (without toggling `panelOpenNotifier`).
-  /// Optionally pin to a specific version of the active artifact.
-  static void requestOpen({int? version}) {
-    pendingInitialVersion.value = version;
+  /// Pins to the given version of `artifactId` once that artifact is active.
+  static void requestOpen({required String artifactId, int? version}) {
+    pendingInitialOpen.value = (artifactId: artifactId, version: version);
     panelOpenNotifier.value = true;
     openRequestNotifier.value = openRequestNotifier.value + 1;
   }
