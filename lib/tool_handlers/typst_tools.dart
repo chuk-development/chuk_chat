@@ -116,12 +116,15 @@ Future<String> executeTypstCompile({
 
   // Upload the PDF encrypted (same trust model as chat messages &
   // images). Failure here is not fatal — we fall back to live
-  // recompilation on open.
+  // recompilation on open, but surface the error to the AI so it
+  // can tell the user why persistence didn't work.
   String? attachmentPath;
+  String? uploadError;
   try {
     attachmentPath = await PdfAttachmentService.upload(pdfBytes);
-  } catch (_) {
+  } catch (e) {
     attachmentPath = null;
+    uploadError = e.toString();
   }
 
   try {
@@ -136,7 +139,8 @@ Future<String> executeTypstCompile({
     );
     final persisted = attachmentPath != null
         ? 'stored end-to-end encrypted in Supabase'
-        : 'source stored; PDF will be re-rendered on demand';
+        : 'source stored; PDF will be re-rendered on demand '
+          '(attachment upload failed: ${uploadError ?? "unknown"})';
     return 'Typst artifact "${created.id}" created '
         '(version: ${created.version}, $persisted).';
   } on StateError catch (e) {

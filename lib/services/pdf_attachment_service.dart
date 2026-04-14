@@ -50,16 +50,28 @@ class PdfAttachmentService {
 
     final encryptedJson = await EncryptionService.encryptBytes(bytes);
     final encryptedBytes = Uint8List.fromList(utf8.encode(encryptedJson));
-    final path = '${user.id}/${_uuid.v4()}.pdf.enc';
 
-    await SupabaseService.client.storage.from(bucketName).uploadBinary(
-          path,
-          encryptedBytes,
-          fileOptions: const FileOptions(
-            contentType: 'application/octet-stream',
-            upsert: false,
-          ),
-        );
+    // The `images` bucket has an image/* MIME allow-list. Our payload is
+    // ciphertext, so we just advertise image/png — the bytes on disk are
+    // opaque either way. Extension stays `.enc` so the file is obviously
+    // encrypted, not an actual image.
+    final path = '${user.id}/${_uuid.v4()}.enc';
+
+    try {
+      await SupabaseService.client.storage.from(bucketName).uploadBinary(
+            path,
+            encryptedBytes,
+            fileOptions: const FileOptions(
+              contentType: 'image/png',
+              upsert: false,
+            ),
+          );
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('PdfAttachmentService upload failed: $e');
+      }
+      rethrow;
+    }
 
     _cache.put(path, bytes);
     return path;
