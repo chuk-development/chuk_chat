@@ -4,13 +4,12 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:chuk_chat/utils/io_helper.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/models/artifact.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
+import 'package:chuk_chat/services/file_save_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/utils/image_clipboard_service.dart';
 import 'package:chuk_chat/widgets/chart_widget.dart';
@@ -2665,20 +2664,29 @@ class _MessageBubbleState extends State<MessageBubble>
     try {
       final bytes = await _loadFirstImageBytes();
       if (bytes == null) return;
-      final dir =
-          await getDownloadsDirectory() ??
-          await getApplicationDocumentsDirectory();
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final file = File(
-        '${dir.path}${Platform.pathSeparator}chuk_chat_image_$timestamp.png',
+      final result = await FileSaveService.save(
+        bytes: bytes,
+        suggestedName: 'chuk_chat_image_$timestamp.png',
+        dialogTitle: 'Save image',
+        allowedExtensions: const ['png'],
       );
-      await file.writeAsBytes(bytes, flush: true);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context)!.savedToPath(file.path)),
-        ),
-      );
+      final l = AppLocalizations.of(context)!;
+      switch (result.outcome) {
+        case SaveOutcome.savedToFolder:
+        case SaveOutcome.savedViaPicker:
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(l.savedToPath(result.path ?? ''))),
+          );
+        case SaveOutcome.savedViaShare:
+        case SaveOutcome.cancelled:
+          break;
+        case SaveOutcome.failed:
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(l.unableToSaveImage)),
+          );
+      }
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

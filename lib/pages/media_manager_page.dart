@@ -1,12 +1,9 @@
 // lib/pages/media_manager_page.dart
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
-
+import 'package:chuk_chat/services/file_save_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
-import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
@@ -374,18 +371,29 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
     try {
       final bytes = await _loadThumbnail(image.path);
       if (bytes == null) throw Exception('Failed to load image');
-      final dir = await getDownloadsDirectory() ??
-          await getApplicationDocumentsDirectory();
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final file = File(
-        '${dir.path}${Platform.pathSeparator}chuk_chat_image_$timestamp.png',
+      final result = await FileSaveService.save(
+        bytes: bytes,
+        suggestedName: 'chuk_chat_image_$timestamp.png',
+        dialogTitle: 'Save image',
+        allowedExtensions: const ['png'],
       );
-      await file.writeAsBytes(bytes, flush: true);
       if (!mounted) return;
       final l = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l.savedToPath(file.path))),
-      );
+      switch (result.outcome) {
+        case SaveOutcome.savedToFolder:
+        case SaveOutcome.savedViaPicker:
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(l.savedToPath(result.path ?? ''))),
+          );
+        case SaveOutcome.savedViaShare:
+        case SaveOutcome.cancelled:
+          break;
+        case SaveOutcome.failed:
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(l.unableToSaveImage)),
+          );
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -399,8 +407,7 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
 
     int savedCount = 0;
     int failedCount = 0;
-    final dir = await getDownloadsDirectory() ??
-        await getApplicationDocumentsDirectory();
+    int cancelledCount = 0;
 
     for (final path in _selectedImages.toList()) {
       try {
@@ -410,11 +417,23 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
           continue;
         }
         final timestamp = DateTime.now().millisecondsSinceEpoch;
-        final file = File(
-          '${dir.path}${Platform.pathSeparator}chuk_chat_image_${timestamp}_$savedCount.png',
+        final result = await FileSaveService.save(
+          bytes: bytes,
+          suggestedName:
+              'chuk_chat_image_${timestamp}_$savedCount.png',
+          dialogTitle: 'Save image',
+          allowedExtensions: const ['png'],
         );
-        await file.writeAsBytes(bytes, flush: true);
-        savedCount++;
+        switch (result.outcome) {
+          case SaveOutcome.savedToFolder:
+          case SaveOutcome.savedViaPicker:
+          case SaveOutcome.savedViaShare:
+            savedCount++;
+          case SaveOutcome.cancelled:
+            cancelledCount++;
+          case SaveOutcome.failed:
+            failedCount++;
+        }
       } catch (e) {
         failedCount++;
       }
@@ -422,17 +441,12 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
 
     if (!mounted) return;
 
-    if (failedCount > 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Saved $savedCount images, $failedCount failed'),
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Saved $savedCount images to ${dir.path}')),
-      );
-    }
+    final parts = <String>['Saved $savedCount images'];
+    if (failedCount > 0) parts.add('$failedCount failed');
+    if (cancelledCount > 0) parts.add('$cancelledCount cancelled');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(parts.join(', '))),
+    );
   }
 
   String _formatFileSize(int? bytes) {

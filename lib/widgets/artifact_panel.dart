@@ -2,22 +2,19 @@
 import 'dart:convert';
 import 'dart:ui' as ui;
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import 'package:chuk_chat/models/artifact.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
+import 'package:chuk_chat/services/file_save_service.dart';
 import 'package:chuk_chat/services/pdf_attachment_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/tool_handlers/typst_tools.dart' as typst_tools;
-import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
 import 'package:chuk_chat/widgets/technical_drawing_svg_export.dart';
@@ -298,49 +295,32 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
         return;
       }
 
-      if (kIsWeb) {
-        await SharePlus.instance.share(
-          ShareParams(
-            files: [XFile.fromData(bytes, name: suggestedName)],
-            subject: artifact.title,
-            text: 'Artifact export',
-          ),
-        );
-        return;
-      }
-
-      String? selectedPath;
-      selectedPath = await FilePicker.saveFile(
+      final result = await FileSaveService.save(
+        bytes: bytes,
+        suggestedName: suggestedName,
         dialogTitle: 'Save Artifact',
-        fileName: suggestedName,
-        type: FileType.custom,
         allowedExtensions: [ext],
       );
-
-      if (selectedPath != null && selectedPath.isNotEmpty) {
-        final file = File(selectedPath);
-        await file.writeAsBytes(bytes, flush: true);
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Saved to $selectedPath'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      } else {
-        final tempDir = await getTemporaryDirectory();
-        final tempPath =
-            '${tempDir.path}${Platform.pathSeparator}$suggestedName';
-        final tempFile = File(tempPath);
-        await tempFile.writeAsBytes(bytes, flush: true);
-
-        await SharePlus.instance.share(
-          ShareParams(
-            files: [XFile(tempPath)],
-            subject: artifact.title,
-            text: 'Artifact export',
-          ),
-        );
+      if (!mounted) return;
+      switch (result.outcome) {
+        case SaveOutcome.savedToFolder:
+        case SaveOutcome.savedViaPicker:
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Saved to ${result.path}'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        case SaveOutcome.savedViaShare:
+        case SaveOutcome.cancelled:
+          break;
+        case SaveOutcome.failed:
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to save artifact'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
       }
     } catch (error, stackTrace) {
       if (kDebugMode) {
