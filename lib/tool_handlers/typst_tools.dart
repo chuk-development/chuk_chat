@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -5,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import 'package:chuk_chat/models/artifact.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
+import 'package:chuk_chat/services/pdf_attachment_service.dart';
 
 /// Compile Typst source via the backend. Returns PDF bytes on success.
 /// Nothing is persisted on the server — the backend wipes its tempdir
@@ -95,11 +97,12 @@ Future<String> executeTypstCompile({
           ? rawMessageId.trim()
           : null;
 
-  // Compile once to validate — bytes are discarded. This round-trip also
-  // triggers the backend rate limit, which is what we want: one compile per
-  // tool call.
+  // Compile once. We keep the bytes so we can persist the rendered PDF
+  // as an encrypted attachment — the client no longer has to re-compile
+  // every time the artifact is reopened.
+  Uint8List pdfBytes;
   try {
-    await compileTypstToPdf(
+    pdfBytes = await compileTypstToPdf(
       serverHttpUrl: baseUrl,
       accessToken: accessToken,
       source: source,
@@ -111,6 +114,16 @@ Future<String> executeTypstCompile({
     return 'Typst compile failed: $e';
   }
 
+  // Upload the PDF encrypted (same trust model as chat messages &
+  // images). Failure here is not fatal — we fall back to live
+  // recompilation on open.
+  String? attachmentPath;
+  try {
+    attachmentPath = await PdfAttachmentService.upload(pdfBytes);
+  } catch (_) {
+    attachmentPath = null;
+  }
+
   try {
     final created = await ArtifactStorageService.createArtifact(
       chatId: chatId,
@@ -119,13 +132,23 @@ Future<String> executeTypstCompile({
       type: ArtifactType.typst,
       content: source,
       messageId: messageId,
+      attachmentPath: attachmentPath,
     );
+    final persisted = attachmentPath != null
+        ? 'stored end-to-end encrypted in Supabase'
+        : 'source stored; PDF will be re-rendered on demand';
     return 'Typst artifact "${created.id}" created '
-        '(version: ${created.version}, rendered on demand — PDF is never stored server-side).';
+        '(version: ${created.version}, $persisted).';
   } on StateError catch (e) {
-    // Likely duplicate id — tell the AI to rewrite.
+    // Artifact creation failed — don't leak the orphan attachment.
+    if (attachmentPath != null) {
+      unawaited(PdfAttachmentService.delete(attachmentPath));
+    }
     return 'Error: ${e.message}';
   } catch (e) {
+    if (attachmentPath != null) {
+      unawaited(PdfAttachmentService.delete(attachmentPath));
+    }
     return 'Error: Could not save Typst artifact: $e';
   }
 }

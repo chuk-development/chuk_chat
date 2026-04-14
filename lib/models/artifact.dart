@@ -61,6 +61,7 @@ class ArtifactDocument {
     required this.updatedAt,
     this.messageId,
     this.language,
+    this.attachmentPath,
   });
 
   final String id;
@@ -75,6 +76,11 @@ class ArtifactDocument {
   final DateTime createdAt;
   final DateTime updatedAt;
 
+  /// Supabase Storage path of an encrypted binary attachment (e.g. the
+  /// compiled PDF for a `typst` artifact). Null when no binary blob is
+  /// persisted; clients fall back to compiling/rendering from [content].
+  final String? attachmentPath;
+
   ArtifactDocument copyWith({
     String? id,
     String? chatId,
@@ -87,6 +93,7 @@ class ArtifactDocument {
     int? version,
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? attachmentPath,
   }) {
     return ArtifactDocument(
       id: id ?? this.id,
@@ -100,6 +107,7 @@ class ArtifactDocument {
       version: version ?? this.version,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      attachmentPath: attachmentPath ?? this.attachmentPath,
     );
   }
 
@@ -114,6 +122,7 @@ class ArtifactDocument {
       'language': language,
       'content': encryptedContent ?? content,
       'version': version,
+      'attachment_path': attachmentPath,
       'created_at': createdAt.toUtc().toIso8601String(),
       'updated_at': updatedAt.toUtc().toIso8601String(),
     };
@@ -133,6 +142,9 @@ class ArtifactDocument {
       language: map['language'] as String?,
       content: decryptedContent,
       version: (map['version'] as num?)?.toInt() ?? 1,
+      attachmentPath: (map['attachment_path'] as String?)?.trim().isEmpty == true
+          ? null
+          : map['attachment_path'] as String?,
       createdAt:
           DateTime.tryParse((map['created_at'] as String?) ?? '') ??
           DateTime.now().toUtc(),
@@ -149,12 +161,14 @@ class ArtifactVersionSnapshot {
     required this.version,
     required this.content,
     required this.createdAt,
+    this.attachmentPath,
   });
 
   final String artifactId;
   final int version;
   final String content;
   final DateTime createdAt;
+  final String? attachmentPath;
 
   static ArtifactVersionSnapshot fromMap(
     Map<String, dynamic> map, {
@@ -164,6 +178,9 @@ class ArtifactVersionSnapshot {
       artifactId: map['artifact_id'] as String,
       version: (map['version'] as num?)?.toInt() ?? 1,
       content: decryptedContent,
+      attachmentPath: (map['attachment_path'] as String?)?.trim().isEmpty == true
+          ? null
+          : map['attachment_path'] as String?,
       createdAt:
           DateTime.tryParse((map['created_at'] as String?) ?? '') ??
           DateTime.now().toUtc(),

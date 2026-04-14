@@ -14,6 +14,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:chuk_chat/models/artifact.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
+import 'package:chuk_chat/services/pdf_attachment_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/tool_handlers/typst_tools.dart' as typst_tools;
 import 'package:chuk_chat/utils/io_helper.dart';
@@ -420,6 +421,16 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
 
   ArtifactType get _effectiveType => widget.artifact.type;
 
+  String? get _effectiveAttachmentPath {
+    final selected = _selectedVersion;
+    if (selected != null && selected != widget.artifact.version) {
+      final snapshot =
+          _versions.where((v) => v.version == selected).firstOrNull;
+      return snapshot?.attachmentPath;
+    }
+    return widget.artifact.attachmentPath;
+  }
+
   @override
   Widget build(BuildContext context) {
     final iconFg = Theme.of(context).resolvedIconColor;
@@ -616,6 +627,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
               type: _effectiveType,
               language: widget.artifact.language,
               content: _effectiveContent,
+              attachmentPath: _effectiveAttachmentPath,
               captureKey: _visualCaptureKey,
               forceCodeView: _hasDualView && _viewMode == _ArtifactViewMode.code,
               codeLanguageHint: _codeLanguageHint,
@@ -782,6 +794,7 @@ class _ArtifactRenderer extends StatelessWidget {
     required this.type,
     required this.content,
     this.language,
+    this.attachmentPath,
     this.captureKey,
     this.forceCodeView = false,
     this.codeLanguageHint = '',
@@ -790,6 +803,7 @@ class _ArtifactRenderer extends StatelessWidget {
   final ArtifactType type;
   final String content;
   final String? language;
+  final String? attachmentPath;
   final bool forceCodeView;
   final String codeLanguageHint;
 
@@ -895,17 +909,25 @@ class _ArtifactRenderer extends StatelessWidget {
           ),
         );
       case ArtifactType.typst:
-        return _TypstPdfRenderer(source: content);
+        return _TypstPdfRenderer(
+          source: content,
+          attachmentPath: attachmentPath,
+        );
     }
   }
 }
 
-/// Compiles the Typst source via the backend and displays the returned PDF.
-/// Nothing is cached on disk — bytes live only in memory for this panel.
+/// Renders a Typst artifact's PDF. Prefers the persisted encrypted
+/// attachment (downloaded & decrypted client-side); falls back to a
+/// live backend compile if no attachment exists or it can't be read.
 class _TypstPdfRenderer extends StatefulWidget {
-  const _TypstPdfRenderer({required this.source});
+  const _TypstPdfRenderer({
+    required this.source,
+    this.attachmentPath,
+  });
 
   final String source;
+  final String? attachmentPath;
 
   @override
   State<_TypstPdfRenderer> createState() => _TypstPdfRendererState();
@@ -919,18 +941,47 @@ class _TypstPdfRendererState extends State<_TypstPdfRenderer> {
   @override
   void initState() {
     super.initState();
-    _compile();
+    _load();
   }
 
   @override
   void didUpdateWidget(covariant _TypstPdfRenderer old) {
     super.didUpdateWidget(old);
-    if (old.source != widget.source) {
-      _compile();
+    if (old.source != widget.source ||
+        old.attachmentPath != widget.attachmentPath) {
+      _load();
     }
   }
 
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    final path = widget.attachmentPath;
+    if (path != null && path.isNotEmpty) {
+      try {
+        final bytes = await PdfAttachmentService.download(path);
+        if (!mounted) return;
+        setState(() {
+          _pdfBytes = bytes;
+          _loading = false;
+        });
+        return;
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('PDF attachment fetch failed ($path): $e — falling '
+              'back to live compile');
+        }
+      }
+    }
+
+    await _compile();
+  }
+
   Future<void> _compile() async {
+    if (!mounted) return;
     setState(() {
       _loading = true;
       _error = null;
