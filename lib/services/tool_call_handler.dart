@@ -207,7 +207,11 @@ class ToolCallHandler {
     }
 
     final hallucinationCheck = enforcer.checkForHallucination(effectiveContent);
-    final cleanedContent = hallucinationCheck.cleanedContent.trim();
+    // Strip literal `<thinking>` / `<think>` wrapper tags — some providers
+    // emit them inline in the content stream, which then renders as visible
+    // gibberish in the chat UI.
+    final cleanedContent =
+        _stripThinkingTags(hallucinationCheck.cleanedContent).trim();
 
     if (!session.toolCallingEnabled) {
       final displayContent = _stripToolCallBlocks(cleanedContent);
@@ -592,17 +596,33 @@ class ToolCallHandler {
     required String content,
     required String reasoning,
   }) {
-    final providerReasoning = reasoning.trim();
+    final providerReasoning = _stripThinkingTags(reasoning).trim();
     if (providerReasoning.isNotEmpty) {
       return providerReasoning;
     }
 
-    final preToolText = _extractPreToolText(content).trim();
+    final preToolText = _stripThinkingTags(_extractPreToolText(content)).trim();
     if (preToolText.isEmpty) {
       return null;
     }
 
     return preToolText;
+  }
+
+  /// Some providers (Kimi on Fireworks, DeepSeek) wrap reasoning in
+  /// `<thinking>…</thinking>` tags and stream it either inside
+  /// `reasoning_content` or inline before the tool calls. Rendering
+  /// those tags as literal text looks broken, so strip them.
+  static String _stripThinkingTags(String text) {
+    var out = text.replaceAll(
+      RegExp(r'</?thinking>', caseSensitive: false),
+      '',
+    );
+    out = out.replaceAll(
+      RegExp(r'</?think>', caseSensitive: false),
+      '',
+    );
+    return out;
   }
 
   int _indexOfFirstToolCallBlock(String content) {
