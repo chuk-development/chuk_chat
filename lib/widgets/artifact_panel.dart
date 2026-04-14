@@ -811,6 +811,42 @@ class _ArtifactRenderer extends StatelessWidget {
   /// capture a PNG via RenderRepaintBoundary.toImage().
   final GlobalKey? captureKey;
 
+  Widget _buildVisualView(BuildContext context, Color iconFg) {
+    switch (type) {
+      case ArtifactType.svg:
+        return _ZoomableVisual(
+          child: RepaintBoundary(
+            key: captureKey,
+            child: Container(
+              color: Colors.white,
+              child: SvgPicture.string(
+                content,
+                fit: BoxFit.contain,
+                placeholderBuilder: (context) => const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: CircularProgressIndicator(),
+                ),
+              ),
+            ),
+          ),
+        );
+      case ArtifactType.technicalDrawing:
+        return _ZoomableVisual(
+          child: RepaintBoundary(
+            key: captureKey,
+            child: TechnicalDrawingWidget(jsonString: content),
+          ),
+        );
+      case ArtifactType.typst:
+        return _TypstPdfRenderer(
+          source: content,
+          attachmentPath: attachmentPath,
+        );
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
   Widget _buildCodeView(BuildContext context) {
     final iconFg = Theme.of(context).resolvedIconColor;
     final bg = Theme.of(context).scaffoldBackgroundColor;
@@ -830,13 +866,32 @@ class _ArtifactRenderer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (forceCodeView) {
-      return _buildCodeView(context);
-    }
     final iconFg = Theme.of(context).resolvedIconColor;
     final bg = Theme.of(context).scaffoldBackgroundColor;
     final scrollController = PrimaryScrollController.maybeOf(context);
     final usePrimary = scrollController == null;
+
+    // Dual-view types (typst / svg / technical drawing) keep BOTH children
+    // mounted so toggling Preview ⇄ Code doesn't tear down the preview
+    // renderer (and, for typst, re-download / re-render the PDF every
+    // flip).
+    final bool supportsDualView = type == ArtifactType.typst ||
+        type == ArtifactType.svg ||
+        type == ArtifactType.technicalDrawing;
+    if (supportsDualView) {
+      return IndexedStack(
+        index: forceCodeView ? 1 : 0,
+        sizing: StackFit.expand,
+        children: [
+          _buildVisualView(context, iconFg),
+          _buildCodeView(context),
+        ],
+      );
+    }
+
+    if (forceCodeView) {
+      return _buildCodeView(context);
+    }
 
     switch (type) {
       case ArtifactType.code:
