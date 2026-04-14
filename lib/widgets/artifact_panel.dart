@@ -439,18 +439,29 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
     final iconFg = Theme.of(context).resolvedIconColor;
     final isNarrow = MediaQuery.of(context).size.width < 520;
 
+    final double dropdownFontSize = isNarrow ? 14 : 12;
+    final double dropdownIconSize = isNarrow ? 22 : 18;
+    final double dropdownHorizPad = isNarrow ? 12 : 8;
+    final double dropdownHeight = isNarrow ? 36 : 32;
     final versionDropdown = _loadingVersions
-        ? const SizedBox(
+        ? SizedBox(
             width: 70,
-            child: LinearProgressIndicator(minHeight: 2),
+            height: isNarrow ? dropdownHeight : 16,
+            child: const Center(
+              child: SizedBox(
+                width: 60,
+                child: LinearProgressIndicator(minHeight: 2),
+              ),
+            ),
           )
         : (_versions.length <= 1
             ? const SizedBox.shrink()
             : Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+                height: dropdownHeight,
+                padding: EdgeInsets.symmetric(horizontal: dropdownHorizPad),
                 decoration: BoxDecoration(
                   border: Border.all(color: iconFg.withValues(alpha: 0.2)),
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: DropdownButton<int>(
                   value: _versions.any((v) => v.version == _selectedVersion)
@@ -458,7 +469,8 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
                       : null,
                   isDense: true,
                   underline: const SizedBox.shrink(),
-                  style: TextStyle(fontSize: 12, color: iconFg),
+                  iconSize: dropdownIconSize,
+                  style: TextStyle(fontSize: dropdownFontSize, color: iconFg),
                   items: _versions
                       .map(
                         (v) => DropdownMenuItem<int>(
@@ -508,9 +520,13 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
 
     Widget header;
     if (isNarrow) {
-      // Two-row header so everything fits on a phone.
+      // Mobile header: bigger touch targets, no awkward wrapping.
+      // Row 1: icon + title + action menu + close.
+      // Row 2 (only when dual view): full-width Preview|Code toggle + version chip.
+      // Row 2 alt (no dual view, only when versions > 1): version chip aligned right.
+      final bool showVersion = _loadingVersions || _versions.length > 1;
       header = Container(
-        padding: const EdgeInsets.fromLTRB(12, 6, 4, 6),
+        padding: const EdgeInsets.fromLTRB(12, 4, 4, 8),
         decoration: BoxDecoration(
           border: Border(
             bottom: BorderSide(color: iconFg.withValues(alpha: 0.12)),
@@ -520,47 +536,62 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              children: [
-                const Icon(Icons.article_outlined, size: 18),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    widget.artifact.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
+            SizedBox(
+              height: 48,
+              child: Row(
+                children: [
+                  Icon(_iconForType(_effectiveType), size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      widget.artifact.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
+                  actionMenu,
+                  if (widget.onClose != null)
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 22),
+                      onPressed: widget.onClose,
+                      tooltip: 'Close',
+                    ),
+                ],
+              ),
+            ),
+            if (_hasDualView)
+              Padding(
+                padding: const EdgeInsets.only(top: 4, right: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _ViewModeToggle(
+                        mode: _viewMode,
+                        compact: false,
+                        onChanged: (mode) => setState(() => _viewMode = mode),
+                      ),
+                    ),
+                    if (showVersion) ...[
+                      const SizedBox(width: 8),
+                      versionDropdown,
+                    ],
+                  ],
                 ),
-                actionMenu,
-                if (widget.onClose != null)
-                  IconButton(
-                    icon: const Icon(Icons.close, size: 20),
-                    onPressed: widget.onClose,
-                    tooltip: 'Close',
-                    visualDensity: VisualDensity.compact,
-                  ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                _TypeBadge(type: _effectiveType),
-                const SizedBox(width: 8),
-                if (_hasDualView)
-                  Flexible(
-                    child: _ViewModeToggle(
-                      mode: _viewMode,
-                      onChanged: (mode) => setState(() => _viewMode = mode),
-                    ),
-                  ),
-                const Spacer(),
-                versionDropdown,
-              ],
-            ),
+              )
+            else if (showVersion)
+              Padding(
+                padding: const EdgeInsets.only(top: 4, right: 8),
+                child: Row(
+                  children: [
+                    const Spacer(),
+                    versionDropdown,
+                  ],
+                ),
+              ),
           ],
         ),
       );
@@ -1141,33 +1172,47 @@ class _TypstPdfRendererState extends State<_TypstPdfRenderer> {
 /// Preview / Code toggle shown in the artifact header for types that support
 /// both a rendered preview and a plaintext source view.
 class _ViewModeToggle extends StatelessWidget {
-  const _ViewModeToggle({required this.mode, required this.onChanged});
+  const _ViewModeToggle({
+    required this.mode,
+    required this.onChanged,
+    this.compact = true,
+  });
 
   final _ArtifactViewMode mode;
   final ValueChanged<_ArtifactViewMode> onChanged;
+
+  /// Compact = desktop header (small font, shrink-wrap).
+  /// Non-compact = mobile (larger touch targets, fills available width).
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return SegmentedButton<_ArtifactViewMode>(
       showSelectedIcon: false,
       style: ButtonStyle(
-        visualDensity: VisualDensity.compact,
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        visualDensity: compact ? VisualDensity.compact : VisualDensity.standard,
+        tapTargetSize: compact
+            ? MaterialTapTargetSize.shrinkWrap
+            : MaterialTapTargetSize.padded,
         padding: WidgetStateProperty.all(
-          const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          compact
+              ? const EdgeInsets.symmetric(horizontal: 10, vertical: 4)
+              : const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         ),
-        textStyle: WidgetStateProperty.all(const TextStyle(fontSize: 12)),
+        textStyle: WidgetStateProperty.all(
+          TextStyle(fontSize: compact ? 12 : 13),
+        ),
       ),
-      segments: const [
+      segments: [
         ButtonSegment(
           value: _ArtifactViewMode.preview,
-          icon: Icon(Icons.visibility_outlined, size: 14),
-          label: Text('Preview'),
+          icon: Icon(Icons.visibility_outlined, size: compact ? 14 : 16),
+          label: const Text('Preview'),
         ),
         ButtonSegment(
           value: _ArtifactViewMode.code,
-          icon: Icon(Icons.code, size: 14),
-          label: Text('Code'),
+          icon: Icon(Icons.code, size: compact ? 14 : 16),
+          label: const Text('Code'),
         ),
       ],
       selected: {mode},
@@ -1175,6 +1220,25 @@ class _ViewModeToggle extends StatelessWidget {
         if (set.isNotEmpty) onChanged(set.first);
       },
     );
+  }
+}
+
+IconData _iconForType(ArtifactType type) {
+  switch (type) {
+    case ArtifactType.code:
+      return Icons.code;
+    case ArtifactType.markdown:
+      return Icons.article_outlined;
+    case ArtifactType.html:
+      return Icons.html;
+    case ArtifactType.mermaid:
+      return Icons.account_tree_outlined;
+    case ArtifactType.svg:
+      return Icons.image_outlined;
+    case ArtifactType.technicalDrawing:
+      return Icons.architecture;
+    case ArtifactType.typst:
+      return Icons.picture_as_pdf;
   }
 }
 
