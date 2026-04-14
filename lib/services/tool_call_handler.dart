@@ -204,6 +204,24 @@ class ToolCallHandler {
       final idx = reasoning.indexOf('<tool_call>');
       effectiveReasoning = reasoning.substring(0, idx).trim();
       effectiveContent = reasoning.substring(idx);
+    } else {
+      // Trailing-tool-call rescue: when reasoning ENDS with one or more
+      // </tool_call> blocks (the model "intended" to invoke a tool but emitted
+      // it into the reasoning channel after a normal answer), lift those
+      // trailing blocks into content so the parser can dispatch them.
+      // Only fires when the last non-whitespace content of reasoning is a
+      // closing tool_call tag — strong signal of "meant to call this".
+      final trimmedReasoning = effectiveReasoning.trimRight();
+      if (trimmedReasoning.toLowerCase().endsWith('</tool_call>')) {
+        final liftStart = _trailingToolCallBlockStart(trimmedReasoning);
+        if (liftStart != null) {
+          final lifted = trimmedReasoning.substring(liftStart);
+          effectiveReasoning = trimmedReasoning.substring(0, liftStart).trim();
+          effectiveContent = effectiveContent.isEmpty
+              ? lifted
+              : '${effectiveContent.trimRight()}\n$lifted';
+        }
+      }
     }
 
     final hallucinationCheck = enforcer.checkForHallucination(effectiveContent);
@@ -623,6 +641,35 @@ class ToolCallHandler {
       '',
     );
     return out;
+  }
+
+  /// Returns the start index of the contiguous run of tool-call blocks
+  /// (`<tool_call>…</tool_call>`) that terminate `text` (separated only by
+  /// whitespace), or null if `text` does not end in a tool-call block.
+  /// Used to lift accidental tool calls out of the reasoning channel.
+  @visibleForTesting
+  static int? trailingToolCallBlockStart(String text) =>
+      _trailingToolCallBlockStartImpl(text);
+
+  int? _trailingToolCallBlockStart(String text) =>
+      _trailingToolCallBlockStartImpl(text);
+
+  static int? _trailingToolCallBlockStartImpl(String text) {
+    final matches = RegExp(
+      r'<tool_call>[\s\S]*?</tool_call>',
+      caseSensitive: false,
+    ).allMatches(text).toList();
+    if (matches.isEmpty) return null;
+    if (text.substring(matches.last.end).trim().isNotEmpty) return null;
+    var start = matches.last.start;
+    var prevStart = matches.last.start;
+    for (var i = matches.length - 2; i >= 0; i--) {
+      final m = matches[i];
+      if (text.substring(m.end, prevStart).trim().isNotEmpty) break;
+      start = m.start;
+      prevStart = m.start;
+    }
+    return start;
   }
 
   int _indexOfFirstToolCallBlock(String content) {
