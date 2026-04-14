@@ -201,6 +201,7 @@ class ArtifactStorageService {
     required String content,
     String? language,
     String? messageId,
+    String? attachmentPath,
   }) async {
     if (!_artifactStorageAvailable) {
       throw StateError(_missingSchemaMessage);
@@ -225,6 +226,7 @@ class ArtifactStorageService {
       'content': encrypted,
       'version': 1,
       'is_active': true,
+      'attachment_path': attachmentPath,
       'created_at': now.toIso8601String(),
       'updated_at': now.toIso8601String(),
     };
@@ -251,6 +253,7 @@ class ArtifactStorageService {
         version: 1,
         encryptedContent: encrypted,
         createdAt: now,
+        attachmentPath: attachmentPath,
       );
     } catch (error) {
       try {
@@ -291,6 +294,7 @@ class ArtifactStorageService {
       language: language?.trim().isEmpty == true ? null : language?.trim(),
       content: content,
       version: 1,
+      attachmentPath: attachmentPath,
       createdAt: now,
       updatedAt: now,
     );
@@ -323,7 +327,9 @@ class ArtifactStorageService {
     String? title,
     ArtifactType? type,
     String? language,
+    String? attachmentPath,
     bool preserveMetadata = false,
+    bool clearAttachment = false,
   }) async {
     if (!_artifactStorageAvailable) {
       throw StateError(_missingSchemaMessage);
@@ -352,6 +358,9 @@ class ArtifactStorageService {
         : (language?.trim().isEmpty == true
               ? null
               : (language?.trim() ?? current.language));
+    final resolvedAttachment = clearAttachment
+        ? null
+        : (attachmentPath ?? current.attachmentPath);
 
     final List updateRows;
     try {
@@ -363,6 +372,7 @@ class ArtifactStorageService {
             'language': resolvedLanguage,
             'content': encrypted,
             'version': nextVersion,
+            'attachment_path': resolvedAttachment,
             'updated_at': now.toIso8601String(),
           })
           .eq('id', current.id)
@@ -389,6 +399,7 @@ class ArtifactStorageService {
         version: nextVersion,
         encryptedContent: encrypted,
         createdAt: now,
+        attachmentPath: resolvedAttachment,
       );
     } catch (error) {
       try {
@@ -400,6 +411,7 @@ class ArtifactStorageService {
               'language': current.language,
               'content': previousEncrypted,
               'version': current.version,
+              'attachment_path': current.attachmentPath,
               'updated_at': current.updatedAt.toIso8601String(),
             })
             .eq('id', current.id)
@@ -426,12 +438,18 @@ class ArtifactStorageService {
       rethrow;
     }
 
-    final updated = current.copyWith(
+    final updated = ArtifactDocument(
+      id: current.id,
+      chatId: current.chatId,
+      userId: current.userId,
+      messageId: current.messageId,
       title: resolvedTitle,
       type: resolvedType,
       language: resolvedLanguage,
       content: content,
       version: nextVersion,
+      attachmentPath: resolvedAttachment,
+      createdAt: current.createdAt,
       updatedAt: now,
     );
 
@@ -501,6 +519,7 @@ class ArtifactStorageService {
     required int version,
     required String encryptedContent,
     required DateTime createdAt,
+    String? attachmentPath,
   }) async {
     try {
       await SupabaseService.client.from(_versionsTable).insert({
@@ -509,6 +528,7 @@ class ArtifactStorageService {
         'user_id': userId,
         'version': version,
         'content': encryptedContent,
+        'attachment_path': attachmentPath,
         'created_at': createdAt.toIso8601String(),
       });
     } on PostgrestException catch (error) {
