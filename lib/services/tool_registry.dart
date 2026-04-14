@@ -1134,13 +1134,19 @@ final List<ClientTool> builtinTools = [
   ClientTool(
     name: 'typst_compile',
     description:
-        'Render a Typst document to PDF. Use this for any text with math, '
-        'tables, structured layout, cover pages, or reports — Typst is the '
-        'modern alternative to LaTeX. The source is compiled inside a '
-        'sandbox on the server; the PDF is never stored — the UI re-renders '
-        'it on demand from the source (which IS saved as an artifact). '
-        'Start with `#set page(paper: "a4")` and write normal Typst markup. '
-        r'Math: `$ a^2 + b^2 = c^2 $`. Headings: `= Title`.',
+        'Compile a Typst document to PDF and save it as an artifact. Use '
+        'this for ANY text with math, tables, structured layout, cover '
+        'pages, or reports — Typst is the modern alternative to LaTeX. '
+        'The source is compiled inside a sandbox on the server; the '
+        'rendered PDF is stored end-to-end encrypted in Supabase and the '
+        'source is saved as the artifact. If the same `artifact_id` '
+        'already exists, the call UPDATES it (new version + new PDF). '
+        'Always use this tool — never artifact_manager — for typst '
+        'artifacts, so the compile step validates the source. If compile '
+        'fails, the full compiler error is returned; fix the source and '
+        'retry in the same turn. '
+        'Start with `#set page(paper: "a4")` and write normal Typst '
+        r'markup. Math: `$ a^2 + b^2 = c^2 $`. Headings: `= Title`.',
     parameters: {
       'source':
           'string (required: full Typst document source, max ~256KB)',

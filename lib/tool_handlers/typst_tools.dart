@@ -109,9 +109,9 @@ Future<String> executeTypstCompile({
       format: 'pdf',
     );
   } on _TypstCompileError catch (e) {
-    return 'Typst compile failed:\n${e.message}';
+    return _compileErrorGuidance(e.message);
   } catch (e) {
-    return 'Typst compile failed: $e';
+    return _compileErrorGuidance(e.toString());
   }
 
   // Upload the PDF encrypted (same trust model as chat messages &
@@ -127,24 +127,48 @@ Future<String> executeTypstCompile({
     uploadError = e.toString();
   }
 
+  // If the artifact already exists, this call is an update: rewrite the
+  // source + swap the attachment. Otherwise create a fresh record.
+  final existing = await ArtifactStorageService.loadArtifactById(artifactId);
+
   try {
-    final created = await ArtifactStorageService.createArtifact(
-      chatId: chatId,
-      artifactId: artifactId,
-      title: title,
-      type: ArtifactType.typst,
-      content: source,
-      messageId: messageId,
-      attachmentPath: attachmentPath,
-    );
+    final ArtifactDocument stored;
+    final String verb;
+    if (existing == null) {
+      stored = await ArtifactStorageService.createArtifact(
+        chatId: chatId,
+        artifactId: artifactId,
+        title: title,
+        type: ArtifactType.typst,
+        content: source,
+        messageId: messageId,
+        attachmentPath: attachmentPath,
+      );
+      verb = 'created';
+    } else {
+      final oldAttachment = existing.attachmentPath;
+      stored = await ArtifactStorageService.rewriteArtifact(
+        artifactId: artifactId,
+        content: source,
+        title: title,
+        type: ArtifactType.typst,
+        attachmentPath: attachmentPath,
+        clearAttachment: attachmentPath == null,
+      );
+      verb = 'rewritten';
+      // Drop the now-orphaned previous PDF from storage.
+      if (oldAttachment != null && oldAttachment != attachmentPath) {
+        unawaited(PdfAttachmentService.delete(oldAttachment));
+      }
+    }
+
     final persisted = attachmentPath != null
         ? 'stored end-to-end encrypted in Supabase'
         : 'source stored; PDF will be re-rendered on demand '
           '(attachment upload failed: ${uploadError ?? "unknown"})';
-    return 'Typst artifact "${created.id}" created '
-        '(version: ${created.version}, $persisted).';
+    return 'Typst artifact "${stored.id}" $verb '
+        '(version: ${stored.version}, $persisted).';
   } on StateError catch (e) {
-    // Artifact creation failed — don't leak the orphan attachment.
     if (attachmentPath != null) {
       unawaited(PdfAttachmentService.delete(attachmentPath));
     }
@@ -155,4 +179,19 @@ Future<String> executeTypstCompile({
     }
     return 'Error: Could not save Typst artifact: $e';
   }
+}
+
+/// Wraps a Typst compile error so the AI sees both the compiler output
+/// *and* an explicit nudge to emit a retry. Kimi-style models otherwise
+/// tend to stop at an intention-only reply ("let me fix that") without
+/// calling the tool again.
+String _compileErrorGuidance(String compilerError) {
+  return 'Typst compile failed. The source was NOT saved.\n\n'
+      '--- Compiler output ---\n'
+      '$compilerError\n'
+      '--- End compiler output ---\n\n'
+      'Action required: fix the source based on the error above and emit '
+      'another <tool_call> for typst_compile with the corrected `source`. '
+      'Do NOT end the turn with intention-only text like "I will fix it" — '
+      'retry now in the SAME response.';
 }

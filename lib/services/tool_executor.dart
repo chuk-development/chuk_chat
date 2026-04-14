@@ -804,6 +804,12 @@ class ToolExecutor {
           }
 
           final type = ArtifactTypeX.fromValue(typeRaw);
+          if (type == ArtifactType.typst) {
+            return 'Error: typst artifacts must be created via the '
+                '`typst_compile` tool so the source is compiled and the '
+                'rendered PDF is persisted. Call typst_compile with the '
+                '`source` argument instead of artifact_manager.';
+          }
           final created = await ArtifactStorageService.createArtifact(
             chatId: chatId,
             artifactId: artifactId,
@@ -846,6 +852,17 @@ class ToolExecutor {
             edits.add(ArtifactEdit.fromMap(mapped));
           }
 
+          final existingForUpdate =
+              await ArtifactStorageService.loadArtifactById(artifactId);
+          if (existingForUpdate != null &&
+              existingForUpdate.type == ArtifactType.typst) {
+            return 'Error: artifact "$artifactId" is a typst artifact. '
+                'Small edits still need to go through `typst_compile` so '
+                'the source is recompiled and the stored PDF stays in '
+                'sync. Call typst_compile with the full corrected '
+                '`source`.';
+          }
+
           final updated = await ArtifactStorageService.updateArtifactWithEdits(
             artifactId: artifactId,
             edits: edits,
@@ -869,6 +886,28 @@ class ToolExecutor {
           final type = (typeRaw == null || typeRaw.isEmpty)
               ? null
               : ArtifactTypeX.fromValue(typeRaw);
+
+          // Block rewriting typst artifacts through artifact_manager —
+          // it would skip compile-time validation and leave the stored
+          // attachment pointing at the OLD PDF. typst_compile must be
+          // used so the new source is validated and the new PDF is
+          // persisted.
+          if (type == ArtifactType.typst) {
+            return 'Error: typst artifacts must be rewritten via '
+                '`typst_compile`, not artifact_manager. Call typst_compile '
+                'with the same artifact_id and the new `source` — it will '
+                'validate the compile and replace the saved PDF.';
+          }
+          final existing =
+              await ArtifactStorageService.loadArtifactById(artifactId);
+          if (existing != null &&
+              existing.type == ArtifactType.typst &&
+              (type == null || type == ArtifactType.typst)) {
+            return 'Error: artifact "$artifactId" is a typst artifact. '
+                'Rewrite it via `typst_compile` with the new `source` so '
+                'the compiler validates the changes before the PDF is '
+                'replaced.';
+          }
 
           final updated = await ArtifactStorageService.rewriteArtifact(
             artifactId: artifactId,
