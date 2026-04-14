@@ -74,7 +74,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
     super.initState();
     _selectedVersion = widget.artifact.version;
     _loadVersions();
-    ArtifactStorageService.pendingInitialVersion
+    ArtifactStorageService.pendingInitialOpen
         .addListener(_onPendingVersionChanged);
   }
 
@@ -91,7 +91,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
 
   @override
   void dispose() {
-    ArtifactStorageService.pendingInitialVersion
+    ArtifactStorageService.pendingInitialOpen
         .removeListener(_onPendingVersionChanged);
     super.dispose();
   }
@@ -131,25 +131,28 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
   }
 
   void _applyPendingInitialVersion() {
-    final pending = ArtifactStorageService.pendingInitialVersion.value;
+    final pending = ArtifactStorageService.pendingInitialOpen.value;
     if (pending == null) return;
-    // Consume regardless of success so stale values don't stick.
-    ArtifactStorageService.pendingInitialVersion.value = null;
-    if (pending == widget.artifact.version) {
-      // Requested the latest — drop any pinned snapshot so the main
-      // document is shown.
-      if (_selectedVersion != pending || _selectedVersionContent != null) {
+    // Do NOT consume a request targeting a different artifact — it belongs
+    // to the panel state that will be built once the active artifact swaps
+    // to `pending.artifactId`.
+    if (pending.artifactId != widget.artifact.id) return;
+    ArtifactStorageService.pendingInitialOpen.value = null;
+    final target = pending.version;
+    if (target == null || target == widget.artifact.version) {
+      if (_selectedVersion != widget.artifact.version ||
+          _selectedVersionContent != null) {
         setState(() {
-          _selectedVersion = pending;
+          _selectedVersion = widget.artifact.version;
           _selectedVersionContent = null;
         });
       }
       return;
     }
-    final found = _versions.where((v) => v.version == pending).firstOrNull;
+    final found = _versions.where((v) => v.version == target).firstOrNull;
     if (found == null) return;
     setState(() {
-      _selectedVersion = pending;
+      _selectedVersion = target;
       _selectedVersionContent = found.content;
     });
   }
