@@ -192,21 +192,35 @@ class ToolCallHandler {
     void Function(List<ToolCall>)? onToolCallsUpdated,
   }) async {
     final enforcer = session.enforcer;
-    final hallucinationCheck = enforcer.checkForHallucination(content);
+    // Some providers (e.g. Fireworks + Kimi) emit the entire assistant
+    // response — including <tool_call> blocks — inside `reasoning_content`
+    // while leaving the `content` stream empty. Rescue those tool calls by
+    // splitting the reasoning text at the first <tool_call> boundary and
+    // treating the remainder as real content.
+    var effectiveContent = content;
+    var effectiveReasoning = reasoning;
+    if (effectiveContent.trim().isEmpty &&
+        reasoning.contains('<tool_call>')) {
+      final idx = reasoning.indexOf('<tool_call>');
+      effectiveReasoning = reasoning.substring(0, idx).trim();
+      effectiveContent = reasoning.substring(idx);
+    }
+
+    final hallucinationCheck = enforcer.checkForHallucination(effectiveContent);
     final cleanedContent = hallucinationCheck.cleanedContent.trim();
 
     if (!session.toolCallingEnabled) {
       final displayContent = _stripToolCallBlocks(cleanedContent);
       return ToolLoopResult.finalAnswer(
         content: displayContent.isEmpty ? cleanedContent : displayContent,
-        reasoning: reasoning,
+        reasoning: effectiveReasoning,
         toolCalls: _cloneToolCalls(session.toolCalls),
       );
     }
 
     final roundThinking = _extractRoundThinking(
       content: cleanedContent,
-      reasoning: reasoning,
+      reasoning: effectiveReasoning,
     );
 
     _appendRoundToHistory(
@@ -256,7 +270,7 @@ class ToolCallHandler {
 
       return ToolLoopResult.finalAnswer(
         content: displayContent,
-        reasoning: reasoning,
+        reasoning: effectiveReasoning,
         toolCalls: _cloneToolCalls(session.toolCalls),
       );
     }
@@ -275,7 +289,7 @@ class ToolCallHandler {
         content:
             'Sorry, I hit the tool-call safety limit for this request. '
             'Please try again with a simpler prompt.',
-        reasoning: reasoning,
+        reasoning: effectiveReasoning,
         toolCalls: _cloneToolCalls(session.toolCalls),
       );
     }
