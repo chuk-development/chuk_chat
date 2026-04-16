@@ -111,11 +111,10 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     setState(() {
       _activeArtifact = newArtifact;
     });
-    // Re-open panel when a new artifact is created.
-    if (newArtifact != null &&
-        !ArtifactStorageService.panelOpenNotifier.value) {
-      ArtifactStorageService.panelOpenNotifier.value = true;
-    }
+    // Do NOT auto-open the panel on every notifier change. Opening a chat
+    // that already has artifacts would otherwise force the panel open without
+    // the user asking for it. The panel opens explicitly via requestOpen()
+    // (inline-card taps) and from create/rewrite flows (new AI artifacts).
   }
 
   void _onPanelOpenChanged() {

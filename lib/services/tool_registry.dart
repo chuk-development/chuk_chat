@@ -1093,12 +1093,21 @@ final List<ClientTool> builtinTools = [
         'Create and update rich chat artifacts (code, markdown docs, HTML, '
         'Mermaid diagrams, SVG, technical drawings). Actions: create, update '
         '(old_str/new_str edits), rewrite (full content replace). Use for '
-        'substantial outputs that should stay editable across messages.',
+        'substantial outputs that should stay editable across messages. '
+        'IDENTITY RULE: artifact_id and title MUST describe the CONTENT, not '
+        'the format — "quantum-mechanics-intro" / "Quantenmechanik-Einführung", '
+        'NOT "document", "test", "pdf", "output". Never reuse an existing id '
+        'for a different topic (e.g. do not overwrite a quantum-physics '
+        'artifact with an unrelated invoice). To edit an existing artifact: '
+        'use that SAME id with action=update or rewrite — this bumps its '
+        'version. To create a NEW, unrelated document: pick a DIFFERENT '
+        'descriptive id so both coexist with independent version histories. '
+        'The user can switch between them in the artifact panel.',
     parameters: {
       'action': 'string (required: create | update | rewrite)',
       'artifact_id':
-          'string (required: stable artifact id, letters/numbers/hyphens only)',
-      'title': 'string (required for create, optional for rewrite)',
+          'string (required: stable, CONTENT-descriptive slug; letters/numbers/hyphens only. Bad: "doc", "test", "output". Good: "quantum-mechanics-intro", "invoice-acme-2026-04")',
+      'title': 'string (required for create, optional for rewrite; human-readable name that reflects the content, e.g. "Quantenmechanik-Einführung", not "Test-Dokument")',
       'type':
           'string (required for create; optional for rewrite: code|markdown|html|mermaid|svg|technical_drawing)',
       'language':
@@ -1145,14 +1154,19 @@ final List<ClientTool> builtinTools = [
         'artifacts, so the compile step validates the source. If compile '
         'fails, the full compiler error is returned; fix the source and '
         'retry in the same turn. '
+        'IDENTITY RULE: artifact_id and title MUST describe the CONTENT, not '
+        'the format. Bad: "test-dokument", "pdf", "report". Good: '
+        '"quartalsbericht-q1-2026", "einstein-relativity-notes". Do NOT '
+        'reuse an unrelated existing id — create a new descriptive slug so '
+        'each document has its own version history. '
         'Start with `#set page(paper: "a4")` and write normal Typst '
         r'markup. Math: `$ a^2 + b^2 = c^2 $`. Headings: `= Title`.',
     parameters: {
       'source':
           'string (required: full Typst document source, max ~256KB)',
       'artifact_id':
-          'string (required: stable artifact slug, letters/numbers/hyphens)',
-      'title': 'string (optional: human-readable title)',
+          'string (required: stable, CONTENT-descriptive slug; letters/numbers/hyphens. Bad: "pdf", "test", "document". Good: "invoice-2026-04", "lecture-notes-linalg")',
+      'title': 'string (optional: human-readable title describing the CONTENT, not the format)',
       'message_id':
           'string (optional: associate artifact with a specific message)',
     },

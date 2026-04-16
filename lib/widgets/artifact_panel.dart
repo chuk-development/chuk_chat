@@ -1,4 +1,5 @@
 // lib/widgets/artifact_panel.dart
+import 'dart:async';
 import 'dart:convert';
 import 'dart:ui' as ui;
 
@@ -48,6 +49,12 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
   String? _selectedVersionContent;
   _ArtifactViewMode _viewMode = _ArtifactViewMode.preview;
 
+  /// All artifacts currently available in this chat. Used for the
+  /// switcher button in the header. Refreshed on mount + on every
+  /// `ArtifactStorageService.changes` event.
+  List<ArtifactDocument> _chatArtifacts = const [];
+  StreamSubscription<void>? _artifactsChangesSub;
+
   /// Captures the visual rendering (SVG / technical drawing) for PNG export.
   final GlobalKey _visualCaptureKey = GlobalKey();
 
@@ -72,8 +79,23 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
     super.initState();
     _selectedVersion = widget.artifact.version;
     _loadVersions();
+    _loadChatArtifacts();
+    _artifactsChangesSub = ArtifactStorageService.changes.listen(
+      (_) => _loadChatArtifacts(),
+    );
     ArtifactStorageService.pendingInitialOpen
         .addListener(_onPendingVersionChanged);
+  }
+
+  Future<void> _loadChatArtifacts() async {
+    final chatId = widget.artifact.chatId;
+    try {
+      final all = await ArtifactStorageService.loadArtifactsForChat(chatId);
+      if (!mounted) return;
+      setState(() => _chatArtifacts = all);
+    } catch (_) {
+      // Non-fatal: the switcher just won't populate on error.
+    }
   }
 
   @override
@@ -91,7 +113,14 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
   void dispose() {
     ArtifactStorageService.pendingInitialOpen
         .removeListener(_onPendingVersionChanged);
+    _artifactsChangesSub?.cancel();
     super.dispose();
+  }
+
+  void _switchActiveArtifact(ArtifactDocument target) {
+    if (target.id == widget.artifact.id) return;
+    ArtifactStorageService.activeArtifactNotifier.value = target;
+    ArtifactStorageService.requestOpen(artifactId: target.id);
   }
 
   void _onPendingVersionChanged() {
@@ -524,14 +553,11 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
                   Icon(_iconForType(_effectiveType), size: 22),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Text(
-                      widget.artifact.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    child: _ArtifactSwitcher(
+                      current: widget.artifact,
+                      all: _chatArtifacts,
+                      onSelect: _switchActiveArtifact,
+                      fontSize: 16,
                     ),
                   ),
                   actionMenu,
@@ -590,14 +616,10 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
             const Icon(Icons.article_outlined, size: 18),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(
-                widget.artifact.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
+              child: _ArtifactSwitcher(
+                current: widget.artifact,
+                all: _chatArtifacts,
+                onSelect: _switchActiveArtifact,
               ),
             ),
             _TypeBadge(type: _effectiveType),
@@ -1429,6 +1451,101 @@ class _DownloadFormat {
   const _DownloadFormat(this.label, this.ext);
   final String label;
   final String ext;
+}
+
+/// Header title + switcher. When the current chat has more than one artifact,
+/// the title becomes a popup button that lists all of them so the user can
+/// jump between "Quantum Doc", "Test Doc", etc. without going back to the
+/// chat. For a single-artifact chat it renders as plain text.
+class _ArtifactSwitcher extends StatelessWidget {
+  const _ArtifactSwitcher({
+    required this.current,
+    required this.all,
+    required this.onSelect,
+    this.fontSize = 14,
+  });
+
+  final ArtifactDocument current;
+  final List<ArtifactDocument> all;
+  final ValueChanged<ArtifactDocument> onSelect;
+  final double fontSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final titleStyle = TextStyle(
+      fontSize: fontSize,
+      fontWeight: FontWeight.w600,
+    );
+
+    if (all.length <= 1) {
+      return Text(
+        current.title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: titleStyle,
+      );
+    }
+
+    return PopupMenuButton<String>(
+      tooltip: 'Switch artifact',
+      position: PopupMenuPosition.under,
+      onSelected: (id) {
+        final target = all.firstWhere(
+          (a) => a.id == id,
+          orElse: () => current,
+        );
+        onSelect(target);
+      },
+      itemBuilder: (_) => all
+          .map(
+            (a) => PopupMenuItem<String>(
+              value: a.id,
+              child: Row(
+                children: [
+                  Icon(_iconForType(a.type), size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      a.title.isEmpty ? a.id : a.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: a.id == current.id
+                            ? FontWeight.w700
+                            : FontWeight.w400,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'v${a.version}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Theme.of(context).hintColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+          .toList(),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: Text(
+              current.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: titleStyle,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Icon(Icons.arrow_drop_down, size: fontSize + 6),
+        ],
+      ),
+    );
+  }
 }
 
 class _ZoomButton extends StatelessWidget {
