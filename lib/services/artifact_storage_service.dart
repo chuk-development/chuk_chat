@@ -542,6 +542,82 @@ class ArtifactStorageService {
     }
   }
 
+  /// Hard-deletes the given artifact ids (and their version history) for the
+  /// current user. Used on resend: removed AI messages must not leave orphan
+  /// artifact cards pinned to the chat.
+  ///
+  /// Silent for ids that don't exist or fail to delete — the caller (resend
+  /// flow) should not block on artifact cleanup. Cached entries are pruned
+  /// and a change event is emitted so the panel refreshes.
+  static Future<void> deleteArtifactsByIds(Iterable<String> artifactIds) async {
+    if (!_artifactStorageAvailable) return;
+    final ids = artifactIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (ids.isEmpty) return;
+
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) return;
+    _ensureCacheForUser(user.id);
+
+    try {
+      await SupabaseService.client
+          .from(_versionsTable)
+          .delete()
+          .inFilter('artifact_id', ids)
+          .eq('user_id', user.id);
+    } on PostgrestException catch (error) {
+      if (!_handleMissingArtifactSchema(
+        error,
+        operation: 'deleteArtifactsByIds(versions)',
+      )) {
+        if (kDebugMode) {
+          debugPrint('[deleteArtifactsByIds] version cleanup failed: $error');
+        }
+      }
+    }
+
+    try {
+      await SupabaseService.client
+          .from(_artifactsTable)
+          .delete()
+          .inFilter('id', ids)
+          .eq('user_id', user.id);
+    } on PostgrestException catch (error) {
+      if (_handleMissingArtifactSchema(
+        error,
+        operation: 'deleteArtifactsByIds',
+      )) {
+        return;
+      }
+      if (kDebugMode) {
+        debugPrint('[deleteArtifactsByIds] artifact delete failed: $error');
+      }
+      return;
+    }
+
+    final affectedChats = <String>{};
+    for (final entry in _cacheByChatId.entries) {
+      final before = entry.value.length;
+      entry.value.removeWhere((doc) => ids.contains(doc.id));
+      if (entry.value.length != before) {
+        affectedChats.add(entry.key);
+      }
+    }
+    for (final id in ids) {
+      _versionCache.remove(id);
+    }
+    final active = activeArtifactNotifier.value;
+    if (active != null && ids.contains(active.id)) {
+      activeArtifactNotifier.value = null;
+    }
+    if (affectedChats.isNotEmpty) {
+      _changesController.add(null);
+    }
+  }
+
   /// Sets [attachmentPath] on an existing artifact row **without** bumping
   /// the version. Used to backfill a compiled PDF for artifacts that were
   /// created before attachment persistence was available.

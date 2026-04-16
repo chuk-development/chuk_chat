@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -1017,11 +1018,39 @@ class _TypstPdfRendererState extends State<_TypstPdfRenderer> {
   String? _error;
   bool _loading = true;
   Uint8List? _pdfBytes;
+  // PdfViewerController extends ValueListenable and has no dispose() — it is
+  // attached/detached via the widget lifecycle, so no explicit teardown.
+  final PdfViewerController _pdfController = PdfViewerController();
+  bool _ctrlHeld = false;
 
   @override
   void initState() {
     super.initState();
     _load();
+    HardwareKeyboard.instance.addHandler(_onHardwareKey);
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onHardwareKey);
+    super.dispose();
+  }
+
+  bool _onHardwareKey(KeyEvent event) {
+    final isCtrl = HardwareKeyboard.instance.isControlPressed;
+    if (isCtrl != _ctrlHeld && mounted) {
+      setState(() => _ctrlHeld = isCtrl);
+    }
+    return false;
+  }
+
+  void _zoomUp() => _pdfController.zoomUp();
+  void _zoomDown() => _pdfController.zoomDown();
+  void _zoomReset() {
+    if (!_pdfController.isReady) return;
+    final matrices = _pdfController.calcFitZoomMatrices();
+    if (matrices.isEmpty) return;
+    _pdfController.goTo(matrices.first.matrix);
   }
 
   @override
@@ -1204,13 +1233,52 @@ class _TypstPdfRendererState extends State<_TypstPdfRenderer> {
     if (bytes == null) {
       return const SizedBox.shrink();
     }
-    return PdfViewer.data(
-      bytes,
-      sourceName: 'typst.pdf',
-      params: const PdfViewerParams(
-        margin: 12,
-        backgroundColor: Color(0xFF202020),
-      ),
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerSignal: (event) {
+              if (event is PointerScrollEvent &&
+                  HardwareKeyboard.instance.isControlPressed) {
+                if (event.scrollDelta.dy < 0) {
+                  _zoomUp();
+                } else if (event.scrollDelta.dy > 0) {
+                  _zoomDown();
+                }
+              }
+            },
+            child: PdfViewer.data(
+              bytes,
+              sourceName: 'typst.pdf',
+              controller: _pdfController,
+              // While Ctrl is held, zero out wheel scroll so Ctrl+Wheel only
+              // zooms (via the outer Listener) instead of zooming AND
+              // scrolling simultaneously.
+              params: PdfViewerParams(
+                margin: 12,
+                backgroundColor: const Color(0xFF202020),
+                scrollByMouseWheel: _ctrlHeld ? 0.0 : 0.5,
+                enableKeyboardNavigation: true,
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          right: 8,
+          bottom: 8,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _ZoomButton(icon: Icons.add, onTap: _zoomUp),
+              const SizedBox(height: 4),
+              _ZoomButton(icon: Icons.remove, onTap: _zoomDown),
+              const SizedBox(height: 4),
+              _ZoomButton(icon: Icons.fit_screen, onTap: _zoomReset),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
