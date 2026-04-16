@@ -31,8 +31,11 @@ class ArtifactStorageService {
 
   /// Controls whether the artifact panel is visible in the UI. Decoupled from
   /// activeArtifactNotifier so users can close the panel without losing the
-  /// active artifact (inline card in chat can reopen it).
-  static final ValueNotifier<bool> panelOpenNotifier = ValueNotifier<bool>(true);
+  /// active artifact (inline card in chat can reopen it). Starts closed so
+  /// that opening a chat with existing artifacts does not force the panel
+  /// open without the user asking — the panel opens on explicit user action
+  /// (inline-card tap) or when the AI creates/rewrites an artifact.
+  static final ValueNotifier<bool> panelOpenNotifier = ValueNotifier<bool>(false);
 
   /// Monotonic counter fired each time the user asks to (re-)open the panel,
   /// even when `panelOpenNotifier` is already `true`. Mobile listens on this
@@ -304,6 +307,10 @@ class ArtifactStorageService {
 
     _insertIntoCache(doc);
     _emitChange(doc.chatId, doc);
+    // Opening the panel is reserved for AI-generated artifacts. Create is
+    // only reached from the artifact_manager tool / <artifact> tag flow,
+    // never from chat load — so popping the panel here is safe.
+    panelOpenNotifier.value = true;
     return doc;
   }
 
@@ -459,6 +466,10 @@ class ArtifactStorageService {
     _insertIntoCache(updated);
     _versionCache.remove(updated.id);
     _emitChange(updated.chatId, updated);
+    // Same reasoning as createArtifact: rewrite only runs from AI flows
+    // (artifact_manager update/rewrite, <artifact> tag). Panel should pop
+    // so the user sees the new version.
+    panelOpenNotifier.value = true;
     return updated;
   }
 

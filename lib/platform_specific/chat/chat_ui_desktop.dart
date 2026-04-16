@@ -1407,9 +1407,18 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     if (!_scrollController.hasClients) return;
     final position = _scrollController.position;
     final distanceToBottom = position.maxScrollExtent - position.pixels;
+    // If the whole chat fits on screen (nothing to scroll) the button is
+    // always useless — hide it unconditionally. Without this guard, a short
+    // chat whose maxScrollExtent briefly grows during layout (e.g. when an
+    // AI message finishes streaming and the input shifts) can leave the
+    // button stuck visible even though the user is already at the end.
+    final hasScrollableContent = position.maxScrollExtent > 0;
 
     bool nextShowScrollButton = _showScrollToBottom;
-    if (!_showScrollToBottom && distanceToBottom > _kShowScrollButtonDistance) {
+    if (!hasScrollableContent) {
+      nextShowScrollButton = false;
+    } else if (!_showScrollToBottom &&
+        distanceToBottom > _kShowScrollButtonDistance) {
       nextShowScrollButton = true;
     } else if (_showScrollToBottom &&
         distanceToBottom < _kHideScrollButtonDistance) {
@@ -1729,8 +1738,21 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                       // target message selection instead of the composer.
                                       FocusScope.of(context).unfocus();
                                     },
-                                    child: ListView.builder(
-                                      controller: _scrollController,
+                                    // Re-evaluate the scroll-to-bottom button
+                                    // when layout metrics change without a
+                                    // user scroll (e.g. maxScrollExtent shrinks
+                                    // after a streaming message finalises).
+                                    // Plain scroll listener doesn't fire in
+                                    // that case and the button can get stuck.
+                                    child: NotificationListener<
+                                      ScrollMetricsNotification
+                                    >(
+                                      onNotification: (_) {
+                                        _onScrollChanged();
+                                        return false;
+                                      },
+                                      child: ListView.builder(
+                                        controller: _scrollController,
                                       padding: EdgeInsets.only(
                                         left: effectiveHorizontalPadding,
                                         right: effectiveHorizontalPadding,
@@ -1840,6 +1862,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                           ),
                                         );
                                       },
+                                    ),
                                     ),
                                   ),
                                 ),
