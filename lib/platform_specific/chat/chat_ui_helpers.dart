@@ -477,6 +477,63 @@ class ChatUiHelpers {
     return parsed;
   }
 
+  /// Extracts artifact_ids emitted by `artifact_manager` tool calls inside a
+  /// raw message map. Scans both the legacy `toolCalls` JSON and the newer
+  /// `contentBlocks` JSON. Used on resend to delete artifacts that belonged
+  /// to the AI message being replaced so no orphan cards linger in the chat.
+  static Set<String> extractArtifactIdsFromRawMessage(
+    Map<String, String> message,
+  ) {
+    final ids = <String>{};
+
+    void scanCalls(List<ToolCall> calls) {
+      for (final call in calls) {
+        if (call.name != 'artifact_manager') continue;
+        final raw = call.arguments['artifact_id'];
+        if (raw is String && raw.trim().isNotEmpty) {
+          ids.add(raw.trim());
+        }
+      }
+    }
+
+    final toolCallsJson = message['toolCalls'];
+    if (toolCallsJson != null && toolCallsJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(toolCallsJson);
+        if (decoded is List) {
+          scanCalls(
+            decoded
+                .whereType<Map>()
+                .map(
+                  (item) => ToolCall.fromJson(Map<String, dynamic>.from(item)),
+                )
+                .toList(),
+          );
+        }
+      } catch (_) {}
+    }
+
+    final contentBlocksJson = message['contentBlocks'];
+    if (contentBlocksJson != null && contentBlocksJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(contentBlocksJson);
+        if (decoded is List) {
+          for (final item in decoded.whereType<Map>()) {
+            final block = ContentBlock.fromJson(
+              Map<String, dynamic>.from(item),
+            );
+            if (block.type == ContentBlockType.toolCalls &&
+                block.toolCalls != null) {
+              scanCalls(block.toolCalls!);
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    return ids;
+  }
+
   /// Trim decode caches if they get too large.
   static void trimCachesIfNeeded(List<Map<dynamic, dynamic>> caches) {
     const int maxEntriesPerCache = 240;

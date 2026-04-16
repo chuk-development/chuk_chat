@@ -33,6 +33,7 @@ import 'package:chuk_chat/platform_specific/chat/handlers/chat_persistence_handl
 import 'package:chuk_chat/platform_specific/chat/handlers/streaming_message_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/widgets/mobile_chat_widgets.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
+import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/mobile_workspace_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/widgets/fullscreen_composer.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
@@ -2144,16 +2145,37 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       _messages[index]['text'] = newText;
     });
 
+    // Before removing AI messages, collect artifact ids they emitted so the
+    // backing artifact rows get deleted alongside the messages that created
+    // them — otherwise resend leaves orphan artifact cards in the chat.
+    final artifactIdsToDelete = <String>{};
+    void collectArtifactsFrom(int start, int end) {
+      for (int i = start; i < end && i < _messages.length; i++) {
+        if (_messages[i]['sender'] != 'ai') continue;
+        artifactIdsToDelete.addAll(
+          ChatUiHelpers.extractArtifactIdsFromRawMessage(_messages[i]),
+        );
+      }
+    }
+
     if (clearMessagesBelow && index + 1 < _messages.length) {
+      collectArtifactsFrom(index + 1, _messages.length);
       setState(() {
         _messages.removeRange(index + 1, _messages.length);
       });
     } else if (removeFollowingAssistant &&
         index + 1 < _messages.length &&
         _messages[index + 1]['sender'] == 'ai') {
+      collectArtifactsFrom(index + 1, index + 2);
       setState(() {
         _messages.removeAt(index + 1);
       });
+    }
+
+    if (artifactIdsToDelete.isNotEmpty) {
+      unawaited(
+        ArtifactStorageService.deleteArtifactsByIds(artifactIdsToDelete),
+      );
     }
 
     // Resend with new text
