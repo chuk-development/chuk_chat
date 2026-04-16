@@ -466,9 +466,15 @@ class StreamingMessageHandler {
                   chatId,
                 );
 
-                // Accumulate text for backward-compat message field.
-                if (interimOutputText.isNotEmpty) {
-                  accumulatedText.write(interimOutputText);
+                // Accumulate the *original* interim text (not the deduped
+                // version used for content blocks).  buildRoundBlocks may
+                // clear interimOutputText when it matches the reasoning
+                // block — that's correct for block rendering (no duplicate
+                // text block), but for the flat streaming display we must
+                // keep it so the user doesn't see text flash and disappear
+                // between passes.
+                if (interimText.isNotEmpty) {
+                  accumulatedText.write(interimText);
                   accumulatedText.write('\n\n');
                 }
 
