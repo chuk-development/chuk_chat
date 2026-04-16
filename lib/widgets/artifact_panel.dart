@@ -642,6 +642,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
               language: widget.artifact.language,
               content: _effectiveContent,
               attachmentPath: _effectiveAttachmentPath,
+              artifactId: widget.artifact.id,
               captureKey: _visualCaptureKey,
               forceCodeView: _hasDualView && _viewMode == _ArtifactViewMode.code,
               codeLanguageHint: _codeLanguageHint,
@@ -809,6 +810,7 @@ class _ArtifactRenderer extends StatelessWidget {
     required this.content,
     this.language,
     this.attachmentPath,
+    this.artifactId,
     this.captureKey,
     this.forceCodeView = false,
     this.codeLanguageHint = '',
@@ -818,6 +820,7 @@ class _ArtifactRenderer extends StatelessWidget {
   final String content;
   final String? language;
   final String? attachmentPath;
+  final String? artifactId;
   final bool forceCodeView;
   final String codeLanguageHint;
 
@@ -855,6 +858,7 @@ class _ArtifactRenderer extends StatelessWidget {
         return _TypstPdfRenderer(
           source: content,
           attachmentPath: attachmentPath,
+          artifactId: artifactId,
         );
       default:
         return const SizedBox.shrink();
@@ -981,6 +985,7 @@ class _ArtifactRenderer extends StatelessWidget {
         return _TypstPdfRenderer(
           source: content,
           attachmentPath: attachmentPath,
+          artifactId: artifactId,
         );
     }
   }
@@ -993,10 +998,16 @@ class _TypstPdfRenderer extends StatefulWidget {
   const _TypstPdfRenderer({
     required this.source,
     this.attachmentPath,
+    this.artifactId,
   });
 
   final String source;
   final String? attachmentPath;
+
+  /// When non-null and [attachmentPath] is null, a successful live compile
+  /// will upload the PDF and backfill the artifact row so subsequent opens
+  /// skip the compile step.
+  final String? artifactId;
 
   @override
   State<_TypstPdfRenderer> createState() => _TypstPdfRendererState();
@@ -1079,6 +1090,11 @@ class _TypstPdfRendererState extends State<_TypstPdfRenderer> {
         _pdfBytes = bytes;
         _loading = false;
       });
+      // Backfill: if this artifact had no stored PDF, persist the
+      // compiled bytes so future opens skip the compile round-trip.
+      if (widget.attachmentPath == null && widget.artifactId != null) {
+        _backfillAttachment(bytes, widget.artifactId!);
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -1086,6 +1102,28 @@ class _TypstPdfRendererState extends State<_TypstPdfRenderer> {
         _error = e.toString();
       });
     }
+  }
+
+  /// Upload compiled PDF and update the artifact row in the background.
+  /// Best-effort — failures are silent; the next open just compiles again.
+  static void _backfillAttachment(Uint8List bytes, String artifactId) {
+    () async {
+      try {
+        final path = await PdfAttachmentService.upload(bytes);
+        await ArtifactStorageService.setAttachmentPath(
+          artifactId: artifactId,
+          attachmentPath: path,
+        );
+        if (kDebugMode) {
+          debugPrint('[TypstPdfRenderer] Backfilled attachment for '
+              '$artifactId → $path');
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('[TypstPdfRenderer] Backfill failed for $artifactId: $e');
+        }
+      }
+    }();
   }
 
   @override
