@@ -199,8 +199,23 @@ class ToolCallHandler {
     // treating the remainder as real content.
     var effectiveContent = content;
     var effectiveReasoning = reasoning;
-    if (effectiveContent.trim().isEmpty &&
-        reasoning.contains('<tool_call>')) {
+
+    // Some providers (Kimi K2.5 on Fireworks) emit <thinking> blocks in the
+    // content channel while the actual tool calls end up in the reasoning
+    // channel.  Strip full <thinking>/<think> blocks (tags + inner text) to
+    // determine whether the content is *effectively* empty for rescue purposes.
+    final _contentSansThinking = content
+        .replaceAll(
+          RegExp(r'<thinking>[\s\S]*?</thinking>', caseSensitive: false),
+          '',
+        )
+        .replaceAll(
+          RegExp(r'<think>[\s\S]*?</think>', caseSensitive: false),
+          '',
+        )
+        .trim();
+
+    if (_contentSansThinking.isEmpty && reasoning.contains('<tool_call>')) {
       final idx = reasoning.indexOf('<tool_call>');
       effectiveReasoning = reasoning.substring(0, idx).trim();
       effectiveContent = reasoning.substring(idx);
