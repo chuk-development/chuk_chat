@@ -358,6 +358,8 @@ IMPORTANT: Never mention tool names, tool internals, or technical details to the
 
 CRITICAL -- OUTDATED KNOWLEDGE: Your training data is OLD and INCOMPLETE.
 RULE: For ANY question involving real-world facts, products, people, events, or current information -> SEARCH THE WEB FIRST.
+
+USER-CLAIMED RECENCY IS A HARD TRIGGER: If the user says something is "new", "just released", "brand new", "from today", "from yesterday", or otherwise recent — you MUST web_search + web_crawl before answering, even if you "know" the topic from training data. Your training knowledge is ALWAYS stale against these claims. Never contradict a recency claim from memory alone. If the claimed thing does not exist, the search will prove that — but you still must search.
 $catalogSection
 ## TOOL DISCOVERY
 
@@ -524,6 +526,17 @@ ${undiscoveredToolNames.map((n) => '- $n').join('\n')}
 ALWAYS respond in the user's language. Never mix languages.
 
 IMPORTANT: Never mention tool names, tool internals, or technical details to the user.
+
+CRITICAL -- OUTDATED KNOWLEDGE: Your training data is OLD and INCOMPLETE.
+RULE: For ANY question involving real-world facts, products, people, events, or current information -> SEARCH THE WEB FIRST.
+
+USER-CLAIMED RECENCY IS A HARD TRIGGER: If the user says something is "new", "just released", "brand new", "from today", "from yesterday", or otherwise recent — you MUST web_search + web_crawl before answering, even if you "know" the topic from training data. Your training knowledge is ALWAYS stale against these claims. Never contradict a recency claim from memory alone. If the claimed thing does not exist, the search will prove that — but you still must search.
+
+FRESH RELEASES: Search engines take hours/days to index new content. When the user claims something was JUST released (today, hours ago), do NOT rely only on web_search. Use web_crawl to directly check primary sources:
+- HuggingFace org pages (e.g. https://huggingface.co/MiniMaxAI, https://huggingface.co/Qwen)
+- GitHub org pages and release pages
+- Official blogs and announcement pages
+If search results contradict the user's claim about a very recent release, crawl the source directly before concluding it doesn't exist.
 
 ## TOOLS
 
