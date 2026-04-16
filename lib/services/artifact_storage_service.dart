@@ -549,19 +549,40 @@ class ArtifactStorageService {
     required String artifactId,
     required String attachmentPath,
   }) async {
-    if (!_artifactStorageAvailable) return;
+    if (!_artifactStorageAvailable) {
+      if (kDebugMode) {
+        debugPrint('📄 [setAttachmentPath] Storage unavailable — skipping');
+      }
+      return;
+    }
 
     final user = SupabaseService.auth.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      if (kDebugMode) {
+        debugPrint('📄 [setAttachmentPath] No user — skipping');
+      }
+      return;
+    }
     _ensureCacheForUser(user.id);
 
+    if (kDebugMode) {
+      debugPrint('📄 [setAttachmentPath] Updating $artifactId → '
+          '$attachmentPath');
+    }
     try {
       await SupabaseService.client
           .from(_artifactsTable)
           .update({'attachment_path': attachmentPath})
           .eq('id', artifactId)
           .eq('user_id', user.id);
+      if (kDebugMode) {
+        debugPrint('📄 [setAttachmentPath] ✅ DB updated');
+      }
     } on PostgrestException catch (error) {
+      if (kDebugMode) {
+        debugPrint('📄 [setAttachmentPath] ❌ PostgREST error: '
+            '${error.code} ${error.message}');
+      }
       if (_handleMissingArtifactSchema(
         error,
         operation: 'setAttachmentPath',
@@ -579,6 +600,10 @@ class ArtifactStorageService {
       final updated = old.copyWith(attachmentPath: attachmentPath);
       entry.value[idx] = updated;
       _emitChange(entry.key, updated);
+      if (kDebugMode) {
+        debugPrint('📄 [setAttachmentPath] ✅ Cache updated for '
+            '$artifactId');
+      }
       break;
     }
   }

@@ -1040,10 +1040,22 @@ class _TypstPdfRendererState extends State<_TypstPdfRenderer> {
     });
 
     final path = widget.attachmentPath;
+    if (kDebugMode) {
+      debugPrint('📄 [Typst] _load() — attachmentPath=${path ?? "NULL"}, '
+          'artifactId=${widget.artifactId ?? "NULL"}, '
+          'source=${widget.source.length} chars');
+    }
     if (path != null && path.isNotEmpty) {
       try {
+        if (kDebugMode) {
+          debugPrint('📄 [Typst] Downloading from Supabase Storage: $path');
+        }
         final bytes = await PdfAttachmentService.download(path);
         if (!mounted) return;
+        if (kDebugMode) {
+          debugPrint('📄 [Typst] ✅ Downloaded ${bytes.length} bytes — '
+              'skipping compile');
+        }
         setState(() {
           _pdfBytes = bytes;
           _loading = false;
@@ -1051,12 +1063,15 @@ class _TypstPdfRendererState extends State<_TypstPdfRenderer> {
         return;
       } catch (e) {
         if (kDebugMode) {
-          debugPrint('PDF attachment fetch failed ($path): $e — falling '
-              'back to live compile');
+          debugPrint('📄 [Typst] ❌ Download failed ($path): $e — '
+              'falling back to compile');
         }
       }
     }
 
+    if (kDebugMode) {
+      debugPrint('📄 [Typst] No attachment — compiling live');
+    }
     await _compile();
   }
 
@@ -1079,6 +1094,9 @@ class _TypstPdfRendererState extends State<_TypstPdfRenderer> {
       return;
     }
 
+    if (kDebugMode) {
+      debugPrint('📄 [Typst] Compiling via $baseUrl ...');
+    }
     try {
       final bytes = await typst_tools.compileTypstToPdf(
         serverHttpUrl: baseUrl,
@@ -1086,6 +1104,9 @@ class _TypstPdfRendererState extends State<_TypstPdfRenderer> {
         source: widget.source,
       );
       if (!mounted) return;
+      if (kDebugMode) {
+        debugPrint('📄 [Typst] ✅ Compiled ${bytes.length} bytes');
+      }
       setState(() {
         _pdfBytes = bytes;
         _loading = false;
@@ -1093,9 +1114,16 @@ class _TypstPdfRendererState extends State<_TypstPdfRenderer> {
       // Backfill: if this artifact had no stored PDF, persist the
       // compiled bytes so future opens skip the compile round-trip.
       if (widget.attachmentPath == null && widget.artifactId != null) {
+        if (kDebugMode) {
+          debugPrint('📄 [Typst] Starting backfill for '
+              '${widget.artifactId}...');
+        }
         _backfillAttachment(bytes, widget.artifactId!);
       }
     } catch (e) {
+      if (kDebugMode) {
+        debugPrint('📄 [Typst] ❌ Compile failed: $e');
+      }
       if (!mounted) return;
       setState(() {
         _loading = false;
