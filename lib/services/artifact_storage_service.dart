@@ -542,6 +542,47 @@ class ArtifactStorageService {
     }
   }
 
+  /// Sets [attachmentPath] on an existing artifact row **without** bumping
+  /// the version. Used to backfill a compiled PDF for artifacts that were
+  /// created before attachment persistence was available.
+  static Future<void> setAttachmentPath({
+    required String artifactId,
+    required String attachmentPath,
+  }) async {
+    if (!_artifactStorageAvailable) return;
+
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) return;
+    _ensureCacheForUser(user.id);
+
+    try {
+      await SupabaseService.client
+          .from(_artifactsTable)
+          .update({'attachment_path': attachmentPath})
+          .eq('id', artifactId)
+          .eq('user_id', user.id);
+    } on PostgrestException catch (error) {
+      if (_handleMissingArtifactSchema(
+        error,
+        operation: 'setAttachmentPath',
+      )) {
+        return;
+      }
+      rethrow;
+    }
+
+    // Update the in-memory cache so the current session sees the path.
+    for (final entry in _cacheByChatId.entries) {
+      final idx = entry.value.indexWhere((a) => a.id == artifactId);
+      if (idx == -1) continue;
+      final old = entry.value[idx];
+      final updated = old.copyWith(attachmentPath: attachmentPath);
+      entry.value[idx] = updated;
+      _emitChange(entry.key, updated);
+      break;
+    }
+  }
+
   static void _emitChange(String chatId, ArtifactDocument updated) {
     if (_activeChatId == chatId) {
       activeArtifactNotifier.value = updated;
