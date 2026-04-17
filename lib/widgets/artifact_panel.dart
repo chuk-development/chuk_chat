@@ -855,6 +855,7 @@ class _ArtifactRenderer extends StatelessWidget {
     switch (type) {
       case ArtifactType.svg:
         return _ZoomableVisual(
+          key: ValueKey('zoom_svg_${artifactId ?? ""}'),
           child: RepaintBoundary(
             key: captureKey,
             child: Container(
@@ -872,6 +873,7 @@ class _ArtifactRenderer extends StatelessWidget {
         );
       case ArtifactType.technicalDrawing:
         return _ZoomableVisual(
+          key: ValueKey('zoom_td_${artifactId ?? ""}'),
           child: RepaintBoundary(
             key: captureKey,
             child: TechnicalDrawingWidget(jsonString: content),
@@ -879,6 +881,7 @@ class _ArtifactRenderer extends StatelessWidget {
         );
       case ArtifactType.typst:
         return _TypstPdfRenderer(
+          key: ValueKey('typst_${artifactId ?? ""}'),
           source: content,
           attachmentPath: attachmentPath,
           artifactId: artifactId,
@@ -959,6 +962,7 @@ class _ArtifactRenderer extends StatelessWidget {
         );
       case ArtifactType.svg:
         return _ZoomableVisual(
+          key: ValueKey('zoom_svg_${artifactId ?? ""}'),
           child: RepaintBoundary(
             key: captureKey,
             child: Container(
@@ -999,6 +1003,7 @@ class _ArtifactRenderer extends StatelessWidget {
         );
       case ArtifactType.technicalDrawing:
         return _ZoomableVisual(
+          key: ValueKey('zoom_td_${artifactId ?? ""}'),
           child: RepaintBoundary(
             key: captureKey,
             child: TechnicalDrawingWidget(jsonString: content),
@@ -1006,6 +1011,7 @@ class _ArtifactRenderer extends StatelessWidget {
         );
       case ArtifactType.typst:
         return _TypstPdfRenderer(
+          key: ValueKey('typst_${artifactId ?? ""}'),
           source: content,
           attachmentPath: attachmentPath,
           artifactId: artifactId,
@@ -1019,6 +1025,7 @@ class _ArtifactRenderer extends StatelessWidget {
 /// live backend compile if no attachment exists or it can't be read.
 class _TypstPdfRenderer extends StatefulWidget {
   const _TypstPdfRenderer({
+    super.key,
     required this.source,
     this.attachmentPath,
     this.artifactId,
@@ -1381,7 +1388,7 @@ IconData _iconForType(ArtifactType type) {
 
 /// Zoomable wrapper with +/- buttons for visual artifacts (SVG, drawings).
 class _ZoomableVisual extends StatefulWidget {
-  const _ZoomableVisual({required this.child});
+  const _ZoomableVisual({super.key, required this.child});
 
   final Widget child;
 
@@ -1398,12 +1405,12 @@ class _ZoomableVisualState extends State<_ZoomableVisual> {
     super.dispose();
   }
 
-  void _zoom(double factor) {
+  void _zoom(double factor, {Offset? focal}) {
     final size = context.size;
     if (size == null) return;
     final current = _ctrl.value.clone();
-    final center = Offset(size.width / 2, size.height / 2);
-    // Scale around center of viewport.
+    final center = focal ?? Offset(size.width / 2, size.height / 2);
+    // Scale around given focal point (or viewport center).
     current
       ..translateByDouble(center.dx, center.dy, 0, 1.0)
       ..scaleByDouble(factor, factor, 1.0, 1.0)
@@ -1420,12 +1427,22 @@ class _ZoomableVisualState extends State<_ZoomableVisual> {
     return Stack(
       children: [
         Positioned.fill(
-          child: InteractiveViewer(
-            transformationController: _ctrl,
-            minScale: 0.3,
-            maxScale: 5.0,
-            boundaryMargin: const EdgeInsets.all(100),
-            child: Center(child: widget.child),
+          child: Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerSignal: (event) {
+              if (event is! PointerScrollEvent) return;
+              final box = context.findRenderObject() as RenderBox?;
+              final focal = box?.globalToLocal(event.position);
+              final factor = event.scrollDelta.dy < 0 ? 1.15 : 1 / 1.15;
+              _zoom(factor, focal: focal);
+            },
+            child: InteractiveViewer(
+              transformationController: _ctrl,
+              minScale: 0.05,
+              maxScale: 1000.0,
+              boundaryMargin: const EdgeInsets.all(double.infinity),
+              child: Center(child: widget.child),
+            ),
           ),
         ),
         Positioned(
