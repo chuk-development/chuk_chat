@@ -1359,6 +1359,7 @@ class _MessageBubbleState extends State<MessageBubble>
     final Color barAccent = accentColor;
 
     return Container(
+      width: double.infinity,
       margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
         color: barAccent.withValues(alpha: 0.06),
@@ -1478,6 +1479,7 @@ class _MessageBubbleState extends State<MessageBubble>
     final bool cardExpanded = _expandedCards.contains(key);
 
     return Container(
+      width: double.infinity,
       margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
         color: accentColor.withValues(alpha: 0.06),
@@ -1727,6 +1729,7 @@ class _MessageBubbleState extends State<MessageBubble>
               : Colors.green);
 
     return Container(
+      width: double.infinity,
       margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
         color: accentColor.withValues(alpha: 0.06),
@@ -2525,6 +2528,7 @@ class _MessageBubbleState extends State<MessageBubble>
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           Container(
+            height: kPlatformMobile ? _mobileBottomBarHeight : null,
             decoration: BoxDecoration(
               color: bgColor.lighten(0.05),
               borderRadius: BorderRadius.circular(100),
@@ -2534,7 +2538,7 @@ class _MessageBubbleState extends State<MessageBubble>
               ),
             ),
             padding: EdgeInsets.symmetric(
-              horizontal: kPlatformMobile ? 2 : 8,
+              horizontal: kPlatformMobile ? 4 : 8,
               vertical: kPlatformMobile ? 0 : 4,
             ),
             child: Row(
@@ -2611,18 +2615,16 @@ class _MessageBubbleState extends State<MessageBubble>
     return Tooltip(
       message: tooltip,
       child: IconButton(
-        icon: Icon(icon, color: color, size: kPlatformMobile ? 15 : 18),
-        padding: EdgeInsets.all(kPlatformMobile ? 4 : 8),
+        icon: Icon(icon, color: color, size: 18),
+        padding: EdgeInsets.all(kPlatformMobile ? 5 : 8),
         visualDensity: VisualDensity.compact,
         constraints: BoxConstraints(
-          minWidth: kPlatformMobile ? 24 : 30,
-          minHeight: kPlatformMobile ? 24 : 30,
+          minWidth: kPlatformMobile ? 28 : 30,
+          minHeight: kPlatformMobile ? 28 : 30,
         ),
-        style: kPlatformMobile
-            ? null
-            : IconButton.styleFrom(
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
+        style: IconButton.styleFrom(
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
         onPressed: onPressed,
       ),
     );
