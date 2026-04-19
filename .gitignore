@@ -4,6 +4,7 @@
 *.pyc
 *.swp
 .DS_Store
+.claude/scheduled_tasks.lock
 .atom/
 .build/
 .buildlog/
