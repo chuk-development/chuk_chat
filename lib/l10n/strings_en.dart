@@ -57,6 +57,28 @@ const Map<String, String> stringsEn = {
   'chatFontSizeSubtitle':
       'Adjust the text size of chat messages for easier reading',
   'fontSizePreview': 'The quick brown fox jumps over the lazy dog.',
+  'chatFontFamily': 'Chat font',
+  'chatFontFamilySubtitle':
+      'Choose the typeface for chat message text',
+  'fontFamilySystem': 'System default',
+  'fontFamilyArimo': 'Arimo (sans-serif)',
+  'fontFamilyMerriweather': 'Merriweather (serif)',
+  'fontFamilyJetBrainsMono': 'JetBrains Mono',
+  // ── Downloads page ─────────────────────────────────────────
+  'downloads': 'Downloads',
+  'downloadsSubtitle':
+      'Where saved files go and whether to prompt each time',
+  'downloadsAlwaysAsk': 'Always ask where to save',
+  'downloadsAlwaysAskOn':
+      'Turn off to save directly to your default folder',
+  'downloadsAlwaysAskOff':
+      'Set a default folder below to allow turning this off',
+  'downloadsDefaultFolder': 'Default download folder',
+  'downloadsDefaultFolderUnset': 'Not set — every download will prompt',
+  'downloadsChooseFolderDialog': 'Choose default download folder',
+  'downloadsClear': 'Clear',
+  'downloadsInfo':
+      'These settings apply to every download in the app — chat images, media manager exports, artifact downloads and chat backups.',
   'aiContext': 'AI Context',
   'recentImagesInContext': 'Recent images in context',
   'recentImagesInContextSubtitle':

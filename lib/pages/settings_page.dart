@@ -12,7 +12,6 @@ import 'package:chuk_chat/services/developer_options_service.dart';
 import 'package:chuk_chat/pages/theme_page.dart';
 import 'package:chuk_chat/pages/customization_page.dart';
 import 'package:chuk_chat/pages/diagnostics_settings_page.dart';
-import 'package:chuk_chat/pages/download_settings_page.dart';
 import 'package:chuk_chat/pages/tool_calling_settings_page.dart';
 import 'package:chuk_chat/pages/account_settings_page.dart';
 import 'package:chuk_chat/pages/about_page.dart';
@@ -263,24 +262,6 @@ class _SettingsPageState extends State<SettingsPage> {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const AccountSettingsPage()),
-              );
-            },
-            accentColor: accent,
-            iconFgColor: iconFg,
-            bgColor: scaffoldBg,
-          ),
-          const SizedBox(height: 32),
-          _buildSettingsCard(
-            context,
-            title: 'Downloads',
-            subtitle: 'Where saved files go and whether to prompt each time',
-            icon: Icons.folder_outlined,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const DownloadSettingsPage(),
-                ),
               );
             },
             accentColor: accent,

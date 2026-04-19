@@ -122,6 +122,23 @@ class AppLocalizations {
   String get chatFontSize => _get('chatFontSize');
   String get chatFontSizeSubtitle => _get('chatFontSizeSubtitle');
   String get fontSizePreview => _get('fontSizePreview');
+  String get chatFontFamily => _get('chatFontFamily');
+  String get chatFontFamilySubtitle => _get('chatFontFamilySubtitle');
+  String get fontFamilySystem => _get('fontFamilySystem');
+  String get fontFamilyArimo => _get('fontFamilyArimo');
+  String get fontFamilyMerriweather => _get('fontFamilyMerriweather');
+  String get fontFamilyJetBrainsMono => _get('fontFamilyJetBrainsMono');
+  String get downloads => _get('downloads');
+  String get downloadsSubtitle => _get('downloadsSubtitle');
+  String get downloadsAlwaysAsk => _get('downloadsAlwaysAsk');
+  String get downloadsAlwaysAskOn => _get('downloadsAlwaysAskOn');
+  String get downloadsAlwaysAskOff => _get('downloadsAlwaysAskOff');
+  String get downloadsDefaultFolder => _get('downloadsDefaultFolder');
+  String get downloadsDefaultFolderUnset =>
+      _get('downloadsDefaultFolderUnset');
+  String get downloadsChooseFolderDialog => _get('downloadsChooseFolderDialog');
+  String get downloadsClear => _get('downloadsClear');
+  String get downloadsInfo => _get('downloadsInfo');
   String get aiContext => _get('aiContext');
   String get recentImagesInContext => _get('recentImagesInContext');
   String get recentImagesInContextSubtitle => _get('recentImagesInContextSubtitle');

@@ -382,6 +382,8 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
         setUiLocale: _themeService.setUiLocale,
         chatFontSize: _themeService.chatFontSize,
         setChatFontSize: _themeService.setChatFontSize,
+        chatFontFamily: _themeService.chatFontFamily,
+        setChatFontFamily: _themeService.setChatFontFamily,
       ),
     );
   }
