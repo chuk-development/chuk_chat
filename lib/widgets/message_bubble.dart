@@ -2077,16 +2077,25 @@ class _MessageBubbleState extends State<MessageBubble>
                         ),
                         trailing: Icon(
                           Icons.open_in_new,
-                          size: 16,
+                          size: 22,
                           color: colorScheme.onSurfaceVariant,
                         ),
                         onTap: () async {
                           final url = Uri.tryParse(source['url']!);
-                          if (url != null && await canLaunchUrl(url)) {
-                            await launchUrl(
+                          if (url == null) return;
+                          try {
+                            final launched = await launchUrl(
                               url,
                               mode: LaunchMode.externalApplication,
                             );
+                            if (!launched) {
+                              await launchUrl(
+                                url,
+                                mode: LaunchMode.platformDefault,
+                              );
+                            }
+                          } catch (_) {
+                            // swallow: nothing to do if no handler available
                           }
                         },
                       );
