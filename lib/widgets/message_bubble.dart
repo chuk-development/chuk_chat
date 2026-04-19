@@ -332,9 +332,10 @@ class _MessageBubbleState extends State<MessageBubble>
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
+      mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        if (hasActions) _buildActionButtons(iconFgColor, false),
-        const Spacer(),
+        if (hasActions) _buildActionButtons(iconFgColor, true),
+        if (hasActions && hasSources) const SizedBox(width: 8),
         if (hasSources) _buildSourcesBar(widget.toolCalls!),
       ],
     );
