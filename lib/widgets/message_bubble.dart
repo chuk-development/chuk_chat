@@ -332,10 +332,9 @@ class _MessageBubbleState extends State<MessageBubble>
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
-      mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        if (hasActions) _buildActionButtons(iconFgColor, true),
-        if (hasActions && hasSources) const SizedBox(width: 8),
+        if (hasActions) _buildActionButtons(iconFgColor, false),
+        const Spacer(),
         if (hasSources) _buildSourcesBar(widget.toolCalls!),
       ],
     );
@@ -512,7 +511,7 @@ class _MessageBubbleState extends State<MessageBubble>
 
     final EdgeInsetsGeometry containerPadding = isUserMessage
         ? const EdgeInsets.symmetric(horizontal: 14, vertical: 10)
-        : const EdgeInsets.symmetric(horizontal: 4, vertical: 2);
+        : const EdgeInsets.symmetric(horizontal: 0, vertical: 2);
 
     final BoxDecoration? decoration = isUserMessage
         ? BoxDecoration(
