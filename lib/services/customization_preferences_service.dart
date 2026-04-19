@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
 class CustomizationPreferences {
@@ -21,6 +22,7 @@ class CustomizationPreferences {
     required this.showToolCalls,
     required this.allowMarkdownToolCalls,
     required this.uiLocale,
+    required this.chatFontSize,
   });
 
   final String userId;
@@ -45,6 +47,8 @@ class CustomizationPreferences {
   final bool allowMarkdownToolCalls;
   // UI locale ('en' or 'de')
   final String uiLocale;
+  // Chat body font size (applies to user + AI message text)
+  final double chatFontSize;
 
   CustomizationPreferences copyWith({
     bool? autoSendVoiceTranscription,
@@ -64,6 +68,7 @@ class CustomizationPreferences {
     bool? showToolCalls,
     bool? allowMarkdownToolCalls,
     String? uiLocale,
+    double? chatFontSize,
   }) {
     return CustomizationPreferences(
       userId: userId,
@@ -90,6 +95,7 @@ class CustomizationPreferences {
       allowMarkdownToolCalls:
           allowMarkdownToolCalls ?? this.allowMarkdownToolCalls,
       uiLocale: uiLocale ?? this.uiLocale,
+      chatFontSize: chatFontSize ?? this.chatFontSize,
     );
   }
 
@@ -113,6 +119,7 @@ class CustomizationPreferences {
       'show_tool_calls': showToolCalls,
       'allow_markdown_tool_calls': allowMarkdownToolCalls,
       'ui_locale': uiLocale,
+      'chat_font_size': chatFontSize,
     };
   }
 
@@ -136,6 +143,7 @@ class CustomizationPreferences {
       showToolCalls: true,
       allowMarkdownToolCalls: true,
       uiLocale: 'en',
+      chatFontSize: kDefaultChatFontSize,
     );
   }
 
@@ -169,6 +177,8 @@ class CustomizationPreferences {
       allowMarkdownToolCalls:
           (map['allow_markdown_tool_calls'] as bool?) ?? true,
       uiLocale: (map['ui_locale'] as String?) ?? 'en',
+      chatFontSize:
+          (map['chat_font_size'] as num?)?.toDouble() ?? kDefaultChatFontSize,
     );
   }
 }

@@ -67,6 +67,10 @@ class AppShellConfig {
   final String uiLocale;
   final Function(String) setUiLocale;
 
+  // ── Chat font size ─────────────────────────────────────────
+  final double chatFontSize;
+  final Function(double) setChatFontSize;
+
   const AppShellConfig({
     required this.currentThemeMode,
     required this.currentAccentColor,
@@ -112,5 +116,7 @@ class AppShellConfig {
     required this.setAllowMarkdownToolCalls,
     required this.uiLocale,
     required this.setUiLocale,
+    required this.chatFontSize,
+    required this.setChatFontSize,
   });
 }

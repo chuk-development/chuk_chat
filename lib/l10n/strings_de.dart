@@ -55,6 +55,11 @@ const Map<String, String> stringsDe = {
       'Modellname und Informationen in Chat-Nachrichten anzeigen',
   'showTps': 'Tokens pro Sekunde anzeigen',
   'showTpsSubtitle': 'KI-Antwort-Generierungsgeschwindigkeit (TPS) anzeigen',
+  'chatFontSize': 'Chat-Schriftgröße',
+  'chatFontSizeSubtitle':
+      'Textgröße der Chatnachrichten anpassen für bessere Lesbarkeit',
+  'fontSizePreview':
+      'Franz jagt im komplett verwahrlosten Taxi quer durch Bayern.',
   'aiContext': 'KI-Kontext',
   'recentImagesInContext': 'Aktuelle Bilder im Kontext',
   'recentImagesInContextSubtitle':

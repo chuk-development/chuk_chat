@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/models/artifact.dart';
+import 'package:chuk_chat/services/app_theme_service.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/file_save_service.dart';
@@ -994,6 +995,7 @@ class _MessageBubbleState extends State<MessageBubble>
               textColor: textColor,
               backgroundColor: bgColor,
               fontFamily: _kAiResponseFontFamily,
+              paragraphFontSize: AppThemeService.instance.chatFontSize,
             ),
           ),
         );
@@ -1053,6 +1055,7 @@ class _MessageBubbleState extends State<MessageBubble>
             textColor: textColor,
             backgroundColor: bgColor,
             fontFamily: _kAiResponseFontFamily,
+            paragraphFontSize: AppThemeService.instance.chatFontSize,
           ),
         ),
       );
@@ -1067,6 +1070,7 @@ class _MessageBubbleState extends State<MessageBubble>
             textColor: textColor,
             backgroundColor: bgColor,
             fontFamily: _kAiResponseFontFamily,
+            paragraphFontSize: AppThemeService.instance.chatFontSize,
           ),
         ),
       );
@@ -1256,6 +1260,7 @@ class _MessageBubbleState extends State<MessageBubble>
         textColor: textColor,
         backgroundColor: bgColor,
         fontFamily: _kAiResponseFontFamily,
+        paragraphFontSize: AppThemeService.instance.chatFontSize,
       ),
     );
   }
@@ -2486,7 +2491,11 @@ class _MessageBubbleState extends State<MessageBubble>
       children.add(
         Text(
           displayText,
-          style: TextStyle(color: iconFgColor, fontSize: 15, height: 1.38),
+          style: TextStyle(
+            color: iconFgColor,
+            fontSize: AppThemeService.instance.chatFontSize,
+            height: 1.38,
+          ),
         ),
       );
 

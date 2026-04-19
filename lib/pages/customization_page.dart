@@ -2,6 +2,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
@@ -23,6 +24,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
   late bool _selectedShowReasoningTokens;
   late bool _selectedShowModelInfo;
   late bool _selectedShowTps;
+  late double _selectedChatFontSize;
   // AI context state
   late bool _selectedIncludeRecentImagesInHistory;
   late bool _selectedIncludeAllImagesInHistory;
@@ -44,6 +46,10 @@ class _CustomizationPageState extends State<CustomizationPage> {
     _selectedShowReasoningTokens = widget.config.showReasoningTokens;
     _selectedShowModelInfo = widget.config.showModelInfo;
     _selectedShowTps = widget.config.showTps;
+    _selectedChatFontSize = widget.config.chatFontSize.clamp(
+      kMinChatFontSize,
+      kMaxChatFontSize,
+    );
     _selectedIncludeRecentImagesInHistory =
         widget.config.includeRecentImagesInHistory;
     _selectedIncludeAllImagesInHistory =
@@ -297,6 +303,8 @@ class _CustomizationPageState extends State<CustomizationPage> {
             scaffoldBg: scaffoldBg,
             iconFg: iconFg,
           ),
+          const SizedBox(height: 12),
+          _buildChatFontSizeCard(scaffoldBg, iconFg, l),
           const SizedBox(height: 24),
 
           // AI Context Section
@@ -379,6 +387,118 @@ class _CustomizationPageState extends State<CustomizationPage> {
 
           // Image generation is now handled via tool calling (generate_image tool)
         ],
+      ),
+    );
+  }
+
+  Widget _buildChatFontSizeCard(
+    Color scaffoldBg,
+    Color iconFg,
+    AppLocalizations l,
+  ) {
+    final theme = Theme.of(context);
+    return Card(
+      color: scaffoldBg.lighten(0.05),
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: iconFg.withValues(alpha: 0.3), width: 1),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l.chatFontSize,
+                        style: TextStyle(
+                          color: theme.textTheme.titleMedium?.color,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        l.chatFontSizeSubtitle,
+                        style: TextStyle(
+                          color: iconFg.lighten(0.3),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '${_selectedChatFontSize.round()}pt',
+                    style: TextStyle(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Slider(
+              value: _selectedChatFontSize,
+              min: kMinChatFontSize,
+              max: kMaxChatFontSize,
+              divisions: (kMaxChatFontSize - kMinChatFontSize).round(),
+              label: '${_selectedChatFontSize.round()}pt',
+              onChanged: (double value) {
+                setState(() {
+                  _selectedChatFontSize = value;
+                });
+              },
+              onChangeEnd: (double value) {
+                widget.config.setChatFontSize(value);
+              },
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 4),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: scaffoldBg,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: iconFg.withValues(alpha: 0.2),
+                    width: 1,
+                  ),
+                ),
+                child: Text(
+                  l.fontSizePreview,
+                  style: TextStyle(
+                    color: iconFg,
+                    fontSize: _selectedChatFontSize,
+                    height: 1.38,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

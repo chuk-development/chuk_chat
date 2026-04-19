@@ -380,6 +380,8 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
         setAllowMarkdownToolCalls: _themeService.setAllowMarkdownToolCalls,
         uiLocale: _themeService.uiLocale,
         setUiLocale: _themeService.setUiLocale,
+        chatFontSize: _themeService.chatFontSize,
+        setChatFontSize: _themeService.setChatFontSize,
       ),
     );
   }

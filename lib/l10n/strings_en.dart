@@ -53,6 +53,10 @@ const Map<String, String> stringsEn = {
       'Display model name and information in chat messages',
   'showTps': 'Show tokens per second',
   'showTpsSubtitle': 'Display AI response generation speed (TPS)',
+  'chatFontSize': 'Chat font size',
+  'chatFontSizeSubtitle':
+      'Adjust the text size of chat messages for easier reading',
+  'fontSizePreview': 'The quick brown fox jumps over the lazy dog.',
   'aiContext': 'AI Context',
   'recentImagesInContext': 'Recent images in context',
   'recentImagesInContextSubtitle':
