@@ -119,6 +119,9 @@ class AppLocalizations {
   String get showModelInfoSubtitle => _get('showModelInfoSubtitle');
   String get showTps => _get('showTps');
   String get showTpsSubtitle => _get('showTpsSubtitle');
+  String get chatFontSize => _get('chatFontSize');
+  String get chatFontSizeSubtitle => _get('chatFontSizeSubtitle');
+  String get fontSizePreview => _get('fontSizePreview');
   String get aiContext => _get('aiContext');
   String get recentImagesInContext => _get('recentImagesInContext');
   String get recentImagesInContextSubtitle => _get('recentImagesInContextSubtitle');

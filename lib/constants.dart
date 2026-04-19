@@ -29,6 +29,11 @@ const bool kDefaultToolDiscoveryMode = true;
 const bool kDefaultShowToolCalls = true;
 const bool kDefaultAllowMarkdownToolCalls = true;
 
+/* ---------- CHAT FONT SIZE ---------- */
+const double kDefaultChatFontSize = 15.0;
+const double kMinChatFontSize = 11.0;
+const double kMaxChatFontSize = 24.0;
+
 /* ---------- THEME BUILDER ---------- */
 ThemeData buildAppTheme({
   required Color accent,
