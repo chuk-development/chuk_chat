@@ -69,9 +69,9 @@ const Map<String, String> stringsEn = {
   'downloadsSubtitle':
       'Where saved files go and whether to prompt each time',
   'downloadsAlwaysAsk': 'Always ask where to save',
-  'downloadsAlwaysAskOn':
+  'downloadsAlwaysAskHintCan':
       'Turn off to save directly to your default folder',
-  'downloadsAlwaysAskOff':
+  'downloadsAlwaysAskHintNoFolder':
       'Set a default folder below to allow turning this off',
   'downloadsDefaultFolder': 'Default download folder',
   'downloadsDefaultFolderUnset': 'Not set — every download will prompt',

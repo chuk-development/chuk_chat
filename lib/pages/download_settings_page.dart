@@ -82,8 +82,8 @@ class _DownloadSettingsPageState extends State<DownloadSettingsPage> {
             title: Text(l.downloadsAlwaysAsk),
             subtitle: Text(
               canDisableAsk
-                  ? l.downloadsAlwaysAskOn
-                  : l.downloadsAlwaysAskOff,
+                  ? l.downloadsAlwaysAskHintCan
+                  : l.downloadsAlwaysAskHintNoFolder,
             ),
             value: alwaysAsk || !canDisableAsk,
             onChanged: canDisableAsk
