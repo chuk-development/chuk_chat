@@ -62,6 +62,9 @@ class AppThemeService extends ChangeNotifier {
   // Chat body font size
   double _chatFontSize = kDefaultChatFontSize;
 
+  // Chat body font family identifier
+  String _chatFontFamily = kDefaultChatFontFamily;
+
   // Keys for SharedPreferences
   static const String _kThemeModeKey = 'themeMode';
   static const String _kAccentColorKey = 'accentColor';
@@ -90,6 +93,7 @@ class AppThemeService extends ChangeNotifier {
   static const String _kAllowMarkdownToolCallsKey = 'allowMarkdownToolCalls';
   static const String _kUiLocaleKey = 'uiLocale';
   static const String _kChatFontSizeKey = 'chatFontSize';
+  static const String _kChatFontFamilyKey = 'chatFontFamily';
 
   // Performance optimizations
   SharedPreferences? _cachedPrefs;
@@ -124,6 +128,7 @@ class AppThemeService extends ChangeNotifier {
   bool get allowMarkdownToolCalls => _allowMarkdownToolCalls;
   String get uiLocale => _uiLocale;
   double get chatFontSize => _chatFontSize;
+  String get chatFontFamily => _chatFontFamily;
   bool get hasAppliedSupabaseTheme => _hasAppliedSupabaseTheme;
 
   ThemeData? get cachedThemeData => _cachedThemeData;
@@ -184,6 +189,9 @@ class AppThemeService extends ChangeNotifier {
     _chatFontSize = _clampChatFontSize(
       prefs.getDouble(_kChatFontSizeKey) ?? kDefaultChatFontSize,
     );
+    _chatFontFamily = _sanitizeChatFontFamily(
+      prefs.getString(_kChatFontFamilyKey),
+    );
 
     _cachedThemeData = null;
     notifyListeners();
@@ -191,6 +199,13 @@ class AppThemeService extends ChangeNotifier {
 
   double _clampChatFontSize(double v) =>
       v.clamp(kMinChatFontSize, kMaxChatFontSize);
+
+  String _sanitizeChatFontFamily(String? id) {
+    if (id == null || !kSupportedChatFontFamilies.contains(id)) {
+      return kDefaultChatFontFamily;
+    }
+    return id;
+  }
 
   /// Load theme from Supabase in background
   Future<void> loadFromSupabaseAsync({bool forceRefresh = false}) async {
@@ -260,7 +275,9 @@ class AppThemeService extends ChangeNotifier {
         _showToolCalls != customizationPrefs.showToolCalls ||
         _allowMarkdownToolCalls != customizationPrefs.allowMarkdownToolCalls ||
         _uiLocale != customizationPrefs.uiLocale ||
-        _chatFontSize != _clampChatFontSize(customizationPrefs.chatFontSize);
+        _chatFontSize != _clampChatFontSize(customizationPrefs.chatFontSize) ||
+        _chatFontFamily !=
+            _sanitizeChatFontFamily(customizationPrefs.chatFontFamily);
 
     _themeMode = settings.themeMode;
     _accentColor = settings.accentColor;
@@ -286,6 +303,7 @@ class AppThemeService extends ChangeNotifier {
     _allowMarkdownToolCalls = customizationPrefs.allowMarkdownToolCalls;
     _uiLocale = customizationPrefs.uiLocale;
     _chatFontSize = _clampChatFontSize(customizationPrefs.chatFontSize);
+    _chatFontFamily = _sanitizeChatFontFamily(customizationPrefs.chatFontFamily);
     _hasAppliedSupabaseTheme = true;
     _cachedThemeData = null;
 
@@ -332,6 +350,7 @@ class AppThemeService extends ChangeNotifier {
       prefs.setBool(_kAllowMarkdownToolCallsKey, _allowMarkdownToolCalls),
       prefs.setString(_kUiLocaleKey, _uiLocale),
       prefs.setDouble(_kChatFontSizeKey, _chatFontSize),
+      prefs.setString(_kChatFontFamilyKey, _chatFontFamily),
     ]);
   }
 
@@ -395,6 +414,7 @@ class AppThemeService extends ChangeNotifier {
       allowMarkdownToolCalls: _allowMarkdownToolCalls,
       uiLocale: _uiLocale,
       chatFontSize: _chatFontSize,
+      chatFontFamily: _chatFontFamily,
     );
 
     try {
@@ -549,6 +569,14 @@ class AppThemeService extends ChangeNotifier {
     final clamped = _clampChatFontSize(size);
     if (_chatFontSize == clamped) return;
     _chatFontSize = clamped;
+    notifyListeners();
+    _debouncedSyncCustomization();
+  }
+
+  void setChatFontFamily(String id) {
+    final sanitized = _sanitizeChatFontFamily(id);
+    if (_chatFontFamily == sanitized) return;
+    _chatFontFamily = sanitized;
     notifyListeners();
     _debouncedSyncCustomization();
   }

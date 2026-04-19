@@ -2,6 +2,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/download_preferences_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 
@@ -38,10 +39,11 @@ class _DownloadSettingsPageState extends State<DownloadSettingsPage> {
 
   Future<void> _pickFolder() async {
     if (_busy) return;
+    final l = AppLocalizations.of(context)!;
     setState(() => _busy = true);
     try {
       final selected = await FilePicker.getDirectoryPath(
-        dialogTitle: 'Choose default download folder',
+        dialogTitle: l.downloadsChooseFolderDialog,
       );
       if (selected != null && selected.isNotEmpty) {
         await DownloadPreferencesService.setDefaultFolder(selected);
@@ -58,6 +60,7 @@ class _DownloadSettingsPageState extends State<DownloadSettingsPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l = AppLocalizations.of(context)!;
     final iconFg = theme.resolvedIconColor;
     final folder = DownloadPreferencesService.defaultFolderNotifier.value;
     final alwaysAsk = DownloadPreferencesService.alwaysAskNotifier.value;
@@ -67,7 +70,7 @@ class _DownloadSettingsPageState extends State<DownloadSettingsPage> {
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Downloads'),
+        title: Text(l.downloads),
         backgroundColor: theme.scaffoldBackgroundColor,
         elevation: 0,
         iconTheme: IconThemeData(color: iconFg),
@@ -76,11 +79,11 @@ class _DownloadSettingsPageState extends State<DownloadSettingsPage> {
         padding: const EdgeInsets.symmetric(vertical: 8),
         children: [
           SwitchListTile(
-            title: const Text('Always ask where to save'),
+            title: Text(l.downloadsAlwaysAsk),
             subtitle: Text(
               canDisableAsk
-                  ? 'Turn off to save directly to your default folder'
-                  : 'Set a default folder below to allow turning this off',
+                  ? l.downloadsAlwaysAskOn
+                  : l.downloadsAlwaysAskOff,
             ),
             value: alwaysAsk || !canDisableAsk,
             onChanged: canDisableAsk
@@ -90,27 +93,26 @@ class _DownloadSettingsPageState extends State<DownloadSettingsPage> {
           const Divider(height: 1),
           ListTile(
             leading: const Icon(Icons.folder_outlined),
-            title: const Text('Default download folder'),
+            title: Text(l.downloadsDefaultFolder),
             subtitle: Text(
-              hasFolder ? folder : 'Not set — every download will prompt',
+              hasFolder ? folder : l.downloadsDefaultFolderUnset,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
             trailing: hasFolder
                 ? IconButton(
                     icon: const Icon(Icons.close),
-                    tooltip: 'Clear',
+                    tooltip: l.downloadsClear,
                     onPressed: _busy ? null : _clearFolder,
                   )
                 : null,
             onTap: _busy ? null : _pickFolder,
           ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Text(
-              'These settings apply to every download in the app — chat images, '
-              'media manager exports, artifact downloads and chat backups.',
-              style: TextStyle(fontSize: 12),
+              l.downloadsInfo,
+              style: const TextStyle(fontSize: 12),
             ),
           ),
         ],

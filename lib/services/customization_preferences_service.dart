@@ -23,6 +23,7 @@ class CustomizationPreferences {
     required this.allowMarkdownToolCalls,
     required this.uiLocale,
     required this.chatFontSize,
+    required this.chatFontFamily,
   });
 
   final String userId;
@@ -49,6 +50,8 @@ class CustomizationPreferences {
   final String uiLocale;
   // Chat body font size (applies to user + AI message text)
   final double chatFontSize;
+  // Chat body font family identifier (see constants.dart, e.g. 'arimo')
+  final String chatFontFamily;
 
   CustomizationPreferences copyWith({
     bool? autoSendVoiceTranscription,
@@ -69,6 +72,7 @@ class CustomizationPreferences {
     bool? allowMarkdownToolCalls,
     String? uiLocale,
     double? chatFontSize,
+    String? chatFontFamily,
   }) {
     return CustomizationPreferences(
       userId: userId,
@@ -96,6 +100,7 @@ class CustomizationPreferences {
           allowMarkdownToolCalls ?? this.allowMarkdownToolCalls,
       uiLocale: uiLocale ?? this.uiLocale,
       chatFontSize: chatFontSize ?? this.chatFontSize,
+      chatFontFamily: chatFontFamily ?? this.chatFontFamily,
     );
   }
 
@@ -120,6 +125,7 @@ class CustomizationPreferences {
       'allow_markdown_tool_calls': allowMarkdownToolCalls,
       'ui_locale': uiLocale,
       'chat_font_size': chatFontSize,
+      'chat_font_family': chatFontFamily,
     };
   }
 
@@ -144,6 +150,7 @@ class CustomizationPreferences {
       allowMarkdownToolCalls: true,
       uiLocale: 'en',
       chatFontSize: kDefaultChatFontSize,
+      chatFontFamily: kDefaultChatFontFamily,
     );
   }
 
@@ -179,8 +186,16 @@ class CustomizationPreferences {
       uiLocale: (map['ui_locale'] as String?) ?? 'en',
       chatFontSize:
           (map['chat_font_size'] as num?)?.toDouble() ?? kDefaultChatFontSize,
+      chatFontFamily: _sanitizeFontFamily(map['chat_font_family'] as String?),
     );
   }
+}
+
+String _sanitizeFontFamily(String? id) {
+  if (id == null || !kSupportedChatFontFamilies.contains(id)) {
+    return kDefaultChatFontFamily;
+  }
+  return id;
 }
 
 class CustomizationPreferencesService {

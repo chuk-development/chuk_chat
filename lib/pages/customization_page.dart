@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/pages/download_settings_page.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
+import 'package:chuk_chat/utils/chat_font_resolver.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/services/title_generation_service.dart';
@@ -25,6 +27,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
   late bool _selectedShowModelInfo;
   late bool _selectedShowTps;
   late double _selectedChatFontSize;
+  late String _selectedChatFontFamily;
   // AI context state
   late bool _selectedIncludeRecentImagesInHistory;
   late bool _selectedIncludeAllImagesInHistory;
@@ -50,6 +53,10 @@ class _CustomizationPageState extends State<CustomizationPage> {
       kMinChatFontSize,
       kMaxChatFontSize,
     );
+    _selectedChatFontFamily =
+        kSupportedChatFontFamilies.contains(widget.config.chatFontFamily)
+        ? widget.config.chatFontFamily
+        : kDefaultChatFontFamily;
     _selectedIncludeRecentImagesInHistory =
         widget.config.includeRecentImagesInHistory;
     _selectedIncludeAllImagesInHistory =
@@ -305,6 +312,8 @@ class _CustomizationPageState extends State<CustomizationPage> {
           ),
           const SizedBox(height: 12),
           _buildChatFontSizeCard(scaffoldBg, iconFg, l),
+          const SizedBox(height: 12),
+          _buildChatFontFamilyCard(scaffoldBg, iconFg, l),
           const SizedBox(height: 24),
 
           // AI Context Section
@@ -358,6 +367,32 @@ class _CustomizationPageState extends State<CustomizationPage> {
           _buildInfoCard(context, l.aiContextInfo, scaffoldBg, iconFg),
           const SizedBox(height: 24),
 
+          // Downloads Section
+          _buildSectionHeader(
+            context,
+            l.downloads,
+            Icons.folder_outlined,
+            iconFg,
+          ),
+          const SizedBox(height: 12),
+          _buildNavCard(
+            context,
+            title: l.downloads,
+            subtitle: l.downloadsSubtitle,
+            icon: Icons.folder_outlined,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const DownloadSettingsPage(),
+                ),
+              );
+            },
+            scaffoldBg: scaffoldBg,
+            iconFg: iconFg,
+          ),
+          const SizedBox(height: 24),
+
           // Auto Chat Titles Section
           _buildSectionHeader(context, l.chatTitles, Icons.title, iconFg),
           const SizedBox(height: 12),
@@ -387,6 +422,117 @@ class _CustomizationPageState extends State<CustomizationPage> {
 
           // Image generation is now handled via tool calling (generate_image tool)
         ],
+      ),
+    );
+  }
+
+  String _fontFamilyLabel(String id, AppLocalizations l) {
+    switch (id) {
+      case kChatFontFamilySystem:
+        return l.fontFamilySystem;
+      case kChatFontFamilyMerriweather:
+        return l.fontFamilyMerriweather;
+      case kChatFontFamilyJetBrainsMono:
+        return l.fontFamilyJetBrainsMono;
+      case kChatFontFamilyArimo:
+      default:
+        return l.fontFamilyArimo;
+    }
+  }
+
+  Widget _buildChatFontFamilyCard(
+    Color scaffoldBg,
+    Color iconFg,
+    AppLocalizations l,
+  ) {
+    final theme = Theme.of(context);
+    return Card(
+      color: scaffoldBg.lighten(0.05),
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: iconFg.withValues(alpha: 0.3), width: 1),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l.chatFontFamily,
+                        style: TextStyle(
+                          color: theme.textTheme.titleMedium?.color,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        l.chatFontFamilySubtitle,
+                        style: TextStyle(
+                          color: iconFg.lighten(0.3),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                DropdownButton<String>(
+                  value: _selectedChatFontFamily,
+                  underline: const SizedBox.shrink(),
+                  dropdownColor: scaffoldBg.lighten(0.08),
+                  items: kSupportedChatFontFamilies.map((id) {
+                    return DropdownMenuItem<String>(
+                      value: id,
+                      child: Text(_fontFamilyLabel(id, l)),
+                    );
+                  }).toList(),
+                  onChanged: (String? value) {
+                    if (value == null || value == _selectedChatFontFamily) {
+                      return;
+                    }
+                    setState(() {
+                      _selectedChatFontFamily = value;
+                    });
+                    widget.config.setChatFontFamily(value);
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+              decoration: BoxDecoration(
+                color: scaffoldBg,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: iconFg.withValues(alpha: 0.2),
+                  width: 1,
+                ),
+              ),
+              child: Text(
+                l.fontSizePreview,
+                style: TextStyle(
+                  color: iconFg,
+                  fontSize: _selectedChatFontSize,
+                  fontFamily: resolveChatFontFamily(_selectedChatFontFamily),
+                  height: 1.38,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -757,6 +903,66 @@ class _CustomizationPageState extends State<CustomizationPage> {
           context,
         ).colorScheme.primary.withValues(alpha: 0.5),
         activeThumbColor: Theme.of(context).colorScheme.primary,
+      ),
+    );
+  }
+
+  Widget _buildNavCard(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required VoidCallback onTap,
+    required Color scaffoldBg,
+    required Color iconFg,
+  }) {
+    final theme = Theme.of(context);
+    return Card(
+      color: scaffoldBg.lighten(0.05),
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: iconFg.withValues(alpha: 0.3), width: 1),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Icon(icon, color: iconFg, size: 22),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: theme.textTheme.titleMedium?.color,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        color: iconFg.lighten(0.3),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: iconFg.withValues(alpha: 0.7),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

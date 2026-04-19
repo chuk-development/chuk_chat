@@ -8,6 +8,7 @@ import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/models/artifact.dart';
 import 'package:chuk_chat/services/app_theme_service.dart';
+import 'package:chuk_chat/utils/chat_font_resolver.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/file_save_service.dart';
@@ -197,8 +198,16 @@ class _MessageBubbleState extends State<MessageBubble>
   final Set<String> _expandedCards = {};
   bool _complexBubbleLogged = false;
   bool _showUserActions = false;
-  static final String _kAiResponseFontFamily =
+  static final String _kAiResponseFontFamilyDefault =
       GoogleFonts.arimo().fontFamily ?? 'Arimo';
+
+  /// Returns the user-selected chat font family, falling back to the historic
+  /// Arimo default when the user has explicitly picked the system font.
+  String get _chatFontFamily {
+    final resolved =
+        resolveChatFontFamily(AppThemeService.instance.chatFontFamily);
+    return resolved ?? _kAiResponseFontFamilyDefault;
+  }
 
   @override
   bool get wantKeepAlive => true; // Keep this widget alive to prevent rebuilds
@@ -994,7 +1003,7 @@ class _MessageBubbleState extends State<MessageBubble>
               text: textBefore,
               textColor: textColor,
               backgroundColor: bgColor,
-              fontFamily: _kAiResponseFontFamily,
+              fontFamily: _chatFontFamily,
               paragraphFontSize: AppThemeService.instance.chatFontSize,
             ),
           ),
@@ -1054,7 +1063,7 @@ class _MessageBubbleState extends State<MessageBubble>
             text: textAfter,
             textColor: textColor,
             backgroundColor: bgColor,
-            fontFamily: _kAiResponseFontFamily,
+            fontFamily: _chatFontFamily,
             paragraphFontSize: AppThemeService.instance.chatFontSize,
           ),
         ),
@@ -1069,7 +1078,7 @@ class _MessageBubbleState extends State<MessageBubble>
             text: content,
             textColor: textColor,
             backgroundColor: bgColor,
-            fontFamily: _kAiResponseFontFamily,
+            fontFamily: _chatFontFamily,
             paragraphFontSize: AppThemeService.instance.chatFontSize,
           ),
         ),
@@ -1259,7 +1268,7 @@ class _MessageBubbleState extends State<MessageBubble>
         text: text,
         textColor: textColor,
         backgroundColor: bgColor,
-        fontFamily: _kAiResponseFontFamily,
+        fontFamily: _chatFontFamily,
         paragraphFontSize: AppThemeService.instance.chatFontSize,
       ),
     );
@@ -2494,6 +2503,9 @@ class _MessageBubbleState extends State<MessageBubble>
           style: TextStyle(
             color: iconFgColor,
             fontSize: AppThemeService.instance.chatFontSize,
+            fontFamily: resolveChatFontFamily(
+              AppThemeService.instance.chatFontFamily,
+            ),
             height: 1.38,
           ),
         ),

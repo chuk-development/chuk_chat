@@ -60,6 +60,29 @@ const Map<String, String> stringsDe = {
       'Textgröße der Chatnachrichten anpassen für bessere Lesbarkeit',
   'fontSizePreview':
       'Franz jagt im komplett verwahrlosten Taxi quer durch Bayern.',
+  'chatFontFamily': 'Chat-Schriftart',
+  'chatFontFamilySubtitle':
+      'Schriftart für Chatnachrichten auswählen',
+  'fontFamilySystem': 'System-Standard',
+  'fontFamilyArimo': 'Arimo (Serifenlos)',
+  'fontFamilyMerriweather': 'Merriweather (Serifen)',
+  'fontFamilyJetBrainsMono': 'JetBrains Mono',
+  // ── Downloads-Seite ────────────────────────────────────────
+  'downloads': 'Downloads',
+  'downloadsSubtitle':
+      'Wohin gespeicherte Dateien gehen und ob jedes Mal gefragt wird',
+  'downloadsAlwaysAsk': 'Immer fragen wo gespeichert wird',
+  'downloadsAlwaysAskOn':
+      'Ausschalten, um direkt in den Standardordner zu speichern',
+  'downloadsAlwaysAskOff':
+      'Standardordner unten festlegen, um dies ausschalten zu können',
+  'downloadsDefaultFolder': 'Standard-Download-Ordner',
+  'downloadsDefaultFolderUnset':
+      'Nicht festgelegt — jeder Download fragt nach',
+  'downloadsChooseFolderDialog': 'Standard-Download-Ordner wählen',
+  'downloadsClear': 'Löschen',
+  'downloadsInfo':
+      'Diese Einstellungen gelten für jeden Download in der App — Chat-Bilder, Medien-Manager-Exporte, Artifact-Downloads und Chat-Backups.',
   'aiContext': 'KI-Kontext',
   'recentImagesInContext': 'Aktuelle Bilder im Kontext',
   'recentImagesInContextSubtitle':

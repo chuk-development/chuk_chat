@@ -34,6 +34,23 @@ const double kDefaultChatFontSize = 15.0;
 const double kMinChatFontSize = 11.0;
 const double kMaxChatFontSize = 24.0;
 
+/* ---------- CHAT FONT FAMILY ---------- */
+/// Identifiers used to persist the user's font family preference.
+/// The actual resolved [fontFamily] string is looked up at render time
+/// via [resolveChatFontFamily] (handles GoogleFonts caching).
+const String kChatFontFamilySystem = 'system';
+const String kChatFontFamilyArimo = 'arimo';
+const String kChatFontFamilyMerriweather = 'merriweather';
+const String kChatFontFamilyJetBrainsMono = 'jetbrains_mono';
+const String kDefaultChatFontFamily = kChatFontFamilyArimo;
+
+const List<String> kSupportedChatFontFamilies = <String>[
+  kChatFontFamilySystem,
+  kChatFontFamilyArimo,
+  kChatFontFamilyMerriweather,
+  kChatFontFamilyJetBrainsMono,
+];
+
 /* ---------- THEME BUILDER ---------- */
 ThemeData buildAppTheme({
   required Color accent,
