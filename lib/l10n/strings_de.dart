@@ -71,10 +71,10 @@ const Map<String, String> stringsDe = {
   'downloads': 'Downloads',
   'downloadsSubtitle':
       'Wohin gespeicherte Dateien gehen und ob jedes Mal gefragt wird',
-  'downloadsAlwaysAsk': 'Immer fragen wo gespeichert wird',
-  'downloadsAlwaysAskOn':
+  'downloadsAlwaysAsk': 'Immer fragen, wo gespeichert wird',
+  'downloadsAlwaysAskHintCan':
       'Ausschalten, um direkt in den Standardordner zu speichern',
-  'downloadsAlwaysAskOff':
+  'downloadsAlwaysAskHintNoFolder':
       'Standardordner unten festlegen, um dies ausschalten zu können',
   'downloadsDefaultFolder': 'Standard-Download-Ordner',
   'downloadsDefaultFolderUnset':

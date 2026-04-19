@@ -131,8 +131,9 @@ class AppLocalizations {
   String get downloads => _get('downloads');
   String get downloadsSubtitle => _get('downloadsSubtitle');
   String get downloadsAlwaysAsk => _get('downloadsAlwaysAsk');
-  String get downloadsAlwaysAskOn => _get('downloadsAlwaysAskOn');
-  String get downloadsAlwaysAskOff => _get('downloadsAlwaysAskOff');
+  String get downloadsAlwaysAskHintCan => _get('downloadsAlwaysAskHintCan');
+  String get downloadsAlwaysAskHintNoFolder =>
+      _get('downloadsAlwaysAskHintNoFolder');
   String get downloadsDefaultFolder => _get('downloadsDefaultFolder');
   String get downloadsDefaultFolderUnset =>
       _get('downloadsDefaultFolderUnset');

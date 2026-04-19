@@ -638,6 +638,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
                   style: TextStyle(
                     color: iconFg,
                     fontSize: _selectedChatFontSize,
+                    fontFamily: resolveChatFontFamily(_selectedChatFontFamily),
                     height: 1.38,
                   ),
                 ),
