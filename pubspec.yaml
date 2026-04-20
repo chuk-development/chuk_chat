@@ -1,7 +1,7 @@
 name: chuk_chat
 description: "Chuk Chat — AI chat client for all platforms."
 
-version: 1.0.82
+version: 1.0.83
 
 environment:
   sdk: ^3.9.2
@@ -61,13 +61,13 @@ dependencies:
   path: ^1.9.1
   sqlite3_flutter_libs: ^0.6.0+eol
   # System-WebView renderer for Excalidraw (+ future HTML) artifacts.
-  # 6.1.5 is the last stable release — Android, iOS, macOS, Windows, Web.
-  # Linux is NOT supported by this plugin; ExcalidrawView falls back to
-  # the native CustomPainter when running on Linux so users still see a
-  # rendering. We deliberately avoid 6.2.0-beta because the Linux
-  # federation there needs libwpewebkit-1.0-dev, which is not shipped by
-  # default on Ubuntu/Debian desktops.
-  flutter_inappwebview: ^6.1.5
+  # 6.2.0-beta enables the Linux federation via WPE WebKit. Required
+  # system packages (build-time only, bundled into the app at install):
+  #   libwpewebkit-1.0-dev, libwpe-1.0-dev, libwpebackend-fdo-1.0-dev
+  # CI installs them on ubuntu-24.04 (universe). End-users install
+  # nothing — the plugin's CMake bundles the .so files with RPATH=$ORIGIN.
+  flutter_inappwebview: ^6.2.0-beta.3
+  flutter_inappwebview_linux: ^0.1.0-beta.1
 
 dev_dependencies:
   flutter_test:

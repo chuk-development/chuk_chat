@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS artifacts (
 
   CONSTRAINT artifacts_id_format CHECK (id ~ '^[A-Za-z0-9-]+$'),
   CONSTRAINT artifacts_type_valid CHECK (
-    type IN ('code', 'markdown', 'html', 'mermaid', 'svg', 'technical_drawing')
+    type IN ('code', 'markdown', 'html', 'mermaid', 'svg', 'technical_drawing', 'typst', 'excalidraw')
   ),
   CONSTRAINT artifacts_version_positive CHECK (version > 0),
   CONSTRAINT artifacts_content_size CHECK (octet_length(content) <= 512000)

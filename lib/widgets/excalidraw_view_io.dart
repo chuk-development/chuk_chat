@@ -5,14 +5,14 @@
 // @excalidraw/excalidraw React component from
 // `assets/excalidraw/bundle.js`. No network access is required.
 //
-// When the WebView platform or the bundled assets fail to initialise
-// (e.g. Linux build without WebKitGTK runtime, or a distro where the
-// beta plugin crashes), the widget falls back to the native Flutter
-// CustomPainter renderer so the user always sees *something*.
+// Linux uses the WPE WebKit federation (flutter_inappwebview_linux). The
+// plugin bundles the WPE shared libraries into the app install dir, so
+// end-users do not need to install anything. If the WebView still fails
+// to initialise at runtime (e.g. missing system GL libs), the widget
+// falls back to the CustomPainter renderer so users see *something*.
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -136,21 +136,8 @@ class _ExcalidrawViewState extends State<ExcalidrawView> {
     }
   }
 
-  /// Linux has no stable flutter_inappwebview implementation on
-  /// 6.1.x — the beta 6.2 federation needs libwpewebkit-1.0-dev which
-  /// Ubuntu/Debian does not ship by default. On Linux we therefore skip
-  /// the WebView entirely and render with the native CustomPainter, so
-  /// users still see the artifact.
-  bool get _useWebView {
-    if (kIsWeb) return true; // handled by excalidraw_view_web.dart
-    return !Platform.isLinux;
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (!_useWebView) {
-      return ExcalidrawWidget(jsonString: widget.jsonString);
-    }
     return Stack(
       children: [
         Positioned.fill(
