@@ -297,6 +297,8 @@ jobs:
             clang cmake ninja-build pkg-config \
             libgtk-3-dev liblzma-dev libstdc++-12-dev libsecret-1-dev \
             libayatana-appindicator3-dev \
+            libwpewebkit-1.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev \
+            libepoxy-dev libwayland-dev \
             dpkg-dev rpm file wget fuse libfuse2
 
       - uses: subosito/flutter-action@v2
@@ -525,6 +527,8 @@ jobs:
             clang cmake ninja-build pkg-config \
             libgtk-3-dev liblzma-dev libstdc++-14-dev libsecret-1-dev \
             libayatana-appindicator3-dev \
+            libwpewebkit-1.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev \
+            libepoxy-dev libwayland-dev \
             dpkg-dev rpm file wget curl unzip git libfuse2
 
       - name: Install Flutter (manual ARM64)
