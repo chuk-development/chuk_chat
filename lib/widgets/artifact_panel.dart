@@ -19,6 +19,8 @@ import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/tool_handlers/typst_tools.dart' as typst_tools;
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
+import 'package:chuk_chat/widgets/excalidraw_svg_export.dart';
+import 'package:chuk_chat/widgets/excalidraw_widget.dart';
 import 'package:chuk_chat/widgets/technical_drawing_svg_export.dart';
 import 'package:chuk_chat/widgets/technical_drawing_widget.dart';
 import 'package:pdfrx/pdfrx.dart';
@@ -63,6 +65,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
     ArtifactType.svg,
     ArtifactType.technicalDrawing,
     ArtifactType.typst,
+    ArtifactType.excalidraw,
   };
 
   bool get _hasDualView => _dualViewTypes.contains(widget.artifact.type);
@@ -71,6 +74,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
     ArtifactType.svg => 'xml',
     ArtifactType.technicalDrawing => 'json',
     ArtifactType.typst => 'typst',
+    ArtifactType.excalidraw => 'json',
     _ => '',
   };
 
@@ -214,6 +218,12 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
           _DownloadFormat('PDF document', 'pdf'),
           _DownloadFormat('Typst source', 'typ'),
         ];
+      case ArtifactType.excalidraw:
+        return const [
+          _DownloadFormat('Excalidraw file', 'excalidraw'),
+          _DownloadFormat('PNG image', 'png'),
+          _DownloadFormat('SVG vector', 'svg'),
+        ];
       case ArtifactType.code:
       case ArtifactType.markdown:
       case ArtifactType.html:
@@ -238,7 +248,15 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
           if (svg == null) return null;
           return Uint8List.fromList(utf8.encode(svg));
         }
+        // Excalidraw → generate SVG from scene JSON
+        if (widget.artifact.type == ArtifactType.excalidraw) {
+          final svg = excalidrawToSvg(_effectiveContent);
+          if (svg == null) return null;
+          return Uint8List.fromList(utf8.encode(svg));
+        }
         // SVG artifact → raw content
+        return Uint8List.fromList(utf8.encode(_effectiveContent));
+      case 'excalidraw':
         return Uint8List.fromList(utf8.encode(_effectiveContent));
       case 'pdf':
         if (widget.artifact.type == ArtifactType.typst) {
@@ -879,6 +897,14 @@ class _ArtifactRenderer extends StatelessWidget {
             child: TechnicalDrawingWidget(jsonString: content),
           ),
         );
+      case ArtifactType.excalidraw:
+        return _ZoomableVisual(
+          key: ValueKey('zoom_exc_${artifactId ?? ""}'),
+          child: RepaintBoundary(
+            key: captureKey,
+            child: ExcalidrawWidget(jsonString: content),
+          ),
+        );
       case ArtifactType.typst:
         return _TypstPdfRenderer(
           key: ValueKey('typst_${artifactId ?? ""}'),
@@ -915,13 +941,14 @@ class _ArtifactRenderer extends StatelessWidget {
     final scrollController = PrimaryScrollController.maybeOf(context);
     final usePrimary = scrollController == null;
 
-    // Dual-view types (typst / svg / technical drawing) keep BOTH children
-    // mounted so toggling Preview ⇄ Code doesn't tear down the preview
-    // renderer (and, for typst, re-download / re-render the PDF every
-    // flip).
+    // Dual-view types (typst / svg / technical drawing / excalidraw) keep
+    // BOTH children mounted so toggling Preview ⇄ Code doesn't tear down
+    // the preview renderer (and, for typst, re-download / re-render the
+    // PDF every flip).
     final bool supportsDualView = type == ArtifactType.typst ||
         type == ArtifactType.svg ||
-        type == ArtifactType.technicalDrawing;
+        type == ArtifactType.technicalDrawing ||
+        type == ArtifactType.excalidraw;
     if (supportsDualView) {
       return IndexedStack(
         index: forceCodeView ? 1 : 0,
@@ -1009,6 +1036,10 @@ class _ArtifactRenderer extends StatelessWidget {
             child: TechnicalDrawingWidget(jsonString: content),
           ),
         );
+      case ArtifactType.excalidraw:
+        // Unreachable — excalidraw is handled by the IndexedStack dual-view
+        // branch above. This case exists only so the switch stays exhaustive.
+        return const SizedBox.shrink();
       case ArtifactType.typst:
         return _TypstPdfRenderer(
           key: ValueKey('typst_${artifactId ?? ""}'),
@@ -1383,6 +1414,8 @@ IconData _iconForType(ArtifactType type) {
       return Icons.architecture;
     case ArtifactType.typst:
       return Icons.picture_as_pdf;
+    case ArtifactType.excalidraw:
+      return Icons.brush_outlined;
   }
 }
 

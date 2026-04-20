@@ -2933,6 +2933,8 @@ class _ArtifactInlineCard extends StatelessWidget {
         return Icons.architecture;
       case 'typst':
         return Icons.picture_as_pdf;
+      case 'excalidraw':
+        return Icons.brush_outlined;
       default:
         return Icons.description_outlined;
     }
@@ -2954,6 +2956,8 @@ class _ArtifactInlineCard extends StatelessWidget {
         return 'Technical drawing';
       case 'typst':
         return 'Typst · PDF';
+      case 'excalidraw':
+        return 'Excalidraw sketch';
       default:
         return 'Artifact';
     }

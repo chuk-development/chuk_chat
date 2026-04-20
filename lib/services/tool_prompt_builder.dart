@@ -584,6 +584,7 @@ Use artifact_manager for substantial outputs such as:
 - Mermaid diagrams
 - SVG content
 - technical drawings (type: technical_drawing)
+- Excalidraw sketches / diagrams / flowcharts (type: excalidraw)
 
 Do NOT use artifacts for short snippets or quick conversational replies.
 
@@ -652,6 +653,53 @@ Drawing rules:
 - meta fields populate DIN title block (Schriftfeld)
 - Always dimension all significant features
 - Use centerlines through circles and symmetry axes
+
+### Excalidraw sketches (type: excalidraw)
+
+For hand-drawn style diagrams, flowcharts, system architectures, whiteboard sketches, mind maps, user flows, wireframes — use type="excalidraw". Content is the standard `.excalidraw` scene JSON (same format as excalidraw.com). The app renders it inline + in the right-side artifact panel, and the user can download the raw `.excalidraw` file, a PNG, or an SVG.
+
+Use Excalidraw for: flowcharts, block diagrams, system/architecture diagrams, whiteboard-style sketches, entity-relationship diagrams, user flows, network topologies, mind maps.
+Do NOT use it for: precise engineering drawings with dimensions (use technical_drawing instead), pixel-accurate UI mockups (use svg), or charts/graphs (use <chart>).
+
+Minimum scene shape:
+
+```json
+{
+  "type": "excalidraw",
+  "version": 2,
+  "source": "https://excalidraw.com",
+  "elements": [
+    {"type":"rectangle","id":"r1","x":100,"y":100,"width":200,"height":100,
+     "strokeColor":"#1e1e1e","backgroundColor":"#a5d8ff","fillStyle":"solid",
+     "strokeWidth":2,"roughness":1,"roundness":{"type":3}},
+    {"type":"text","id":"t1","x":150,"y":138,"width":100,"height":24,
+     "text":"Client","fontSize":20,"fontFamily":1,"textAlign":"center",
+     "strokeColor":"#1e1e1e"},
+    {"type":"arrow","id":"a1","x":300,"y":150,"width":200,"height":0,
+     "points":[[0,0],[200,0]],"endArrowhead":"arrow",
+     "strokeColor":"#1e1e1e","strokeWidth":2}
+  ],
+  "appState":{"viewBackgroundColor":"#ffffff","gridSize":null},
+  "files":{}
+}
+```
+
+Excalidraw rules:
+- Top-level keys: `type` ("excalidraw"), `version` (2), `source`, `elements` (array, required), `appState` (object), `files` (object, usually `{}`).
+- Coordinate system: pixels, origin top-left, Y axis down.
+- Required per element: `type`, `id` (unique string), `x`, `y`, `width`, `height`.
+- Element types supported by the renderer: `rectangle`, `ellipse`, `diamond`, `line`, `arrow`, `text`, `freedraw`, `frame`.
+- Colours: hex (`"#1e1e1e"`, `"#a5d8ff"`) or `"transparent"`. Recommended palette — stroke: `#1e1e1e`, `#e03131`, `#2f9e44`, `#1971c2`, `#f08c00`; fill: `#ffc9c9`, `#b2f2bb`, `#a5d8ff`, `#ffec99`, `#e9ecef`.
+- `strokeWidth`: 1 (thin), 2 (bold), 4 (extra bold). `strokeStyle`: `"solid"` | `"dashed"` | `"dotted"`.
+- `fillStyle`: `"solid"` | `"hachure"` (default) | `"cross-hatch"`.
+- `roundness`: `{"type":3}` for rounded corners on rectangles/diamonds, omit for sharp corners.
+- `angle`: rotation in radians around the element center (default 0).
+- Arrows: `points` is an array of `[dx,dy]` offsets relative to element `x,y`. Always start with `[0,0]`. Use `endArrowhead:"arrow"` (or `"triangle"`, `"dot"`, `"bar"`, `null`). Arrows can bind to shapes via `startBinding`/`endBinding` with `{elementId,focus,gap}` — simpler to just connect with explicit points.
+- Text: `text`, `fontSize` (16/20/28/36), `fontFamily` (1=hand-drawn, 2=normal, 3=monospace), `textAlign` (`"left"`/`"center"`/`"right"`), `verticalAlign` (`"top"`/`"middle"`). For a label inside a shape, create a separate text element positioned over the shape (or set `containerId` to the shape's id to bind it).
+- `freedraw`: hand-drawn stroke. `points` is absolute-ish `[x,y]` pairs relative to element origin.
+- Emit ONE artifact per response using `<artifact id="..." type="excalidraw" title="...">` or artifact_manager.
+- Keep scenes focused — 5 to 30 elements is typical. Large scenes (>100 elements) slow the renderer.
+- Do NOT include `seed`, `versionNonce`, `updated`, `groupIds` unless needed — the renderer ignores them but they bloat the payload.
 ''';
   }
 
