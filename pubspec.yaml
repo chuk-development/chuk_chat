@@ -60,6 +60,14 @@ dependencies:
   sqflite_common_ffi: ^2.4.0+2
   path: ^1.9.1
   sqlite3_flutter_libs: ^0.6.0+eol
+  # System-WebView renderer for Excalidraw (+ future HTML) artifacts.
+  # 6.1.5 is the last stable release — Android, iOS, macOS, Windows, Web.
+  # Linux is NOT supported by this plugin; ExcalidrawView falls back to
+  # the native CustomPainter when running on Linux so users still see a
+  # rendering. We deliberately avoid 6.2.0-beta because the Linux
+  # federation there needs libwpewebkit-1.0-dev, which is not shipped by
+  # default on Ubuntu/Debian desktops.
+  flutter_inappwebview: ^6.1.5
 
 dev_dependencies:
   flutter_test:
@@ -72,6 +80,9 @@ flutter:
   assets:
     - assets/icons/
     - assets/icons/chuk_chat_tray_brand.png
+    - assets/excalidraw/
+    - assets/excalidraw/fonts/Assistant/
+    - assets/excalidraw/fonts/Excalifont/
     - web/icons/Icon-512.png
     - windows/runner/resources/app_icon.ico
 
