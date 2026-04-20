@@ -169,15 +169,12 @@ class _LinuxWebViewState extends State<LinuxWebView> {
   }
 
   Future<void> _bootstrap() async {
+    WebViewController? pending;
     try {
       await _ensureCefInitialised();
-      final controller = WebviewManager().createWebView();
-      _controller = controller;
-
-      controller.setWebviewListener(
-        WebviewEventsListener(
-          onUrlChanged: _onUrlChanged,
-        ),
+      pending = WebviewManager().createWebView();
+      pending.setWebviewListener(
+        WebviewEventsListener(onUrlChanged: _onUrlChanged),
       );
 
       final scene = widget.excalidrawJson;
@@ -196,9 +193,16 @@ class _LinuxWebViewState extends State<LinuxWebView> {
         initialUrl = 'about:blank';
       }
 
-      await controller.initialize(initialUrl);
+      await pending.initialize(initialUrl);
+      // Only expose the controller to the widget tree once initialize()
+      // has completed — webview_cef's internal `_creatingCompleter` is
+      // not set before initialize runs, so calling `dispose()` on a
+      // half-built controller throws LateInitializationError.
+      _controller = pending;
+      pending = null;
+
       if (scene != null) {
-        await controller.setJavaScriptChannels({
+        await _controller!.setJavaScriptChannels({
           JavascriptChannel(
             name: 'chukBridge',
             onMessageReceived: (m) => _onBridgeMessage(m.message, scene),
@@ -209,11 +213,22 @@ class _LinuxWebViewState extends State<LinuxWebView> {
       setState(() => _state = _LoadState.ready);
     } catch (e) {
       if (kDebugMode) debugPrint('LinuxWebView bootstrap failed: $e');
-      // Tear down any half-created controller so build() doesn't treat
-      // it as ready and try to render against an uninitialised native
-      // browser handle.
-      unawaited(_controller?.dispose() ?? Future<void>.value());
+      // If initialize completed but a later step failed, dispose the
+      // now-owned controller. If initialize never ran, pending is still
+      // set and webview_cef has no teardown for it — leaking the
+      // JS-side browser slot is cheaper than crashing on dispose.
+      final owned = _controller;
       _controller = null;
+      if (pending == null && owned != null) {
+        unawaited(() async {
+          try {
+            await owned.dispose();
+          } catch (_) {
+            // Swallow LateInitializationError etc. — this is best-effort
+            // cleanup on a failed bootstrap.
+          }
+        }());
+      }
       if (!mounted) return;
       setState(() {
         _state = _LoadState.failed;
@@ -297,7 +312,19 @@ class _LinuxWebViewState extends State<LinuxWebView> {
     // `dispose()` on WebViewController is async and tears down the CEF
     // browser. We can't await inside State.dispose, so fire-and-forget;
     // webview_cef's manager cleans up on app quit regardless.
-    unawaited(_controller?.dispose() ?? Future<void>.value());
+    final owned = _controller;
+    _controller = null;
+    if (owned != null) {
+      unawaited(() async {
+        try {
+          await owned.dispose();
+        } catch (_) {
+          // Safety net for the same LateInitializationError handled in
+          // _bootstrap — if the widget is removed before initialize
+          // completes, dispose races with a half-built controller.
+        }
+      }());
+    }
     super.dispose();
   }
 

@@ -748,6 +748,15 @@ jobs:
             --dart-define=FEATURE_SERVER_TOOLS=false \
             --tree-shake-icons
 
+      - name: Strip bundled .so files
+        # CEF's prebuilt libcef.so ships with full Chromium debug info
+        # (~1.4 GB); stripping drops it to ~210 MB with no runtime
+        # impact. Apply to every bundled .so so all plugins shrink too.
+        run: |
+          BUNDLE=build/linux/x64/release/bundle
+          find "$BUNDLE" -type f -name '*.so' -exec strip --strip-unneeded {} + 2>/dev/null || true
+          du -sh "$BUNDLE" || true
+
       - name: Package .deb / AppImage / .rpm (full)
         run: |
           set -e
@@ -958,6 +967,13 @@ jobs:
             --dart-define=FEATURE_VOICE_MODE=false \
             --dart-define=FEATURE_SERVER_TOOLS=false \
             --tree-shake-icons
+
+      - name: Strip bundled .so files
+        # See rationale on build-linux-x64-full.
+        run: |
+          BUNDLE=$(find build/linux -name "bundle" -type d | head -1)
+          [ -n "$BUNDLE" ] && find "$BUNDLE" -type f -name '*.so' -exec strip --strip-unneeded {} + 2>/dev/null || true
+          [ -n "$BUNDLE" ] && du -sh "$BUNDLE" || true
 
       - name: Detect bundle path
         id: bundle
