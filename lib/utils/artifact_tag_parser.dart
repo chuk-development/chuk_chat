@@ -37,11 +37,12 @@ class ParsedArtifactTag {
 
 // Matches <artifact ...>body</artifact>. The attribute capture accepts:
 //   - unquoted text that is not a quote or a closing angle bracket
-//   - double-quoted strings
-//   - single-quoted strings
-// This keeps quoted values containing ">" intact (e.g. id="foo>1").
+//   - double-quoted strings (straight " or curly “ ”)
+//   - single-quoted strings (straight ' or curly ‘ ’)
+// Curly quotes are accepted because LLMs (especially multilingual models)
+// frequently "smart-quote" attribute values even when explicitly told not to.
 final RegExp _artifactBlockPattern = RegExp(
-  r'''<\s*artifact\b((?:[^>"']|"[^"]*"|'[^']*')*)>([\s\S]*?)<\s*/\s*artifact\s*>''',
+  r'''<\s*artifact\b((?:[^>"'\u201C\u201D\u2018\u2019]|"[^"]*"|'[^']*'|\u201C[^\u201D]*\u201D|\u2018[^\u2019]*\u2019)*)>([\s\S]*?)<\s*/\s*artifact\s*>''',
   caseSensitive: false,
 );
 
@@ -50,10 +51,17 @@ final RegExp _artifactStartPattern = RegExp(
   caseSensitive: false,
 );
 
+// name="value" / name='value' / name=“value” / name=‘value’
 final RegExp _attrPattern = RegExp(
-  // name="value" with either single or double quotes
-  r'''(\w+)\s*=\s*(?:"([^"]*)"|'([^']*)')''',
+  r'''(\w+)\s*=\s*(?:"([^"]*)"|'([^']*)'|\u201C([^\u201D]*)\u201D|\u2018([^\u2019]*)\u2019)''',
 );
+
+// Matches an optional leading markdown code fence the LLM sometimes
+// wraps around the content ("```json\n{...}\n```").
+final RegExp _leadingCodeFence = RegExp(
+  r'^\s*```(?:[a-zA-Z_][\w+\-]*)?\s*\r?\n',
+);
+final RegExp _trailingCodeFence = RegExp(r'\r?\n\s*```\s*$');
 
 /// Returns all complete `<artifact>` blocks found in [text]. Partial
 /// (unclosed) blocks are ignored.
@@ -61,14 +69,21 @@ List<ParsedArtifactTag> parseArtifactTags(String text) {
   final results = <ParsedArtifactTag>[];
   for (final match in _artifactBlockPattern.allMatches(text)) {
     final attrsRaw = match.group(1) ?? '';
-    final content = (match.group(2) ?? '').trim();
+    final rawContent = (match.group(2) ?? '').trim();
+    if (rawContent.isEmpty) continue;
+
+    // LLMs sometimes wrap the inner payload in a ```json fence. Strip a
+    // single pair if present so the persisted content is usable JSON /
+    // source text.
+    final content = _stripWrappingFence(rawContent);
     if (content.isEmpty) continue;
 
     final attrs = <String, String>{};
     for (final a in _attrPattern.allMatches(attrsRaw)) {
       final key = a.group(1)?.toLowerCase();
       if (key == null || key.isEmpty) continue;
-      final value = a.group(2) ?? a.group(3) ?? '';
+      final value =
+          a.group(2) ?? a.group(3) ?? a.group(4) ?? a.group(5) ?? '';
       attrs[key] = value;
     }
 
@@ -96,6 +111,15 @@ List<ParsedArtifactTag> parseArtifactTags(String text) {
     );
   }
   return results;
+}
+
+/// Strip a single surrounding "```lang\n … \n```" fence if present. Leaves
+/// nested fences alone — only the outermost wrapper is removed.
+String _stripWrappingFence(String content) {
+  if (!_leadingCodeFence.hasMatch(content)) return content;
+  var stripped = content.replaceFirst(_leadingCodeFence, '');
+  stripped = stripped.replaceFirst(_trailingCodeFence, '');
+  return stripped.trim();
 }
 
 /// Returns true when [content] starts (or contains) a partial

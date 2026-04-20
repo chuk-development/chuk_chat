@@ -577,9 +577,14 @@ class ToolCallHandler {
     // treat it like chart/map/email output, no discovery needed.
     // Chat scoping happens at execute time (tool_executor.dart).
     Map<String, dynamic>? artifactToolDef;
+    Map<String, dynamic>? artifactSchemaToolDef;
     if (kFeatureArtifacts) {
       artifactToolDef = _toolExecutor.allTools
           .where((t) => t.name == 'artifact_manager')
+          .map((t) => t.toJson())
+          .firstOrNull;
+      artifactSchemaToolDef = _toolExecutor.allTools
+          .where((t) => t.name == 'artifact_schema')
           .map((t) => t.toJson())
           .firstOrNull;
     }
@@ -600,6 +605,7 @@ class ToolCallHandler {
           webCrawlToolDef: webCrawlToolDef,
           projectToolDef: projectToolDef,
           artifactToolDef: artifactToolDef,
+          artifactSchemaToolDef: artifactSchemaToolDef,
           includeMapVisualOutput: _toolExecutor.mapVisualOutputEnabled,
           includeChartVisualOutput: _toolExecutor.chartVisualOutputEnabled,
         )

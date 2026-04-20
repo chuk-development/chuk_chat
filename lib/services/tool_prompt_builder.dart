@@ -36,6 +36,7 @@ class ToolPromptBuilder {
     Map<String, dynamic>? webCrawlToolDef,
     Map<String, dynamic>? projectToolDef,
     Map<String, dynamic>? artifactToolDef,
+    Map<String, dynamic>? artifactSchemaToolDef,
     bool includeMapVisualOutput = true,
     bool includeChartVisualOutput = true,
   }) {
@@ -100,6 +101,9 @@ class ToolPromptBuilder {
       }
       if (artifactToolDef != null) {
         alwaysAvailableTools.add(artifactToolDef);
+      }
+      if (artifactSchemaToolDef != null) {
+        alwaysAvailableTools.add(artifactSchemaToolDef);
       }
 
       if (discoveryMode && hasDiscoveredTools) {
@@ -578,13 +582,15 @@ ${_visualOutputProtocol(includeMaps: includeMapVisualOutput, includeCharts: incl
 ## ARTIFACTS
 
 Use artifact_manager for substantial outputs such as:
-- code blocks longer than about 15 lines
-- full markdown documents/specs
-- HTML apps/pages
-- Mermaid diagrams
-- SVG content
-- technical drawings (type: technical_drawing)
-- Excalidraw sketches / diagrams / flowcharts (type: excalidraw)
+- code blocks longer than about 15 lines (type: code)
+- full markdown documents/specs (type: markdown)
+- HTML apps/pages (type: html — rendered in a sandboxed webview)
+- Mermaid diagrams (type: mermaid)
+- SVG content (type: svg)
+- Technical / engineering drawings (type: technical_drawing)
+- Excalidraw sketches / flowcharts / architecture diagrams (type: excalidraw)
+
+For Typst documents (math, tables, reports) use the dedicated `typst_compile` tool, NOT artifact_manager.
 
 Do NOT use artifacts for short snippets or quick conversational replies.
 
@@ -594,112 +600,35 @@ Artifact rules:
 3. Keep update edits small (max ~5 edits). If many structural changes are needed, use rewrite.
 4. Create at most ONE artifact per assistant response.
 5. Reuse the same artifact_id across follow-up edits so version history stays intact.
-6. When recreating an artifact in a different format (e.g. SVG → technical_drawing), use action="rewrite" with the SAME artifact_id and set the new type. Do NOT create a new artifact_id — this keeps version history.
+6. When recreating an artifact in a different format, use action="rewrite" with the SAME artifact_id and set the new type. Do NOT create a new artifact_id.
+
+### MANDATORY schema lookup before complex types
+
+For `excalidraw`, `technical_drawing`, `mermaid`, `svg`, and `typst`, you MUST call `artifact_schema(type: "<type>")` FIRST — in the SAME response, before the artifact_manager call. The tool returns the exact content shape (JSON keys, element syntax, allowed values). Skipping this step is the #1 cause of silent render failures because the content field does not match what the renderer expects.
+
+Flow:
+  1. `<tool_call>{"name":"artifact_schema","arguments":{"type":"excalidraw"}}</tool_call>`
+  2. Wait for the tool result (the schema).
+  3. Build `content` strictly following that schema.
+  4. `<tool_call>{"name":"artifact_manager","arguments":{"action":"create","artifact_id":"...","title":"...","type":"excalidraw","content":"...full JSON as a string..."}}</tool_call>`
+
+For simple types (`code`, `markdown`, `html`) no schema lookup is needed.
 
 ### Inline <artifact> tag (alternative to artifact_manager)
 
-As a shorthand, you may also emit the artifact directly in your message text using this tag shape:
+As a shorthand, you may emit the artifact directly in your message text:
 
-    <artifact id="my-id" type="technical_drawing" title="Optional Title">
+    <artifact id="my-id" type="excalidraw" title="Optional Title">
     {...content JSON or code...}
     </artifact>
 
-The UI parses these tags on message finalization and routes them through the same storage path as artifact_manager — so versioning still works:
+The UI parses these tags on message finalization:
 - If the id is new → creates a fresh artifact (equivalent to action="create").
 - If the id already exists → bumps the version (equivalent to action="rewrite").
 
-Use the tag form when you want to produce an artifact as part of a normal answer. For targeted text edits (small old_str → new_str swaps) you still MUST use artifact_manager with action="update" — inline tags only support create/rewrite.
+The mandatory-schema-lookup rule above also applies to inline tags for complex types. For targeted text edits you still MUST use artifact_manager with action="update" — inline tags only support create/rewrite.
 
-### Technical Drawings (type: technical_drawing)
-
-For engineering/mechanical drawings, use type="technical_drawing". Content is JSON:
-
-```json
-{
-  "type": "technical_drawing",
-  "meta": {
-    "title": "Flachplatte",
-    "partNo": "FP-001",
-    "material": "S235JR",
-    "scale": "1:1",
-    "unit": "mm",
-    "tolerance": "ISO 2768-m",
-    "author": "Claude",
-    "date": "12.04.2026",
-    "sheet": "1/1"
-  },
-  "elements": [
-    {"type":"rect","lineStyle":"solid","weight":"thick","x":50,"y":30,"w":120,"h":80},
-    {"type":"circle","lineStyle":"solid","weight":"thick","cx":110,"cy":70,"r":15},
-    {"type":"line","lineStyle":"centerline","weight":"thin","x1":85,"y1":70,"x2":135,"y2":70},
-    {"type":"dimension","subtype":"linear_h","x1":50,"x2":170,"y":110,"offset":14,"value":"120"},
-    {"type":"dimension","subtype":"linear_v","y1":30,"y2":110,"x":50,"offset":-14,"value":"80"},
-    {"type":"dimension","subtype":"diameter","cx":110,"cy":70,"r":15,"angle":45,"value":"\\u00d8 30"},
-    {"type":"note","x":50,"y":22,"text":"t = 10"}
-  ]
-}
-```
-
-Drawing rules:
-- Coordinates in mm, origin top-left, Y-axis down
-- lineStyle: "solid" (visible edges), "dashed" (hidden edges), "centerline" (axes)
-- weight: "thick" (body edges ~0.7mm), "thin" (dimensions/helpers ~0.25mm)
-- Element types: rect (x,y,w,h), circle (cx,cy,r), line (x1,y1,x2,y2)
-- Dimension subtypes: linear_h (horizontal), linear_v (vertical), diameter
-- For linear_h: x1,x2 = endpoints, y = part edge Y, offset = distance to dim line (+ = down, - = up)
-- For linear_v: y1,y2 = endpoints, x = part edge X, offset = distance to dim line (+ = right, - = left)
-- For diameter: cx,cy,r from circle, angle = leader line angle in degrees, value includes \\u00d8 prefix
-- note: freeform text annotation at position
-- meta fields populate DIN title block (Schriftfeld)
-- Always dimension all significant features
-- Use centerlines through circles and symmetry axes
-
-### Excalidraw sketches (type: excalidraw)
-
-For hand-drawn style diagrams, flowcharts, system architectures, whiteboard sketches, mind maps, user flows, wireframes — use type="excalidraw". Content is the standard `.excalidraw` scene JSON (same format as excalidraw.com). The app renders it inline + in the right-side artifact panel, and the user can download the raw `.excalidraw` file, a PNG, or an SVG.
-
-Use Excalidraw for: flowcharts, block diagrams, system/architecture diagrams, whiteboard-style sketches, entity-relationship diagrams, user flows, network topologies, mind maps.
-Do NOT use it for: precise engineering drawings with dimensions (use technical_drawing instead), pixel-accurate UI mockups (use svg), or charts/graphs (use <chart>).
-
-Minimum scene shape:
-
-```json
-{
-  "type": "excalidraw",
-  "version": 2,
-  "source": "https://excalidraw.com",
-  "elements": [
-    {"type":"rectangle","id":"r1","x":100,"y":100,"width":200,"height":100,
-     "strokeColor":"#1e1e1e","backgroundColor":"#a5d8ff","fillStyle":"solid",
-     "strokeWidth":2,"roughness":1,"roundness":{"type":3}},
-    {"type":"text","id":"t1","x":150,"y":138,"width":100,"height":24,
-     "text":"Client","fontSize":20,"fontFamily":1,"textAlign":"center",
-     "strokeColor":"#1e1e1e"},
-    {"type":"arrow","id":"a1","x":300,"y":150,"width":200,"height":0,
-     "points":[[0,0],[200,0]],"endArrowhead":"arrow",
-     "strokeColor":"#1e1e1e","strokeWidth":2}
-  ],
-  "appState":{"viewBackgroundColor":"#ffffff","gridSize":null},
-  "files":{}
-}
-```
-
-Excalidraw rules:
-- Top-level keys: `type` ("excalidraw"), `version` (2), `source`, `elements` (array, required), `appState` (object), `files` (object, usually `{}`).
-- Coordinate system: pixels, origin top-left, Y axis down.
-- Required per element: `type`, `id` (unique string), `x`, `y`, `width`, `height`.
-- Element types supported by the renderer: `rectangle`, `ellipse`, `diamond`, `line`, `arrow`, `text`, `freedraw`, `frame`.
-- Colours: hex (`"#1e1e1e"`, `"#a5d8ff"`) or `"transparent"`. Recommended palette — stroke: `#1e1e1e`, `#e03131`, `#2f9e44`, `#1971c2`, `#f08c00`; fill: `#ffc9c9`, `#b2f2bb`, `#a5d8ff`, `#ffec99`, `#e9ecef`.
-- `strokeWidth`: 1 (thin), 2 (bold), 4 (extra bold). `strokeStyle`: `"solid"` | `"dashed"` | `"dotted"`.
-- `fillStyle`: `"solid"` | `"hachure"` (default) | `"cross-hatch"`.
-- `roundness`: `{"type":3}` for rounded corners on rectangles/diamonds, omit for sharp corners.
-- `angle`: rotation in radians around the element center (default 0).
-- Arrows: `points` is an array of `[dx,dy]` offsets relative to element `x,y`. Always start with `[0,0]`. Use `endArrowhead:"arrow"` (or `"triangle"`, `"dot"`, `"bar"`, `null`). Arrows can bind to shapes via `startBinding`/`endBinding` with `{elementId,focus,gap}` — simpler to just connect with explicit points.
-- Text: `text`, `fontSize` (16/20/28/36), `fontFamily` (1=hand-drawn, 2=normal, 3=monospace), `textAlign` (`"left"`/`"center"`/`"right"`), `verticalAlign` (`"top"`/`"middle"`). For a label inside a shape, create a separate text element positioned over the shape (or set `containerId` to the shape's id to bind it).
-- `freedraw`: hand-drawn stroke. `points` is absolute-ish `[x,y]` pairs relative to element origin.
-- Emit ONE artifact per response using `<artifact id="..." type="excalidraw" title="...">` or artifact_manager.
-- Keep scenes focused — 5 to 30 elements is typical. Large scenes (>100 elements) slow the renderer.
-- Do NOT include `seed`, `versionNonce`, `updated`, `groupIds` unless needed — the renderer ignores them but they bloat the payload.
+Never wrap an <artifact> tag inside a markdown code fence (```…```); the parser reads the tag from raw message text.
 ''';
   }
 

@@ -59,6 +59,7 @@ const Map<String, ToolCategory> toolCategoryMap = {
   'reminder': ToolCategory.device,
   'search_chats': ToolCategory.basic,
   'artifact_manager': ToolCategory.basic,
+  'artifact_schema': ToolCategory.basic,
   'update_project': ToolCategory.basic,
   'typst_compile': ToolCategory.basic,
 };
@@ -1109,7 +1110,8 @@ final List<ClientTool> builtinTools = [
           'string (required: stable, CONTENT-descriptive slug; letters/numbers/hyphens only. Bad: "doc", "test", "output". Good: "quantum-mechanics-intro", "invoice-acme-2026-04")',
       'title': 'string (required for create, optional for rewrite; human-readable name that reflects the content, e.g. "Quantenmechanik-Einführung", not "Test-Dokument")',
       'type':
-          'string (required for create; optional for rewrite: code|markdown|html|mermaid|svg|technical_drawing)',
+          'string (required for create; optional for rewrite: code|markdown|html|mermaid|svg|technical_drawing|excalidraw). '
+          'For excalidraw|technical_drawing|typst|mermaid|svg call artifact_schema(type) FIRST to get the precise content shape.',
       'language':
           'string (optional for code artifacts, e.g. dart, python, ts, rust)',
       'content':
@@ -1129,6 +1131,7 @@ final List<ClientTool> builtinTools = [
       'mermaid',
       'svg',
       'technical_drawing',
+      'excalidraw',
       'drawing',
       'rewrite',
       'edit',
@@ -1136,6 +1139,38 @@ final List<ClientTool> builtinTools = [
       'version',
       'panel',
       'workspace',
+    ],
+  ),
+
+  // ── Artifact schema reference ────────────────────────────────────────
+  ClientTool(
+    name: 'artifact_schema',
+    description:
+        'Return the precise JSON/content schema for a complex artifact '
+        'type (excalidraw, technical_drawing, typst, mermaid, svg). '
+        'MUST be called BEFORE creating an artifact of those types so '
+        'your content field matches the renderer exactly — the app '
+        'rejects malformed JSON silently otherwise. For simple types '
+        '(code, markdown, html) no schema call is needed.',
+    parameters: {
+      'type':
+          'string (required: excalidraw | technical_drawing | typst | mermaid | svg)',
+    },
+    type: ToolType.builtin,
+    tags: [
+      'schema',
+      'artifact',
+      'excalidraw',
+      'diagram',
+      'flowchart',
+      'sketch',
+      'whiteboard',
+      'technical_drawing',
+      'blueprint',
+      'typst',
+      'latex',
+      'mermaid',
+      'svg',
     ],
   ),
 
