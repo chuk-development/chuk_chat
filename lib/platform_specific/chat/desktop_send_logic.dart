@@ -62,6 +62,13 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       return;
     }
 
+    // Keep builtin tools (artifact_manager, typst_compile) pointing at this
+    // chat even if widget.selectedChatId is transiently null during the
+    // async resend flow. Without this, the tool handler sees no active
+    // chat and aborts with "No active chat. Start or select a chat first."
+    ChatStorageService.activeMessageChatId = _activeChatId;
+    ChatStorageService.selectedChatId ??= _activeChatId;
+
     final int sendOperationId = _beginSendOperation();
 
     try {
@@ -101,8 +108,14 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       }
 
       if (artifactIdsToDelete.isNotEmpty) {
-        unawaited(
-          ArtifactStorageService.deleteArtifactsByIds(artifactIdsToDelete),
+        // MUST await. deleteArtifactsByIds prunes the in-memory cache
+        // only after the Supabase round-trip, and the new AI turn
+        // starts immediately below — firing this unawaited lets the
+        // next loadArtifactsForChat return the ghost artifact, which
+        // ends up in the system prompt as a "still active" item the
+        // model then tries to update instead of creating fresh.
+        await ArtifactStorageService.deleteArtifactsByIds(
+          artifactIdsToDelete,
         );
       }
 

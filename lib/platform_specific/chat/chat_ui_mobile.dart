@@ -2173,8 +2173,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     }
 
     if (artifactIdsToDelete.isNotEmpty) {
-      unawaited(
-        ArtifactStorageService.deleteArtifactsByIds(artifactIdsToDelete),
+      // MUST await. deleteArtifactsByIds prunes the in-memory cache
+      // only after the Supabase round-trip; firing it unawaited lets
+      // the next loadArtifactsForChat return the ghost artifact which
+      // ends up in the system prompt as a "still active" item.
+      await ArtifactStorageService.deleteArtifactsByIds(
+        artifactIdsToDelete,
       );
     }
 
@@ -2219,6 +2223,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     // Generate chat ID if needed BEFORE persisting
     _activeChatId ??= _uuid.v4();
     final String chatId = _activeChatId!;
+
+    // Keep builtin tools (artifact_manager, typst_compile) pointing at
+    // this chat even if widget.selectedChatId is transiently null
+    // during the async resend flow. Without this, the tool handler
+    // aborts with "No active chat. Start or select a chat first."
+    ChatStorageService.activeMessageChatId = chatId;
+    ChatStorageService.selectedChatId ??= chatId;
 
     setState(() {
       _messages.add({
