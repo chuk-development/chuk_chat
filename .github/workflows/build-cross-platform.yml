@@ -21,6 +21,16 @@ on:
         required: false
         default: true
         type: boolean
+      build_linux_x64_full:
+        description: 'Build Linux x86_64 -full (webview_cef / CEF bundled, ~120 MB)'
+        required: false
+        default: false
+        type: boolean
+      build_linux_arm64_full:
+        description: 'Build Linux ARM64 -full (webview_cef / CEF bundled, ~120 MB)'
+        required: false
+        default: false
+        type: boolean
       build_windows:
         description: 'Build Windows (MSIX + Portable)'
         required: false
@@ -281,11 +291,7 @@ jobs:
   # ──────────────────────────────────────────────
   build-linux-x64:
     name: Linux x86_64
-    # Pinned to ubuntu-22.04 (jammy) because libwpewebkit-1.0-dev was
-    # dropped from the Ubuntu 24.04 (noble) archive. The plugin's WPE
-    # bundling produces .so files linked against glibc 2.35, which is
-    # forward-compatible with newer target distros.
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     needs: version-bump
     if: inputs.build_linux_x64 || (github.event_name == 'push')
     timeout-minutes: 45
@@ -301,32 +307,12 @@ jobs:
             clang cmake ninja-build pkg-config \
             libgtk-3-dev liblzma-dev libstdc++-12-dev libsecret-1-dev \
             libayatana-appindicator3-dev \
-            libwpewebkit-1.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev \
-            libepoxy-dev libwayland-dev \
             dpkg-dev rpm file wget fuse libfuse2
 
       - uses: subosito/flutter-action@v2
         with: { flutter-version: '3.41.4', cache: true }
 
       - run: flutter pub get
-
-      - name: Patch flutter_inappwebview_linux CMake flags
-        # Drop `-Wno-deprecated-literal-operator` from the plugin's
-        # CMakeLists — clang 14 on Ubuntu 22.04 rejects it with
-        # -Werror,-Wunknown-warning-option and fails the whole build.
-        # The flag is only there to silence nlohmann_json warnings on
-        # newer GCC/clang, so removing it is safe.
-        run: |
-          set -e
-          mapfile -t PLUGIN_CMAKES < <(find ~/.pub-cache/hosted -path '*flutter_inappwebview_linux*/linux/CMakeLists.txt' 2>/dev/null || true)
-          if [ ${#PLUGIN_CMAKES[@]} -eq 0 ]; then
-            echo "::warning::flutter_inappwebview_linux CMakeLists.txt not found; skipping patch."
-            exit 0
-          fi
-          for f in "${PLUGIN_CMAKES[@]}"; do
-            echo "Patching: $f"
-            sed -i '/-Wno-deprecated-literal-operator/d' "$f"
-          done
 
       - name: Build Linux
         run: |
@@ -533,10 +519,7 @@ jobs:
   # ──────────────────────────────────────────────
   build-linux-arm64:
     name: Linux ARM64
-    # See runs-on comment on build-linux-x64. libwpewebkit-1.0-dev only
-    # exists in jammy; switch to the 22.04 ARM runner for the same WPE
-    # build inputs.
-    runs-on: ubuntu-22.04-arm
+    runs-on: ubuntu-24.04-arm
     needs: version-bump
     if: inputs.build_linux_arm64 || (github.event_name == 'push')
     timeout-minutes: 60
@@ -550,10 +533,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             clang cmake ninja-build pkg-config \
-            libgtk-3-dev liblzma-dev libstdc++-12-dev libsecret-1-dev \
+            libgtk-3-dev liblzma-dev libstdc++-14-dev libsecret-1-dev \
             libayatana-appindicator3-dev \
-            libwpewebkit-1.0-dev libwpe-1.0-dev libwpebackend-fdo-1.0-dev \
-            libepoxy-dev libwayland-dev \
             dpkg-dev rpm file wget curl unzip git libfuse2
 
       - name: Install Flutter (manual ARM64)
@@ -571,21 +552,6 @@ jobs:
         run: |
           export PATH="$HOME/flutter/bin:$PATH"
           flutter pub get
-
-      - name: Patch flutter_inappwebview_linux CMake flags (arm64)
-        # See Build Linux x64 for rationale — clang 14 rejects the
-        # -Wno-deprecated-literal-operator flag with -Werror.
-        run: |
-          set -e
-          mapfile -t PLUGIN_CMAKES < <(find $HOME/.pub-cache/hosted -path '*flutter_inappwebview_linux*/linux/CMakeLists.txt' 2>/dev/null || true)
-          if [ ${#PLUGIN_CMAKES[@]} -eq 0 ]; then
-            echo "::warning::flutter_inappwebview_linux CMakeLists.txt not found; skipping patch."
-            exit 0
-          fi
-          for f in "${PLUGIN_CMAKES[@]}"; do
-            echo "Patching: $f"
-            sed -i '/-Wno-deprecated-literal-operator/d' "$f"
-          done
 
       - name: Build Linux ARM64
         run: |
@@ -727,6 +693,370 @@ jobs:
           TAG=${{ needs.version-bump.outputs.tag }}
           FILES=""
           for f in chuk_chat-*-linux-arm64.deb chuk_chat-*-linux-aarch64.AppImage chuk_chat-*-linux-aarch64.tar.gz; do
+            [ -f "$f" ] && FILES="$FILES $f"
+          done
+          [ -n "$FILES" ] && gh release upload "$TAG" $FILES --repo ${{ github.repository }} --clobber
+
+  # ──────────────────────────────────────────────
+  # Linux x86_64 (-full, CEF/webview_cef bundled)
+  # ──────────────────────────────────────────────
+  build-linux-x64-full:
+    name: Linux x86_64 (-full)
+    # Pin explicitly so a future ubuntu-latest bump doesn't silently
+    # change apt package names (`libasound2t64` is 24.04+ only).
+    runs-on: ubuntu-24.04
+    needs: version-bump
+    if: inputs.build_linux_x64_full || (github.event_name == 'push')
+    # A broken -full job should never block the regular release — this
+    # is an opt-in variant. `continue-on-error: true` makes a failure
+    # report as a soft-skip to downstream gating.
+    continue-on-error: true
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v5
+        with: { ref: master }
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang cmake ninja-build pkg-config \
+            libgtk-3-dev liblzma-dev libstdc++-12-dev libsecret-1-dev \
+            libayatana-appindicator3-dev \
+            libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libxdamage1 \
+            libxkbcommon0 libxcomposite1 libxrandr2 libgbm1 libasound2t64 \
+            dpkg-dev rpm file wget fuse libfuse2
+
+      - uses: subosito/flutter-action@v2
+        with: { flutter-version: '3.41.4', cache: true }
+
+      - name: Apply full-Linux swap (webview_cef)
+        run: bash ci/linux_full/apply.sh
+
+      - run: flutter pub get
+
+      - name: Build Linux (full)
+        run: |
+          flutter build linux --release \
+            --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
+            --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} \
+            --dart-define=PLATFORM_DESKTOP=true \
+            --dart-define=FEATURE_PROJECTS=false \
+            --dart-define=FEATURE_IMAGE_GEN=false \
+            --dart-define=FEATURE_VOICE_MODE=false \
+            --dart-define=FEATURE_SERVER_TOOLS=false \
+            --tree-shake-icons
+
+      - name: Package .deb / AppImage / .rpm (full)
+        run: |
+          set -e
+          TAG=${{ needs.version-bump.outputs.tag }}
+          VER=${{ needs.version-bump.outputs.version_short }}
+          BUNDLE=build/linux/x64/release/bundle
+
+          # .deb
+          rm -rf debian
+          mkdir -p debian/DEBIAN debian/opt/chuk-chat debian/usr/bin \
+                   debian/usr/share/applications debian/usr/share/icons/hicolor/512x512/apps
+          cp -r ${BUNDLE}/* debian/opt/chuk-chat/
+          chmod +x debian/opt/chuk-chat/chuk_chat
+          ln -s /opt/chuk-chat/chuk_chat debian/usr/bin/chuk-chat
+          [ -f web/icons/Icon-512.png ] && cp web/icons/Icon-512.png debian/usr/share/icons/hicolor/512x512/apps/chuk-chat.png
+          cat > debian/usr/share/applications/chuk-chat.desktop <<EOF
+          [Desktop Entry]
+          Version=1.0
+          Type=Application
+          Name=Chuk Chat
+          GenericName=Chat Application
+          Comment=Privacy-focused AI chat with end-to-end encryption (full, Linux WebView)
+          Exec=/opt/chuk-chat/chuk_chat
+          Icon=chuk-chat
+          Terminal=false
+          Categories=Network;InstantMessaging;Chat;
+          StartupWMClass=chuk_chat
+          Keywords=chat;ai;encrypted;privacy;
+          EOF
+          cat > debian/DEBIAN/control <<EOF
+          Package: chuk-chat
+          Version: ${VER}
+          Section: net
+          Priority: optional
+          Architecture: amd64
+          Maintainer: Chuk Development <support@chuk.dev>
+          Homepage: https://chuk.chat
+          Description: Privacy-focused AI chat with end-to-end encryption (full)
+           Bundles a Chromium Embedded Framework (CEF) runtime for real
+           HTML and Excalidraw artifact rendering on Linux. If you prefer
+           a smaller install, use the non-"-full" artifact instead.
+          Depends: libgtk-3-0, libblkid1, liblzma5, libnss3, libxkbcommon0, libxdamage1, libxcomposite1, libgbm1, libasound2t64
+          EOF
+          cat > debian/DEBIAN/postinst <<'SCRIPT'
+          #!/bin/bash
+          update-desktop-database /usr/share/applications 2>/dev/null || true
+          gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
+          SCRIPT
+          chmod +x debian/DEBIAN/postinst
+          dpkg-deb --build debian chuk_chat-${TAG}-linux-amd64-full.deb
+
+          # AppImage
+          rm -rf AppDir
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
+          mkdir -p AppDir/usr/bin AppDir/usr/share/applications AppDir/usr/share/icons/hicolor/512x512/apps
+          cp -r ${BUNDLE}/* AppDir/usr/bin/
+          chmod +x AppDir/usr/bin/chuk_chat
+          [ -f web/icons/Icon-512.png ] && cp web/icons/Icon-512.png AppDir/usr/share/icons/hicolor/512x512/apps/chuk-chat.png
+          [ -f web/icons/Icon-512.png ] && cp web/icons/Icon-512.png AppDir/chuk-chat.png
+          cat > AppDir/chuk-chat.desktop <<EOF
+          [Desktop Entry]
+          Version=1.0
+          Type=Application
+          Name=Chuk Chat (full)
+          Exec=chuk_chat
+          Icon=chuk-chat
+          Terminal=false
+          Categories=Network;InstantMessaging;Chat;
+          StartupWMClass=chuk_chat
+          EOF
+          cp AppDir/chuk-chat.desktop AppDir/usr/share/applications/
+          cat > AppDir/AppRun <<'APPRUN'
+          #!/bin/bash
+          HERE="$(dirname "$(readlink -f "$0")")"
+          export LD_LIBRARY_PATH="${HERE}/usr/bin/lib:${LD_LIBRARY_PATH}"
+          exec "${HERE}/usr/bin/chuk_chat" "$@"
+          APPRUN
+          chmod +x AppDir/AppRun
+          ARCH=x86_64 ./appimagetool-x86_64.AppImage AppDir chuk_chat-${TAG}-linux-x86_64-full.AppImage
+
+          # .rpm
+          rm -rf ~/rpmbuild rpm-src
+          mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+          mkdir -p rpm-src/opt/chuk-chat rpm-src/usr/bin \
+                   rpm-src/usr/share/applications rpm-src/usr/share/icons/hicolor/512x512/apps
+          cp -r ${BUNDLE}/* rpm-src/opt/chuk-chat/
+          chmod +x rpm-src/opt/chuk-chat/chuk_chat
+          ln -s /opt/chuk-chat/chuk_chat rpm-src/usr/bin/chuk-chat
+          [ -f web/icons/Icon-512.png ] && cp web/icons/Icon-512.png rpm-src/usr/share/icons/hicolor/512x512/apps/chuk-chat.png
+          cat > rpm-src/usr/share/applications/chuk-chat.desktop <<EOF
+          [Desktop Entry]
+          Version=1.0
+          Type=Application
+          Name=Chuk Chat (full)
+          Exec=/opt/chuk-chat/chuk_chat
+          Icon=chuk-chat
+          Terminal=false
+          Categories=Network;InstantMessaging;Chat;
+          StartupWMClass=chuk_chat
+          EOF
+          tar -czf ~/rpmbuild/SOURCES/chuk-chat-${VER}.tar.gz -C rpm-src .
+          cat > ~/rpmbuild/SPECS/chuk-chat.spec <<EOF
+          Name:           chuk-chat
+          Version:        ${VER}
+          Release:        1%{?dist}
+          Summary:        Privacy-focused AI chat with CEF-backed Linux WebView
+          License:        BSL-1.1
+          URL:            https://chuk.chat
+          Source0:        chuk-chat-%{version}.tar.gz
+          BuildArch:      x86_64
+          Requires:       gtk3, libblkid, xz-libs, nss, libxkbcommon, libXdamage, libXcomposite, mesa-libgbm, alsa-lib
+
+          %description
+          Chuk Chat -full bundles a Chromium Embedded Framework runtime
+          for Linux artifact rendering. Use the non-"-full" RPM if you
+          prefer a smaller install.
+
+          %prep
+          %setup -q -c
+
+          %install
+          mkdir -p %{buildroot}
+          cp -r * %{buildroot}/
+
+          %files
+          /opt/chuk-chat/
+          /usr/bin/chuk-chat
+          /usr/share/applications/chuk-chat.desktop
+          /usr/share/icons/hicolor/512x512/apps/chuk-chat.png
+
+          %post
+          update-desktop-database /usr/share/applications 2>/dev/null || true
+          gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
+
+          %changelog
+          * $(date '+%a %b %d %Y') Chuk Development <support@chuk.dev> - ${VER}-1
+          - Release ${VER} (full variant)
+          EOF
+          rpmbuild -bb ~/rpmbuild/SPECS/chuk-chat.spec
+          cp ~/rpmbuild/RPMS/x86_64/chuk-chat-*.rpm chuk_chat-${TAG}-linux-x86_64-full.rpm || true
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG=${{ needs.version-bump.outputs.tag }}
+          gh release upload "$TAG" \
+            chuk_chat-*-linux-amd64-full.deb \
+            chuk_chat-*-linux-x86_64-full.AppImage \
+            chuk_chat-*-linux-x86_64-full.rpm \
+            --repo ${{ github.repository }} --clobber
+
+  # ──────────────────────────────────────────────
+  # Linux ARM64 (-full, CEF/webview_cef bundled)
+  # ──────────────────────────────────────────────
+  build-linux-arm64-full:
+    name: Linux ARM64 (-full)
+    runs-on: ubuntu-24.04-arm
+    needs: version-bump
+    if: inputs.build_linux_arm64_full || (github.event_name == 'push')
+    # See comment on build-linux-x64-full.
+    continue-on-error: true
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v5
+        with: { ref: master }
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang cmake ninja-build pkg-config \
+            libgtk-3-dev liblzma-dev libstdc++-14-dev libsecret-1-dev \
+            libayatana-appindicator3-dev \
+            libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libxdamage1 \
+            libxkbcommon0 libxcomposite1 libxrandr2 libgbm1 libasound2t64 \
+            dpkg-dev rpm file wget curl unzip git libfuse2
+
+      - name: Install Flutter (manual ARM64)
+        run: |
+          git clone https://github.com/flutter/flutter.git -b stable --depth 1 "$HOME/flutter"
+          echo "$HOME/flutter/bin" >> $GITHUB_PATH
+
+      - name: Flutter setup
+        run: |
+          export PATH="$HOME/flutter/bin:$PATH"
+          flutter precache --linux
+          flutter doctor -v
+
+      - name: Apply full-Linux swap (webview_cef)
+        run: bash ci/linux_full/apply.sh
+
+      - name: Get dependencies
+        run: |
+          export PATH="$HOME/flutter/bin:$PATH"
+          flutter pub get
+
+      - name: Build Linux ARM64 (full)
+        run: |
+          flutter build linux --release \
+            --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
+            --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} \
+            --dart-define=PLATFORM_DESKTOP=true \
+            --dart-define=FEATURE_PROJECTS=false \
+            --dart-define=FEATURE_IMAGE_GEN=false \
+            --dart-define=FEATURE_VOICE_MODE=false \
+            --dart-define=FEATURE_SERVER_TOOLS=false \
+            --tree-shake-icons
+
+      - name: Detect bundle path
+        id: bundle
+        run: |
+          if [ -d "build/linux/arm64/release/bundle" ]; then
+            echo "path=build/linux/arm64/release/bundle" >> $GITHUB_OUTPUT
+          elif [ -d "build/linux/aarch64/release/bundle" ]; then
+            echo "path=build/linux/aarch64/release/bundle" >> $GITHUB_OUTPUT
+          else
+            BUNDLE=$(find build/linux -name "bundle" -type d | head -1)
+            echo "path=${BUNDLE}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Package .deb / AppImage (full, arm64)
+        run: |
+          set -e
+          TAG=${{ needs.version-bump.outputs.tag }}
+          VER=${{ needs.version-bump.outputs.version_short }}
+          BUNDLE=${{ steps.bundle.outputs.path }}
+
+          # .deb
+          rm -rf debian
+          mkdir -p debian/DEBIAN debian/opt/chuk-chat debian/usr/bin \
+                   debian/usr/share/applications debian/usr/share/icons/hicolor/512x512/apps
+          cp -r ${BUNDLE}/* debian/opt/chuk-chat/
+          chmod +x debian/opt/chuk-chat/chuk_chat
+          ln -s /opt/chuk-chat/chuk_chat debian/usr/bin/chuk-chat
+          [ -f web/icons/Icon-512.png ] && cp web/icons/Icon-512.png debian/usr/share/icons/hicolor/512x512/apps/chuk-chat.png
+          cat > debian/usr/share/applications/chuk-chat.desktop <<EOF
+          [Desktop Entry]
+          Version=1.0
+          Type=Application
+          Name=Chuk Chat (full)
+          Exec=/opt/chuk-chat/chuk_chat
+          Icon=chuk-chat
+          Terminal=false
+          Categories=Network;InstantMessaging;Chat;
+          StartupWMClass=chuk_chat
+          EOF
+          cat > debian/DEBIAN/control <<EOF
+          Package: chuk-chat
+          Version: ${VER}
+          Section: net
+          Priority: optional
+          Architecture: arm64
+          Maintainer: Chuk Development <support@chuk.dev>
+          Homepage: https://chuk.chat
+          Description: Privacy-focused AI chat with CEF-backed Linux WebView (full)
+          Depends: libgtk-3-0, libblkid1, liblzma5, libnss3, libxkbcommon0, libxdamage1, libxcomposite1, libgbm1, libasound2t64
+          EOF
+          cat > debian/DEBIAN/postinst <<'SCRIPT'
+          #!/bin/bash
+          update-desktop-database /usr/share/applications 2>/dev/null || true
+          gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
+          SCRIPT
+          chmod +x debian/DEBIAN/postinst
+          dpkg-deb --build debian chuk_chat-${TAG}-linux-arm64-full.deb
+
+          # AppImage (aarch64)
+          rm -rf AppDir
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-aarch64.AppImage || true
+          if [ -f appimagetool-aarch64.AppImage ]; then
+            chmod +x appimagetool-aarch64.AppImage
+            mkdir -p AppDir/usr/bin AppDir/usr/share/applications AppDir/usr/share/icons/hicolor/512x512/apps
+            cp -r ${BUNDLE}/* AppDir/usr/bin/
+            chmod +x AppDir/usr/bin/chuk_chat
+            [ -f web/icons/Icon-512.png ] && cp web/icons/Icon-512.png AppDir/chuk-chat.png
+            cat > AppDir/chuk-chat.desktop <<EOF
+          [Desktop Entry]
+          Version=1.0
+          Type=Application
+          Name=Chuk Chat (full)
+          Exec=chuk_chat
+          Icon=chuk-chat
+          Terminal=false
+          Categories=Network;InstantMessaging;Chat;
+          StartupWMClass=chuk_chat
+          EOF
+            cp AppDir/chuk-chat.desktop AppDir/usr/share/applications/
+            cat > AppDir/AppRun <<'APPRUN'
+          #!/bin/bash
+          HERE="$(dirname "$(readlink -f "$0")")"
+          export LD_LIBRARY_PATH="${HERE}/usr/bin/lib:${LD_LIBRARY_PATH}"
+          exec "${HERE}/usr/bin/chuk_chat" "$@"
+          APPRUN
+            chmod +x AppDir/AppRun
+            ARCH=aarch64 ./appimagetool-aarch64.AppImage AppDir chuk_chat-${TAG}-linux-aarch64-full.AppImage
+          else
+            echo "appimagetool not available for aarch64, creating tarball instead"
+            tar -czf chuk_chat-${TAG}-linux-aarch64-full.tar.gz -C ${BUNDLE} .
+          fi
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG=${{ needs.version-bump.outputs.tag }}
+          FILES=""
+          for f in chuk_chat-*-linux-arm64-full.deb chuk_chat-*-linux-aarch64-full.AppImage chuk_chat-*-linux-aarch64-full.tar.gz; do
             [ -f "$f" ] && FILES="$FILES $f"
           done
           [ -n "$FILES" ] && gh release upload "$TAG" $FILES --repo ${{ github.repository }} --clobber
@@ -1003,13 +1333,15 @@ jobs:
   publish-release:
     name: Publish Release
     runs-on: ubuntu-latest
-    needs: [version-bump, build-android, build-linux-x64, build-linux-arm64, build-windows, build-macos, build-ios]
+    needs: [version-bump, build-android, build-linux-x64, build-linux-arm64, build-linux-x64-full, build-linux-arm64-full, build-windows, build-macos, build-ios]
     if: |
       always() &&
       needs.version-bump.result == 'success' &&
       (needs.build-android.result == 'success' || needs.build-android.result == 'skipped') &&
       (needs.build-linux-x64.result == 'success' || needs.build-linux-x64.result == 'skipped') &&
       (needs.build-linux-arm64.result == 'success' || needs.build-linux-arm64.result == 'skipped') &&
+      (needs.build-linux-x64-full.result == 'success' || needs.build-linux-x64-full.result == 'skipped') &&
+      (needs.build-linux-arm64-full.result == 'success' || needs.build-linux-arm64-full.result == 'skipped') &&
       (needs.build-windows.result == 'success' || needs.build-windows.result == 'skipped') &&
       (needs.build-macos.result == 'success' || needs.build-macos.result == 'skipped') &&
       (needs.build-ios.result == 'success' || needs.build-ios.result == 'skipped')
@@ -1043,6 +1375,12 @@ jobs:
           for f in downloads/chuk_chat-*-linux-x86_64.rpm; do [ -f "$f" ] && cp "$f" release-assets/chuk_chat-linux-x86_64.rpm; done
           for f in downloads/chuk_chat-*-linux-arm64.deb; do [ -f "$f" ] && cp "$f" release-assets/chuk_chat-linux-arm64.deb; done
           for f in downloads/chuk_chat-*-linux-aarch64.AppImage; do [ -f "$f" ] && cp "$f" release-assets/chuk_chat-linux-aarch64.AppImage; done
+          # -full variants (Linux with bundled CEF / real WebView)
+          for f in downloads/chuk_chat-*-linux-amd64-full.deb; do [ -f "$f" ] && cp "$f" release-assets/chuk_chat-linux-amd64-full.deb; done
+          for f in downloads/chuk_chat-*-linux-x86_64-full.AppImage; do [ -f "$f" ] && cp "$f" release-assets/chuk_chat-linux-x86_64-full.AppImage; done
+          for f in downloads/chuk_chat-*-linux-x86_64-full.rpm; do [ -f "$f" ] && cp "$f" release-assets/chuk_chat-linux-x86_64-full.rpm; done
+          for f in downloads/chuk_chat-*-linux-arm64-full.deb; do [ -f "$f" ] && cp "$f" release-assets/chuk_chat-linux-arm64-full.deb; done
+          for f in downloads/chuk_chat-*-linux-aarch64-full.AppImage; do [ -f "$f" ] && cp "$f" release-assets/chuk_chat-linux-aarch64-full.AppImage; done
           for f in downloads/chuk_chat-*-windows-x64-setup.exe; do [ -f "$f" ] && cp "$f" release-assets/chuk_chat-windows-x64-setup.exe; done
           for f in downloads/chuk_chat-*-windows-x64-portable.zip; do [ -f "$f" ] && cp "$f" release-assets/chuk_chat-windows-x64-portable.zip; done
           for f in downloads/chuk_chat-*-macos.dmg; do [ -f "$f" ] && cp "$f" release-assets/chuk_chat-macos.dmg; done

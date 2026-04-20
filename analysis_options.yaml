@@ -9,6 +9,15 @@
 # packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
 
+analyzer:
+  exclude:
+    # The "full Linux" CI variant swaps its lib/widgets/linux_webview.dart
+    # into place and injects webview_cef into pubspec.yaml before build.
+    # The source lives under ci/linux_full/ so default `flutter analyze`
+    # does not try to resolve `package:webview_cef` (absent from the slim
+    # pubspec).
+    - ci/linux_full/**
+
 linter:
   # The lint rules applied to this project can be customized in the
   # section below to disable rules from the `package:flutter_lints/flutter.yaml`
