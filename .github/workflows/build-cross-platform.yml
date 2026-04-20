@@ -310,14 +310,25 @@ jobs:
 
       - run: flutter pub get
 
+      - name: Patch flutter_inappwebview_linux CMake flags
+        # Drop `-Wno-deprecated-literal-operator` from the plugin's
+        # CMakeLists — clang 14 on Ubuntu 22.04 rejects it with
+        # -Werror,-Wunknown-warning-option and fails the whole build.
+        # The flag is only there to silence nlohmann_json warnings on
+        # newer GCC/clang, so removing it is safe.
+        run: |
+          set -e
+          mapfile -t PLUGIN_CMAKES < <(find ~/.pub-cache/hosted -path '*flutter_inappwebview_linux*/linux/CMakeLists.txt' 2>/dev/null || true)
+          if [ ${#PLUGIN_CMAKES[@]} -eq 0 ]; then
+            echo "::warning::flutter_inappwebview_linux CMakeLists.txt not found; skipping patch."
+            exit 0
+          fi
+          for f in "${PLUGIN_CMAKES[@]}"; do
+            echo "Patching: $f"
+            sed -i '/-Wno-deprecated-literal-operator/d' "$f"
+          done
+
       - name: Build Linux
-        # Force GCC because Ubuntu 22.04 ships clang 14, which rejects
-        # `-Wno-deprecated-literal-operator` (added by
-        # flutter_inappwebview_linux/CMakeLists.txt for nlohmann_json).
-        # GCC silently ignores unknown `-Wno-*` flags.
-        env:
-          CC: gcc
-          CXX: g++
         run: |
           flutter build linux --release \
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
@@ -561,12 +572,22 @@ jobs:
           export PATH="$HOME/flutter/bin:$PATH"
           flutter pub get
 
+      - name: Patch flutter_inappwebview_linux CMake flags (arm64)
+        # See Build Linux x64 for rationale — clang 14 rejects the
+        # -Wno-deprecated-literal-operator flag with -Werror.
+        run: |
+          set -e
+          mapfile -t PLUGIN_CMAKES < <(find $HOME/.pub-cache/hosted -path '*flutter_inappwebview_linux*/linux/CMakeLists.txt' 2>/dev/null || true)
+          if [ ${#PLUGIN_CMAKES[@]} -eq 0 ]; then
+            echo "::warning::flutter_inappwebview_linux CMakeLists.txt not found; skipping patch."
+            exit 0
+          fi
+          for f in "${PLUGIN_CMAKES[@]}"; do
+            echo "Patching: $f"
+            sed -i '/-Wno-deprecated-literal-operator/d' "$f"
+          done
+
       - name: Build Linux ARM64
-        # See Build Linux comment — force GCC for the same clang 14 /
-        # `-Wno-deprecated-literal-operator` incompatibility.
-        env:
-          CC: gcc
-          CXX: g++
         run: |
           flutter build linux --release \
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
