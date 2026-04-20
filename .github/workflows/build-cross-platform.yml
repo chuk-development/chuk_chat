@@ -311,6 +311,13 @@ jobs:
       - run: flutter pub get
 
       - name: Build Linux
+        # Force GCC because Ubuntu 22.04 ships clang 14, which rejects
+        # `-Wno-deprecated-literal-operator` (added by
+        # flutter_inappwebview_linux/CMakeLists.txt for nlohmann_json).
+        # GCC silently ignores unknown `-Wno-*` flags.
+        env:
+          CC: gcc
+          CXX: g++
         run: |
           flutter build linux --release \
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
@@ -555,6 +562,11 @@ jobs:
           flutter pub get
 
       - name: Build Linux ARM64
+        # See Build Linux comment — force GCC for the same clang 14 /
+        # `-Wno-deprecated-literal-operator` incompatibility.
+        env:
+          CC: gcc
+          CXX: g++
         run: |
           flutter build linux --release \
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
