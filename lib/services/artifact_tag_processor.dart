@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import 'package:chuk_chat/models/artifact.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
@@ -18,11 +20,29 @@ class ArtifactTagProcessor {
     String? messageId,
   }) async {
     final tags = parseArtifactTags(content);
+    if (kDebugMode) {
+      debugPrint(
+        '[ArtifactTags] parseArtifactTags found ${tags.length} tag(s) '
+        'in ${content.length}-char content',
+      );
+    }
     if (tags.isEmpty) return const [];
 
     final calls = <ToolCall>[];
     for (final tag in tags) {
+      if (kDebugMode) {
+        debugPrint(
+          '[ArtifactTags] processing tag id=${tag.id} type=${tag.type} '
+          'title=${tag.title} content=${tag.content.length}chars',
+        );
+      }
       final call = await _processOne(tag, chatId: chatId, messageId: messageId);
+      if (kDebugMode) {
+        debugPrint(
+          '[ArtifactTags] tag id=${tag.id} → status=${call.status.name} '
+          'result=${call.result}',
+        );
+      }
       calls.add(call);
     }
     return calls;

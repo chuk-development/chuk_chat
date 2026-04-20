@@ -1612,6 +1612,23 @@ class _MessageBubbleState extends State<MessageBubble>
     if (!kFeatureArtifacts) return const [];
     final cards = <Widget>[];
     for (final tc in toolCalls) {
+      // Render error ToolCalls as a visible error chip so silent failures
+      // (malformed tag, RLS denial, network error) surface to the user
+      // instead of producing a mysteriously empty chat bubble.
+      if (tc.status == ToolCallStatus.error &&
+          (tc.name == 'artifact_manager' || tc.name == 'typst_compile')) {
+        final result = tc.result ?? 'Unknown error';
+        cards.add(
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: _ArtifactErrorCard(
+              toolName: tc.name,
+              message: result,
+            ),
+          ),
+        );
+        continue;
+      }
       if (tc.status != ToolCallStatus.completed) continue;
 
       String artifactId = '';
@@ -3061,6 +3078,60 @@ class _ArtifactInlineCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Visible error chip when an inline artifact tag (or artifact_manager tool
+/// call) fails. Without this the failure is invisible — the protocol tag is
+/// stripped from display but no chip replaces it, leaving the bubble empty.
+class _ArtifactErrorCard extends StatelessWidget {
+  const _ArtifactErrorCard({required this.toolName, required this.message});
+
+  final String toolName;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final text = message.replaceFirst(RegExp(r'^Error:\s*'), '');
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: scheme.error.withValues(alpha: 0.4)),
+        color: scheme.errorContainer.withValues(alpha: 0.25),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.error_outline, size: 18, color: scheme.error),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Artifact could not be created',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: scheme.error,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  text,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: scheme.onErrorContainer,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
