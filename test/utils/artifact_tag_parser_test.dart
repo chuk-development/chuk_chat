@@ -137,4 +137,71 @@ Trailing text.
       expect(out, 'Start');
     });
   });
+
+  group('parseArtifactTags - robustness against common AI mistakes', () {
+    test('accepts curly double quotes on attributes', () {
+      const text =
+          '<artifact id=\u201Cfoo\u201D type=\u201Cexcalidraw\u201D>\n'
+          '{"type":"excalidraw","elements":[]}\n'
+          '</artifact>';
+      final tags = parseArtifactTags(text);
+      expect(tags, hasLength(1));
+      expect(tags.first.id, 'foo');
+      expect(tags.first.type, 'excalidraw');
+    });
+
+    test('accepts curly single quotes on attributes', () {
+      const text =
+          '<artifact id=\u2018foo\u2019 type=\u2018excalidraw\u2019>\n'
+          '{"type":"excalidraw","elements":[]}\n'
+          '</artifact>';
+      final tags = parseArtifactTags(text);
+      expect(tags, hasLength(1));
+      expect(tags.first.id, 'foo');
+    });
+
+    test('strips a single ```json fence wrapping the inner content', () {
+      const text =
+          '<artifact id="foo" type="excalidraw">\n'
+          '```json\n'
+          '{"type":"excalidraw","elements":[]}\n'
+          '```\n'
+          '</artifact>';
+      final tags = parseArtifactTags(text);
+      expect(tags, hasLength(1));
+      expect(tags.first.content, '{"type":"excalidraw","elements":[]}');
+    });
+
+    test('strips a plain ``` fence (no language hint)', () {
+      const text =
+          '<artifact id="foo" type="svg">\n'
+          '```\n'
+          '<svg></svg>\n'
+          '```\n'
+          '</artifact>';
+      final tags = parseArtifactTags(text);
+      expect(tags.first.content, '<svg></svg>');
+    });
+
+    test('keeps a nested code fence that is part of a larger payload', () {
+      const text =
+          '<artifact id="foo" type="markdown">\n'
+          'Intro paragraph.\n'
+          '```dart\n'
+          'print(1);\n'
+          '```\n'
+          'Outro paragraph.\n'
+          '</artifact>';
+      final tags = parseArtifactTags(text);
+      expect(tags.first.content.contains('```dart'), isTrue);
+      expect(tags.first.content.contains('Intro paragraph'), isTrue);
+    });
+
+    test('ignores a tag whose content is only whitespace', () {
+      const text =
+          '<artifact id="foo" type="excalidraw">\n   \n</artifact>';
+      final tags = parseArtifactTags(text);
+      expect(tags, isEmpty);
+    });
+  });
 }

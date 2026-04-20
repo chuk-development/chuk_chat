@@ -748,6 +748,8 @@ class ToolExecutor {
       // -- Workspace management --
       case 'artifact_manager':
         return _wrapOutput(await _executeArtifactManager(args));
+      case 'artifact_schema':
+        return _wrapOutput(_executeArtifactSchema(args));
       case 'update_project':
         return _wrapOutput(await _executeUpdateProject(args));
 
@@ -928,6 +930,36 @@ class ToolExecutor {
     }
   }
 
+  /// Returns the full content schema for a complex artifact type, so the
+  /// AI can build a correct `content` field before calling
+  /// `artifact_manager`. Moving these schemas out of the system prompt
+  /// into an on-demand tool keeps the prompt small and forces the AI to
+  /// have the current schema in context right when it generates the
+  /// artifact content — which empirically yields fewer malformed
+  /// payloads.
+  String _executeArtifactSchema(Map<String, dynamic> args) {
+    final type = (args['type'] as String? ?? '').trim().toLowerCase();
+    if (type.isEmpty) {
+      return 'Error: "type" is required (excalidraw | technical_drawing | '
+          'typst | mermaid | svg).';
+    }
+    switch (type) {
+      case 'excalidraw':
+        return _excalidrawSchemaText;
+      case 'technical_drawing':
+        return _technicalDrawingSchemaText;
+      case 'typst':
+        return _typstSchemaText;
+      case 'mermaid':
+        return _mermaidSchemaText;
+      case 'svg':
+        return _svgSchemaText;
+      default:
+        return 'Error: Unknown artifact type "$type". Supported: '
+            'excalidraw, technical_drawing, typst, mermaid, svg.';
+    }
+  }
+
   /// Update the active workspace's instructions, name, or description.
   Future<String> _executeUpdateProject(Map<String, dynamic> args) async {
     final workspaceId = WorkspaceStorageService.selectedWorkspaceId;
@@ -1038,3 +1070,177 @@ class ToolExecutor {
   }
 
 }
+
+// ---------------------------------------------------------------------------
+// Artifact schema texts
+// ---------------------------------------------------------------------------
+//
+// These strings are returned by the `artifact_schema` tool. They live here
+// rather than in `tool_prompt_builder.dart` so the AI only sees the schema
+// for the type it is actively producing — the system prompt stays small.
+
+const String _excalidrawSchemaText = '''
+# Excalidraw scene schema (content field for artifact_manager)
+
+The `content` string MUST be valid JSON in the standard `.excalidraw`
+file format (same shape as excalidraw.com export):
+
+```json
+{
+  "type": "excalidraw",
+  "version": 2,
+  "source": "https://excalidraw.com",
+  "elements": [
+    {"type":"rectangle","id":"r1","x":100,"y":100,"width":200,"height":100,
+     "strokeColor":"#1e1e1e","backgroundColor":"#a5d8ff","fillStyle":"solid",
+     "strokeWidth":2,"roundness":{"type":3}},
+    {"type":"text","id":"t1","x":150,"y":138,"width":100,"height":24,
+     "text":"Client","fontSize":20,"fontFamily":1,"textAlign":"center",
+     "strokeColor":"#1e1e1e"},
+    {"type":"arrow","id":"a1","x":300,"y":150,"width":200,"height":0,
+     "points":[[0,0],[200,0]],"endArrowhead":"arrow",
+     "strokeColor":"#1e1e1e","strokeWidth":2}
+  ],
+  "appState":{"viewBackgroundColor":"#ffffff","gridSize":null},
+  "files":{}
+}
+```
+
+Rules:
+- Top-level keys: type ("excalidraw"), version (2), source, elements (array, required), appState (object), files (object, usually {}).
+- Coordinates: pixels, origin top-left, Y axis down.
+- Required per element: type, id (unique string), x, y, width, height.
+- Element types: rectangle, ellipse, diamond, line, arrow, text, freedraw, frame.
+- Colours: hex ("#1e1e1e", "#a5d8ff") or "transparent".
+  Stroke palette: #1e1e1e, #e03131, #2f9e44, #1971c2, #f08c00.
+  Fill palette: #ffc9c9, #b2f2bb, #a5d8ff, #ffec99, #e9ecef.
+- strokeWidth: 1 (thin), 2 (bold), 4 (extra bold).
+- strokeStyle: "solid" | "dashed" | "dotted".
+- fillStyle: "solid" | "hachure" (default) | "cross-hatch".
+- roundness: {"type":3} for rounded corners, omit for sharp.
+- angle: rotation in radians around element center (default 0).
+- arrow points: array of [dx,dy] offsets relative to element x,y; start with [0,0]. endArrowhead: "arrow" (default) | "triangle" | "dot" | "bar" | null.
+- text: text, fontSize (16/20/28/36), fontFamily (1=hand-drawn, 2=normal, 3=monospace), textAlign ("left"/"center"/"right"), verticalAlign ("top"/"middle").
+- Do NOT include: seed, versionNonce, updated, groupIds (renderer ignores them).
+- Target 5-30 elements per scene. >100 elements slow the renderer.
+
+CRITICAL:
+- Content must be VALID JSON — no trailing commas, no comments, no single quotes, no ```json fences around the JSON.
+- Wrap the full JSON in the artifact_manager tool call as the `content` string argument. Do NOT wrap it in a code fence inside the content.
+''';
+
+const String _technicalDrawingSchemaText = '''
+# Technical drawing schema (content field for artifact_manager, type="technical_drawing")
+
+DIN ISO 128-style engineering drawing. Content is JSON:
+
+```json
+{
+  "type": "technical_drawing",
+  "meta": {
+    "title": "Flachplatte",
+    "partNo": "FP-001",
+    "material": "S235JR",
+    "scale": "1:1",
+    "unit": "mm",
+    "tolerance": "ISO 2768-m",
+    "author": "Claude",
+    "date": "12.04.2026",
+    "sheet": "1/1"
+  },
+  "elements": [
+    {"type":"rect","lineStyle":"solid","weight":"thick","x":50,"y":30,"w":120,"h":80},
+    {"type":"circle","lineStyle":"solid","weight":"thick","cx":110,"cy":70,"r":15},
+    {"type":"line","lineStyle":"centerline","weight":"thin","x1":85,"y1":70,"x2":135,"y2":70},
+    {"type":"dimension","subtype":"linear_h","x1":50,"x2":170,"y":110,"offset":14,"value":"120"},
+    {"type":"dimension","subtype":"linear_v","y1":30,"y2":110,"x":50,"offset":-14,"value":"80"},
+    {"type":"dimension","subtype":"diameter","cx":110,"cy":70,"r":15,"angle":45,"value":"\\u00d8 30"},
+    {"type":"note","x":50,"y":22,"text":"t = 10"}
+  ]
+}
+```
+
+Rules:
+- Coordinates in mm, origin top-left, Y-axis down.
+- lineStyle: "solid" (visible edges), "dashed" (hidden edges), "centerline" (axes).
+- weight: "thick" (body ~0.7mm) vs "thin" (dimensions/helpers ~0.25mm).
+- Element types: rect (x,y,w,h), circle (cx,cy,r), line (x1,y1,x2,y2).
+- Dimension subtypes: linear_h (x1,x2,y,offset,value), linear_v (y1,y2,x,offset,value), diameter (cx,cy,r,angle,value with \\u00d8 prefix).
+- note: freeform text at (x,y).
+- meta fields populate the DIN title block.
+- Dimension all significant features, centerlines through circles and symmetry axes.
+''';
+
+const String _typstSchemaText = '''
+# Typst schema (source is the content for typst_compile, NOT artifact_manager)
+
+Use the dedicated `typst_compile` tool for Typst — never `artifact_manager`. Source is plain Typst markup:
+
+```typst
+#set page(paper: "a4", margin: 2cm)
+#set text(font: "Linux Libertine", size: 11pt)
+
+= Titel
+== Abschnitt
+
+Fließtext mit Mathe: \$ a^2 + b^2 = c^2 \$
+
+#table(
+  columns: 2,
+  [Name], [Wert],
+  [Alpha], [1],
+  [Beta], [2],
+)
+```
+
+Rules:
+- Start with #set page(paper: "a4") for A4 output.
+- Math: \$ ... \$ inline, \$ ... \$ block.
+- Headings: = Level 1, == Level 2.
+- Use #set and #show for styling, never raw LaTeX.
+- The server compiles the source and returns either the rendered PDF (stored encrypted) or the full compiler error — fix errors in-turn.
+- artifact_id / title must describe CONTENT, not "pdf" / "document".
+''';
+
+const String _mermaidSchemaText = '''
+# Mermaid schema (content for artifact_manager, type="mermaid")
+
+Standard Mermaid diagram source. Example:
+
+```
+flowchart LR
+    A[Client] -->|HTTP GET| B(Router)
+    B --> C{DNS?}
+    C -->|yes| D[DNS Server]
+    C -->|no| E[Origin Server]
+    D --> B
+    E --> B
+    B --> A
+```
+
+Supported graph types: flowchart, sequenceDiagram, classDiagram, stateDiagram-v2, erDiagram, journey, gantt, pie, mindmap, timeline.
+
+Rules:
+- Content is the Mermaid source ONLY (no code fence, no extra markdown).
+- Keep diagrams under 40 nodes — anything bigger is hard to read.
+- Use quoted node labels when the label contains spaces or punctuation: A["User Device"].
+''';
+
+const String _svgSchemaText = '''
+# SVG schema (content for artifact_manager, type="svg")
+
+Full SVG document as a string. Example:
+
+```xml
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <rect x="10" y="10" width="120" height="80" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+  <text x="70" y="55" font-family="sans-serif" font-size="16" text-anchor="middle">Client</text>
+</svg>
+```
+
+Rules:
+- Root <svg> MUST include xmlns="http://www.w3.org/2000/svg" and a viewBox.
+- Avoid <script>, <foreignObject>, external <image href="https://...">, or remote fonts — the renderer is offline-only.
+- Use viewBox (not width/height attrs) so the SVG scales in the artifact panel.
+- For hand-drawn-style diagrams, use the excalidraw type instead.
+''';
