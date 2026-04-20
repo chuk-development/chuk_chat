@@ -95,6 +95,7 @@ class ToolExecutor {
     'reminder',
     'search_chats',
     'artifact_manager',
+    'artifact_schema',
     'update_project',
     'typst_compile',
   };
