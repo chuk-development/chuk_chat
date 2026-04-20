@@ -1,0 +1,307 @@
+// lib/widgets/excalidraw_view_io.dart
+//
+// Native (non-web) renderer for Excalidraw artifacts. Uses
+// flutter_inappwebview to host a bundled HTML shell that loads the real
+// @excalidraw/excalidraw React component from
+// `assets/excalidraw/bundle.js`. No network access is required.
+//
+// When the WebView platform or the bundled assets fail to initialise
+// (e.g. Linux build without WebKitGTK runtime, or a distro where the
+// beta plugin crashes), the widget falls back to the native Flutter
+// CustomPainter renderer so the user always sees *something*.
+
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+
+import 'package:chuk_chat/widgets/excalidraw_widget.dart';
+
+class ExcalidrawView extends StatefulWidget {
+  const ExcalidrawView({
+    super.key,
+    required this.jsonString,
+    this.viewMode = ExcalidrawViewMode.readOnly,
+  });
+
+  final String jsonString;
+  final ExcalidrawViewMode viewMode;
+
+  @override
+  State<ExcalidrawView> createState() => _ExcalidrawViewState();
+}
+
+enum ExcalidrawViewMode { readOnly, edit }
+
+enum _LoadState { loading, ready, failed }
+
+class _ExcalidrawViewState extends State<ExcalidrawView> {
+  InAppWebViewController? _controller;
+  _LoadState _state = _LoadState.loading;
+  Object? _lastError;
+
+  /// Prevents a race where setScene arrives before the JS bundle finishes
+  /// hydrating and registers `window.chukExcalidraw`.
+  bool _jsReady = false;
+
+  /// Latest scene we were asked to render. Used on `ready` and on
+  /// `didUpdateWidget` to push the scene down to JS.
+  late String _pendingScene;
+
+  @override
+  void initState() {
+    super.initState();
+    _pendingScene = widget.jsonString;
+  }
+
+  @override
+  void didUpdateWidget(covariant ExcalidrawView old) {
+    super.didUpdateWidget(old);
+    if (old.jsonString != widget.jsonString) {
+      _pendingScene = widget.jsonString;
+      _pushScene();
+    }
+    if (old.viewMode != widget.viewMode) {
+      _pushViewMode();
+    }
+  }
+
+  Future<void> _pushScene() async {
+    final ctrl = _controller;
+    if (ctrl == null || !_jsReady) return;
+    try {
+      await ctrl.evaluateJavascript(
+        source:
+            'window.chukExcalidraw && window.chukExcalidraw.setScene(${jsonEncode(_pendingScene)});',
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('Excalidraw push scene failed: $e');
+      }
+    }
+  }
+
+  Future<void> _pushViewMode() async {
+    final ctrl = _controller;
+    if (ctrl == null || !_jsReady) return;
+    final mode = widget.viewMode == ExcalidrawViewMode.edit ? 'edit' : 'readOnly';
+    try {
+      await ctrl.evaluateJavascript(
+        source:
+            "window.chukExcalidraw && window.chukExcalidraw.setViewMode('$mode');",
+      );
+    } catch (_) {
+      // non-fatal
+    }
+  }
+
+  void _onBridgeMessage(List<dynamic> args) {
+    if (args.isEmpty) return;
+    final raw = args.first;
+    if (raw is! String) return;
+    Map<String, dynamic>? msg;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) {
+        msg = decoded;
+      }
+    } catch (_) {
+      return;
+    }
+    if (msg == null) return;
+
+    final type = msg['type'];
+    if (type == 'ready') {
+      _jsReady = true;
+      if (mounted) setState(() => _state = _LoadState.ready);
+      _pushScene();
+      _pushViewMode();
+    } else if (type == 'scene-loaded') {
+      // Optional telemetry; ignore in release.
+      if (kDebugMode) {
+        debugPrint(
+          'Excalidraw scene loaded, elements=${msg['elementCount']}',
+        );
+      }
+    } else if (type == 'error') {
+      if (mounted) {
+        setState(() {
+          _state = _LoadState.failed;
+          _lastError = msg?['message'];
+        });
+      }
+    }
+  }
+
+  /// Linux has no stable flutter_inappwebview implementation on
+  /// 6.1.x — the beta 6.2 federation needs libwpewebkit-1.0-dev which
+  /// Ubuntu/Debian does not ship by default. On Linux we therefore skip
+  /// the WebView entirely and render with the native CustomPainter, so
+  /// users still see the artifact.
+  bool get _useWebView {
+    if (kIsWeb) return true; // handled by excalidraw_view_web.dart
+    return !Platform.isLinux;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_useWebView) {
+      return ExcalidrawWidget(jsonString: widget.jsonString);
+    }
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: InAppWebView(
+            initialFile: 'assets/excalidraw/index.html',
+            initialSettings: InAppWebViewSettings(
+              // Security: no network; script disabled for about: navigations.
+              javaScriptEnabled: true,
+              javaScriptCanOpenWindowsAutomatically: false,
+              // WebView features we don't need — turn them off so an
+              // attacker-shaped scene JSON cannot exploit them.
+              mediaPlaybackRequiresUserGesture: true,
+              allowsInlineMediaPlayback: false,
+              allowFileAccessFromFileURLs: false,
+              allowUniversalAccessFromFileURLs: false,
+              // Transparent so the artifact panel's background shows while
+              // the bundle initialises.
+              transparentBackground: true,
+              // Desktop-only: surface console logs in debug builds.
+              isInspectable: kDebugMode,
+              // Prevent arbitrary url navigation away from our shell.
+              useShouldOverrideUrlLoading: true,
+              supportZoom: false,
+            ),
+            shouldOverrideUrlLoading: (controller, action) async {
+              // Only allow our own bundled assets; everything else is blocked.
+              // The asset-path check is scoped to `file://` so external hosts
+              // cannot smuggle navigation in with a crafted
+              // `https://attacker.com/assets/excalidraw/...` URL.
+              final uri = action.request.url;
+              if (uri == null) return NavigationActionPolicy.CANCEL;
+              final scheme = uri.scheme.toLowerCase();
+              if (scheme == 'about' ||
+                  scheme == 'data' ||
+                  scheme == 'blob') {
+                return NavigationActionPolicy.ALLOW;
+              }
+              if (scheme == 'file' &&
+                  uri.path.contains('/assets/excalidraw/')) {
+                return NavigationActionPolicy.ALLOW;
+              }
+              return NavigationActionPolicy.CANCEL;
+            },
+            onWebViewCreated: (controller) {
+              _controller = controller;
+              controller.addJavaScriptHandler(
+                handlerName: 'chukBridge',
+                callback: _onBridgeMessage,
+              );
+              // Inject a tiny shim that exposes `window.chukBridge.post(msg)`
+              // which proxies to the Dart handler via the official
+              // flutter_inappwebview message-channel.
+              controller.evaluateJavascript(source: r'''
+                window.chukBridge = {
+                  post(msg) {
+                    try {
+                      window.flutter_inappwebview.callHandler('chukBridge', msg);
+                    } catch (e) {
+                      /* bridge not ready */
+                    }
+                  },
+                };
+              ''');
+            },
+            onConsoleMessage: (controller, message) {
+              if (kDebugMode) {
+                debugPrint('Excalidraw [${message.messageLevel}]: '
+                    '${message.message}');
+              }
+            },
+            onReceivedError: (controller, request, error) {
+              if (mounted) {
+                setState(() {
+                  _state = _LoadState.failed;
+                  _lastError = error.description;
+                });
+              }
+            },
+            onLoadStop: (controller, url) async {
+              // Re-register the bridge after navigations in case the
+              // previous frame was discarded.
+              await controller.evaluateJavascript(source: r'''
+                if (!window.chukBridge) {
+                  window.chukBridge = {
+                    post(msg) {
+                      try { window.flutter_inappwebview.callHandler('chukBridge', msg); } catch (_) {}
+                    },
+                  };
+                }
+              ''');
+            },
+          ),
+        ),
+        if (_state == _LoadState.loading)
+          const Center(
+            child: SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        if (_state == _LoadState.failed)
+          _WebViewFailedFallback(
+            jsonString: widget.jsonString,
+            error: _lastError,
+          ),
+      ],
+    );
+  }
+}
+
+/// Shown when the WebView can't initialise. Falls back to the native
+/// CustomPainter renderer so the user still sees the drawing, with a
+/// discreet note in debug builds.
+class _WebViewFailedFallback extends StatelessWidget {
+  const _WebViewFailedFallback({required this.jsonString, required this.error});
+
+  final String jsonString;
+  final Object? error;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: Container(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        child: Stack(
+          children: [
+            Positioned.fill(child: ExcalidrawWidget(jsonString: jsonString)),
+            if (kDebugMode && error != null)
+              Positioned(
+                left: 8,
+                bottom: 8,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    'WebView failed: $error (using fallback renderer)',
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: Colors.red,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}

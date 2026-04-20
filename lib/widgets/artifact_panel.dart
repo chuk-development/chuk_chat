@@ -20,7 +20,8 @@ import 'package:chuk_chat/tool_handlers/typst_tools.dart' as typst_tools;
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
 import 'package:chuk_chat/widgets/excalidraw_svg_export.dart';
-import 'package:chuk_chat/widgets/excalidraw_widget.dart';
+import 'package:chuk_chat/widgets/excalidraw_view.dart';
+import 'package:chuk_chat/widgets/html_artifact_view.dart';
 import 'package:chuk_chat/widgets/technical_drawing_svg_export.dart';
 import 'package:chuk_chat/widgets/technical_drawing_widget.dart';
 import 'package:pdfrx/pdfrx.dart';
@@ -66,6 +67,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
     ArtifactType.technicalDrawing,
     ArtifactType.typst,
     ArtifactType.excalidraw,
+    ArtifactType.html,
   };
 
   bool get _hasDualView => _dualViewTypes.contains(widget.artifact.type);
@@ -75,6 +77,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
     ArtifactType.technicalDrawing => 'json',
     ArtifactType.typst => 'typst',
     ArtifactType.excalidraw => 'json',
+    ArtifactType.html => 'html',
     _ => '',
   };
 
@@ -224,9 +227,13 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
           _DownloadFormat('PNG image', 'png'),
           _DownloadFormat('SVG vector', 'svg'),
         ];
+      case ArtifactType.html:
+        return const [
+          _DownloadFormat('HTML source', 'html'),
+          _DownloadFormat('PNG screenshot', 'png'),
+        ];
       case ArtifactType.code:
       case ArtifactType.markdown:
-      case ArtifactType.html:
       case ArtifactType.mermaid:
         return [
           _DownloadFormat(
@@ -902,8 +909,14 @@ class _ArtifactRenderer extends StatelessWidget {
           key: ValueKey('zoom_exc_${artifactId ?? ""}'),
           child: RepaintBoundary(
             key: captureKey,
-            child: ExcalidrawWidget(jsonString: content),
+            child: ExcalidrawView(jsonString: content),
           ),
+        );
+      case ArtifactType.html:
+        return HtmlArtifactView(
+          key: ValueKey('html_${artifactId ?? ""}'),
+          html: content,
+          captureKey: captureKey,
         );
       case ArtifactType.typst:
         return _TypstPdfRenderer(
@@ -941,14 +954,15 @@ class _ArtifactRenderer extends StatelessWidget {
     final scrollController = PrimaryScrollController.maybeOf(context);
     final usePrimary = scrollController == null;
 
-    // Dual-view types (typst / svg / technical drawing / excalidraw) keep
-    // BOTH children mounted so toggling Preview ⇄ Code doesn't tear down
-    // the preview renderer (and, for typst, re-download / re-render the
-    // PDF every flip).
+    // Dual-view types (typst / svg / technical drawing / excalidraw / html)
+    // keep BOTH children mounted so toggling Preview ⇄ Code doesn't tear
+    // down the preview renderer (and, for typst, re-download / re-render
+    // the PDF every flip).
     final bool supportsDualView = type == ArtifactType.typst ||
         type == ArtifactType.svg ||
         type == ArtifactType.technicalDrawing ||
-        type == ArtifactType.excalidraw;
+        type == ArtifactType.excalidraw ||
+        type == ArtifactType.html;
     if (supportsDualView) {
       return IndexedStack(
         index: forceCodeView ? 1 : 0,
@@ -1005,7 +1019,6 @@ class _ArtifactRenderer extends StatelessWidget {
             ),
           ),
         );
-      case ArtifactType.html:
       case ArtifactType.mermaid:
         return SingleChildScrollView(
           controller: scrollController,
@@ -1039,6 +1052,9 @@ class _ArtifactRenderer extends StatelessWidget {
       case ArtifactType.excalidraw:
         // Unreachable — excalidraw is handled by the IndexedStack dual-view
         // branch above. This case exists only so the switch stays exhaustive.
+        return const SizedBox.shrink();
+      case ArtifactType.html:
+        // Unreachable — html is handled by the IndexedStack dual-view branch.
         return const SizedBox.shrink();
       case ArtifactType.typst:
         return _TypstPdfRenderer(
