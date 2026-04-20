@@ -95,4 +95,41 @@ PY
   echo "Patched main.dart to initialise webview_cef on Linux."
 fi
 
+# --- linux/runner/main.cc ---
+# CEF on Linux uses a fork+exec multi-process model. The child renderer
+# process re-execs this binary with `--type=renderer` (etc) in argv, and
+# `CefExecuteProcess` must run FIRST to detect that and hand control to
+# CEF. Without this, child processes re-run Flutter's main() and hang.
+# The webview_cef plugin ships a helper that patches main.cc; we invoke
+# it here (idempotent).
+MAIN_CC="$ROOT_DIR/linux/runner/main.cc"
+if [[ -f "$MAIN_CC" ]]; then
+  if ! grep -q 'initCEFProcesses' "$MAIN_CC"; then
+    # Ensure the webview_cef header is included.
+    if ! grep -q 'webview_cef_plugin.h' "$MAIN_CC"; then
+      awk '
+        NR == 1 && /^#include / {
+          print "#include <webview_cef/webview_cef_plugin.h>";
+          print;
+          next
+        }
+        { print }
+      ' "$MAIN_CC" > "$MAIN_CC.tmp" && mv "$MAIN_CC.tmp" "$MAIN_CC"
+    fi
+    # Insert the init call before the first `g_autoptr(...)` line in main().
+    awk '
+      /^[[:space:]]*g_autoptr/ && !done {
+        print "  initCEFProcesses(argc, argv);";
+        done = 1;
+      }
+      { print }
+    ' "$MAIN_CC" > "$MAIN_CC.tmp" && mv "$MAIN_CC.tmp" "$MAIN_CC"
+    echo "Patched linux/runner/main.cc with initCEFProcesses."
+  else
+    echo "linux/runner/main.cc already calls initCEFProcesses; skipping."
+  fi
+else
+  echo "::warning::linux/runner/main.cc missing; skipping main.cc patch."
+fi
+
 echo "ci/linux_full/apply.sh complete."
