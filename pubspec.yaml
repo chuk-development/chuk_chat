@@ -60,14 +60,17 @@ dependencies:
   sqflite_common_ffi: ^2.4.0+2
   path: ^1.9.1
   sqlite3_flutter_libs: ^0.6.0+eol
-  # System-WebView renderer for Excalidraw (+ future HTML) artifacts.
-  # 6.2.0-beta enables the Linux federation via WPE WebKit. Required
-  # system packages (build-time only, bundled into the app at install):
-  #   libwpewebkit-1.0-dev, libwpe-1.0-dev, libwpebackend-fdo-1.0-dev
-  # CI installs them on ubuntu-24.04 (universe). End-users install
-  # nothing — the plugin's CMake bundles the .so files with RPATH=$ORIGIN.
-  flutter_inappwebview: ^6.2.0-beta.3
-  flutter_inappwebview_linux: ^0.1.0-beta.1
+  # System-WebView renderer for Excalidraw (+ future HTML) artifacts on
+  # Android/iOS/macOS/Windows/Web. Linux has no stable federation for
+  # this plugin, so the desktop Linux build falls back to a native
+  # CustomPainter renderer for Excalidraw and a source view for HTML.
+  #
+  # A separate "-full" Linux artifact built via CI injects `webview_cef`
+  # (CEF/Chromium) for real rendering. See .github/workflows and
+  # ci/linux_full/ for the swap-in files. The default pubspec below
+  # stays CEF-free so Android/iOS/macOS/Windows bundles don't carry the
+  # ~120 MB Chromium runtime.
+  flutter_inappwebview: ^6.1.5
 
 dev_dependencies:
   flutter_test:

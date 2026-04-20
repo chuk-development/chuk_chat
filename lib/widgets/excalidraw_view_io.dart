@@ -5,20 +5,22 @@
 // @excalidraw/excalidraw React component from
 // `assets/excalidraw/bundle.js`. No network access is required.
 //
-// Linux uses the WPE WebKit federation (flutter_inappwebview_linux). The
-// plugin bundles the WPE shared libraries into the app install dir, so
-// end-users do not need to install anything. If the WebView still fails
-// to initialise at runtime (e.g. missing system GL libs), the widget
-// falls back to the CustomPainter renderer so users see *something*.
+// Desktop Linux builds don't ship a stable WebView backend in this
+// default codebase, so Linux falls back to the native CustomPainter
+// renderer (see `ExcalidrawWidget`). The `-full` Linux CI variant swaps
+// in a `webview_cef`-backed LinuxWebView for real rendering (see
+// `ci/linux_full/` and `.github/workflows/build-cross-platform.yml`).
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import 'package:chuk_chat/widgets/excalidraw_widget.dart';
+import 'package:chuk_chat/widgets/linux_webview.dart';
 
 class ExcalidrawView extends StatefulWidget {
   const ExcalidrawView({
@@ -138,6 +140,13 @@ class _ExcalidrawViewState extends State<ExcalidrawView> {
 
   @override
   Widget build(BuildContext context) {
+    // Linux: delegate to LinuxWebView. The default implementation (in
+    // lib/widgets/linux_webview.dart) returns the CustomPainter fallback;
+    // the `-full` CI build swaps that file with a webview_cef-backed
+    // version that renders the real Excalidraw React bundle.
+    if (Platform.isLinux) {
+      return LinuxWebView.excalidraw(jsonString: widget.jsonString);
+    }
     return Stack(
       children: [
         Positioned.fill(

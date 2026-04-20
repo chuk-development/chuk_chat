@@ -1,21 +1,26 @@
 // lib/widgets/html_artifact_view_io.dart
 // Native implementation of HtmlArtifactView.
 //
-// On all native platforms (Android / iOS / macOS / Windows / Linux):
-// renders the user-provided HTML inside an InAppWebView sandbox.
-// JavaScript is allowed so that LLM output using <script> tags works,
-// but file-system access, universal CORS, auto window-opening, and
-// navigation away from the artifact content are all blocked. External
-// http(s) links are opened via url_launcher in the system browser
-// instead of navigating the WebView.
+// On Android/iOS/macOS/Windows: renders the user-provided HTML inside
+// an InAppWebView sandbox. JavaScript is allowed so that LLM output
+// using <script> tags works, but file-system access, universal CORS,
+// auto window-opening, and navigation away from the artifact content
+// are all blocked. External http(s) links are opened via url_launcher
+// in the system browser instead of navigating the WebView.
 //
-// Linux uses the WPE WebKit federation (flutter_inappwebview_linux).
+// Desktop Linux builds don't ship a stable WebView backend in this
+// default codebase, so Linux shows a read-only source view. The `-full`
+// Linux CI variant swaps in a `webview_cef`-backed LinuxWebView for
+// real rendering (see `ci/linux_full/`).
+
+import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/linux_webview.dart';
 
 /// Returns true for schemes that are allowed to load inside the WebView
 /// (i.e. the artifact's own content). Everything else is opened via
@@ -43,6 +48,9 @@ class HtmlArtifactView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (Platform.isLinux) {
+      return LinuxWebView.html(html: html, captureKey: captureKey);
+    }
     return _HtmlWebView(html: html, captureKey: captureKey);
   }
 }
