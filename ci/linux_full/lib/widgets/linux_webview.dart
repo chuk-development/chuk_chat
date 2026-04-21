@@ -47,7 +47,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart' show AssetManifest, rootBundle;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -75,11 +75,38 @@ Future<String?> _extractExcalidrawBundle() async {
     await dir.create(recursive: true);
     final dirReal = p.normalize(dir.absolute.path);
 
-    final manifestJson = await rootBundle.loadString('AssetManifest.json');
-    final manifest = jsonDecode(manifestJson) as Map<String, dynamic>;
-    final assetPaths = manifest.keys
-        .where((k) => k.startsWith('assets/excalidraw/'))
-        .toList();
+    // Flutter 3.38+ serves the new binary `AssetManifest.bin` by
+    // default and removes `AssetManifest.json`. Try the binary format
+    // first via AssetManifest.loadFromAssetBundle, fall back to the
+    // legacy JSON for older bundles.
+    List<String> assetPaths = const [];
+    try {
+      final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+      assetPaths = manifest
+          .listAssets()
+          .where((k) => k.startsWith('assets/excalidraw/'))
+          .toList();
+    } catch (_) {
+      try {
+        final manifestJson =
+            await rootBundle.loadString('AssetManifest.json');
+        final manifest = jsonDecode(manifestJson) as Map<String, dynamic>;
+        assetPaths = manifest.keys
+            .where((k) => k.startsWith('assets/excalidraw/'))
+            .toList();
+      } catch (e) {
+        // ignore: avoid_print
+        print('[LinuxWebView] asset manifest unreadable: $e');
+        rethrow;
+      }
+    }
+
+    if (assetPaths.isEmpty) {
+      // ignore: avoid_print
+      print('[LinuxWebView] no assets under assets/excalidraw/ in manifest');
+      return null;
+    }
+
     for (final asset in assetPaths) {
       final relative = asset.substring('assets/excalidraw/'.length);
       if (relative.isEmpty) continue;
@@ -90,18 +117,24 @@ Future<String?> _extractExcalidrawBundle() async {
       // compromised AssetManifest should not be able to write arbitrary
       // files on disk.
       if (!p.isWithin(dirReal, destReal) && destReal != dirReal) {
-        if (kDebugMode) {
-          debugPrint('Skipping asset with suspicious path: $asset');
-        }
+        // ignore: avoid_print
+        print('[LinuxWebView] skipping asset with suspicious path: $asset');
         continue;
       }
       await dest.parent.create(recursive: true);
       final data = await rootBundle.load(asset);
       await dest.writeAsBytes(data.buffer.asUint8List(), flush: true);
     }
+    if (!await indexFile.exists()) {
+      // ignore: avoid_print
+      print('[LinuxWebView] extracted bundle but index.html missing at '
+          '${indexFile.path}');
+      return null;
+    }
     return indexFile.path;
-  } catch (e) {
-    if (kDebugMode) debugPrint('Excalidraw asset extract failed: $e');
+  } catch (e, stack) {
+    // ignore: avoid_print
+    print('[LinuxWebView] Excalidraw asset extract failed: $e\n$stack');
     return null;
   }
 }
@@ -160,25 +193,38 @@ class _LinuxWebViewState extends State<LinuxWebView> {
   WebViewController? _controller;
   _LoadState _state = _LoadState.loading;
   Object? _lastError;
+  String? _currentScene;
+  bool _sceneInjected = false;
 
   @override
   void initState() {
     super.initState();
+    _currentScene = widget.excalidrawJson;
     unawaited(_bootstrap());
   }
 
   Future<void> _bootstrap() async {
     WebViewController? pending;
+    String stage = 'cef-init';
     try {
+      // ignore: avoid_print
+      print('[LinuxWebView] bootstrap start');
       await _ensureCefInitialised();
+      stage = 'create-webview';
+      // ignore: avoid_print
+      print('[LinuxWebView] cef ready — creating browser');
       pending = WebviewManager().createWebView();
       pending.setWebviewListener(
-        WebviewEventsListener(onUrlChanged: _onUrlChanged),
+        WebviewEventsListener(
+          onUrlChanged: _onUrlChanged,
+          onLoadEnd: (_, __) => _onLoadEnd(),
+        ),
       );
 
       final scene = widget.excalidrawJson;
       final body = widget.htmlContent;
 
+      stage = 'resolve-initial-url';
       String initialUrl;
       if (scene != null) {
         final indexPath = await _extractExcalidrawBundle();
@@ -192,7 +238,12 @@ class _LinuxWebViewState extends State<LinuxWebView> {
         initialUrl = 'about:blank';
       }
 
+      // ignore: avoid_print
+      print('[LinuxWebView] loading $initialUrl');
+      stage = 'controller-initialize';
       await pending.initialize(initialUrl);
+      // ignore: avoid_print
+      print('[LinuxWebView] controller initialised');
       // Only expose the controller to the widget tree once initialize()
       // has completed — webview_cef's internal `_creatingCompleter` is
       // not set before initialize runs, so calling `dispose()` on a
@@ -201,17 +252,26 @@ class _LinuxWebViewState extends State<LinuxWebView> {
       pending = null;
 
       if (scene != null) {
+        stage = 'js-channels';
+        // webview_cef injects `window.<name> = (e,r) => external...` as a
+        // FUNCTION (not an object). The Excalidraw bundle expects
+        // `window.chukBridge.post(msg)`, so the shim in _onLoadEnd
+        // repacks the function into `{ post: fn }` after every load.
         await _controller!.setJavaScriptChannels({
           JavascriptChannel(
             name: 'chukBridge',
-            onMessageReceived: (m) => _onBridgeMessage(m.message, scene),
+            onMessageReceived: (m) => _onBridgeMessage(m.message),
           ),
         });
       }
       if (!mounted) return;
       setState(() => _state = _LoadState.ready);
-    } catch (e) {
-      if (kDebugMode) debugPrint('LinuxWebView bootstrap failed: $e');
+    } catch (e, stack) {
+      // Always log to stderr so release builds surface the reason on
+      // the tty — kDebugMode-only logging hid the cause behind an
+      // unlabelled red-icon card.
+      // ignore: avoid_print
+      print('[LinuxWebView] bootstrap failed at stage="$stage": $e\n$stack');
       // If initialize completed but a later step failed, dispose the
       // now-owned controller. If initialize never ran, pending is still
       // set and webview_cef has no teardown for it — leaking the
@@ -278,12 +338,43 @@ class _LinuxWebViewState extends State<LinuxWebView> {
       await ctrl.executeJavaScript(
         'window.chukExcalidraw && window.chukExcalidraw.setScene(${jsonEncode(json)});',
       );
+      _sceneInjected = true;
     } catch (e) {
       if (kDebugMode) debugPrint('Excalidraw push scene failed: $e');
     }
   }
 
-  void _onBridgeMessage(String raw, String pendingScene) {
+  /// Runs after every page load inside the CEF frame. We reach this
+  /// point AFTER webview_cef's `setJavaScriptChannels` injection ran, so
+  /// `window.chukBridge` exists as a bare function. The bundle expects
+  /// `window.chukBridge.post(...)`, so we repack it here, then push the
+  /// scene — relying on the bundle's own `ready` ping is racy because it
+  /// fires before the channel is wired.
+  Future<void> _onLoadEnd() async {
+    final ctrl = _controller;
+    if (ctrl == null) return;
+    try {
+      await ctrl.executeJavaScript(
+        '(function(){'
+        'var fn = window.chukBridge;'
+        'if (typeof fn === "function") {'
+        'window.chukBridge = { post: function(m){ try { fn(m); } catch(_){} } };'
+        '}'
+        '})();',
+      );
+    } catch (e) {
+      if (kDebugMode) debugPrint('chukBridge shim injection failed: $e');
+    }
+    // Re-read after the await — didUpdateWidget may have swapped
+    // _currentScene while the JS injection was in flight, in which case
+    // pushing the older capture would overwrite the fresh scene.
+    final scene = _currentScene;
+    if (scene != null) {
+      await _pushScene(scene);
+    }
+  }
+
+  void _onBridgeMessage(String raw) {
     Map<String, dynamic>? msg;
     try {
       final decoded = jsonDecode(raw);
@@ -292,8 +383,12 @@ class _LinuxWebViewState extends State<LinuxWebView> {
       return;
     }
     if (msg == null) return;
-    if (msg['type'] == 'ready') {
-      unawaited(_pushScene(pendingScene));
+    final type = msg['type'];
+    if (type == 'ready') {
+      final scene = _currentScene;
+      if (scene != null && !_sceneInjected) unawaited(_pushScene(scene));
+    } else if (type == 'error' && kDebugMode) {
+      debugPrint('Excalidraw bundle error: ${msg['message']}');
     }
   }
 
@@ -301,8 +396,10 @@ class _LinuxWebViewState extends State<LinuxWebView> {
   void didUpdateWidget(covariant LinuxWebView old) {
     super.didUpdateWidget(old);
     final next = widget.excalidrawJson;
-    if (next != null && old.excalidrawJson != next && _controller != null) {
-      unawaited(_pushScene(next));
+    if (next != null && old.excalidrawJson != next) {
+      _currentScene = next;
+      _sceneInjected = false;
+      if (_controller != null) unawaited(_pushScene(next));
     }
   }
 
@@ -397,9 +494,9 @@ class _Fallback extends StatelessWidget {
                 'Excalidraw WebView (CEF) failed to initialise.',
                 textAlign: TextAlign.center,
               ),
-              if (kDebugMode && error != null) ...[
+              if (error != null) ...[
                 const SizedBox(height: 8),
-                Text(
+                SelectableText(
                   '$error',
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 11, color: Colors.red),
