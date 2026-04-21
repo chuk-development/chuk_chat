@@ -1225,6 +1225,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       if (_activeChatId == null) {
         _activeChatId = _uuid.v4();
         if (kDebugMode) {
+          debugPrint(
+            '🔗 [SEND-DESKTOP] Generated chat id for new chat: $_activeChatId',
+          );
+        }
+        if (kDebugMode) {
           debugPrint('');
           debugPrint(
             '┌─────────────────────────────────────────────────────────────',
@@ -1262,6 +1267,21 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
               '🤖 [SEND-DESKTOP] Linked chat to workspace $workspaceId',
             );
           }
+        }
+      }
+
+      // Keep builtin tools (artifact_manager, typst_compile) pointing at
+      // this chat for the entire send. Without this, the very first
+      // turn of a freshly-created chat races the parent widget's
+      // `selectedChatId` propagation and `artifact_manager` aborts with
+      // "No active chat". Applies to normal send AND resend paths.
+      if (_activeChatId != null) {
+        ChatStorageService.activeMessageChatId = _activeChatId;
+        ChatStorageService.selectedChatId ??= _activeChatId;
+        if (kDebugMode) {
+          debugPrint(
+            '🔗 [SEND-DESKTOP] ChatStorageService.activeMessageChatId = $_activeChatId (selectedChatId=${ChatStorageService.selectedChatId})',
+          );
         }
       }
 

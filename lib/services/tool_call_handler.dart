@@ -137,6 +137,12 @@ class ToolCallHandler {
     bool allowMarkdownToolCalls = true,
     bool skipIdentity = false,
   }) {
+    // Pin the chat id on the executor for the duration of this send. The
+    // `discoveryContextKey` carries the active chat id from the send
+    // logic — treat it as authoritative for tool invocations so
+    // artifact_manager / typst_compile never race static-state
+    // propagation on the first turn of a newly-created chat.
+    _toolExecutor.currentChatId = discoveryContextKey;
     final enforcer = ToolEnforcer(maxIterations: 24)..resetIteration();
 
     // Tell the enforcer which tools bypass discovery.
