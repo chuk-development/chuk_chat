@@ -49,6 +49,14 @@ class ToolExecutor {
   bool _chartVisualOutputEnabled = true;
   Future<void>? _loadPrefsFuture;
 
+  /// The chat id for the current send/turn. Set by the send logic before
+  /// every LLM invocation. Used by `artifact_manager` / `typst_compile`
+  /// as the authoritative chat scope, with `ChatStorageService` as a
+  /// fallback only. Avoids the static-state races where the parent
+  /// widget's `selectedChatId` hasn't propagated yet on the first turn
+  /// of a newly-created chat.
+  String? currentChatId;
+
   static const String _kMapVisualOutputEnabledKey = 'visual_output_map_enabled';
   static const String _kChartVisualOutputEnabledKey =
       'visual_output_chart_enabled';
@@ -760,7 +768,8 @@ class ToolExecutor {
           await typst_tools.executeTypstCompile(
             serverHttpUrl: serverHttpUrl,
             accessToken: accessToken,
-            chatId: ChatStorageService.selectedChatId ??
+            chatId: currentChatId ??
+                ChatStorageService.selectedChatId ??
                 ChatStorageService.activeMessageChatId,
             args: args,
           ),
@@ -776,12 +785,24 @@ class ToolExecutor {
 
   Future<String> _executeArtifactManager(Map<String, dynamic> args) async {
     final action = (args['action'] as String? ?? '').trim().toLowerCase();
-    // Fall back to activeMessageChatId when selectedChatId isn't committed yet
-    // (race condition on first message of a new chat).
-    final chatId = ChatStorageService.selectedChatId ??
+    // Resolve the chat id with three layers of fallback so tool
+    // invocations cannot race static-state propagation:
+    //   1. `currentChatId` set by the send logic at the start of the turn.
+    //   2. `ChatStorageService.selectedChatId` — parent widget state.
+    //   3. `ChatStorageService.activeMessageChatId` — set by the resend
+    //      path and mirrored by the send path for the same reason.
+    final chatId = currentChatId ??
+        ChatStorageService.selectedChatId ??
         ChatStorageService.activeMessageChatId;
 
     if (chatId == null || chatId.isEmpty) {
+      if (kDebugMode) {
+        debugPrint(
+          '❌ [ToolExecutor] artifact_manager: no chat id resolvable '
+          '(currentChatId=null, selectedChatId=${ChatStorageService.selectedChatId}, '
+          'activeMessageChatId=${ChatStorageService.activeMessageChatId})',
+        );
+      }
       return 'Error: No active chat. Start or select a chat first.';
     }
 
