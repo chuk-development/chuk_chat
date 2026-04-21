@@ -14,7 +14,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:web/web.dart' as web;
 
-import 'package:chuk_chat/widgets/excalidraw_widget.dart';
 
 enum ExcalidrawViewMode { readOnly, edit }
 
@@ -159,21 +158,29 @@ class _ExcalidrawViewState extends State<ExcalidrawView> {
   @override
   Widget build(BuildContext context) {
     if (_failed) {
-      return Stack(
-        children: [
-          Positioned.fill(
-            child: ExcalidrawWidget(jsonString: widget.jsonString),
-          ),
-          if (kDebugMode && _lastError != null)
-            Positioned(
-              left: 8,
-              bottom: 8,
-              child: Text(
-                'WebView error: $_lastError',
-                style: const TextStyle(color: Colors.red, fontSize: 10),
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, size: 48, color: Colors.red),
+              const SizedBox(height: 12),
+              const Text(
+                'Excalidraw iframe failed to initialise.',
+                textAlign: TextAlign.center,
               ),
-            ),
-        ],
+              if (kDebugMode && _lastError != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  '$_lastError',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 11, color: Colors.red),
+                ),
+              ],
+            ],
+          ),
+        ),
       );
     }
     return Stack(

@@ -54,7 +54,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_cef/webview_cef.dart';
 
 import 'package:chuk_chat/utils/theme_extensions.dart';
-import 'package:chuk_chat/widgets/excalidraw_widget.dart';
 import 'package:chuk_chat/widgets/html_artifact_view_source_fallback.dart';
 
 /// One-shot CEF bootstrap. Idempotent and safe to call from multiple
@@ -379,13 +378,39 @@ class _Fallback extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scene = excalidrawJson;
-    final body = htmlContent;
+    final isExcalidraw = excalidrawJson != null;
+    // HTML artifacts can still fall back to the read-only source view
+    // (it's plain text, not a re-implementation of the browser). For
+    // Excalidraw there is no fallback — we refuse to render a
+    // fake/simplified version and surface the error directly.
     Widget child;
-    if (scene != null) {
-      child = ExcalidrawWidget(jsonString: scene);
-    } else if (body != null) {
-      child = HtmlSourceFallback(html: body);
+    if (isExcalidraw) {
+      child = Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, size: 48, color: Colors.red),
+              const SizedBox(height: 12),
+              const Text(
+                'Excalidraw WebView (CEF) failed to initialise.',
+                textAlign: TextAlign.center,
+              ),
+              if (kDebugMode && error != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  '$error',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 11, color: Colors.red),
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    } else if (htmlContent != null) {
+      child = HtmlSourceFallback(html: htmlContent!);
     } else {
       child = const SizedBox.shrink();
     }
@@ -394,7 +419,7 @@ class _Fallback extends StatelessWidget {
       child: Stack(
         children: [
           Positioned.fill(child: child),
-          if (kDebugMode && error != null)
+          if (kDebugMode && error != null && !isExcalidraw)
             Positioned(
               left: 8,
               bottom: 8,
