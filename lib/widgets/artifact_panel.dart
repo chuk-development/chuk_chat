@@ -905,12 +905,14 @@ class _ArtifactRenderer extends StatelessWidget {
           ),
         );
       case ArtifactType.excalidraw:
-        return _ZoomableVisual(
-          key: ValueKey('zoom_exc_${artifactId ?? ""}'),
-          child: RepaintBoundary(
-            key: captureKey,
-            child: ExcalidrawView(jsonString: content),
-          ),
+        // Excalidraw owns its own zoom/pan UI; wrapping it in
+        // `_ZoomableVisual` (InteractiveViewer) would re-layout the
+        // underlying WebView every time the panel was resized, which
+        // thrashed the CEF iframe and re-fit the scene. Render at the
+        // panel's natural size and let the bundle handle gestures.
+        return RepaintBoundary(
+          key: captureKey,
+          child: ExcalidrawView(jsonString: content),
         );
       case ArtifactType.html:
         return HtmlArtifactView(
