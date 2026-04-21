@@ -1,6 +1,7 @@
 // lib/widgets/markdown_message.dart
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -722,6 +723,46 @@ class _AsyncCodeBlock extends StatefulWidget {
 class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
   List<InlineSpan>? _highlightedSpans;
   Timer? _debounceTimer;
+  String? _displayedCode;
+
+  /// Returns a pretty-printed version of [code] if the language is `json`
+  /// (or auto-detected as JSON from the content) and the current
+  /// formatting is a single long line. Otherwise returns [code] verbatim.
+  String _prettifyIfJson(String code, String? language) {
+    final normalized = (language ?? '').trim().toLowerCase();
+    final looksLikeJson = normalized == 'json' ||
+        normalized == 'jsonc' ||
+        _autoDetectJson(code);
+    if (!looksLikeJson) return code;
+    // Already has meaningful newlines — leave it alone.
+    final newlineCount = '\n'.allMatches(code).length;
+    if (newlineCount > 3 && code.length / (newlineCount + 1) < 200) {
+      return code;
+    }
+    try {
+      final decoded = jsonDecode(code);
+      const encoder = JsonEncoder.withIndent('  ');
+      return encoder.convert(decoded);
+    } catch (_) {
+      return code;
+    }
+  }
+
+  bool _autoDetectJson(String code) {
+    final trimmed = code.trim();
+    if (trimmed.length < 8) return false;
+    final head = trimmed.codeUnitAt(0);
+    final tail = trimmed.codeUnitAt(trimmed.length - 1);
+    // Must start with { or [ and end with } or ]
+    if (!((head == 0x7B && tail == 0x7D) ||
+        (head == 0x5B && tail == 0x5D))) {
+      return false;
+    }
+    return true;
+  }
+
+  String _codeForDisplay() =>
+      _displayedCode ??= _prettifyIfJson(widget.code, widget.language);
 
   @override
   void initState() {
@@ -735,6 +776,7 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
     if (widget.code != oldWidget.code ||
         widget.language != oldWidget.language ||
         widget.theme != oldWidget.theme) {
+      _displayedCode = null;
       _scheduleHighlight();
     }
   }
@@ -757,7 +799,7 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
   Future<void> _highlightCode() async {
     if (!mounted) return;
 
-    final String code = widget.code;
+    final String code = _codeForDisplay();
     final String? language = widget.language;
 
     // Skip highlighting for empty code
@@ -873,9 +915,10 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
 
   @override
   Widget build(BuildContext context) {
+    final String displayCode = _codeForDisplay();
     final List<InlineSpan> content =
         _highlightedSpans ??
-        [TextSpan(text: widget.code, style: widget.textStyle)];
+        [TextSpan(text: displayCode, style: widget.textStyle)];
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -910,7 +953,7 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                _CopyButton(code: widget.code, textColor: widget.textColor),
+                _CopyButton(code: displayCode, textColor: widget.textColor),
               ],
             ),
           ),
