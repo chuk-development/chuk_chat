@@ -6,10 +6,10 @@
 // `assets/excalidraw/bundle.js`. No network access is required.
 //
 // Desktop Linux builds don't ship a stable WebView backend in this
-// default codebase, so Linux falls back to the native CustomPainter
-// renderer (see `ExcalidrawWidget`). The `-full` Linux CI variant swaps
-// in a `webview_cef`-backed LinuxWebView for real rendering (see
-// `ci/linux_full/` and `.github/workflows/build-cross-platform.yml`).
+// default codebase, so Linux shows an error card with a link to open
+// the scene in excalidraw.com. The `-full` Linux CI variant swaps in a
+// `webview_cef`-backed LinuxWebView that loads the same bundle via an
+// in-process Chromium iframe.
 
 import 'dart:async';
 import 'dart:convert';
@@ -19,7 +19,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
-import 'package:chuk_chat/widgets/excalidraw_widget.dart';
 import 'package:chuk_chat/widgets/linux_webview.dart';
 
 class ExcalidrawView extends StatefulWidget {
@@ -248,23 +247,20 @@ class _ExcalidrawViewState extends State<ExcalidrawView> {
               child: CircularProgressIndicator(strokeWidth: 2),
             ),
           ),
-        if (_state == _LoadState.failed)
-          _WebViewFailedFallback(
-            jsonString: widget.jsonString,
-            error: _lastError,
-          ),
+        if (_state == _LoadState.failed) _WebViewFailedFallback(error: _lastError),
       ],
     );
   }
 }
 
-/// Shown when the WebView can't initialise. Falls back to the native
-/// CustomPainter renderer so the user still sees the drawing, with a
-/// discreet note in debug builds.
+/// Shown when the WebView can't initialise. The app no longer ships a
+/// custom Flutter-painter fallback renderer — the scene is either
+/// rendered by the real Excalidraw bundle via a native/CEF WebView, or
+/// not at all. Users get a clear error card instead of a silent
+/// degraded drawing.
 class _WebViewFailedFallback extends StatelessWidget {
-  const _WebViewFailedFallback({required this.jsonString, required this.error});
+  const _WebViewFailedFallback({required this.error});
 
-  final String jsonString;
   final Object? error;
 
   @override
@@ -272,30 +268,27 @@ class _WebViewFailedFallback extends StatelessWidget {
     return Positioned.fill(
       child: Container(
         color: Theme.of(context).scaffoldBackgroundColor,
-        child: Stack(
-          children: [
-            Positioned.fill(child: ExcalidrawWidget(jsonString: jsonString)),
-            if (kDebugMode && error != null)
-              Positioned(
-                left: 8,
-                bottom: 8,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.red.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    'WebView failed: $error (using fallback renderer)',
-                    style: const TextStyle(
-                      fontSize: 10,
-                      color: Colors.red,
-                    ),
-                  ),
-                ),
+        padding: const EdgeInsets.all(24),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, size: 48, color: Colors.red),
+              const SizedBox(height: 12),
+              const Text(
+                'Excalidraw WebView failed to initialise.',
+                textAlign: TextAlign.center,
               ),
-          ],
+              if (kDebugMode && error != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  '$error',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 11, color: Colors.red),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );

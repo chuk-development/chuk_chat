@@ -1,9 +1,8 @@
 // lib/widgets/excalidraw_svg_export.dart
 //
 // Converts an Excalidraw scene JSON string into a stand-alone SVG document.
-// Mirrors the element subset supported by [ExcalidrawWidget]:
-//   rectangle, ellipse, diamond, line, arrow, text, freedraw, frame.
-//
+// Supported element subset: rectangle, ellipse, diamond, line, arrow, text,
+// freedraw, frame. Used by the artifact panel's "Export as SVG" action.
 // The output is intentionally plain (no rough.js hand-drawn jitter) — the
 // `.excalidraw` file itself is downloadable separately for perfect fidelity.
 
