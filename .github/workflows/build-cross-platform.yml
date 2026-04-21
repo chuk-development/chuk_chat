@@ -742,6 +742,7 @@ jobs:
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
             --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} \
             --dart-define=PLATFORM_DESKTOP=true \
+            --dart-define=LINUX_VARIANT=full \
             --dart-define=FEATURE_PROJECTS=false \
             --dart-define=FEATURE_IMAGE_GEN=false \
             --dart-define=FEATURE_VOICE_MODE=false \
@@ -962,6 +963,7 @@ jobs:
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
             --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} \
             --dart-define=PLATFORM_DESKTOP=true \
+            --dart-define=LINUX_VARIANT=full \
             --dart-define=FEATURE_PROJECTS=false \
             --dart-define=FEATURE_IMAGE_GEN=false \
             --dart-define=FEATURE_VOICE_MODE=false \
