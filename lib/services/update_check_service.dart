@@ -26,6 +26,18 @@ class UpdateCheckService {
   /// Minimum interval between automatic checks (4 hours).
   static const Duration _checkInterval = Duration(hours: 4);
 
+  /// Linux ships two flavours: the default "slim" AppImage/deb/rpm (no
+  /// WebView backend, ~25 MB) and the `-full` variant that bundles CEF
+  /// for real artifact rendering (~210 MB). `build-cross-platform.yml`
+  /// passes `--dart-define=LINUX_VARIANT=full` from the `-full` jobs, so
+  /// an installed full build always updates to a full build and never
+  /// downgrades the user to the slim AppImage.
+  static const String _linuxVariant =
+      String.fromEnvironment('LINUX_VARIANT', defaultValue: 'slim');
+
+  static bool get _isLinuxFull =>
+      !kIsWeb && Platform.isLinux && _linuxVariant == 'full';
+
   /// Reactive notifier — widgets listen to this for update availability.
   static final ValueNotifier<UpdateInfo?> updateAvailable =
       ValueNotifier<UpdateInfo?>(null);
@@ -152,11 +164,27 @@ class UpdateCheckService {
 
     if (assetNames.isEmpty) return null;
 
+    // On Linux the release carries BOTH slim and `-full` artifacts
+    // (`…-linux-amd64.deb` vs `…-linux-amd64-full.deb`). A substring
+    // match for `linux-amd64` would accept either, so slim installs
+    // would get auto-upgraded to the CEF bundle and vice versa. Filter
+    // the candidate set by variant up front.
+    final filteredAssets = !kIsWeb && Platform.isLinux
+        ? Map<String, String>.fromEntries(
+            assetNames.entries.where((e) {
+              final isFullAsset = e.key.contains('-full');
+              return _isLinuxFull ? isFullAsset : !isFullAsset;
+            }),
+          )
+        : assetNames;
+
+    if (filteredAssets.isEmpty) return null;
+
     // Determine what asset pattern to look for based on platform + arch
     final patterns = _getAssetPatterns();
 
     for (final pattern in patterns) {
-      for (final entry in assetNames.entries) {
+      for (final entry in filteredAssets.entries) {
         if (entry.key.contains(pattern)) {
           return entry.value;
         }
@@ -185,6 +213,23 @@ class UpdateCheckService {
       }
     }
     if (Platform.isLinux) {
+      if (_isLinuxFull) {
+        if (arch == 'arm64') {
+          return [
+            'linux-arm64-full.deb',
+            'linux-aarch64-full.appimage',
+            'linux-arm64-full',
+            'linux-aarch64-full',
+          ];
+        }
+        return [
+          'linux-amd64-full.deb',
+          'linux-x86_64-full.appimage',
+          'linux-x86_64-full.rpm',
+          'linux-amd64-full',
+          'linux-x86_64-full',
+        ];
+      }
       if (arch == 'arm64') {
         return [
           'linux-arm64.deb',
