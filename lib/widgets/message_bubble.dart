@@ -601,22 +601,8 @@ class _MessageBubbleState extends State<MessageBubble>
               : CrossAxisAlignment.start,
           children: [
             if (hasUserImages) ...[
-              Stack(
-                children: [
-                  _buildFramedUserImageGrid(_buildImagesGrid(widget.images!)),
-                  Positioned(
-                    right: 8,
-                    bottom: 8,
-                    child: _buildImageMetaMenu(
-                      iconFgColor,
-                      alignRight,
-                      widget.imageCostEur,
-                      widget.imageGeneratedAt,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
+              _buildFramedUserImageGrid(_buildImagesGrid(widget.images!)),
+              const SizedBox(height: 2),
             ],
             if (!hideEmptyUserBubble) userBubble,
             if (hasUserActions && _showUserActions)
@@ -715,22 +701,9 @@ class _MessageBubbleState extends State<MessageBubble>
   }
 
   Widget _buildFramedUserImageGrid(Widget child) {
-    if (!widget.isUser) {
-      return child;
-    }
-
-    final Color borderColor = Theme.of(
-      context,
-    ).resolvedIconColor.withValues(alpha: 0.24);
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: borderColor, width: 1),
-      ),
-      child: child,
-    );
+    // No frame on user-uploaded images: the thumbnail already has its own
+    // rounded border and an outer frame made the bubble look cluttered.
+    return child;
   }
 
   /// Interleaved content blocks layout: renders text, tool calls, and
@@ -2355,7 +2328,10 @@ class _MessageBubbleState extends State<MessageBubble>
                     ? (imageWidth * 0.65).clamp(140.0, 256.0)
                     : (maxWidth * 0.65).clamp(280.0, 512.0));
 
-          final Widget thumb = _CachedImageThumbnail(
+          // Outer Column already right-aligns user messages via
+          // CrossAxisAlignment.end — do NOT wrap in Align here, or the frame
+          // stretches to full width and shows an asymmetric gap on the left.
+          return _CachedImageThumbnail(
             imageDataUrl: imageSource,
             width: imageWidth,
             height: imageHeight,
@@ -2367,10 +2343,6 @@ class _MessageBubbleState extends State<MessageBubble>
               index: 0,
             ),
           );
-
-          return widget.isUser
-              ? Align(alignment: Alignment.centerRight, child: thumb)
-              : thumb;
         }
 
         final int columns = maxWidth > 520 ? 3 : 2;

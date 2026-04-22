@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:chuk_chat/services/file_save_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
+import 'package:chuk_chat/utils/image_clipboard_service.dart';
+import 'package:chuk_chat/widgets/nice_snackbar.dart';
 
 /// Full-screen image viewer with zoom and pan capabilities
 class ImageViewer extends StatefulWidget {
@@ -153,6 +155,11 @@ class _ImageViewerState extends State<ImageViewer> {
             tooltip: 'Close',
           ),
           actions: [
+            IconButton(
+              icon: Icon(Icons.copy, color: iconColor),
+              onPressed: _copyCurrentImage,
+              tooltip: 'Copy image',
+            ),
             if (!kIsWeb)
               IconButton(
                 icon: Icon(Icons.download, color: iconColor),
@@ -341,30 +348,40 @@ class _ImageViewerState extends State<ImageViewer> {
       _showSaveSnackBar(result);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to save image')),
-      );
+      NiceSnackBar.showError(context, 'Unable to save image');
+    }
+  }
+
+  Future<void> _copyCurrentImage() async {
+    try {
+      final source = _hasMultipleImages
+          ? widget.allImages![_currentIndex]
+          : widget.imageDataUrl;
+      final bytes = await _loadImageBytes(source);
+      final copied = await ImageClipboardService.copyImageBytes(bytes);
+      if (!mounted) return;
+      if (copied) {
+        NiceSnackBar.show(context, 'Image copied');
+      } else {
+        NiceSnackBar.showError(context, 'Unable to copy image');
+      }
+    } catch (_) {
+      if (!mounted) return;
+      NiceSnackBar.showError(context, 'Unable to copy image');
     }
   }
 
   void _showSaveSnackBar(SaveResult result) {
-    final messenger = ScaffoldMessenger.of(context);
     switch (result.outcome) {
       case SaveOutcome.savedToFolder:
       case SaveOutcome.savedViaPicker:
-        messenger.showSnackBar(
-          SnackBar(content: Text('Saved to ${result.path}')),
-        );
+        NiceSnackBar.show(context, 'Saved to ${result.path}');
       case SaveOutcome.savedViaShare:
-        messenger.showSnackBar(
-          const SnackBar(content: Text('Image shared')),
-        );
+        NiceSnackBar.show(context, 'Image shared');
       case SaveOutcome.cancelled:
         break;
       case SaveOutcome.failed:
-        messenger.showSnackBar(
-          const SnackBar(content: Text('Unable to save image')),
-        );
+        NiceSnackBar.showError(context, 'Unable to save image');
     }
   }
 
