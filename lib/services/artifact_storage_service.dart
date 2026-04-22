@@ -89,6 +89,50 @@ class ArtifactStorageService {
     }
   }
 
+  /// Loads every active artifact owned by the signed-in user, across all
+  /// chats. Used by the Media Manager to surface artifacts alongside images.
+  /// Does not populate the per-chat cache to avoid cross-chat polluting it.
+  static Future<List<ArtifactDocument>> listAllUserArtifacts() async {
+    if (!_artifactStorageAvailable) {
+      return const <ArtifactDocument>[];
+    }
+
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) {
+      return const <ArtifactDocument>[];
+    }
+
+    final List response;
+    try {
+      response = await SupabaseService.client
+          .from(_artifactsTable)
+          .select()
+          .eq('user_id', user.id)
+          .eq('is_active', true)
+          .order('updated_at', ascending: false);
+    } on PostgrestException catch (error) {
+      if (_handleMissingArtifactSchema(
+        error,
+        operation: 'listAllUserArtifacts',
+      )) {
+        return const <ArtifactDocument>[];
+      }
+      rethrow;
+    }
+
+    final rows = response
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList(growable: false);
+
+    final docs = <ArtifactDocument>[];
+    for (final row in rows) {
+      final raw = row['content'] as String? ?? '';
+      final content = await _decryptMaybe(raw);
+      docs.add(ArtifactDocument.fromMap(row, decryptedContent: content));
+    }
+    return docs;
+  }
+
   static Future<List<ArtifactDocument>> loadArtifactsForChat(
     String chatId, {
     bool forceRefresh = false,
