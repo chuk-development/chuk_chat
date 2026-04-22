@@ -614,7 +614,6 @@ class _ModelSelectionRowState extends State<ModelSelectionRow> {
     final Widget nameRow = _NameRow(
       model: widget.model,
       buildIconWidget: widget.buildIconWidget,
-      isActive: isActive,
       trailing: _ProviderPill(
         model: widget.model,
         selectedProvider: widget.selectedProvider,
@@ -774,13 +773,11 @@ class _ModelSelectionRowState extends State<ModelSelectionRow> {
 class _NameRow extends StatelessWidget {
   final CustomModelInfo model;
   final Widget Function(String?, IconData, {double size}) buildIconWidget;
-  final bool isActive;
   final Widget trailing;
 
   const _NameRow({
     required this.model,
     required this.buildIconWidget,
-    required this.isActive,
     required this.trailing,
   });
 
@@ -795,26 +792,15 @@ class _NameRow extends StatelessWidget {
         buildIconWidget(model.iconUrl, Icons.psychology_alt, size: 28),
         const SizedBox(width: 12),
         Expanded(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Flexible(
-                child: Text(
-                  model.name,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: colorScheme.onSurface,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (isActive) ...[
-                const SizedBox(width: 8),
-                const _Badge('Active', tone: _BadgeTone.primary),
-              ],
-            ],
+          child: Text(
+            model.name,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              color: colorScheme.onSurface,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
         const SizedBox(width: 12),
@@ -1037,55 +1023,6 @@ class _SectionHeader extends StatelessWidget {
           fontWeight: FontWeight.w600,
           letterSpacing: 1.5,
           color: colorScheme.primary,
-        ),
-      ),
-    );
-  }
-}
-
-enum _BadgeTone { primary, success, warn, neutral }
-
-class _Badge extends StatelessWidget {
-  final String label;
-  final _BadgeTone tone;
-  const _Badge(this.label, {this.tone = _BadgeTone.neutral});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final m3 = theme.m3;
-    late Color bg;
-    late Color fg;
-    switch (tone) {
-      case _BadgeTone.primary:
-        bg = m3.primaryContainer;
-        fg = m3.onPrimaryContainer;
-        break;
-      case _BadgeTone.success:
-        bg = m3.successContainer;
-        fg = m3.onSuccessContainer;
-        break;
-      case _BadgeTone.warn:
-        bg = m3.warningContainer;
-        fg = m3.onWarningContainer;
-        break;
-      case _BadgeTone.neutral:
-        bg = m3.surfaceContainerHigh;
-        fg = m3.onSurfaceVariant;
-        break;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: fg,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.15,
         ),
       ),
     );
