@@ -575,6 +575,21 @@ class _MessageBubbleState extends State<MessageBubble>
           )
         : bubbleContent;
 
+    // User messages with images: render image + meta menu above the bubble,
+    // outside the rounded container, so the bubble wraps the text only.
+    final bool hasUserImages =
+        isUserMessage &&
+        widget.images != null &&
+        widget.images!.isNotEmpty;
+    // Hide the bubble entirely when the only content was the auto-generated
+    // "N image(s) attached" header — otherwise an empty blue pill would sit
+    // below the image.
+    final bool hideEmptyUserBubble =
+        hasUserImages &&
+        _stripAttachmentHeaderForUser(widget.message).trim().isEmpty &&
+        (widget.replyPreviewText == null ||
+            widget.replyPreviewText!.trim().isEmpty);
+
     final result = Align(
       alignment: alignRight ? Alignment.centerRight : Alignment.centerLeft,
       child: ConstrainedBox(
@@ -585,7 +600,17 @@ class _MessageBubbleState extends State<MessageBubble>
               ? CrossAxisAlignment.end
               : CrossAxisAlignment.start,
           children: [
-            userBubble,
+            if (hasUserImages) ...[
+              _buildFramedUserImageGrid(_buildImagesGrid(widget.images!)),
+              _buildImageMetaMenu(
+                iconFgColor,
+                alignRight,
+                widget.imageCostEur,
+                widget.imageGeneratedAt,
+              ),
+              const SizedBox(height: 4),
+            ],
+            if (!hideEmptyUserBubble) userBubble,
             if (hasUserActions && _showUserActions)
               _buildUserActionButtons(iconFgColor),
             if (!isUserMessage) _buildBottomBar(iconFgColor, hasActions),
@@ -633,6 +658,8 @@ class _MessageBubbleState extends State<MessageBubble>
   }) {
     final bool hasImages = widget.images != null && widget.images!.isNotEmpty;
     final bool placeQrImageAboveResponse = hasImages && _isQrImageMessage;
+    // User messages render images above the bubble (see build()).
+    final bool renderImagesInBubble = hasImages && !isUserMessage;
 
     return [
       if (hasInfoStatusBar)
@@ -640,7 +667,7 @@ class _MessageBubbleState extends State<MessageBubble>
           width: double.infinity,
           child: _buildInfoStatusBar(iconFgColor, accentColor),
         ),
-      if (hasImages && !placeQrImageAboveResponse) ...[
+      if (renderImagesInBubble && !placeQrImageAboveResponse) ...[
         _buildFramedUserImageGrid(_buildImagesGrid(widget.images!)),
         _buildImageMetaMenu(
           iconFgColor,
@@ -660,7 +687,7 @@ class _MessageBubbleState extends State<MessageBubble>
         ..._buildArtifactCards(widget.toolCalls!),
         const SizedBox(height: 8),
       ],
-      if (hasImages && placeQrImageAboveResponse) ...[
+      if (renderImagesInBubble && placeQrImageAboveResponse) ...[
         _buildFramedUserImageGrid(_buildImagesGrid(widget.images!)),
         _buildImageMetaMenu(
           iconFgColor,
@@ -2441,17 +2468,43 @@ class _MessageBubbleState extends State<MessageBubble>
     );
   }
 
+  static final RegExp _attachmentHeaderRe = RegExp(
+    r'^\d+ images? attached(?:, Documents: .+)?$',
+  );
+
+  String _stripAttachmentHeaderForUser(String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return trimmed;
+    final separatorIndex = trimmed.indexOf('\n\n');
+    if (separatorIndex < 0) {
+      if (_attachmentHeaderRe.hasMatch(trimmed) ||
+          trimmed.startsWith('Documents: ')) {
+        return '';
+      }
+      return text;
+    }
+    final header = trimmed.substring(0, separatorIndex).trim();
+    if (_attachmentHeaderRe.hasMatch(header) ||
+        header.startsWith('Documents: ')) {
+      return trimmed.substring(separatorIndex + 2).trim();
+    }
+    return text;
+  }
+
   Widget _buildMessageBody({
     required Color iconFgColor,
     required Color bgColor,
     required bool isUserMessage,
   }) {
     final displayText = isUserMessage
-        ? widget.message
+        ? _stripAttachmentHeaderForUser(widget.message)
         : stripToolCallBlocksForDisplay(widget.message);
 
     if (!isUserMessage &&
         (displayText.trim().isEmpty || displayText == 'Thinking...')) {
+      return const SizedBox.shrink();
+    }
+    if (isUserMessage && displayText.trim().isEmpty) {
       return const SizedBox.shrink();
     }
 
