@@ -2339,13 +2339,15 @@ class _MessageBubbleState extends State<MessageBubble>
 
         if (images.length == 1) {
           final String imageSource = images.first;
-          final double imageWidth = maxWidth;
+          final double imageWidth = widget.isUser ? maxWidth * 0.5 : maxWidth;
           // Desktop gets a taller preview; mobile stays compact.
           final double imageHeight = kPlatformMobile
-              ? 280
-              : (maxWidth * 0.65).clamp(280.0, 512.0);
+              ? (widget.isUser ? 140.0 : 280.0)
+              : (widget.isUser
+                    ? (imageWidth * 0.65).clamp(140.0, 256.0)
+                    : (maxWidth * 0.65).clamp(280.0, 512.0));
 
-          return _CachedImageThumbnail(
+          final Widget thumb = _CachedImageThumbnail(
             imageDataUrl: imageSource,
             width: imageWidth,
             height: imageHeight,
@@ -2357,6 +2359,10 @@ class _MessageBubbleState extends State<MessageBubble>
               index: 0,
             ),
           );
+
+          return widget.isUser
+              ? Align(alignment: Alignment.centerRight, child: thumb)
+              : thumb;
         }
 
         final int columns = maxWidth > 520 ? 3 : 2;
