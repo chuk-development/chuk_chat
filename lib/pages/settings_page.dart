@@ -121,13 +121,31 @@ class _SettingsPageState extends State<SettingsPage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          _HeroIdentityTile(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const AccountSettingsPage()),
-              );
-            },
+          _SectionHeader(label: 'Account'),
+          _GroupedCard(
+            rows: [
+              _AccountRow(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const AccountSettingsPage(),
+                    ),
+                  );
+                },
+              ),
+              _SettingsRow(
+                icon: Icons.credit_card,
+                title: l.pricingPlans,
+                subtitle: l.pricingPlansSubtitle,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PricingPage()),
+                  );
+                },
+              ),
+            ],
           ),
 
           _SectionHeader(label: 'AI & Chat'),
@@ -578,16 +596,16 @@ class _PlanInfo {
   const _PlanInfo({required this.heroLabel, required this.chipLabel});
 }
 
-class _HeroIdentityTile extends StatefulWidget {
+class _AccountRow extends StatefulWidget {
   final VoidCallback onTap;
 
-  const _HeroIdentityTile({required this.onTap});
+  const _AccountRow({required this.onTap});
 
   @override
-  State<_HeroIdentityTile> createState() => _HeroIdentityTileState();
+  State<_AccountRow> createState() => _AccountRowState();
 }
 
-class _HeroIdentityTileState extends State<_HeroIdentityTile> {
+class _AccountRowState extends State<_AccountRow> {
   late Future<_PlanInfo> _planFuture;
 
   @override
@@ -692,13 +710,6 @@ class _HeroIdentityTileState extends State<_HeroIdentityTile> {
     return (displayName: displayName, email: email, initials: initials);
   }
 
-  void _openPricing() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const PricingPage()),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -708,18 +719,14 @@ class _HeroIdentityTileState extends State<_HeroIdentityTile> {
 
     return InkWell(
       onTap: widget.onTap,
-      borderRadius: BorderRadius.circular(28),
-      child: Ink(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(28),
-          color: m3.surfaceContainerHigh,
-        ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Container(
-              width: 56,
-              height: 56,
+              width: 40,
+              height: 40,
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: cs.primaryContainer,
@@ -729,8 +736,8 @@ class _HeroIdentityTileState extends State<_HeroIdentityTile> {
                 id.initials,
                 style: TextStyle(
                   color: cs.onPrimaryContainer,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w500,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -738,11 +745,12 @@ class _HeroIdentityTileState extends State<_HeroIdentityTile> {
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     id.displayName,
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 15,
                       fontWeight: FontWeight.w500,
                       color: cs.onSurface,
                     ),
@@ -753,32 +761,35 @@ class _HeroIdentityTileState extends State<_HeroIdentityTile> {
                     Text(
                       id.email,
                       style: TextStyle(
-                        fontSize: 13,
+                        fontSize: 12,
                         color: m3.onSurfaceVariant,
                       ),
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
-                  const SizedBox(height: 8),
-                  FutureBuilder<_PlanInfo>(
-                    future: _planFuture,
-                    builder: (context, snapshot) {
-                      final String label;
-                      if (snapshot.connectionState != ConnectionState.done) {
-                        label = 'Loading…';
-                      } else if (snapshot.hasData) {
-                        label = snapshot.data!.chipLabel;
-                      } else {
-                        label = 'Free · Upgrade →';
-                      }
-                      return _PlanChip(label: label, onTap: _openPricing);
-                    },
-                  ),
                 ],
               ),
             ),
+            const SizedBox(width: 10),
+            FutureBuilder<_PlanInfo>(
+              future: _planFuture,
+              builder: (context, snapshot) {
+                final String label;
+                if (snapshot.connectionState != ConnectionState.done) {
+                  label = '…';
+                } else if (snapshot.hasData) {
+                  label = snapshot.data!.heroLabel;
+                } else {
+                  label = 'Free plan';
+                }
+                return _PlanBadge(label: label);
+              },
+            ),
+            const SizedBox(width: 10),
             Icon(
               Icons.chevron_right,
+              size: 20,
               color: m3.onSurfaceVariant,
             ),
           ],
@@ -788,41 +799,29 @@ class _HeroIdentityTileState extends State<_HeroIdentityTile> {
   }
 }
 
-class _PlanChip extends StatelessWidget {
+class _PlanBadge extends StatelessWidget {
   final String label;
-  final VoidCallback onTap;
 
-  const _PlanChip({required this.label, required this.onTap});
+  const _PlanBadge({required this.label});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final m3 = theme.m3;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+      decoration: BoxDecoration(
+        color: m3.surfaceContainerHigh,
+        border: Border.all(color: m3.outlineVariant),
         borderRadius: BorderRadius.circular(999),
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 4,
-          ),
-          decoration: BoxDecoration(
-            color: m3.surfaceContainer,
-            border: Border.all(color: m3.outlineVariant),
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: cs.onSurface,
-            ),
-          ),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+          color: cs.onSurface,
         ),
       ),
     );
