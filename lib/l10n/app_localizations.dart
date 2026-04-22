@@ -600,6 +600,69 @@ class AppLocalizations {
 
   // ── Subscription dialogs ───────────────────────────────────
   String get maybeLater => _get('maybeLater');
+
+  // ── Workspace (project) detail ─────────────────────────────
+  String get projectPrivate => _get('projectPrivate');
+  String get projectPublic => _get('projectPublic');
+  String get projectKnowledge => _get('projectKnowledge');
+  String get projectInstructions => _get('projectInstructions');
+  String get projectInstructionsEmpty => _get('projectInstructionsEmpty');
+  String get projectInstructionsSubtitle =>
+      _get('projectInstructionsSubtitle');
+  String get projectLatestChats => _get('projectLatestChats');
+  String get projectNoChats => _get('projectNoChats');
+  String get projectNoChatsHint => _get('projectNoChatsHint');
+  String get projectNewChat => _get('projectNewChat');
+  String projectFileCount(int count) =>
+      _get(count == 1 ? 'projectFileCountSingular' : 'projectFileCountPlural')
+          .replaceAll('{count}', count.toString());
+  String get projectNoFiles => _get('projectNoFiles');
+  String get projectAddContent => _get('projectAddContent');
+  String get projectUploadFromDevice => _get('projectUploadFromDevice');
+  String get projectTakePhoto => _get('projectTakePhoto');
+  String get projectPickImage => _get('projectPickImage');
+  String get projectCreateDocument => _get('projectCreateDocument');
+  String get projectNewDocument => _get('projectNewDocument');
+  String get projectDocumentTitle => _get('projectDocumentTitle');
+  String get projectDocumentContent => _get('projectDocumentContent');
+  String get projectDocumentTitleHint => _get('projectDocumentTitleHint');
+  String get projectDocumentContentHint => _get('projectDocumentContentHint');
+  String get projectEditProject => _get('projectEditProject');
+  String get projectDeleteProject => _get('projectDeleteProject');
+  String get projectDeleteProjectBody => _get('projectDeleteProjectBody');
+  String get projectWorkspaceNotFound => _get('projectWorkspaceNotFound');
+  String get projectName => _get('projectName');
+  String get projectDescriptionLabel => _get('projectDescriptionLabel');
+  String get projectDiscardChangesTitle => _get('projectDiscardChangesTitle');
+  String get projectDiscardChangesBody => _get('projectDiscardChangesBody');
+  String get projectKeepEditing => _get('projectKeepEditing');
+  String get projectDiscardAction => _get('projectDiscardAction');
+  String projectSaveFailed(String error) =>
+      _get('projectSaveFailed').replaceAll('{error}', error);
+  String projectLoadFailed(String error) =>
+      _get('projectLoadFailed').replaceAll('{error}', error);
+  String projectUploadFailed(String error) =>
+      _get('projectUploadFailed').replaceAll('{error}', error);
+  String projectDeleteFailed(String error) =>
+      _get('projectDeleteFailed').replaceAll('{error}', error);
+  String projectUploaded(String name) =>
+      _get('projectUploaded').replaceAll('{name}', name);
+  String projectCameraFailed(String error) =>
+      _get('projectCameraFailed').replaceAll('{error}', error);
+  String projectImagePickFailed(String error) =>
+      _get('projectImagePickFailed').replaceAll('{error}', error);
+  String get projectContextBudgetTitle => _get('projectContextBudgetTitle');
+  String projectContextBudgetBody(int tokens) => _get('projectContextBudgetBody')
+      .replaceAll('{tokens}', tokens.toString());
+  String get projectUploadAnyway => _get('projectUploadAnyway');
+  String get projectEncryptingUploading => _get('projectEncryptingUploading');
+  String get projectConvertingMarkdown => _get('projectConvertingMarkdown');
+  String get projectDeleteFileTitle => _get('projectDeleteFileTitle');
+  String projectDeleteFileBody(String name) =>
+      _get('projectDeleteFileBody').replaceAll('{name}', name);
+  String get projectView => _get('projectView');
+  String get projectNotSupportedPlatform => _get('projectNotSupportedPlatform');
+  String get projectEditProjectTitle => _get('projectEditProjectTitle');
 }
 
 class _AppLocalizationsDelegate

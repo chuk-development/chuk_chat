@@ -3,6 +3,8 @@ import 'dart:async';
 
 import 'package:chuk_chat/constants/file_constants.dart';
 import 'package:chuk_chat/models/workspace_model.dart';
+import 'package:chuk_chat/pages/workspace_mobile_detail_page.dart';
+import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/workspace_message_service.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
@@ -11,9 +13,10 @@ import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/workspace_file_viewer.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-class WorkspaceDetailPage extends StatefulWidget {
+class WorkspaceDetailPage extends StatelessWidget {
   final String workspaceId;
   final Function(String? workspaceId)? onStartNewChat;
 
@@ -23,11 +26,47 @@ class WorkspaceDetailPage extends StatefulWidget {
     this.onStartNewChat,
   });
 
+  bool get _isMobileForm {
+    if (kPlatformMobile) return true;
+    if (kPlatformDesktop) return false;
+    // Auto-detect on platforms where the compile-time flag wasn't set.
+    if (kIsWeb) return false;
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.android => true,
+      TargetPlatform.iOS => true,
+      _ => false,
+    };
+  }
+
   @override
-  State<WorkspaceDetailPage> createState() => _WorkspaceDetailPageState();
+  Widget build(BuildContext context) {
+    if (_isMobileForm) {
+      return WorkspaceMobileDetailPage(
+        workspaceId: workspaceId,
+        onStartNewChat: onStartNewChat,
+      );
+    }
+    return _WorkspaceDetailDesktop(
+      workspaceId: workspaceId,
+      onStartNewChat: onStartNewChat,
+    );
+  }
 }
 
-class _WorkspaceDetailPageState extends State<WorkspaceDetailPage>
+class _WorkspaceDetailDesktop extends StatefulWidget {
+  final String workspaceId;
+  final Function(String? workspaceId)? onStartNewChat;
+
+  const _WorkspaceDetailDesktop({
+    required this.workspaceId,
+    this.onStartNewChat,
+  });
+
+  @override
+  State<_WorkspaceDetailDesktop> createState() => _WorkspaceDetailPageState();
+}
+
+class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   Workspace? _project;
