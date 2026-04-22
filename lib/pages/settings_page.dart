@@ -230,17 +230,19 @@ class _SettingsPageState extends State<SettingsPage> {
             ],
           ),
 
-          _SectionHeader(label: 'Data & Privacy'),
-          _GroupedCard(
-            rows: [
-              _SettingsRow(
-                icon: Icons.file_download_outlined,
-                title: l.exportChats,
-                subtitle: l.exportChatsSubtitle,
-                onTap: () => _exportChats(context),
-              ),
-            ],
-          ),
+          if (_developerOptionsEnabled) ...[
+            _SectionHeader(label: 'Data & Privacy'),
+            _GroupedCard(
+              rows: [
+                _SettingsRow(
+                  icon: Icons.file_download_outlined,
+                  title: l.exportChats,
+                  subtitle: l.exportChatsSubtitle,
+                  onTap: () => _exportChats(context),
+                ),
+              ],
+            ),
+          ],
 
           _SectionHeader(label: 'System'),
           _GroupedCard(

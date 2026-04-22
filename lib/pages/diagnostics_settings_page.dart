@@ -7,6 +7,7 @@ import 'package:chuk_chat/services/developer_options_service.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/nice_snackbar.dart';
 import 'package:share_plus/share_plus.dart';
 
 class DeveloperOptionsPage extends StatefulWidget {
@@ -57,13 +58,9 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
 
     if (!mounted) return;
     final l = AppLocalizations.of(context)!;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          value ? l.devOptionsEnabled : l.devOptionsDisabledMsg,
-        ),
-        behavior: SnackBarBehavior.floating,
-      ),
+    NiceSnackBar.show(
+      context,
+      value ? l.devOptionsEnabled : l.devOptionsDisabledMsg,
     );
 
     if (!value) {
@@ -78,13 +75,9 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
     if (!mounted) return;
     setState(() => _busy = false);
     final l = AppLocalizations.of(context)!;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          value ? l.diagnosticsEnabled : l.diagnosticsDisabled,
-        ),
-        behavior: SnackBarBehavior.floating,
-      ),
+    NiceSnackBar.show(
+      context,
+      value ? l.diagnosticsEnabled : l.diagnosticsDisabled,
     );
   }
 
@@ -105,12 +98,7 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
     await Clipboard.setData(ClipboardData(text: _logPreview));
     if (!mounted) return;
     final l = AppLocalizations.of(context)!;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(l.copiedRecentLogs),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    NiceSnackBar.show(context, l.copiedRecentLogs);
   }
 
   Future<void> _copyFocusedModelMenuDebug() async {
@@ -121,34 +109,19 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
       if (!mounted) return;
       final l = AppLocalizations.of(context)!;
       if (report.trim().isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l.noFocusedDebugData),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        NiceSnackBar.show(context, l.noFocusedDebugData);
         setState(() => _busy = false);
         return;
       }
       await Clipboard.setData(ClipboardData(text: report));
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l.copiedFocusedDebug),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      NiceSnackBar.show(context, l.copiedFocusedDebug);
       setState(() => _busy = false);
     } catch (error) {
       if (!mounted) return;
       setState(() => _busy = false);
       final l = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l.failedFocusedDebug(error.toString())),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      NiceSnackBar.showError(context, l.failedFocusedDebug(error.toString()));
     }
   }
 
@@ -157,24 +130,14 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
     if (path == null) {
       if (!mounted) return;
       final l = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l.noDiagnosticsLog),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      NiceSnackBar.show(context, l.noDiagnosticsLog);
       return;
     }
     final file = File(path);
     if (!await file.exists()) {
       if (!mounted) return;
       final l = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l.diagnosticsLogNotFound),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      NiceSnackBar.show(context, l.diagnosticsLogNotFound);
       return;
     }
 
@@ -185,12 +148,7 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
     } catch (error) {
       if (!mounted) return;
       final l = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l.failedToShareLog(error.toString())),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      NiceSnackBar.showError(context, l.failedToShareLog(error.toString()));
     }
   }
 
@@ -208,22 +166,12 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
         _busy = false;
       });
       final l = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l.diagnosticsLogCleared),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      NiceSnackBar.show(context, l.diagnosticsLogCleared);
     } catch (error) {
       if (!mounted) return;
       setState(() => _busy = false);
       final l = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l.failedToClearLog(error.toString())),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      NiceSnackBar.showError(context, l.failedToClearLog(error.toString()));
     }
   }
 
