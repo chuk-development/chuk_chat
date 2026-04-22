@@ -27,7 +27,7 @@ class _ThemePageState extends State<ThemePage> {
   final TextEditingController _iconFgHexController = TextEditingController();
   final TextEditingController _bgHexController = TextEditingController();
 
-  // Presets (same as your earlier file)
+  // Preset swatches preserved byte-for-byte from the prior version.
   final List<Color> _accentColorOptions = [
     kDefaultAccentColor,
     Colors.deepPurple,
@@ -106,55 +106,53 @@ class _ThemePageState extends State<ThemePage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final Color scaffoldBg = theme.scaffoldBackgroundColor;
-    final Color accent = theme.colorScheme.primary;
-    final Color iconFg = theme.resolvedIconColor;
-    final TextStyle? titleTextStyle = theme.appBarTheme.titleTextStyle;
-    final bool isDarkMode = _selectedThemeMode == Brightness.dark;
+    final cs = theme.colorScheme;
     final l = AppLocalizations.of(context)!;
+    final bool isDarkMode = _selectedThemeMode == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: scaffoldBg,
+      backgroundColor: cs.surface,
       appBar: AppBar(
-        title: Text(l.themeSettings, style: titleTextStyle),
-        backgroundColor: scaffoldBg,
+        title: Text(l.themeSettings),
+        centerTitle: false,
+        backgroundColor: cs.surface,
         elevation: 0,
-        iconTheme: IconThemeData(color: iconFg),
+        scrolledUnderElevation: 0,
       ),
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
-          // Dark Mode
-          _card(
-            context,
-            child: ListTile(
-              title: Text(
-                l.darkMode,
-                style: TextStyle(color: iconFg, fontWeight: FontWeight.w600),
-              ),
-              subtitle: Text(
-                l.darkModeSubtitle,
-                style: TextStyle(color: iconFg.withValues(alpha: 0.6)),
-              ),
-              trailing: Switch(
+          // Mode section: dark toggle + film grain grouped in one card.
+          const _SectionHeader('Mode'),
+          _GroupedCard(
+            children: [
+              _SwitchRow(
+                icon: Icons.dark_mode_outlined,
+                title: l.darkMode,
+                subtitle: l.darkModeSubtitle,
                 value: isDarkMode,
                 onChanged: _updateThemeMode,
-                activeThumbColor: accent,
-                activeTrackColor: accent.withValues(alpha: 0.5),
               ),
-              onTap: () => _updateThemeMode(!isDarkMode),
-            ),
+              _divider(context),
+              _SwitchRow(
+                icon: Icons.blur_on_outlined,
+                title: l.filmGrainEffect,
+                subtitle: l.filmGrainSubtitle,
+                value: _selectedGrain,
+                onChanged: _updateGrainEnabled,
+              ),
+            ],
           ),
           const SizedBox(height: 24),
 
-          // Accent Color
-          _colorSection(
-            title: l.accentColor,
+          _SectionHeader(l.accentColor),
+          _ColorCard(
             description: l.accentColorSubtitle,
             hexLabel: l.customHexColor,
             currentColor: _selectedAccentColor,
             options: _accentColorOptions,
             hexController: _accentHexController,
+            gridColumns: 8,
             onColorSelected: (c) {
               setState(() {
                 _selectedAccentColor = c;
@@ -171,20 +169,17 @@ class _ThemePageState extends State<ThemePage> {
                 });
               } catch (_) {}
             },
-            iconFg: iconFg,
-            accent: accent,
-            scaffoldBg: scaffoldBg,
           ),
           const SizedBox(height: 24),
 
-          // Icon / Foreground Color
-          _colorSection(
-            title: l.iconFgColor,
+          _SectionHeader(l.iconFgColor),
+          _ColorCard(
             description: l.iconFgColorSubtitle,
             hexLabel: l.customHexColor,
             currentColor: _selectedIconFgColor,
             options: _iconFgColorOptions,
             hexController: _iconFgHexController,
+            gridColumns: 5,
             onColorSelected: (c) {
               setState(() {
                 _selectedIconFgColor = c;
@@ -201,20 +196,17 @@ class _ThemePageState extends State<ThemePage> {
                 });
               } catch (_) {}
             },
-            iconFg: iconFg,
-            accent: accent,
-            scaffoldBg: scaffoldBg,
           ),
           const SizedBox(height: 24),
 
-          // Background Color
-          _colorSection(
-            title: l.backgroundColor,
+          _SectionHeader(l.backgroundColor),
+          _ColorCard(
             description: l.backgroundColorSubtitle,
             hexLabel: l.customHexColor,
             currentColor: _selectedBgColor,
             options: _bgColorOptions,
             hexController: _bgHexController,
+            gridColumns: 8,
             onColorSelected: (c) {
               setState(() {
                 _selectedBgColor = c;
@@ -231,147 +223,262 @@ class _ThemePageState extends State<ThemePage> {
                 });
               } catch (_) {}
             },
-            iconFg: iconFg,
-            accent: accent,
-            scaffoldBg: scaffoldBg,
           ),
           const SizedBox(height: 24),
-
-          // Film Grain
-          _card(
-            context,
-            child: ListTile(
-              title: Text(
-                l.filmGrainEffect,
-                style: TextStyle(color: iconFg, fontWeight: FontWeight.w600),
-              ),
-              subtitle: Text(
-                l.filmGrainSubtitle,
-                style: TextStyle(color: iconFg.withValues(alpha: 0.6)),
-              ),
-              trailing: Switch(
-                value: _selectedGrain,
-                onChanged: _updateGrainEnabled,
-                activeThumbColor: accent,
-                activeTrackColor: accent.withValues(alpha: 0.5),
-              ),
-              onTap: () => _updateGrainEnabled(!_selectedGrain),
-            ),
-          ),
         ],
       ),
     );
   }
 
-  // ----- UI helpers -----
+  Widget _divider(BuildContext context) {
+    final m3 = Theme.of(context).m3;
+    return Divider(height: 1, color: m3.outlineVariant, indent: 56);
+  }
+}
 
-  Widget _card(BuildContext context, {required Widget child}) {
-    final theme = Theme.of(context);
-    final Color scaffoldBg = theme.scaffoldBackgroundColor;
-    final Color iconFg = theme.resolvedIconColor;
-    return Card(
-      color: scaffoldBg.lighten(0.05),
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: iconFg.withValues(alpha: 0.3), width: 1),
+// Small caps section header used across both settings pages.
+class _SectionHeader extends StatelessWidget {
+  final String label;
+  const _SectionHeader(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
+      child: Text(
+        label.toUpperCase(),
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 1.5,
+          color: cs.primary,
+        ),
       ),
-      child: child,
     );
   }
+}
 
-  Widget _colorSection({
-    required String title,
-    required String description,
-    required Color currentColor,
-    required List<Color> options,
-    required TextEditingController hexController,
-    required ValueChanged<Color> onColorSelected,
-    required ValueChanged<String> onHexChanged,
-    required Color iconFg,
-    required Color accent,
-    required Color scaffoldBg,
-    required String hexLabel,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: TextStyle(
-            color: iconFg,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          description,
-          style: TextStyle(color: iconFg.withValues(alpha: 0.6), fontSize: 14),
-        ),
-        const SizedBox(height: 16),
+// Grouped rounded surfaceContainer card, rows separated by thin dividers.
+class _GroupedCard extends StatelessWidget {
+  final List<Widget> children;
+  const _GroupedCard({required this.children});
 
-        // Hex input
-        Padding(
-          padding: const EdgeInsets.only(bottom: 16.0),
-          child: TextField(
-            controller: hexController,
-            decoration: InputDecoration(
-              labelText: hexLabel,
-              prefixIcon: Icon(
-                Icons.colorize,
-                color: iconFg.withValues(alpha: 0.7),
-              ),
-              suffixIcon: IconButton(
-                icon: Icon(Icons.check_circle, color: accent),
-                onPressed: () => onHexChanged(hexController.text),
+  @override
+  Widget build(BuildContext context) {
+    final m3 = Theme.of(context).m3;
+    return Container(
+      decoration: BoxDecoration(
+        color: m3.surfaceContainer,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(children: children),
+    );
+  }
+}
+
+class _SwitchRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _SwitchRow({
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final m3 = Theme.of(context).m3;
+    return InkWell(
+      onTap: () => onChanged(!value),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Icon(icon, size: 24, color: m3.onSurfaceVariant),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  if (subtitle != null && subtitle!.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle!,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: m3.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
-            onSubmitted: onHexChanged,
+            const SizedBox(width: 12),
+            Switch.adaptive(value: value, onChanged: onChanged),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Color section: description, swatch grid, hex input field.
+class _ColorCard extends StatelessWidget {
+  final String description;
+  final String hexLabel;
+  final Color currentColor;
+  final List<Color> options;
+  final TextEditingController hexController;
+  final int gridColumns;
+  final ValueChanged<Color> onColorSelected;
+  final ValueChanged<String> onHexChanged;
+
+  const _ColorCard({
+    required this.description,
+    required this.hexLabel,
+    required this.currentColor,
+    required this.options,
+    required this.hexController,
+    required this.gridColumns,
+    required this.onColorSelected,
+    required this.onHexChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final m3 = theme.m3;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: m3.surfaceContainer,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            description,
+            style: TextStyle(fontSize: 13, color: m3.onSurfaceVariant),
+          ),
+          const SizedBox(height: 16),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              const spacing = 8.0;
+              final totalSpacing = spacing * (gridColumns - 1);
+              final size =
+                  (constraints.maxWidth - totalSpacing) / gridColumns;
+              final swatchSize = size.clamp(32.0, 40.0);
+              return Wrap(
+                spacing: spacing,
+                runSpacing: spacing,
+                children: options
+                    .map((c) => _Swatch(
+                          color: c,
+                          selected: c == currentColor,
+                          size: swatchSize,
+                          onTap: () => onColorSelected(c),
+                        ))
+                    .toList(),
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          Text(
+            hexLabel,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: m3.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 6),
+          TextFormField(
+            controller: hexController,
+            decoration: InputDecoration(
+              prefixIcon:
+                  Icon(Icons.colorize_outlined, color: m3.onSurfaceVariant),
+              suffixIcon: IconButton(
+                icon: Icon(Icons.check_circle, color: cs.primary),
+                onPressed: () => onHexChanged(hexController.text),
+              ),
+              hintText: '#RRGGBB',
+            ),
+            onFieldSubmitted: onHexChanged,
             keyboardType: TextInputType.text,
             inputFormatters: [
               FilteringTextInputFormatter.allow(RegExp(r'^[#0-9a-fA-F]+$')),
             ],
-            style: TextStyle(color: iconFg),
           ),
-        ),
+        ],
+      ),
+    );
+  }
+}
 
-        // Presets
-        Wrap(
-          spacing: 12.0,
-          runSpacing: 12.0,
-          children: options.map((color) {
-            final bool isSelected = color == currentColor;
-            return GestureDetector(
-              onTap: () => onColorSelected(color),
-              child: Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: color,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: isSelected ? accent : iconFg.withValues(alpha: 0.4),
-                    width: isSelected ? 3.0 : 1.0,
+class _Swatch extends StatelessWidget {
+  final Color color;
+  final bool selected;
+  final double size;
+  final VoidCallback onTap;
+
+  const _Swatch({
+    required this.color,
+    required this.selected,
+    required this.size,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    // Check mark uses a contrast-aware foreground so it stays legible
+    // on both light and dark swatches.
+    final checkColor = ThemeData.estimateBrightnessForColor(color) ==
+            Brightness.dark
+        ? Colors.white
+        : Colors.black;
+    return InkWell(
+      customBorder: const CircleBorder(),
+      onTap: onTap,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: color,
+          border: selected
+              ? Border.all(color: cs.onSurface, width: 2)
+              : Border.all(color: Colors.transparent, width: 2),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: cs.surface,
+                    spreadRadius: 3,
                   ),
-                  boxShadow: isSelected
-                      ? [
-                          BoxShadow(
-                            color: color.withValues(alpha: 0.5),
-                            blurRadius: 6,
-                            spreadRadius: 2,
-                          ),
-                        ]
-                      : [],
-                ),
-                child: isSelected
-                    ? const Icon(Icons.check, color: Colors.white, size: 28)
-                    : null,
-              ),
-            );
-          }).toList(),
+                ]
+              : null,
         ),
-      ],
+        child: selected
+            ? Icon(Icons.check, size: size * 0.5, color: checkColor)
+            : null,
+      ),
     );
   }
 }

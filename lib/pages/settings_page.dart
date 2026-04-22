@@ -20,6 +20,7 @@ import 'package:chuk_chat/pages/system_prompt_page.dart';
 import 'package:chuk_chat/services/auth_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
+// ignore: unused_import
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
@@ -100,9 +101,9 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final m3 = theme.m3;
     final Color scaffoldBg = theme.scaffoldBackgroundColor;
-    final Color accent = theme.colorScheme.primary;
-    final Color iconFg = theme.resolvedIconColor;
     final TextStyle? titleTextStyle = theme.appBarTheme.titleTextStyle;
 
     return Scaffold(
@@ -111,78 +112,153 @@ class _SettingsPageState extends State<SettingsPage> {
         title: Text(l.settings, style: titleTextStyle),
         backgroundColor: scaffoldBg,
         elevation: 0,
-        iconTheme: IconThemeData(color: iconFg),
+        iconTheme: IconThemeData(color: theme.resolvedIconColor),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          // Theme Settings
-          _buildSettingsCard(
-            context,
-            title: l.themeSettings,
-            subtitle: l.themeSettingsSubtitle,
-            icon: Icons.palette,
+          _HeroIdentityTile(
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => ThemePage(config: widget.config),
-                ),
+                MaterialPageRoute(builder: (_) => const AccountSettingsPage()),
               );
             },
-            accentColor: accent,
-            iconFgColor: iconFg,
-            bgColor: scaffoldBg,
           ),
-          const SizedBox(height: 16),
 
-          // Customization Settings
-          _buildSettingsCard(
-            context,
-            title: l.customization,
-            subtitle: l.customizationSubtitle,
-            icon: Icons.tune,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => CustomizationPage(config: widget.config),
-                ),
-              );
-            },
-            accentColor: accent,
-            iconFgColor: iconFg,
-            bgColor: scaffoldBg,
+          _SectionHeader(label: 'AI & Chat'),
+          _GroupedCard(
+            rows: [
+              _SettingsRow(
+                icon: Icons.psychology_alt,
+                iconAccent: true,
+                title: l.modelSelection,
+                subtitle: 'Claude Opus 4.7 · 1M context',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const ModelSelectorPage(),
+                    ),
+                  );
+                },
+              ),
+              _SettingsRow(
+                icon: Icons.psychology,
+                iconAccent: true,
+                title: l.aiIdentityMemory,
+                subtitle: l.aiIdentityMemorySubtitle,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const SystemPromptPage(),
+                    ),
+                  );
+                },
+              ),
+              _SettingsRow(
+                icon: Icons.build_circle_outlined,
+                iconAccent: true,
+                title: l.toolCalling,
+                subtitle: l.toolCallingSubtitle,
+                trailing: const _Badge('On', tone: BadgeTone.success),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          ToolCallingSettingsPage(config: widget.config),
+                    ),
+                  );
+                },
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
 
-          // Tool Calling Settings
-          _buildSettingsCard(
-            context,
-            title: l.toolCalling,
-            subtitle: l.toolCallingSubtitle,
-            icon: Icons.build_circle_outlined,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      ToolCallingSettingsPage(config: widget.config),
-                ),
-              );
-            },
-            accentColor: accent,
-            iconFgColor: iconFg,
-            bgColor: scaffoldBg,
+          _SectionHeader(label: 'Appearance'),
+          _GroupedCard(
+            rows: [
+              _SettingsRow(
+                icon: Icons.palette_outlined,
+                title: l.themeSettings,
+                subtitle: l.themeSettingsSubtitle,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ThemePage(config: widget.config),
+                    ),
+                  );
+                },
+              ),
+              _SettingsRow(
+                icon: Icons.tune,
+                title: l.customization,
+                subtitle: l.customizationSubtitle,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CustomizationPage(config: widget.config),
+                    ),
+                  );
+                },
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
 
+          _SectionHeader(label: 'Data & Privacy'),
+          _GroupedCard(
+            rows: [
+              _SettingsRow(
+                icon: Icons.file_download_outlined,
+                title: l.exportChats,
+                subtitle: l.exportChatsSubtitle,
+                onTap: () => _exportChats(context),
+              ),
+            ],
+          ),
+
+          _SectionHeader(label: 'Billing'),
+          _GroupedCard(
+            rows: [
+              _SettingsRow(
+                icon: Icons.credit_card,
+                title: l.pricingPlans,
+                subtitle: l.pricingPlansSubtitle,
+                trailing: const _Badge('Upgrade', tone: BadgeTone.primary),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PricingPage()),
+                  );
+                },
+              ),
+            ],
+          ),
+
+          _SectionHeader(label: 'System'),
+          _GroupedCard(
+            rows: [
+              _SettingsRow(
+                icon: Icons.info_outline,
+                title: l.about,
+                subtitle: l.aboutSubtitle,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AboutPage()),
+                  );
+                },
+              ),
+            ],
+          ),
           if (_developerOptionsEnabled) ...[
-            _buildSettingsCard(
-              context,
+            const SizedBox(height: 12),
+            _DevTile(
               title: l.developerOptions,
               subtitle: l.developerOptionsSubtitle,
-              icon: Icons.developer_mode,
               onTap: () {
                 Navigator.push(
                   context,
@@ -191,120 +267,19 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 );
               },
-              accentColor: accent,
-              iconFgColor: iconFg,
-              bgColor: scaffoldBg,
             ),
-            const SizedBox(height: 16),
           ],
 
-          // Model Selection
-          _buildSettingsCard(
-            context,
-            title: l.modelSelection,
-            subtitle: l.modelSelectionSubtitle,
-            icon: Icons.psychology_alt,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const ModelSelectorPage()),
-              );
-            },
-            accentColor: accent,
-            iconFgColor: iconFg,
-            bgColor: scaffoldBg,
-          ),
-          const SizedBox(height: 16),
-
-          // AI Identity & Memory
-          _buildSettingsCard(
-            context,
-            title: l.aiIdentityMemory,
-            subtitle: l.aiIdentityMemorySubtitle,
-            icon: Icons.psychology,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const SystemPromptPage()),
-              );
-            },
-            accentColor: accent,
-            iconFgColor: iconFg,
-            bgColor: scaffoldBg,
-          ),
-          const SizedBox(height: 16),
-
-          // Pricing Plans
-          _buildSettingsCard(
-            context,
-            title: l.pricingPlans,
-            subtitle: l.pricingPlansSubtitle,
-            icon: Icons.credit_card,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const PricingPage()),
-              );
-            },
-            accentColor: accent,
-            iconFgColor: iconFg,
-            bgColor: scaffoldBg,
-          ),
-          const SizedBox(height: 16),
-
-          // Account Settings
-          _buildSettingsCard(
-            context,
-            title: l.accountSettings,
-            subtitle: l.accountSettingsSubtitle,
-            icon: Icons.person_outline,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const AccountSettingsPage()),
-              );
-            },
-            accentColor: accent,
-            iconFgColor: iconFg,
-            bgColor: scaffoldBg,
-          ),
-          const SizedBox(height: 32),
-          _buildSettingsCard(
-            context,
-            title: l.exportChats,
-            subtitle: l.exportChatsSubtitle,
-            icon: Icons.download_outlined,
-            onTap: () => _exportChats(context),
-            accentColor: accent,
-            iconFgColor: iconFg,
-            bgColor: scaffoldBg,
-          ),
-          const SizedBox(height: 32),
-          _buildSettingsCard(
-            context,
-            title: l.about,
-            subtitle: l.aboutSubtitle,
-            icon: Icons.info_outline,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const AboutPage()),
-              );
-            },
-            accentColor: accent,
-            iconFgColor: iconFg,
-            bgColor: scaffoldBg,
-          ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red.shade600,
-                foregroundColor: Colors.white,
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: cs.error,
+                side: BorderSide(color: m3.outline),
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(999),
                 ),
               ),
               onPressed: () async {
@@ -366,7 +341,20 @@ class _SettingsPageState extends State<SettingsPage> {
               },
               child: Text(
                 l.logout,
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w500,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Center(
+            child: Text(
+              'Chuk Chat',
+              style: TextStyle(
+                fontSize: 11,
+                color: m3.onSurfaceVariant.withValues(alpha: 0.7),
               ),
             ),
           ),
@@ -593,42 +581,522 @@ class _SettingsPageState extends State<SettingsPage> {
     }
     return null;
   }
+}
 
-  Widget _buildSettingsCard(
-    BuildContext context, {
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required VoidCallback onTap,
-    required Color accentColor,
-    required Color iconFgColor,
-    required Color bgColor,
-  }) {
-    return Card(
-      color: bgColor.lighten(0.05),
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: iconFgColor.withValues(alpha: 0.3), width: 1),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: Icon(icon, color: accentColor),
-        title: Text(
-          title,
-          style: TextStyle(
-            color: Theme.of(context).textTheme.titleMedium?.color,
-            fontWeight: FontWeight.w600,
-            fontSize: 16,
+// -------- Private widgets (Material You aesthetic) --------
+
+class _HeroIdentityTile extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _HeroIdentityTile({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final m3 = theme.m3;
+
+    // Avatar initials: service lookup is out-of-scope here, use a neutral glyph.
+    const String initials = 'U';
+    const String displayName = 'Chuk Chat User';
+    const String email = '';
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(28),
+      child: Ink(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(28),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [m3.primaryContainer, m3.tertiaryContainer],
           ),
         ),
-        subtitle: Text(
-          subtitle,
-          style: TextStyle(color: iconFgColor.lighten(0.3), fontSize: 13),
+        child: Row(
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: cs.primary,
+                shape: BoxShape.circle,
+              ),
+              child: Text(
+                initials,
+                style: TextStyle(
+                  color: cs.onPrimary,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    displayName,
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w500,
+                      color: m3.onPrimaryContainer,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (email.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      email,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: m3.onPrimaryContainer.withValues(alpha: 0.85),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.12),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.18),
+                      ),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Free Plan · ',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: m3.onPrimaryContainer,
+                          ),
+                        ),
+                        const Text(
+                          'Upgrade →',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFFFFD166),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_right,
+              color: m3.onPrimaryContainer.withValues(alpha: 0.7),
+            ),
+          ],
         ),
-        trailing: Icon(Icons.arrow_forward_ios, color: iconFgColor),
-        onTap: onTap,
       ),
     );
   }
+}
+
+class _SectionHeader extends StatelessWidget {
+  final String label;
+
+  const _SectionHeader({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 4, 8),
+      child: Text(
+        label.toUpperCase(),
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 1.5,
+          color: cs.primary,
+        ),
+      ),
+    );
+  }
+}
+
+class _GroupedCard extends StatelessWidget {
+  final List<Widget> rows;
+
+  const _GroupedCard({required this.rows});
+
+  @override
+  Widget build(BuildContext context) {
+    final m3 = Theme.of(context).m3;
+    final children = <Widget>[];
+    for (var i = 0; i < rows.length; i++) {
+      if (i > 0) {
+        children.add(
+          Padding(
+            padding: const EdgeInsets.only(left: 56, right: 16),
+            child: Divider(
+              height: 1,
+              thickness: 1,
+              color: m3.outlineVariant.withValues(alpha: 0.5),
+            ),
+          ),
+        );
+      }
+      children.add(rows[i]);
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: Material(
+        color: m3.surfaceContainer,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: children,
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+  final VoidCallback onTap;
+  final bool iconAccent;
+
+  const _SettingsRow({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+    this.subtitle,
+    this.trailing,
+    this.iconAccent = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final m3 = theme.m3;
+    final Color iconColor = iconAccent ? cs.primary : m3.onSurfaceVariant;
+
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: Icon(icon, size: 22, color: iconColor),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: cs.onSurface,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (subtitle != null && subtitle!.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle!,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: m3.onSurfaceVariant,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (trailing != null) ...[
+              const SizedBox(width: 10),
+              trailing!,
+            ],
+            const SizedBox(width: 10),
+            Icon(
+              Icons.chevron_right,
+              size: 20,
+              color: m3.onSurfaceVariant,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DevTile extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _DevTile({
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final m3 = Theme.of(context).m3;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: DottedBorderBox(
+          color: m3.outlineVariant,
+          radius: 20,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: Icon(
+                    Icons.developer_mode,
+                    size: 22,
+                    color: m3.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                          color: m3.onSurfaceVariant,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: m3.onSurfaceVariant.withValues(alpha: 0.85),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const _Badge('Dev', tone: BadgeTone.warning),
+                const SizedBox(width: 10),
+                Icon(
+                  Icons.chevron_right,
+                  size: 20,
+                  color: m3.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+enum BadgeTone { neutral, primary, success, warning, error }
+
+class _Badge extends StatelessWidget {
+  final String label;
+  final BadgeTone tone;
+
+  const _Badge(this.label, {required this.tone});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final m3 = theme.m3;
+
+    late final Color bg;
+    late final Color fg;
+    switch (tone) {
+      case BadgeTone.primary:
+        bg = m3.primaryContainer;
+        fg = m3.onPrimaryContainer;
+        break;
+      case BadgeTone.success:
+        bg = m3.successContainer;
+        fg = m3.onSuccessContainer;
+        break;
+      case BadgeTone.warning:
+        bg = m3.warningContainer;
+        fg = m3.onWarningContainer;
+        break;
+      case BadgeTone.error:
+        bg = cs.errorContainer;
+        fg = cs.onErrorContainer;
+        break;
+      case BadgeTone.neutral:
+        bg = m3.secondaryContainer;
+        fg = m3.onSecondaryContainer;
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: fg,
+        ),
+      ),
+    );
+  }
+}
+
+// Retained for future connector chip surfacing (spec'd reusable widget).
+// ignore: unused_element
+class _MiniChip extends StatelessWidget {
+  final String label;
+  final bool connected;
+
+  // ignore: unused_element_parameter
+  const _MiniChip(this.label, {this.connected = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final m3 = theme.m3;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: m3.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (connected) ...[
+            Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(
+                color: m3.success,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 4),
+          ],
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              color: m3.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Paints a dashed rounded-rectangle border around [child].
+class DottedBorderBox extends StatelessWidget {
+  final Widget child;
+  final Color color;
+  final double radius;
+
+  const DottedBorderBox({
+    super.key,
+    required this.child,
+    required this.color,
+    this.radius = 12,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: _DashedRectPainter(color: color, radius: radius),
+      child: child,
+    );
+  }
+}
+
+class _DashedRectPainter extends CustomPainter {
+  final Color color;
+  final double radius;
+  final double dashWidth;
+  final double dashSpace;
+
+  _DashedRectPainter({
+    required this.color,
+    required this.radius,
+  })  : dashWidth = 5,
+        dashSpace = 4;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1
+      ..style = PaintingStyle.stroke;
+
+    final rrect = RRect.fromRectAndRadius(
+      Offset.zero & size,
+      Radius.circular(radius),
+    );
+    final path = Path()..addRRect(rrect);
+    final metrics = path.computeMetrics();
+    for (final metric in metrics) {
+      double distance = 0;
+      while (distance < metric.length) {
+        final extract = metric.extractPath(
+          distance,
+          (distance + dashWidth).clamp(0, metric.length),
+        );
+        canvas.drawPath(extract, paint);
+        distance += dashWidth + dashSpace;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedRectPainter oldDelegate) =>
+      oldDelegate.color != color ||
+      oldDelegate.radius != radius ||
+      oldDelegate.dashWidth != dashWidth ||
+      oldDelegate.dashSpace != dashSpace;
 }

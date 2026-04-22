@@ -10,7 +10,6 @@ import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/tool_call_handler.dart';
 import 'package:chuk_chat/services/tool_executor.dart';
 import 'package:chuk_chat/tool_handlers/platform_tools.dart' as platform_tools;
-import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 
 class ToolCallingSettingsPage extends StatefulWidget {
@@ -429,16 +428,15 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
     return tools;
   }
 
-  List<Widget> _buildConnectorCards(Color scaffoldBg, Color iconFg) {
+  List<Widget> _buildConnectorSections() {
     final l = AppLocalizations.of(context)!;
     final tools = _visibleTools();
     if (tools.isEmpty) {
       return [
-        _buildInfoCard(
-          context,
-          l.noToolsRegistered,
-          scaffoldBg,
-          iconFg,
+        _InfoCard(
+          text: l.noToolsRegistered,
+          tone: InfoTone.neutral,
+          icon: Icons.info_outline,
         ),
       ];
     }
@@ -459,183 +457,39 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
       final connected = _isCategoryConnected(category);
       final toolsInCategory = grouped[category]!;
 
-      // Category header card
-      widgets.add(
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: scaffoldBg.lighten(0.03),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: iconFg.withValues(alpha: 0.15)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: scaffoldBg.lighten(0.07),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: iconFg.withValues(alpha: 0.1),
-                  ),
-                ),
-                child: Icon(
-                  _categoryIcon(category),
-                  size: 18,
-                  color: iconFg,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _categoryLabel(category),
-                      style: TextStyle(
-                        color: iconFg.withValues(alpha: 0.9),
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
-                    ),
-                    Text(
-                      _categoryDescription(category),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: iconFg.lighten(0.2),
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (connectable) ...[
-                Container(
-                  width: 7,
-                  height: 7,
-                  margin: const EdgeInsets.only(right: 8),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: connected
-                        ? Colors.green.shade400
-                        : iconFg.withValues(alpha: 0.3),
-                  ),
-                ),
-                connected
-                    ? TextButton(
-                        onPressed: () => _disconnectService(category),
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          minimumSize: const Size(0, 28),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: Text(
-                          l.disconnect,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: iconFg.withValues(alpha: 0.6),
-                          ),
-                        ),
-                      )
-                    : FilledButton.tonal(
-                        onPressed: () => _connectService(category),
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          minimumSize: const Size(0, 28),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: Text(
-                          l.connect,
-                          style: TextStyle(fontSize: 12),
-                        ),
-                      ),
-              ],
-            ],
-          ),
-        ),
-      );
-      widgets.add(const SizedBox(height: 6));
+      widgets.add(_CategoryHeader(
+        icon: _categoryIcon(category),
+        label: _categoryLabel(category),
+        description: _categoryDescription(category),
+        connectable: connectable,
+        connected: connected,
+        onConnect: () => _connectService(category),
+        onDisconnect: () => _disconnectService(category),
+      ));
+      widgets.add(const SizedBox(height: 10));
 
-      // Individual tool cards under this category
+      final rows = <Widget>[];
       for (final tool in toolsInCategory) {
         final isEnabled = _toolExecutor.isToolEnabled(tool.name);
-
-        widgets.add(
-          Card(
-            color: scaffoldBg.lighten(0.05),
-            margin: EdgeInsets.zero,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(
-                color: iconFg.withValues(alpha: 0.2),
-                width: 1,
-              ),
-            ),
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 4,
-              ),
-              leading: Icon(
-                _toolIcons[tool.name] ?? Icons.extension,
-                color: isEnabled
-                    ? Theme.of(context).colorScheme.primary
-                    : iconFg.withValues(alpha: 0.4),
-              ),
-              title: Text(
-                _displayName(tool.name),
-                style: TextStyle(
-                  color: Theme.of(context).textTheme.titleMedium?.color,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                ),
-              ),
-              subtitle: Text(
-                _trimDescription(
-                  _toolExecutor.getToolDescription(tool.name),
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: iconFg.lighten(0.2),
-                  fontSize: 12,
-                ),
-              ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox(
-                    height: 28,
-                    child: Switch(
-                      value: isEnabled,
-                      onChanged: (value) async {
-                        await _toolExecutor.setToolEnabled(
-                          tool.name,
-                          value,
-                        );
-                        if (!mounted) return;
-                        setState(() {});
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    Icons.chevron_right,
-                    color: iconFg.withValues(alpha: 0.4),
-                    size: 20,
-                  ),
-                ],
-              ),
-              onTap: () => _openToolDetail(tool),
-            ),
+        rows.add(
+          _ToolRow(
+            icon: _toolIcons[tool.name] ?? Icons.extension,
+            iconEnabled: isEnabled,
+            title: _displayName(tool.name),
+            subtitle:
+                _trimDescription(_toolExecutor.getToolDescription(tool.name)),
+            value: isEnabled,
+            onChanged: (value) async {
+              await _toolExecutor.setToolEnabled(tool.name, value);
+              if (!mounted) return;
+              setState(() {});
+            },
+            onTap: () => _openToolDetail(tool),
           ),
         );
-        widgets.add(const SizedBox(height: 6));
       }
-
-      widgets.add(const SizedBox(height: 12));
+      widgets.add(_GroupedCard(children: rows));
+      widgets.add(const SizedBox(height: 20));
     }
 
     return widgets;
@@ -690,173 +544,137 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l = AppLocalizations.of(context)!;
-    final scaffoldBg = theme.scaffoldBackgroundColor;
-    final iconFg = theme.resolvedIconColor;
-    final titleTextStyle = theme.appBarTheme.titleTextStyle;
 
     return Scaffold(
-      backgroundColor: scaffoldBg,
       appBar: AppBar(
-        title: Text(l.toolCalling, style: titleTextStyle),
-        backgroundColor: scaffoldBg,
-        elevation: 0,
-        iconTheme: IconThemeData(color: iconFg),
+        title: Text(l.toolCalling),
+        centerTitle: false,
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _buildSectionHeader(
-            context,
-            l.engine,
-            Icons.precision_manufacturing_outlined,
-            iconFg,
+          const _SectionHeader('Engine'),
+          _GroupedCard(
+            children: [
+              _SwitchRow(
+                icon: Icons.precision_manufacturing_outlined,
+                title: l.enableToolCalling,
+                subtitle: l.enableToolCallingSubtitle,
+                value: _toolCallingEnabled,
+                onChanged: (value) {
+                  setState(() {
+                    _toolCallingEnabled = value;
+                  });
+                  widget.config.setToolCallingEnabled(value);
+                },
+              ),
+            ],
+          ),
+          const _SectionHeader('Behavior'),
+          _GroupedCard(
+            children: [
+              _SwitchRow(
+                icon: Icons.search,
+                title: l.requireDiscoveryFirst,
+                subtitle: l.requireDiscoverySubtitle,
+                value: _toolDiscoveryMode,
+                onChanged: _toolCallingEnabled
+                    ? (value) {
+                        setState(() {
+                          _toolDiscoveryMode = value;
+                        });
+                        widget.config.setToolDiscoveryMode(value);
+                      }
+                    : null,
+              ),
+              _SwitchRow(
+                icon: Icons.code,
+                title: l.markdownToolCallFallback,
+                subtitle: l.markdownFallbackSubtitle,
+                value: _allowMarkdownToolCalls,
+                onChanged: _toolCallingEnabled
+                    ? (value) {
+                        setState(() {
+                          _allowMarkdownToolCalls = value;
+                        });
+                        widget.config.setAllowMarkdownToolCalls(value);
+                      }
+                    : null,
+              ),
+            ],
+          ),
+          const _SectionHeader('Display'),
+          _GroupedCard(
+            children: [
+              _SwitchRow(
+                icon: Icons.visibility_outlined,
+                title: l.showToolActivity,
+                subtitle: l.showToolActivitySubtitle,
+                value: _showToolCalls,
+                onChanged: (value) {
+                  setState(() {
+                    _showToolCalls = value;
+                  });
+                  widget.config.setShowToolCalls(value);
+                },
+              ),
+            ],
           ),
           const SizedBox(height: 12),
-          _buildToggleCard(
-            context,
-            title: l.enableToolCalling,
-            subtitle: l.enableToolCallingSubtitle,
-            value: _toolCallingEnabled,
-            onChanged: (value) {
-              setState(() {
-                _toolCallingEnabled = value;
-              });
-              widget.config.setToolCallingEnabled(value);
-            },
-            scaffoldBg: scaffoldBg,
-            iconFg: iconFg,
+          _InfoCard(
+            text: l.toolCallingTip,
+            tone: InfoTone.neutral,
+            icon: Icons.info_outline,
           ),
-          const SizedBox(height: 24),
-          _buildSectionHeader(context, l.behavior, Icons.tune, iconFg),
-          const SizedBox(height: 12),
-          _buildToggleCard(
-            context,
-            title: l.requireDiscoveryFirst,
-            subtitle: l.requireDiscoverySubtitle,
-            value: _toolDiscoveryMode,
-            onChanged: _toolCallingEnabled
-                ? (value) {
-                    setState(() {
-                      _toolDiscoveryMode = value;
-                    });
-                    widget.config.setToolDiscoveryMode(value);
-                  }
-                : null,
-            scaffoldBg: scaffoldBg,
-            iconFg: iconFg,
+          const _SectionHeader('Visual Output'),
+          _GroupedCard(
+            children: [
+              _SwitchRow(
+                icon: Icons.map_outlined,
+                title: l.enableMapBlocks,
+                subtitle: l.enableMapBlocksSubtitle,
+                value: _mapVisualOutputEnabled,
+                onChanged: _toolCallingEnabled
+                    ? (value) async {
+                        await _toolExecutor.setMapVisualOutputEnabled(value);
+                        if (!mounted) {
+                          return;
+                        }
+                        setState(() {
+                          _mapVisualOutputEnabled = value;
+                        });
+                      }
+                    : null,
+              ),
+              _SwitchRow(
+                icon: Icons.insights_outlined,
+                title: l.enableChartBlocks,
+                subtitle: l.enableChartBlocksSubtitle,
+                value: _chartVisualOutputEnabled,
+                onChanged: _toolCallingEnabled
+                    ? (value) async {
+                        await _toolExecutor.setChartVisualOutputEnabled(value);
+                        if (!mounted) {
+                          return;
+                        }
+                        setState(() {
+                          _chartVisualOutputEnabled = value;
+                        });
+                      }
+                    : null,
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
-          _buildToggleCard(
-            context,
-            title: l.markdownToolCallFallback,
-            subtitle: l.markdownFallbackSubtitle,
-            value: _allowMarkdownToolCalls,
-            onChanged: _toolCallingEnabled
-                ? (value) {
-                    setState(() {
-                      _allowMarkdownToolCalls = value;
-                    });
-                    widget.config.setAllowMarkdownToolCalls(value);
-                  }
-                : null,
-            scaffoldBg: scaffoldBg,
-            iconFg: iconFg,
-          ),
-          const SizedBox(height: 24),
-          _buildSectionHeader(
-            context,
-            l.display,
-            Icons.visibility_outlined,
-            iconFg,
-          ),
-          const SizedBox(height: 12),
-          _buildToggleCard(
-            context,
-            title: l.showToolActivity,
-            subtitle: l.showToolActivitySubtitle,
-            value: _showToolCalls,
-            onChanged: (value) {
-              setState(() {
-                _showToolCalls = value;
-              });
-              widget.config.setShowToolCalls(value);
-            },
-            scaffoldBg: scaffoldBg,
-            iconFg: iconFg,
-          ),
-          const SizedBox(height: 8),
-          _buildInfoCard(
-            context,
-            l.toolCallingTip,
-            scaffoldBg,
-            iconFg,
-          ),
-          const SizedBox(height: 24),
-          _buildSectionHeader(
-            context,
-            l.visualOutputNonTool,
-            Icons.insights_outlined,
-            iconFg,
-          ),
-          const SizedBox(height: 12),
-          _buildToggleCard(
-            context,
-            title: l.enableMapBlocks,
-            subtitle: l.enableMapBlocksSubtitle,
-            value: _mapVisualOutputEnabled,
-            onChanged: _toolCallingEnabled
-                ? (value) async {
-                    await _toolExecutor.setMapVisualOutputEnabled(value);
-                    if (!mounted) {
-                      return;
-                    }
-                    setState(() {
-                      _mapVisualOutputEnabled = value;
-                    });
-                  }
-                : null,
-            scaffoldBg: scaffoldBg,
-            iconFg: iconFg,
-          ),
-          const SizedBox(height: 12),
-          _buildToggleCard(
-            context,
-            title: l.enableChartBlocks,
-            subtitle: l.enableChartBlocksSubtitle,
-            value: _chartVisualOutputEnabled,
-            onChanged: _toolCallingEnabled
-                ? (value) async {
-                    await _toolExecutor.setChartVisualOutputEnabled(value);
-                    if (!mounted) {
-                      return;
-                    }
-                    setState(() {
-                      _chartVisualOutputEnabled = value;
-                    });
-                  }
-                : null,
-            scaffoldBg: scaffoldBg,
-            iconFg: iconFg,
-          ),
-          const SizedBox(height: 24),
-          _buildSectionHeader(
-            context,
-            l.connectors,
-            Icons.extension_outlined,
-            iconFg,
-          ),
-          const SizedBox(height: 12),
+          const _SectionHeader('Connectors'),
           if (_isLoadingToolPreferences)
-            _buildInfoCard(
-              context,
-              l.loadingToolSettings,
-              scaffoldBg,
-              iconFg,
+            _InfoCard(
+              text: l.loadingToolSettings,
+              tone: InfoTone.neutral,
+              icon: Icons.hourglass_empty,
             )
           else
-            ..._buildConnectorCards(scaffoldBg, iconFg),
+            ..._buildConnectorSections(),
           const SizedBox(height: 12),
           Align(
             alignment: Alignment.centerLeft,
@@ -868,103 +686,417 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
               label: Text(l.resetAllToolPrefs),
             ),
           ),
+          const SizedBox(height: 16),
         ],
       ),
     );
   }
+}
 
-  Widget _buildSectionHeader(
-    BuildContext context,
-    String title,
-    IconData icon,
-    Color iconFg,
-  ) {
-    return Row(
-      children: [
-        Icon(icon, color: iconFg, size: 20),
-        const SizedBox(width: 8),
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: Theme.of(context).textTheme.titleMedium?.color,
-          ),
-        ),
-      ],
-    );
-  }
+// ───────── private shared widgets ─────────
 
-  Widget _buildToggleCard(
-    BuildContext context, {
-    required String title,
-    required String subtitle,
-    required bool value,
-    required ValueChanged<bool>? onChanged,
-    required Color scaffoldBg,
-    required Color iconFg,
-  }) {
-    return Card(
-      color: scaffoldBg.lighten(0.05),
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: iconFg.withValues(alpha: 0.3), width: 1),
-      ),
-      child: SwitchListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        title: Text(
-          title,
-          style: TextStyle(
-            color: Theme.of(context).textTheme.titleMedium?.color,
-            fontWeight: FontWeight.w600,
-            fontSize: 16,
-          ),
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader(this.label);
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 0, 8),
+      child: Text(
+        label.toUpperCase(),
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 1.5,
+          color: Theme.of(context).colorScheme.primary,
         ),
-        subtitle: Text(
-          subtitle,
-          style: TextStyle(color: iconFg.lighten(0.3), fontSize: 13),
-        ),
-        value: value,
-        onChanged: onChanged,
-        activeTrackColor: Theme.of(
-          context,
-        ).colorScheme.primary.withValues(alpha: 0.5),
-        activeThumbColor: Theme.of(context).colorScheme.primary,
       ),
     );
   }
+}
 
-  Widget _buildInfoCard(
-    BuildContext context,
-    String text,
-    Color scaffoldBg,
-    Color iconFg,
-  ) {
+class _GroupedCard extends StatelessWidget {
+  const _GroupedCard({required this.children});
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final m3 = Theme.of(context).m3;
+    final separated = <Widget>[];
+    for (var i = 0; i < children.length; i++) {
+      if (i > 0) {
+        separated.add(
+          Divider(height: 1, color: m3.outlineVariant, indent: 56),
+        );
+      }
+      separated.add(children[i]);
+    }
     return Container(
-      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: scaffoldBg.lighten(0.03),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: iconFg.withValues(alpha: 0.2), width: 1),
+        color: m3.surfaceContainer,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(children: separated),
+    );
+  }
+}
+
+class _SwitchRow extends StatelessWidget {
+  const _SwitchRow({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final m3 = theme.m3;
+    final disabled = onChanged == null;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: 24,
+            color: disabled
+                ? m3.onSurfaceVariant.withValues(alpha: 0.5)
+                : m3.onSurfaceVariant,
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    color: disabled
+                        ? cs.onSurface.withValues(alpha: 0.5)
+                        : cs.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: m3.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Switch.adaptive(value: value, onChanged: onChanged),
+        ],
+      ),
+    );
+  }
+}
+
+class _ToolRow extends StatelessWidget {
+  const _ToolRow({
+    required this.icon,
+    required this.iconEnabled,
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final bool iconEnabled;
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final m3 = theme.m3;
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 24,
+              color: iconEnabled ? cs.primary : m3.onSurfaceVariant,
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: cs.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: m3.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Switch.adaptive(value: value, onChanged: onChanged),
+            const SizedBox(width: 4),
+            Icon(Icons.chevron_right, size: 20, color: m3.onSurfaceVariant),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CategoryHeader extends StatelessWidget {
+  const _CategoryHeader({
+    required this.icon,
+    required this.label,
+    required this.description,
+    required this.connectable,
+    required this.connected,
+    required this.onConnect,
+    required this.onDisconnect,
+  });
+
+  final IconData icon;
+  final String label;
+  final String description;
+  final bool connectable;
+  final bool connected;
+  final VoidCallback onConnect;
+  final VoidCallback onDisconnect;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final m3 = theme.m3;
+    final l = AppLocalizations.of(context)!;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: m3.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: m3.primaryContainer.withValues(alpha: 0.4),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, size: 20, color: m3.onPrimaryContainer),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: cs.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  description,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: m3.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (connectable) ...[
+            const SizedBox(width: 8),
+            if (connected)
+              _Badge(label: 'Connected', tone: BadgeTone.success)
+            else
+              _Badge(label: 'Not connected', tone: BadgeTone.neutral),
+            const SizedBox(width: 8),
+            connected
+                ? OutlinedButton(
+                    onPressed: onDisconnect,
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      minimumSize: const Size(0, 32),
+                      shape: const StadiumBorder(),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: Text(
+                      l.disconnect,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  )
+                : FilledButton.tonal(
+                    onPressed: onConnect,
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      minimumSize: const Size(0, 32),
+                      shape: const StadiumBorder(),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: Text(
+                      l.connect,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+enum BadgeTone { neutral, primary, success, warning, error }
+
+class _Badge extends StatelessWidget {
+  const _Badge({required this.label, this.tone = BadgeTone.neutral});
+  final String label;
+  final BadgeTone tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final m3 = theme.m3;
+    final Color bg;
+    final Color fg;
+    switch (tone) {
+      case BadgeTone.primary:
+        bg = m3.primaryContainer;
+        fg = m3.onPrimaryContainer;
+        break;
+      case BadgeTone.success:
+        bg = m3.successContainer;
+        fg = m3.onSuccessContainer;
+        break;
+      case BadgeTone.warning:
+        bg = m3.warningContainer;
+        fg = m3.onWarningContainer;
+        break;
+      case BadgeTone.error:
+        bg = cs.errorContainer;
+        fg = cs.onErrorContainer;
+        break;
+      case BadgeTone.neutral:
+        bg = m3.surfaceContainerHigh;
+        fg = m3.onSurfaceVariant;
+        break;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10.5,
+          fontWeight: FontWeight.w600,
+          color: fg,
+          letterSpacing: 0.3,
+        ),
+      ),
+    );
+  }
+}
+
+enum InfoTone { neutral, warn, danger }
+
+class _InfoCard extends StatelessWidget {
+  const _InfoCard({
+    required this.text,
+    this.tone = InfoTone.neutral,
+    this.icon,
+  });
+
+  final String text;
+  final InfoTone tone;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final m3 = theme.m3;
+    final Color accent;
+    final Color textColor;
+    switch (tone) {
+      case InfoTone.warn:
+        accent = m3.warning;
+        textColor = cs.onSurface;
+        break;
+      case InfoTone.danger:
+        accent = cs.error;
+        textColor = cs.error;
+        break;
+      case InfoTone.neutral:
+        accent = cs.primary;
+        textColor = cs.onSurface;
+        break;
+    }
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 16, 12),
+      decoration: BoxDecoration(
+        color: m3.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+        border: Border(left: BorderSide(color: accent, width: 3)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.info_outline,
-            size: 18,
-            color: iconFg.withValues(alpha: 0.7),
-          ),
-          const SizedBox(width: 8),
+          if (icon != null) ...[
+            Icon(icon, size: 18, color: accent),
+            const SizedBox(width: 10),
+          ],
           Expanded(
             child: Text(
               text,
-              style: TextStyle(
-                fontSize: 12,
-                color: iconFg.withValues(alpha: 0.8),
-                height: 1.4,
-              ),
+              style: TextStyle(fontSize: 13, height: 1.4, color: textColor),
             ),
           ),
         ],

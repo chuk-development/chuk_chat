@@ -4,11 +4,10 @@ import 'dart:convert';
 import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:flutter_svg/flutter_svg.dart'; // Import for SVG support
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/foundation.dart';
 
-// Import your app constants for colors and theme
-import 'package:chuk_chat/utils/color_extensions.dart'; // Import the new extension
+import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
@@ -17,7 +16,7 @@ import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 
-// --- Data Models (Mirroring your FastAPI Pydantic Models) ---
+// ─── Data models (mirroring FastAPI Pydantic models) ─────────────────────
 
 class PricingDetails {
   final double prompt;
@@ -47,7 +46,6 @@ class PricingDetails {
     );
   }
 
-  // Helper to format price per million tokens
   String formatTokenPrice(double pricePerToken) {
     if (pricePerToken == 0.0) return 'Free';
     final pricePerMillion = pricePerToken * 1000000;
@@ -56,7 +54,6 @@ class PricingDetails {
     return '\$$priceStr/M';
   }
 
-  // Helper to format request price (not per million)
   String formatRequestPrice(double price) {
     if (price == 0.0) return 'Free';
     return '\$${price.toStringAsFixed(3)}/req';
@@ -126,7 +123,7 @@ class CustomModelInfo {
   }
 }
 
-// --- Flutter Page Widget ---
+// ─── Page widget ────────────────────────────────────────────────────────
 
 class ModelSelectorPage extends StatefulWidget {
   const ModelSelectorPage({super.key});
@@ -172,7 +169,6 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
     }).toList();
   }
 
-  // Initialize model selections by loading saved preferences and fetching models
   Future<void> _initializeModelSelections() async {
     setState(() {
       _isLoading = true;
@@ -216,7 +212,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
       }
       await _handleApiUnavailable('Data format error: $error');
     } catch (error, stackTrace) {
-      // Rethrow non-Exception/unknown errors so programming errors are not swallowed
+      // Rethrow unknown errors so programming errors are not swallowed.
       if (kDebugMode) {
         debugPrint('Model selector initialization unexpected error: $error');
       }
@@ -432,13 +428,12 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
     return tokens.toString();
   }
 
-  // Widget to display an image from a URL (SVG or raster) or a fallback icon
   Widget _buildIconWidget(
     String? imageUrl,
     IconData fallbackIcon, {
     double size = 24,
   }) {
-    final Color iconFg = Theme.of(context).resolvedIconColor;
+    final Color tint = Theme.of(context).colorScheme.onSurfaceVariant;
     if (imageUrl != null && imageUrl.isNotEmpty) {
       final isSvg = imageUrl.toLowerCase().endsWith('.svg');
       if (isSvg) {
@@ -453,7 +448,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
             child: Center(
               child: Icon(
                 Icons.downloading,
-                color: iconFg.lighten(0.3),
+                color: tint,
                 size: size / 2,
               ),
             ),
@@ -471,279 +466,118 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
             if (kDebugMode) {
               debugPrint('Error loading image from $imageUrl: $error');
             }
-            return Icon(
-              fallbackIcon,
-              color: iconFg.lighten(0.3),
-              size: size,
-            ); // Fallback icon is tinted
+            return Icon(fallbackIcon, color: tint, size: size);
           },
         );
       }
     } else {
-      // Fallback to Icon if URL is null or empty
-      return Icon(
-        fallbackIcon,
-        color: iconFg.lighten(0.3),
-        size: size,
-      ); // Fallback icon is tinted
+      return Icon(fallbackIcon, color: tint, size: size);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
-    // Access theme colors dynamically
-    final Color scaffoldBg = Theme.of(context).scaffoldBackgroundColor;
-    final Color accent = Theme.of(context).colorScheme.primary;
-    final Color iconFg = Theme.of(context).resolvedIconColor;
-    final TextStyle? titleTextStyle = Theme.of(
-      context,
-    ).appBarTheme.titleTextStyle;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final m3 = theme.m3;
 
     return Scaffold(
-      backgroundColor: scaffoldBg,
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        title: Text(
-          l.models,
-          style: titleTextStyle,
-        ), // Use theme's title text style
-        backgroundColor: scaffoldBg,
+        title: Text(l.models),
+        centerTitle: false,
+        backgroundColor: colorScheme.surface,
         elevation: 0,
-        iconTheme: IconThemeData(color: iconFg), // Set back button color
+        scrolledUnderElevation: 0,
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator(color: iconFg))
+          ? const Center(child: CircularProgressIndicator())
           : _error != null
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.error_outline,
-                      color: Colors.red,
-                      size: 50,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      l.modelError(_error ?? ''),
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: iconFg, fontSize: 18),
-                    ),
-                    const SizedBox(height: 24),
-                    ElevatedButton.icon(
-                      onPressed: _initializeModelSelections,
-                      icon: Icon(
-                        Icons.refresh,
-                        color: scaffoldBg,
-                      ), // Text color on button
-                      label: Text(l.retry, style: TextStyle(color: scaffoldBg)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: iconFg, // Button background color
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 12,
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.error_outline,
+                          color: colorScheme.error,
+                          size: 48,
                         ),
-                        textStyle: const TextStyle(fontSize: 16),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          : Column(
-              children: [
-                // Search field (pinned at top)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                  child: TextField(
-                    controller: _searchController,
-                    style: TextStyle(color: iconFg, fontSize: 14),
-                    decoration: InputDecoration(
-                      hintText: l.searchModels,
-                      hintStyle: TextStyle(
-                        color: iconFg.withValues(alpha: 0.5),
-                        fontSize: 14,
-                      ),
-                      prefixIcon: Icon(
-                        Icons.search,
-                        color: iconFg.withValues(alpha: 0.6),
-                        size: 20,
-                      ),
-                      suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
-                              icon: Icon(
-                                Icons.clear,
-                                color: iconFg.withValues(alpha: 0.6),
-                                size: 20,
-                              ),
-                              onPressed: () {
-                                _searchController.clear();
-                              },
-                            )
-                          : null,
-                      filled: true,
-                      fillColor: scaffoldBg.lighten(0.05),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(
-                          color: iconFg.withValues(alpha: 0.3),
-                        ),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(
-                          color: iconFg.withValues(alpha: 0.3),
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(color: accent, width: 1.5),
-                      ),
-                    ),
-                  ),
-                ),
-                // Show results count when searching
-                if (_searchQuery.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(
-                      top: 12,
-                      bottom: 4,
-                      left: 24,
-                    ),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        '${_filteredModels.length} model${_filteredModels.length == 1 ? '' : 's'} found',
-                        style: TextStyle(
-                          color: iconFg.withValues(alpha: 0.7),
-                          fontSize: 13,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ),
-                  ),
-                // Models list — lazy-built for smooth scrolling
-                Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                    itemCount: _filteredModels.length,
-                    // Estimated height per item for smoother scrollbar
-                    itemExtent: null,
-                    itemBuilder: (context, index) {
-                      final model = _filteredModels[index];
-                      final ModelProviderInfo? selectedProviderForModel =
-                          _selectedProviders[model.id];
-                      final bool isDescriptionExpanded =
-                          _expandedDescriptions[model.id] ?? false;
-
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          ModelSelectionRow(
-                            key: ValueKey(model.id),
-                            model: model,
-                            selectedProvider: selectedProviderForModel,
-                            onProviderChanged: (provider) =>
-                                _onProviderSelect(model.id, provider),
-                            formatContextLength: _formatContextLength,
-                            buildIconWidget: _buildIconWidget,
-                            accentColor: accent,
-                            iconFgColor: iconFg,
-                            bgColor: scaffoldBg,
+                        const SizedBox(height: 16),
+                        Text(
+                          l.modelError(_error ?? ''),
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            color: m3.onSurfaceVariant,
                           ),
-                          if (model.description != null &&
-                              model.description!.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                left: 8.0,
-                                right: 8.0,
-                                top: 4.0,
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  GestureDetector(
-                                    onTap: () =>
-                                        _toggleDescription(model.id),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 8.0,
-                                        horizontal: 12.0,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: scaffoldBg.darken(0.05),
-                                        borderRadius:
-                                            BorderRadius.circular(10),
-                                        border: Border.all(
-                                          color: iconFg.withValues(
-                                            alpha: 0.3,
-                                          ),
-                                        ),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Text(
-                                            'Description',
-                                            style: TextStyle(
-                                              color: iconFg.lighten(0.3),
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 13,
-                                            ),
-                                          ),
-                                          const Spacer(),
-                                          Icon(
-                                            isDescriptionExpanded
-                                                ? Icons.keyboard_arrow_up
-                                                : Icons.keyboard_arrow_down,
-                                            color: iconFg.lighten(0.3),
-                                            size: 20,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                  if (isDescriptionExpanded)
-                                    Container(
-                                      width: double.infinity,
-                                      padding: const EdgeInsets.all(12.0),
-                                      margin:
-                                          const EdgeInsets.only(top: 4.0),
-                                      decoration: BoxDecoration(
-                                        color: scaffoldBg.darken(0.05),
-                                        borderRadius:
-                                            BorderRadius.circular(10),
-                                        border: Border.all(
-                                          color: iconFg.withValues(
-                                            alpha: 0.3,
-                                          ),
-                                        ),
-                                      ),
-                                      child: Text(
-                                        model.description!,
-                                        style: TextStyle(
-                                          color: iconFg.lighten(0.3),
-                                          fontSize: 12,
-                                          height: 1.4,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
+                        ),
+                        const SizedBox(height: 24),
+                        FilledButton.icon(
+                          onPressed: _initializeModelSelections,
+                          icon: const Icon(Icons.refresh),
+                          label: Text(l.retry),
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 14,
                             ),
-                          const SizedBox(height: 16),
-                        ],
-                      );
-                    },
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  // +2 header slots: search field + section header.
+                  itemCount: _filteredModels.length + 2,
+                  itemBuilder: (context, index) {
+                    if (index == 0) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: _SearchField(
+                          controller: _searchController,
+                          hintText: l.searchModels,
+                          hasQuery: _searchQuery.isNotEmpty,
+                        ),
+                      );
+                    }
+                    if (index == 1) {
+                      final label = _searchQuery.isEmpty
+                          ? 'AVAILABLE · ${_filteredModels.length} MODELS'
+                          : '${_filteredModels.length} MODEL${_filteredModels.length == 1 ? '' : 'S'} FOUND';
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _SectionHeader(label),
+                      );
+                    }
+                    final model = _filteredModels[index - 2];
+                    final ModelProviderInfo? selectedProviderForModel =
+                        _selectedProviders[model.id];
+                    final bool isDescriptionExpanded =
+                        _expandedDescriptions[model.id] ?? false;
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: ModelSelectionRow(
+                        key: ValueKey(model.id),
+                        model: model,
+                        selectedProvider: selectedProviderForModel,
+                        isDescriptionExpanded: isDescriptionExpanded,
+                        onToggleDescription: () => _toggleDescription(model.id),
+                        onProviderChanged: (provider) =>
+                            _onProviderSelect(model.id, provider),
+                        formatContextLength: _formatContextLength,
+                        buildIconWidget: _buildIconWidget,
+                      ),
+                    );
+                  },
                 ),
-              ],
-            ),
     );
   }
 
@@ -755,498 +589,450 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
   }
 }
 
-// Widget to represent a single row for model, provider, and data
+// ─── Model card (restyled; active selection = primary 2px border) ───────
+
 class ModelSelectionRow extends StatelessWidget {
   final CustomModelInfo model;
   final ModelProviderInfo? selectedProvider;
+  final bool isDescriptionExpanded;
+  final VoidCallback onToggleDescription;
   final Function(ModelProviderInfo?) onProviderChanged;
   final String Function(int?) formatContextLength;
   final Widget Function(String?, IconData, {double size}) buildIconWidget;
-  final Color accentColor; // New
-  final Color iconFgColor; // New
-  final Color bgColor; // New
 
   const ModelSelectionRow({
     super.key,
     required this.model,
     required this.selectedProvider,
+    required this.isDescriptionExpanded,
+    required this.onToggleDescription,
     required this.onProviderChanged,
     required this.formatContextLength,
     required this.buildIconWidget,
-    required this.accentColor,
-    required this.iconFgColor,
-    required this.bgColor,
   });
 
   @override
   Widget build(BuildContext context) {
-    final Color inputFieldBg = bgColor.lighten(0.05);
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final bool isCompact = constraints.maxWidth < 600;
-        if (isCompact) {
-          return _buildMobileLayout(inputFieldBg);
-        }
-        return _buildDesktopLayout(inputFieldBg);
-      },
-    );
-  }
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final m3 = theme.m3;
+    final bool isActive = selectedProvider != null;
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final bool isDesktop = screenWidth >= kTabletBreakpoint;
 
-  Widget _buildDesktopLayout(Color inputFieldBg) {
-    const double containerHeight = 78.0;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              flex: 3,
-              child: _buildModelNameCard(
-                containerHeight,
-                inputFieldBg,
-                alignCenter: true,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              flex: 3,
-              child: _buildProviderCard(
-                containerHeight,
-                inputFieldBg,
-                alignCenter: true,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              flex: 4,
-              child: _buildPriceCard(containerHeight, inputFieldBg),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              flex: 4,
-              child: _buildContextCard(containerHeight, inputFieldBg),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMobileLayout(Color inputFieldBg) {
-    const double cardHeight = 98.0;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6.0),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: _buildModelNameCard(
-                  cardHeight,
-                  inputFieldBg,
-                  alignCenter: false,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildProviderCard(
-                  cardHeight,
-                  inputFieldBg,
-                  alignCenter: false,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(child: _buildPriceCard(cardHeight, inputFieldBg)),
-              const SizedBox(width: 8),
-              Expanded(child: _buildContextCard(cardHeight, inputFieldBg)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildModelNameCard(
-    double height,
-    Color inputFieldBg, {
-    required bool alignCenter,
-  }) {
     return Container(
-      constraints: BoxConstraints(minHeight: height),
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
       decoration: BoxDecoration(
-        color: inputFieldBg,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: iconFgColor.withValues(alpha: 0.5)),
+        color: m3.surfaceContainer,
+        borderRadius: BorderRadius.circular(16),
+        border: isActive
+            ? Border.all(color: colorScheme.primary, width: 2)
+            : Border.all(color: Colors.transparent, width: 2),
       ),
+      padding: const EdgeInsets.all(16),
       child: Column(
-        crossAxisAlignment: alignCenter
-            ? CrossAxisAlignment.center
-            : CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Model',
-            style: TextStyle(
-              color: iconFgColor.lighten(0.25),
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.4,
-            ),
-          ),
-          const SizedBox(height: 8),
+          // Header row: icon + name/description, badge/provider on the right.
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: alignCenter
-                ? MainAxisAlignment.center
-                : MainAxisAlignment.start,
             children: [
-              buildIconWidget(model.iconUrl, Icons.psychology_alt, size: 24),
-              const SizedBox(width: 8),
+              buildIconWidget(model.iconUrl, Icons.psychology_alt, size: 28),
+              const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  model.name,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: iconFgColor,
-                    fontSize: 14,
-                    height: 1.2,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      model.name,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: colorScheme.onSurface,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (model.description != null &&
+                        model.description!.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        model.description!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: m3.onSurfaceVariant,
+                        ),
+                        maxLines: isDescriptionExpanded ? 10 : 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (model.description!.length > 80)
+                        GestureDetector(
+                          onTap: onToggleDescription,
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              isDescriptionExpanded ? 'Show less' : 'Show more',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: colorScheme.primary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ],
                 ),
               ),
+              const SizedBox(width: 8),
+              if (isActive)
+                _Badge('Active', tone: _BadgeTone.primary)
+              else if (selectedProvider == null)
+                _Badge('Disabled', tone: _BadgeTone.neutral),
             ],
           ),
+          const SizedBox(height: 12),
+
+          // Provider dropdown pill.
+          _ProviderPill(
+            model: model,
+            selectedProvider: selectedProvider,
+            onProviderChanged: onProviderChanged,
+            buildIconWidget: buildIconWidget,
+          ),
+
+          // Stats row (context / max out / prices) — only when provider selected.
+          if (selectedProvider != null) ...[
+            const SizedBox(height: 12),
+            _buildStatsGrid(context, isDesktop),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildProviderCard(
-    double height,
-    Color inputFieldBg, {
-    required bool alignCenter,
-  }) {
-    return Container(
-      constraints: BoxConstraints(minHeight: height),
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-      decoration: BoxDecoration(
-        color: inputFieldBg,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: iconFgColor.withValues(alpha: 0.5)),
+  Widget _buildStatsGrid(BuildContext context, bool isDesktop) {
+    final provider = selectedProvider!;
+    final List<_StatChip> chips = [
+      _StatChip(label: 'Ctx', value: formatContextLength(provider.contextLength)),
+      _StatChip(
+        label: 'Max Out',
+        value: formatContextLength(provider.maxCompletionTokens),
       ),
-      child: Column(
-        crossAxisAlignment: alignCenter
-            ? CrossAxisAlignment.center
-            : CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Provider',
-            style: TextStyle(
-              color: iconFgColor.lighten(0.25),
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.4,
-            ),
+      _StatChip(
+        label: 'In',
+        value: provider.pricing.formatTokenPrice(provider.pricing.prompt),
+      ),
+      _StatChip(
+        label: 'Out',
+        value: provider.pricing.formatTokenPrice(provider.pricing.completion),
+      ),
+      if (provider.pricing.request > 0)
+        _StatChip(
+          label: 'Req',
+          value: provider.pricing.formatRequestPrice(provider.pricing.request),
+        ),
+      if (provider.isModerated != null)
+        _StatChip(
+          label: 'Moderated',
+          value: provider.isModerated! ? 'Yes' : 'No',
+        ),
+    ];
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: chips,
+    );
+  }
+}
+
+class _ProviderPill extends StatelessWidget {
+  final CustomModelInfo model;
+  final ModelProviderInfo? selectedProvider;
+  final Function(ModelProviderInfo?) onProviderChanged;
+  final Widget Function(String?, IconData, {double size}) buildIconWidget;
+
+  const _ProviderPill({
+    required this.model,
+    required this.selectedProvider,
+    required this.onProviderChanged,
+    required this.buildIconWidget,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final m3 = theme.m3;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: m3.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<ModelProviderInfo?>(
+          value: selectedProvider,
+          dropdownColor: m3.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(16),
+          icon: Icon(
+            Icons.arrow_drop_down,
+            color: m3.onSurfaceVariant,
           ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<ModelProviderInfo?>(
-                value: selectedProvider,
-                dropdownColor: bgColor.darken(0.05).withValues(alpha: 0.9),
-                icon: Icon(Icons.arrow_drop_down, color: iconFgColor),
-                style: TextStyle(color: iconFgColor, fontSize: 13),
-                onChanged: onProviderChanged,
-                isExpanded: true,
-                hint: _buildDisabledSelectedDisplay(alignCenter),
-                items: [
-                  DropdownMenuItem<ModelProviderInfo?>(
-                    value: null,
-                    child: _buildDisabledMenuItem(alignCenter),
-                  ),
-                  ...model.providers.map(
-                    (provider) => DropdownMenuItem<ModelProviderInfo?>(
-                      value: provider,
-                      child: _buildProviderMenuItem(
-                        provider,
-                        alignCenter,
-                        isSelected: selectedProvider?.slug == provider.slug,
-                      ),
-                    ),
-                  ),
-                ],
-                selectedItemBuilder: (context) {
-                  final items = <Widget>[
-                    _wrapSelectedBuilderChild(
-                      _buildDisabledSelectedDisplay(alignCenter),
-                      alignCenter,
-                    ),
-                    ...model.providers.map(
-                      (provider) => _wrapSelectedBuilderChild(
-                        _buildProviderSelectedDisplay(provider, alignCenter),
-                        alignCenter,
-                      ),
-                    ),
-                  ];
-                  return items;
-                },
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: colorScheme.onSurface,
+          ),
+          onChanged: onProviderChanged,
+          isDense: true,
+          hint: _buildDisabledDisplay(context),
+          items: [
+            DropdownMenuItem<ModelProviderInfo?>(
+              value: null,
+              child: _buildDisabledDisplay(context),
+            ),
+            ...model.providers.map(
+              (provider) => DropdownMenuItem<ModelProviderInfo?>(
+                value: provider,
+                child: _buildProviderDisplay(
+                  context,
+                  provider,
+                  isSelected: selectedProvider?.slug == provider.slug,
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+          selectedItemBuilder: (ctx) {
+            return [
+              _buildDisabledDisplay(ctx),
+              ...model.providers.map(
+                (provider) => _buildProviderDisplay(
+                  ctx,
+                  provider,
+                  isSelected: true,
+                ),
+              ),
+            ];
+          },
+        ),
       ),
     );
   }
 
-  Widget _wrapSelectedBuilderChild(Widget child, bool alignCenter) {
-    return alignCenter
-        ? Center(child: child)
-        : Align(alignment: Alignment.centerLeft, child: child);
-  }
-
-  Widget _buildDisabledMenuItem(bool alignCenter) {
+  Widget _buildDisabledDisplay(BuildContext context) {
+    final m3 = Theme.of(context).m3;
     return Row(
-      mainAxisAlignment: alignCenter
-          ? MainAxisAlignment.center
-          : MainAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.block, color: iconFgColor.withValues(alpha: 0.6), size: 16),
+        Icon(Icons.block, color: m3.onSurfaceVariant, size: 16),
         const SizedBox(width: 6),
-        Expanded(
-          child: Text(
-            'Disabled',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: iconFgColor.withValues(alpha: 0.6),
-              fontWeight: FontWeight.w500,
-            ),
-            textAlign: alignCenter ? TextAlign.center : TextAlign.left,
-          ),
+        Text(
+          'Disabled',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: m3.onSurfaceVariant,
+                fontWeight: FontWeight.w500,
+              ),
         ),
       ],
     );
   }
 
-  Widget _buildProviderMenuItem(
-    ModelProviderInfo provider,
-    bool alignCenter, {
+  Widget _buildProviderDisplay(
+    BuildContext context,
+    ModelProviderInfo provider, {
     required bool isSelected,
   }) {
-    final Color textColor = isSelected ? accentColor : iconFgColor;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final Color textColor =
+        isSelected ? colorScheme.primary : colorScheme.onSurface;
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisAlignment: alignCenter
-          ? MainAxisAlignment.center
-          : MainAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        buildIconWidget(provider.iconUrl, Icons.business, size: 18),
+        buildIconWidget(provider.iconUrl, Icons.business, size: 16),
         const SizedBox(width: 6),
-        Expanded(
-          child: Text(
-            provider.name,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: textColor,
-              fontWeight: FontWeight.w500,
-              height: 1.2,
-            ),
-            textAlign: alignCenter ? TextAlign.center : TextAlign.left,
+        Text(
+          provider.name,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: textColor,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildDisabledSelectedDisplay(bool alignCenter) {
-    return Row(
-      mainAxisAlignment: alignCenter
-          ? MainAxisAlignment.center
-          : MainAxisAlignment.start,
-      children: [
-        Icon(Icons.block, color: iconFgColor.withValues(alpha: 0.6), size: 16),
-        const SizedBox(width: 6),
-        Flexible(
-          child: Text(
-            'Disabled',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: alignCenter ? TextAlign.center : TextAlign.left,
-            style: TextStyle(
-              fontWeight: FontWeight.w500,
-              color: iconFgColor.withValues(alpha: 0.6),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildProviderSelectedDisplay(
-    ModelProviderInfo provider,
-    bool alignCenter,
-  ) {
-    return Row(
-      mainAxisAlignment: alignCenter
-          ? MainAxisAlignment.center
-          : MainAxisAlignment.start,
-      children: [
-        buildIconWidget(provider.iconUrl, Icons.business, size: 18),
-        const SizedBox(width: 6),
-        Flexible(
-          child: Text(
-            provider.name,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            textAlign: alignCenter ? TextAlign.center : TextAlign.left,
-            style: TextStyle(fontWeight: FontWeight.w500, color: iconFgColor),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPriceCard(double height, Color inputFieldBg) {
-    return Container(
-      constraints: BoxConstraints(minHeight: height),
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-      decoration: BoxDecoration(
-        color: inputFieldBg,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: iconFgColor.withValues(alpha: 0.5)),
-      ),
-      child: selectedProvider == null
-          ? Center(
-              child: Text(
-                'Pricing',
-                style: TextStyle(
-                  color: iconFgColor.lighten(0.3).withValues(alpha: 0.7),
-                  fontSize: 12,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Pricing',
-                  style: TextStyle(
-                    color: iconFgColor.lighten(0.25),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.4,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'In: ${selectedProvider!.pricing.formatTokenPrice(selectedProvider!.pricing.prompt)}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: iconFgColor.lighten(0.3),
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                ),
-                Text(
-                  'Out: ${selectedProvider!.pricing.formatTokenPrice(selectedProvider!.pricing.completion)}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: iconFgColor.lighten(0.3),
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                ),
-                if (selectedProvider!.pricing.request > 0)
-                  Text(
-                    'Req: ${selectedProvider!.pricing.formatRequestPrice(selectedProvider!.pricing.request)}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: iconFgColor.lighten(0.3),
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                  ),
-              ],
-            ),
-    );
-  }
-
-  Widget _buildContextCard(double height, Color inputFieldBg) {
-    return Container(
-      constraints: BoxConstraints(minHeight: height),
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-      decoration: BoxDecoration(
-        color: inputFieldBg,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: iconFgColor.withValues(alpha: 0.5)),
-      ),
-      child: selectedProvider == null
-          ? Center(
-              child: Text(
-                'Capabilities',
-                style: TextStyle(
-                  color: iconFgColor.lighten(0.3).withValues(alpha: 0.7),
-                  fontSize: 12,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Capabilities',
-                  style: TextStyle(
-                    color: iconFgColor.lighten(0.25),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.4,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Ctx: ${formatContextLength(selectedProvider!.contextLength)}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: iconFgColor.lighten(0.2),
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                ),
-                Text(
-                  'Max Out: ${formatContextLength(selectedProvider!.maxCompletionTokens)}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: iconFgColor.lighten(0.2),
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                ),
-                if (selectedProvider!.isModerated != null)
-                  Text(
-                    'Moderated: ${selectedProvider!.isModerated! ? 'Yes' : 'No'}',
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: iconFgColor.lighten(0.2),
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                  ),
-              ],
-            ),
     );
   }
 }
 
 class _AuthRequiredException implements Exception {
   const _AuthRequiredException();
+}
+
+// ─── Reusable private pieces ─────────────────────────────────────────────
+
+class _SearchField extends StatelessWidget {
+  final TextEditingController controller;
+  final String hintText;
+  final bool hasQuery;
+
+  const _SearchField({
+    required this.controller,
+    required this.hintText,
+    required this.hasQuery,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final m3 = theme.m3;
+    return TextField(
+      controller: controller,
+      style: theme.textTheme.bodyMedium?.copyWith(
+        color: colorScheme.onSurface,
+      ),
+      decoration: InputDecoration(
+        hintText: hintText,
+        hintStyle: theme.textTheme.bodyMedium?.copyWith(
+          color: m3.onSurfaceVariant,
+        ),
+        prefixIcon: Icon(
+          Icons.search,
+          color: m3.onSurfaceVariant,
+          size: 20,
+        ),
+        suffixIcon: hasQuery
+            ? IconButton(
+                icon: Icon(
+                  Icons.clear,
+                  color: m3.onSurfaceVariant,
+                  size: 20,
+                ),
+                onPressed: controller.clear,
+              )
+            : null,
+        filled: true,
+        fillColor: m3.surfaceContainer,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(999),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(999),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(999),
+          borderSide: BorderSide(color: colorScheme.primary, width: 2),
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  final String label;
+  const _SectionHeader(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 1.5,
+          color: colorScheme.primary,
+        ),
+      ),
+    );
+  }
+}
+
+enum _BadgeTone { primary, success, warn, neutral }
+
+class _Badge extends StatelessWidget {
+  final String label;
+  final _BadgeTone tone;
+  const _Badge(this.label, {this.tone = _BadgeTone.neutral});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final m3 = theme.m3;
+    late Color bg;
+    late Color fg;
+    switch (tone) {
+      case _BadgeTone.primary:
+        bg = m3.primaryContainer;
+        fg = m3.onPrimaryContainer;
+        break;
+      case _BadgeTone.success:
+        bg = m3.successContainer;
+        fg = m3.onSuccessContainer;
+        break;
+      case _BadgeTone.warn:
+        bg = m3.warningContainer;
+        fg = m3.onWarningContainer;
+        break;
+      case _BadgeTone.neutral:
+        bg = m3.surfaceContainerHigh;
+        fg = m3.onSurfaceVariant;
+        break;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: fg,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.15,
+        ),
+      ),
+    );
+  }
+}
+
+class _StatChip extends StatelessWidget {
+  final String label;
+  final String value;
+  const _StatChip({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final m3 = theme.m3;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: m3.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: RichText(
+        text: TextSpan(
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: m3.onSurfaceVariant,
+          ),
+          children: [
+            TextSpan(text: '$label: '),
+            TextSpan(
+              text: value,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurface,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

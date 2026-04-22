@@ -8,7 +8,6 @@ import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/pages/download_settings_page.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/utils/chat_font_resolver.dart';
-import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/services/title_generation_service.dart';
 
@@ -176,7 +175,8 @@ class _CustomizationPageState extends State<CustomizationPage> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(AppLocalizations.of(context)?.systemPromptSaved ?? 'System prompt saved'),
+          content: Text(AppLocalizations.of(context)?.systemPromptSaved ??
+              'System prompt saved'),
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 2),
         ),
@@ -193,7 +193,9 @@ class _CustomizationPageState extends State<CustomizationPage> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(AppLocalizations.of(context)?.systemPromptResetToDefault ?? 'System prompt reset to default'),
+          content: Text(AppLocalizations.of(context)
+                  ?.systemPromptResetToDefault ??
+              'System prompt reset to default'),
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 2),
         ),
@@ -210,220 +212,375 @@ class _CustomizationPageState extends State<CustomizationPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final Color scaffoldBg = theme.scaffoldBackgroundColor;
-    final Color iconFg = theme.resolvedIconColor;
-    final TextStyle? titleTextStyle = theme.appBarTheme.titleTextStyle;
+    final cs = theme.colorScheme;
+    final m3 = theme.m3;
     final l = AppLocalizations.of(context)!;
 
     return Scaffold(
-      backgroundColor: scaffoldBg,
+      backgroundColor: cs.surface,
       appBar: AppBar(
-        title: Text(l.customization, style: titleTextStyle),
-        backgroundColor: scaffoldBg,
+        title: Text(l.customization),
+        centerTitle: false,
+        backgroundColor: cs.surface,
         elevation: 0,
-        iconTheme: IconThemeData(color: iconFg),
+        scrolledUnderElevation: 0,
       ),
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
-          // Language Section
-          _buildSectionHeader(context, l.language, Icons.language, iconFg),
-          const SizedBox(height: 12),
-          _buildLanguageSelector(scaffoldBg, iconFg, l),
-          const SizedBox(height: 24),
-
-          // Voice Transcription Section
-          _buildSectionHeader(
-            context,
-            l.voiceTranscription,
-            Icons.mic,
-            iconFg,
-          ),
-          const SizedBox(height: 12),
-          _buildToggleCard(
-            context,
-            title: l.autoSendVoice,
-            subtitle: l.autoSendVoiceSubtitle,
-            value: _selectedAutoSendVoiceTranscription,
-            onChanged: (bool value) {
-              setState(() {
-                _selectedAutoSendVoiceTranscription = value;
-              });
-              widget.config.setAutoSendVoiceTranscription(value);
-            },
-            scaffoldBg: scaffoldBg,
-            iconFg: iconFg,
-          ),
-          const SizedBox(height: 8),
-          _buildInfoCard(context, l.autoSendVoiceInfo, scaffoldBg, iconFg),
-          const SizedBox(height: 24),
-
-          // Message Display Section
-          _buildSectionHeader(
-            context,
-            l.messageDisplay,
-            Icons.chat_bubble_outline,
-            iconFg,
-          ),
-          const SizedBox(height: 12),
-          _buildToggleCard(
-            context,
-            title: l.showReasoningTokens,
-            subtitle: l.showReasoningTokensSubtitle,
-            value: _selectedShowReasoningTokens,
-            onChanged: (bool value) {
-              setState(() {
-                _selectedShowReasoningTokens = value;
-              });
-              widget.config.setShowReasoningTokens(value);
-            },
-            scaffoldBg: scaffoldBg,
-            iconFg: iconFg,
-          ),
-          const SizedBox(height: 12),
-          _buildToggleCard(
-            context,
-            title: l.showModelInfo,
-            subtitle: l.showModelInfoSubtitle,
-            value: _selectedShowModelInfo,
-            onChanged: (bool value) {
-              setState(() {
-                _selectedShowModelInfo = value;
-              });
-              widget.config.setShowModelInfo(value);
-            },
-            scaffoldBg: scaffoldBg,
-            iconFg: iconFg,
-          ),
-          const SizedBox(height: 12),
-          _buildToggleCard(
-            context,
-            title: l.showTps,
-            subtitle: l.showTpsSubtitle,
-            value: _selectedShowTps,
-            onChanged: (bool value) {
-              setState(() {
-                _selectedShowTps = value;
-              });
-              widget.config.setShowTps(value);
-            },
-            scaffoldBg: scaffoldBg,
-            iconFg: iconFg,
-          ),
-          const SizedBox(height: 12),
-          _buildChatFontSizeCard(scaffoldBg, iconFg, l),
-          const SizedBox(height: 12),
-          _buildChatFontFamilyCard(scaffoldBg, iconFg, l),
-          const SizedBox(height: 24),
-
-          // AI Context Section
-          _buildSectionHeader(context, l.aiContext, Icons.psychology, iconFg),
-          const SizedBox(height: 12),
-          _buildToggleCard(
-            context,
-            title: l.recentImagesInContext,
-            subtitle: l.recentImagesInContextSubtitle,
-            value: _selectedIncludeRecentImagesInHistory,
-            onChanged: (bool value) {
-              setState(() {
-                _selectedIncludeRecentImagesInHistory = value;
-              });
-              widget.config.setIncludeRecentImagesInHistory(value);
-            },
-            scaffoldBg: scaffoldBg,
-            iconFg: iconFg,
-          ),
-          const SizedBox(height: 12),
-          _buildToggleCard(
-            context,
-            title: l.allImagesInContext,
-            subtitle: l.allImagesInContextSubtitle,
-            value: _selectedIncludeAllImagesInHistory,
-            onChanged: (bool value) {
-              setState(() {
-                _selectedIncludeAllImagesInHistory = value;
-              });
-              widget.config.setIncludeAllImagesInHistory(value);
-            },
-            scaffoldBg: scaffoldBg,
-            iconFg: iconFg,
-          ),
-          const SizedBox(height: 12),
-          _buildToggleCard(
-            context,
-            title: l.reasoningInContext,
-            subtitle: l.reasoningInContextSubtitle,
-            value: _selectedIncludeReasoningInHistory,
-            onChanged: (bool value) {
-              setState(() {
-                _selectedIncludeReasoningInHistory = value;
-              });
-              widget.config.setIncludeReasoningInHistory(value);
-            },
-            scaffoldBg: scaffoldBg,
-            iconFg: iconFg,
-          ),
-          const SizedBox(height: 8),
-          _buildInfoCard(context, l.aiContextInfo, scaffoldBg, iconFg),
-          const SizedBox(height: 24),
-
-          // Downloads Section
-          _buildSectionHeader(
-            context,
-            l.downloads,
-            Icons.folder_outlined,
-            iconFg,
-          ),
-          const SizedBox(height: 12),
-          _buildNavCard(
-            context,
-            title: l.downloads,
-            subtitle: l.downloadsSubtitle,
-            icon: Icons.folder_outlined,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const DownloadSettingsPage(),
+          // Language section.
+          _SectionHeader(l.language),
+          _FilledCard(
+            child: Row(
+              children: [
+                Icon(Icons.language, size: 24, color: m3.onSurfaceVariant),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l.language,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        l.languageSubtitle,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: m3.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              );
-            },
-            scaffoldBg: scaffoldBg,
-            iconFg: iconFg,
+                const SizedBox(width: 12),
+                DropdownButton<String>(
+                  value: _selectedLocale,
+                  underline: const SizedBox.shrink(),
+                  dropdownColor: m3.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(12),
+                  items: const [
+                    DropdownMenuItem(value: 'en', child: Text('English')),
+                    DropdownMenuItem(value: 'de', child: Text('Deutsch')),
+                    DropdownMenuItem(value: 'zh', child: Text('中文')),
+                    DropdownMenuItem(value: 'hi', child: Text('हिन्दी')),
+                    DropdownMenuItem(value: 'es', child: Text('Español')),
+                    DropdownMenuItem(value: 'fr', child: Text('Français')),
+                    DropdownMenuItem(value: 'ar', child: Text('العربية')),
+                    DropdownMenuItem(value: 'bn', child: Text('বাংলা')),
+                    DropdownMenuItem(value: 'pt', child: Text('Português')),
+                    DropdownMenuItem(value: 'ru', child: Text('Русский')),
+                    DropdownMenuItem(value: 'ja', child: Text('日本語')),
+                  ],
+                  onChanged: (String? value) {
+                    if (value != null && value != _selectedLocale) {
+                      setState(() {
+                        _selectedLocale = value;
+                      });
+                      widget.config.setUiLocale(value);
+                    }
+                  },
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 24),
 
-          // Auto Chat Titles Section
-          _buildSectionHeader(context, l.chatTitles, Icons.title, iconFg),
-          const SizedBox(height: 12),
-          _buildToggleCard(
-            context,
-            title: l.autoGenerateTitles,
-            subtitle: l.autoGenerateTitlesSubtitle,
-            value: _isLoadingTitleSetting ? false : _autoGenerateTitles,
-            onChanged: _isLoadingTitleSetting
-                ? null
-                : (bool value) async {
-                    setState(() {
-                      _autoGenerateTitles = value;
-                    });
-                    await TitleGenerationService.setEnabled(value);
-                  },
-            scaffoldBg: scaffoldBg,
-            iconFg: iconFg,
+          // Voice Transcription section.
+          _SectionHeader(l.voiceTranscription),
+          _GroupedCard(
+            children: [
+              _SwitchRow(
+                icon: Icons.mic_outlined,
+                title: l.autoSendVoice,
+                subtitle: l.autoSendVoiceSubtitle,
+                value: _selectedAutoSendVoiceTranscription,
+                onChanged: (bool value) {
+                  setState(() {
+                    _selectedAutoSendVoiceTranscription = value;
+                  });
+                  widget.config.setAutoSendVoiceTranscription(value);
+                },
+              ),
+            ],
           ),
-          // System prompt editor (only shown when auto-generate is enabled)
+          const SizedBox(height: 8),
+          _InfoCard(text: l.autoSendVoiceInfo),
+          const SizedBox(height: 24),
+
+          // Message Display section (toggles only; typography is its own section).
+          _SectionHeader(l.messageDisplay),
+          _GroupedCard(
+            children: [
+              _SwitchRow(
+                icon: Icons.psychology_alt_outlined,
+                title: l.showReasoningTokens,
+                subtitle: l.showReasoningTokensSubtitle,
+                value: _selectedShowReasoningTokens,
+                onChanged: (bool value) {
+                  setState(() {
+                    _selectedShowReasoningTokens = value;
+                  });
+                  widget.config.setShowReasoningTokens(value);
+                },
+              ),
+              _divider(context),
+              _SwitchRow(
+                icon: Icons.info_outline,
+                title: l.showModelInfo,
+                subtitle: l.showModelInfoSubtitle,
+                value: _selectedShowModelInfo,
+                onChanged: (bool value) {
+                  setState(() {
+                    _selectedShowModelInfo = value;
+                  });
+                  widget.config.setShowModelInfo(value);
+                },
+              ),
+              _divider(context),
+              _SwitchRow(
+                icon: Icons.speed_outlined,
+                title: l.showTps,
+                subtitle: l.showTpsSubtitle,
+                value: _selectedShowTps,
+                onChanged: (bool value) {
+                  setState(() {
+                    _selectedShowTps = value;
+                  });
+                  widget.config.setShowTps(value);
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // Typography section.
+          const _SectionHeader('Typography'),
+          _FilledCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l.chatFontSize,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  l.chatFontSizeSubtitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: m3.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Slider(
+                        value: _selectedChatFontSize,
+                        min: kMinChatFontSize,
+                        max: kMaxChatFontSize,
+                        divisions:
+                            (kMaxChatFontSize - kMinChatFontSize).round(),
+                        label: '${_selectedChatFontSize.toStringAsFixed(0)} pt',
+                        onChanged: (double value) {
+                          setState(() {
+                            _selectedChatFontSize = value;
+                          });
+                        },
+                        onChangeEnd: (double value) {
+                          widget.config.setChatFontSize(value);
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 56,
+                      child: Text(
+                        '${_selectedChatFontSize.toStringAsFixed(0)} pt',
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                          color: cs.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  l.chatFontFamily,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  l.chatFontFamilySubtitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: m3.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _FontFamilyField(
+                  value: _selectedChatFontFamily,
+                  items: kSupportedChatFontFamilies
+                      .map((id) => DropdownMenuItem<String>(
+                            value: id,
+                            child: Text(_fontFamilyLabel(id, l)),
+                          ))
+                      .toList(),
+                  onChanged: (String? value) {
+                    if (value == null || value == _selectedChatFontFamily) {
+                      return;
+                    }
+                    setState(() {
+                      _selectedChatFontFamily = value;
+                    });
+                    widget.config.setChatFontFamily(value);
+                  },
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: m3.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    l.fontSizePreview,
+                    style: TextStyle(
+                      color: cs.onSurface,
+                      fontSize: _selectedChatFontSize,
+                      fontFamily: resolveChatFontFamily(_selectedChatFontFamily),
+                      height: 1.38,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // AI Context section.
+          _SectionHeader(l.aiContext),
+          _InfoCard(text: l.aiContextInfo),
+          const SizedBox(height: 8),
+          _GroupedCard(
+            children: [
+              _SwitchRow(
+                icon: Icons.image_outlined,
+                title: l.recentImagesInContext,
+                subtitle: l.recentImagesInContextSubtitle,
+                value: _selectedIncludeRecentImagesInHistory,
+                onChanged: (bool value) {
+                  setState(() {
+                    _selectedIncludeRecentImagesInHistory = value;
+                  });
+                  widget.config.setIncludeRecentImagesInHistory(value);
+                },
+              ),
+              _divider(context),
+              _SwitchRow(
+                icon: Icons.photo_library_outlined,
+                title: l.allImagesInContext,
+                subtitle: l.allImagesInContextSubtitle,
+                value: _selectedIncludeAllImagesInHistory,
+                onChanged: (bool value) {
+                  setState(() {
+                    _selectedIncludeAllImagesInHistory = value;
+                  });
+                  widget.config.setIncludeAllImagesInHistory(value);
+                },
+              ),
+              _divider(context),
+              _SwitchRow(
+                icon: Icons.psychology_outlined,
+                title: l.reasoningInContext,
+                subtitle: l.reasoningInContextSubtitle,
+                value: _selectedIncludeReasoningInHistory,
+                onChanged: (bool value) {
+                  setState(() {
+                    _selectedIncludeReasoningInHistory = value;
+                  });
+                  widget.config.setIncludeReasoningInHistory(value);
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // Downloads section: nav row into DownloadSettingsPage.
+          _SectionHeader(l.downloads),
+          _GroupedCard(
+            children: [
+              _NavRow(
+                icon: Icons.folder_outlined,
+                title: l.downloads,
+                subtitle: l.downloadsSubtitle,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const DownloadSettingsPage(),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // Auto Chat Titles section.
+          _SectionHeader(l.chatTitles),
+          _GroupedCard(
+            children: [
+              _SwitchRow(
+                icon: Icons.auto_awesome_outlined,
+                title: l.autoGenerateTitles,
+                subtitle: l.autoGenerateTitlesSubtitle,
+                value: _isLoadingTitleSetting ? false : _autoGenerateTitles,
+                onChanged: _isLoadingTitleSetting
+                    ? null
+                    : (bool value) async {
+                        setState(() {
+                          _autoGenerateTitles = value;
+                        });
+                        await TitleGenerationService.setEnabled(value);
+                      },
+              ),
+            ],
+          ),
           if (_autoGenerateTitles && !_isLoadingTitleSetting) ...[
             const SizedBox(height: 12),
-            _buildSystemPromptEditor(scaffoldBg, iconFg),
+            _buildSystemPromptEditor(),
           ],
           const SizedBox(height: 8),
-          _buildInfoCard(context, l.titleGenInfo, scaffoldBg, iconFg),
+          _InfoCard(text: l.titleGenInfo),
+          const SizedBox(height: 16),
 
           // Image generation is now handled via tool calling (generate_image tool)
         ],
       ),
     );
+  }
+
+  Widget _divider(BuildContext context) {
+    final m3 = Theme.of(context).m3;
+    return Divider(height: 1, color: m3.outlineVariant, indent: 56);
   }
 
   String _fontFamilyLabel(String id, AppLocalizations l) {
@@ -440,314 +597,41 @@ class _CustomizationPageState extends State<CustomizationPage> {
     }
   }
 
-  Widget _buildChatFontFamilyCard(
-    Color scaffoldBg,
-    Color iconFg,
-    AppLocalizations l,
-  ) {
+  Widget _buildSystemPromptEditor() {
     final theme = Theme.of(context);
-    return Card(
-      color: scaffoldBg.lighten(0.05),
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: iconFg.withValues(alpha: 0.3), width: 1),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        l.chatFontFamily,
-                        style: TextStyle(
-                          color: theme.textTheme.titleMedium?.color,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        l.chatFontFamilySubtitle,
-                        style: TextStyle(
-                          color: iconFg.lighten(0.3),
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                DropdownButton<String>(
-                  value: _selectedChatFontFamily,
-                  underline: const SizedBox.shrink(),
-                  dropdownColor: scaffoldBg.lighten(0.08),
-                  items: kSupportedChatFontFamilies.map((id) {
-                    return DropdownMenuItem<String>(
-                      value: id,
-                      child: Text(_fontFamilyLabel(id, l)),
-                    );
-                  }).toList(),
-                  onChanged: (String? value) {
-                    if (value == null || value == _selectedChatFontFamily) {
-                      return;
-                    }
-                    setState(() {
-                      _selectedChatFontFamily = value;
-                    });
-                    widget.config.setChatFontFamily(value);
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 10,
-              ),
-              decoration: BoxDecoration(
-                color: scaffoldBg,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: iconFg.withValues(alpha: 0.2),
-                  width: 1,
-                ),
-              ),
-              child: Text(
-                l.fontSizePreview,
-                style: TextStyle(
-                  color: iconFg,
-                  fontSize: _selectedChatFontSize,
-                  fontFamily: resolveChatFontFamily(_selectedChatFontFamily),
-                  height: 1.38,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildChatFontSizeCard(
-    Color scaffoldBg,
-    Color iconFg,
-    AppLocalizations l,
-  ) {
-    final theme = Theme.of(context);
-    return Card(
-      color: scaffoldBg.lighten(0.05),
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: iconFg.withValues(alpha: 0.3), width: 1),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        l.chatFontSize,
-                        style: TextStyle(
-                          color: theme.textTheme.titleMedium?.color,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        l.chatFontSizeSubtitle,
-                        style: TextStyle(
-                          color: iconFg.lighten(0.3),
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '${_selectedChatFontSize.round()}pt',
-                    style: TextStyle(
-                      color: theme.colorScheme.primary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Slider(
-              value: _selectedChatFontSize,
-              min: kMinChatFontSize,
-              max: kMaxChatFontSize,
-              divisions: (kMaxChatFontSize - kMinChatFontSize).round(),
-              label: '${_selectedChatFontSize.round()}pt',
-              onChanged: (double value) {
-                setState(() {
-                  _selectedChatFontSize = value;
-                });
-              },
-              onChangeEnd: (double value) {
-                widget.config.setChatFontSize(value);
-              },
-            ),
-            Padding(
-              padding: const EdgeInsets.only(top: 4, bottom: 4),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: scaffoldBg,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: iconFg.withValues(alpha: 0.2),
-                    width: 1,
-                  ),
-                ),
-                child: Text(
-                  l.fontSizePreview,
-                  style: TextStyle(
-                    color: iconFg,
-                    fontSize: _selectedChatFontSize,
-                    fontFamily: resolveChatFontFamily(_selectedChatFontFamily),
-                    height: 1.38,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLanguageSelector(Color scaffoldBg, Color iconFg, AppLocalizations l) {
-    return Card(
-      color: scaffoldBg.lighten(0.05),
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: iconFg.withValues(alpha: 0.3), width: 1),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    l.language,
-                    style: TextStyle(
-                      color: Theme.of(context).textTheme.titleMedium?.color,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    l.languageSubtitle,
-                    style: TextStyle(color: iconFg.lighten(0.3), fontSize: 13),
-                  ),
-                ],
-              ),
-            ),
-            DropdownButton<String>(
-              value: _selectedLocale,
-              underline: const SizedBox.shrink(),
-              dropdownColor: scaffoldBg.lighten(0.08),
-              items: [
-                const DropdownMenuItem(value: 'en', child: Text('English')),
-                const DropdownMenuItem(value: 'de', child: Text('Deutsch')),
-                const DropdownMenuItem(value: 'zh', child: Text('中文')),
-                const DropdownMenuItem(value: 'hi', child: Text('हिन्दी')),
-                const DropdownMenuItem(value: 'es', child: Text('Español')),
-                const DropdownMenuItem(value: 'fr', child: Text('Français')),
-                const DropdownMenuItem(value: 'ar', child: Text('العربية')),
-                const DropdownMenuItem(value: 'bn', child: Text('বাংলা')),
-                const DropdownMenuItem(value: 'pt', child: Text('Português')),
-                const DropdownMenuItem(value: 'ru', child: Text('Русский')),
-                const DropdownMenuItem(value: 'ja', child: Text('日本語')),
-              ],
-              onChanged: (String? value) {
-                if (value != null && value != _selectedLocale) {
-                  setState(() {
-                    _selectedLocale = value;
-                  });
-                  widget.config.setUiLocale(value);
-                }
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSystemPromptEditor(Color scaffoldBg, Color iconFg) {
-    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final m3 = theme.m3;
     final l = AppLocalizations.of(context)!;
-    return Card(
-      color: scaffoldBg.lighten(0.05),
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: iconFg.withValues(alpha: 0.3), width: 1),
+    return Container(
+      decoration: BoxDecoration(
+        color: m3.surfaceContainer,
+        borderRadius: BorderRadius.circular(20),
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header with expand/collapse
           InkWell(
             onTap: () {
               setState(() {
                 _isPromptExpanded = !_isPromptExpanded;
               });
             },
-            borderRadius: BorderRadius.circular(12),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
                 children: [
-                  Icon(Icons.edit_note, color: iconFg, size: 20),
-                  const SizedBox(width: 12),
+                  Icon(Icons.edit_note, size: 24, color: m3.onSurfaceVariant),
+                  const SizedBox(width: 16),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           l.titleGenerationPrompt,
-                          style: theme.textTheme.bodyLarge?.copyWith(
+                          style: const TextStyle(
+                            fontSize: 15,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -756,8 +640,9 @@ class _CustomizationPageState extends State<CustomizationPage> {
                           _hasCustomPrompt
                               ? l.usingCustomPrompt
                               : l.usingDefaultPrompt,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: iconFg.withValues(alpha: 0.7),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: m3.onSurfaceVariant,
                           ),
                         ),
                       ],
@@ -765,15 +650,14 @@ class _CustomizationPageState extends State<CustomizationPage> {
                   ),
                   Icon(
                     _isPromptExpanded ? Icons.expand_less : Icons.expand_more,
-                    color: iconFg,
+                    color: m3.onSurfaceVariant,
                   ),
                 ],
               ),
             ),
           ),
-          // Expandable content
           if (_isPromptExpanded) ...[
-            const Divider(height: 1),
+            Divider(height: 1, color: m3.outlineVariant),
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -781,40 +665,19 @@ class _CustomizationPageState extends State<CustomizationPage> {
                 children: [
                   Text(
                     'System prompt used to generate titles:',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: iconFg.withValues(alpha: 0.7),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: m3.onSurfaceVariant,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  TextField(
+                  TextFormField(
                     controller: _promptController,
                     maxLines: 6,
-                    style: theme.textTheme.bodyMedium?.copyWith(
+                    style: TextStyle(
+                      color: cs.onSurface,
                       fontFamily: 'monospace',
                       fontSize: 13,
-                    ),
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: scaffoldBg,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(
-                          color: iconFg.withValues(alpha: 0.3),
-                        ),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(
-                          color: iconFg.withValues(alpha: 0.3),
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                      contentPadding: const EdgeInsets.all(12),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -823,16 +686,13 @@ class _CustomizationPageState extends State<CustomizationPage> {
                     children: [
                       TextButton.icon(
                         onPressed: _resetSystemPrompt,
-                        icon: Icon(Icons.restore, size: 18),
+                        icon: const Icon(Icons.restore, size: 18),
                         label: Text(l.reset),
-                        style: TextButton.styleFrom(
-                          foregroundColor: iconFg.withValues(alpha: 0.7),
-                        ),
                       ),
                       const SizedBox(width: 8),
                       FilledButton.icon(
                         onPressed: _saveSystemPrompt,
-                        icon: Icon(Icons.save, size: 18),
+                        icon: const Icon(Icons.save, size: 18),
                         label: Text(l.save),
                       ),
                     ],
@@ -845,162 +705,254 @@ class _CustomizationPageState extends State<CustomizationPage> {
       ),
     );
   }
+}
 
-  Widget _buildSectionHeader(
-    BuildContext context,
-    String title,
-    IconData icon,
-    Color iconFg,
-  ) {
-    return Row(
-      children: [
-        Icon(icon, color: iconFg, size: 20),
-        const SizedBox(width: 8),
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: Theme.of(context).textTheme.titleMedium?.color,
-          ),
-        ),
-      ],
-    );
-  }
+// ---- Shared UI primitives (colocated because both pages use them) ----
 
-  Widget _buildToggleCard(
-    BuildContext context, {
-    required String title,
-    required String subtitle,
-    required bool value,
-    ValueChanged<bool>? onChanged,
-    required Color scaffoldBg,
-    required Color iconFg,
-  }) {
-    return Card(
-      color: scaffoldBg.lighten(0.05),
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: iconFg.withValues(alpha: 0.3), width: 1),
-      ),
-      child: SwitchListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        title: Text(
-          title,
-          style: TextStyle(
-            color: Theme.of(context).textTheme.titleMedium?.color,
-            fontWeight: FontWeight.w600,
-            fontSize: 16,
-          ),
+class _SectionHeader extends StatelessWidget {
+  final String label;
+  const _SectionHeader(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
+      child: Text(
+        label.toUpperCase(),
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 1.5,
+          color: cs.primary,
         ),
-        subtitle: Text(
-          subtitle,
-          style: TextStyle(color: iconFg.lighten(0.3), fontSize: 13),
-        ),
-        value: value,
-        onChanged: onChanged,
-        activeTrackColor: Theme.of(
-          context,
-        ).colorScheme.primary.withValues(alpha: 0.5),
-        activeThumbColor: Theme.of(context).colorScheme.primary,
       ),
     );
   }
+}
 
-  Widget _buildNavCard(
-    BuildContext context, {
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required VoidCallback onTap,
-    required Color scaffoldBg,
-    required Color iconFg,
-  }) {
-    final theme = Theme.of(context);
-    return Card(
-      color: scaffoldBg.lighten(0.05),
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: iconFg.withValues(alpha: 0.3), width: 1),
+class _GroupedCard extends StatelessWidget {
+  final List<Widget> children;
+  const _GroupedCard({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    final m3 = Theme.of(context).m3;
+    return Container(
+      decoration: BoxDecoration(
+        color: m3.surfaceContainer,
+        borderRadius: BorderRadius.circular(20),
       ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Row(
-            children: [
-              Icon(icon, color: iconFg, size: 22),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        color: theme.textTheme.titleMedium?.color,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 16,
-                      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(children: children),
+    );
+  }
+}
+
+class _FilledCard extends StatelessWidget {
+  final Widget child;
+  const _FilledCard({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final m3 = Theme.of(context).m3;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: m3.surfaceContainer,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _SwitchRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+
+  const _SwitchRow({
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final m3 = Theme.of(context).m3;
+    final enabled = onChanged != null;
+    return InkWell(
+      onTap: enabled ? () => onChanged!(!value) : null,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Icon(icon, size: 24, color: m3.onSurfaceVariant),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
                     ),
+                  ),
+                  if (subtitle != null && subtitle!.isNotEmpty) ...[
                     const SizedBox(height: 2),
                     Text(
-                      subtitle,
+                      subtitle!,
                       style: TextStyle(
-                        color: iconFg.lighten(0.3),
-                        fontSize: 13,
+                        fontSize: 12,
+                        color: m3.onSurfaceVariant,
                       ),
                     ),
                   ],
-                ),
+                ],
               ),
-              Icon(
-                Icons.chevron_right,
-                color: iconFg.withValues(alpha: 0.7),
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(width: 12),
+            Switch.adaptive(value: value, onChanged: onChanged),
+          ],
         ),
       ),
     );
   }
+}
 
-  Widget _buildInfoCard(
-    BuildContext context,
-    String text,
-    Color scaffoldBg,
-    Color iconFg,
-  ) {
+class _NavRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final VoidCallback onTap;
+
+  const _NavRow({
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final m3 = Theme.of(context).m3;
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Icon(icon, size: 24, color: m3.onSurfaceVariant),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  if (subtitle != null && subtitle!.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle!,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: m3.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: m3.onSurfaceVariant),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoCard extends StatelessWidget {
+  final String text;
+  const _InfoCard({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final m3 = theme.m3;
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(14, 12, 16, 12),
       decoration: BoxDecoration(
-        color: scaffoldBg.lighten(0.03),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: iconFg.withValues(alpha: 0.2), width: 1),
+        color: m3.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+        border: Border(
+          left: BorderSide(color: cs.primary, width: 3),
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.info_outline,
-            size: 18,
-            color: iconFg.withValues(alpha: 0.7),
-          ),
-          const SizedBox(width: 8),
+          Icon(Icons.info_outline, size: 18, color: m3.onSurfaceVariant),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               text,
               style: TextStyle(
                 fontSize: 12,
-                color: iconFg.withValues(alpha: 0.8),
+                color: m3.onSurfaceVariant,
                 height: 1.4,
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// Dropdown styled as a filled TextField to match the rest of the surface.
+class _FontFamilyField extends StatelessWidget {
+  final String value;
+  final List<DropdownMenuItem<String>> items;
+  final ValueChanged<String?> onChanged;
+
+  const _FontFamilyField({
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final m3 = theme.m3;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: m3.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          isExpanded: true,
+          dropdownColor: m3.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(12),
+          items: items,
+          onChanged: onChanged,
+        ),
       ),
     );
   }

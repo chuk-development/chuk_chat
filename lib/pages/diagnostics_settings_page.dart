@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/developer_options_service.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
-import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:share_plus/share_plus.dart';
@@ -231,176 +230,324 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scaffoldBg = theme.scaffoldBackgroundColor;
-    final iconFg = theme.resolvedIconColor;
-
+    final cs = theme.colorScheme;
+    final m3 = theme.m3;
     final l = AppLocalizations.of(context)!;
 
     return Scaffold(
-      backgroundColor: scaffoldBg,
       appBar: AppBar(
         title: Text(l.developerOptions),
-        backgroundColor: scaffoldBg,
-        elevation: 0,
-        iconTheme: IconThemeData(color: iconFg),
+        centerTitle: false,
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                Card(
-                  color: scaffoldBg.lighten(0.05),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: iconFg.withValues(alpha: 0.3)),
-                  ),
-                  child: SwitchListTile(
-                    value: _developerOptionsEnabled,
-                    onChanged: _busy ? null : _setDeveloperOptionsEnabled,
-                    title: Text(l.devOptionsToggle),
-                    subtitle: Text(l.devOptionsToggleSubtitle),
-                  ),
+                _InfoCard(
+                  text: 'Advanced options — mainly for debugging and support.',
+                  tone: InfoTone.warn,
+                  icon: Icons.warning_amber_rounded,
                 ),
-                const SizedBox(height: 10),
-                Card(
-                  color: scaffoldBg.lighten(0.05),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: iconFg.withValues(alpha: 0.3)),
-                  ),
-                  child: SwitchListTile(
-                    value: _enabled,
-                    onChanged: _busy || !_developerOptionsEnabled
-                        ? null
-                        : _setEnabled,
-                    title: Text(l.enableDiagnosticsLogging),
-                    subtitle: Text(l.enableDiagnosticsSubtitle),
-                  ),
+                const _SectionHeader('Feature Toggles'),
+                _GroupedCard(
+                  children: [
+                    _SwitchRow(
+                      icon: Icons.developer_mode,
+                      title: l.devOptionsToggle,
+                      subtitle: l.devOptionsToggleSubtitle,
+                      value: _developerOptionsEnabled,
+                      onChanged: _busy ? null : _setDeveloperOptionsEnabled,
+                    ),
+                    _SwitchRow(
+                      icon: Icons.description_outlined,
+                      title: l.enableDiagnosticsLogging,
+                      subtitle: l.enableDiagnosticsSubtitle,
+                      value: _enabled,
+                      onChanged: _busy || !_developerOptionsEnabled
+                          ? null
+                          : _setEnabled,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 10),
-                Card(
-                  color: scaffoldBg.lighten(0.05),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: iconFg.withValues(alpha: 0.3)),
+                const _SectionHeader('Log File'),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: m3.surfaceContainer,
+                    borderRadius: BorderRadius.circular(20),
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          l.logFile,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: m3.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        const SizedBox(height: 6),
-                        SelectableText(
+                        child: SelectableText(
                           _logPath ?? l.notInitializedYet,
                           style: TextStyle(
+                            fontFamily: 'monospace',
                             fontSize: 12,
-                            color: iconFg.withValues(alpha: 0.75),
+                            color: m3.onSurfaceVariant,
                           ),
                         ),
-                        const SizedBox(height: 10),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            OutlinedButton.icon(
-                              onPressed: _busy || !_developerOptionsEnabled
-                                  ? null
-                                  : _refreshLogs,
-                              icon: const Icon(Icons.refresh, size: 18),
-                              label: Text(l.refresh),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: _busy || !_developerOptionsEnabled
+                                ? null
+                                : _refreshLogs,
+                            icon: const Icon(Icons.refresh, size: 18),
+                            label: Text(l.refresh),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed:
+                                _busy ||
+                                    !_developerOptionsEnabled ||
+                                    _logPreview.isEmpty
+                                ? null
+                                : _copyRecentLogs,
+                            icon: const Icon(Icons.copy, size: 18),
+                            label: Text(l.copyRecent),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: _busy || !_developerOptionsEnabled
+                                ? null
+                                : _copyFocusedModelMenuDebug,
+                            icon: const Icon(
+                              Icons.bug_report_outlined,
+                              size: 18,
                             ),
-                            OutlinedButton.icon(
-                              onPressed:
-                                  _busy ||
-                                      !_developerOptionsEnabled ||
-                                      _logPreview.isEmpty
-                                  ? null
-                                  : _copyRecentLogs,
-                              icon: const Icon(Icons.copy, size: 18),
-                              label: Text(l.copyRecent),
+                            label: Text(l.copyFocusedDebug),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: _busy || !_developerOptionsEnabled
+                                ? null
+                                : _shareLogFile,
+                            icon: const Icon(Icons.ios_share, size: 18),
+                            label: Text(l.shareFile),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: _busy || !_developerOptionsEnabled
+                                ? null
+                                : _clearLogs,
+                            icon: Icon(
+                              Icons.delete_outline,
+                              size: 18,
+                              color: cs.error,
                             ),
-                            OutlinedButton.icon(
-                              onPressed: _busy || !_developerOptionsEnabled
-                                  ? null
-                                  : _copyFocusedModelMenuDebug,
-                              icon: const Icon(
-                                Icons.bug_report_outlined,
-                                size: 18,
+                            label: Text(
+                              l.clear,
+                              style: TextStyle(color: cs.error),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: cs.error,
+                              side: BorderSide(
+                                color: cs.error.withValues(alpha: 0.5),
                               ),
-                              label: Text(l.copyFocusedDebug),
                             ),
-                            OutlinedButton.icon(
-                              onPressed: _busy || !_developerOptionsEnabled
-                                  ? null
-                                  : _shareLogFile,
-                              icon: const Icon(Icons.ios_share, size: 18),
-                              label: Text(l.shareFile),
-                            ),
-                            OutlinedButton.icon(
-                              onPressed: _busy || !_developerOptionsEnabled
-                                  ? null
-                                  : _clearLogs,
-                              icon: const Icon(Icons.delete_outline, size: 18),
-                              label: Text(l.clear),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 10),
-                Card(
-                  color: scaffoldBg.lighten(0.05),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: iconFg.withValues(alpha: 0.3)),
+                const _SectionHeader('Recent Log Lines'),
+                Container(
+                  width: double.infinity,
+                  constraints: const BoxConstraints(minHeight: 160),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: m3.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: m3.outlineVariant),
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          l.recentLogLines,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 8),
-                        Container(
-                          width: double.infinity,
-                          constraints: const BoxConstraints(minHeight: 140),
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: scaffoldBg,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: iconFg.withValues(alpha: 0.2),
-                            ),
-                          ),
-                          child: SelectableText(
-                            !_developerOptionsEnabled
-                                ? l.devOptionsDisabledMsg
-                                : _logPreview.isEmpty
-                                ? l.noLogsYet
-                                : _logPreview,
-                            style: TextStyle(
-                              fontFamily: 'monospace',
-                              fontSize: 11,
-                              color: iconFg.withValues(alpha: 0.85),
-                            ),
-                          ),
-                        ),
-                      ],
+                  child: SelectableText(
+                    !_developerOptionsEnabled
+                        ? l.devOptionsDisabledMsg
+                        : _logPreview.isEmpty
+                        ? l.noLogsYet
+                        : _logPreview,
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 11.5,
+                      height: 1.5,
+                      color: m3.onSurfaceVariant,
                     ),
                   ),
                 ),
               ],
             ),
+    );
+  }
+}
+
+// ───────── private shared widgets ─────────
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader(this.label);
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 0, 8),
+      child: Text(
+        label.toUpperCase(),
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 1.5,
+          color: Theme.of(context).colorScheme.primary,
+        ),
+      ),
+    );
+  }
+}
+
+class _GroupedCard extends StatelessWidget {
+  const _GroupedCard({required this.children});
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final m3 = Theme.of(context).m3;
+    final separated = <Widget>[];
+    for (var i = 0; i < children.length; i++) {
+      if (i > 0) {
+        separated.add(
+          Divider(height: 1, color: m3.outlineVariant, indent: 56),
+        );
+      }
+      separated.add(children[i]);
+    }
+    return Container(
+      decoration: BoxDecoration(
+        color: m3.surfaceContainer,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(children: separated),
+    );
+  }
+}
+
+class _SwitchRow extends StatelessWidget {
+  const _SwitchRow({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final m3 = theme.m3;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          Icon(icon, size: 24, color: m3.onSurfaceVariant),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    color: cs.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: m3.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Switch.adaptive(value: value, onChanged: onChanged),
+        ],
+      ),
+    );
+  }
+}
+
+enum InfoTone { neutral, warn, danger }
+
+class _InfoCard extends StatelessWidget {
+  const _InfoCard({required this.text, this.tone = InfoTone.neutral, this.icon});
+  final String text;
+  final InfoTone tone;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final m3 = theme.m3;
+    final Color accent;
+    final Color textColor;
+    switch (tone) {
+      case InfoTone.warn:
+        accent = m3.warning;
+        textColor = cs.onSurface;
+        break;
+      case InfoTone.danger:
+        accent = cs.error;
+        textColor = cs.error;
+        break;
+      case InfoTone.neutral:
+        accent = cs.primary;
+        textColor = cs.onSurface;
+        break;
+    }
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 16, 12),
+      decoration: BoxDecoration(
+        color: m3.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+        border: Border(left: BorderSide(color: accent, width: 3)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 18, color: accent),
+            const SizedBox(width: 10),
+          ],
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(fontSize: 13, height: 1.4, color: textColor),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
