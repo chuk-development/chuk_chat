@@ -935,11 +935,15 @@ class _ProviderPill extends StatelessWidget {
       children: [
         buildIconWidget(provider.iconUrl, Icons.business, size: 16),
         const SizedBox(width: 6),
-        Text(
-          provider.name,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: textColor,
-            fontWeight: FontWeight.w600,
+        Flexible(
+          child: Text(
+            provider.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: textColor,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ],
