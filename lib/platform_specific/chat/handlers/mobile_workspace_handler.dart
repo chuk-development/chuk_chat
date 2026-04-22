@@ -410,71 +410,83 @@ class MobileWorkspaceHandler {
   }
 
   // ---------------------------------------------------------------------------
-  // Widget builder – compact workspace indicator (for the input area)
+  // Widget builder – slim top floating project pill
   // ---------------------------------------------------------------------------
 
-  /// Builds a row showing the workspace name, context summary, and a close
-  /// button. Intended for the area just above the text input field.
-  static Widget buildProjectIndicator({
+  /// Slim pill rendered at the top of the chat UI while a workspace is
+  /// selected. Shows the workspace name with a close button. Tapping the pill
+  /// (outside the close button) is a no-op by default — callers can wrap in a
+  /// [GestureDetector] if they want navigation.
+  static Widget buildTopProjectPill({
     required ThemeData theme,
     required String selectedWorkspaceId,
     required VoidCallback onClearProject,
-    required ValueChanged<String> onShowSnackBar,
   }) {
     final workspace = WorkspaceStorageService.getWorkspace(selectedWorkspaceId);
     if (workspace == null) return const SizedBox.shrink();
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: theme.colorScheme.primary.withValues(alpha: 0.3),
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.folder, size: 18, color: theme.colorScheme.primary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
+    final isDark = theme.brightness == Brightness.dark;
+    final Color pillColor = isDark
+        ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.92)
+        : theme.colorScheme.surface.withValues(alpha: 0.94);
+    final Color borderColor = theme.colorScheme.outlineVariant.withValues(
+      alpha: 0.6,
+    );
+    return Align(
+      alignment: Alignment.topCenter,
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 320),
+          padding: const EdgeInsets.fromLTRB(12, 6, 6, 6),
+          decoration: BoxDecoration(
+            color: pillColor,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: borderColor, width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 12,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.folder_outlined,
+                size: 16,
+                color: workspace.displayColor,
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
                   workspace.name,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                   style: TextStyle(
                     fontSize: 13,
-                    color: theme.colorScheme.onSurface,
                     fontWeight: FontWeight.w500,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  WorkspaceMessageService.getProjectContextSummary(workspace),
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                    color: theme.colorScheme.onSurface,
                   ),
                 ),
-              ],
-            ),
-          ),
-          GestureDetector(
-            onTap: () {
-              onClearProject();
-              onShowSnackBar('Workspace cleared');
-            },
-            child: Padding(
-              padding: const EdgeInsets.all(4),
-              child: Icon(
-                Icons.close,
-                size: 18,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
               ),
-            ),
+              const SizedBox(width: 6),
+              InkWell(
+                customBorder: const CircleBorder(),
+                onTap: onClearProject,
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Icon(
+                    Icons.close,
+                    size: 14,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

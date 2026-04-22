@@ -1267,9 +1267,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     );
   }
 
-  /// Build a compact workspace indicator for the input area
-  Widget _buildProjectIndicator(ThemeData theme) {
-    return MobileWorkspaceHandler.buildProjectIndicator(
+  /// Build the slim floating pill shown at the top of the chat while a
+  /// workspace is selected.
+  Widget _buildTopProjectPill(ThemeData theme) {
+    return MobileWorkspaceHandler.buildTopProjectPill(
       theme: theme,
       selectedWorkspaceId: _selectedWorkspaceId!,
       onClearProject: () {
@@ -1277,7 +1278,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           _selectedWorkspaceId = null;
         });
       },
-      onShowSnackBar: _showSnackBar,
     );
   }
 
@@ -2970,13 +2970,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              // Workspace indicator
-                              if (kFeatureWorkspaces &&
-                                  _selectedWorkspaceId != null)
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 8),
-                                  child: _buildProjectIndicator(theme),
-                                ),
                               _buildSearchBar(
                                 isCompactMode: isCompactModeForModelDropdown,
                                 theme: theme,
@@ -3001,6 +2994,17 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
               ),
             ),
           ),
+          // Floating workspace pill at the top of the chat
+          if (kFeatureWorkspaces && _selectedWorkspaceId != null)
+            Positioned(
+              top: mediaQuery.padding.top + 8,
+              left: effectiveHorizontalPadding,
+              right: effectiveHorizontalPadding,
+              child: IgnorePointer(
+                ignoring: false,
+                child: _buildTopProjectPill(theme),
+              ),
+            ),
           // Loading indicator when switching chats
           if (_isLoadingChat)
             Positioned.fill(
