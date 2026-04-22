@@ -6,6 +6,7 @@ import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/models/client_tool.dart';
 import 'package:chuk_chat/pages/connector_detail_page.dart';
+import 'package:chuk_chat/services/developer_options_service.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/tool_call_handler.dart';
 import 'package:chuk_chat/services/tool_executor.dart';
@@ -90,6 +91,7 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
     _showToolCalls = widget.config.showToolCalls;
     _allowMarkdownToolCalls = widget.config.allowMarkdownToolCalls;
     _toolExecutor = ToolCallHandler().toolExecutor;
+    DeveloperOptionsService.enabledNotifier.addListener(_onDevOptionsChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       // Keep route transition smooth, then hydrate tool prefs.
@@ -100,6 +102,19 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         }),
       );
     });
+  }
+
+  @override
+  void dispose() {
+    DeveloperOptionsService.enabledNotifier.removeListener(
+      _onDevOptionsChanged,
+    );
+    super.dispose();
+  }
+
+  void _onDevOptionsChanged() {
+    if (!mounted) return;
+    setState(() {});
   }
 
   Future<void> _loadToolPreferences() async {
@@ -406,9 +421,25 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
     return '${cleaned.substring(0, maxChars - 3)}...';
   }
 
+  // GitHub and Spotify integrations ship behind Developer Options — the
+  // server-side OAuth is wired up but we're not advertising them yet.
+  static const Set<ToolCategory> _devOnlyCategories = {
+    ToolCategory.github,
+    ToolCategory.spotify,
+  };
+
+  bool _isCategoryDevOnly(ToolCategory category) =>
+      _devOnlyCategories.contains(category) &&
+      !DeveloperOptionsService.enabledNotifier.value;
+
   List<ClientTool> _visibleTools() {
     final tools = _toolExecutor.allRegisteredTools
         .where((tool) => tool.name != 'find_tools')
+        .where((tool) {
+          final category =
+              ToolExecutor.toolCategories[tool.name] ?? ToolCategory.basic;
+          return !_isCategoryDevOnly(category);
+        })
         .toList();
 
     tools.sort((a, b) {

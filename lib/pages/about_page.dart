@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -7,6 +8,7 @@ import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/developer_options_service.dart';
 import 'package:chuk_chat/services/update_check_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/nice_snackbar.dart';
 
 class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
@@ -62,11 +64,10 @@ class _AboutPageState extends State<AboutPage> {
     final l = AppLocalizations.of(context)!;
 
     if (DeveloperOptionsService.enabledNotifier.value) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l.devOptionsAlreadyEnabled),
-          duration: const Duration(seconds: 1),
-        ),
+      NiceSnackBar.show(
+        context,
+        l.devOptionsAlreadyEnabled,
+        duration: const Duration(seconds: 1),
       );
       return;
     }
@@ -85,22 +86,20 @@ class _AboutPageState extends State<AboutPage> {
       setState(() {
         _remainingDeveloperTaps = 3;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l.devOptionsEnabled),
-          duration: const Duration(seconds: 2),
-        ),
+      NiceSnackBar.show(
+        context,
+        l.devOptionsEnabled,
+        duration: const Duration(seconds: 2),
       );
       return;
     }
 
     if (!mounted) return;
     final taps = _remainingDeveloperTaps;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(l.devOptionsTaps(taps)),
-        duration: const Duration(seconds: 1),
-      ),
+    NiceSnackBar.show(
+      context,
+      l.devOptionsTaps(taps),
+      duration: const Duration(seconds: 1),
     );
   }
 
@@ -146,23 +145,19 @@ class _AboutPageState extends State<AboutPage> {
                         GestureDetector(
                           onTap: _handleVersionTap,
                           child: Container(
-                            width: 80,
-                            height: 80,
+                            width: 88,
+                            height: 88,
+                            padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(20),
-                              gradient: LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [
-                                  colorScheme.primary,
-                                  m3.tertiaryContainer,
-                                ],
-                              ),
+                              color: m3.surfaceContainerHigh,
                             ),
-                            child: Icon(
-                              Icons.chat_bubble_outline,
-                              size: 40,
-                              color: colorScheme.onPrimary,
+                            child: SvgPicture.asset(
+                              'assets/logo.svg',
+                              colorFilter: ColorFilter.mode(
+                                colorScheme.onSurface,
+                                BlendMode.srcIn,
+                              ),
                             ),
                           ),
                         ),
