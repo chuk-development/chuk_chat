@@ -14,7 +14,6 @@ import 'package:chuk_chat/services/password_change_service.dart';
 import 'package:chuk_chat/services/password_reset_service.dart';
 import 'package:chuk_chat/services/profile_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
-import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 
 class AccountSettingsPage extends StatefulWidget {
@@ -93,6 +92,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
   Future<void> _saveAccountSettings() async {
     if (_profile == null) return;
 
+    // Cache localizations before any async gap.
+    final l = AppLocalizations.of(context)!;
+
     setState(() {
       _isSaving = true;
       _errorMessage = null;
@@ -109,12 +111,12 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       String? emailNotice;
 
       if (newEmail.isEmpty) {
-        throw ProfileServiceException(AppLocalizations.of(context)!.emailCannotBeEmpty);
+        throw ProfileServiceException(l.emailCannotBeEmpty);
       }
 
       if (newEmail != _profile!.email) {
         await SupabaseService.auth.updateUser(UserAttributes(email: newEmail));
-        emailNotice = AppLocalizations.of(context)!.emailUpdated(newEmail);
+        emailNotice = l.emailUpdated(newEmail);
       }
 
       if (!mounted) return;
@@ -127,7 +129,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            emailNotice ?? AppLocalizations.of(context)!.saved,
+            emailNotice ?? l.saved,
             style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
           ),
           backgroundColor: Theme.of(context).colorScheme.primary,
@@ -157,12 +159,13 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       if (!mounted) return;
       setState(() {
         _isSaving = false;
-        _errorMessage = AppLocalizations.of(context)!.failedToSaveProfile(error.toString());
+        _errorMessage = l.failedToSaveProfile(error.toString());
       });
     }
   }
 
-  Widget _buildRecoverChatsSection(ThemeData theme, Color iconFg, [AppLocalizations? localizations]) {
+  // Recovery section only shows when there are locked chats.
+  Widget _buildRecoverChatsSection([AppLocalizations? localizations]) {
     final l = localizations ?? AppLocalizations.of(context)!;
     final user = SupabaseService.auth.currentUser;
     if (user == null || !KeyVersionService.hasPreviousKeys(user)) {
@@ -173,58 +176,31 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     if (lockedCount == 0) return const SizedBox.shrink();
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 24),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.primary.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: theme.colorScheme.primary.withValues(alpha: 0.3),
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.lock, size: 20, color: theme.colorScheme.primary),
-                  const SizedBox(width: 8),
-                  Text(
-                    l.encryptedChatRecovery,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: iconFg,
-                    ),
+        const _SectionHeader('Chat Recovery'),
+        _InfoCard(
+          text: l.lockedChatsCount(lockedCount),
+          tone: InfoTone.neutral,
+          icon: Icons.lock_outline,
+        ),
+        const SizedBox(height: 12),
+        _GroupedCard(
+          children: [
+            _SettingsRow(
+              icon: Icons.lock_open,
+              title: l.encryptedChatRecovery,
+              subtitle: l.recoverChats,
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const RecoverChatsPage(),
                   ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                l.lockedChatsCount(lockedCount),
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: iconFg.withValues(alpha: 0.7),
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const RecoverChatsPage(),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.lock_open, size: 18),
-                  label: Text(l.recoverChats),
-                ),
-              ),
-            ],
-          ),
+                );
+              },
+            ),
+          ],
         ),
       ],
     );
@@ -298,6 +274,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
 
   Future<void> _deleteAccount() async {
     final l = AppLocalizations.of(context)!;
+    final cs = Theme.of(context).colorScheme;
     // ── Step 1: First warning ──
     final step1 = await showDialog<bool>(
       context: context,
@@ -305,9 +282,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       builder: (ctx) => AlertDialog(
         title: Row(
           children: [
-            const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
+            Icon(Icons.warning_amber_rounded, color: cs.error, size: 28),
             const SizedBox(width: 10),
-            Text(l.deleteAccountQuestion),
+            Expanded(child: Text(l.deleteAccountQuestion)),
           ],
         ),
         content: Text(l.deleteAccountConfirmBody),
@@ -317,7 +294,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
             child: Text(l.cancel),
           ),
           TextButton(
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(foregroundColor: cs.error),
             onPressed: () => Navigator.of(ctx).pop(true),
             child: Text(l.yesDelete),
           ),
@@ -334,9 +311,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       builder: (ctx) => AlertDialog(
         title: Row(
           children: [
-            const Icon(Icons.delete_forever, color: Colors.red, size: 28),
+            Icon(Icons.delete_forever, color: cs.error, size: 28),
             const SizedBox(width: 10),
-            Text(l.thisIsPermanent),
+            Expanded(child: Text(l.thisIsPermanent)),
           ],
         ),
         content: Text(l.finalDeleteWarning),
@@ -346,7 +323,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
             child: Text(l.noKeepMyAccount),
           ),
           TextButton(
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(foregroundColor: cs.error),
             onPressed: () => Navigator.of(ctx).pop(true),
             child: Text(l.deleteEverything),
           ),
@@ -380,7 +357,6 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                   decoration: InputDecoration(
                     labelText: l.password,
                     errorText: errorText,
-                    border: const OutlineInputBorder(),
                     prefixIcon: const Icon(Icons.lock_outline),
                   ),
                   onSubmitted: isVerifying
@@ -436,7 +412,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                 child: Text(l.cancel),
               ),
               TextButton(
-                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                style: TextButton.styleFrom(foregroundColor: cs.error),
                 onPressed: isVerifying
                     ? null
                     : () async {
@@ -537,9 +513,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
-    final Color scaffoldBg = theme.scaffoldBackgroundColor;
-    final Color iconFg = theme.resolvedIconColor;
-    final TextStyle? titleTextStyle = theme.appBarTheme.titleTextStyle;
+    final cs = theme.colorScheme;
 
     Widget bodyContent;
 
@@ -558,7 +532,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
-              ElevatedButton(
+              FilledButton(
                 onPressed: _loadProfile,
                 child: Text(l.retry),
               ),
@@ -571,212 +545,56 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         padding: const EdgeInsets.all(16),
         children: [
           if (_errorMessage != null)
-            Container(
-              padding: const EdgeInsets.all(12),
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color: Colors.red.withValues(alpha: 0.1),
-                border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                _errorMessage!,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: Colors.redAccent,
-                ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _InfoCard(
+                text: _errorMessage!,
+                tone: InfoTone.danger,
+                icon: Icons.error_outline,
               ),
             ),
-          _AccountSectionCard(
-            title: l.profile,
-            description: l.profileSubtitle,
-            child: Column(
-              children: [
-                TextFormField(
+
+          // Profile
+          const _SectionHeader('Profile'),
+          _GroupedCard(
+            children: [
+              _FieldRow(
+                icon: Icons.person_outline,
+                label: l.displayName,
+                child: TextFormField(
                   controller: _displayNameCtrl,
-                  decoration: InputDecoration(
-                    labelText: l.displayName,
-                    hintText: l.displayNameHint,
-                  ),
                   textCapitalization: TextCapitalization.words,
+                  decoration: InputDecoration(
+                    hintText: l.displayNameHint,
+                    isDense: true,
+                  ),
                 ),
-                const SizedBox(height: 16),
-                TextFormField(
+              ),
+              _FieldRow(
+                icon: Icons.mail_outline,
+                label: l.emailAddress,
+                child: TextFormField(
                   controller: _emailCtrl,
-                  decoration: InputDecoration(
-                    labelText: l.emailAddress,
-                    hintText: l.emailAddressHint,
-                  ),
                   keyboardType: TextInputType.emailAddress,
+                  decoration: InputDecoration(
+                    hintText: l.emailAddressHint,
+                    isDense: true,
+                  ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          const SizedBox(height: 24),
-          _AccountSectionCard(
-            title: l.security,
-            description: l.securitySubtitle,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(l.changePassword, style: theme.textTheme.titleMedium),
-                const SizedBox(height: 6),
-                Text(
-                  l.changePasswordSubtitle,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: iconFg.withValues(alpha: 0.7),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                if (_passwordChangeError != null)
-                  Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.red.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: Colors.red.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: Text(
-                      _passwordChangeError!,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.redAccent,
-                      ),
-                    ),
-                  ),
-                if (_passwordChangeNotice != null)
-                  Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.green.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: Colors.green.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: Text(
-                      _passwordChangeNotice!,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.green.shade400,
-                      ),
-                    ),
-                  ),
-                TextField(
-                  controller: _currentPasswordCtrl,
-                  decoration: InputDecoration(
-                    labelText: l.currentPassword,
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscureCurrentPassword
-                            ? Icons.visibility_off
-                            : Icons.visibility,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _obscureCurrentPassword = !_obscureCurrentPassword;
-                        });
-                      },
-                    ),
-                  ),
-                  obscureText: _obscureCurrentPassword,
-                  textInputAction: TextInputAction.next,
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _newPasswordCtrl,
-                  decoration: InputDecoration(
-                    labelText: l.newPassword,
-                    helperText: l.minCharsPassword,
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscureNewPassword
-                            ? Icons.visibility_off
-                            : Icons.visibility,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _obscureNewPassword = !_obscureNewPassword;
-                        });
-                      },
-                    ),
-                  ),
-                  obscureText: _obscureNewPassword,
-                  textInputAction: TextInputAction.next,
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _confirmPasswordCtrl,
-                  decoration: InputDecoration(
-                    labelText: l.confirmNewPassword,
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscureConfirmPassword
-                            ? Icons.visibility_off
-                            : Icons.visibility,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _obscureConfirmPassword = !_obscureConfirmPassword;
-                        });
-                      },
-                    ),
-                  ),
-                  obscureText: _obscureConfirmPassword,
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) {
-                    if (!_isChangingPassword) {
-                      _changePassword();
-                    }
-                  },
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: _isChangingPassword ? null : _changePassword,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: theme.colorScheme.primary,
-                      foregroundColor: theme.colorScheme.onPrimary,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    child: _isChangingPassword
-                        ? SizedBox(
-                            height: 18,
-                            width: 18,
-                            child: CircularProgressIndicator(
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                theme.colorScheme.onPrimary,
-                              ),
-                              strokeWidth: 2,
-                            ),
-                          )
-                        : Text(l.updatePassword),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Recover Encrypted Chats section
-          _buildRecoverChatsSection(theme, iconFg),
-          const SizedBox(height: 32),
+          const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
-            height: 48,
-            child: ElevatedButton.icon(
+            child: FilledButton.icon(
               icon: _isSaving
                   ? SizedBox(
-                      height: 18,
-                      width: 18,
+                      height: 16,
+                      width: 16,
                       child: CircularProgressIndicator(
                         valueColor: AlwaysStoppedAnimation<Color>(
-                          theme.colorScheme.onPrimary,
+                          cs.onPrimary,
                         ),
                         strokeWidth: 2,
                       ),
@@ -786,64 +604,182 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
               onPressed: _isSaving || _profile == null
                   ? null
                   : _saveAccountSettings,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: theme.colorScheme.primary,
-                foregroundColor: theme.colorScheme.onPrimary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+
+          // Security
+          const _SectionHeader('Security'),
+          if (_passwordChangeError != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _InfoCard(
+                text: _passwordChangeError!,
+                tone: InfoTone.danger,
+                icon: Icons.error_outline,
+              ),
+            ),
+          if (_passwordChangeNotice != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _InfoCard(
+                text: _passwordChangeNotice!,
+                tone: InfoTone.success,
+                icon: Icons.check_circle_outline,
+              ),
+            ),
+          _GroupedCard(
+            children: [
+              _FieldRow(
+                icon: Icons.lock_outline,
+                label: l.currentPassword,
+                child: TextField(
+                  controller: _currentPasswordCtrl,
+                  obscureText: _obscureCurrentPassword,
+                  textInputAction: TextInputAction.next,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscureCurrentPassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                        size: 20,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscureCurrentPassword =
+                              !_obscureCurrentPassword;
+                        });
+                      },
+                    ),
+                  ),
                 ),
+              ),
+              _FieldRow(
+                icon: Icons.lock_reset,
+                label: l.newPassword,
+                helper: l.minCharsPassword,
+                child: TextField(
+                  controller: _newPasswordCtrl,
+                  obscureText: _obscureNewPassword,
+                  textInputAction: TextInputAction.next,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscureNewPassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                        size: 20,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscureNewPassword = !_obscureNewPassword;
+                        });
+                      },
+                    ),
+                  ),
+                ),
+              ),
+              _FieldRow(
+                icon: Icons.check_circle_outline,
+                label: l.confirmNewPassword,
+                child: TextField(
+                  controller: _confirmPasswordCtrl,
+                  obscureText: _obscureConfirmPassword,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) {
+                    if (!_isChangingPassword) {
+                      _changePassword();
+                    }
+                  },
+                  decoration: InputDecoration(
+                    isDense: true,
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscureConfirmPassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                        size: 20,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscureConfirmPassword =
+                              !_obscureConfirmPassword;
+                        });
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.tonalIcon(
+              icon: _isChangingPassword
+                  ? SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          cs.onSecondaryContainer,
+                        ),
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Icon(Icons.password),
+              label: Text(l.updatePassword),
+              onPressed: _isChangingPassword ? null : _changePassword,
+            ),
+          ),
+
+          // Chat Recovery (conditional).
+          _buildRecoverChatsSection(l),
+
+          const SizedBox(height: 24),
+
+          // Danger Zone
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 0, 8),
+            child: Text(
+              'DANGER ZONE',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1.5,
+                color: cs.error,
               ),
             ),
           ),
-          const SizedBox(height: 32),
-          const Divider(),
-          const SizedBox(height: 16),
-          _AccountSectionCard(
-            title: l.dangerZone,
-            description: l.dangerZoneSubtitle,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  l.deleteAccountWarning,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: iconFg.withValues(alpha: 0.7),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red.shade600,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+          _InfoCard(
+            text: l.deleteAccountWarning,
+            tone: InfoTone.danger,
+            icon: Icons.warning_amber_rounded,
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: cs.errorContainer,
+                foregroundColor: cs.onErrorContainer,
+              ),
+              icon: _isDeletingAccount
+                  ? SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          cs.onErrorContainer,
+                        ),
+                        strokeWidth: 2,
                       ),
-                    ),
-                    onPressed: _isDeletingAccount ? null : _deleteAccount,
-                    child: _isDeletingAccount
-                        ? const SizedBox(
-                            height: 18,
-                            width: 18,
-                            child: CircularProgressIndicator(
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.white,
-                              ),
-                              strokeWidth: 2,
-                            ),
-                          )
-                        : Text(
-                            l.deleteAccount,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 16,
-                            ),
-                          ),
-                  ),
-                ),
-              ],
+                    )
+                  : const Icon(Icons.delete_forever),
+              onPressed: _isDeletingAccount ? null : _deleteAccount,
+              label: Text(l.deleteAccount),
             ),
           ),
           const SizedBox(height: 32),
@@ -852,60 +788,258 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     }
 
     return Scaffold(
-      backgroundColor: scaffoldBg,
       appBar: AppBar(
-        title: Text(l.accountSettings, style: titleTextStyle),
-        backgroundColor: scaffoldBg,
-        elevation: 0,
-        iconTheme: IconThemeData(color: iconFg),
+        title: Text(l.accountSettings),
+        centerTitle: false,
       ),
       body: bodyContent,
     );
   }
 }
 
-class _AccountSectionCard extends StatelessWidget {
-  final String title;
-  final String description;
-  final Widget child;
+// ───────── private shared widgets ─────────
 
-  const _AccountSectionCard({
-    required this.title,
-    required this.description,
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader(this.label);
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 0, 8),
+      child: Text(
+        label.toUpperCase(),
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 1.5,
+          color: Theme.of(context).colorScheme.primary,
+        ),
+      ),
+    );
+  }
+}
+
+class _GroupedCard extends StatelessWidget {
+  const _GroupedCard({required this.children});
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final m3 = Theme.of(context).m3;
+    final separated = <Widget>[];
+    for (var i = 0; i < children.length; i++) {
+      if (i > 0) {
+        separated.add(
+          Divider(height: 1, color: m3.outlineVariant, indent: 56),
+        );
+      }
+      separated.add(children[i]);
+    }
+    return Container(
+      decoration: BoxDecoration(
+        color: m3.surfaceContainer,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(children: separated),
+    );
+  }
+}
+
+class _FieldRow extends StatelessWidget {
+  const _FieldRow({
+    required this.icon,
+    required this.label,
     required this.child,
+    this.helper,
   });
+
+  final IconData icon;
+  final String label;
+  final String? helper;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final Color bg = theme.scaffoldBackgroundColor.lighten(0.05);
-    final Color iconFg = theme.resolvedIconColor;
-    final Color border = iconFg.withValues(alpha: 0.25);
-
-    return Card(
-      color: bg,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: border, width: 1),
+    final cs = theme.colorScheme;
+    final m3 = theme.m3;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 20),
+            child: Icon(icon, size: 24, color: m3.onSurfaceVariant),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: m3.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                DefaultTextStyle.merge(
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: cs.onSurface,
+                  ),
+                  child: child,
+                ),
+                if (helper != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    helper!,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: m3.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
-      margin: EdgeInsets.zero,
+    );
+  }
+}
+
+class _SettingsRow extends StatelessWidget {
+  const _SettingsRow({
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    this.trailing,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final m3 = theme.m3;
+    return InkWell(
+      onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
           children: [
-            Text(title, style: theme.textTheme.titleLarge),
-            const SizedBox(height: 6),
-            Text(
-              description,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: iconFg.withValues(alpha: 0.7),
+            Icon(icon, size: 24, color: m3.onSurfaceVariant),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: cs.onSurface,
+                    ),
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle!,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: m3.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
-            const SizedBox(height: 20),
-            child,
+            if (trailing != null) ...[
+              const SizedBox(width: 8),
+              IconTheme.merge(
+                data: IconThemeData(color: m3.onSurfaceVariant),
+                child: trailing!,
+              ),
+            ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+enum InfoTone { neutral, warn, danger, success }
+
+class _InfoCard extends StatelessWidget {
+  const _InfoCard({
+    required this.text,
+    this.tone = InfoTone.neutral,
+    this.icon,
+  });
+
+  final String text;
+  final InfoTone tone;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final m3 = theme.m3;
+    final Color accent;
+    final Color textColor;
+    switch (tone) {
+      case InfoTone.warn:
+        accent = m3.warning;
+        textColor = cs.onSurface;
+        break;
+      case InfoTone.danger:
+        accent = cs.error;
+        textColor = cs.error;
+        break;
+      case InfoTone.success:
+        accent = m3.success;
+        textColor = cs.onSurface;
+        break;
+      case InfoTone.neutral:
+        accent = cs.primary;
+        textColor = cs.onSurface;
+        break;
+    }
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 16, 12),
+      decoration: BoxDecoration(
+        color: m3.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+        border: Border(left: BorderSide(color: accent, width: 3)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 18, color: accent),
+            const SizedBox(width: 10),
+          ],
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(fontSize: 13, height: 1.4, color: textColor),
+            ),
+          ),
+        ],
       ),
     );
   }

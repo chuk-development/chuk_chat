@@ -2,20 +2,19 @@ import 'dart:convert';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/pages/usage_details_page.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
-import 'package:chuk_chat/utils/color_extensions.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/credit_display.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 
 final SupabaseClient _supabase = Supabase.instance.client;
 
-// API base URL - resolved from ApiConfigService (debug → local, release → production)
+// API base URL — resolved from ApiConfigService (debug → local, release → production)
 final String _apiBaseUrl = ApiConfigService.apiBaseUrl;
 
 Future<void> _launchExternalUrl(String url) async {
@@ -270,24 +269,23 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final Color scaffoldBg = theme.scaffoldBackgroundColor;
-    final Color accent = theme.colorScheme.primary;
-    final Color iconFg = theme.resolvedIconColor;
-    final TextStyle? titleTextStyle = theme.appBarTheme.titleTextStyle;
+    final colorScheme = theme.colorScheme;
+    final m3 = theme.m3;
     final bool isMobile =
         kPlatformMobile || MediaQuery.of(context).size.width < 720;
     final l = AppLocalizations.of(context)!;
 
     if (_isLoading) {
       return Scaffold(
-        backgroundColor: scaffoldBg,
+        backgroundColor: colorScheme.surface,
         appBar: AppBar(
-          title: Text(l.subscription, style: titleTextStyle),
-          backgroundColor: scaffoldBg,
+          title: Text(l.subscription),
+          centerTitle: false,
+          backgroundColor: colorScheme.surface,
           elevation: 0,
-          iconTheme: IconThemeData(color: iconFg),
+          scrolledUnderElevation: 0,
         ),
-        body: Center(child: CircularProgressIndicator(color: accent)),
+        body: const Center(child: CircularProgressIndicator()),
       );
     }
 
@@ -295,149 +293,85 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
     final currentPlan = _userStatus?['current_plan'] as String?;
 
     return Scaffold(
-      backgroundColor: scaffoldBg,
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        title: Text(l.subscription, style: titleTextStyle),
-        backgroundColor: scaffoldBg,
+        title: Text(l.subscription),
+        centerTitle: false,
+        backgroundColor: colorScheme.surface,
         elevation: 0,
-        iconTheme: IconThemeData(color: iconFg),
+        scrolledUnderElevation: 0,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Credit Display
-            const CreditDisplay(),
-            const SizedBox(height: 12),
-
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: scaffoldBg.lighten(0.05),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: accent.withValues(alpha: 0.35)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.query_stats, color: accent, size: 20),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          l.openUsageDetailsInfo,
-                          style: TextStyle(
-                            color: iconFg.withValues(alpha: 0.82),
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: _openUsageDetails,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: accent,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      icon: const Icon(Icons.query_stats),
-                      label: Text(
-                        l.openUsageDetails,
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          // ── Credits ────────────────────────────────────────────
+          const _SectionHeader('CREDITS'),
+          Container(
+            decoration: BoxDecoration(
+              color: m3.surfaceContainer,
+              borderRadius: BorderRadius.circular(20),
             ),
-            const SizedBox(height: 24),
-
-            // Current Plan Card (if subscribed)
-            if (hasSubscription) ...[
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: scaffoldBg.lighten(0.05),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: accent, width: 2),
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const CreditDisplay(),
+                const SizedBox(height: 12),
+                Text(
+                  l.openUsageDetailsInfo,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: m3.onSurfaceVariant,
+                  ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+                const SizedBox(height: 16),
+                FilledButton.tonalIcon(
+                  icon: const Icon(Icons.query_stats, size: 18),
+                  label: Text(l.openUsageDetails),
+                  onPressed: _openUsageDetails,
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // ── Plans ──────────────────────────────────────────────
+          const _SectionHeader('PLANS'),
+
+          // Mobile notice
+          if (isMobile) ...[
+            _InfoCard(l.subscriptionDesktopOnly),
+            const SizedBox(height: 12),
+          ],
+
+          // Active plan card (if subscribed)
+          if (hasSubscription)
+            _PlanCard(
+              title: currentPlan ?? l.plus,
+              price: l.pricePerMonth,
+              features: [
+                l.monthlyCredits,
+                l.unusedCreditsExpire,
+              ],
+              badgeLabel: l.active,
+              badgeTone: _BadgeTone.success,
+              highlighted: false,
+              child: !isMobile
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Icon(Icons.check_circle, color: accent, size: 24),
-                        const SizedBox(width: 8),
-                        Text(
-                          l.currentPlan,
-                          style: TextStyle(
-                            color: accent,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      currentPlan ?? l.plus,
-                      style: TextStyle(
-                        color: iconFg,
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      l.pricePerMonth,
-                      style: TextStyle(
-                        color: iconFg.withValues(alpha: 0.7),
-                        fontSize: 18,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      l.monthlyCredits,
-                      style: TextStyle(
-                        color: iconFg.withValues(alpha: 0.7),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    Text(
-                      l.unusedCreditsExpire,
-                      style: TextStyle(
-                        color: iconFg.withValues(alpha: 0.6),
-                        fontSize: 12,
-                      ),
-                    ),
-                    if (!isMobile) ...[
-                      const SizedBox(height: 20),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: _isProcessing
-                              ? null
-                              : _handleManageBilling,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: accent,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
+                        const SizedBox(height: 16),
+                        FilledButton.icon(
+                          onPressed:
+                              _isProcessing ? null : _handleManageBilling,
                           icon: _isProcessing
                               ? const SizedBox(
                                   height: 18,
@@ -449,323 +383,395 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                                     ),
                                   ),
                                 )
-                              : const Icon(Icons.credit_card),
+                              : const Icon(Icons.credit_card, size: 18),
                           label: Text(
                             _isProcessing ? l.opening : l.manageBilling,
-                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(999),
+                            ),
                           ),
                         ),
+                        const SizedBox(height: 12),
+                        Text(
+                          l.manageBillingSubtitle,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: Colors.white.withValues(alpha: 0.8),
+                          ),
+                        ),
+                      ],
+                    )
+                  : null,
+            ),
+
+          if (hasSubscription) const SizedBox(height: 16),
+
+          // Plus plan subscribe card (if not already subscribed)
+          if (!hasSubscription)
+            _PlanCard(
+              title: l.plus,
+              price: '€20/month',
+              features: [
+                l.getCreditsMonthly,
+                l.accessAllModels,
+                l.imageGeneration,
+                l.voiceMode,
+                l.textChatReasoning,
+              ],
+              badgeLabel: 'Popular',
+              badgeTone: _BadgeTone.primary,
+              highlighted: true,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      l.creditsExplanation,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: Colors.white.withValues(alpha: 0.85),
                       ),
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: accent.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: accent.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  if (!isMobile) ...[
+                    const SizedBox(height: 16),
+                    // Consent checkbox — inline rich text with terms + withdrawal links.
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: Checkbox(
+                            value: _agreedToTerms,
+                            onChanged: (value) {
+                              setState(() => _agreedToTerms = value ?? false);
+                            },
+                            side: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.8),
+                              width: 1.5,
+                            ),
+                            checkColor: colorScheme.onPrimary,
+                            fillColor: WidgetStateProperty.resolveWith(
+                              (states) {
+                                if (states.contains(WidgetState.selected)) {
+                                  return Colors.white;
+                                }
+                                return Colors.transparent;
+                              },
+                            ),
                           ),
                         ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.info_outline, color: accent, size: 18),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                l.manageBillingSubtitle,
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () {
+                              setState(
+                                () => _agreedToTerms = !_agreedToTerms,
+                              );
+                            },
+                            child: Text.rich(
+                              TextSpan(
                                 style: TextStyle(
-                                  color: iconFg.withValues(alpha: 0.8),
+                                  color: Colors.white.withValues(alpha: 0.9),
                                   fontSize: 12,
+                                  height: 1.4,
                                 ),
+                                children: [
+                                  TextSpan(text: l.immediateAccessAck),
+                                  TextSpan(
+                                    text: l.rightOfWithdrawal,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      decoration: TextDecoration.underline,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    recognizer: TapGestureRecognizer()
+                                      ..onTap = () => _launchExternalUrl(
+                                            'https://chuk.chat/en/cancellation/',
+                                          ),
+                                  ),
+                                  TextSpan(text: l.onceServiceBegins),
+                                  TextSpan(
+                                    text: l.termsOfService,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      decoration: TextDecoration.underline,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    recognizer: TapGestureRecognizer()
+                                      ..onTap = () => _launchExternalUrl(
+                                            'https://chuk.chat/en/terms/',
+                                          ),
+                                  ),
+                                  const TextSpan(text: '.'),
+                                ],
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(height: 32),
-            ],
-
-            // Plan Header
-            Text(
-              hasSubscription
-                  ? l.subscription
-                  : l.subscribeToGetCredits,
-              style: TextStyle(
-                color: iconFg,
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Mobile notice
-            if (isMobile) ...[
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: scaffoldBg.lighten(0.05),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: accent.withValues(alpha: 0.4)),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.desktop_windows, color: accent, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        l.subscriptionDesktopOnly,
-                        style: TextStyle(
-                          color: iconFg.withValues(alpha: 0.7),
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-
-            // Plus Plan Card
-            Card(
-              elevation: hasSubscription ? 8 : 4,
-              shadowColor: Colors.black.withValues(alpha: 0.1),
-              color: scaffoldBg.lighten(0.05),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: BorderSide(
-                  color: hasSubscription
-                      ? accent
-                      : iconFg.withValues(alpha: 0.3),
-                  width: hasSubscription ? 2 : 1,
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (hasSubscription)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: accent,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          l.active,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 12),
-                    Text(
-                      l.plus,
-                      style: TextStyle(
-                        color: iconFg,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        Text(
-                          '€',
-                          style: TextStyle(
-                            color: accent,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          '20',
-                          style: TextStyle(
-                            color: accent,
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          '/month',
-                          style: TextStyle(
-                            color: iconFg.withValues(alpha: 0.7),
-                            fontSize: 14,
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 16),
-                    _buildFeature(
-                      accent,
-                      iconFg,
-                      l.getCreditsMonthly,
-                    ),
-                    _buildFeature(accent, iconFg, l.accessAllModels),
-                    _buildFeature(accent, iconFg, l.imageGeneration),
-                    _buildFeature(accent, iconFg, l.voiceMode),
-                    _buildFeature(accent, iconFg, l.textChatReasoning),
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: accent.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        l.creditsExplanation,
-                        style: TextStyle(
-                          color: iconFg.withValues(alpha: 0.8),
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                    if (!isMobile && !hasSubscription) ...[
-                      const SizedBox(height: 20),
-                      // Consent checkbox
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: Checkbox(
-                              value: _agreedToTerms,
-                              onChanged: (value) {
-                                setState(() => _agreedToTerms = value ?? false);
-                              },
-                              activeColor: accent,
-                            ),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: _isProcessing || !_agreedToTerms
+                            ? null
+                            : _handleSubscribe,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: colorScheme.primary,
+                          disabledBackgroundColor:
+                              Colors.white.withValues(alpha: 0.35),
+                          disabledForegroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: GestureDetector(
-                              onTap: () {
-                                setState(
-                                  () => _agreedToTerms = !_agreedToTerms,
-                                );
-                              },
-                              child: Text.rich(
-                                TextSpan(
-                                  style: TextStyle(
-                                    color: iconFg.withValues(alpha: 0.8),
-                                    fontSize: 12,
-                                    height: 1.4,
+                          elevation: 0,
+                        ),
+                        child: _isProcessing
+                            ? SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    colorScheme.primary,
                                   ),
-                                  children: [
-                                    TextSpan(
-                                      text: l.immediateAccessAck,
-                                    ),
-                                    TextSpan(
-                                      text: l.rightOfWithdrawal,
-                                      style: TextStyle(
-                                        color: accent,
-                                        decoration: TextDecoration.underline,
-                                      ),
-                                      recognizer: TapGestureRecognizer()
-                                        ..onTap = () => _launchExternalUrl(
-                                          'https://chuk.chat/en/cancellation/',
-                                        ),
-                                    ),
-                                    TextSpan(
-                                      text: l.onceServiceBegins,
-                                    ),
-                                    TextSpan(
-                                      text: l.termsOfService,
-                                      style: TextStyle(
-                                        color: accent,
-                                        decoration: TextDecoration.underline,
-                                      ),
-                                      recognizer: TapGestureRecognizer()
-                                        ..onTap = () => _launchExternalUrl(
-                                          'https://chuk.chat/en/terms/',
-                                        ),
-                                    ),
-                                    const TextSpan(text: '.'), // period after Terms of Service
-                                  ],
+                                ),
+                              )
+                            : Text(
+                                l.subscribeNow,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 15,
                                 ),
                               ),
-                            ),
-                          ),
-                        ],
                       ),
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: _isProcessing || !_agreedToTerms
-                              ? null
-                              : _handleSubscribe,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: accent,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            elevation: 4,
-                          ),
-                          child: _isProcessing
-                              ? const SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      Colors.white,
-                                    ),
-                                  ),
-                                )
-                              : Text(
-                                  l.subscribeNow,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ],
-                ),
+                ],
               ),
             ),
-          ],
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Reusable private pieces ─────────────────────────────────────────────
+
+class _SectionHeader extends StatelessWidget {
+  final String label;
+  const _SectionHeader(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 1.5,
+          color: colorScheme.primary,
         ),
       ),
     );
   }
+}
 
-  Widget _buildFeature(Color accent, Color iconFg, String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: Row(
+enum _BadgeTone { primary, success, warn, neutral }
+
+class _Badge extends StatelessWidget {
+  final String label;
+  final _BadgeTone tone;
+  const _Badge(this.label, {this.tone = _BadgeTone.neutral});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final m3 = theme.m3;
+    late Color bg;
+    late Color fg;
+    switch (tone) {
+      case _BadgeTone.primary:
+        bg = m3.primaryContainer;
+        fg = m3.onPrimaryContainer;
+        break;
+      case _BadgeTone.success:
+        bg = m3.successContainer;
+        fg = m3.onSuccessContainer;
+        break;
+      case _BadgeTone.warn:
+        bg = m3.warningContainer;
+        fg = m3.onWarningContainer;
+        break;
+      case _BadgeTone.neutral:
+        bg = m3.surfaceContainerHigh;
+        fg = m3.onSurfaceVariant;
+        break;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: fg,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.15,
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoCard extends StatelessWidget {
+  final String text;
+  const _InfoCard(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final m3 = theme.m3;
+    return Container(
+      decoration: BoxDecoration(
+        color: m3.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+        border: Border(
+          left: BorderSide(color: theme.colorScheme.primary, width: 3),
+        ),
+      ),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      child: Text(
+        text,
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: m3.onSurfaceVariant,
+          height: 1.4,
+        ),
+      ),
+    );
+  }
+}
+
+class _PlanCard extends StatelessWidget {
+  final String title;
+  final String price;
+  final List<String> features;
+  final String? badgeLabel;
+  final _BadgeTone badgeTone;
+  final bool highlighted;
+  final Widget? child;
+
+  const _PlanCard({
+    required this.title,
+    required this.price,
+    required this.features,
+    required this.highlighted,
+    this.badgeLabel,
+    this.badgeTone = _BadgeTone.neutral,
+    this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final m3 = theme.m3;
+
+    // Highlighted plans get the gradient treatment; others surfaceContainer.
+    final BoxDecoration decoration = highlighted
+        ? BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                m3.primaryContainer,
+                m3.tertiaryContainer,
+              ],
+            ),
+          )
+        : BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            color: m3.surfaceContainer,
+          );
+
+    final Color titleColor =
+        highlighted ? Colors.white : colorScheme.onSurface;
+    final Color priceColor =
+        highlighted ? Colors.white : colorScheme.onSurface;
+    final Color featureColor = highlighted
+        ? Colors.white.withValues(alpha: 0.9)
+        : m3.onSurfaceVariant;
+    final Color checkColor =
+        highlighted ? Colors.white : colorScheme.primary;
+
+    return Container(
+      decoration: decoration,
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.check_circle, color: accent, size: 16),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(
-                color: iconFg.withValues(alpha: 0.9),
-                fontSize: 14,
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: titleColor,
+                  ),
+                ),
               ),
+              if (badgeLabel != null) _Badge(badgeLabel!, tone: badgeTone),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            price,
+            style: theme.textTheme.headlineMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: priceColor,
             ),
           ),
+          const SizedBox(height: 16),
+          for (final feature in features)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.check_circle, size: 16, color: checkColor),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      feature,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: featureColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ?child,
         ],
       ),
     );

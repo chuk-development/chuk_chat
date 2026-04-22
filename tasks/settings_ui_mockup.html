@@ -1,0 +1,2000 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Chuk Chat — Settings UI Mockup (Before / After)</title>
+<style>
+  :root {
+    --md-sys-color-primary: #a8c7fa;
+    --md-sys-color-on-primary: #062e6f;
+    --md-sys-color-primary-container: #284777;
+    --md-sys-color-on-primary-container: #d8e2ff;
+    --md-sys-color-secondary-container: #3e4759;
+    --md-sys-color-on-secondary-container: #dae2f9;
+    --md-sys-color-tertiary-container: #52437a;
+    --md-sys-color-on-tertiary-container: #ead9ff;
+    --md-sys-color-surface: #111318;
+    --md-sys-color-surface-container-low: #191c20;
+    --md-sys-color-surface-container: #1d2024;
+    --md-sys-color-surface-container-high: #272a2f;
+    --md-sys-color-surface-container-highest: #32353a;
+    --md-sys-color-on-surface: #e2e2e9;
+    --md-sys-color-on-surface-variant: #c4c6d0;
+    --md-sys-color-outline: #8d9199;
+    --md-sys-color-outline-variant: #43474e;
+    --md-sys-color-error: #ffb4ab;
+    --md-sys-color-error-container: #93000a;
+    --md-sys-color-on-error-container: #ffdad6;
+    --md-sys-color-success: #7fd79a;
+
+    /* OLD-style tokens — match current Flutter look */
+    --old-bg: #1a1a1a;
+    --old-card: #242424;
+    --old-card-border: rgba(196,198,208,0.3);
+    --old-text: #e5e5e5;
+    --old-text-dim: #a0a0a0;
+    --old-accent: #4a9eff;
+    --old-danger: #c62828;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: #0a0c10;
+    color: var(--md-sys-color-on-surface);
+    font-family: 'Roboto', 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+  }
+  button { font: inherit; color: inherit; }
+  input, textarea, select { font: inherit; color: inherit; }
+
+  .page {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 32px 24px 64px;
+  }
+  .page-header { margin-bottom: 32px; }
+  .page-header h1 { font-size: 28px; font-weight: 500; letter-spacing: -0.5px; margin-bottom: 6px; }
+  .page-header p { color: var(--md-sys-color-on-surface-variant); font-size: 14px; }
+  .hint-banner {
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: var(--md-sys-color-surface-container);
+    border-radius: 8px;
+    font-size: 12px;
+    color: var(--md-sys-color-on-surface-variant);
+  }
+  .hint-banner kbd {
+    padding: 1px 6px;
+    background: var(--md-sys-color-surface-container-highest);
+    border-radius: 4px;
+    font-size: 11px;
+  }
+
+  .compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+    align-items: start;
+  }
+  @media (max-width: 1000px) { .compare { grid-template-columns: 1fr; } }
+
+  .col-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--md-sys-color-on-surface-variant);
+    margin-bottom: 12px;
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: var(--md-sys-color-surface-container);
+    border: 1px solid var(--md-sys-color-outline-variant);
+  }
+  .col-label.now { color: #ffb3b3; border-color: #5a2020; background: #2a1616; }
+  .col-label.new { color: var(--md-sys-color-success); border-color: #234730; background: #142a1c; }
+
+  .phone {
+    width: 100%;
+    border-radius: 28px;
+    overflow: hidden;
+    border: 1px solid var(--md-sys-color-outline-variant);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    position: relative;
+  }
+  .phone.old { background: var(--old-bg); color: var(--old-text); }
+  .phone.new { background: var(--md-sys-color-surface); }
+
+  .appbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    border-bottom: 1px solid transparent;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+  .phone.old .appbar { background: var(--old-bg); border-bottom: 1px solid #2a2a2a; }
+  .phone.new .appbar { background: var(--md-sys-color-surface); }
+
+  .appbar .back {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    display: grid; place-items: center;
+    font-size: 22px;
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+  }
+  .phone.old .appbar .back { color: var(--old-text); }
+  .phone.new .appbar .back { color: var(--md-sys-color-on-surface); }
+  .phone.old .appbar .back:hover { background: rgba(255,255,255,0.06); }
+  .phone.new .appbar .back:hover { background: var(--md-sys-color-surface-container-high); }
+
+  .appbar h2 { font-size: 22px; font-weight: 400; flex: 1; }
+  .phone.old .appbar h2 { font-weight: 500; font-size: 20px; }
+
+  .appbar .trail-btn {
+    padding: 8px 16px;
+    border-radius: 999px;
+    border: 0;
+    font-weight: 500;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .phone.new .appbar .trail-btn {
+    background: var(--md-sys-color-primary);
+    color: var(--md-sys-color-on-primary);
+  }
+  .phone.old .appbar .trail-btn {
+    background: var(--old-accent);
+    color: white;
+    border-radius: 6px;
+  }
+
+  .scroll {
+    padding: 16px;
+    height: 820px;
+    overflow-y: auto;
+  }
+  .scroll::-webkit-scrollbar { width: 6px; }
+  .scroll::-webkit-scrollbar-thumb { background: var(--md-sys-color-outline-variant); border-radius: 3px; }
+
+  .view { display: none; }
+  .view.active { display: block; animation: slideIn 0.22s cubic-bezier(0.2, 0, 0, 1); }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(18px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  /* ============================================================ */
+  /* ============ OLD — current Flutter aesthetic =============== */
+  /* ============================================================ */
+  .old-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 16px;
+    background: var(--old-card);
+    border: 1px solid var(--old-card-border);
+    border-radius: 12px;
+    margin-bottom: 16px;
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
+  }
+  .old-card:hover { background: #2c2c2c; }
+  .old-card .icon {
+    width: 24px; height: 24px;
+    color: var(--old-accent);
+    display: grid; place-items: center;
+    font-size: 22px;
+    flex-shrink: 0;
+  }
+  .old-card .body { flex: 1; min-width: 0; }
+  .old-card .title { font-size: 16px; font-weight: 600; color: var(--old-text); }
+  .old-card .subtitle { font-size: 13px; color: var(--old-text-dim); margin-top: 2px; }
+  .old-card .chev { color: var(--old-text-dim); font-size: 16px; }
+
+  .old-gap-lg { height: 32px; }
+
+  .old-section-card {
+    background: var(--old-card);
+    border: 1px solid var(--old-card-border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .old-section-card h3 {
+    font-size: 15px; font-weight: 600;
+    margin-bottom: 4px;
+    color: var(--old-text);
+  }
+  .old-section-card .desc {
+    font-size: 12px;
+    color: var(--old-text-dim);
+    margin-bottom: 16px;
+  }
+  .old-field-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid #2f2f2f;
+    gap: 12px;
+  }
+  .old-field-row:last-child { border-bottom: 0; }
+  .old-field-row .label { font-size: 14px; color: var(--old-text); }
+  .old-field-row .sub { font-size: 12px; color: var(--old-text-dim); margin-top: 2px; }
+
+  .old-input {
+    width: 100%;
+    background: #1a1a1a;
+    border: 1px solid #3a3a3a;
+    border-radius: 6px;
+    padding: 10px 12px;
+    color: var(--old-text);
+    font-size: 14px;
+    outline: 0;
+    margin-top: 8px;
+  }
+  .old-input:focus { border-color: var(--old-accent); }
+  textarea.old-input { min-height: 80px; resize: vertical; }
+
+  .old-btn {
+    padding: 10px 20px;
+    border: 0;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    background: var(--old-accent);
+    color: white;
+  }
+  .old-btn.block { width: 100%; padding: 14px; }
+  .old-btn.outline { background: transparent; border: 1px solid var(--old-text-dim); color: var(--old-text); }
+  .old-btn.danger { background: var(--old-danger); }
+
+  .old-switch {
+    position: relative;
+    width: 44px; height: 24px;
+    border-radius: 12px;
+    background: #3a3a3a;
+    cursor: pointer;
+    transition: 0.2s;
+    flex-shrink: 0;
+  }
+  .old-switch::after {
+    content: '';
+    position: absolute;
+    left: 2px; top: 2px;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: #e5e5e5;
+    transition: 0.2s;
+  }
+  .old-switch.on { background: var(--old-accent); }
+  .old-switch.on::after { left: 22px; }
+
+  .old-logout {
+    width: 100%;
+    padding: 14px;
+    background: var(--old-danger);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .old-swatch-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 6px;
+    margin: 8px 0;
+  }
+  .old-swatch {
+    aspect-ratio: 1;
+    border-radius: 4px;
+    cursor: pointer;
+    border: 2px solid transparent;
+  }
+  .old-swatch.selected { border-color: var(--old-accent); }
+
+  .old-log-box {
+    background: #0d0d0d;
+    color: #9cdcfe;
+    padding: 12px;
+    border-radius: 6px;
+    font-family: Consolas, monospace;
+    font-size: 11px;
+    max-height: 160px;
+    overflow-y: auto;
+    white-space: pre;
+    border: 1px solid #2a2a2a;
+  }
+  .old-model-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px;
+    border: 1px solid #3a3a3a;
+    border-radius: 6px;
+    margin-bottom: 8px;
+  }
+  .old-model-row.active { border-color: var(--old-accent); background: rgba(74,158,255,0.05); }
+  .old-plan-card {
+    background: var(--old-card);
+    border: 1px solid var(--old-card-border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+
+  /* ============================================================ */
+  /* ============ NEW — Material You ============================ */
+  /* ============================================================ */
+  .hero {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px;
+    background: linear-gradient(135deg,
+      var(--md-sys-color-primary-container) 0%,
+      var(--md-sys-color-tertiary-container) 100%);
+    border-radius: 28px;
+    margin-bottom: 24px;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    border: 0; width: 100%; text-align: left;
+  }
+  .hero::after {
+    content: '';
+    position: absolute;
+    right: -40px; top: -40px;
+    width: 160px; height: 160px;
+    background: radial-gradient(circle, rgba(255,255,255,0.08), transparent 70%);
+    pointer-events: none;
+  }
+  .avatar {
+    width: 64px; height: 64px;
+    border-radius: 50%;
+    background: var(--md-sys-color-primary);
+    color: var(--md-sys-color-on-primary);
+    display: grid; place-items: center;
+    font-size: 26px; font-weight: 500;
+    flex-shrink: 0;
+  }
+  .hero-body { flex: 1; min-width: 0; }
+  .hero-name { font-size: 20px; font-weight: 500; color: var(--md-sys-color-on-primary-container); }
+  .hero-email { font-size: 13px; color: var(--md-sys-color-on-primary-container); opacity: 0.85; margin-top: 2px; }
+  .plan-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    margin-top: 8px; padding: 4px 12px;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 999px;
+    font-size: 12px; font-weight: 500;
+    color: var(--md-sys-color-on-primary-container);
+  }
+  .plan-chip .upgrade { color: #ffd166; font-weight: 600; }
+  .hero .chev { color: var(--md-sys-color-on-primary-container); opacity: 0.7; font-size: 20px; }
+
+  .section-header {
+    padding: 20px 4px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--md-sys-color-primary);
+  }
+
+  .group {
+    background: var(--md-sys-color-surface-container);
+    border-radius: 20px;
+    overflow: hidden;
+  }
+  .group .row {
+    display: flex; align-items: center; gap: 16px;
+    padding: 14px 16px;
+    cursor: pointer;
+    position: relative;
+    background: transparent;
+    border: 0;
+    width: 100%;
+    text-align: left;
+    color: inherit;
+  }
+  .group .row:hover { background: var(--md-sys-color-surface-container-high); }
+  .group .row + .row::before {
+    content: '';
+    position: absolute;
+    left: 56px; right: 16px; top: 0;
+    height: 1px;
+    background: var(--md-sys-color-outline-variant);
+    opacity: 0.5;
+  }
+  .row .ico {
+    width: 24px; height: 24px;
+    display: grid; place-items: center;
+    color: var(--md-sys-color-on-surface-variant);
+    font-size: 20px; flex-shrink: 0;
+  }
+  .row .ico.accent { color: var(--md-sys-color-primary); }
+  .row .body { flex: 1; min-width: 0; }
+  .row .title { font-size: 15px; font-weight: 500; color: var(--md-sys-color-on-surface); }
+  .row .subtitle {
+    font-size: 12px;
+    color: var(--md-sys-color-on-surface-variant);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .row .trail {
+    display: flex; align-items: center; gap: 10px;
+    color: var(--md-sys-color-on-surface-variant);
+  }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px; font-weight: 600;
+    background: var(--md-sys-color-secondary-container);
+    color: var(--md-sys-color-on-secondary-container);
+  }
+  .badge.green { background: #143a1f; color: var(--md-sys-color-success); }
+  .badge.amber { background: #3d2e00; color: #ffc860; }
+  .badge.primary { background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); }
+  .badge.red { background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); }
+
+  .chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .mini-chip {
+    padding: 3px 8px;
+    font-size: 11px;
+    border-radius: 999px;
+    background: var(--md-sys-color-surface-container-highest);
+    color: var(--md-sys-color-on-surface-variant);
+  }
+  .mini-chip .dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--md-sys-color-success);
+    margin-right: 4px;
+    vertical-align: middle;
+  }
+
+  .dev-tile { background: transparent; border: 1px dashed var(--md-sys-color-outline-variant); }
+  .dev-tile .title { color: var(--md-sys-color-on-surface-variant); }
+
+  .sign-out {
+    width: 100%;
+    padding: 14px;
+    margin-top: 24px;
+    background: transparent;
+    color: var(--md-sys-color-error);
+    border: 1px solid var(--md-sys-color-outline);
+    border-radius: 999px;
+    font-size: 14px; font-weight: 500;
+    cursor: pointer;
+  }
+  .sign-out:hover { background: rgba(255,180,171,0.08); }
+  .version {
+    text-align: center;
+    font-size: 11px;
+    color: var(--md-sys-color-on-surface-variant);
+    margin-top: 16px;
+    opacity: 0.7;
+  }
+
+  .search {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 16px;
+    background: var(--md-sys-color-surface-container-high);
+    border-radius: 999px;
+    margin-bottom: 20px;
+    color: var(--md-sys-color-on-surface-variant);
+  }
+  .search input {
+    flex: 1; border: 0; outline: 0;
+    background: transparent;
+    font-size: 14px;
+  }
+  .search input::placeholder { color: var(--md-sys-color-on-surface-variant); }
+
+  .switch {
+    position: relative;
+    width: 52px; height: 32px;
+    border-radius: 16px;
+    background: var(--md-sys-color-surface-container-highest);
+    border: 2px solid var(--md-sys-color-outline);
+    cursor: pointer;
+    transition: 0.2s;
+    flex-shrink: 0;
+  }
+  .switch::after {
+    content: '';
+    position: absolute;
+    left: 4px; top: 4px;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--md-sys-color-outline);
+    transition: 0.2s;
+  }
+  .switch.on { background: var(--md-sys-color-primary); border-color: var(--md-sys-color-primary); }
+  .switch.on::after { left: 24px; width: 24px; height: 24px; top: 2px; background: var(--md-sys-color-on-primary); }
+
+  .tf {
+    display: block;
+    width: 100%;
+    background: var(--md-sys-color-surface-container-high);
+    border: 1px solid var(--md-sys-color-outline-variant);
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-size: 14px;
+    outline: 0;
+    margin-bottom: 12px;
+  }
+  .tf:focus { border-color: var(--md-sys-color-primary); }
+  textarea.tf { min-height: 100px; resize: vertical; font-family: inherit; }
+
+  .field-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--md-sys-color-on-surface-variant);
+    margin: 4px 4px 6px;
+  }
+  .helper {
+    font-size: 11px;
+    color: var(--md-sys-color-on-surface-variant);
+    margin: -8px 4px 16px;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center; justify-content: center;
+    gap: 8px;
+    padding: 12px 20px;
+    border-radius: 999px;
+    border: 0;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 14px;
+  }
+  .btn-filled { background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); }
+  .btn-tonal { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
+  .btn-outline { background: transparent; border: 1px solid var(--md-sys-color-outline); color: var(--md-sys-color-on-surface); }
+  .btn-danger { background: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .btn-block { width: 100%; }
+
+  .swatch-grid {
+    display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px;
+    margin-bottom: 12px;
+  }
+  .swatch {
+    aspect-ratio: 1; border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid transparent;
+    position: relative;
+  }
+  .swatch.selected { border-color: var(--md-sys-color-on-surface); box-shadow: 0 0 0 3px var(--md-sys-color-surface); }
+  .swatch.selected::after {
+    content: '✓';
+    position: absolute; inset: 0;
+    display: grid; place-items: center;
+    color: white; font-weight: 700; font-size: 14px;
+  }
+
+  .slider-wrap { padding: 8px 4px 12px; }
+  .slider-row { display: flex; align-items: center; gap: 12px; }
+  .slider {
+    flex: 1;
+    -webkit-appearance: none; appearance: none;
+    height: 4px;
+    background: var(--md-sys-color-surface-container-highest);
+    border-radius: 2px;
+    outline: 0;
+  }
+  .slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: var(--md-sys-color-primary);
+    cursor: pointer;
+  }
+  .slider-val {
+    min-width: 50px; text-align: right;
+    color: var(--md-sys-color-primary);
+    font-weight: 600;
+  }
+
+  select.tf {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23c4c6d0' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 16px center;
+    padding-right: 40px;
+  }
+
+  .info-card {
+    display: flex; gap: 12px;
+    padding: 14px 16px;
+    background: var(--md-sys-color-surface-container-low);
+    border-left: 3px solid var(--md-sys-color-primary);
+    border-radius: 12px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--md-sys-color-on-surface-variant);
+  }
+  .info-card.warn { border-left-color: #ffc860; }
+  .info-card.danger { border-left-color: var(--md-sys-color-error); color: var(--md-sys-color-error); }
+
+  .plan-card {
+    background: linear-gradient(135deg,
+      var(--md-sys-color-primary-container) 0%,
+      var(--md-sys-color-tertiary-container) 100%);
+    border-radius: 24px;
+    padding: 24px;
+    margin-bottom: 16px;
+    color: var(--md-sys-color-on-primary-container);
+    position: relative;
+  }
+  .plan-card .plan-title { font-size: 24px; font-weight: 500; }
+  .plan-card .plan-price { font-size: 32px; font-weight: 300; margin: 8px 0 16px; }
+  .plan-card .plan-price small { font-size: 14px; opacity: 0.7; }
+  .plan-card ul { list-style: none; margin: 16px 0; }
+  .plan-card li { padding: 4px 0; font-size: 14px; }
+  .plan-card li::before { content: '✓ '; color: var(--md-sys-color-success); font-weight: 700; margin-right: 4px; }
+  .plan-card .plan-badge { position: absolute; top: 16px; right: 16px; }
+
+  .model-card {
+    background: var(--md-sys-color-surface-container);
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+  .model-header { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
+  .model-name { font-size: 15px; font-weight: 500; }
+  .model-provider {
+    padding: 4px 10px;
+    background: var(--md-sys-color-secondary-container);
+    border-radius: 999px;
+    font-size: 11px;
+    color: var(--md-sys-color-on-secondary-container);
+  }
+  .model-meta {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    margin-top: 12px;
+    font-size: 12px;
+    color: var(--md-sys-color-on-surface-variant);
+  }
+  .model-meta span strong { color: var(--md-sys-color-on-surface); }
+
+  .log-box {
+    background: #050609;
+    color: #a5f0b0;
+    padding: 12px;
+    border-radius: 12px;
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    font-size: 11px;
+    max-height: 180px;
+    overflow-y: auto;
+    white-space: pre;
+  }
+
+  /* Toast */
+  .toast {
+    position: absolute;
+    left: 50%; bottom: 20px;
+    transform: translateX(-50%);
+    padding: 10px 20px;
+    border-radius: 999px;
+    font-size: 13px;
+    opacity: 0;
+    transition: 0.25s;
+    pointer-events: none;
+    z-index: 10;
+  }
+  .phone.old .toast { background: #333; color: white; border-radius: 4px; }
+  .phone.new .toast { background: var(--md-sys-color-surface-container-highest); color: var(--md-sys-color-on-surface); }
+
+  /* Issue callouts */
+  .issues {
+    margin-top: 40px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+  @media (max-width: 1000px) { .issues { grid-template-columns: 1fr; } }
+  .issues > div {
+    background: var(--md-sys-color-surface-container);
+    border-radius: 20px;
+    padding: 20px 24px;
+  }
+  .issues h3 {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    color: var(--md-sys-color-primary);
+  }
+  .issues ul { padding-left: 18px; }
+  .issues li {
+    font-size: 13px;
+    color: var(--md-sys-color-on-surface-variant);
+    margin-bottom: 6px;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="page-header">
+    <h1>Chuk Chat — Settings UI</h1>
+    <p>Beide Spalten voll interaktiv mit echten Submenüs. Links: aktuelles Flutter-Design. Rechts: Material-You-Vorschlag.</p>
+    <div class="hint-banner">Klick beliebige Karte / Row → Submenu öffnet sich. <kbd>← Back</kbd> oder <kbd>Esc</kbd> kehrt zurück.</div>
+  </div>
+
+  <div class="compare">
+
+    <!-- ================================================================ -->
+    <!-- ================= OLD (fully interactive) ====================== -->
+    <!-- ================================================================ -->
+    <div>
+      <span class="col-label now">● Heute · flach, unkategorisiert</span>
+      <div class="phone old" id="old-phone">
+        <div class="appbar">
+          <button class="back" data-side="old" onclick="navOld('hub')" style="display:none;">←</button>
+          <h2 id="old-title">Settings</h2>
+        </div>
+        <div class="scroll">
+
+          <!-- HUB -->
+          <div class="view active" data-view="hub">
+            <button class="old-card" onclick="navOld('theme')">
+              <div class="icon">🎨</div>
+              <div class="body"><div class="title">Theme Settings</div><div class="subtitle">Customize theme settings</div></div>
+              <div class="chev">›</div>
+            </button>
+            <button class="old-card" onclick="navOld('customization')">
+              <div class="icon">⚙</div>
+              <div class="body"><div class="title">Customization</div><div class="subtitle">Configure UI behavior</div></div>
+              <div class="chev">›</div>
+            </button>
+            <button class="old-card" onclick="navOld('tools')">
+              <div class="icon">🔧</div>
+              <div class="body"><div class="title">Tool Calling</div><div class="subtitle">Manage tool calling settings</div></div>
+              <div class="chev">›</div>
+            </button>
+            <button class="old-card" onclick="navOld('dev')">
+              <div class="icon">🧪</div>
+              <div class="body"><div class="title">Developer Options</div><div class="subtitle">Diagnostics &amp; advanced toggles</div></div>
+              <div class="chev">›</div>
+            </button>
+            <button class="old-card" onclick="navOld('model')">
+              <div class="icon">🧠</div>
+              <div class="body"><div class="title">Model Selection</div><div class="subtitle">Pick AI model</div></div>
+              <div class="chev">›</div>
+            </button>
+            <button class="old-card" onclick="navOld('identity')">
+              <div class="icon">💬</div>
+              <div class="body"><div class="title">AI Identity &amp; Memory</div><div class="subtitle">System prompt &amp; memory</div></div>
+              <div class="chev">›</div>
+            </button>
+            <button class="old-card" onclick="navOld('pricing')">
+              <div class="icon">💳</div>
+              <div class="body"><div class="title">Pricing Plans</div><div class="subtitle">View subscription tiers</div></div>
+              <div class="chev">›</div>
+            </button>
+            <button class="old-card" onclick="navOld('account')">
+              <div class="icon">👤</div>
+              <div class="body"><div class="title">Account Settings</div><div class="subtitle">Profile, password, delete</div></div>
+              <div class="chev">›</div>
+            </button>
+            <div class="old-gap-lg"></div>
+            <button class="old-card" onclick="flashToastOld('Export started')">
+              <div class="icon">⬇</div>
+              <div class="body"><div class="title">Export Chats</div><div class="subtitle">Download JSON backup</div></div>
+              <div class="chev">›</div>
+            </button>
+            <div class="old-gap-lg"></div>
+            <button class="old-card" onclick="navOld('about')">
+              <div class="icon">ℹ</div>
+              <div class="body"><div class="title">About</div><div class="subtitle">Version &amp; credits</div></div>
+              <div class="chev">›</div>
+            </button>
+            <div class="old-gap-lg"></div>
+            <button class="old-logout" onclick="flashToastOld('Logged out')">Logout</button>
+          </div>
+
+          <!-- OLD THEME -->
+          <div class="view" data-view="theme" data-title="Theme Settings">
+            <div class="old-section-card">
+              <h3>Dark Mode</h3>
+              <div class="desc">Switch between light and dark themes</div>
+              <div class="old-field-row">
+                <div class="label">Dark mode</div>
+                <div class="old-switch on" onclick="toggleOld(this)"></div>
+              </div>
+              <div class="old-field-row">
+                <div class="label">Film grain effect</div>
+                <div class="old-switch" onclick="toggleOld(this)"></div>
+              </div>
+            </div>
+            <div class="old-section-card">
+              <h3>Accent Color</h3>
+              <div class="desc">Choose accent color or enter custom hex</div>
+              <div class="old-swatch-grid">
+                <div class="old-swatch" style="background:#4a9eff;"></div>
+                <div class="old-swatch selected" style="background:#7fd79a;"></div>
+                <div class="old-swatch" style="background:#ffb4ab;"></div>
+                <div class="old-swatch" style="background:#ffd166;"></div>
+                <div class="old-swatch" style="background:#c4a7e7;"></div>
+                <div class="old-swatch" style="background:#ff8fab;"></div>
+                <div class="old-swatch" style="background:#64d8cb;"></div>
+                <div class="old-swatch" style="background:#f4a261;"></div>
+              </div>
+              <input class="old-input" value="#7fd79a" maxlength="7">
+            </div>
+            <div class="old-section-card">
+              <h3>Icon/Foreground Color</h3>
+              <div class="old-swatch-grid" style="grid-template-columns:repeat(5,1fr);">
+                <div class="old-swatch selected" style="background:#ffffff;"></div>
+                <div class="old-swatch" style="background:#c4c6d0;"></div>
+                <div class="old-swatch" style="background:#8d9199;"></div>
+                <div class="old-swatch" style="background:#4a9eff;"></div>
+                <div class="old-swatch" style="background:#7fd79a;"></div>
+              </div>
+              <input class="old-input" value="#ffffff" maxlength="7">
+            </div>
+            <div class="old-section-card">
+              <h3>Background Color</h3>
+              <div class="old-swatch-grid">
+                <div class="old-swatch selected" style="background:#1a1a1a;"></div>
+                <div class="old-swatch" style="background:#121212;"></div>
+                <div class="old-swatch" style="background:#0d1b2a;"></div>
+                <div class="old-swatch" style="background:#1d1d2f;"></div>
+                <div class="old-swatch" style="background:#2d1b1b;"></div>
+                <div class="old-swatch" style="background:#1b2d1b;"></div>
+                <div class="old-swatch" style="background:#ffffff;"></div>
+                <div class="old-swatch" style="background:#f5f5f0;"></div>
+              </div>
+              <input class="old-input" value="#1a1a1a" maxlength="7">
+            </div>
+          </div>
+
+          <!-- OLD CUSTOMIZATION -->
+          <div class="view" data-view="customization" data-title="Customization">
+            <div class="old-section-card">
+              <h3>Language</h3>
+              <select class="old-input">
+                <option>English</option>
+                <option>Deutsch</option>
+                <option>Français</option>
+              </select>
+            </div>
+            <div class="old-section-card">
+              <h3>Voice Transcription</h3>
+              <div class="old-field-row">
+                <div>
+                  <div class="label">Auto-send voice transcription</div>
+                  <div class="sub">Auto-sends voice after 3 seconds of silence</div>
+                </div>
+                <div class="old-switch" onclick="toggleOld(this)"></div>
+              </div>
+            </div>
+            <div class="old-section-card">
+              <h3>Message Display</h3>
+              <div class="old-field-row">
+                <div class="label">Show reasoning tokens</div>
+                <div class="old-switch" onclick="toggleOld(this)"></div>
+              </div>
+              <div class="old-field-row">
+                <div class="label">Show model info</div>
+                <div class="old-switch on" onclick="toggleOld(this)"></div>
+              </div>
+              <div class="old-field-row">
+                <div class="label">Show tokens per second</div>
+                <div class="old-switch" onclick="toggleOld(this)"></div>
+              </div>
+              <div style="padding:12px 0;">
+                <div class="label" style="margin-bottom:6px;">Chat font size: <strong>14pt</strong></div>
+                <input type="range" min="10" max="24" value="14" style="width:100%;" oninput="this.previousElementSibling.querySelector('strong').textContent = this.value + 'pt'">
+              </div>
+              <div style="padding:8px 0;">
+                <div class="label" style="margin-bottom:6px;">Chat font family</div>
+                <select class="old-input" style="margin-top:0;">
+                  <option>Merriweather</option>
+                  <option>Roboto</option>
+                  <option>Inter</option>
+                </select>
+              </div>
+            </div>
+            <div class="old-section-card">
+              <h3>AI Context</h3>
+              <div class="desc">These affect how much history is sent to the AI</div>
+              <div class="old-field-row">
+                <div class="label">Recent images in context</div>
+                <div class="old-switch on" onclick="toggleOld(this)"></div>
+              </div>
+              <div class="old-field-row">
+                <div class="label">All images in context</div>
+                <div class="old-switch" onclick="toggleOld(this)"></div>
+              </div>
+              <div class="old-field-row">
+                <div class="label">Reasoning in context</div>
+                <div class="old-switch on" onclick="toggleOld(this)"></div>
+              </div>
+            </div>
+            <div class="old-section-card">
+              <h3>Downloads</h3>
+              <div class="old-field-row" style="cursor:pointer;" onclick="flashToastOld('Navigate to Download Defaults')">
+                <div>
+                  <div class="label">Download defaults</div>
+                  <div class="sub">~/Downloads · Always ask: off</div>
+                </div>
+                <div class="chev" style="color:var(--old-text-dim);">›</div>
+              </div>
+            </div>
+            <div class="old-section-card">
+              <h3>Auto Chat Titles</h3>
+              <div class="old-field-row">
+                <div class="label">Auto-generate titles</div>
+                <div class="old-switch on" onclick="toggleOld(this)"></div>
+              </div>
+              <textarea class="old-input">Summarize this conversation in 4 words or less.</textarea>
+              <div style="display:flex;gap:8px;margin-top:8px;">
+                <button class="old-btn outline" onclick="flashToastOld('Reset')">Reset</button>
+                <button class="old-btn" onclick="flashToastOld('Saved')">Save</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- OLD TOOLS -->
+          <div class="view" data-view="tools" data-title="Tool Calling">
+            <div class="old-section-card">
+              <h3>Engine</h3>
+              <div class="old-field-row">
+                <div class="label">Enable tool calling</div>
+                <div class="old-switch on" onclick="toggleOld(this)"></div>
+              </div>
+            </div>
+            <div class="old-section-card">
+              <h3>Behavior</h3>
+              <div class="old-field-row">
+                <div>
+                  <div class="label">Require tool discovery first</div>
+                  <div class="sub">AI must list tools before calling</div>
+                </div>
+                <div class="old-switch" onclick="toggleOld(this)"></div>
+              </div>
+              <div class="old-field-row">
+                <div>
+                  <div class="label">Markdown tool fallback</div>
+                  <div class="sub">Parse tool tags from plain text</div>
+                </div>
+                <div class="old-switch on" onclick="toggleOld(this)"></div>
+              </div>
+            </div>
+            <div class="old-section-card">
+              <h3>Display</h3>
+              <div class="old-field-row">
+                <div>
+                  <div class="label">Show tool activity</div>
+                  <div class="sub">Displays when tools run in chat</div>
+                </div>
+                <div class="old-switch on" onclick="toggleOld(this)"></div>
+              </div>
+            </div>
+            <div class="old-section-card">
+              <h3>Visual Output</h3>
+              <div class="old-field-row">
+                <div class="label">Enable map blocks</div>
+                <div class="old-switch on" onclick="toggleOld(this)"></div>
+              </div>
+              <div class="old-field-row">
+                <div class="label">Enable chart blocks</div>
+                <div class="old-switch on" onclick="toggleOld(this)"></div>
+              </div>
+            </div>
+            <div class="old-section-card">
+              <h3>Connectors · Search &amp; Web</h3>
+              <div class="old-field-row">
+                <div class="label">🔎 Web Search</div>
+                <div class="old-switch on" onclick="toggleOld(this)"></div>
+              </div>
+              <div class="old-field-row">
+                <div class="label">🌐 Web Crawl</div>
+                <div class="old-switch on" onclick="toggleOld(this)"></div>
+              </div>
+            </div>
+            <div class="old-section-card">
+              <h3>Connectors · GitHub</h3>
+              <div class="desc">
+                <span style="color:var(--md-sys-color-success);">●</span> Connected as chukfinley
+                <button class="old-btn outline" style="float:right;padding:4px 10px;font-size:12px;">Disconnect</button>
+              </div>
+              <div class="old-field-row"><div class="label">🐙 List Issues</div><div class="old-switch on" onclick="toggleOld(this)"></div></div>
+              <div class="old-field-row"><div class="label">🐙 Create PR</div><div class="old-switch on" onclick="toggleOld(this)"></div></div>
+            </div>
+            <div class="old-section-card">
+              <h3>Connectors · Slack</h3>
+              <div class="desc"><span style="color:var(--md-sys-color-success);">●</span> Connected</div>
+              <div class="old-field-row"><div class="label">💬 Send Message</div><div class="old-switch on" onclick="toggleOld(this)"></div></div>
+            </div>
+            <div class="old-section-card">
+              <h3>Connectors · Google Calendar</h3>
+              <div class="desc">
+                <span style="color:#888;">●</span> Not connected
+                <button class="old-btn" style="float:right;padding:4px 10px;font-size:12px;">Connect</button>
+              </div>
+            </div>
+            <button class="old-btn outline block" onclick="flashToastOld('Reset')">Reset All Tool Preferences</button>
+          </div>
+
+          <!-- OLD DEV -->
+          <div class="view" data-view="dev" data-title="Developer Options">
+            <div class="old-section-card">
+              <h3>Developer Options</h3>
+              <div class="desc">Advanced settings for debugging</div>
+              <div class="old-field-row">
+                <div class="label">Enable developer options</div>
+                <div class="old-switch on" onclick="toggleOld(this)"></div>
+              </div>
+            </div>
+            <div class="old-section-card">
+              <h3>Diagnostics Logging</h3>
+              <div class="old-field-row">
+                <div class="label">Enable diagnostics logging</div>
+                <div class="old-switch on" onclick="toggleOld(this)"></div>
+              </div>
+            </div>
+            <div class="old-section-card">
+              <h3>Log File</h3>
+              <div style="font-family:monospace;font-size:11px;padding:8px;background:#0d0d0d;border-radius:4px;word-break:break-all;">~/.local/share/chuk_chat/diagnostics.log</div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;">
+                <button class="old-btn outline" style="padding:6px 12px;font-size:12px;" onclick="flashToastOld('Refreshed')">Refresh</button>
+                <button class="old-btn outline" style="padding:6px 12px;font-size:12px;" onclick="flashToastOld('Copied')">Copy Recent</button>
+                <button class="old-btn outline" style="padding:6px 12px;font-size:12px;" onclick="flashToastOld('Copied')">Copy Focused Debug</button>
+                <button class="old-btn outline" style="padding:6px 12px;font-size:12px;" onclick="flashToastOld('Shared')">Share File</button>
+                <button class="old-btn outline" style="padding:6px 12px;font-size:12px;color:var(--old-danger);" onclick="flashToastOld('Cleared')">Clear</button>
+              </div>
+            </div>
+            <div class="old-section-card">
+              <h3>Recent Log Lines</h3>
+              <div class="old-log-box">[22:58:12] settings.load duration=42ms
+[22:58:12] auth.session valid=true
+[22:58:13] chat.preload count=142 cache=sqlite
+[22:58:13] tools.init connectors=12 enabled=4
+[22:58:14] supabase.sync ok delta=3
+[22:58:15] encryption.unlock keys=1 chats=142
+[22:58:16] ui.render frame=16ms ok
+[22:58:17] tools.github rate_limit=4850/5000
+[22:58:18] model.selected id=claude-opus-4-7
+[22:58:19] settings.refresh dev_options=true</div>
+            </div>
+          </div>
+
+          <!-- OLD MODEL -->
+          <div class="view" data-view="model" data-title="Model Selection">
+            <div class="old-section-card">
+              <input class="old-input" placeholder="Search models…" style="margin-top:0;">
+              <div class="desc" style="margin-top:8px;">12 models found</div>
+            </div>
+            <div class="old-section-card">
+              <h3>Models</h3>
+              <div class="old-model-row active">
+                <div>
+                  <div style="font-weight:600;">Claude Opus 4.7</div>
+                  <div class="sub">Ctx: 1M · Max Out: 8K · In: $15/M · Out: $75/M</div>
+                </div>
+                <select style="background:#1a1a1a;color:var(--old-text);border:1px solid #3a3a3a;border-radius:4px;padding:4px 8px;">
+                  <option>Anthropic</option>
+                </select>
+              </div>
+              <div class="old-model-row">
+                <div>
+                  <div style="font-weight:600;">Claude Sonnet 4.6</div>
+                  <div class="sub">Ctx: 200K · Max Out: 8K · In: $3/M · Out: $15/M</div>
+                </div>
+                <select style="background:#1a1a1a;color:var(--old-text);border:1px solid #3a3a3a;border-radius:4px;padding:4px 8px;">
+                  <option>Anthropic</option>
+                </select>
+              </div>
+              <div class="old-model-row">
+                <div>
+                  <div style="font-weight:600;">Claude Haiku 4.5</div>
+                  <div class="sub">Ctx: 200K · Max Out: 4K · In: $1/M · Out: $5/M</div>
+                </div>
+                <select style="background:#1a1a1a;color:var(--old-text);border:1px solid #3a3a3a;border-radius:4px;padding:4px 8px;">
+                  <option>Anthropic</option>
+                </select>
+              </div>
+              <div class="old-model-row">
+                <div>
+                  <div style="font-weight:600;">GPT-4o</div>
+                  <div class="sub">Ctx: 128K · Max Out: 16K · In: $2.50/M · Out: $10/M</div>
+                </div>
+                <select style="background:#1a1a1a;color:var(--old-text);border:1px solid #3a3a3a;border-radius:4px;padding:4px 8px;">
+                  <option>OpenAI</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- OLD IDENTITY -->
+          <div class="view" data-view="identity" data-title="AI Identity &amp; Memory">
+            <div class="old-section-card">
+              <h3>Identity System</h3>
+              <div class="old-field-row">
+                <div class="label">Identity system enabled</div>
+                <div class="old-switch on" onclick="toggleOld(this)"></div>
+              </div>
+            </div>
+            <div class="old-section-card">
+              <h3>Soul</h3>
+              <div class="desc">Core personality traits</div>
+              <textarea class="old-input" placeholder="Example: thoughtful, concise…">Helpful, direct, technical. Avoids filler.</textarea>
+            </div>
+            <div class="old-section-card">
+              <h3>User</h3>
+              <div class="desc">Who you are</div>
+              <textarea class="old-input" placeholder="Example: software engineer…">Software engineer. Deep Go, new to Flutter.</textarea>
+            </div>
+            <div class="old-section-card">
+              <h3>Memory</h3>
+              <div class="desc">Learned context</div>
+              <textarea class="old-input" placeholder="Example: prefers X…">Prefers short responses. Tests must pass before push.</textarea>
+              <button class="old-btn outline" onclick="flashToastOld('Import')">Import from another AI</button>
+            </div>
+            <div class="old-section-card">
+              <h3>System Prompt</h3>
+              <div class="desc">Raw instructions for the AI</div>
+              <textarea class="old-input" style="min-height:120px;">You are Chuk, an AI assistant. Follow user's preferences in memory.</textarea>
+              <div class="sub" style="text-align:right;">185 characters</div>
+            </div>
+            <button class="old-btn block" onclick="flashToastOld('Saved')">Save Changes</button>
+          </div>
+
+          <!-- OLD PRICING -->
+          <div class="view" data-view="pricing" data-title="Pricing Plans">
+            <div class="old-section-card">
+              <h3>Usage</h3>
+              <div style="font-size:24px;font-weight:600;">145 <span style="font-size:13px;color:var(--old-text-dim);font-weight:400;">credits remaining</span></div>
+              <button class="old-btn outline" style="margin-top:10px;" onclick="flashToastOld('Usage')">Open usage details</button>
+            </div>
+            <div class="old-plan-card">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div style="font-size:18px;font-weight:600;">Free</div>
+                <span style="padding:2px 8px;background:#143a1f;color:var(--md-sys-color-success);border-radius:4px;font-size:11px;">Active</span>
+              </div>
+              <div style="font-size:24px;font-weight:700;margin:6px 0;">€0/month</div>
+              <ul style="padding-left:20px;font-size:13px;color:var(--old-text-dim);">
+                <li>50 messages per day</li>
+                <li>Haiku model only</li>
+              </ul>
+            </div>
+            <div class="old-plan-card">
+              <div style="font-size:18px;font-weight:600;">Plus</div>
+              <div style="font-size:24px;font-weight:700;margin:6px 0;">€20/month</div>
+              <ul style="padding-left:20px;font-size:13px;color:var(--old-text-dim);">
+                <li>3,000 credits monthly</li>
+                <li>Access all models</li>
+                <li>Image generation</li>
+                <li>Voice mode</li>
+                <li>Text chat with reasoning</li>
+              </ul>
+              <div style="margin:10px 0;font-size:12px;color:var(--old-text-dim);">ℹ Credits = 1 API token unit</div>
+              <label style="display:flex;gap:6px;font-size:12px;color:var(--old-text-dim);margin-bottom:10px;">
+                <input type="checkbox"> I agree to terms and have read right of withdrawal
+              </label>
+              <button class="old-btn block" onclick="flashToastOld('Checkout')">Subscribe now</button>
+            </div>
+          </div>
+
+          <!-- OLD ACCOUNT -->
+          <div class="view" data-view="account" data-title="Account Settings">
+            <div class="old-section-card">
+              <h3>Profile</h3>
+              <div class="desc">Your display name and email</div>
+              <label class="label" style="font-size:12px;color:var(--old-text-dim);">Display name</label>
+              <input class="old-input" value="Chuk Finley">
+              <label class="label" style="font-size:12px;color:var(--old-text-dim);display:block;margin-top:8px;">Email address</label>
+              <input class="old-input" type="email" value="claude@chuk.dev">
+            </div>
+            <div class="old-section-card">
+              <h3>Security</h3>
+              <div class="desc">Change your password</div>
+              <input class="old-input" type="password" placeholder="Current password">
+              <input class="old-input" type="password" placeholder="New password · min 8 chars">
+              <input class="old-input" type="password" placeholder="Confirm new password">
+              <button class="old-btn" style="margin-top:10px;" onclick="flashToastOld('Password updated')">Update Password</button>
+            </div>
+            <button class="old-btn block" onclick="flashToastOld('Saved')">Save Changes</button>
+            <div class="old-gap-lg"></div>
+            <div class="old-section-card" style="border-color:#5a2020;">
+              <h3 style="color:var(--md-sys-color-error);">Danger Zone</h3>
+              <div class="desc">Deleting your account is permanent and cannot be undone.</div>
+              <button class="old-btn danger block" onclick="flashToastOld('Delete cancelled')">Delete Account</button>
+            </div>
+          </div>
+
+          <!-- OLD ABOUT -->
+          <div class="view" data-view="about" data-title="About">
+            <div class="old-section-card">
+              <h3>Chuk Chat</h3>
+              <div class="desc">Version 1.0.85 (build 20260422)</div>
+            </div>
+            <div class="old-section-card">
+              <h3>Legal</h3>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <button class="old-card" style="margin:0;" onclick="flashToastOld('Opening…')">
+                  <div class="icon">📜</div>
+                  <div class="body"><div class="title" style="font-size:14px;">Open Source Licenses</div></div>
+                  <div class="chev">›</div>
+                </button>
+                <button class="old-card" style="margin:0;" onclick="flashToastOld('Opening…')">
+                  <div class="icon">📄</div>
+                  <div class="body"><div class="title" style="font-size:14px;">Terms of Service</div></div>
+                  <div class="chev">↗</div>
+                </button>
+                <button class="old-card" style="margin:0;" onclick="flashToastOld('Opening…')">
+                  <div class="icon">🔒</div>
+                  <div class="body"><div class="title" style="font-size:14px;">Privacy Policy</div></div>
+                  <div class="chev">↗</div>
+                </button>
+              </div>
+            </div>
+            <div style="text-align:center;font-size:11px;color:var(--old-text-dim);padding:16px;">© 2026 Chuk Chat</div>
+          </div>
+
+        </div>
+        <div class="toast" id="old-toast"></div>
+      </div>
+    </div>
+
+    <!-- ================================================================ -->
+    <!-- ================= NEW (fully interactive) ====================== -->
+    <!-- ================================================================ -->
+    <div>
+      <span class="col-label new">● Vorschlag · Material You · gruppiert</span>
+      <div class="phone new" id="new-phone">
+
+        <div class="appbar">
+          <button class="back" data-side="new" onclick="navNew('hub')" style="display:none;">←</button>
+          <h2 id="new-title">Settings</h2>
+          <button class="trail-btn" id="new-save-btn" style="display:none;" onclick="flashToastNew('Saved')">Save</button>
+        </div>
+
+        <div class="scroll">
+
+          <!-- HUB -->
+          <div class="view active" data-view="hub">
+            <button class="hero" onclick="navNew('account')">
+              <div class="avatar">CF</div>
+              <div class="hero-body">
+                <div class="hero-name">Chuk Finley</div>
+                <div class="hero-email">claude@chuk.dev</div>
+                <div class="plan-chip">Free Plan · <span class="upgrade">Upgrade →</span></div>
+              </div>
+              <span class="chev">›</span>
+            </button>
+            <div class="search"><span>🔍</span><input placeholder="Search settings…"></div>
+
+            <div class="section-header">AI &amp; Chat</div>
+            <div class="group">
+              <button class="row" onclick="navNew('model')">
+                <div class="ico accent">🧠</div>
+                <div class="body"><div class="title">Model</div><div class="subtitle">Claude Opus 4.7 · 1M context</div></div>
+                <div class="trail"><span>›</span></div>
+              </button>
+              <button class="row" onclick="navNew('identity')">
+                <div class="ico accent">💬</div>
+                <div class="body"><div class="title">AI Identity &amp; Memory</div><div class="subtitle">System prompt · 3 memories</div></div>
+                <div class="trail"><span>›</span></div>
+              </button>
+              <button class="row" onclick="navNew('tools')">
+                <div class="ico accent">🔧</div>
+                <div class="body">
+                  <div class="title">Tools &amp; Connectors</div>
+                  <div class="subtitle">4 of 12 connected</div>
+                  <div class="chip-row">
+                    <span class="mini-chip"><span class="dot"></span>GitHub</span>
+                    <span class="mini-chip"><span class="dot"></span>Gmail</span>
+                    <span class="mini-chip"><span class="dot"></span>Slack</span>
+                    <span class="mini-chip"><span class="dot"></span>Nextcloud</span>
+                  </div>
+                </div>
+                <div class="trail"><span class="badge green">On</span><span>›</span></div>
+              </button>
+            </div>
+
+            <div class="section-header">Appearance</div>
+            <div class="group">
+              <button class="row" onclick="navNew('theme')">
+                <div class="ico">🎨</div>
+                <div class="body"><div class="title">Theme</div><div class="subtitle">Dark · Dynamic accent</div></div>
+                <div class="trail"><span>›</span></div>
+              </button>
+              <button class="row" onclick="navNew('customization')">
+                <div class="ico">⚙</div>
+                <div class="body"><div class="title">Customization</div><div class="subtitle">Density · Font size · Layout</div></div>
+                <div class="trail"><span>›</span></div>
+              </button>
+            </div>
+
+            <div class="section-header">Data &amp; Privacy</div>
+            <div class="group">
+              <button class="row" onclick="navNew('encryption')">
+                <div class="ico">🔐</div>
+                <div class="body"><div class="title">Encryption &amp; Recovery</div><div class="subtitle">All chats unlocked</div></div>
+                <div class="trail"><span class="badge green">Secure</span><span>›</span></div>
+              </button>
+              <button class="row" onclick="navNew('downloads')">
+                <div class="ico">⬇</div>
+                <div class="body"><div class="title">Download Defaults</div><div class="subtitle">~/Downloads · Ask first off</div></div>
+                <div class="trail"><span>›</span></div>
+              </button>
+              <button class="row" onclick="flashToastNew('Export started — 142 chats')">
+                <div class="ico">📤</div>
+                <div class="body"><div class="title">Export Chats</div><div class="subtitle">JSON backup · 142 chats</div></div>
+                <div class="trail"><span>›</span></div>
+              </button>
+            </div>
+
+            <div class="section-header">Billing</div>
+            <div class="group">
+              <button class="row" onclick="navNew('pricing')">
+                <div class="ico">💳</div>
+                <div class="body"><div class="title">Plan &amp; Pricing</div><div class="subtitle">Free · 50 messages / day</div></div>
+                <div class="trail"><span class="badge primary">Upgrade</span><span>›</span></div>
+              </button>
+            </div>
+
+            <div class="section-header">System</div>
+            <div class="group">
+              <button class="row" onclick="navNew('about')">
+                <div class="ico">ℹ</div>
+                <div class="body"><div class="title">About</div><div class="subtitle">Version 1.0.85</div></div>
+                <div class="trail"><span>›</span></div>
+              </button>
+              <button class="row dev-tile" onclick="navNew('dev')">
+                <div class="ico">🛠</div>
+                <div class="body"><div class="title">Developer Options</div><div class="subtitle">Diagnostics log · Hidden from users</div></div>
+                <div class="trail"><span class="badge amber">Dev</span><span>›</span></div>
+              </button>
+            </div>
+
+            <button class="sign-out" onclick="flashToastNew('Signed out')">Sign out</button>
+            <div class="version">Chuk Chat 1.0.85 · build 20260422</div>
+          </div>
+
+          <!-- ACCOUNT -->
+          <div class="view" data-view="account" data-title="Account" data-save="true">
+            <div class="section-header">Profile</div>
+            <div class="group" style="padding:16px;">
+              <label class="field-label">Display name</label>
+              <input class="tf" value="Chuk Finley">
+              <label class="field-label">Email address</label>
+              <input class="tf" type="email" value="claude@chuk.dev">
+            </div>
+
+            <div class="section-header">Security</div>
+            <div class="group" style="padding:16px;">
+              <label class="field-label">Current password</label>
+              <input class="tf" type="password" placeholder="••••••••">
+              <label class="field-label">New password</label>
+              <input class="tf" type="password" placeholder="Min 8 characters">
+              <label class="field-label">Confirm new password</label>
+              <input class="tf" type="password" placeholder="••••••••">
+              <button class="btn btn-tonal" onclick="flashToastNew('Password updated')">Update password</button>
+            </div>
+
+            <div class="section-header">Chat Recovery</div>
+            <div class="info-card">🔓 All encrypted chats are unlocked on this device.</div>
+
+            <div class="section-header" style="color:var(--md-sys-color-error);">Danger Zone</div>
+            <div class="info-card danger">⚠ Deleting your account is permanent and cannot be undone.</div>
+            <button class="btn btn-danger btn-block" onclick="flashToastNew('Delete cancelled')">Delete account</button>
+          </div>
+
+          <!-- MODEL -->
+          <div class="view" data-view="model" data-title="Model Selection">
+            <div class="search"><span>🔍</span><input placeholder="Search models…"></div>
+            <div class="section-header">Available · 12 models</div>
+            <div class="model-card" style="border:2px solid var(--md-sys-color-primary);">
+              <div class="model-header">
+                <div>
+                  <div class="model-name">Claude Opus 4.7</div>
+                  <div style="font-size:12px;color:var(--md-sys-color-on-surface-variant);margin-top:2px;">Most capable · Anthropic flagship</div>
+                </div>
+                <span class="badge primary">Active</span>
+              </div>
+              <div class="model-meta">
+                <span>Ctx: <strong>1M</strong></span>
+                <span>Max Out: <strong>8K</strong></span>
+                <span>In: <strong>$15/M</strong></span>
+                <span>Out: <strong>$75/M</strong></span>
+              </div>
+            </div>
+            <div class="model-card">
+              <div class="model-header">
+                <div>
+                  <div class="model-name">Claude Sonnet 4.6</div>
+                  <div style="font-size:12px;color:var(--md-sys-color-on-surface-variant);margin-top:2px;">Balanced · Fast responses</div>
+                </div>
+                <span class="model-provider">Anthropic</span>
+              </div>
+              <div class="model-meta">
+                <span>Ctx: <strong>200K</strong></span>
+                <span>Max Out: <strong>8K</strong></span>
+                <span>In: <strong>$3/M</strong></span>
+                <span>Out: <strong>$15/M</strong></span>
+              </div>
+            </div>
+            <div class="model-card">
+              <div class="model-header">
+                <div>
+                  <div class="model-name">Claude Haiku 4.5</div>
+                  <div style="font-size:12px;color:var(--md-sys-color-on-surface-variant);margin-top:2px;">Fastest · Low cost</div>
+                </div>
+                <span class="model-provider">Anthropic</span>
+              </div>
+              <div class="model-meta">
+                <span>Ctx: <strong>200K</strong></span>
+                <span>Max Out: <strong>4K</strong></span>
+                <span>In: <strong>$1/M</strong></span>
+                <span>Out: <strong>$5/M</strong></span>
+              </div>
+            </div>
+            <div class="model-card">
+              <div class="model-header">
+                <div>
+                  <div class="model-name">GPT-4o</div>
+                  <div style="font-size:12px;color:var(--md-sys-color-on-surface-variant);margin-top:2px;">Multimodal · Vision</div>
+                </div>
+                <span class="model-provider">OpenAI</span>
+              </div>
+              <div class="model-meta">
+                <span>Ctx: <strong>128K</strong></span>
+                <span>Max Out: <strong>16K</strong></span>
+                <span>In: <strong>$2.50/M</strong></span>
+                <span>Out: <strong>$10/M</strong></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- IDENTITY -->
+          <div class="view" data-view="identity" data-title="AI Identity & Memory" data-save="true">
+            <div class="section-header">Identity System</div>
+            <div class="group">
+              <div class="row" onclick="toggleNew(this)">
+                <div class="ico">🧬</div>
+                <div class="body"><div class="title">Identity system enabled</div><div class="subtitle">Master toggle for soul, user, memory</div></div>
+                <div class="switch on"></div>
+              </div>
+            </div>
+            <div class="section-header">Soul</div>
+            <div class="info-card">Core personality traits injected into every conversation.</div>
+            <textarea class="tf" placeholder="Example: thoughtful, concise, direct">Helpful, direct, technical. Avoids filler.</textarea>
+
+            <div class="section-header">User</div>
+            <div class="info-card">Who you are — helps the AI address you correctly.</div>
+            <textarea class="tf" placeholder="Example: software engineer, prefers dark mode">Software engineer at chuk.dev. Deep Go expertise, new to Flutter frontend.</textarea>
+
+            <div class="section-header">Memory</div>
+            <textarea class="tf" placeholder="Example: prefers concise answers">Prefers short responses. Use caveman mode when asked. Tests must pass before push.</textarea>
+            <div class="btn-row">
+              <button class="btn btn-outline" onclick="flashToastNew('Import started')">📥 Import from another AI</button>
+              <span style="margin-left:auto;font-size:11px;color:var(--md-sys-color-on-surface-variant);align-self:center;">185 chars</span>
+            </div>
+
+            <div class="section-header">Raw System Prompt</div>
+            <textarea class="tf" style="min-height:140px;" placeholder="Advanced: raw instructions for the AI">You are Chuk, an AI assistant for chuk.dev. Follow user's preferences in memory.</textarea>
+          </div>
+
+          <!-- TOOLS -->
+          <div class="view" data-view="tools" data-title="Tools & Connectors">
+            <div class="section-header">Engine</div>
+            <div class="group">
+              <div class="row" onclick="toggleNew(this)">
+                <div class="ico accent">🔧</div>
+                <div class="body"><div class="title">Enable tool calling</div><div class="subtitle">Master switch</div></div>
+                <div class="switch on"></div>
+              </div>
+            </div>
+            <div class="section-header">Behavior</div>
+            <div class="group">
+              <div class="row" onclick="toggleNew(this)">
+                <div class="ico">🔍</div>
+                <div class="body"><div class="title">Require tool discovery first</div><div class="subtitle">AI must list tools before calling</div></div>
+                <div class="switch"></div>
+              </div>
+              <div class="row" onclick="toggleNew(this)">
+                <div class="ico">📝</div>
+                <div class="body"><div class="title">Markdown tool fallback</div><div class="subtitle">Parse &lt;tool&gt; tags from plain text</div></div>
+                <div class="switch on"></div>
+              </div>
+            </div>
+            <div class="section-header">Display</div>
+            <div class="group">
+              <div class="row" onclick="toggleNew(this)">
+                <div class="ico">👁</div>
+                <div class="body"><div class="title">Show tool activity</div><div class="subtitle">Inline live status in chat</div></div>
+                <div class="switch on"></div>
+              </div>
+            </div>
+            <div class="section-header">Visual Output</div>
+            <div class="group">
+              <div class="row" onclick="toggleNew(this)">
+                <div class="ico">🗺</div>
+                <div class="body"><div class="title">Map blocks</div></div>
+                <div class="switch on"></div>
+              </div>
+              <div class="row" onclick="toggleNew(this)">
+                <div class="ico">📊</div>
+                <div class="body"><div class="title">Chart blocks</div></div>
+                <div class="switch on"></div>
+              </div>
+            </div>
+            <div class="section-header">Connectors · 4 of 12 connected</div>
+            <div class="group">
+              <div class="row" onclick="toggleNew(this)">
+                <div class="ico">🔎</div>
+                <div class="body"><div class="title">Web Search</div><div class="subtitle">DuckDuckGo, Brave</div></div>
+                <div class="switch on"></div>
+              </div>
+              <div class="row" onclick="toggleNew(this)">
+                <div class="ico">🌐</div>
+                <div class="body"><div class="title">Web Crawl</div><div class="subtitle">Fetch &amp; parse pages</div></div>
+                <div class="switch on"></div>
+              </div>
+              <div class="row" onclick="toggleNew(this)">
+                <div class="ico">🐙</div>
+                <div class="body"><div class="title">GitHub</div><div class="subtitle">Connected · issues, PRs, gists</div></div>
+                <div class="switch on"></div>
+              </div>
+              <div class="row" onclick="toggleNew(this)">
+                <div class="ico">💬</div>
+                <div class="body"><div class="title">Slack</div><div class="subtitle">Connected · workspace messages</div></div>
+                <div class="switch on"></div>
+              </div>
+              <div class="row" onclick="toggleNew(this)">
+                <div class="ico">📧</div>
+                <div class="body"><div class="title">Gmail</div><div class="subtitle">Connected · read &amp; send</div></div>
+                <div class="switch on"></div>
+              </div>
+              <div class="row" onclick="toggleNew(this)">
+                <div class="ico">📅</div>
+                <div class="body"><div class="title">Google Calendar</div><div class="subtitle">Not connected</div></div>
+                <div class="switch"></div>
+              </div>
+              <div class="row" onclick="toggleNew(this)">
+                <div class="ico">☁</div>
+                <div class="body"><div class="title">Nextcloud</div><div class="subtitle">Connected · files &amp; calendar</div></div>
+                <div class="switch on"></div>
+              </div>
+              <div class="row" onclick="toggleNew(this)">
+                <div class="ico">🎵</div>
+                <div class="body"><div class="title">Spotify</div><div class="subtitle">Not connected</div></div>
+                <div class="switch"></div>
+              </div>
+              <div class="row" onclick="toggleNew(this)">
+                <div class="ico">🖥</div>
+                <div class="body"><div class="title">Bash</div><div class="subtitle">Execute shell commands</div></div>
+                <div class="switch"></div>
+              </div>
+            </div>
+            <button class="btn btn-outline btn-block" style="margin-top:16px;" onclick="flashToastNew('Tool prefs reset')">↺ Reset all tool preferences</button>
+          </div>
+
+          <!-- THEME -->
+          <div class="view" data-view="theme" data-title="Theme">
+            <div class="section-header">Mode</div>
+            <div class="group">
+              <div class="row" onclick="toggleNew(this)">
+                <div class="ico">🌙</div>
+                <div class="body"><div class="title">Dark mode</div><div class="subtitle">Switch between light &amp; dark</div></div>
+                <div class="switch on"></div>
+              </div>
+              <div class="row" onclick="toggleNew(this)">
+                <div class="ico">🎞</div>
+                <div class="body"><div class="title">Film grain effect</div><div class="subtitle">Subtle noise overlay</div></div>
+                <div class="switch"></div>
+              </div>
+            </div>
+            <div class="section-header">Accent Color</div>
+            <div class="swatch-grid">
+              <div class="swatch" style="background:#a8c7fa;"></div>
+              <div class="swatch selected" style="background:#7fd79a;"></div>
+              <div class="swatch" style="background:#ffb4ab;"></div>
+              <div class="swatch" style="background:#ffd166;"></div>
+              <div class="swatch" style="background:#c4a7e7;"></div>
+              <div class="swatch" style="background:#ff8fab;"></div>
+              <div class="swatch" style="background:#64d8cb;"></div>
+              <div class="swatch" style="background:#f4a261;"></div>
+            </div>
+            <label class="field-label">Custom hex</label>
+            <input class="tf" value="#7fd79a" maxlength="7">
+
+            <div class="section-header">Icon Color</div>
+            <div class="swatch-grid" style="grid-template-columns:repeat(5,1fr);">
+              <div class="swatch selected" style="background:#ffffff;"></div>
+              <div class="swatch" style="background:#c4c6d0;"></div>
+              <div class="swatch" style="background:#8d9199;"></div>
+              <div class="swatch" style="background:#a8c7fa;"></div>
+              <div class="swatch" style="background:#7fd79a;"></div>
+            </div>
+
+            <div class="section-header">Background</div>
+            <div class="swatch-grid">
+              <div class="swatch selected" style="background:#111318;border-color:var(--md-sys-color-primary);"></div>
+              <div class="swatch" style="background:#1a1a1a;"></div>
+              <div class="swatch" style="background:#0d1b2a;"></div>
+              <div class="swatch" style="background:#1d1d2f;"></div>
+              <div class="swatch" style="background:#2d1b1b;"></div>
+              <div class="swatch" style="background:#1b2d1b;"></div>
+              <div class="swatch" style="background:#ffffff;"></div>
+              <div class="swatch" style="background:#f5f5f0;"></div>
+            </div>
+          </div>
+
+          <!-- CUSTOMIZATION -->
+          <div class="view" data-view="customization" data-title="Customization" data-save="true">
+            <div class="section-header">Language</div>
+            <div class="group" style="padding:16px;">
+              <select class="tf">
+                <option>Deutsch</option>
+                <option>English</option>
+                <option>Français</option>
+                <option>Español</option>
+              </select>
+            </div>
+            <div class="section-header">Voice Transcription</div>
+            <div class="group">
+              <div class="row" onclick="toggleNew(this)">
+                <div class="ico">🎤</div>
+                <div class="body"><div class="title">Auto-send voice transcription</div><div class="subtitle">Sends after 3s silence</div></div>
+                <div class="switch"></div>
+              </div>
+            </div>
+            <div class="section-header">Message Display</div>
+            <div class="group">
+              <div class="row" onclick="toggleNew(this)">
+                <div class="ico">💭</div>
+                <div class="body"><div class="title">Show reasoning tokens</div></div>
+                <div class="switch"></div>
+              </div>
+              <div class="row" onclick="toggleNew(this)">
+                <div class="ico">🏷</div>
+                <div class="body"><div class="title">Show model info</div></div>
+                <div class="switch on"></div>
+              </div>
+              <div class="row" onclick="toggleNew(this)">
+                <div class="ico">⚡</div>
+                <div class="body"><div class="title">Show tokens/sec</div></div>
+                <div class="switch"></div>
+              </div>
+            </div>
+            <div class="section-header">Typography</div>
+            <div class="group" style="padding:16px;">
+              <label class="field-label">Chat font size</label>
+              <div class="slider-wrap">
+                <div class="slider-row">
+                  <input type="range" class="slider" min="10" max="24" value="14" oninput="this.nextElementSibling.textContent = this.value + 'pt'">
+                  <span class="slider-val">14pt</span>
+                </div>
+              </div>
+              <label class="field-label">Font family</label>
+              <select class="tf">
+                <option>Merriweather</option>
+                <option>Roboto</option>
+                <option>Inter</option>
+                <option>JetBrains Mono</option>
+              </select>
+            </div>
+            <div class="section-header">AI Context</div>
+            <div class="info-card">These affect how much history is sent to the AI.</div>
+            <div class="group">
+              <div class="row" onclick="toggleNew(this)">
+                <div class="ico">🖼</div>
+                <div class="body"><div class="title">Recent images in context</div></div>
+                <div class="switch on"></div>
+              </div>
+              <div class="row" onclick="toggleNew(this)">
+                <div class="ico">🗂</div>
+                <div class="body"><div class="title">All images in context</div></div>
+                <div class="switch"></div>
+              </div>
+              <div class="row" onclick="toggleNew(this)">
+                <div class="ico">💭</div>
+                <div class="body"><div class="title">Reasoning in context</div></div>
+                <div class="switch on"></div>
+              </div>
+            </div>
+            <div class="section-header">Auto Chat Titles</div>
+            <div class="group">
+              <div class="row" onclick="toggleNew(this)">
+                <div class="ico">✨</div>
+                <div class="body"><div class="title">Auto-generate titles</div></div>
+                <div class="switch on"></div>
+              </div>
+            </div>
+            <label class="field-label" style="margin-top:12px;">Title generation prompt</label>
+            <textarea class="tf">Summarize this conversation in 4 words or less.</textarea>
+          </div>
+
+          <!-- ENCRYPTION -->
+          <div class="view" data-view="encryption" data-title="Encryption & Recovery">
+            <div class="info-card">🔐 All chats are end-to-end encrypted with AES-256-GCM. Your key never leaves your device.</div>
+            <div class="section-header">Status</div>
+            <div class="group">
+              <div class="row">
+                <div class="ico accent">🔓</div>
+                <div class="body"><div class="title">Unlocked chats</div><div class="subtitle">142 of 142 on this device</div></div>
+                <div class="trail"><span class="badge green">All good</span></div>
+              </div>
+              <div class="row">
+                <div class="ico">🔑</div>
+                <div class="body"><div class="title">Encryption key</div><div class="subtitle">Stored in system keyring</div></div>
+                <div class="trail"><span class="badge">Local</span></div>
+              </div>
+            </div>
+            <div class="section-header">Recovery</div>
+            <div class="group">
+              <button class="row" onclick="flashToastNew('Recovery phrase copied')">
+                <div class="ico">📋</div>
+                <div class="body"><div class="title">Show recovery phrase</div><div class="subtitle">12 words — store securely</div></div>
+                <div class="trail"><span>›</span></div>
+              </button>
+              <button class="row" onclick="flashToastNew('Key rotated')">
+                <div class="ico">🔄</div>
+                <div class="body"><div class="title">Rotate encryption key</div><div class="subtitle">Re-encrypt all chats</div></div>
+                <div class="trail"><span>›</span></div>
+              </button>
+            </div>
+          </div>
+
+          <!-- DOWNLOADS -->
+          <div class="view" data-view="downloads" data-title="Download Defaults">
+            <div class="section-header">Behavior</div>
+            <div class="group">
+              <div class="row" onclick="toggleNew(this)">
+                <div class="ico">❓</div>
+                <div class="body"><div class="title">Always ask where to save</div><div class="subtitle">Shows file picker each time</div></div>
+                <div class="switch"></div>
+              </div>
+            </div>
+            <div class="section-header">Default Folder</div>
+            <div class="group">
+              <button class="row" onclick="flashToastNew('Folder picker opened')">
+                <div class="ico">📁</div>
+                <div class="body"><div class="title">~/Downloads</div><div class="subtitle">Tap to change folder</div></div>
+                <div class="trail"><span>›</span></div>
+              </button>
+            </div>
+            <div class="info-card">Downloads will use this folder unless "Always ask" is enabled.</div>
+          </div>
+
+          <!-- PRICING -->
+          <div class="view" data-view="pricing" data-title="Pricing Plans">
+            <div class="section-header">Credits</div>
+            <div class="group" style="padding:20px;">
+              <div style="font-size:32px;font-weight:300;">145 <span style="font-size:14px;opacity:0.7;">credits remaining</span></div>
+              <div class="helper" style="margin:8px 0 12px;">Resets monthly · Unused credits expire after 30 days</div>
+              <button class="btn btn-tonal" onclick="flashToastNew('Usage details')">📊 View usage details</button>
+            </div>
+            <div class="section-header">Plans</div>
+            <div class="plan-card">
+              <span class="badge green plan-badge">Active</span>
+              <div class="plan-title">Free</div>
+              <div class="plan-price">€0<small>/month</small></div>
+              <ul>
+                <li>50 messages per day</li>
+                <li>Haiku model only</li>
+                <li>No image generation</li>
+              </ul>
+            </div>
+            <div class="plan-card" style="background:linear-gradient(135deg,#284777 0%,#52437a 100%);">
+              <span class="badge primary plan-badge">Popular</span>
+              <div class="plan-title">Plus</div>
+              <div class="plan-price">€20<small>/month</small></div>
+              <ul>
+                <li>3,000 credits monthly</li>
+                <li>Access all models</li>
+                <li>Image generation</li>
+                <li>Voice mode</li>
+                <li>Extended reasoning</li>
+              </ul>
+              <button class="btn btn-filled btn-block" style="margin-top:8px;" onclick="flashToastNew('Checkout opened')">Subscribe now</button>
+              <div class="helper" style="margin:8px 0 0;color:rgba(255,255,255,0.7);">14-day right of withdrawal · Cancel anytime</div>
+            </div>
+          </div>
+
+          <!-- ABOUT -->
+          <div class="view" data-view="about" data-title="About">
+            <div style="text-align:center;padding:32px 16px 16px;">
+              <div style="width:80px;height:80px;margin:0 auto 16px;border-radius:20px;background:linear-gradient(135deg,var(--md-sys-color-primary),var(--md-sys-color-tertiary-container));display:grid;place-items:center;font-size:40px;">💬</div>
+              <div style="font-size:24px;font-weight:500;">Chuk Chat</div>
+              <div style="font-size:13px;color:var(--md-sys-color-on-surface-variant);margin-top:4px;">Version 1.0.85 · build 20260422</div>
+              <span class="badge green" style="margin-top:8px;">✓ Up to date</span>
+            </div>
+            <div class="section-header">Links</div>
+            <div class="group">
+              <button class="row" onclick="flashToastNew('Opening…')">
+                <div class="ico">📜</div>
+                <div class="body"><div class="title">Open source licenses</div></div>
+                <div class="trail"><span>›</span></div>
+              </button>
+              <button class="row" onclick="flashToastNew('Opening…')">
+                <div class="ico">📄</div>
+                <div class="body"><div class="title">Terms of Service</div></div>
+                <div class="trail"><span>↗</span></div>
+              </button>
+              <button class="row" onclick="flashToastNew('Opening…')">
+                <div class="ico">🔒</div>
+                <div class="body"><div class="title">Privacy Policy</div></div>
+                <div class="trail"><span>↗</span></div>
+              </button>
+              <button class="row" onclick="flashToastNew('Opening GitHub')">
+                <div class="ico">🐙</div>
+                <div class="body"><div class="title">GitHub repository</div><div class="subtitle">chuk-development/chuk_chat</div></div>
+                <div class="trail"><span>↗</span></div>
+              </button>
+            </div>
+            <div style="text-align:center;padding:24px;font-size:11px;color:var(--md-sys-color-on-surface-variant);">© 2026 Chuk Chat<br>Made with Flutter</div>
+          </div>
+
+          <!-- DEV -->
+          <div class="view" data-view="dev" data-title="Developer Options">
+            <div class="info-card warn">⚠ Advanced options — mainly for debugging and support.</div>
+            <div class="section-header">Feature Toggles</div>
+            <div class="group">
+              <div class="row" onclick="toggleNew(this)">
+                <div class="ico">🛠</div>
+                <div class="body"><div class="title">Enable developer options</div></div>
+                <div class="switch on"></div>
+              </div>
+              <div class="row" onclick="toggleNew(this)">
+                <div class="ico">📋</div>
+                <div class="body"><div class="title">Diagnostics logging</div><div class="subtitle">Write to log file</div></div>
+                <div class="switch on"></div>
+              </div>
+            </div>
+            <div class="section-header">Log File</div>
+            <div class="group" style="padding:16px;">
+              <div style="font-family:monospace;font-size:11px;padding:10px;background:var(--md-sys-color-surface-container-low);border-radius:8px;word-break:break-all;">~/.local/share/chuk_chat/diagnostics.log</div>
+              <div class="btn-row" style="margin-top:12px;">
+                <button class="btn btn-outline" onclick="flashToastNew('Refreshed')">↻ Refresh</button>
+                <button class="btn btn-outline" onclick="flashToastNew('Copied')">📋 Copy recent</button>
+                <button class="btn btn-outline" onclick="flashToastNew('Share sheet opened')">📤 Share</button>
+                <button class="btn btn-outline" onclick="flashToastNew('Logs cleared')" style="color:var(--md-sys-color-error);">🗑 Clear</button>
+              </div>
+            </div>
+            <div class="section-header">Recent Log Lines</div>
+            <div class="log-box">[2026-04-22 22:58:12] settings.load duration=42ms
+[2026-04-22 22:58:12] auth.session valid=true user=claude@chuk.dev
+[2026-04-22 22:58:13] chat.preload count=142 cache=sqlite
+[2026-04-22 22:58:13] tools.init connectors=12 enabled=4
+[2026-04-22 22:58:14] supabase.sync ok delta=3
+[2026-04-22 22:58:15] encryption.unlock keys=1 chats=142
+[2026-04-22 22:58:16] ui.render frame=16ms ok
+[2026-04-22 22:58:17] tools.github rate_limit=4850/5000
+[2026-04-22 22:58:18] model.selected id=claude-opus-4-7
+[2026-04-22 22:58:19] settings.refresh dev_options=true</div>
+          </div>
+
+        </div>
+        <div class="toast" id="new-toast"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="issues">
+    <div>
+      <h3>Probleme im aktuellen Hub</h3>
+      <ul>
+        <li>Flache Liste — 10 gleichwertige Karten, kein Gruppieren.</li>
+        <li>Subtitles redundant (&laquo;Theme Settings / Customize theme settings&raquo;).</li>
+        <li>Developer Options zwischen AI-Tools, stört Flow.</li>
+        <li>Pricing mittendrin statt im Kontext Billing/Account.</li>
+        <li>Kein User-Identity-Block — wer bin ich eingeloggt?</li>
+        <li>Export = Action, sieht aus wie Settings-Eintrag.</li>
+        <li>Logout knalliges Rot — zu viel Gewicht für harmlose Action.</li>
+        <li>Download-Settings-Page existiert, aber nicht erreichbar vom Hub.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Was der Vorschlag ändert</h3>
+      <ul>
+        <li>Hero-Tile mit Avatar, Mail, Plan-Chip — Identity sofort sichtbar.</li>
+        <li>5 klar benannte Sections: AI &amp; Chat, Appearance, Data &amp; Privacy, Billing, System.</li>
+        <li>Gruppierte M3-Cards mit internen Dividern statt 16-px-Gaps.</li>
+        <li>Informative Subtitles: aktuelles Modell, connected count, chat count.</li>
+        <li>Status-Badges: &laquo;On&raquo;, &laquo;Secure&raquo;, &laquo;Upgrade&raquo;, &laquo;Dev&raquo;.</li>
+        <li>Connector-Mini-Chips als visual hint im Tools-Row.</li>
+        <li>Developer Options ganz unten, dashed border, &laquo;Dev&raquo;-Badge.</li>
+        <li>Sign-out als neutraler Outline-Button — kein Panik-Rot.</li>
+        <li>Search-Bar oben — skaliert für mehr Settings.</li>
+      </ul>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  function showView(phoneSel, view, titleElId) {
+    const root = document.querySelector(phoneSel);
+    root.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    const target = root.querySelector(`.view[data-view="${view}"]`);
+    if (!target) return null;
+    target.classList.add('active');
+    const title = document.getElementById(titleElId);
+    if (view === 'hub') title.textContent = 'Settings';
+    else title.textContent = target.dataset.title || 'Settings';
+    root.querySelector('.scroll').scrollTop = 0;
+    return target;
+  }
+
+  function navOld(view) {
+    const target = showView('#old-phone', view, 'old-title');
+    document.querySelector('#old-phone .back').style.display = view === 'hub' ? 'none' : 'grid';
+  }
+
+  function navNew(view) {
+    const target = showView('#new-phone', view, 'new-title');
+    document.querySelector('#new-phone .back').style.display = view === 'hub' ? 'none' : 'grid';
+    const saveBtn = document.getElementById('new-save-btn');
+    saveBtn.style.display = (target && target.dataset.save === 'true') ? 'inline-flex' : 'none';
+  }
+
+  function toggleOld(el) {
+    event.stopPropagation();
+    el.classList.toggle('on');
+  }
+  function toggleNew(row) {
+    const sw = row.querySelector('.switch');
+    if (sw) sw.classList.toggle('on');
+  }
+
+  let oldT, newT;
+  function flashToastOld(msg) {
+    const t = document.getElementById('old-toast');
+    t.textContent = msg;
+    t.style.opacity = '1';
+    clearTimeout(oldT);
+    oldT = setTimeout(() => { t.style.opacity = '0'; }, 1600);
+  }
+  function flashToastNew(msg) {
+    const t = document.getElementById('new-toast');
+    t.textContent = msg;
+    t.style.opacity = '1';
+    clearTimeout(newT);
+    newT = setTimeout(() => { t.style.opacity = '0'; }, 1600);
+  }
+
+  // Swatch click feedback — both sides
+  document.querySelectorAll('.swatch, .old-swatch').forEach(s => {
+    s.addEventListener('click', e => {
+      e.stopPropagation();
+      const parent = s.parentElement;
+      parent.querySelectorAll('.swatch, .old-swatch').forEach(x => x.classList.remove('selected'));
+      s.classList.add('selected');
+      const isOld = s.classList.contains('old-swatch');
+      (isOld ? flashToastOld : flashToastNew)('Color applied');
+    });
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { navOld('hub'); navNew('hub'); }
+  });
+</script>
+</body>
+</html>

@@ -11,7 +11,6 @@ import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/tool_handlers/notes_tools.dart';
-import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 
 class SystemPromptPage extends StatefulWidget {
@@ -31,7 +30,7 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
   bool _isLoading = true;
   String? _errorMessage;
 
-  /// Master toggle for the identity system (Soul / User / Memory).
+  // Master toggle for the identity system (Soul / User / Memory).
   bool _identityEnabled = true;
 
   // Original values to detect changes.
@@ -211,8 +210,8 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
     }
   }
 
-  /// Refresh identity fields from Supabase in the background.
-  /// Updates the UI only if the user hasn't started editing.
+  // Refresh identity fields from Supabase in the background.
+  // Updates the UI only if the user hasn't started editing.
   Future<void> _backgroundSyncIdentity() async {
     try {
       await syncIdentityFromSupabase(forceRefresh: true);
@@ -338,8 +337,6 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
       _hasMemoryChanges ||
       _hasIdentityToggleChanged;
 
-  // ─── Memory helpers ────────────────────────────────────────────────────
-
   // ─── Import memory from another AI ────────────────────────────────────
 
   static const String _importPrompt =
@@ -362,8 +359,8 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
 
   Future<void> _importMemory() async {
     final theme = Theme.of(context);
-    final Color scaffoldBg = theme.scaffoldBackgroundColor;
-    final Color iconFg = theme.resolvedIconColor;
+    final colorScheme = theme.colorScheme;
+    final m3 = theme.m3;
 
     // Step 1: Show the prompt the user should paste into their old AI.
     final goToStep2 = await showDialog<bool>(
@@ -380,7 +377,7 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                 'Step 1: Copy this prompt and paste it into your '
                 'other AI chat (ChatGPT, Claude, etc.):',
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: iconFg.lighten(0.2),
+                  color: m3.onSurfaceVariant,
                 ),
               ),
               const SizedBox(height: 12),
@@ -388,15 +385,14 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: scaffoldBg.lighten(0.03),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: iconFg.withValues(alpha: 0.2)),
+                  color: m3.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: SelectableText(
                   _importPrompt,
                   style: theme.textTheme.bodySmall?.copyWith(
                     fontFamily: 'monospace',
-                    color: iconFg,
+                    color: colorScheme.onSurface,
                     height: 1.4,
                   ),
                 ),
@@ -441,7 +437,7 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
               Text(
                 'Step 2: Paste the response from your other AI below:',
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: iconFg.lighten(0.2),
+                  color: m3.onSurfaceVariant,
                 ),
               ),
               const SizedBox(height: 12),
@@ -457,12 +453,12 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                 ),
                 decoration: InputDecoration(
                   hintText: 'Paste the AI\'s response here...',
-                  hintStyle: TextStyle(color: iconFg.withValues(alpha: 0.4)),
+                  hintStyle: TextStyle(color: m3.onSurfaceVariant),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   filled: true,
-                  fillColor: scaffoldBg.lighten(0.03),
+                  fillColor: m3.surfaceContainerLow,
                 ),
               ),
             ],
@@ -526,38 +522,11 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
 
   // ─── Build ────────────────────────────────────────────────────────────
 
-  InputDecoration _fieldDecoration({
-    required String hintText,
-    required Color iconFg,
-    required Color scaffoldBg,
-    required ThemeData theme,
-  }) {
-    return InputDecoration(
-      hintText: hintText,
-      hintStyle: TextStyle(color: iconFg.withValues(alpha: 0.5), fontSize: 14),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: iconFg.withValues(alpha: 0.3)),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: iconFg.withValues(alpha: 0.3)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: theme.colorScheme.primary, width: 2),
-      ),
-      filled: true,
-      fillColor: scaffoldBg.lighten(0.03),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final Color scaffoldBg = theme.scaffoldBackgroundColor;
-    final Color iconFg = theme.resolvedIconColor;
-    final TextStyle? titleTextStyle = theme.appBarTheme.titleTextStyle;
+    final colorScheme = theme.colorScheme;
+    final m3 = theme.m3;
     final l = AppLocalizations.of(context)!;
 
     Widget bodyContent;
@@ -568,77 +537,37 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
       bodyContent = ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          if (_errorMessage != null)
-            Container(
-              padding: const EdgeInsets.all(12),
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color: Colors.red.withValues(alpha: 0.1),
-                border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                _errorMessage!,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: Colors.redAccent,
-                ),
-              ),
-            ),
+          if (_errorMessage != null) ...[
+            _InfoCard(_errorMessage!, tone: _InfoTone.error),
+            const SizedBox(height: 16),
+          ],
 
-          // ── Identity toggle ──────────────────────────────────────
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: scaffoldBg.lighten(0.05),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: iconFg.withValues(alpha: 0.3),
-                width: 1,
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.psychology,
-                  color: _identityEnabled
-                      ? theme.colorScheme.primary
-                      : iconFg.withValues(alpha: 0.4),
-                  size: 22,
+          // ── Identity System (master toggle) ─────────────────────
+          const _SectionHeader('IDENTITY SYSTEM'),
+          _GroupedCard(
+            children: [
+              _SettingsRow(
+                leading: _LeadingIcon(
+                  icon: Icons.psychology,
+                  tint: _identityEnabled
+                      ? colorScheme.primary
+                      : m3.onSurfaceVariant,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        l.identitySystem,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: iconFg,
-                        ),
-                      ),
-                      Text(
-                        _identityEnabled
-                            ? l.identityActive
-                            : l.identityDisabled,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: iconFg.withValues(alpha: 0.6),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Switch.adaptive(
+                title: l.identitySystem,
+                subtitle: _identityEnabled
+                    ? l.identityActive
+                    : l.identityDisabled,
+                trailing: Switch(
                   value: _identityEnabled,
                   onChanged: (value) async {
                     setState(() => _identityEnabled = value);
                     await setIdentityEnabled(value);
                   },
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
 
           // ── Soul / User / Memory — dimmed when identity is off ──
           IgnorePointer(
@@ -647,189 +576,134 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
               opacity: _identityEnabled ? 1.0 : 0.35,
               duration: const Duration(milliseconds: 200),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // ── Soul ──────────────────────────────────────────
-                  _SectionCard(
-                    title: l.soul,
-                    scaffoldBg: scaffoldBg,
-                    iconFg: iconFg,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          l.soulHint,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: iconFg.lighten(0.2),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        TextField(
-                          controller: _soulCtrl,
-                          maxLines: 8,
-                          contextMenuBuilder: _isDesktopPlatform
-                              ? _buildDesktopTextContextMenu
-                              : null,
-                          style: theme.textTheme.bodyMedium,
-                          decoration: _fieldDecoration(
-                            hintText: l.soulExample,
-                            iconFg: iconFg,
-                            scaffoldBg: scaffoldBg,
-                            theme: theme,
-                          ),
-                        ),
-                      ],
-                    ),
+                  // ── Soul ─────────────────────────────────────────
+                  const _SectionHeader('SOUL'),
+                  _InfoCard(l.soulHint),
+                  const SizedBox(height: 12),
+                  _MaterialTextField(
+                    controller: _soulCtrl,
+                    hintText: l.soulExample,
+                    minLines: 4,
+                    maxLines: 8,
+                    contextMenuBuilder: _isDesktopPlatform
+                        ? _buildDesktopTextContextMenu
+                        : null,
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 24),
 
-                  // ── User ──────────────────────────────────────────
-                  _SectionCard(
-                    title: l.user,
-                    scaffoldBg: scaffoldBg,
-                    iconFg: iconFg,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          l.userHint,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: iconFg.lighten(0.2),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        TextField(
-                          controller: _userInfoCtrl,
-                          maxLines: 8,
-                          contextMenuBuilder: _isDesktopPlatform
-                              ? _buildDesktopTextContextMenu
-                              : null,
-                          style: theme.textTheme.bodyMedium,
-                          decoration: _fieldDecoration(
-                            hintText: l.userExample,
-                            iconFg: iconFg,
-                            scaffoldBg: scaffoldBg,
-                            theme: theme,
-                          ),
-                        ),
-                      ],
-                    ),
+                  // ── User ─────────────────────────────────────────
+                  const _SectionHeader('USER'),
+                  _InfoCard(l.userHint),
+                  const SizedBox(height: 12),
+                  _MaterialTextField(
+                    controller: _userInfoCtrl,
+                    hintText: l.userExample,
+                    minLines: 4,
+                    maxLines: 8,
+                    contextMenuBuilder: _isDesktopPlatform
+                        ? _buildDesktopTextContextMenu
+                        : null,
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 24),
 
-                  // ── Memory ─────────────────────────────────────────
-                  _SectionCard(
-                    title: l.memory,
-                    scaffoldBg: scaffoldBg,
-                    iconFg: iconFg,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          l.memoryHint,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: iconFg.lighten(0.2),
+                  // ── Memory ───────────────────────────────────────
+                  const _SectionHeader('MEMORY'),
+                  _InfoCard(l.memoryHint),
+                  const SizedBox(height: 12),
+                  _MaterialTextField(
+                    controller: _memoryCtrl,
+                    hintText: l.memoryExample,
+                    minLines: 4,
+                    maxLines: 8,
+                    contextMenuBuilder: _isDesktopPlatform
+                        ? _buildDesktopTextContextMenu
+                        : null,
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.download_outlined, size: 18),
+                        label: Text(l.importFromAnotherAi),
+                        onPressed: _importMemory,
+                        style: OutlinedButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 12,
                           ),
                         ),
-                        const SizedBox(height: 16),
-                        TextField(
-                          controller: _memoryCtrl,
-                          maxLines: 8,
-                          contextMenuBuilder: _isDesktopPlatform
-                              ? _buildDesktopTextContextMenu
-                              : null,
-                          style: theme.textTheme.bodyMedium,
-                          decoration: _fieldDecoration(
-                            hintText: l.memoryExample,
-                            iconFg: iconFg,
-                            scaffoldBg: scaffoldBg,
-                            theme: theme,
-                          ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '${_memoryCtrl.text.length} ${l.characters}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: m3.onSurfaceVariant,
                         ),
-                        const SizedBox(height: 12),
-                        OutlinedButton.icon(
-                          icon: const Icon(Icons.upload, size: 18),
-                          label: Text(l.importFromAnotherAi),
-                          onPressed: _importMemory,
-                          style: OutlinedButton.styleFrom(
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
 
-          // ── System Prompt ─────────────────────────────────────────
-          _SectionCard(
-            title: l.systemPrompt,
-            scaffoldBg: scaffoldBg,
-            iconFg: iconFg,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  l.systemPromptHint,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: iconFg.lighten(0.2),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _systemPromptCtrl,
-                  maxLines: 10,
-                  contextMenuBuilder: _isDesktopPlatform
-                      ? _buildDesktopTextContextMenu
-                      : null,
-                  style: theme.textTheme.bodyMedium,
-                  decoration: _fieldDecoration(
-                    hintText: l.systemPromptExample,
-                    iconFg: iconFg,
-                    scaffoldBg: scaffoldBg,
-                    theme: theme,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${_systemPromptCtrl.text.length} ${l.characters}',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: iconFg.withValues(alpha: 0.6),
-                  ),
-                ),
-              ],
+          // ── Raw System Prompt ───────────────────────────────────
+          const _SectionHeader('RAW SYSTEM PROMPT'),
+          _InfoCard(l.systemPromptHint),
+          const SizedBox(height: 12),
+          _MaterialTextField(
+            controller: _systemPromptCtrl,
+            hintText: l.systemPromptExample,
+            minLines: 6,
+            maxLines: 12,
+            contextMenuBuilder: _isDesktopPlatform
+                ? _buildDesktopTextContextMenu
+                : null,
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              '${_systemPromptCtrl.text.length} ${l.characters}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: m3.onSurfaceVariant,
+              ),
             ),
           ),
           const SizedBox(height: 24),
 
-          // ── Save button ───────────────────────────────────────────
+          // ── Save button ─────────────────────────────────────────
           SizedBox(
             width: double.infinity,
-            height: 48,
-            child: ElevatedButton.icon(
+            height: 52,
+            child: FilledButton.icon(
               icon: _isSaving
                   ? SizedBox(
                       height: 18,
                       width: 18,
                       child: CircularProgressIndicator(
                         valueColor: AlwaysStoppedAnimation<Color>(
-                          theme.colorScheme.onPrimary,
+                          colorScheme.onPrimary,
                         ),
                         strokeWidth: 2,
                       ),
                     )
-                  : const Icon(Icons.check),
+                  : const Icon(Icons.check, size: 20),
               label: Text(_isSaving ? l.saving : l.saveChanges),
               onPressed: _isSaving || !_hasAnyChanges ? null : _saveAll,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: theme.colorScheme.primary,
-                foregroundColor: theme.colorScheme.onPrimary,
+              style: FilledButton.styleFrom(
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                textStyle: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -840,59 +714,239 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
     }
 
     return Scaffold(
-      backgroundColor: scaffoldBg,
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        title: Text(l.aiIdentityMemory, style: titleTextStyle),
-        backgroundColor: scaffoldBg,
+        title: Text(l.aiIdentityMemory),
+        centerTitle: false,
+        backgroundColor: colorScheme.surface,
         elevation: 0,
-        iconTheme: IconThemeData(color: iconFg),
+        scrolledUnderElevation: 0,
       ),
       body: bodyContent,
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Shared card widget
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Reusable private pieces ─────────────────────────────────────────────
 
-class _SectionCard extends StatelessWidget {
+class _SectionHeader extends StatelessWidget {
+  final String label;
+  const _SectionHeader(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 1.5,
+          color: colorScheme.primary,
+        ),
+      ),
+    );
+  }
+}
+
+class _GroupedCard extends StatelessWidget {
+  final List<Widget> children;
+  const _GroupedCard({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    final m3 = Theme.of(context).m3;
+
+    final List<Widget> rows = [];
+    for (int i = 0; i < children.length; i++) {
+      rows.add(children[i]);
+      if (i < children.length - 1) {
+        rows.add(Padding(
+          padding: const EdgeInsets.only(left: 56),
+          child: Divider(height: 1, thickness: 1, color: m3.outlineVariant),
+        ));
+      }
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: m3.surfaceContainer,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(children: rows),
+    );
+  }
+}
+
+class _SettingsRow extends StatelessWidget {
+  final Widget leading;
   final String title;
-  final Widget child;
-  final Color scaffoldBg;
-  final Color iconFg;
+  final String? subtitle;
+  final Widget? trailing;
 
-  const _SectionCard({
+  const _SettingsRow({
+    required this.leading,
     required this.title,
-    required this.child,
-    required this.scaffoldBg,
-    required this.iconFg,
+    this.subtitle,
+    this.trailing,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: scaffoldBg.lighten(0.05),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: iconFg.withValues(alpha: 0.3), width: 1),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    final colorScheme = theme.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
         children: [
-          Text(
-            title,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-              color: iconFg,
+          leading,
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.w500,
+                    color: colorScheme.onSurface,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (subtitle != null && subtitle!.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle!,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.m3.onSurfaceVariant,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
             ),
           ),
-          const SizedBox(height: 12),
-          child,
+          if (trailing != null) ...[
+            const SizedBox(width: 12),
+            trailing!,
+          ],
         ],
+      ),
+    );
+  }
+}
+
+class _LeadingIcon extends StatelessWidget {
+  final IconData icon;
+  final Color tint;
+  const _LeadingIcon({required this.icon, required this.tint});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: Center(
+        child: Icon(icon, size: 22, color: tint),
+      ),
+    );
+  }
+}
+
+enum _InfoTone { neutral, warn, error }
+
+class _InfoCard extends StatelessWidget {
+  final String text;
+  final _InfoTone tone;
+  const _InfoCard(this.text, {this.tone = _InfoTone.neutral});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final m3 = theme.m3;
+    late Color accent;
+    switch (tone) {
+      case _InfoTone.warn:
+        accent = m3.warning;
+        break;
+      case _InfoTone.error:
+        accent = theme.colorScheme.error;
+        break;
+      case _InfoTone.neutral:
+        accent = theme.colorScheme.primary;
+        break;
+    }
+    return Container(
+      decoration: BoxDecoration(
+        color: m3.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+        border: Border(left: BorderSide(color: accent, width: 3)),
+      ),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      child: Text(
+        text,
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: m3.onSurfaceVariant,
+          height: 1.4,
+        ),
+      ),
+    );
+  }
+}
+
+class _MaterialTextField extends StatelessWidget {
+  final TextEditingController controller;
+  final String hintText;
+  final int minLines;
+  final int maxLines;
+  final EditableTextContextMenuBuilder? contextMenuBuilder;
+
+  const _MaterialTextField({
+    required this.controller,
+    required this.hintText,
+    this.minLines = 4,
+    this.maxLines = 8,
+    this.contextMenuBuilder,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final m3 = theme.m3;
+    return TextField(
+      controller: controller,
+      minLines: minLines,
+      maxLines: maxLines,
+      contextMenuBuilder: contextMenuBuilder,
+      style: theme.textTheme.bodyMedium?.copyWith(
+        color: colorScheme.onSurface,
+      ),
+      decoration: InputDecoration(
+        hintText: hintText,
+        hintStyle: theme.textTheme.bodyMedium?.copyWith(
+          color: m3.onSurfaceVariant,
+        ),
+        filled: true,
+        fillColor: m3.surfaceContainer,
+        contentPadding: const EdgeInsets.all(16),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: colorScheme.primary, width: 2),
+        ),
       ),
     );
   }
