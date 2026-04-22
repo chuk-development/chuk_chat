@@ -601,12 +601,20 @@ class _MessageBubbleState extends State<MessageBubble>
               : CrossAxisAlignment.start,
           children: [
             if (hasUserImages) ...[
-              _buildFramedUserImageGrid(_buildImagesGrid(widget.images!)),
-              _buildImageMetaMenu(
-                iconFgColor,
-                alignRight,
-                widget.imageCostEur,
-                widget.imageGeneratedAt,
+              Stack(
+                children: [
+                  _buildFramedUserImageGrid(_buildImagesGrid(widget.images!)),
+                  Positioned(
+                    right: 8,
+                    bottom: 8,
+                    child: _buildImageMetaMenu(
+                      iconFgColor,
+                      alignRight,
+                      widget.imageCostEur,
+                      widget.imageGeneratedAt,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 4),
             ],
@@ -2631,15 +2639,16 @@ class _MessageBubbleState extends State<MessageBubble>
     return Padding(
       padding: const EdgeInsets.only(top: 4, right: 6),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           Container(
             height: kPlatformMobile ? _mobileBottomBarHeight : null,
             decoration: BoxDecoration(
-              color: bgColor.lighten(0.05),
+              color: bgColor.withValues(alpha: 0.85),
               borderRadius: BorderRadius.circular(100),
               border: Border.all(
-                color: iconFgColor.withValues(alpha: 0.15),
+                color: iconFgColor.withValues(alpha: 0.25),
                 width: 1,
               ),
             ),
