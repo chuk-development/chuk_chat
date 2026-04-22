@@ -46,8 +46,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart'
+    show PointerScrollEvent, PointerSignalEvent;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show AssetManifest, rootBundle;
+import 'package:flutter/services.dart'
+    show AssetManifest, HardwareKeyboard, rootBundle;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -217,7 +220,7 @@ class _LinuxWebViewState extends State<LinuxWebView> {
       pending.setWebviewListener(
         WebviewEventsListener(
           onUrlChanged: _onUrlChanged,
-          onLoadEnd: (_, __) => _onLoadEnd(),
+          onLoadEnd: (_, _) => _onLoadEnd(),
         ),
       );
 
@@ -427,7 +430,11 @@ class _LinuxWebViewState extends State<LinuxWebView> {
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
-    if (_state == _LoadState.failed || controller == null) {
+    // Treat a null controller during bootstrap as the loading state, not
+    // a failure — the previous check flashed the "failed to initialise"
+    // card for a frame every time an artifact opened before the CEF
+    // browser handle landed.
+    if (_state == _LoadState.failed) {
       return _Fallback(
         excalidrawJson: widget.excalidrawJson,
         htmlContent: widget.htmlContent,
@@ -435,7 +442,7 @@ class _LinuxWebViewState extends State<LinuxWebView> {
         error: _lastError,
       );
     }
-    if (_state == _LoadState.loading) {
+    if (_state == _LoadState.loading || controller == null) {
       return const Center(
         child: SizedBox(
           width: 20,
@@ -454,7 +461,34 @@ class _LinuxWebViewState extends State<LinuxWebView> {
           borderRadius: BorderRadius.circular(8),
         ),
         clipBehavior: Clip.antiAlias,
-        child: WebView(controller),
+        child: Listener(
+          behavior: HitTestBehavior.translucent,
+          onPointerSignal: _onPointerSignal,
+          child: WebView(controller),
+        ),
+      ),
+    );
+  }
+
+  /// webview_cef on Linux delivers mouse-wheel events without the
+  /// Ctrl modifier, so Excalidraw's native Ctrl+Scroll zoom never
+  /// fires. Intercept here and re-dispatch a synthetic WheelEvent
+  /// with `ctrlKey:true` into the Excalidraw mount point. React's
+  /// root listener picks it up via bubbling.
+  void _onPointerSignal(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent) return;
+    if (!HardwareKeyboard.instance.isControlPressed) return;
+    final ctrl = _controller;
+    if (ctrl == null) return;
+    final dy = event.scrollDelta.dy;
+    if (dy == 0) return;
+    unawaited(
+      ctrl.executeJavaScript(
+        '(function(){'
+        'var t=document.querySelector(".excalidraw")||document.getElementById("root")||document.body;'
+        'if(!t)return;'
+        't.dispatchEvent(new WheelEvent("wheel",{deltaY:$dy,ctrlKey:true,bubbles:true,cancelable:true}));'
+        '})();',
       ),
     );
   }
