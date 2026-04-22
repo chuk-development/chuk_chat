@@ -2,11 +2,15 @@
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/models/artifact.dart';
+import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/file_save_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
+
+enum _MediaFilter { images, artifacts }
 
 class MediaManagerPage extends StatefulWidget {
   final bool embedded;
@@ -24,6 +28,12 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
   final Set<String> _selectedImages = {};
   bool _isSelectionMode = false;
 
+  // Artifacts tab — minimal viable extension: SVG / HTML / Mermaid /
+  // technical drawing / Typst PDF / Excalidraw all surface here.
+  List<ArtifactDocument> _artifacts = const <ArtifactDocument>[];
+  bool _isLoadingArtifacts = true;
+  _MediaFilter _filter = _MediaFilter.images;
+
   // Cache for loaded image thumbnails
   final Map<String, Uint8List> _thumbnailCache = {};
   final Map<String, bool> _loadingImages = {};
@@ -32,6 +42,26 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
   void initState() {
     super.initState();
     _loadImages();
+    _loadArtifacts();
+  }
+
+  Future<void> _loadArtifacts() async {
+    if (!mounted) return;
+    setState(() => _isLoadingArtifacts = true);
+    try {
+      final list = await ArtifactStorageService.listAllUserArtifacts();
+      if (!mounted) return;
+      setState(() {
+        _artifacts = list;
+        _isLoadingArtifacts = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _artifacts = const <ArtifactDocument>[];
+        _isLoadingArtifacts = false;
+      });
+    }
   }
 
   Future<void> _loadImages() async {
@@ -563,11 +593,11 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
   }
 
   Widget _buildBody(bool isMobile, Color iconFg, AppLocalizations l) {
-    if (_isLoading) {
+    if (_isLoading && _isLoadingArtifacts) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (_error != null) {
+    if (_error != null && _filter == _MediaFilter.images) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -586,24 +616,100 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
       );
     }
 
-    if (_images.isEmpty) {
+    return RefreshIndicator(
+      onRefresh: () async {
+        await Future.wait([_loadImages(), _loadArtifacts()]);
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Filter chips: Images / Artifacts
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Row(
+              children: [
+                _MediaFilterChip(
+                  label: 'Images',
+                  count: _images.length,
+                  selected: _filter == _MediaFilter.images,
+                  onTap: () =>
+                      setState(() => _filter = _MediaFilter.images),
+                ),
+                const SizedBox(width: 8),
+                _MediaFilterChip(
+                  label: 'Artifacts',
+                  count: _artifacts.length,
+                  selected: _filter == _MediaFilter.artifacts,
+                  onTap: () =>
+                      setState(() => _filter = _MediaFilter.artifacts),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: switch (_filter) {
+              _MediaFilter.images =>
+                _images.isEmpty ? _buildImagesEmpty(iconFg, l) :
+                (isMobile ? _buildMobileList(iconFg) : _buildDesktopGrid(iconFg)),
+              _MediaFilter.artifacts => _buildArtifactsView(iconFg),
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildImagesEmpty(Color iconFg, AppLocalizations l) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.image_not_supported,
+            size: 64,
+            color: iconFg.withValues(alpha: 0.3),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            l.noImagesStored,
+            style: TextStyle(color: iconFg.withValues(alpha: 0.5)),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            l.imagesAppearHere,
+            style: TextStyle(
+              color: iconFg.withValues(alpha: 0.3),
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildArtifactsView(Color iconFg) {
+    if (_isLoadingArtifacts) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_artifacts.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              Icons.image_not_supported,
+              Icons.description_outlined,
               size: 64,
               color: iconFg.withValues(alpha: 0.3),
             ),
             const SizedBox(height: 16),
             Text(
-              l.noImagesStored,
+              'No artifacts yet',
               style: TextStyle(color: iconFg.withValues(alpha: 0.5)),
             ),
             const SizedBox(height: 8),
             Text(
-              l.imagesAppearHere,
+              'SVGs, HTML pages, drawings, and PDFs will appear here.',
+              textAlign: TextAlign.center,
               style: TextStyle(
                 color: iconFg.withValues(alpha: 0.3),
                 fontSize: 12,
@@ -613,33 +719,106 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
         ),
       );
     }
-
-    return RefreshIndicator(
-      onRefresh: _loadImages,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Stats bar
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              '${_images.length} image${_images.length == 1 ? '' : 's'}',
-              style: TextStyle(
-                color: iconFg.withValues(alpha: 0.7),
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          // Grid/List
-          Expanded(
-            child: isMobile
-                ? _buildMobileList(iconFg)
-                : _buildDesktopGrid(iconFg),
-          ),
-        ],
-      ),
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      itemCount: _artifacts.length,
+      separatorBuilder: (_, i) => const SizedBox(height: 8),
+      itemBuilder: (context, index) {
+        final artifact = _artifacts[index];
+        return _ArtifactTile(
+          artifact: artifact,
+          onTap: () => _showArtifactPreview(artifact),
+        );
+      },
     );
   }
+
+  void _showArtifactPreview(ArtifactDocument artifact) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      showDragHandle: true,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        final m3 = theme.m3;
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.7,
+          minChildSize: 0.3,
+          maxChildSize: 0.95,
+          builder: (_, scrollController) => Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(_iconForType(artifact.type),
+                        color: theme.colorScheme.primary),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        artifact.title,
+                        style: theme.textTheme.titleMedium,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: m3.surfaceContainerHigh,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        artifact.type.displayLabel,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: m3.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: m3.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.all(12),
+                    child: SingleChildScrollView(
+                      controller: scrollController,
+                      child: SelectableText(
+                        artifact.content,
+                        style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 12,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  IconData _iconForType(ArtifactType type) => switch (type) {
+        ArtifactType.svg => Icons.image_outlined,
+        ArtifactType.html => Icons.html_outlined,
+        ArtifactType.mermaid => Icons.account_tree_outlined,
+        ArtifactType.technicalDrawing => Icons.architecture_outlined,
+        ArtifactType.typst => Icons.picture_as_pdf_outlined,
+        ArtifactType.excalidraw => Icons.draw_outlined,
+        ArtifactType.code => Icons.code,
+        ArtifactType.markdown => Icons.description_outlined,
+      };
 
   Widget _buildDesktopGrid(Color iconFg) {
     return GridView.builder(
@@ -876,4 +1055,172 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
       ),
     );
   }
+}
+
+class _MediaFilterChip extends StatelessWidget {
+  final String label;
+  final int count;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _MediaFilterChip({
+    required this.label,
+    required this.count,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final m3 = theme.m3;
+    final bg = selected ? cs.primaryContainer : m3.surfaceContainerHigh;
+    final fg = selected ? cs.onPrimaryContainer : m3.onSurfaceVariant;
+    return Material(
+      color: bg,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: fg,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: fg.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '$count',
+                  style: theme.textTheme.labelSmall?.copyWith(color: fg),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ArtifactTile extends StatelessWidget {
+  final ArtifactDocument artifact;
+  final VoidCallback onTap;
+
+  const _ArtifactTile({required this.artifact, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final m3 = theme.m3;
+    return Material(
+      color: m3.surfaceContainer,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: cs.primaryContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  _iconForType(artifact.type),
+                  color: cs.onPrimaryContainer,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      artifact.title,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Text(
+                          artifact.type.displayLabel,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: m3.onSurfaceVariant,
+                          ),
+                        ),
+                        Text(' · ',
+                            style: TextStyle(color: m3.onSurfaceVariant)),
+                        Text(
+                          'v${artifact.version}',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: m3.onSurfaceVariant,
+                          ),
+                        ),
+                        Text(' · ',
+                            style: TextStyle(color: m3.onSurfaceVariant)),
+                        Expanded(
+                          child: Text(
+                            _relative(artifact.updatedAt),
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: m3.onSurfaceVariant,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: m3.onSurfaceVariant),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static String _relative(DateTime updatedAt) {
+    final delta = DateTime.now().difference(updatedAt);
+    if (delta.inMinutes < 1) return 'just now';
+    if (delta.inMinutes < 60) return '${delta.inMinutes}m ago';
+    if (delta.inHours < 24) return '${delta.inHours}h ago';
+    if (delta.inDays < 7) return '${delta.inDays}d ago';
+    return '${updatedAt.day}/${updatedAt.month}/${updatedAt.year}';
+  }
+
+  static IconData _iconForType(ArtifactType type) => switch (type) {
+        ArtifactType.svg => Icons.image_outlined,
+        ArtifactType.html => Icons.html_outlined,
+        ArtifactType.mermaid => Icons.account_tree_outlined,
+        ArtifactType.technicalDrawing => Icons.architecture_outlined,
+        ArtifactType.typst => Icons.picture_as_pdf_outlined,
+        ArtifactType.excalidraw => Icons.draw_outlined,
+        ArtifactType.code => Icons.code,
+        ArtifactType.markdown => Icons.description_outlined,
+      };
 }
