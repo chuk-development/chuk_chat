@@ -21,6 +21,8 @@ const String _kCachedFreeMessagesTotal = 'cached_free_messages_total';
 // Cache keys for CreditListenerMixin (CreditDisplay/CreditBadge)
 const String _kCachedTotalCreditsAllocated = 'cached_total_credits_allocated';
 const String _kCachedRemainingCredits = 'cached_remaining_credits';
+const String _kCachedBillingPeriodStart = 'cached_billing_period_start';
+const String _kCachedBillingPeriodEnd = 'cached_billing_period_end';
 
 class CreditBalances {
   const CreditBalances({
@@ -106,11 +108,22 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
         final double remaining = cachedRemaining ?? 0.0;
         final double used = total - remaining;
 
+        final int? cachedStartMs = prefs.getInt(_kCachedBillingPeriodStart);
+        final int? cachedEndMs = prefs.getInt(_kCachedBillingPeriodEnd);
+        final DateTime? cachedStart = cachedStartMs != null
+            ? DateTime.fromMillisecondsSinceEpoch(cachedStartMs, isUtc: true)
+            : null;
+        final DateTime? cachedEnd = cachedEndMs != null
+            ? DateTime.fromMillisecondsSinceEpoch(cachedEndMs, isUtc: true)
+            : null;
+
         setState(() {
           creditBalances = CreditBalances(
             totalCredits: total,
             usedCredits: used.clamp(0.0, total),
             remainingCredits: remaining,
+            billingPeriodStart: cachedStart,
+            billingPeriodEnd: cachedEnd,
           );
           creditLoading = false;
           _hasLoadedOnce = true;
@@ -135,12 +148,33 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
   }
 
   /// Save credits to cache for offline access
-  Future<void> _saveCreditsToCache(double total, double remaining) async {
+  Future<void> _saveCreditsToCache(
+    double total,
+    double remaining, {
+    DateTime? periodStart,
+    DateTime? periodEnd,
+  }) async {
     final sw = Stopwatch()..start();
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setDouble(_kCachedTotalCreditsAllocated, total);
       await prefs.setDouble(_kCachedRemainingCredits, remaining);
+      if (periodStart != null) {
+        await prefs.setInt(
+          _kCachedBillingPeriodStart,
+          periodStart.toUtc().millisecondsSinceEpoch,
+        );
+      } else {
+        await prefs.remove(_kCachedBillingPeriodStart);
+      }
+      if (periodEnd != null) {
+        await prefs.setInt(
+          _kCachedBillingPeriodEnd,
+          periodEnd.toUtc().millisecondsSinceEpoch,
+        );
+      } else {
+        await prefs.remove(_kCachedBillingPeriodEnd);
+      }
       if (kDebugMode) {
         debugPrint('💾 [CreditMixin] Saved to cache (${sw.elapsedMilliseconds}ms)');
       }
@@ -175,13 +209,32 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
         return;
       }
 
-      // Load credits from API server (not Supabase)
-      final response = await http
+      // Fire user_status + user_billing in parallel — the billing query no
+      // longer waits for /user/status to resolve, so the billing-cycle panel
+      // appears at the same time as the credits figure.
+      final Future<http.Response> statusFuture = http
           .get(
             Uri.parse('${ApiConfigService.apiBaseUrl}/v1/user/status'),
             headers: {'Authorization': 'Bearer ${session.accessToken}'},
           )
           .timeout(const Duration(seconds: 10));
+
+      final Future<Map<String, dynamic>?> billingFuture = _supabase
+          .from('user_billing')
+          .select('credits_last_renewed_period')
+          .eq('user_id', session.user.id)
+          .maybeSingle()
+          .then<Map<String, dynamic>?>((row) => row)
+          .catchError((Object e) {
+        if (kDebugMode) {
+          debugPrint('⚠️ [CreditMixin] Billing period fetch failed: $e');
+        }
+        return null;
+      });
+
+      final results = await Future.wait<Object?>([statusFuture, billingFuture]);
+      final response = results[0] as http.Response;
+      final billing = results[1] as Map<String, dynamic>?;
       final int apiMs = sw.elapsedMilliseconds;
 
       if (response.statusCode != 200) {
@@ -202,54 +255,32 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
         totalCredits,
       );
 
-      // Fetch billing period dates if subscribed
+      // Derive billing period dates from the parallel query (subscribers only)
       DateTime? periodStart;
       DateTime? periodEnd;
-      if (hasSubscription) {
-        final billingSw = Stopwatch()..start();
-        try {
-          final billing = await _supabase
-              .from('user_billing')
-              .select('credits_last_renewed_period')
-              .eq('user_id', session.user.id)
-              .maybeSingle();
-          if (billing != null) {
-            final rawDate = billing['credits_last_renewed_period'];
-            if (rawDate is String) {
-              periodStart = DateTime.tryParse(rawDate);
-            } else if (rawDate is DateTime) {
-              periodStart = rawDate;
-            }
-            if (periodStart != null) {
-              // Handle month overflow (e.g., Jan 31 → Feb 28)
-              final nextMonth = DateTime(
-                periodStart.year,
-                periodStart.month + 1,
-              );
-              final lastDay = DateTime(
-                nextMonth.year,
-                nextMonth.month + 1,
-                0,
-              ).day;
-              periodEnd = DateTime(
-                nextMonth.year,
-                nextMonth.month,
-                periodStart.day.clamp(1, lastDay),
-              );
-            }
-          }
-          if (kDebugMode) {
-            debugPrint(
-              '📅 [CreditMixin] Billing period fetched (${billingSw.elapsedMilliseconds}ms)',
-            );
-          }
-        } catch (e) {
-          if (kDebugMode) {
-            debugPrint(
-              '⚠️ [CreditMixin] Billing period fetch failed (${billingSw.elapsedMilliseconds}ms): $e',
-            );
-          }
-          // Non-critical — billing cycle display is optional
+      if (hasSubscription && billing != null) {
+        final rawDate = billing['credits_last_renewed_period'];
+        if (rawDate is String) {
+          periodStart = DateTime.tryParse(rawDate);
+        } else if (rawDate is DateTime) {
+          periodStart = rawDate;
+        }
+        if (periodStart != null) {
+          // Handle month overflow (e.g., Jan 31 → Feb 28)
+          final nextMonth = DateTime(
+            periodStart.year,
+            periodStart.month + 1,
+          );
+          final lastDay = DateTime(
+            nextMonth.year,
+            nextMonth.month + 1,
+            0,
+          ).day;
+          periodEnd = DateTime(
+            nextMonth.year,
+            nextMonth.month,
+            periodStart.day.clamp(1, lastDay),
+          );
         }
       }
 
@@ -267,10 +298,17 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
       });
 
       // Save to cache in background
-      unawaited(_saveCreditsToCache(totalCredits, remainingCredits));
+      unawaited(
+        _saveCreditsToCache(
+          totalCredits,
+          remainingCredits,
+          periodStart: periodStart,
+          periodEnd: periodEnd,
+        ),
+      );
       if (kDebugMode) {
         debugPrint(
-          '✅ [CreditMixin] Loaded from API: €$remainingCredits / €$totalCredits (API ${apiMs}ms, total ${sw.elapsedMilliseconds}ms)',
+          '✅ [CreditMixin] Loaded from API: €$remainingCredits / €$totalCredits (API+billing ${apiMs}ms)',
         );
       }
     } catch (error) {
