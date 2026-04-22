@@ -2320,12 +2320,18 @@ class _MessageBubbleState extends State<MessageBubble>
 
         if (images.length == 1) {
           final String imageSource = images.first;
-          final double imageWidth = widget.isUser ? maxWidth * 0.5 : maxWidth;
-          // Desktop gets a taller preview; mobile stays compact.
-          final double imageHeight = kPlatformMobile
-              ? (widget.isUser ? 140.0 : 280.0)
-              : (widget.isUser
-                    ? (imageWidth * 0.65).clamp(140.0, 256.0)
+          // User uploads render as a square preview (width == height) so the
+          // aspect ratio stays predictable on both mobile and desktop.
+          // Mobile stays compact (~140 px side); desktop gets a larger square
+          // sized to ~45 % of the bubble's max width, clamped.
+          final double userSquare = kPlatformMobile
+              ? 140.0
+              : (maxWidth * 0.45).clamp(200.0, 320.0);
+          final double imageWidth = widget.isUser ? userSquare : maxWidth;
+          final double imageHeight = widget.isUser
+              ? userSquare
+              : (kPlatformMobile
+                    ? 280.0
                     : (maxWidth * 0.65).clamp(280.0, 512.0));
 
           // Outer Column already right-aligns user messages via

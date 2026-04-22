@@ -156,13 +156,15 @@ class _ImageViewerState extends State<ImageViewer> {
           ),
           actions: [
             IconButton(
-              icon: Icon(Icons.copy, color: iconColor),
+              icon: Icon(Icons.content_copy_outlined,
+                  color: iconColor, size: 22),
               onPressed: _copyCurrentImage,
               tooltip: 'Copy image',
             ),
             if (!kIsWeb)
               IconButton(
-                icon: Icon(Icons.download, color: iconColor),
+                icon: Icon(Icons.download_outlined,
+                    color: iconColor, size: 22),
                 onPressed: _downloadCurrentImage,
                 tooltip: 'Download image',
               ),
