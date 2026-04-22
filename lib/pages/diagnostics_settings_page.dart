@@ -510,40 +510,37 @@ class _InfoCard extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final m3 = theme.m3;
-    final Color accent;
-    final Color textColor;
+    final Color bg;
+    final Color fg;
     switch (tone) {
       case InfoTone.warn:
-        accent = m3.warning;
-        textColor = cs.onSurface;
+        bg = m3.warningContainer.withValues(alpha: 0.4);
+        fg = m3.onWarningContainer;
         break;
       case InfoTone.danger:
-        accent = cs.error;
-        textColor = cs.error;
+        bg = cs.errorContainer.withValues(alpha: 0.4);
+        fg = cs.onErrorContainer;
         break;
       case InfoTone.neutral:
-        accent = cs.primary;
-        textColor = cs.onSurface;
+        bg = m3.surfaceContainerLow;
+        fg = m3.onSurfaceVariant;
         break;
     }
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 16, 12),
       decoration: BoxDecoration(
-        color: m3.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
-        border: Border(left: BorderSide(color: accent, width: 3)),
+        color: bg,
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (icon != null) ...[
-            Icon(icon, size: 18, color: accent),
-            const SizedBox(width: 10),
-          ],
+          Icon(icon ?? Icons.info_outline, size: 18, color: fg),
+          const SizedBox(width: 12),
           Expanded(
             child: Text(
               text,
-              style: TextStyle(fontSize: 13, height: 1.4, color: textColor),
+              style: TextStyle(fontSize: 13, height: 1.4, color: fg),
             ),
           ),
         ],

@@ -138,7 +138,6 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
   Map<String, ModelProviderInfo?> _selectedProviders = {};
   bool _isLoading = true;
   String? _error;
-  final Map<String, bool> _expandedDescriptions = {};
   Map<String, String> _lastSavedPreferences = {};
   Timer? _apiAvailabilityTimer;
   final TextEditingController _searchController = TextEditingController();
@@ -174,7 +173,6 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
       _isLoading = true;
       _error = null;
       _selectedProviders.clear();
-      _expandedDescriptions.clear();
     });
 
     try {
@@ -267,7 +265,6 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
           }
 
           initialSelections[model.id] = selectedProvider;
-          _expandedDescriptions[model.id] = false;
         }
 
         if (cleanupFutures.isNotEmpty) {
@@ -411,13 +408,6 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
     await UserPreferencesService.refreshModelSelections();
   }
 
-  void _toggleDescription(String modelId) {
-    setState(() {
-      _expandedDescriptions[modelId] =
-          !(_expandedDescriptions[modelId] ?? false);
-    });
-  }
-
   String _formatContextLength(int? tokens) {
     if (tokens == null) return 'N/A';
     if (tokens >= 1000000) {
@@ -559,8 +549,6 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                     final model = _filteredModels[index - 2];
                     final ModelProviderInfo? selectedProviderForModel =
                         _selectedProviders[model.id];
-                    final bool isDescriptionExpanded =
-                        _expandedDescriptions[model.id] ?? false;
 
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
@@ -568,8 +556,6 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                         key: ValueKey(model.id),
                         model: model,
                         selectedProvider: selectedProviderForModel,
-                        isDescriptionExpanded: isDescriptionExpanded,
-                        onToggleDescription: () => _toggleDescription(model.id),
                         onProviderChanged: (provider) =>
                             _onProviderSelect(model.id, provider),
                         formatContextLength: _formatContextLength,
@@ -589,13 +575,12 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
   }
 }
 
-// ─── Model card (restyled; active selection = primary 2px border) ───────
+// Card owns its own expansion state so it survives list rebuilds without
+// bubbling through the parent.
 
-class ModelSelectionRow extends StatelessWidget {
+class ModelSelectionRow extends StatefulWidget {
   final CustomModelInfo model;
   final ModelProviderInfo? selectedProvider;
-  final bool isDescriptionExpanded;
-  final VoidCallback onToggleDescription;
   final Function(ModelProviderInfo?) onProviderChanged;
   final String Function(int?) formatContextLength;
   final Widget Function(String?, IconData, {double size}) buildIconWidget;
@@ -604,116 +589,164 @@ class ModelSelectionRow extends StatelessWidget {
     super.key,
     required this.model,
     required this.selectedProvider,
-    required this.isDescriptionExpanded,
-    required this.onToggleDescription,
     required this.onProviderChanged,
     required this.formatContextLength,
     required this.buildIconWidget,
   });
 
   @override
+  State<ModelSelectionRow> createState() => _ModelSelectionRowState();
+}
+
+class _ModelSelectionRowState extends State<ModelSelectionRow> {
+  static const int _descriptionToggleThreshold = 100;
+  bool _descriptionExpanded = false;
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final m3 = theme.m3;
-    final bool isActive = selectedProvider != null;
+    final bool isActive = widget.selectedProvider != null;
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isDesktop = screenWidth >= kTabletBreakpoint;
+
+    final Widget nameRow = _NameRow(
+      model: widget.model,
+      buildIconWidget: widget.buildIconWidget,
+      isActive: isActive,
+      trailing: _ProviderPill(
+        model: widget.model,
+        selectedProvider: widget.selectedProvider,
+        onProviderChanged: widget.onProviderChanged,
+        buildIconWidget: widget.buildIconWidget,
+      ),
+    );
+
+    final Widget? descriptionBlock = _buildDescriptionBlock(theme, m3);
+    final Widget? statsBlock = _buildStatsBlock();
+
+    final List<Widget> mobileChildren = <Widget>[
+      nameRow,
+      if (descriptionBlock != null) ...[
+        const SizedBox(height: 10),
+        descriptionBlock,
+      ],
+      if (statsBlock != null) ...[
+        const SizedBox(height: 12),
+        statsBlock,
+      ],
+    ];
+
+    // Desktop reuses the same pieces but gives the stats a tighter right
+    // column so the header doesn't feel crammed.
+    final List<Widget> desktopChildren = <Widget>[
+      nameRow,
+      if (descriptionBlock != null) ...[
+        const SizedBox(height: 10),
+        descriptionBlock,
+      ],
+      if (statsBlock != null) ...[
+        const SizedBox(height: 14),
+        statsBlock,
+      ],
+    ];
 
     return Container(
       decoration: BoxDecoration(
         color: m3.surfaceContainer,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         border: isActive
             ? Border.all(color: colorScheme.primary, width: 2)
             : Border.all(color: Colors.transparent, width: 2),
       ),
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(isDesktop ? 20 : 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header row: icon + name/description, badge/provider on the right.
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              buildIconWidget(model.iconUrl, Icons.psychology_alt, size: 28),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      model.name,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: colorScheme.onSurface,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (model.description != null &&
-                        model.description!.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        model.description!,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: m3.onSurfaceVariant,
-                        ),
-                        maxLines: isDescriptionExpanded ? 10 : 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (model.description!.length > 80)
-                        GestureDetector(
-                          onTap: onToggleDescription,
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text(
-                              isDescriptionExpanded ? 'Show less' : 'Show more',
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: colorScheme.primary,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              if (isActive)
-                _Badge('Active', tone: _BadgeTone.primary)
-              else if (selectedProvider == null)
-                _Badge('Disabled', tone: _BadgeTone.neutral),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          // Provider dropdown pill.
-          _ProviderPill(
-            model: model,
-            selectedProvider: selectedProvider,
-            onProviderChanged: onProviderChanged,
-            buildIconWidget: buildIconWidget,
-          ),
-
-          // Stats row (context / max out / prices) — only when provider selected.
-          if (selectedProvider != null) ...[
-            const SizedBox(height: 12),
-            _buildStatsGrid(context, isDesktop),
-          ],
-        ],
+        children: isDesktop ? desktopChildren : mobileChildren,
       ),
     );
   }
 
-  Widget _buildStatsGrid(BuildContext context, bool isDesktop) {
-    final provider = selectedProvider!;
+  Widget? _buildDescriptionBlock(ThemeData theme, dynamic m3) {
+    final description = widget.model.description;
+    if (description == null || description.isEmpty) return null;
+    final bool needsToggle = description.length > _descriptionToggleThreshold;
+    final Color descColor = m3.onSurfaceVariant as Color;
+    final Color primary = theme.colorScheme.primary;
+
+    final collapsedText = Text(
+      description,
+      style: theme.textTheme.bodySmall?.copyWith(color: descColor, height: 1.4),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+    final expandedText = Text(
+      description,
+      style: theme.textTheme.bodySmall?.copyWith(color: descColor, height: 1.4),
+    );
+
+    if (!needsToggle) {
+      return expandedText;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AnimatedCrossFade(
+          duration: const Duration(milliseconds: 180),
+          crossFadeState: _descriptionExpanded
+              ? CrossFadeState.showSecond
+              : CrossFadeState.showFirst,
+          firstChild: SizedBox(width: double.infinity, child: collapsedText),
+          secondChild: SizedBox(width: double.infinity, child: expandedText),
+          sizeCurve: Curves.easeInOut,
+        ),
+        const SizedBox(height: 2),
+        // TextButton.icon has a built-in Material ancestor so the tap always
+        // registers — some users reported the plain InkWell not responding.
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () =>
+                setState(() => _descriptionExpanded = !_descriptionExpanded),
+            icon: Icon(
+              _descriptionExpanded
+                  ? Icons.keyboard_arrow_up
+                  : Icons.keyboard_arrow_down,
+              size: 16,
+              color: primary,
+            ),
+            label: Text(
+              _descriptionExpanded ? 'Show less' : 'Show more',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            style: TextButton.styleFrom(
+              foregroundColor: primary,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget? _buildStatsBlock() {
+    final provider = widget.selectedProvider;
+    if (provider == null) return null;
     final List<_StatChip> chips = [
-      _StatChip(label: 'Ctx', value: formatContextLength(provider.contextLength)),
+      _StatChip(
+        label: 'Ctx',
+        value: widget.formatContextLength(provider.contextLength),
+      ),
       _StatChip(
         label: 'Max Out',
-        value: formatContextLength(provider.maxCompletionTokens),
+        value: widget.formatContextLength(provider.maxCompletionTokens),
       ),
       _StatChip(
         label: 'In',
@@ -734,11 +767,59 @@ class ModelSelectionRow extends StatelessWidget {
           value: provider.isModerated! ? 'Yes' : 'No',
         ),
     ];
+    return Wrap(spacing: 8, runSpacing: 8, children: chips);
+  }
+}
 
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: chips,
+class _NameRow extends StatelessWidget {
+  final CustomModelInfo model;
+  final Widget Function(String?, IconData, {double size}) buildIconWidget;
+  final bool isActive;
+  final Widget trailing;
+
+  const _NameRow({
+    required this.model,
+    required this.buildIconWidget,
+    required this.isActive,
+    required this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        buildIconWidget(model.iconUrl, Icons.psychology_alt, size: 28),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  model.name,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: colorScheme.onSurface,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (isActive) ...[
+                const SizedBox(width: 8),
+                const _Badge('Active', tone: _BadgeTone.primary),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        trailing,
+      ],
     );
   }
 }
@@ -762,7 +843,11 @@ class _ProviderPill extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     final m3 = theme.m3;
 
-    return Container(
+    // Fixed column width keeps provider pills visually aligned across all
+    // cards, even when one provider label is very long (e.g. "Cerebras (US)").
+    return SizedBox(
+      width: 180,
+      child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
         color: m3.surfaceContainerHigh,
@@ -773,6 +858,7 @@ class _ProviderPill extends StatelessWidget {
           value: selectedProvider,
           dropdownColor: m3.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(16),
+          isExpanded: true,
           icon: Icon(
             Icons.arrow_drop_down,
             color: m3.onSurfaceVariant,
@@ -812,6 +898,7 @@ class _ProviderPill extends StatelessWidget {
             ];
           },
         ),
+      ),
       ),
     );
   }
@@ -1011,21 +1098,25 @@ class _StatChip extends StatelessWidget {
     final theme = Theme.of(context);
     final m3 = theme.m3;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: m3.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(8),
+        color: m3.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(999),
       ),
       child: RichText(
         text: TextSpan(
           style: theme.textTheme.labelSmall?.copyWith(
+            fontSize: 11.5,
             color: m3.onSurfaceVariant,
+            letterSpacing: 0.1,
           ),
           children: [
-            TextSpan(text: '$label: '),
+            TextSpan(text: label),
+            const TextSpan(text: '  '),
             TextSpan(
               text: value,
               style: theme.textTheme.labelSmall?.copyWith(
+                fontSize: 11.5,
                 color: theme.colorScheme.onSurface,
                 fontWeight: FontWeight.w700,
               ),

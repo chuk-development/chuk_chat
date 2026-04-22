@@ -556,33 +556,24 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
 
           // Profile
           const _SectionHeader('Profile'),
-          _GroupedCard(
-            children: [
-              _FieldRow(
-                icon: Icons.person_outline,
-                label: l.displayName,
-                child: TextFormField(
-                  controller: _displayNameCtrl,
-                  textCapitalization: TextCapitalization.words,
-                  decoration: InputDecoration(
-                    hintText: l.displayNameHint,
-                    isDense: true,
-                  ),
-                ),
-              ),
-              _FieldRow(
-                icon: Icons.mail_outline,
-                label: l.emailAddress,
-                child: TextFormField(
-                  controller: _emailCtrl,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: InputDecoration(
-                    hintText: l.emailAddressHint,
-                    isDense: true,
-                  ),
-                ),
-              ),
-            ],
+          _FieldLabel(l.displayName),
+          TextFormField(
+            controller: _displayNameCtrl,
+            textCapitalization: TextCapitalization.words,
+            decoration: InputDecoration(
+              hintText: l.displayNameHint,
+              prefixIcon: const Icon(Icons.person_outline),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _FieldLabel(l.emailAddress),
+          TextFormField(
+            controller: _emailCtrl,
+            keyboardType: TextInputType.emailAddress,
+            decoration: InputDecoration(
+              hintText: l.emailAddressHint,
+              prefixIcon: const Icon(Icons.mail_outline),
+            ),
           ),
           const SizedBox(height: 16),
           SizedBox(
@@ -627,92 +618,78 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                 icon: Icons.check_circle_outline,
               ),
             ),
-          _GroupedCard(
-            children: [
-              _FieldRow(
-                icon: Icons.lock_outline,
-                label: l.currentPassword,
-                child: TextField(
-                  controller: _currentPasswordCtrl,
-                  obscureText: _obscureCurrentPassword,
-                  textInputAction: TextInputAction.next,
-                  decoration: InputDecoration(
-                    isDense: true,
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscureCurrentPassword
-                            ? Icons.visibility_off
-                            : Icons.visibility,
-                        size: 20,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _obscureCurrentPassword =
-                              !_obscureCurrentPassword;
-                        });
-                      },
-                    ),
-                  ),
+          _FieldLabel(l.currentPassword),
+          TextField(
+            controller: _currentPasswordCtrl,
+            obscureText: _obscureCurrentPassword,
+            textInputAction: TextInputAction.next,
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.lock_outline),
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscureCurrentPassword
+                      ? Icons.visibility_off
+                      : Icons.visibility,
+                  size: 20,
                 ),
+                onPressed: () {
+                  setState(() {
+                    _obscureCurrentPassword = !_obscureCurrentPassword;
+                  });
+                },
               ),
-              _FieldRow(
-                icon: Icons.lock_reset,
-                label: l.newPassword,
-                helper: l.minCharsPassword,
-                child: TextField(
-                  controller: _newPasswordCtrl,
-                  obscureText: _obscureNewPassword,
-                  textInputAction: TextInputAction.next,
-                  decoration: InputDecoration(
-                    isDense: true,
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscureNewPassword
-                            ? Icons.visibility_off
-                            : Icons.visibility,
-                        size: 20,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _obscureNewPassword = !_obscureNewPassword;
-                        });
-                      },
-                    ),
-                  ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _FieldLabel(l.newPassword, helper: l.minCharsPassword),
+          TextField(
+            controller: _newPasswordCtrl,
+            obscureText: _obscureNewPassword,
+            textInputAction: TextInputAction.next,
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.lock_reset),
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscureNewPassword
+                      ? Icons.visibility_off
+                      : Icons.visibility,
+                  size: 20,
                 ),
+                onPressed: () {
+                  setState(() {
+                    _obscureNewPassword = !_obscureNewPassword;
+                  });
+                },
               ),
-              _FieldRow(
-                icon: Icons.check_circle_outline,
-                label: l.confirmNewPassword,
-                child: TextField(
-                  controller: _confirmPasswordCtrl,
-                  obscureText: _obscureConfirmPassword,
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) {
-                    if (!_isChangingPassword) {
-                      _changePassword();
-                    }
-                  },
-                  decoration: InputDecoration(
-                    isDense: true,
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscureConfirmPassword
-                            ? Icons.visibility_off
-                            : Icons.visibility,
-                        size: 20,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _obscureConfirmPassword =
-                              !_obscureConfirmPassword;
-                        });
-                      },
-                    ),
-                  ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _FieldLabel(l.confirmNewPassword),
+          TextField(
+            controller: _confirmPasswordCtrl,
+            obscureText: _obscureConfirmPassword,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) {
+              if (!_isChangingPassword) {
+                _changePassword();
+              }
+            },
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.check_circle_outline),
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscureConfirmPassword
+                      ? Icons.visibility_off
+                      : Icons.visibility,
+                  size: 20,
                 ),
+                onPressed: () {
+                  setState(() {
+                    _obscureConfirmPassword = !_obscureConfirmPassword;
+                  });
+                },
               ),
-            ],
+            ),
           ),
           const SizedBox(height: 16),
           SizedBox(
@@ -847,67 +824,38 @@ class _GroupedCard extends StatelessWidget {
   }
 }
 
-class _FieldRow extends StatelessWidget {
-  const _FieldRow({
-    required this.icon,
-    required this.label,
-    required this.child,
-    this.helper,
-  });
+class _FieldLabel extends StatelessWidget {
+  const _FieldLabel(this.label, {this.helper});
 
-  final IconData icon;
   final String label;
   final String? helper;
-  final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final m3 = theme.m3;
+    final m3 = Theme.of(context).m3;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 6),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 20),
-            child: Icon(icon, size: 24, color: m3.onSurfaceVariant),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: m3.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                DefaultTextStyle.merge(
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: cs.onSurface,
-                  ),
-                  child: child,
-                ),
-                if (helper != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    helper!,
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      color: m3.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ],
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: m3.onSurfaceVariant,
             ),
           ),
+          if (helper != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              helper!,
+              style: TextStyle(
+                fontSize: 11.5,
+                color: m3.onSurfaceVariant,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -999,44 +947,41 @@ class _InfoCard extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final m3 = theme.m3;
-    final Color accent;
-    final Color textColor;
+    final Color bg;
+    final Color fg;
     switch (tone) {
       case InfoTone.warn:
-        accent = m3.warning;
-        textColor = cs.onSurface;
+        bg = m3.warningContainer.withValues(alpha: 0.4);
+        fg = m3.onWarningContainer;
         break;
       case InfoTone.danger:
-        accent = cs.error;
-        textColor = cs.error;
+        bg = cs.errorContainer.withValues(alpha: 0.4);
+        fg = cs.onErrorContainer;
         break;
       case InfoTone.success:
-        accent = m3.success;
-        textColor = cs.onSurface;
+        bg = m3.successContainer.withValues(alpha: 0.4);
+        fg = m3.onSuccessContainer;
         break;
       case InfoTone.neutral:
-        accent = cs.primary;
-        textColor = cs.onSurface;
+        bg = m3.surfaceContainerLow;
+        fg = m3.onSurfaceVariant;
         break;
     }
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 16, 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: m3.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
-        border: Border(left: BorderSide(color: accent, width: 3)),
+        color: bg,
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (icon != null) ...[
-            Icon(icon, size: 18, color: accent),
-            const SizedBox(width: 10),
-          ],
+          Icon(icon ?? Icons.info_outline, size: 18, color: fg),
+          const SizedBox(width: 12),
           Expanded(
             child: Text(
               text,
-              style: TextStyle(fontSize: 13, height: 1.4, color: textColor),
+              style: TextStyle(fontSize: 13, height: 1.4, color: fg),
             ),
           ),
         ],
