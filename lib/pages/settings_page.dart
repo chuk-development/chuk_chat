@@ -6,9 +6,13 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:chuk_chat/model_selector_page.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
+import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/developer_options_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/pages/theme_page.dart';
 import 'package:chuk_chat/pages/customization_page.dart';
 import 'package:chuk_chat/pages/diagnostics_settings_page.dart';
@@ -216,24 +220,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 title: l.exportChats,
                 subtitle: l.exportChatsSubtitle,
                 onTap: () => _exportChats(context),
-              ),
-            ],
-          ),
-
-          _SectionHeader(label: 'Billing'),
-          _GroupedCard(
-            rows: [
-              _SettingsRow(
-                icon: Icons.credit_card,
-                title: l.pricingPlans,
-                subtitle: l.pricingPlansSubtitle,
-                trailing: const _Badge('Upgrade', tone: BadgeTone.primary),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const PricingPage()),
-                  );
-                },
               ),
             ],
           ),
@@ -585,50 +571,165 @@ class _SettingsPageState extends State<SettingsPage> {
 
 // -------- Private widgets (Material You aesthetic) --------
 
-class _HeroIdentityTile extends StatelessWidget {
+class _PlanInfo {
+  final String heroLabel;
+  final String chipLabel;
+
+  const _PlanInfo({required this.heroLabel, required this.chipLabel});
+}
+
+class _HeroIdentityTile extends StatefulWidget {
   final VoidCallback onTap;
 
   const _HeroIdentityTile({required this.onTap});
+
+  @override
+  State<_HeroIdentityTile> createState() => _HeroIdentityTileState();
+}
+
+class _HeroIdentityTileState extends State<_HeroIdentityTile> {
+  late Future<_PlanInfo> _planFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _planFuture = _loadPlan();
+  }
+
+  Future<_PlanInfo> _loadPlan() async {
+    try {
+      String? token;
+      try {
+        token = SupabaseService.client.auth.currentSession?.accessToken;
+      } catch (_) {
+        token = null;
+      }
+      if (token == null || token.isEmpty) {
+        return const _PlanInfo(
+          heroLabel: 'Free plan',
+          chipLabel: 'Free · Upgrade →',
+        );
+      }
+      final response = await http.get(
+        Uri.parse('${ApiConfigService.apiBaseUrl}/v1/user/status'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      if (response.statusCode != 200) {
+        throw StateError(
+          'user_status returned ${response.statusCode}',
+        );
+      }
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) {
+        throw StateError('user_status body was not a JSON object');
+      }
+      final bool hasSubscription = decoded['has_subscription'] == true;
+      final String? currentPlan = decoded['current_plan'] as String?;
+      if (hasSubscription) {
+        final plan = (currentPlan == null || currentPlan.trim().isEmpty)
+            ? 'Plus'
+            : currentPlan.trim();
+        return _PlanInfo(
+          heroLabel: '$plan plan',
+          chipLabel: '$plan plan',
+        );
+      }
+      return const _PlanInfo(
+        heroLabel: 'Free plan',
+        chipLabel: 'Free · Upgrade →',
+      );
+    } catch (error) {
+      unawaited(
+        DiagnosticsLogService.warning(
+          'settings',
+          'Failed to fetch user plan status',
+          data: {'error': error.toString()},
+        ),
+      );
+      if (kDebugMode) {
+        debugPrint('Failed to fetch user plan status: $error');
+      }
+      return const _PlanInfo(
+        heroLabel: 'Free plan',
+        chipLabel: 'Free · Upgrade →',
+      );
+    }
+  }
+
+  ({String displayName, String email, String initials}) _identity() {
+    User? user;
+    try {
+      user = Supabase.instance.client.auth.currentUser;
+    } catch (_) {
+      user = null;
+    }
+    final rawName = user?.userMetadata?['full_name'];
+    final name = (rawName is String) ? rawName.trim() : '';
+    final email = user?.email ?? '';
+    String displayName;
+    if (name.isNotEmpty) {
+      displayName = name;
+    } else if (email.isNotEmpty) {
+      displayName = email.split('@').first;
+    } else {
+      displayName = 'User';
+    }
+
+    String initials;
+    final parts = displayName
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty)
+        .toList();
+    if (parts.isNotEmpty) {
+      final letters = parts.take(2).map((p) => p[0]).join();
+      initials = letters.toUpperCase();
+    } else if (email.isNotEmpty) {
+      initials = email[0].toUpperCase();
+    } else {
+      initials = 'U';
+    }
+    if (initials.isEmpty) initials = 'U';
+    return (displayName: displayName, email: email, initials: initials);
+  }
+
+  void _openPricing() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const PricingPage()),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final m3 = theme.m3;
-
-    // Avatar initials: service lookup is out-of-scope here, use a neutral glyph.
-    const String initials = 'U';
-    const String displayName = 'Chuk Chat User';
-    const String email = '';
+    final id = _identity();
 
     return InkWell(
-      onTap: onTap,
+      onTap: widget.onTap,
       borderRadius: BorderRadius.circular(28),
       child: Ink(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(28),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [m3.primaryContainer, m3.tertiaryContainer],
-          ),
+          color: m3.surfaceContainerHigh,
         ),
         child: Row(
           children: [
             Container(
-              width: 64,
-              height: 64,
+              width: 56,
+              height: 56,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: cs.primary,
+                color: cs.primaryContainer,
                 shape: BoxShape.circle,
               ),
               child: Text(
-                initials,
+                id.initials,
                 style: TextStyle(
-                  color: cs.onPrimary,
-                  fontSize: 26,
+                  color: cs.onPrimaryContainer,
+                  fontSize: 18,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -639,68 +740,89 @@ class _HeroIdentityTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    displayName,
+                    id.displayName,
                     style: TextStyle(
-                      fontSize: 20,
+                      fontSize: 18,
                       fontWeight: FontWeight.w500,
-                      color: m3.onPrimaryContainer,
+                      color: cs.onSurface,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
-                  if (email.isNotEmpty) ...[
+                  if (id.email.isNotEmpty) ...[
                     const SizedBox(height: 2),
                     Text(
-                      email,
+                      id.email,
                       style: TextStyle(
                         fontSize: 13,
-                        color: m3.onPrimaryContainer.withValues(alpha: 0.85),
+                        color: m3.onSurfaceVariant,
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
                   const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.12),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.18),
-                      ),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Free Plan · ',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: m3.onPrimaryContainer,
-                          ),
-                        ),
-                        const Text(
-                          'Upgrade →',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFFFFD166),
-                          ),
-                        ),
-                      ],
-                    ),
+                  FutureBuilder<_PlanInfo>(
+                    future: _planFuture,
+                    builder: (context, snapshot) {
+                      final String label;
+                      if (snapshot.connectionState != ConnectionState.done) {
+                        label = 'Loading…';
+                      } else if (snapshot.hasData) {
+                        label = snapshot.data!.chipLabel;
+                      } else {
+                        label = 'Free · Upgrade →';
+                      }
+                      return _PlanChip(label: label, onTap: _openPricing);
+                    },
                   ),
                 ],
               ),
             ),
             Icon(
               Icons.chevron_right,
-              color: m3.onPrimaryContainer.withValues(alpha: 0.7),
+              color: m3.onSurfaceVariant,
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PlanChip extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _PlanChip({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final m3 = theme.m3;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 4,
+          ),
+          decoration: BoxDecoration(
+            color: m3.surfaceContainer,
+            border: Border.all(color: m3.outlineVariant),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: cs.onSurface,
+            ),
+          ),
         ),
       ),
     );

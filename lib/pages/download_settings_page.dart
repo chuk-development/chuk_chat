@@ -280,20 +280,27 @@ class _InfoCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final m3 = theme.m3;
-    final Color accent = theme.colorScheme.primary;
     return Container(
       decoration: BoxDecoration(
         color: m3.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
-        border: Border(left: BorderSide(color: accent, width: 3)),
+        borderRadius: BorderRadius.circular(16),
       ),
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      child: Text(
-        text,
-        style: theme.textTheme.bodySmall?.copyWith(
-          color: m3.onSurfaceVariant,
-          height: 1.4,
-        ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline, size: 18, color: m3.onSurfaceVariant),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              text,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: m3.onSurfaceVariant,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

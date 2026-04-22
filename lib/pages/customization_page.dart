@@ -890,22 +890,18 @@ class _InfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final cs = theme.colorScheme;
     final m3 = theme.m3;
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 16, 12),
       decoration: BoxDecoration(
         color: m3.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
-        border: Border(
-          left: BorderSide(color: cs.primary, width: 3),
-        ),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(Icons.info_outline, size: 18, color: m3.onSurfaceVariant),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Expanded(
             child: Text(
               text,

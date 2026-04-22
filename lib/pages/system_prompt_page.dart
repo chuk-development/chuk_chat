@@ -585,8 +585,8 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                   _MaterialTextField(
                     controller: _soulCtrl,
                     hintText: l.soulExample,
-                    minLines: 4,
-                    maxLines: 8,
+                    minLines: 3,
+                    maxLines: 10,
                     contextMenuBuilder: _isDesktopPlatform
                         ? _buildDesktopTextContextMenu
                         : null,
@@ -600,8 +600,8 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                   _MaterialTextField(
                     controller: _userInfoCtrl,
                     hintText: l.userExample,
-                    minLines: 4,
-                    maxLines: 8,
+                    minLines: 3,
+                    maxLines: 10,
                     contextMenuBuilder: _isDesktopPlatform
                         ? _buildDesktopTextContextMenu
                         : null,
@@ -615,8 +615,8 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                   _MaterialTextField(
                     controller: _memoryCtrl,
                     hintText: l.memoryExample,
-                    minLines: 4,
-                    maxLines: 8,
+                    minLines: 3,
+                    maxLines: 10,
                     contextMenuBuilder: _isDesktopPlatform
                         ? _buildDesktopTextContextMenu
                         : null,
@@ -660,8 +660,8 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
           _MaterialTextField(
             controller: _systemPromptCtrl,
             hintText: l.systemPromptExample,
-            minLines: 6,
-            maxLines: 12,
+            minLines: 3,
+            maxLines: 16,
             contextMenuBuilder: _isDesktopPlatform
                 ? _buildDesktopTextContextMenu
                 : null,
@@ -868,32 +868,45 @@ class _InfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final m3 = theme.m3;
-    late Color accent;
+    final Color bg;
+    final Color fg;
     switch (tone) {
       case _InfoTone.warn:
-        accent = m3.warning;
+        bg = m3.warningContainer.withValues(alpha: 0.4);
+        fg = m3.onWarningContainer;
         break;
       case _InfoTone.error:
-        accent = theme.colorScheme.error;
+        bg = cs.errorContainer.withValues(alpha: 0.4);
+        fg = cs.onErrorContainer;
         break;
       case _InfoTone.neutral:
-        accent = theme.colorScheme.primary;
+        bg = m3.surfaceContainerLow;
+        fg = m3.onSurfaceVariant;
         break;
     }
     return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: m3.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
-        border: Border(left: BorderSide(color: accent, width: 3)),
+        color: bg,
+        borderRadius: BorderRadius.circular(16),
       ),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      child: Text(
-        text,
-        style: theme.textTheme.bodySmall?.copyWith(
-          color: m3.onSurfaceVariant,
-          height: 1.4,
-        ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline, size: 18, color: fg),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              text,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: fg,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
