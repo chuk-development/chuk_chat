@@ -16,6 +16,7 @@ import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/utils/image_clipboard_service.dart';
 import 'package:chuk_chat/widgets/chart_widget.dart';
 import 'package:chuk_chat/widgets/map_block_renderer.dart';
+import 'package:chuk_chat/widgets/weather_widget.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
 import 'package:chuk_chat/widgets/document_viewer.dart';
@@ -181,15 +182,15 @@ class MessageBubble extends StatefulWidget {
 
 class _MessageBubbleState extends State<MessageBubble>
     with AutomaticKeepAliveClientMixin {
-  /// Regex to find `<chart>`, `<map>`, and `<email>` blocks in message content.
+  /// Regex to find `<chart>`, `<map>`, `<email>`, and `<weather>` blocks.
   static final RegExp _richBlockRegex = RegExp(
-    r'<\s*(chart|map|email)\s*>([\s\S]*?)<\s*/\s*\1\s*>',
+    r'<\s*(chart|map|email|weather)\s*>([\s\S]*?)<\s*/\s*\1\s*>',
     multiLine: true,
     caseSensitive: false,
   );
 
   static final RegExp _visualBlockStartRegex = RegExp(
-    r'<\s*(chart|map|email)\b',
+    r'<\s*(chart|map|email|weather)\b',
     caseSensitive: false,
   );
 
@@ -1037,6 +1038,12 @@ class _MessageBubbleState extends State<MessageBubble>
             throw const FormatException('Expected JSON object');
           }
           widgets.add(_buildEmailBlock(parsed));
+        } else if (blockType == 'weather') {
+          final parsed = _tryParseJson(blockJson);
+          if (parsed is! Map<String, dynamic>) {
+            throw const FormatException('Expected JSON object');
+          }
+          widgets.add(WeatherBlockWidget(data: parsed));
         } else {
           final parsed = _tryParseJson(blockJson);
           if (parsed is! Map<String, dynamic>) {
