@@ -37,7 +37,6 @@ class ToolEnforcer {
     'ask_user',
     'web_search',
     'web_crawl',
-    'image_search',
     // Artifact tools are core to chuk_chat's UX and their full schemas
     // live in the system prompt already — forcing the model to
     // find_tools round-trip them just burns a turn.
@@ -54,7 +53,6 @@ class ToolEnforcer {
       'ask_user',
       'web_search',
       'web_crawl',
-      'image_search',
       'artifact_schema',
       'artifact_manager',
       ...tools,
@@ -101,7 +99,6 @@ class ToolEnforcer {
       'ask_user',
       'web_search',
       'web_crawl',
-      'image_search',
       'artifact_schema',
       'artifact_manager',
     };
