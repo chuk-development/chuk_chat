@@ -250,7 +250,8 @@ class StreamingMessageHandler {
         jsonEncode(contentBlocks.map((b) => b.toJson()).toList());
 
     /// Merge accumulated multi-pass text with the final pass text while
-    /// avoiding duplicated prefixes when the model restarts its final answer.
+    /// avoiding duplicated prefixes/suffixes when the model restarts or
+    /// repeats its final answer across passes.
     String mergeAccumulatedWithFinal({
       required String accumulated,
       required String finalText,
@@ -270,6 +271,12 @@ class StreamingMessageHandler {
       if (normalizedAccumulated.startsWith(normalizedFinal)) {
         return normalizedAccumulated;
       }
+      // The last interim fragment of the preceding pass often equals the
+      // next pass's final answer — drop that trailing duplicate so the flat
+      // text field does not contain the final answer twice back-to-back.
+      if (normalizedAccumulated.endsWith(normalizedFinal)) {
+        return normalizedAccumulated;
+      }
 
       return '$normalizedAccumulated\n\n$normalizedFinal';
     }
@@ -280,6 +287,23 @@ class StreamingMessageHandler {
       final normalizedFinalText = finalText.trim();
       if (normalizedFinalText.isEmpty || contentBlocks.isEmpty) {
         return normalizedFinalText;
+      }
+
+      // If the most recent text block already contains this exact final
+      // answer, drop it — re-appending would duplicate the same text block.
+      ContentBlock? lastTextBlock;
+      for (var i = contentBlocks.length - 1; i >= 0; i--) {
+        final b = contentBlocks[i];
+        if (b.type == ContentBlockType.text &&
+            b.text != null &&
+            b.text!.trim().isNotEmpty) {
+          lastTextBlock = b;
+          break;
+        }
+      }
+      if (lastTextBlock != null &&
+          lastTextBlock.text!.trim() == normalizedFinalText) {
+        return '';
       }
 
       final finalizedPrefix = contentBlocks
@@ -455,16 +479,19 @@ class StreamingMessageHandler {
                   providerReasoning: finalReasoning,
                   newToolCalls: newToolCalls,
                   interimBeforeToolCalls: loopResult.interimBeforeToolCalls,
+                  existingBlocks: contentBlocks,
                 );
-                contentBlocks.addAll(roundResult.blocks);
-                final interimOutputText = roundResult.interimOutputText;
+                final appendedBlocks = roundResult.blocks;
+                contentBlocks.addAll(appendedBlocks);
 
                 // Fire content blocks update so the UI can render them.
-                onContentBlocksUpdate?.call(
-                  placeholderIndex,
-                  encodeBlocks(),
-                  chatId,
-                );
+                if (appendedBlocks.isNotEmpty) {
+                  onContentBlocksUpdate?.call(
+                    placeholderIndex,
+                    encodeBlocks(),
+                    chatId,
+                  );
+                }
 
                 // Accumulate the *original* interim text (not the deduped
                 // version used for content blocks).  buildRoundBlocks may
@@ -473,7 +500,11 @@ class StreamingMessageHandler {
                 // text block), but for the flat streaming display we must
                 // keep it so the user doesn't see text flash and disappear
                 // between passes.
-                if (interimText.isNotEmpty) {
+                //
+                // When the round was an idempotent no-op (retry with the
+                // exact same reasoning+toolCalls as the tail), don't
+                // accumulate either — that text is already represented.
+                if (interimText.isNotEmpty && appendedBlocks.isNotEmpty) {
                   accumulatedText.write(interimText);
                   accumulatedText.write('\n\n');
                 }

@@ -14,11 +14,18 @@ class RoundContentBlockResult {
 class RoundContentBlockService {
   const RoundContentBlockService._();
 
+  /// Build the content blocks for a single streaming round.
+  ///
+  /// When [existingBlocks] is provided, the result is made idempotent: if the
+  /// newly built blocks exactly match the tail of [existingBlocks] (by
+  /// content), [RoundContentBlockResult.blocks] will be empty so the caller
+  /// does not re-append the same round on a retry/continuation.
   static RoundContentBlockResult buildRoundBlocks({
     required String interimText,
     required String providerReasoning,
     required List<ToolCall> newToolCalls,
     bool interimBeforeToolCalls = false,
+    List<ContentBlock> existingBlocks = const [],
   }) {
     final normalizedInterim = interimText.trim();
     final normalizedProviderReasoning = providerReasoning.trim();
@@ -78,9 +85,55 @@ class RoundContentBlockService {
       blocks.add(ContentBlock.text(interimOutputText));
     }
 
+    // Idempotency: if the newly built blocks already exist as the exact tail
+    // of existingBlocks, drop them so the caller does not double-append.
+    if (blocks.isNotEmpty && _tailMatches(existingBlocks, blocks)) {
+      return RoundContentBlockResult(
+        blocks: const <ContentBlock>[],
+        interimOutputText: interimOutputText,
+      );
+    }
+
     return RoundContentBlockResult(
       blocks: blocks,
       interimOutputText: interimOutputText,
     );
+  }
+
+  /// Returns true when [tail] is the exact suffix of [existing] (by content
+  /// equality of blocks).
+  static bool _tailMatches(
+    List<ContentBlock> existing,
+    List<ContentBlock> tail,
+  ) {
+    if (tail.isEmpty || existing.length < tail.length) return false;
+    final offset = existing.length - tail.length;
+    for (var i = 0; i < tail.length; i++) {
+      if (!_blocksEqual(existing[offset + i], tail[i])) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  static bool _blocksEqual(ContentBlock a, ContentBlock b) {
+    if (a.type != b.type) return false;
+    switch (a.type) {
+      case ContentBlockType.text:
+      case ContentBlockType.reasoning:
+        return (a.text ?? '').trim() == (b.text ?? '').trim();
+      case ContentBlockType.toolCalls:
+        final aCalls = a.toolCalls ?? const <ToolCall>[];
+        final bCalls = b.toolCalls ?? const <ToolCall>[];
+        if (aCalls.length != bCalls.length) return false;
+        for (var i = 0; i < aCalls.length; i++) {
+          if (!_toolCallEqual(aCalls[i], bCalls[i])) return false;
+        }
+        return true;
+    }
+  }
+
+  static bool _toolCallEqual(ToolCall a, ToolCall b) {
+    return a.id == b.id && a.name == b.name;
   }
 }

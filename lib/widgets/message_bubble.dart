@@ -915,7 +915,10 @@ class _MessageBubbleState extends State<MessageBubble>
     }
 
     // Live tool calls: any tool calls NOT yet in a content block
-    // (from the currently-running pass).
+    // (from the currently-running pass). Treat them as a synthetic
+    // in-progress tool-calls block appended to the ordered block list — this
+    // preserves true emission order: finalized rounds, then trailing
+    // streaming text, then the in-progress tools for the current pass.
     var liveToolCalls = <ToolCall>[];
     if (widget.showToolCalls &&
         widget.toolCalls != null &&
@@ -925,10 +928,15 @@ class _MessageBubbleState extends State<MessageBubble>
           .toList();
     }
 
+    // If there's no trailing text, live tools start a new group so they stay
+    // separated from any prior-round finalized tools sitting in the open
+    // group. If trailing text already rendered, live tools belong to a new
+    // block below the text.
     if (trailingText.isEmpty && liveToolCalls.isNotEmpty) {
-      if (groupedSegments.isEmpty) {
-        groupedSegments.add(_ToolCallGroupSegment());
-      }
+      // Flush any pending prior-round reasoning/tools first so the live
+      // tools render as their own block (true sequence order).
+      flushGroupedReasoningTools();
+      groupedSegments.add(_ToolCallGroupSegment());
       groupedSegments.last.toolCalls.addAll(
         liveToolCalls.map((tc) => ToolCall.fromJson(tc.toJson())).toList(),
       );
@@ -937,7 +945,6 @@ class _MessageBubbleState extends State<MessageBubble>
     // Flush any still-open reasoning/tool-call group now.
     flushGroupedReasoningTools();
 
-    // If we already showed trailing text, live tool calls belong to a new block.
     if (trailingText.isNotEmpty && liveToolCalls.isNotEmpty) {
       children.add(_buildToolCallsBar(liveToolCalls));
       children.add(const SizedBox(height: 8));
