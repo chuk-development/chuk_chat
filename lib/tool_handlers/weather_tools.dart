@@ -1,85 +1,90 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-/// WMO Weather interpretation codes -> human-readable descriptions.
-const _wmoCodes = <int, String>{
-  0: 'Clear sky',
-  1: 'Mainly clear',
-  2: 'Partly cloudy',
-  3: 'Overcast',
-  45: 'Fog',
-  48: 'Depositing rime fog',
-  51: 'Light drizzle',
-  53: 'Moderate drizzle',
-  55: 'Dense drizzle',
-  61: 'Slight rain',
-  63: 'Moderate rain',
-  65: 'Heavy rain',
-  71: 'Slight snowfall',
-  73: 'Moderate snowfall',
-  75: 'Heavy snowfall',
-  80: 'Slight rain showers',
-  81: 'Moderate rain showers',
-  82: 'Violent rain showers',
-  95: 'Thunderstorm',
-  96: 'Thunderstorm with slight hail',
-  99: 'Thunderstorm with heavy hail',
-};
-
-String _wmoDescription(int code) => _wmoCodes[code] ?? 'Unknown ($code)';
-
-/// Wind direction from degrees.
-String _windDirection(num degrees) {
-  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-  return dirs[((degrees + 22.5) % 360 / 45).floor()];
-}
-
-/// Execute the weather tool. Calls Open-Meteo API directly (no key needed).
-Future<String> executeWeather(
-  Map<String, dynamic> args, {
+/// Weather via server-side Brave Rich Callback proxy.
+///
+/// The server calls Brave `/web/search?enable_rich_callback=1` to get a
+/// `callback_key`, then `/web/rich?callback_key=…` for the structured
+/// weather payload. No Open-Meteo fallback.
+Future<String> executeWeather({
+  required String? serverHttpUrl,
+  required Map<String, String> serverHeaders,
+  required Map<String, dynamic> args,
   http.Client? client,
 }) async {
-  final action = (args['action'] as String? ?? 'current').toLowerCase();
+  final location = (args['location'] as String? ?? '').trim();
+  final latRaw = args['latitude'];
+  final lonRaw = args['longitude'];
+  if (location.isEmpty && !(latRaw is num && lonRaw is num)) {
+    return 'Error: Provide "location" (city name) or '
+        '"latitude"/"longitude"';
+  }
+
+  final baseUrl = serverHttpUrl;
+  if (baseUrl == null || baseUrl.isEmpty) {
+    return 'Error: Not connected to server';
+  }
+
+  final action = (args['action'] as String? ?? 'current').toLowerCase().trim();
+  final days = (args['days'] as num?)?.toInt();
+  final hours = (args['hours'] as num?)?.toInt();
+
+  final query = _buildQuery(
+    location: location,
+    latitude: latRaw is num ? latRaw.toDouble() : null,
+    longitude: lonRaw is num ? lonRaw.toDouble() : null,
+    action: action,
+    days: days,
+    hours: hours,
+  );
+
   final effectiveClient = client ?? http.Client();
   final shouldCloseClient = client == null;
 
   try {
-    final coords = await _resolveCoordinates(args, effectiveClient);
-    if (coords == null) {
-      return 'Error: Provide "location" (city name) or '
-          '"latitude"/"longitude"';
+    final response = await effectiveClient
+        .post(
+          Uri.parse('$baseUrl/v1/tools/brave/rich'),
+          headers: {'Content-Type': 'application/json', ...serverHeaders},
+          body: jsonEncode({
+            'query': query,
+            'country': 'DE',
+            'search_lang': 'de',
+          }),
+        )
+        .timeout(const Duration(seconds: 25));
+
+    if (response.statusCode == 404) {
+      return 'No weather data from Brave for "$query". Try rephrasing the '
+          'location or a different action.';
+    }
+    if (response.statusCode != 200) {
+      final errorData = _tryDecodeJsonObject(response.body);
+      final error = errorData?['error']?.toString();
+      return 'Weather error: ${error ?? 'HTTP ${response.statusCode}'}';
     }
 
-    final lat = coords['lat']!;
-    final lon = coords['lon']!;
-    final locationName = coords['name'] ?? '$lat, $lon';
-
-    switch (action) {
-      case 'current':
-        return await _fetchCurrent(lat, lon, locationName, effectiveClient);
-      case 'forecast':
-        final days = (args['days'] as num?)?.toInt() ?? 7;
-        return await _fetchForecast(
-          lat,
-          lon,
-          locationName,
-          days.clamp(1, 16),
-          effectiveClient,
-        );
-      case 'hourly':
-        final hours = (args['hours'] as num?)?.toInt() ?? 24;
-        return await _fetchHourly(
-          lat,
-          lon,
-          locationName,
-          hours.clamp(1, 48),
-          effectiveClient,
-        );
-      default:
-        return 'Error: Unknown action "$action". Use: current, forecast, '
-            'hourly';
+    final data = _tryDecodeJsonObject(response.body);
+    if (data == null) {
+      return 'Weather error: Invalid server response';
     }
+
+    final vertical = data['vertical']?.toString() ?? '';
+    final payload = data['data'];
+    if (payload is! Map) {
+      return 'No weather data in response for "$query"';
+    }
+
+    return _formatWeather(
+      locationLabel: location.isNotEmpty ? location : query,
+      action: action,
+      vertical: vertical,
+      payload: Map<String, dynamic>.from(payload),
+    );
+  } on TimeoutException {
+    return 'Weather request timed out. Please try again.';
   } catch (e) {
     return 'Weather error: $e';
   } finally {
@@ -89,225 +94,262 @@ Future<String> executeWeather(
   }
 }
 
-Future<Map<String, dynamic>?> _resolveCoordinates(
-  Map<String, dynamic> args,
-  http.Client client,
-) async {
-  final lat = args['latitude'];
-  final lon = args['longitude'];
-  if (lat is num && lon is num) {
-    return {
-      'lat': lat.toDouble(),
-      'lon': lon.toDouble(),
-      'name': args['location'] as String?,
-    };
+String _buildQuery({
+  required String location,
+  double? latitude,
+  double? longitude,
+  required String action,
+  int? days,
+  int? hours,
+}) {
+  final locationPart = location.isNotEmpty
+      ? location
+      : (latitude != null && longitude != null
+            ? '$latitude,$longitude'
+            : '');
+
+  switch (action) {
+    case 'forecast':
+      final n = (days ?? 7).clamp(1, 16);
+      return '$n day weather forecast $locationPart'.trim();
+    case 'hourly':
+      final n = (hours ?? 24).clamp(1, 48);
+      return 'hourly weather next $n hours $locationPart'.trim();
+    case 'current':
+    default:
+      return 'weather $locationPart'.trim();
   }
-
-  final location = args['location'] as String?;
-  if (location == null || location.isEmpty) return null;
-
-  final uri = Uri.parse(
-    'https://geocoding-api.open-meteo.com/v1/search'
-    '?name=${Uri.encodeComponent(location)}&count=1&language=en',
-  );
-  final resp = await client.get(uri);
-  if (resp.statusCode != 200) return null;
-
-  final data = jsonDecode(resp.body) as Map<String, dynamic>;
-  final results = data['results'] as List?;
-  if (results == null || results.isEmpty) return null;
-
-  final place = results[0] as Map<String, dynamic>;
-  final country = place['country'] ?? '';
-  final admin1 = place['admin1'] ?? '';
-  final name = place['name'] ?? location;
-  final displayName = [
-    name,
-    if ((admin1 as String).isNotEmpty) admin1,
-    if ((country as String).isNotEmpty) country,
-  ].join(', ');
-
-  return {
-    'lat': (place['latitude'] as num).toDouble(),
-    'lon': (place['longitude'] as num).toDouble(),
-    'name': displayName,
-    'timezone': place['timezone'],
-  };
 }
 
-Future<String> _fetchCurrent(
-  double lat,
-  double lon,
-  String location,
-  http.Client client,
-) async {
-  final uri = Uri.parse(
-    'https://api.open-meteo.com/v1/forecast'
-    '?latitude=$lat&longitude=$lon'
-    '&current=temperature_2m,relative_humidity_2m,apparent_temperature,'
-    'precipitation,weather_code,cloud_cover,wind_speed_10m,'
-    'wind_direction_10m,wind_gusts_10m,surface_pressure'
-    '&timezone=auto',
-  );
-
-  final resp = await client.get(uri);
-  if (resp.statusCode != 200) {
-    return 'Error: Open-Meteo returned ${resp.statusCode}';
+Map<String, dynamic>? _tryDecodeJsonObject(String body) {
+  try {
+    final decoded = jsonDecode(body);
+    if (decoded is Map<String, dynamic>) return decoded;
+    if (decoded is Map) return Map<String, dynamic>.from(decoded);
+  } catch (_) {
+    // ignore
   }
+  return null;
+}
 
-  final data = jsonDecode(resp.body) as Map<String, dynamic>;
-  final current = data['current'] as Map<String, dynamic>;
-  final units = data['current_units'] as Map<String, dynamic>;
-
-  final wmo = (current['weather_code'] as num).toInt();
-  final temp = current['temperature_2m'];
-  final feelsLike = current['apparent_temperature'];
-  final humidity = current['relative_humidity_2m'];
-  final windSpeed = current['wind_speed_10m'];
-  final windDir = current['wind_direction_10m'];
-  final windGusts = current['wind_gusts_10m'];
-  final precip = current['precipitation'];
-  final clouds = current['cloud_cover'];
-  final pressure = current['surface_pressure'];
-
+String _formatWeather({
+  required String locationLabel,
+  required String action,
+  required String vertical,
+  required Map<String, dynamic> payload,
+}) {
   final buf = StringBuffer();
-  buf.writeln('Current weather in $location:');
-  buf.writeln(_wmoDescription(wmo));
-  buf.writeln(
-    'Temperature: $temp${units['temperature_2m']} '
-    '(feels like $feelsLike${units['apparent_temperature']})',
-  );
-  buf.writeln('Humidity: $humidity${units['relative_humidity_2m']}');
-  buf.writeln(
-    'Wind: $windSpeed ${units['wind_speed_10m']} '
-    '${_windDirection((windDir as num?)?.toDouble() ?? 0)} '
-    '(gusts $windGusts ${units['wind_gusts_10m']})',
-  );
-  buf.writeln('Precipitation: $precip ${units['precipitation']}');
-  buf.writeln('Cloud cover: $clouds${units['cloud_cover']}');
-  buf.writeln('Pressure: $pressure ${units['surface_pressure']}');
+  final weather = _pickMap(payload, const [
+    'weather',
+    'data',
+    'result',
+    'results',
+    'forecast',
+  ]);
+  final source = weather ?? payload;
 
-  return buf.toString().trimRight();
+  final place = _pickString(source, const [
+    'location',
+    'place',
+    'title',
+    'name',
+    'query',
+  ]) ?? locationLabel;
+
+  buf.writeln('Weather — $place (source: Brave rich${vertical.isNotEmpty ? '/$vertical' : ''})');
+
+  final current = _pickMap(source, const [
+    'current',
+    'now',
+    'current_condition',
+    'current_conditions',
+  ]);
+  if (current != null) {
+    _writeCurrent(buf, current);
+  } else {
+    // Top-level condition fields
+    _writeCurrent(buf, source);
+  }
+
+  if (action == 'forecast' || action == 'current') {
+    final daily = _pickList(source, const [
+      'forecast',
+      'daily',
+      'days',
+      'forecast_days',
+      'daily_forecast',
+    ]);
+    if (daily != null && daily.isNotEmpty) {
+      buf.writeln();
+      buf.writeln('Forecast:');
+      for (final entry in daily) {
+        if (entry is Map) {
+          _writeDay(buf, Map<String, dynamic>.from(entry));
+        }
+      }
+    }
+  }
+
+  if (action == 'hourly') {
+    final hourly = _pickList(source, const [
+      'hourly',
+      'hours',
+      'hour_forecast',
+      'hourly_forecast',
+    ]);
+    if (hourly != null && hourly.isNotEmpty) {
+      buf.writeln();
+      buf.writeln('Hourly:');
+      for (final entry in hourly) {
+        if (entry is Map) {
+          _writeHour(buf, Map<String, dynamic>.from(entry));
+        }
+      }
+    }
+  }
+
+  final result = buf.toString().trimRight();
+  if (result.split('\n').length <= 1) {
+    // Fallback: dump raw JSON so the model still has something to work with.
+    return '$result\nRaw payload:\n${jsonEncode(payload)}';
+  }
+  return result;
 }
 
-Future<String> _fetchForecast(
-  double lat,
-  double lon,
-  String location,
-  int days,
-  http.Client client,
-) async {
-  final uri = Uri.parse(
-    'https://api.open-meteo.com/v1/forecast'
-    '?latitude=$lat&longitude=$lon'
-    '&daily=weather_code,temperature_2m_max,temperature_2m_min,'
-    'apparent_temperature_max,apparent_temperature_min,'
-    'precipitation_sum,precipitation_probability_max,'
-    'wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,'
-    'sunrise,sunset,uv_index_max'
-    '&forecast_days=$days'
-    '&timezone=auto',
-  );
+void _writeCurrent(StringBuffer buf, Map<String, dynamic> src) {
+  final temp = _pickString(src, const [
+    'temperature',
+    'temp',
+    'temp_c',
+    'temperature_c',
+    'current_temp',
+  ]);
+  final feels = _pickString(src, const [
+    'feels_like',
+    'feelslike',
+    'apparent_temperature',
+    'feels_like_c',
+  ]);
+  final condition = _pickString(src, const [
+    'condition',
+    'description',
+    'summary',
+    'weather',
+    'conditions',
+    'text',
+  ]);
+  final humidity = _pickString(src, const ['humidity', 'humidity_pct']);
+  final wind = _pickString(src, const ['wind', 'wind_speed', 'windspeed']);
+  final windDir = _pickString(src, const [
+    'wind_direction',
+    'wind_dir',
+    'winddir',
+  ]);
+  final precip = _pickString(src, const ['precipitation', 'precip', 'rain']);
+  final pressure = _pickString(src, const ['pressure', 'surface_pressure']);
+  final uv = _pickString(src, const ['uv', 'uv_index']);
+  final high = _pickString(src, const ['high', 'max_temp', 'temp_max', 'high_temp']);
+  final low = _pickString(src, const ['low', 'min_temp', 'temp_min', 'low_temp']);
 
-  final resp = await client.get(uri);
-  if (resp.statusCode != 200) {
-    return 'Error: Open-Meteo returned ${resp.statusCode}';
+  if (condition != null) buf.writeln('Condition: $condition');
+  if (temp != null) {
+    final pieces = <String>[temp];
+    if (feels != null && feels != temp) pieces.add('(feels $feels)');
+    buf.writeln('Temperature: ${pieces.join(' ')}');
   }
-
-  final data = jsonDecode(resp.body) as Map<String, dynamic>;
-  final daily = data['daily'] as Map<String, dynamic>;
-  final units = data['daily_units'] as Map<String, dynamic>;
-  final times = (daily['time'] as List).cast<String>();
-
-  final buf = StringBuffer();
-  buf.writeln('$days-day forecast for $location:');
-  buf.writeln();
-
-  for (var i = 0; i < times.length; i++) {
-    final date = times[i];
-    final wmo = (daily['weather_code'][i] as num).toInt();
-    final tMax = daily['temperature_2m_max'][i];
-    final tMin = daily['temperature_2m_min'][i];
-    final precip = daily['precipitation_sum'][i];
-    final precipProb = daily['precipitation_probability_max'][i];
-    final windMax = daily['wind_speed_10m_max'][i];
-    final windDir = daily['wind_direction_10m_dominant'][i];
-    final uvMax = daily['uv_index_max'][i];
-
-    buf.writeln('$date -- ${_wmoDescription(wmo)}');
-    buf.writeln('  Temp: $tMin-$tMax${units['temperature_2m_max']}');
-    buf.writeln(
-      '  Precip: $precip${units['precipitation_sum']} '
-      '($precipProb% chance)',
-    );
-    buf.writeln(
-      '  Wind: $windMax ${units['wind_speed_10m_max']} '
-      '${_windDirection((windDir as num?)?.toDouble() ?? 0)}',
-    );
-    buf.writeln('  UV: $uvMax');
-    buf.writeln();
+  if (high != null || low != null) {
+    buf.writeln('High/Low: ${high ?? '?'} / ${low ?? '?'}');
   }
-
-  return buf.toString().trimRight();
+  if (humidity != null) buf.writeln('Humidity: $humidity');
+  if (wind != null) {
+    buf.writeln('Wind: $wind${windDir != null ? ' $windDir' : ''}');
+  }
+  if (precip != null) buf.writeln('Precipitation: $precip');
+  if (pressure != null) buf.writeln('Pressure: $pressure');
+  if (uv != null) buf.writeln('UV: $uv');
 }
 
-Future<String> _fetchHourly(
-  double lat,
-  double lon,
-  String location,
-  int hours,
-  http.Client client,
-) async {
-  final uri = Uri.parse(
-    'https://api.open-meteo.com/v1/forecast'
-    '?latitude=$lat&longitude=$lon'
-    '&hourly=temperature_2m,relative_humidity_2m,apparent_temperature,'
-    'precipitation_probability,precipitation,weather_code,'
-    'cloud_cover,wind_speed_10m,wind_direction_10m'
-    '&forecast_hours=$hours'
-    '&timezone=auto',
-  );
-
-  final resp = await client.get(uri);
-  if (resp.statusCode != 200) {
-    return 'Error: Open-Meteo returned ${resp.statusCode}';
-  }
-
-  final data = jsonDecode(resp.body) as Map<String, dynamic>;
-  final hourly = data['hourly'] as Map<String, dynamic>;
-  final units = data['hourly_units'] as Map<String, dynamic>;
-  final times = (hourly['time'] as List).cast<String>();
-
-  final buf = StringBuffer();
-  buf.writeln('Hourly forecast for $location (next $hours hours):');
-  buf.writeln();
-
-  for (var i = 0; i < times.length; i++) {
-    final time = times[i];
-    final wmo = (hourly['weather_code'][i] as num).toInt();
-    final temp = hourly['temperature_2m'][i];
-    final feelsLike = hourly['apparent_temperature'][i];
-    final precip = hourly['precipitation'][i];
-    final precipProb = hourly['precipitation_probability'][i];
-    final windSpeed = hourly['wind_speed_10m'][i];
-    final windDir = hourly['wind_direction_10m'][i];
-
-    buf.writeln(
-      '${_timeOnly(time)} $temp${units['temperature_2m']} '
-      '(feels $feelsLike${units['apparent_temperature']}) | '
-      '${_wmoDescription(wmo)} | '
-      'Wind $windSpeed ${units['wind_speed_10m']} '
-      '${_windDirection((windDir as num?)?.toDouble() ?? 0)} | '
-      'Precip $precip${units['precipitation']} ($precipProb%)',
-    );
-  }
-
-  return buf.toString().trimRight();
+void _writeDay(StringBuffer buf, Map<String, dynamic> day) {
+  final date = _pickString(day, const ['date', 'day', 'time', 'label']);
+  final cond = _pickString(day, const [
+    'condition',
+    'description',
+    'summary',
+    'weather',
+  ]);
+  final high = _pickString(day, const ['high', 'max_temp', 'temp_max', 'high_temp']);
+  final low = _pickString(day, const ['low', 'min_temp', 'temp_min', 'low_temp']);
+  final precip = _pickString(day, const ['precipitation', 'precip', 'rain']);
+  final wind = _pickString(day, const ['wind', 'wind_speed']);
+  buf.write('- ');
+  if (date != null) buf.write('$date: ');
+  final parts = <String>[];
+  if (cond != null) parts.add(cond);
+  if (high != null || low != null) parts.add('${high ?? '?'}/${low ?? '?'}');
+  if (precip != null) parts.add('precip $precip');
+  if (wind != null) parts.add('wind $wind');
+  buf.writeln(parts.isEmpty ? '(no data)' : parts.join(' · '));
 }
 
-String _timeOnly(dynamic isoString) {
-  if (isoString == null) return '?';
-  final s = isoString.toString();
-  final tIdx = s.indexOf('T');
-  return tIdx >= 0 ? s.substring(tIdx + 1) : s;
+void _writeHour(StringBuffer buf, Map<String, dynamic> hour) {
+  final time = _pickString(hour, const ['time', 'hour', 'label', 'timestamp']);
+  final cond = _pickString(hour, const [
+    'condition',
+    'description',
+    'summary',
+    'weather',
+  ]);
+  final temp = _pickString(hour, const ['temperature', 'temp', 'temp_c']);
+  final precip = _pickString(hour, const ['precipitation', 'precip', 'rain']);
+  final wind = _pickString(hour, const ['wind', 'wind_speed']);
+  final parts = <String>[];
+  if (temp != null) parts.add(temp);
+  if (cond != null) parts.add(cond);
+  if (precip != null) parts.add('precip $precip');
+  if (wind != null) parts.add('wind $wind');
+  buf.write('- ');
+  if (time != null) buf.write('$time: ');
+  buf.writeln(parts.isEmpty ? '(no data)' : parts.join(' · '));
+}
+
+Map<String, dynamic>? _pickMap(Map<String, dynamic> src, List<String> keys) {
+  for (final k in keys) {
+    final v = src[k];
+    if (v is Map) {
+      return Map<String, dynamic>.from(v);
+    }
+  }
+  return null;
+}
+
+List? _pickList(Map<String, dynamic> src, List<String> keys) {
+  for (final k in keys) {
+    final v = src[k];
+    if (v is List) return v;
+    if (v is Map) {
+      // Nested list candidates, e.g. {"forecast": {"days": [...]}}.
+      final nested = _pickList(Map<String, dynamic>.from(v), keys);
+      if (nested != null) return nested;
+    }
+  }
+  return null;
+}
+
+String? _pickString(Map<String, dynamic> src, List<String> keys) {
+  for (final k in keys) {
+    final v = src[k];
+    if (v == null) continue;
+    if (v is String) {
+      final s = v.trim();
+      if (s.isNotEmpty) return s;
+    } else if (v is num) {
+      return v.toString();
+    } else if (v is Map) {
+      final inner =
+          v['value'] ?? v['text'] ?? v['display'] ?? v['display_value'];
+      if (inner is String && inner.trim().isNotEmpty) return inner.trim();
+      if (inner is num) return inner.toString();
+    }
+  }
+  return null;
 }

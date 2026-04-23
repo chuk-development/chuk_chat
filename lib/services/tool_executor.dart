@@ -714,9 +714,21 @@ class ToolExecutor {
 
       // -- Maps --
       case 'search_places':
-        return _wrapOutput(await map_tools.executeSearchPlaces(args));
+        return _wrapOutput(
+          await map_tools.executeSearchPlaces(
+            serverHttpUrl: serverHttpUrl,
+            serverHeaders: _serverHeaders(accessToken: accessToken),
+            args: args,
+          ),
+        );
       case 'search_restaurants':
-        return _wrapOutput(await map_tools.executeSearchRestaurants(args));
+        return _wrapOutput(
+          await map_tools.executeSearchRestaurants(
+            serverHttpUrl: serverHttpUrl,
+            serverHeaders: _serverHeaders(accessToken: accessToken),
+            args: args,
+          ),
+        );
       case 'geocode':
         return _wrapOutput(await map_tools.executeGeocode(args));
       case 'get_route':
@@ -724,7 +736,13 @@ class ToolExecutor {
 
       // -- Weather --
       case 'weather':
-        return _wrapOutput(await weather_tools.executeWeather(args));
+        return _wrapOutput(
+          await weather_tools.executeWeather(
+            serverHttpUrl: serverHttpUrl,
+            serverHeaders: _serverHeaders(accessToken: accessToken),
+            args: args,
+          ),
+        );
 
       // -- Platform-specific tools (stub on web) --
       case 'spotify_control':

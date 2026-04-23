@@ -17,9 +17,6 @@ import 'package:chuk_chat/utils/certificate_pinning_io.dart' as pinning_io;
 /// because the Dart runtime sometimes cannot access the Windows system
 /// certificate store. Only well-known public services are listed here.
 const Set<String> _trustedToolApiHosts = {
-  // Open-Meteo (weather)
-  'api.open-meteo.com',
-  'geocoding-api.open-meteo.com',
   // OpenStreetMap / Nominatim (maps, geocoding)
   'nominatim.openstreetmap.org',
   // OSRM (routing)

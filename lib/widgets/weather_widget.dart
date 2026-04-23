@@ -403,9 +403,14 @@ class WeatherBlockWidget extends StatelessWidget {
   String _shortTime(String t) {
     if (t.contains('T')) {
       final parts = t.split('T');
-      if (parts.length == 2) return parts[1].substring(0, 5);
+      if (parts.length == 2) {
+        final time = parts[1];
+        return time.length >= 5 ? time.substring(0, 5) : time;
+      }
     }
-    if (t.length >= 5 && t.contains(':')) return t.substring(0, 5);
+    if (t.contains(':')) {
+      return t.length >= 5 ? t.substring(0, 5) : t;
+    }
     return t;
   }
 
