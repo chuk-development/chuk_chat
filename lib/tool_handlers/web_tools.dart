@@ -168,6 +168,10 @@ Future<_CrawlContext> _crawlForContext({
 
 /// Web search via server-side Brave Search proxy.
 /// API key stays on the server; server logs usage/costs.
+///
+/// Set `type: "images"` to get real photo URLs instead of web pages —
+/// pass one of the returned image_url values to `fetch_image` to display
+/// the photo inline. Never fall back to generate_image* for real subjects.
 Future<String> executeWebSearch({
   required String? serverHttpUrl,
   required Map<String, String> serverHeaders,
@@ -176,6 +180,17 @@ Future<String> executeWebSearch({
   final query = args['query'] as String? ?? args['q'] as String? ?? '';
   if (query.isEmpty) {
     return 'Error: No search query provided';
+  }
+
+  final typeRaw = (args['type'] as String? ?? 'web').toLowerCase().trim();
+  final isImageMode =
+      typeRaw == 'images' || typeRaw == 'image' || typeRaw == 'photo';
+  if (isImageMode) {
+    return executeImageSearch(
+      serverHttpUrl: serverHttpUrl,
+      serverHeaders: serverHeaders,
+      args: args,
+    );
   }
 
   final searchCount = _coerceInt(

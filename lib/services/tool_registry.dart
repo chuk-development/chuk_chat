@@ -33,7 +33,6 @@ const Map<String, ToolCategory> toolCategoryMap = {
   'ask_user': ToolCategory.basic,
   'web_search': ToolCategory.search,
   'web_crawl': ToolCategory.search,
-  'image_search': ToolCategory.search,
   'generate_image': ToolCategory.search,
   'generate_image_hunyuan': ToolCategory.search,
   'generate_image_flux': ToolCategory.search,
@@ -321,16 +320,27 @@ final List<ClientTool> builtinTools = [
     description:
         'Search the web and return ranked results with links. Also auto-fetches '
         'readable content from top results to provide immediate context. Use '
-        'web_crawl for deep fetch of a specific URL.',
+        'web_crawl for deep fetch of a specific URL. '
+        'IMAGE MODE: pass type="images" to get REAL photo URLs (actors, '
+        'places, posters, products, events, celebrities, cars, animals, '
+        'food). Returned image_url values go straight into fetch_image to '
+        'render the real photo inline. Use this — NOT generate_image* — '
+        'whenever the user wants a picture of something real. Only use '
+        'generate_image* when the user explicitly asks for AI art, '
+        'illustration, concept art, or a fictional/stylized image.',
     parameters: {
       'query': 'string (required: the search query)',
+      'type':
+          'string (optional: "web" (default) or "images" for real photo URLs)',
       'count': 'int (optional: number of search results, default 5, max 8)',
       'include_content':
-          'bool (optional: auto-fetch page content from top hits, default true)',
+          'bool (optional, web mode only: auto-fetch page content from top hits, default true)',
       'crawl_count':
-          'int (optional: number of top URLs to auto-fetch, default 2, max 3)',
+          'int (optional, web mode only: number of top URLs to auto-fetch, default 2, max 3)',
       'crawl_max_chars':
-          'int (optional: max chars per auto-fetched page, default 3000, max 8000)',
+          'int (optional, web mode only: max chars per auto-fetched page, default 3000, max 8000)',
+      'safesearch':
+          'string (optional, images mode only: "strict" (default) or "off")',
     },
     type: ToolType.builtin,
     tags: [
@@ -350,6 +360,21 @@ final List<ClientTool> builtinTools = [
       'current',
       'facts',
       'fakten',
+      'image',
+      'images',
+      'photo',
+      'photos',
+      'picture',
+      'pictures',
+      'bild',
+      'bilder',
+      'foto',
+      'fotos',
+      'poster',
+      'cover',
+      'schauspieler',
+      'actor',
+      'celebrity',
     ],
   ),
   ClientTool(
@@ -371,48 +396,6 @@ final List<ClientTool> builtinTools = [
       'lesen',
       'article',
       'artikel',
-    ],
-  ),
-  ClientTool(
-    name: 'image_search',
-    description:
-        'Search the web for REAL photos/images via Brave Image Search. '
-        'Returns direct image URLs (image_url), thumbnails, and source pages. '
-        'Use this whenever the user wants to see pictures of real people, '
-        'places, products, events, movies, celebrities, cars, animals, food, '
-        'etc. — NOT generate_image*. Workflow: call image_search to get image '
-        'URLs, then call fetch_image on the best image_url(s) to display the '
-        'photos inline. generate_image* creates AI art and must NOT be used '
-        'for real-world subjects.',
-    parameters: {
-      'query': 'string (required: descriptive image query)',
-      'count': 'int (optional: number of image results, default 5, max 8)',
-      'safesearch':
-          'string (optional: "strict" or "off", default "strict")',
-    },
-    type: ToolType.builtin,
-    tags: [
-      'image',
-      'images',
-      'photo',
-      'photos',
-      'picture',
-      'pictures',
-      'bild',
-      'bilder',
-      'foto',
-      'fotos',
-      'search image',
-      'image search',
-      'bildersuche',
-      'find image',
-      'real photo',
-      'echtes foto',
-      'actor',
-      'schauspieler',
-      'celebrity',
-      'poster',
-      'cover',
     ],
   ),
   ClientTool(

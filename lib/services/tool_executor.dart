@@ -77,7 +77,6 @@ class ToolExecutor {
     'ask_user',
     'web_search',
     'web_crawl',
-    'image_search',
     'generate_image',
     'generate_image_hunyuan',
     'generate_image_flux',
@@ -669,14 +668,6 @@ class ToolExecutor {
       case 'web_crawl':
         return _wrapOutput(
           await web_tools.executeWebCrawl(
-            serverHttpUrl: serverHttpUrl,
-            serverHeaders: _serverHeaders(accessToken: accessToken),
-            args: args,
-          ),
-        );
-      case 'image_search':
-        return _wrapOutput(
-          await web_tools.executeImageSearch(
             serverHttpUrl: serverHttpUrl,
             serverHeaders: _serverHeaders(accessToken: accessToken),
             args: args,

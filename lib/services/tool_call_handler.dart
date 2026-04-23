@@ -560,19 +560,15 @@ class ToolCallHandler {
         .map((t) => t.toJson())
         .firstOrNull;
 
-    // web_search, web_crawl and image_search are always available in
-    // discovery mode so the AI can reach for real photos without the
-    // find_tools round-trip.
+    // web_search and web_crawl are always available in discovery mode.
+    // web_search handles image search too (type="images") so the AI can
+    // reach for real photos without another tool registration.
     final webSearchToolDef = _toolExecutor.allTools
         .where((t) => t.name == 'web_search')
         .map((t) => t.toJson())
         .firstOrNull;
     final webCrawlToolDef = _toolExecutor.allTools
         .where((t) => t.name == 'web_crawl')
-        .map((t) => t.toJson())
-        .firstOrNull;
-    final imageSearchToolDef = _toolExecutor.allTools
-        .where((t) => t.name == 'image_search')
         .map((t) => t.toJson())
         .firstOrNull;
 
@@ -615,7 +611,6 @@ class ToolCallHandler {
           askUserToolDef: askUserToolDef,
           webSearchToolDef: webSearchToolDef,
           webCrawlToolDef: webCrawlToolDef,
-          imageSearchToolDef: imageSearchToolDef,
           projectToolDef: projectToolDef,
           artifactToolDef: artifactToolDef,
           artifactSchemaToolDef: artifactSchemaToolDef,
