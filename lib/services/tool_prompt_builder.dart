@@ -401,10 +401,11 @@ After find_tools returns the tool descriptions and parameters, you can use those
 DO NOT STALL: Never end with intention-only text like "I will search". Either emit the next tool_call, or provide a complete final answer.
 
 VISUAL OUTPUT NOTE:
-- <chart>, <map>, and <email> are OUTPUT TAGS, not tools. Write them directly in your response.
-- Never call find_tools for "chart", "graph", "plot", "map", or "email".
+- <chart>, <map>, <email>, and <weather> are OUTPUT TAGS, not tools. Write them directly in your response.
+- Never call find_tools for "chart", "graph", "plot", "map", "email", or "weather".
 - If user asks for a chart/map, discover DATA tools first, then emit <chart>/<map> directly in your final response text.
 - To draft an email, emit <email>{"to":"...","subject":"...","body":"..."}</email> in your response. The app renders it as a card with an "Open in Mail App" button.
+- For weather questions, call the weather tool first, then emit a <weather> block with the structured data so the app renders a nice weather card.
 - For "technische Zeichnung" / "technical drawing" / "engineering drawing" / DIN-style blueprints: use artifact_manager with type="technical_drawing" and JSON content. This is a RENDERED drawing with dimensions, NOT an AI-generated image. Do NOT use generate_image for technical drawings.
 
 REAL PHOTOS vs AI ART — HARD RULE:
@@ -424,6 +425,7 @@ VISUAL OUTPUT SWITCHES (current):
 - chart tags: ${includeChartVisualOutput ? 'enabled' : 'disabled'}
 - map tags: ${includeMapVisualOutput ? 'enabled' : 'disabled'}
 - email tags: enabled
+- weather tags: enabled
 
 STOP after $toolCallEnd -- wait for real results. Never fabricate outputs.
 ${_buildAlwaysAvailableSection(alwaysAvailableTools)}
@@ -648,16 +650,73 @@ Never wrap an <artifact> tag inside a markdown code fence (```…```); the parse
 ''';
   }
 
+  /// Docs for visual tags that are always available regardless of the
+  /// chart/map feature switches (email drafts, weather cards).
+  void _appendAlwaysOnVisualTags(StringBuffer buffer) {
+    buffer.writeln();
+    buffer.writeln('### Emails');
+    buffer.writeln(
+      'To draft an email, emit an <email> tag with JSON. The app renders it as a card with an "Open in Mail App" button. Nothing is sent automatically.',
+    );
+    buffer.writeln('<email>');
+    buffer.writeln(
+      '{"to":"recipient@example.com","subject":"Meeting Tomorrow","body":"Hi,\\n\\nJust confirming our meeting tomorrow at 2pm.\\n\\nBest regards"}',
+    );
+    buffer.writeln('</email>');
+    buffer.writeln();
+    buffer.writeln('**Email fields:**');
+    buffer.writeln('- "to": recipient email address (required)');
+    buffer.writeln('- "subject": email subject line (optional)');
+    buffer.writeln(
+      '- "body": email body text, use \\n for newlines (optional)',
+    );
+    buffer.writeln('- "cc": CC addresses, comma-separated (optional)');
+    buffer.writeln('- "bcc": BCC addresses, comma-separated (optional)');
+
+    buffer.writeln();
+    buffer.writeln('### Weather');
+    buffer.writeln(
+      'When the user asks about weather, call the weather tool FIRST, then emit a <weather> block populated from the tool output. The app renders it as a polished weather card.',
+    );
+    buffer.writeln('<weather>');
+    buffer.writeln(
+      '{"location":"Kiel, Schleswig-Holstein, Germany","current":{"temp":8,"feels_like":5,"condition":"Partly cloudy","code":2,"humidity":72,"wind_speed":14,"wind_dir":"W","precipitation":0,"unit_temp":"C","unit_wind":"km/h","unit_precip":"mm"},"daily":[{"date":"2026-04-24","code":2,"temp_max":10,"temp_min":3,"precip_prob":20,"condition":"Partly cloudy"}],"hourly":[{"time":"14:00","code":2,"temp":8,"precip_prob":10}]}',
+    );
+    buffer.writeln('</weather>');
+    buffer.writeln();
+    buffer.writeln('**Weather fields:**');
+    buffer.writeln('- "location": display name (required)');
+    buffer.writeln(
+      '- "current": {temp, feels_like, condition, code (WMO 0-99), humidity, wind_speed, wind_dir (N/NE/.../NW), precipitation, unit_temp ("C"|"F"), unit_wind, unit_precip} (required)',
+    );
+    buffer.writeln(
+      '- "daily": array of {date (YYYY-MM-DD), code, temp_max, temp_min, precip_prob, condition} (optional, recommended for forecast queries)',
+    );
+    buffer.writeln(
+      '- "hourly": array of {time (HH:MM or ISO), code, temp, precip_prob} (optional, include when user asks for next hours)',
+    );
+    buffer.writeln(
+      '**WMO codes:** 0=clear, 1-2=partly cloudy, 3=overcast, 45/48=fog, 51-57=drizzle, 61-67=rain, 71-77=snow, 80-82=rain showers, 85-86=snow showers, 95-99=thunderstorm.',
+    );
+    buffer.writeln(
+      '**Weather rules:** Only include fields from weather tool results. Never fabricate temperatures, codes, or forecasts. Emit at most one <weather> block per response. Do NOT also dump the raw tool text — the card contains everything.',
+    );
+  }
+
   /// Chart and map rendering protocol — these are output formats, not tools.
   String _visualOutputProtocol({
     required bool includeMaps,
     required bool includeCharts,
   }) {
     if (!includeMaps && !includeCharts) {
-      return '''
-## VISUAL OUTPUT
-
-Charts and maps are disabled for this session. Do NOT emit <chart> or <map> tags.''';
+      final buffer = StringBuffer();
+      buffer.writeln('## VISUAL OUTPUT');
+      buffer.writeln();
+      buffer.writeln(
+        'Charts and maps are disabled for this session. Do NOT emit <chart> or <map> tags.',
+      );
+      _appendAlwaysOnVisualTags(buffer);
+      return buffer.toString();
     }
 
     final buffer = StringBuffer();
@@ -732,7 +791,7 @@ Charts and maps are disabled for this session. Do NOT emit <chart> or <map> tags
       buffer.writeln('Type "places" (rich cards with details):');
       buffer.writeln('<map>');
       buffer.writeln(
-        '{"type":"places","title":"Restaurants","places":[{"name":"Example","lat":54.3,"lon":10.1,"cuisine":"Italian","opening_hours":"Mo-Fr 12-22","address":"Str. 82"}]}',
+        '{"type":"places","title":"Restaurants","places":[{"name":"Example","lat":54.3,"lon":10.1,"cuisine":"Italian","opening_hours":"Mo-Fr 12-22","address":"Str. 82","rating":4.5,"review_count":120,"price_range":"€€","description":"Cozy trattoria with wood-fired pizzas."}]}',
       );
       buffer.writeln('</map>');
       buffer.writeln();
@@ -744,26 +803,7 @@ Charts and maps are disabled for this session. Do NOT emit <chart> or <map> tags
       buffer.writeln('</map>');
     }
 
-    // Email drafts — always available
-    buffer.writeln();
-    buffer.writeln('### Emails');
-    buffer.writeln(
-      'To draft an email, emit an <email> tag with JSON. The app renders it as a card with an "Open in Mail App" button. Nothing is sent automatically.',
-    );
-    buffer.writeln('<email>');
-    buffer.writeln(
-      '{"to":"recipient@example.com","subject":"Meeting Tomorrow","body":"Hi,\\n\\nJust confirming our meeting tomorrow at 2pm.\\n\\nBest regards"}',
-    );
-    buffer.writeln('</email>');
-    buffer.writeln();
-    buffer.writeln('**Email fields:**');
-    buffer.writeln('- "to": recipient email address (required)');
-    buffer.writeln('- "subject": email subject line (optional)');
-    buffer.writeln(
-      '- "body": email body text, use \\n for newlines (optional)',
-    );
-    buffer.writeln('- "cc": CC addresses, comma-separated (optional)');
-    buffer.writeln('- "bcc": BCC addresses, comma-separated (optional)');
+    _appendAlwaysOnVisualTags(buffer);
 
     buffer.writeln();
     buffer.writeln('### Visual output rules:');
@@ -810,7 +850,7 @@ Charts and maps are disabled for this session. Do NOT emit <chart> or <map> tags
         '${ruleNumber++}. ALWAYS include a <map> after location/restaurant/route tool results that contain coordinates.',
       );
       buffer.writeln(
-        '${ruleNumber++}. For places maps: include all fields the tool returned (name, lat, lon, cuisine, address, phone, website, opening_hours, rating, review_count, price_range). Omit fields marked "NOT AVAILABLE".',
+        '${ruleNumber++}. For places maps: include all fields the tool returned (name, lat, lon, cuisine, address, phone, website, opening_hours, rating, review_count, price_range, description). Omit fields marked "NOT AVAILABLE".',
       );
       buffer.writeln(
         '${ruleNumber++}. For any markers/places map, coordinates MUST come from map API tool output in this conversation (`search_places`, `search_restaurants`, or `geocode`). Never guess or approximate lat/lon.',
