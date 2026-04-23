@@ -17,25 +17,58 @@ const int _defaultChatLimit = 10;
 const int _maxChatLimit = 50;
 const int _defaultMessageLimit = 8;
 const int _maxMessageLimit = 50;
-const int _snippetRadius = 120;
+const int _snippetRadius = 180;
 const int _minLocalScanChats = 60;
 const int _maxLocalScanChats = 250;
 const int _localScanMultiplier = 6;
+// Step 1 inlines a few snippets per candidate so the AI can answer
+// without a follow-up search_in_chat call for simple lookups.
+const int _previewSnippetsTop = 5;
+const int _previewSnippetsRest = 1;
+const int _topCandidatesWithPreview = 3;
+// recent_messages action defaults.
+const int _defaultRecentLimit = 10;
+const int _maxRecentLimit = 50;
+const int _recentSnippetChars = 500;
 
 const String _actionFindChats = 'find_chats';
 const String _actionSearchInChat = 'search_in_chat';
+const String _actionRecentMessages = 'recent_messages';
+const Set<String> _validRoles = {'user', 'assistant', 'ai', 'all'};
 
 Future<String> executeSearchChats(Map<String, dynamic> args) async {
   try {
-    final query = (args['query'] as String? ?? '').trim();
-    if (query.isEmpty) {
-      return 'Error: "query" parameter is required';
-    }
-
     final chatId = (args['chat_id'] as String? ?? '').trim();
     final action = _resolveAction(args['action'], chatId: chatId);
     if (action == null) {
-      return 'Error: Invalid action. Use "find_chats" or "search_in_chat"';
+      return 'Error: Invalid action. Use "find_chats", "search_in_chat", or '
+          '"recent_messages"';
+    }
+
+    if (action == _actionRecentMessages) {
+      final effectiveChatId = chatId.isNotEmpty
+          ? chatId
+          : (ChatStorageState.selectedChatId ?? '');
+      if (effectiveChatId.isEmpty) {
+        return 'Error: "chat_id" is required for recent_messages (no active '
+            'chat selected)';
+      }
+
+      final limit = _coerceInt(
+        args['limit'],
+        fallback: _defaultRecentLimit,
+      ).clamp(1, _maxRecentLimit).toInt();
+      final role = _normalizeRole(args['role']);
+      if (role == null) {
+        return 'Error: "role" must be one of: user, assistant, ai, all';
+      }
+
+      return _recentMessages(chatId: effectiveChatId, limit: limit, role: role);
+    }
+
+    final query = (args['query'] as String? ?? '').trim();
+    if (query.isEmpty) {
+      return 'Error: "query" parameter is required for $action';
     }
 
     if (action == _actionSearchInChat) {
@@ -72,11 +105,25 @@ String? _resolveAction(dynamic rawAction, {required String chatId}) {
     return chatId.isNotEmpty ? _actionSearchInChat : _actionFindChats;
   }
 
-  if (action == _actionFindChats || action == _actionSearchInChat) {
+  if (action == _actionFindChats ||
+      action == _actionSearchInChat ||
+      action == _actionRecentMessages) {
     return action;
   }
 
   return null;
+}
+
+String? _normalizeRole(dynamic raw) {
+  final value = (raw as String? ?? '').trim().toLowerCase();
+  if (value.isEmpty) {
+    return 'all';
+  }
+  if (!_validRoles.contains(value)) {
+    return null;
+  }
+  // Treat "ai" as an alias for "assistant".
+  return value == 'ai' ? 'assistant' : value;
 }
 
 Future<bool> _ensureEncryptionKey() async {
@@ -99,6 +146,7 @@ Future<String> _findChats({required String query, required int limit}) async {
   final queryLower = query.toLowerCase();
   final candidatesById = <String, _ChatCandidate>{};
   var totalSearched = ChatStorageState.chatsById.length;
+  final currentChatId = ChatStorageState.selectedChatId;
 
   final userId = _currentUserId();
   if (userId != null) {
@@ -115,7 +163,7 @@ Future<String> _findChats({required String query, required int limit}) async {
     );
     for (final row in rows) {
       final candidate = _candidateFromCacheRow(row, queryLower);
-      if (candidate != null) {
+      if (candidate != null && candidate.chatId != currentChatId) {
         _upsertCandidate(candidatesById, candidate);
       }
     }
@@ -123,6 +171,9 @@ Future<String> _findChats({required String query, required int limit}) async {
 
   // Include in-memory chats (covers unsynced/new chats).
   for (final chat in ChatStorageState.chatsById.values) {
+    if (chat.id == currentChatId) {
+      continue;
+    }
     final candidate = _candidateFromStoredChat(chat, queryLower);
     if (candidate != null) {
       _upsertCandidate(candidatesById, candidate);
@@ -130,7 +181,10 @@ Future<String> _findChats({required String query, required int limit}) async {
   }
 
   if (candidatesById.isEmpty) {
-    return 'No chats found for "$query".';
+    final excludedNote = currentChatId != null
+        ? ' (current chat excluded)'
+        : '';
+    return 'No chats found for "$query"$excludedNote.';
   }
 
   final candidates = candidatesById.values.toList()..sort(_compareCandidates);
@@ -149,22 +203,22 @@ _ChatCandidate? _candidateFromStoredChat(StoredChat chat, String queryLower) {
   final idMatch = chat.id.toLowerCase().contains(queryLower);
 
   var matchCount = 0;
-  String? firstSnippet;
+  var previewSnippets = const <String>[];
   if (messages != null && messages.isNotEmpty) {
     final summary = _summarizeMatches(messages, queryLower);
     matchCount = summary.matchCount;
-    firstSnippet = summary.firstSnippet;
+    previewSnippets = summary.snippets;
   }
 
   if (!idMatch && !titleMatch && matchCount == 0) {
     return null;
   }
 
-  if (firstSnippet == null) {
+  if (previewSnippets.isEmpty) {
     if (titleMatch) {
-      firstSnippet = title;
+      previewSnippets = <String>[title];
     } else if (idMatch) {
-      firstSnippet = 'chat_id: ${chat.id}';
+      previewSnippets = <String>['chat_id: ${chat.id}'];
     }
   }
 
@@ -174,7 +228,7 @@ _ChatCandidate? _candidateFromStoredChat(StoredChat chat, String queryLower) {
     idMatch: idMatch,
     titleMatch: titleMatch,
     matchCount: matchCount,
-    previewSnippet: firstSnippet ?? '',
+    previewSnippets: previewSnippets,
     messageCount: messages?.length ?? 0,
     updatedAt: chat.updatedAt ?? chat.createdAt,
   );
@@ -196,22 +250,22 @@ _ChatCandidate? _candidateFromCacheRow(
   final idMatch = chatId.toLowerCase().contains(queryLower);
 
   var matchCount = 0;
-  String? firstSnippet;
+  var previewSnippets = const <String>[];
   if (messages != null && messages.isNotEmpty) {
     final summary = _summarizeMatches(messages, queryLower);
     matchCount = summary.matchCount;
-    firstSnippet = summary.firstSnippet;
+    previewSnippets = summary.snippets;
   }
 
   if (!idMatch && !titleMatch && matchCount == 0) {
     return null;
   }
 
-  if (firstSnippet == null) {
+  if (previewSnippets.isEmpty) {
     if (titleMatch) {
-      firstSnippet = title;
+      previewSnippets = <String>[title];
     } else if (idMatch) {
-      firstSnippet = 'chat_id: $chatId';
+      previewSnippets = <String>['chat_id: $chatId'];
     }
   }
 
@@ -221,7 +275,7 @@ _ChatCandidate? _candidateFromCacheRow(
     idMatch: idMatch,
     titleMatch: titleMatch,
     matchCount: matchCount,
-    previewSnippet: firstSnippet ?? '',
+    previewSnippets: previewSnippets,
     messageCount: messages?.length ?? 0,
     updatedAt: _rowTimestamp(row),
   );
@@ -275,6 +329,76 @@ Future<String> _searchInChat({
     totalMatches: totalMatches,
     shownMatches: shownMatches,
   );
+}
+
+Future<String> _recentMessages({
+  required String chatId,
+  required int limit,
+  required String role,
+}) async {
+  final loaded = await _loadChatContent(chatId);
+  if (loaded == null) {
+    return 'Error: Chat "$chatId" not found or could not be loaded';
+  }
+
+  final messages = loaded.messages;
+  if (messages.isEmpty) {
+    return 'No messages found in chat "$chatId".';
+  }
+
+  final filtered = <_RecentMessageEntry>[];
+  for (int i = messages.length - 1; i >= 0; i--) {
+    final msg = messages[i];
+    if (role != 'all' && msg.role != role) {
+      continue;
+    }
+    final text = _renderMessageText(msg);
+    if (text.isEmpty) {
+      continue;
+    }
+    filtered.add(_RecentMessageEntry(index: i, role: msg.role, text: text));
+    if (filtered.length >= limit) {
+      break;
+    }
+  }
+
+  if (filtered.isEmpty) {
+    final roleLabel = role == 'all' ? 'any role' : '"$role"';
+    return 'No recent messages with role $roleLabel in chat "${loaded.title}" '
+        '(chat_id: $chatId).';
+  }
+
+  final buffer = StringBuffer();
+  buffer.writeln(
+    'Recent messages from "${loaded.title}" (chat_id: $chatId, '
+    'total messages: ${messages.length}, role filter: $role, '
+    'returned: ${filtered.length}).',
+  );
+  buffer.writeln('Listed newest first.');
+  buffer.writeln();
+
+  for (final entry in filtered) {
+    final truncated = entry.text.length > _recentSnippetChars
+        ? '${entry.text.substring(0, _recentSnippetChars)}...'
+        : entry.text;
+    buffer.writeln('- #${entry.index + 1} [${entry.role}]: $truncated');
+  }
+
+  return buffer.toString().trimRight();
+}
+
+String _renderMessageText(ChatMessage message) {
+  final parts = <String>[];
+  if (message.text.trim().isNotEmpty) {
+    parts.add(message.text.trim());
+  }
+  if (parts.isEmpty && (message.reasoning ?? '').trim().isNotEmpty) {
+    parts.add('[reasoning] ${message.reasoning!.trim()}');
+  }
+  if (parts.isEmpty && (message.toolCalls ?? '').trim().isNotEmpty) {
+    parts.add('[toolCalls] ${message.toolCalls!.trim()}');
+  }
+  return parts.join('\n').replaceAll(RegExp(r'\s+'), ' ').trim();
 }
 
 Future<_LoadedChatContent?> _loadChatContent(String chatId) async {
@@ -391,7 +515,7 @@ _MessageMatchSummary _summarizeMatches(
   String queryLower,
 ) {
   var matchCount = 0;
-  String? firstSnippet;
+  final snippets = <String>[];
 
   for (int i = 0; i < messages.length; i++) {
     final match = _buildMessageMatch(
@@ -404,13 +528,12 @@ _MessageMatchSummary _summarizeMatches(
     }
 
     matchCount++;
-    firstSnippet ??= match.snippet;
+    if (snippets.length < _previewSnippetsTop) {
+      snippets.add(match.snippet);
+    }
   }
 
-  return _MessageMatchSummary(
-    matchCount: matchCount,
-    firstSnippet: firstSnippet,
-  );
+  return _MessageMatchSummary(matchCount: matchCount, snippets: snippets);
 }
 
 _MessageMatch? _buildMessageMatch({
@@ -428,7 +551,8 @@ _MessageMatch? _buildMessageMatch({
       snippet = '[${field.label}] $snippet';
     }
 
-    return _MessageMatch(index: index, role: message.role, snippet: snippet);
+    final prefixed = '#${index + 1} [${message.role}]: $snippet';
+    return _MessageMatch(index: index, role: message.role, snippet: prefixed);
   }
 
   return null;
@@ -558,8 +682,8 @@ String _formatChatCandidates({
   );
   buffer.writeln();
   buffer.writeln(
-    'Pick one chat_id and call search_chats again with '
-    'action="search_in_chat" and a more specific query.',
+    'Top snippets are inlined below. Call search_chats with '
+    'action="search_in_chat" and a chat_id only if you need more context.',
   );
   buffer.writeln();
 
@@ -573,8 +697,13 @@ String _formatChatCandidates({
       'messages=${item.messageCount} | '
       'updated=${item.updatedAt.toIso8601String().substring(0, 10)}',
     );
-    if (item.previewSnippet.isNotEmpty) {
-      buffer.writeln('   preview: ${item.previewSnippet}');
+
+    final maxSnippets = i < _topCandidatesWithPreview
+        ? _previewSnippetsTop
+        : _previewSnippetsRest;
+    final snippets = item.previewSnippets.take(maxSnippets).toList();
+    for (final snippet in snippets) {
+      buffer.writeln('   preview: $snippet');
     }
   }
 
@@ -598,9 +727,7 @@ String _formatChatDetails({
   buffer.writeln();
 
   for (final match in shownMatches) {
-    buffer.writeln(
-      '- Message #${match.index + 1} (${match.role}): ${match.snippet}',
-    );
+    buffer.writeln('- ${match.snippet}');
   }
 
   return buffer.toString().trimRight();
@@ -642,10 +769,10 @@ class _SearchField {
 }
 
 class _MessageMatchSummary {
-  const _MessageMatchSummary({required this.matchCount, this.firstSnippet});
+  const _MessageMatchSummary({required this.matchCount, required this.snippets});
 
   final int matchCount;
-  final String? firstSnippet;
+  final List<String> snippets;
 }
 
 class _ChatCandidate {
@@ -655,7 +782,7 @@ class _ChatCandidate {
     required this.idMatch,
     required this.titleMatch,
     required this.matchCount,
-    required this.previewSnippet,
+    required this.previewSnippets,
     required this.messageCount,
     required this.updatedAt,
   });
@@ -665,7 +792,7 @@ class _ChatCandidate {
   final bool idMatch;
   final bool titleMatch;
   final int matchCount;
-  final String previewSnippet;
+  final List<String> previewSnippets;
   final int messageCount;
   final DateTime updatedAt;
 }
@@ -680,4 +807,16 @@ class _MessageMatch {
   final int index;
   final String role;
   final String snippet;
+}
+
+class _RecentMessageEntry {
+  const _RecentMessageEntry({
+    required this.index,
+    required this.role,
+    required this.text,
+  });
+
+  final int index;
+  final String role;
+  final String text;
 }
