@@ -192,6 +192,14 @@ Future<String> executeWebSearch({
       args: args,
     );
   }
+  final isNewsMode = typeRaw == 'news';
+  if (isNewsMode) {
+    return executeNewsSearch(
+      serverHttpUrl: serverHttpUrl,
+      serverHeaders: serverHeaders,
+      args: args,
+    );
+  }
 
   final searchCount = _coerceInt(
     args['count'],
@@ -429,6 +437,130 @@ Future<String> executeImageSearch({
     return 'Image search timed out. Please try again.';
   } catch (e) {
     return 'Image search failed: $e';
+  }
+}
+
+/// News search via server-side Brave News Search proxy.
+///
+/// Returns recent articles with publisher, age and thumbnail so the model
+/// can answer time-sensitive "latest / just released / breaking" queries
+/// without crawling. Use the `freshness` hint when the user scopes a
+/// timeframe (pd=24h, pw=week, pm=month, py=year).
+Future<String> executeNewsSearch({
+  required String? serverHttpUrl,
+  required Map<String, String> serverHeaders,
+  required Map<String, dynamic> args,
+}) async {
+  final query = args['query'] as String? ?? args['q'] as String? ?? '';
+  if (query.isEmpty) {
+    return 'Error: No news search query provided';
+  }
+
+  final searchCount = _coerceInt(
+    args['count'],
+    fallback: _defaultSearchCount,
+    min: 1,
+    max: _maxSearchCount,
+  );
+
+  final freshnessRaw =
+      (args['freshness'] as String? ?? '').trim().toLowerCase();
+  const freshnessPresets = {'pd', 'pw', 'pm', 'py'};
+  String? freshness;
+  if (freshnessPresets.contains(freshnessRaw)) {
+    freshness = freshnessRaw;
+  } else if (RegExp(r'^\d{4}-\d{2}-\d{2}to\d{4}-\d{2}-\d{2}$')
+      .hasMatch(freshnessRaw)) {
+    freshness = freshnessRaw;
+  }
+
+  String? country = (args['country'] as String? ?? '').trim();
+  if (country.isEmpty || country.length != 2) country = null;
+  country = country?.toUpperCase();
+
+  String? searchLang = (args['search_lang'] as String? ?? '').trim();
+  if (searchLang.isEmpty) searchLang = null;
+  searchLang = searchLang?.toLowerCase();
+
+  final baseUrl = serverHttpUrl;
+  if (baseUrl == null || baseUrl.isEmpty) {
+    return 'Error: Not connected to server';
+  }
+
+  try {
+    final body = <String, dynamic>{'query': query, 'count': searchCount};
+    if (freshness != null) body['freshness'] = freshness;
+    if (country != null) body['country'] = country;
+    if (searchLang != null) body['search_lang'] = searchLang;
+
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl/v1/tools/brave/news'),
+          headers: _buildJsonHeaders(serverHeaders),
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 30));
+
+    if (response.statusCode != 200) {
+      final errorData = _tryDecodeJsonObject(response.body);
+      final error = errorData?['error']?.toString();
+      return 'News search error: ${error ?? 'HTTP ${response.statusCode}'}';
+    }
+
+    final data = _tryDecodeJsonObject(response.body);
+    if (data == null) {
+      return 'News search error: Invalid server response';
+    }
+
+    final results = data['results'] as List? ?? [];
+    if (results.isEmpty) {
+      return 'No news results found for: $query';
+    }
+
+    final buffer = StringBuffer('News results for "$query":\n\n');
+    for (int i = 0; i < results.length && i < searchCount; i++) {
+      final r = results[i];
+      if (r is! Map) continue;
+      final result = Map<String, dynamic>.from(r);
+      final title = result['title']?.toString() ?? '(untitled)';
+      final url = result['url']?.toString() ?? '';
+      final description = result['description']?.toString() ?? '';
+      final age = result['age']?.toString() ?? '';
+      final pageAge = result['page_age']?.toString() ?? '';
+      final publisher = result['publisher']?.toString() ?? '';
+      final thumbnailUrl = result['thumbnail_url']?.toString() ?? '';
+      final breaking = result['breaking'] == true;
+
+      buffer.writeln('${i + 1}. $title${breaking ? '  [BREAKING]' : ''}');
+      if (publisher.isNotEmpty || age.isNotEmpty || pageAge.isNotEmpty) {
+        final metaBits = <String>[
+          if (publisher.isNotEmpty) publisher,
+          if (age.isNotEmpty) age,
+          if (pageAge.isNotEmpty && pageAge != age) pageAge,
+        ];
+        buffer.writeln('   ${metaBits.join(' · ')}');
+      }
+      if (url.isNotEmpty) {
+        buffer.writeln('   $url');
+      }
+      if (description.isNotEmpty) {
+        buffer.writeln('   $description');
+      }
+      if (thumbnailUrl.isNotEmpty) {
+        buffer.writeln('   thumbnail_url: $thumbnailUrl');
+      }
+      buffer.writeln();
+    }
+
+    buffer.writeln(
+      'Call web_crawl on a url above if you need the full article text.',
+    );
+
+    return buffer.toString();
+  } on TimeoutException {
+    return 'News search timed out. Please try again.';
+  } catch (e) {
+    return 'News search failed: $e';
   }
 }
 

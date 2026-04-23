@@ -327,11 +327,17 @@ final List<ClientTool> builtinTools = [
         'render the real photo inline. Use this — NOT generate_image* — '
         'whenever the user wants a picture of something real. Only use '
         'generate_image* when the user explicitly asks for AI art, '
-        'illustration, concept art, or a fictional/stylized image.',
+        'illustration, concept art, or a fictional/stylized image. '
+        'NEWS MODE: pass type="news" to get recent news articles with '
+        'publisher, age and thumbnail. Combine with freshness="pd" (24h), '
+        '"pw" (week), "pm" (month) or "py" (year) when the user scopes a '
+        'timeframe or uses words like "latest", "today", "breaking", '
+        '"just released", "aktuell", "neu".',
     parameters: {
       'query': 'string (required: the search query)',
       'type':
-          'string (optional: "web" (default) or "images" for real photo URLs)',
+          'string (optional: "web" (default), "images" for real photo URLs, '
+          '"news" for recent articles)',
       'count': 'int (optional: number of search results, default 5, max 8)',
       'include_content':
           'bool (optional, web mode only: auto-fetch page content from top hits, default true)',
@@ -341,6 +347,14 @@ final List<ClientTool> builtinTools = [
           'int (optional, web mode only: max chars per auto-fetched page, default 3000, max 8000)',
       'safesearch':
           'string (optional, images mode only: "strict" (default) or "off")',
+      'freshness':
+          'string (optional, news mode: "pd" (24h), "pw" (week), "pm" (month), '
+          '"py" (year), or a "YYYY-MM-DDtoYYYY-MM-DD" range)',
+      'country':
+          'string (optional, news mode: ISO 3166-1 alpha-2 code like "DE" '
+          'or "US")',
+      'search_lang':
+          'string (optional, news mode: language code like "de" or "en")',
     },
     type: ToolType.builtin,
     tags: [
@@ -375,6 +389,12 @@ final List<ClientTool> builtinTools = [
       'schauspieler',
       'actor',
       'celebrity',
+      'breaking',
+      'latest',
+      'today',
+      'heute',
+      'meldung',
+      'schlagzeile',
     ],
   ),
   ClientTool(
