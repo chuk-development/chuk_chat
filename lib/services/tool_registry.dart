@@ -33,6 +33,7 @@ const Map<String, ToolCategory> toolCategoryMap = {
   'ask_user': ToolCategory.basic,
   'web_search': ToolCategory.search,
   'web_crawl': ToolCategory.search,
+  'image_search': ToolCategory.search,
   'generate_image': ToolCategory.search,
   'generate_image_hunyuan': ToolCategory.search,
   'generate_image_flux': ToolCategory.search,
@@ -218,23 +219,39 @@ final List<ClientTool> builtinTools = [
   ClientTool(
     name: 'search_chats',
     description:
-        'Two-step chat history search. Step 1 (find_chats): search across '
-        'saved chats and return matching chat IDs. Step 2 '
-        '(search_in_chat): search inside one chat_id with a more specific '
-        'query. Uses local plaintext cache for fast lookup and falls back to '
+        'Chat history search with three actions. '
+        '(1) find_chats: keyword search across all saved chats; returns '
+        'matching chat IDs with up to 5 inlined message snippets per top hit '
+        '(role + message index prefixed) — usually enough to answer without '
+        'a follow-up call. The current chat is excluded from results. '
+        '(2) search_in_chat: keyword search inside one chat_id; use only if '
+        'find_chats snippets lack context. '
+        '(3) recent_messages: return the last N messages from a chat_id '
+        '(defaults to the current chat when chat_id is omitted), optionally '
+        'filtered by role (user/assistant/all). Use this to review what the '
+        'user or the AI recently said without needing a search term. '
+        'Uses local plaintext cache for fast lookup and falls back to full '
         'chat loading when needed.',
     parameters: {
       'action':
-          'string (optional: find_chats or search_in_chat; defaults to '
-          'find_chats when no chat_id is provided)',
-      'query': 'string (required: search term)',
-      'chat_id': 'string (required for search_in_chat)',
+          'string (optional: find_chats | search_in_chat | recent_messages. '
+          'Defaults to search_in_chat when chat_id is provided with a query, '
+          'else find_chats.)',
+      'query':
+          'string (required for find_chats and search_in_chat; ignored for '
+          'recent_messages)',
+      'chat_id':
+          'string (required for search_in_chat; optional for recent_messages '
+          '— defaults to the currently open chat)',
       'limit':
-          'int (optional for find_chats: max matching chats to return, '
-          'default 10)',
+          'int (optional: max chats for find_chats default 10 / max 50; '
+          'max messages for recent_messages default 10 / max 50)',
       'message_limit':
           'int (optional for search_in_chat: max matching messages to show, '
-          'default 8)',
+          'default 8, max 50)',
+      'role':
+          'string (optional for recent_messages: "user" | "assistant" | "ai" '
+          '(alias for assistant) | "all". Default "all".)',
     },
     type: ToolType.builtin,
     tags: [
@@ -354,6 +371,48 @@ final List<ClientTool> builtinTools = [
       'lesen',
       'article',
       'artikel',
+    ],
+  ),
+  ClientTool(
+    name: 'image_search',
+    description:
+        'Search the web for REAL photos/images via Brave Image Search. '
+        'Returns direct image URLs (image_url), thumbnails, and source pages. '
+        'Use this whenever the user wants to see pictures of real people, '
+        'places, products, events, movies, celebrities, cars, animals, food, '
+        'etc. — NOT generate_image*. Workflow: call image_search to get image '
+        'URLs, then call fetch_image on the best image_url(s) to display the '
+        'photos inline. generate_image* creates AI art and must NOT be used '
+        'for real-world subjects.',
+    parameters: {
+      'query': 'string (required: descriptive image query)',
+      'count': 'int (optional: number of image results, default 5, max 8)',
+      'safesearch':
+          'string (optional: "strict" or "off", default "strict")',
+    },
+    type: ToolType.builtin,
+    tags: [
+      'image',
+      'images',
+      'photo',
+      'photos',
+      'picture',
+      'pictures',
+      'bild',
+      'bilder',
+      'foto',
+      'fotos',
+      'search image',
+      'image search',
+      'bildersuche',
+      'find image',
+      'real photo',
+      'echtes foto',
+      'actor',
+      'schauspieler',
+      'celebrity',
+      'poster',
+      'cover',
     ],
   ),
   ClientTool(

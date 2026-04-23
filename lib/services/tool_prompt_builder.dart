@@ -34,6 +34,7 @@ class ToolPromptBuilder {
     Map<String, dynamic>? askUserToolDef,
     Map<String, dynamic>? webSearchToolDef,
     Map<String, dynamic>? webCrawlToolDef,
+    Map<String, dynamic>? imageSearchToolDef,
     Map<String, dynamic>? projectToolDef,
     Map<String, dynamic>? artifactToolDef,
     Map<String, dynamic>? artifactSchemaToolDef,
@@ -96,6 +97,9 @@ class ToolPromptBuilder {
       if (webCrawlToolDef != null) {
         alwaysAvailableTools.add(webCrawlToolDef);
       }
+      if (imageSearchToolDef != null) {
+        alwaysAvailableTools.add(imageSearchToolDef);
+      }
       if (projectToolDef != null) {
         alwaysAvailableTools.add(projectToolDef);
       }
@@ -136,6 +140,7 @@ class ToolPromptBuilder {
           // Core tools the AI should find immediately
           'web_search',
           'web_crawl',
+          'image_search',
           'generate_image',
           'generate_image_hunyuan',
           'generate_image_flux',
@@ -332,13 +337,15 @@ class ToolPromptBuilder {
         .toList();
     final hasWebSearch = alwaysAvailableNames.contains('web_search');
     final hasWebCrawl = alwaysAvailableNames.contains('web_crawl');
+    final hasImageSearch = alwaysAvailableNames.contains('image_search');
     final webToolNames = [
       if (hasWebSearch) '`web_search`',
       if (hasWebCrawl) '`web_crawl`',
+      if (hasImageSearch) '`image_search`',
     ];
     final webToolsException = webToolNames.isEmpty
         ? ''
-        : 'Exception: ${webToolNames.join(' and ')} '
+        : 'Exception: ${webToolNames.join(', ')} '
               '${webToolNames.length == 1 ? 'is' : 'are'} always available '
               'with full details below and can be used directly.\n';
 
@@ -406,6 +413,11 @@ VISUAL OUTPUT NOTE:
 - If user asks for a chart/map, discover DATA tools first, then emit <chart>/<map> directly in your final response text.
 - To draft an email, emit <email>{"to":"...","subject":"...","body":"..."}</email> in your response. The app renders it as a card with an "Open in Mail App" button.
 - For "technische Zeichnung" / "technical drawing" / "engineering drawing" / DIN-style blueprints: use artifact_manager with type="technical_drawing" and JSON content. This is a RENDERED drawing with dimensions, NOT an AI-generated image. Do NOT use generate_image for technical drawings.
+
+REAL PHOTOS vs AI ART — HARD RULE:
+- User wants pictures of REAL things (people, actors, celebrities, movies, posters, places, products, cars, animals, food, events) -> use `image_search` to get image URLs, then `fetch_image` on the best image_url to display the real photo inline.
+- Only use generate_image / generate_image_hunyuan / generate_image_flux when the user explicitly asks for AI art, illustration, fantasy, concept art, something fictional, or a stylized generated image.
+- NEVER fall back to generate_image* just because image_search/fetch_image failed the first time. Retry with a different query first, or explain the failure — do not silently substitute AI fakes for a real-photo request.
 
 VISUAL OUTPUT SWITCHES (current):
 - chart tags: ${includeChartVisualOutput ? 'enabled' : 'disabled'}
@@ -564,6 +576,7 @@ FORMAT: Emit raw $toolCallStart...$toolCallEnd tags only. Do NOT wrap tool calls
 6. Never stop with intention-only text (e.g. "I will now search"). Do the next tool_call or provide the final answer.
 7. COST & PRIVACY: Before calling generate_image, generate_image_hunyuan, generate_image_flux, or edit_image, ALWAYS briefly inform the user that (a) it costs credits and (b) generated/edited images are NOT end-to-end encrypted and can be seen by the service operator. Then proceed with the tool call in the same response — do not wait for confirmation unless the user previously expressed privacy concerns. After the image is generated, do NOT show the URL, dimensions, seed, model, or other technical metadata — the image is displayed inline automatically by the app. Use generate_image (fast, ~0.01 EUR) by default; use generate_image_hunyuan (high quality, ~0.08 EUR) or generate_image_flux (best quality, ~0.02 EUR) when the user requests higher quality or a specific model.
 8. If the needed tool is already listed above with its full description, call it directly. Do NOT call find_tools again unless you need a tool from "Other available tools".
+9. REAL PHOTOS vs AI ART: When the user wants pictures of REAL things (people, actors, celebrities, movies, posters, places, products, cars, animals, food, events), use `image_search` to get image URLs and then `fetch_image` on the best image_url to display the real photo. Only use generate_image / generate_image_hunyuan / generate_image_flux when the user explicitly asks for AI art, illustration, fantasy, concept art, fictional subjects, or a stylized generated image. Never silently swap a real-photo request for AI-generated fakes — retry image_search with a better query first, or report the failure.
 
 ### Research depth:
 Do NOT give shallow one-search answers. For any factual question:

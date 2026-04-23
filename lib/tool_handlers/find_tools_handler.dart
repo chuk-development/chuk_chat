@@ -3,13 +3,14 @@ import 'package:chuk_chat/models/client_tool.dart';
 /// Companion tools that are always bundled together.
 /// When a trigger tool is discovered, its companions are auto-included.
 const companions = <String, List<String>>{
-  'web_search': ['web_crawl'],
+  'web_search': ['web_crawl', 'image_search'],
   'web_crawl': ['web_search'],
-  'generate_image': ['generate_image_hunyuan', 'generate_image_flux', 'edit_image', 'fetch_image', 'view_chat_images'],
-  'generate_image_hunyuan': ['generate_image', 'generate_image_flux', 'edit_image', 'fetch_image', 'view_chat_images'],
-  'generate_image_flux': ['generate_image', 'generate_image_hunyuan', 'edit_image', 'fetch_image', 'view_chat_images'],
+  'image_search': ['fetch_image', 'web_search'],
+  'generate_image': ['image_search', 'generate_image_hunyuan', 'generate_image_flux', 'edit_image', 'fetch_image', 'view_chat_images'],
+  'generate_image_hunyuan': ['image_search', 'generate_image', 'generate_image_flux', 'edit_image', 'fetch_image', 'view_chat_images'],
+  'generate_image_flux': ['image_search', 'generate_image', 'generate_image_hunyuan', 'edit_image', 'fetch_image', 'view_chat_images'],
   'edit_image': ['generate_image', 'generate_image_hunyuan', 'generate_image_flux', 'fetch_image', 'view_chat_images'],
-  'fetch_image': ['view_chat_images', 'web_crawl'],
+  'fetch_image': ['image_search', 'view_chat_images', 'web_crawl'],
   'view_chat_images': ['fetch_image'],
   'search_restaurants': ['web_search', 'web_crawl', 'get_route', 'geocode'],
   'search_places': ['web_search', 'web_crawl', 'get_route', 'geocode'],

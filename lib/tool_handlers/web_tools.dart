@@ -310,6 +310,113 @@ Future<String> executeWebSearch({
   }
 }
 
+/// Image search via server-side Brave Image Search proxy.
+///
+/// Returns real image URLs the model can then pass to `fetch_image` to
+/// display the actual photo inline — this is the correct path when the
+/// user wants pictures of real people, places, products or events.
+/// Do NOT use `generate_image*` for that case; generated images are
+/// AI interpretations, not real photos.
+Future<String> executeImageSearch({
+  required String? serverHttpUrl,
+  required Map<String, String> serverHeaders,
+  required Map<String, dynamic> args,
+}) async {
+  final query = args['query'] as String? ?? args['q'] as String? ?? '';
+  if (query.isEmpty) {
+    return 'Error: No image search query provided';
+  }
+
+  final searchCount = _coerceInt(
+    args['count'],
+    fallback: _defaultSearchCount,
+    min: 1,
+    max: _maxSearchCount,
+  );
+  final safesearchRaw =
+      (args['safesearch'] as String? ?? 'strict').toLowerCase();
+  final safesearch = safesearchRaw == 'off' ? 'off' : 'strict';
+
+  final baseUrl = serverHttpUrl;
+  if (baseUrl == null || baseUrl.isEmpty) {
+    return 'Error: Not connected to server';
+  }
+
+  try {
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl/v1/tools/brave/images'),
+          headers: _buildJsonHeaders(serverHeaders),
+          body: jsonEncode({
+            'query': query,
+            'count': searchCount,
+            'safesearch': safesearch,
+          }),
+        )
+        .timeout(const Duration(seconds: 30));
+
+    if (response.statusCode != 200) {
+      final errorData = _tryDecodeJsonObject(response.body);
+      final error = errorData?['error']?.toString();
+      return 'Image search error: ${error ?? 'HTTP ${response.statusCode}'}';
+    }
+
+    final data = _tryDecodeJsonObject(response.body);
+    if (data == null) {
+      return 'Image search error: Invalid server response';
+    }
+
+    final results = data['results'] as List? ?? [];
+    if (results.isEmpty) {
+      return 'No image results found for: $query';
+    }
+
+    final buffer = StringBuffer('Image search results for "$query":\n\n');
+    for (int i = 0; i < results.length && i < searchCount; i++) {
+      final r = results[i];
+      if (r is! Map) continue;
+      final result = Map<String, dynamic>.from(r);
+      final title = result['title']?.toString() ?? '(untitled)';
+      final imageUrl = result['image_url']?.toString() ?? '';
+      final thumbnailUrl = result['thumbnail_url']?.toString() ?? '';
+      final sourceUrl = result['source_url']?.toString() ?? '';
+      final source = result['source']?.toString() ?? '';
+      final width = result['width'];
+      final height = result['height'];
+
+      buffer.writeln('${i + 1}. $title');
+      if (imageUrl.isNotEmpty) {
+        buffer.writeln('   image_url: $imageUrl');
+      }
+      if (thumbnailUrl.isNotEmpty && thumbnailUrl != imageUrl) {
+        buffer.writeln('   thumbnail_url: $thumbnailUrl');
+      }
+      if (sourceUrl.isNotEmpty) {
+        buffer.writeln('   source_page: $sourceUrl');
+      }
+      if (source.isNotEmpty) {
+        buffer.writeln('   source: $source');
+      }
+      if (width != null && height != null) {
+        buffer.writeln('   size: ${width}x$height');
+      }
+      buffer.writeln();
+    }
+
+    buffer.writeln(
+      'To display a picture to the user, pass one of the image_url values '
+      'above to fetch_image. Do NOT call generate_image* for real photos — '
+      'use fetch_image on an image_url from this list instead.',
+    );
+
+    return buffer.toString();
+  } on TimeoutException {
+    return 'Image search timed out. Please try again.';
+  } catch (e) {
+    return 'Image search failed: $e';
+  }
+}
+
 /// Crawl a webpage via server-side crawler and return markdown content.
 Future<String> executeWebCrawl({
   required String? serverHttpUrl,
