@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -9,8 +10,11 @@ const Map<String, String> _defaultHeaders = {
   'User-Agent': 'chuk-chat/1.0',
 };
 
-Future<String> executeSearchPlaces(
-  Map<String, dynamic> args, {
+/// Search places via server-side Brave Local proxy.
+Future<String> executeSearchPlaces({
+  required String? serverHttpUrl,
+  required Map<String, String> serverHeaders,
+  required Map<String, dynamic> args,
   http.Client? client,
 }) async {
   final query = (args['query'] as String? ?? '').trim();
@@ -19,34 +23,37 @@ Future<String> executeSearchPlaces(
   }
 
   final city = (args['city'] as String? ?? '').trim();
-  final limit = _coerceInt(args['limit'], fallback: 10).clamp(1, 25);
+  final limit = _coerceInt(args['limit'], fallback: 10).clamp(1, 20);
+  final country = _extractCountry(args);
+  final lang = _extractLang(args);
 
-  final lat = _coerceDouble(args['lat']);
-  final lon = _coerceDouble(args['lon']);
-  final radius = _coerceInt(args['radius'], fallback: 5000).clamp(500, 50000);
+  final baseUrl = serverHttpUrl;
+  if (baseUrl == null || baseUrl.isEmpty) {
+    return 'Error: Not connected to server';
+  }
 
   final effectiveClient = client ?? http.Client();
   final shouldCloseClient = client == null;
 
   try {
     final searchQuery = city.isNotEmpty ? '$query $city' : query;
-
-    final results = await _searchNominatim(
+    final places = await _fetchBravePlaces(
+      baseUrl: baseUrl,
+      serverHeaders: serverHeaders,
       client: effectiveClient,
       query: searchQuery,
-      limit: limit,
-      latitude: lat,
-      longitude: lon,
-      radiusMeters: city.isEmpty ? radius : null,
+      count: limit,
+      country: country,
+      searchLang: lang,
     );
 
-    if (results.isEmpty) {
+    if (places.isEmpty) {
       return 'No places found for "$query"';
     }
 
-    return _formatPlaceResults(
-      heading: 'Found ${results.length} places for "$query":',
-      results: results,
+    return _formatBravePlaces(
+      heading: 'Found ${places.length} places for "$query":',
+      places: places,
     );
   } catch (error) {
     return 'Error searching places: $error';
@@ -57,56 +64,57 @@ Future<String> executeSearchPlaces(
   }
 }
 
-Future<String> executeSearchRestaurants(
-  Map<String, dynamic> args, {
+/// Search restaurants via server-side Brave Local proxy.
+Future<String> executeSearchRestaurants({
+  required String? serverHttpUrl,
+  required Map<String, String> serverHeaders,
+  required Map<String, dynamic> args,
   http.Client? client,
 }) async {
   final query = (args['query'] as String? ?? '').trim();
   final cuisine = (args['cuisine'] as String? ?? '').trim();
   final city = (args['city'] as String? ?? '').trim();
-  final limit = _coerceInt(args['limit'], fallback: 10).clamp(1, 25);
+  final limit = _coerceInt(args['limit'], fallback: 10).clamp(1, 20);
+  final country = _extractCountry(args);
+  final lang = _extractLang(args);
 
-  final lat = _coerceDouble(args['lat']);
-  final lon = _coerceDouble(args['lon']);
-  final radius = _coerceInt(args['radius'], fallback: 5000).clamp(500, 50000);
+  final baseUrl = serverHttpUrl;
+  if (baseUrl == null || baseUrl.isEmpty) {
+    return 'Error: Not connected to server';
+  }
 
   final effectiveClient = client ?? http.Client();
   final shouldCloseClient = client == null;
 
   try {
-    final parts = <String>['restaurant'];
-    if (query.isNotEmpty) {
-      parts.add(query);
-    }
-    if (cuisine.isNotEmpty) {
-      parts.add(cuisine);
-    }
-    if (city.isNotEmpty) {
-      parts.add(city);
-    }
+    final parts = <String>[];
+    if (cuisine.isNotEmpty) parts.add(cuisine);
+    parts.add('restaurants');
+    if (query.isNotEmpty) parts.add(query);
+    if (city.isNotEmpty) parts.add('in $city');
+    final searchQuery = parts.join(' ');
 
-    final results = await _searchNominatim(
+    final places = await _fetchBravePlaces(
+      baseUrl: baseUrl,
+      serverHeaders: serverHeaders,
       client: effectiveClient,
-      query: parts.join(' '),
-      limit: limit,
-      latitude: lat,
-      longitude: lon,
-      radiusMeters: city.isEmpty ? radius : null,
+      query: searchQuery,
+      count: limit,
+      country: country,
+      searchLang: lang,
     );
 
-    if (results.isEmpty) {
-      final searchLabel = query.isNotEmpty
-          ? query
-          : (cuisine.isNotEmpty ? cuisine : 'restaurants');
-      return 'No restaurants found for "$searchLabel"';
-    }
-
-    final headingLabel = query.isNotEmpty
+    final label = query.isNotEmpty
         ? query
         : (cuisine.isNotEmpty ? cuisine : 'restaurants');
-    return _formatPlaceResults(
-      heading: 'Found ${results.length} restaurants for "$headingLabel":',
-      results: results,
+
+    if (places.isEmpty) {
+      return 'No restaurants found for "$label"';
+    }
+
+    return _formatBravePlaces(
+      heading: 'Found ${places.length} restaurants for "$label":',
+      places: places,
     );
   } catch (error) {
     return 'Error searching restaurants: $error';
@@ -117,6 +125,7 @@ Future<String> executeSearchRestaurants(
   }
 }
 
+/// Forward / reverse geocoding via Nominatim (kept; no server proxy).
 Future<String> executeGeocode(
   Map<String, dynamic> args, {
   http.Client? client,
@@ -267,6 +276,88 @@ Future<String> executeGetRoute(
   }
 }
 
+Future<List<Map<String, dynamic>>> _fetchBravePlaces({
+  required String baseUrl,
+  required Map<String, String> serverHeaders,
+  required http.Client client,
+  required String query,
+  required int count,
+  String country = 'DE',
+  String searchLang = 'de',
+}) async {
+  final response = await client
+      .post(
+        Uri.parse('$baseUrl/v1/tools/brave/places'),
+        headers: {'Content-Type': 'application/json', ...serverHeaders},
+        body: jsonEncode({
+          'query': query,
+          'count': count,
+          'country': country,
+          'search_lang': searchLang,
+        }),
+      )
+      .timeout(const Duration(seconds: 30));
+
+  if (response.statusCode != 200) {
+    final err = _tryDecodeJsonObject(response.body)?['error']?.toString();
+    throw StateError(err ?? 'HTTP ${response.statusCode}');
+  }
+
+  final data = _tryDecodeJsonObject(response.body);
+  if (data == null) {
+    throw StateError('Invalid server response');
+  }
+
+  final raw = data['places'];
+  if (raw is! List) return const <Map<String, dynamic>>[];
+  return raw
+      .whereType<Map>()
+      .map((e) => Map<String, dynamic>.from(e))
+      .toList(growable: false);
+}
+
+String _formatBravePlaces({
+  required String heading,
+  required List<Map<String, dynamic>> places,
+}) {
+  final buf = StringBuffer();
+  buf.writeln(heading);
+  buf.writeln();
+
+  for (final place in places) {
+    final name = (place['name'] as String? ?? '').trim();
+    final lat = place['lat'];
+    final lon = place['lon'];
+    final address = (place['address'] as String? ?? '').trim();
+    final phone = (place['phone'] as String? ?? '').trim();
+    final website = (place['website'] as String? ?? '').trim();
+    final hours = (place['opening_hours'] as String? ?? '').trim();
+    final cuisine = (place['cuisine'] as String? ?? '').trim();
+    final rating = place['rating'];
+    final reviews = place['review_count'];
+    final price = (place['price_range'] as String? ?? '').trim();
+    final description = (place['description'] as String? ?? '').trim();
+
+    final latLonLabel = (lat != null && lon != null) ? ' [$lat, $lon]' : '';
+    buf.writeln('- ${name.isEmpty ? '(unnamed)' : name}$latLonLabel');
+    if (cuisine.isNotEmpty) buf.writeln('  Category: $cuisine');
+    if (address.isNotEmpty) buf.writeln('  Address: $address');
+    if (phone.isNotEmpty) buf.writeln('  Phone: $phone');
+    if (website.isNotEmpty) buf.writeln('  Website: $website');
+    if (hours.isNotEmpty) buf.writeln('  Hours: $hours');
+    final ratingBits = <String>[];
+    if (rating != null) ratingBits.add('rating $rating');
+    if (reviews != null) ratingBits.add('$reviews reviews');
+    if (price.isNotEmpty) ratingBits.add('price $price');
+    if (ratingBits.isNotEmpty) {
+      buf.writeln('  ${ratingBits.join(' · ')}');
+    }
+    if (description.isNotEmpty) buf.writeln('  About: $description');
+  }
+
+  return buf.toString().trimRight();
+}
+
 Future<List<Map<String, dynamic>>> _searchNominatim({
   required http.Client client,
   required String query,
@@ -324,37 +415,28 @@ Future<List<Map<String, dynamic>>> _searchNominatim({
   return parsed;
 }
 
-String _formatPlaceResults({
-  required String heading,
-  required List<Map<String, dynamic>> results,
-}) {
-  final buf = StringBuffer();
-  buf.writeln(heading);
-  buf.writeln();
+String _extractCountry(Map<String, dynamic> args) {
+  final v = (args['country'] as String? ?? '').trim();
+  if (v.length == 2) return v.toUpperCase();
+  return 'DE';
+}
 
-  for (final result in results) {
-    final fullName = (result['display_name'] as String? ?? '').trim();
-    final shortName = fullName.split(',').first.trim();
-    final lat = result['lat'];
-    final lon = result['lon'];
-    final type = (result['type'] as String? ?? '').trim();
-    final category = (result['category'] as String? ?? '').trim();
+String _extractLang(Map<String, dynamic> args) {
+  final v = (args['search_lang'] as String? ?? args['lang'] as String? ?? '')
+      .trim();
+  if (v.isNotEmpty) return v.toLowerCase();
+  return 'de';
+}
 
-    buf.write('- ${shortName.isEmpty ? fullName : shortName}');
-    if (type.isNotEmpty || category.isNotEmpty) {
-      final tag = [
-        if (category.isNotEmpty) category,
-        if (type.isNotEmpty) type,
-      ].join('/');
-      buf.write(' ($tag)');
-    }
-    buf.writeln(' [$lat, $lon]');
-    if (fullName.isNotEmpty) {
-      buf.writeln('  Address: $fullName');
-    }
+Map<String, dynamic>? _tryDecodeJsonObject(String body) {
+  try {
+    final decoded = jsonDecode(body);
+    if (decoded is Map<String, dynamic>) return decoded;
+    if (decoded is Map) return Map<String, dynamic>.from(decoded);
+  } catch (_) {
+    // ignore
   }
-
-  return buf.toString().trimRight();
+  return null;
 }
 
 String _buildInstruction({

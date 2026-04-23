@@ -630,16 +630,13 @@ final List<ClientTool> builtinTools = [
   ClientTool(
     name: 'search_places',
     description:
-        'Search places and points of interest via OpenStreetMap/Nominatim. '
-        'Filter by query and optional location (city name or lat/lon with '
-        'radius).',
+        'Brave Local — places and POIs with rating, reviews, opening hours, '
+        'phone, website, price range and a short description. Filter by '
+        'query and optional city.',
     parameters: {
       'query': 'string (required, e.g. pharmacy, museum, cafe)',
       'city': 'string (optional city/region filter)',
-      'lat': 'number (optional center latitude)',
-      'lon': 'number (optional center longitude)',
-      'radius': 'int (optional meters, with lat/lon)',
-      'limit': 'int (optional number of results)',
+      'limit': 'int (optional number of results, 1-20)',
     },
     type: ToolType.builtin,
     tags: ['map', 'place', 'poi', 'location', 'ort', 'karte', 'nearby'],
@@ -647,17 +644,14 @@ final List<ClientTool> builtinTools = [
   ClientTool(
     name: 'search_restaurants',
     description:
-        'Search restaurants via OpenStreetMap/Nominatim. Filter by '
-        'cuisine type and optional location (city name or lat/lon with '
-        'radius).',
+        'Brave Local — restaurants with rating, reviews, opening hours, '
+        'phone, website, price range and a short description. Filter by '
+        'cuisine and optional city.',
     parameters: {
       'query': 'string (optional restaurant keyword)',
       'cuisine': 'string (optional cuisine, e.g. italian, sushi)',
       'city': 'string (optional city/region filter)',
-      'lat': 'number (optional center latitude)',
-      'lon': 'number (optional center longitude)',
-      'radius': 'int (optional meters, with lat/lon)',
-      'limit': 'int (optional number of results)',
+      'limit': 'int (optional number of results, 1-20)',
     },
     type: ToolType.builtin,
     tags: ['restaurant', 'food', 'essen', 'cuisine', 'dinner', 'lunch', 'map'],
@@ -1133,8 +1127,9 @@ final List<ClientTool> builtinTools = [
   ClientTool(
     name: 'weather',
     description:
-        'Get weather data. Actions: current, forecast, hourly. Accepts '
-        'location name or latitude/longitude.',
+        'Weather via Brave Rich Callback. Actions: current, forecast, '
+        'hourly. Provide "location" (city/place name) or lat/lon. Days/hours '
+        'are hints baked into the natural-language query Brave receives.',
     parameters: {
       'location': 'string (city/place name, e.g. "Berlin", "New York")',
       'latitude': 'number (optional: direct WGS84 latitude)',

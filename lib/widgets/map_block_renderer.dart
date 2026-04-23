@@ -650,6 +650,7 @@ class _PlaceCard extends StatelessWidget {
               : int.tryParse(place['review_count'].toString()))
         : null;
     final priceRange = place['price_range'] as String?;
+    final description = place['description'] as String?;
 
     return Material(
       color: Colors.transparent,
@@ -782,6 +783,20 @@ class _PlaceCard extends StatelessWidget {
                     address,
                     style: TextStyle(
                       fontSize: 11,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              if (description != null && description.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    description,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      height: 1.3,
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
