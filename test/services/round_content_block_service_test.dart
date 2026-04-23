@@ -114,5 +114,116 @@ void main() {
         equals([ContentBlockType.reasoning, ContentBlockType.text]),
       );
     });
+
+    test('is idempotent: same inputs twice do not double-append', () {
+      final toolCalls = [
+        ToolCall(
+          id: 'tc-1',
+          name: 'web_search',
+          status: ToolCallStatus.completed,
+        ),
+      ];
+
+      const providerReasoning = 'Ich suche jetzt die passenden Quellen.';
+      const interimText = 'Erste Einordnung.';
+
+      final firstPass = RoundContentBlockService.buildRoundBlocks(
+        interimText: interimText,
+        providerReasoning: providerReasoning,
+        newToolCalls: toolCalls,
+        existingBlocks: const [],
+      );
+
+      // Caller appends first-pass blocks as it normally would.
+      final accumulated = <ContentBlock>[...firstPass.blocks];
+
+      final secondPass = RoundContentBlockService.buildRoundBlocks(
+        interimText: interimText,
+        providerReasoning: providerReasoning,
+        newToolCalls: toolCalls,
+        existingBlocks: accumulated,
+      );
+
+      expect(firstPass.blocks, isNotEmpty);
+      expect(
+        secondPass.blocks,
+        isEmpty,
+        reason:
+            'Second call with identical input should not re-append blocks.',
+      );
+    });
+
+    test('idempotency only matches exact tail, not interior matches', () {
+      final toolCalls = [
+        ToolCall(
+          id: 'tc-1',
+          name: 'web_search',
+          status: ToolCallStatus.completed,
+        ),
+      ];
+
+      const providerReasoning = 'Reasoning A';
+
+      final firstPass = RoundContentBlockService.buildRoundBlocks(
+        interimText: '',
+        providerReasoning: providerReasoning,
+        newToolCalls: toolCalls,
+      );
+
+      // Append a text block after the first round — the same reasoning+tools
+      // at the start of existingBlocks is NOT a tail match, so a repeat
+      // should still append.
+      final accumulated = <ContentBlock>[
+        ...firstPass.blocks,
+        const ContentBlock.text('Mid-stream text.'),
+      ];
+
+      final secondPass = RoundContentBlockService.buildRoundBlocks(
+        interimText: '',
+        providerReasoning: providerReasoning,
+        newToolCalls: toolCalls,
+        existingBlocks: accumulated,
+      );
+
+      expect(secondPass.blocks, isNotEmpty);
+    });
+
+    test('idempotency distinguishes different tool call ids', () {
+      final firstCalls = [
+        ToolCall(
+          id: 'tc-1',
+          name: 'web_search',
+          status: ToolCallStatus.completed,
+        ),
+      ];
+      final secondCalls = [
+        ToolCall(
+          id: 'tc-2',
+          name: 'web_search',
+          status: ToolCallStatus.completed,
+        ),
+      ];
+
+      final firstPass = RoundContentBlockService.buildRoundBlocks(
+        interimText: '',
+        providerReasoning: 'Same reasoning',
+        newToolCalls: firstCalls,
+      );
+
+      final accumulated = <ContentBlock>[...firstPass.blocks];
+
+      final secondPass = RoundContentBlockService.buildRoundBlocks(
+        interimText: '',
+        providerReasoning: 'Same reasoning',
+        newToolCalls: secondCalls,
+        existingBlocks: accumulated,
+      );
+
+      expect(
+        secondPass.blocks,
+        isNotEmpty,
+        reason: 'Different tool call ids should NOT dedupe as tail match.',
+      );
+    });
   });
 }
