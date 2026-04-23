@@ -345,16 +345,28 @@ final List<ClientTool> builtinTools = [
           'int (optional, web mode only: number of top URLs to auto-fetch, default 2, max 3)',
       'crawl_max_chars':
           'int (optional, web mode only: max chars per auto-fetched page, default 3000, max 8000)',
-      'safesearch':
-          'string (optional, images mode only: "strict" (default) or "off")',
+      'extra_snippets':
+          'bool (optional, web mode: up to 5 extra excerpts per result, '
+          'default true — often removes the need for a separate web_crawl)',
       'freshness':
-          'string (optional, news mode: "pd" (24h), "pw" (week), "pm" (month), '
-          '"py" (year), or a "YYYY-MM-DDtoYYYY-MM-DD" range)',
+          'string (optional, web/news: "pd" (24h), "pw" (week), "pm" (month), '
+          '"py" (year), or a "YYYY-MM-DDtoYYYY-MM-DD" range). Use when the '
+          'query has a time component like "latest", "heute", "neu".',
       'country':
-          'string (optional, news mode: ISO 3166-1 alpha-2 code like "DE" '
-          'or "US")',
+          'string (optional, web/news: ISO 3166-1 alpha-2 code like "DE" or "US")',
       'search_lang':
-          'string (optional, news mode: language code like "de" or "en")',
+          'string (optional, web/news: language code like "de" or "en")',
+      'ui_lang':
+          'string (optional, web: response metadata language, e.g. "de-DE")',
+      'safesearch':
+          'string (optional: "off", "moderate" (web default) or "strict" '
+          '(images default))',
+      'units':
+          'string (optional, web: "metric" or "imperial")',
+      'spellcheck':
+          'bool (optional, web: run spell correction on the query, default true)',
+      'goggles_id':
+          'string (optional, web: custom Brave Goggles re-ranking profile)',
     },
     type: ToolType.builtin,
     tags: [
