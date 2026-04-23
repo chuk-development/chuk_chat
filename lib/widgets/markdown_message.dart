@@ -335,6 +335,13 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
         ),
         ListConfig(),
         HrConfig(color: widget.textColor.withValues(alpha: 0.2), height: 1),
+        CheckBoxConfig(
+          builder: (checked) => Icon(
+            checked ? Icons.check_box : Icons.check_box_outline_blank,
+            size: 16,
+            color: widget.textColor.withValues(alpha: 0.85),
+          ),
+        ),
       ],
     );
 
