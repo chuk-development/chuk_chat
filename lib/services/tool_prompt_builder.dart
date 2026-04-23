@@ -415,6 +415,11 @@ REAL PHOTOS vs AI ART — HARD RULE:
 NEWS QUERIES:
 - For "latest", "news", "today", "breaking", "just released", "aktuell", "neu", "heute" or other time-sensitive questions -> call `web_search` with `type: "news"` and the matching `freshness` (pd/pw/pm/py). You get publisher, age and thumbnail without a separate crawl. Follow up with web_crawl only when the user asks for full article detail.
 
+WEB SEARCH TUNING:
+- When the user writes in German or asks about DE-specific facts (prices in EUR, DE laws, local events), pass `country: "DE"` and `search_lang: "de"` to web_search so Brave localizes the SERP.
+- `extra_snippets: true` is the default — read those bullet points before deciding whether you need web_crawl. Only crawl when a single source needs the full article.
+- Use `freshness` for web-mode too, not just news, when recency matters ("latest release notes", "current version").
+
 VISUAL OUTPUT SWITCHES (current):
 - chart tags: ${includeChartVisualOutput ? 'enabled' : 'disabled'}
 - map tags: ${includeMapVisualOutput ? 'enabled' : 'disabled'}
@@ -574,6 +579,7 @@ FORMAT: Emit raw $toolCallStart...$toolCallEnd tags only. Do NOT wrap tool calls
 8. If the needed tool is already listed above with its full description, call it directly. Do NOT call find_tools again unless you need a tool from "Other available tools".
 9. REAL PHOTOS vs AI ART: When the user wants pictures of REAL things (people, actors, celebrities, movies, posters, places, products, cars, animals, food, events), call `web_search` with `type: "images"` to get image URLs, then `fetch_image` on the best image_url to display the real photo. Only use generate_image / generate_image_hunyuan / generate_image_flux when the user explicitly asks for AI art, illustration, fantasy, concept art, fictional subjects, or a stylized generated image. Never silently swap a real-photo request for AI-generated fakes — retry web_search with type="images" and a better query first, or report the failure.
 10. NEWS & TIME-SENSITIVE QUERIES: For "latest", "news", "today", "breaking", "just released", "aktuell", "neu", "heute" or similar, call `web_search` with `type: "news"` and the right `freshness` (pd/pw/pm/py). You get publisher, date and thumbnail without a separate crawl. Follow up with `web_crawl` only when the user asks for full article detail.
+11. WEB SEARCH TUNING: `extra_snippets` is on by default — read the bullet-point snippets before deciding you need web_crawl. Use `country`/`search_lang` (e.g. "DE"/"de") for German or region-specific queries. Use `freshness` in web mode too when recency matters.
 
 ### Research depth:
 Do NOT give shallow one-search answers. For any factual question:

@@ -226,12 +226,39 @@ Future<String> executeWebSearch({
     return 'Error: Not connected to server';
   }
 
+  final body = <String, dynamic>{
+    'query': query,
+    'count': searchCount,
+    // Brave returns up to 5 extra text snippets per hit; cheap wins.
+    'extra_snippets': _coerceBool(args['extra_snippets'], fallback: true),
+  };
+  final freshnessRaw = (args['freshness'] as String? ?? '').trim().toLowerCase();
+  if (freshnessRaw.isNotEmpty) body['freshness'] = freshnessRaw;
+  final country = (args['country'] as String? ?? '').trim();
+  if (country.length == 2) body['country'] = country.toUpperCase();
+  final searchLang = (args['search_lang'] as String? ?? '').trim().toLowerCase();
+  if (searchLang.isNotEmpty) body['search_lang'] = searchLang;
+  final uiLang = (args['ui_lang'] as String? ?? '').trim();
+  if (uiLang.isNotEmpty) body['ui_lang'] = uiLang;
+  final safesearchRaw =
+      (args['safesearch'] as String? ?? '').trim().toLowerCase();
+  if ({'off', 'moderate', 'strict'}.contains(safesearchRaw)) {
+    body['safesearch'] = safesearchRaw;
+  }
+  final units = (args['units'] as String? ?? '').trim().toLowerCase();
+  if ({'metric', 'imperial'}.contains(units)) body['units'] = units;
+  if (args.containsKey('spellcheck')) {
+    body['spellcheck'] = _coerceBool(args['spellcheck'], fallback: true);
+  }
+  final gogglesId = (args['goggles_id'] as String? ?? '').trim();
+  if (gogglesId.isNotEmpty) body['goggles_id'] = gogglesId;
+
   try {
     final response = await http
         .post(
           Uri.parse('$baseUrl/v1/tools/brave/search'),
           headers: _buildJsonHeaders(serverHeaders),
-          body: jsonEncode({'query': query, 'count': searchCount}),
+          body: jsonEncode(body),
         )
         .timeout(const Duration(seconds: 30));
 
@@ -271,6 +298,19 @@ Future<String> executeWebSearch({
       }
       if (description.isNotEmpty) {
         buffer.writeln('   $description');
+      }
+      final age = result['age']?.toString() ?? '';
+      if (age.isNotEmpty) {
+        buffer.writeln('   age: $age');
+      }
+      final extraSnippets = result['extra_snippets'];
+      if (extraSnippets is List && extraSnippets.isNotEmpty) {
+        for (final snippet in extraSnippets.take(5)) {
+          final snippetStr = snippet.toString().trim();
+          if (snippetStr.isNotEmpty) {
+            buffer.writeln('   • $snippetStr');
+          }
+        }
       }
       buffer.writeln();
     }
