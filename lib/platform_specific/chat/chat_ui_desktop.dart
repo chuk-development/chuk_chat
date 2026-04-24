@@ -779,6 +779,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   /// Whether reasoning is enabled for the current model. Debug only.
   bool get debugReasoningEnabled => _reasoningEnabled;
 
+  /// Current active chat id. Debug only.
+  String? get debugActiveChatId => _activeChatId;
+
   void newChat() {
     _pendingWorkspaceId = null;
     WorkspaceStorageService.selectedWorkspaceId = null;

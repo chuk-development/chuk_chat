@@ -306,29 +306,23 @@ class ChatStorageSidebar {
         } else if (existing.isStarred != chat.isStarred ||
             existing.title != chat.title) {
           if (existing.isFullyLoaded) {
+            // Keep local payload's updatedAt so _performSync sees server is
+            // newer and fetches the full payload. Title-only sync must not
+            // mask a stale payload.
             ChatStorageState.chatsById[chat.id] = existing.copyWith(
               isStarred: chat.isStarred,
               title: chat.title,
-              updatedAt: chat.updatedAt,
             );
           } else {
             ChatStorageState.chatsById[chat.id] = chat;
           }
           hasChanges = true;
         } else {
-          // Title and isStarred unchanged, but we decrypted because updatedAt was newer
-          // MUST save new updatedAt to cache so we don't re-decrypt next time!
-          if (existing.isFullyLoaded) {
-            ChatStorageState.chatsById[chat.id] = existing.copyWith(
-              updatedAt: chat.updatedAt,
-            );
-          } else {
+          // Title and isStarred unchanged. For fully loaded chats, DO NOT
+          // bump updatedAt — the payload in memory is still the old one.
+          // _performSync must see local < cloud to re-fetch the payload.
+          if (!existing.isFullyLoaded) {
             ChatStorageState.chatsById[chat.id] = chat;
-          }
-          if (kDebugMode) {
-            debugPrint(
-              '📝 [ChatStorage] Updated timestamp only for ${chat.id.substring(0, 8)}',
-            );
           }
         }
       }

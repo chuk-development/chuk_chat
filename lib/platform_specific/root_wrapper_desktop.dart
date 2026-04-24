@@ -10,6 +10,8 @@ import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/chat_storage_state.dart';
+import 'package:chuk_chat/services/chat_sync_service.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_desktop.dart';
 import 'package:chuk_chat/platform_specific/sidebar_desktop.dart';
 import 'package:chuk_chat/pages/workspaces_page.dart';
@@ -301,12 +303,31 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
 
   Map<String, String> _debugContext(ChukChatUIDesktopState? state) {
     if (state == null) return const {};
+    final chatId = state.debugActiveChatId;
+    final chat = chatId == null ? null : ChatStorageState.chatsById[chatId];
+    final lastSync = ChatSyncService.lastSyncAt;
     return {
       'Model': state.debugModelId,
       'Provider': state.debugProviderSlug ?? '',
       'Workspace': state.debugWorkspaceId ?? '',
       'Reasoning': state.debugReasoningEnabled.toString(),
       'Platform': 'desktop',
+      'Chat ID': chatId ?? '',
+      'Chat UpdatedAt (local)': chat?.updatedAt?.toIso8601String() ?? '',
+      'Chat Fully Loaded': (chat?.isFullyLoaded ?? false).toString(),
+      'Chat Pending Save': chatId != null &&
+              ChatStorageState.pendingSaves.containsKey(chatId)
+          ? 'true'
+          : 'false',
+      'Chat Saving': chatId != null &&
+              ChatStorageState.savingChats.contains(chatId)
+          ? 'true'
+          : 'false',
+      'Sync Enabled': ChatSyncService.isEnabled.toString(),
+      'Sync In Progress': ChatSyncService.isSyncing.toString(),
+      'Sync First Done': ChatSyncService.hasCompletedFirstSync.toString(),
+      'Sync Last At': lastSync?.toIso8601String() ?? 'never',
+      'Sync Last Result': ChatSyncService.lastSyncOutcome ?? '',
     };
   }
 

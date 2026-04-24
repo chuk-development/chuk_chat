@@ -21,6 +21,15 @@ class ChatSyncService {
   static bool _isEnabled = false;
   static bool _hasCompletedFirstSync = false;
   static DateTime? _lastResumeTitleSyncAt;
+  static DateTime? _lastSyncAt;
+  static String? _lastSyncOutcome;
+
+  /// Public sync state for debug exports / status UI.
+  static bool get isEnabled => _isEnabled;
+  static bool get isSyncing => _isSyncing;
+  static bool get hasCompletedFirstSync => _hasCompletedFirstSync;
+  static DateTime? get lastSyncAt => _lastSyncAt;
+  static String? get lastSyncOutcome => _lastSyncOutcome;
 
   /// Completer that resolves when the first sync cycle finishes.
   /// Used by ChatPreloadService to wait before preloading.
@@ -382,6 +391,9 @@ class ChatSyncService {
       }
     } finally {
       _isSyncing = false;
+      _lastSyncAt = DateTime.now();
+      _lastSyncOutcome =
+          'fetched=$fetchedCount new=$newCount updated=$updatedCount deleted=$deletedCount';
     }
   }
 }
