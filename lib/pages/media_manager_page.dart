@@ -734,91 +734,16 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
   }
 
   void _showArtifactPreview(ArtifactDocument artifact) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      showDragHandle: true,
-      builder: (ctx) {
-        final theme = Theme.of(ctx);
-        final m3 = theme.m3;
-        return DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.7,
-          minChildSize: 0.3,
-          maxChildSize: 0.95,
-          builder: (_, scrollController) => Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(_iconForType(artifact.type),
-                        color: theme.colorScheme.primary),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        artifact.title,
-                        style: theme.textTheme.titleMedium,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: m3.surfaceContainerHigh,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        artifact.type.displayLabel,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: m3.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: m3.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.all(12),
-                    child: SingleChildScrollView(
-                      controller: scrollController,
-                      child: SelectableText(
-                        artifact.content,
-                        style: const TextStyle(
-                          fontFamily: 'monospace',
-                          fontSize: 12,
-                          height: 1.4,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+    // Reuse the chat UI's artifact flow: activate the artifact and fire an
+    // open-request. Mobile's root wrapper opens the ArtifactBottomSheet,
+    // desktop's shows ArtifactPanel in the side slot — same preview/code
+    // toggle, versions, and exports as clicking an inline card in chat.
+    ArtifactStorageService.activeArtifactNotifier.value = artifact;
+    ArtifactStorageService.requestOpen(
+      artifactId: artifact.id,
+      version: artifact.version,
     );
   }
-
-  IconData _iconForType(ArtifactType type) => switch (type) {
-        ArtifactType.svg => Icons.image_outlined,
-        ArtifactType.html => Icons.html_outlined,
-        ArtifactType.mermaid => Icons.account_tree_outlined,
-        ArtifactType.technicalDrawing => Icons.architecture_outlined,
-        ArtifactType.typst => Icons.picture_as_pdf_outlined,
-        ArtifactType.excalidraw => Icons.draw_outlined,
-        ArtifactType.code => Icons.code,
-        ArtifactType.markdown => Icons.description_outlined,
-      };
 
   Widget _buildDesktopGrid(Color iconFg) {
     return GridView.builder(

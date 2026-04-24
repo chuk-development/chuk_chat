@@ -54,6 +54,13 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
         _onArtifactChanged,
       );
       ArtifactStorageService.panelOpenNotifier.addListener(_onPanelOpenChanged);
+      // When the user explicitly requests to open an artifact (inline chat
+      // card or media manager tap), yield the side panel slot to the
+      // artifact panel — otherwise an open media/projects panel would hide
+      // it because `_activePanel` wins over `hasArtifact` in `effectivePanel`.
+      ArtifactStorageService.openRequestNotifier.addListener(
+        _onArtifactOpenRequested,
+      );
     }
     // Defer non-critical startup work to keep first interactions responsive.
     unawaited(
@@ -101,6 +108,9 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       ArtifactStorageService.panelOpenNotifier.removeListener(
         _onPanelOpenChanged,
       );
+      ArtifactStorageService.openRequestNotifier.removeListener(
+        _onArtifactOpenRequested,
+      );
     }
     super.dispose();
   }
@@ -122,6 +132,13 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     setState(() {
       _panelOpen = ArtifactStorageService.panelOpenNotifier.value;
     });
+  }
+
+  void _onArtifactOpenRequested() {
+    if (!mounted) return;
+    if (_activePanel != null) {
+      setState(() => _activePanel = null);
+    }
   }
 
   void _closeArtifactPanel() {
