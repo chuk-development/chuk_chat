@@ -231,37 +231,45 @@ class WeatherBlockWidget extends StatelessWidget {
             final temp = _asNum(h['temp']);
             final code = _asInt(h['code']) ?? 0;
             final precipProb = _asNum(h['precip_prob']);
+            final showPrecip = precipProb != null && precipProb > 0;
             return Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.start,
               children: [
-                Text(
-                  _shortTime(time),
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: Colors.white70,
-                    fontWeight: FontWeight.w500,
+                SizedBox(
+                  height: 14,
+                  child: Text(
+                    _shortTime(time),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Colors.white70,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 4),
                 Icon(_iconForCode(code), size: 22, color: Colors.white),
                 const SizedBox(height: 4),
-                if (temp != null)
-                  Text(
-                    '${_fmtNum(temp)}°',
+                SizedBox(
+                  height: 16,
+                  child: Text(
+                    temp != null ? '${_fmtNum(temp)}°' : '',
                     style: const TextStyle(
                       fontSize: 13,
                       color: Colors.white,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                if (precipProb != null && precipProb > 0)
-                  Text(
-                    '${_fmtNum(precipProb)}%',
+                ),
+                SizedBox(
+                  height: 14,
+                  child: Text(
+                    showPrecip ? '${_fmtNum(precipProb)}%' : '',
                     style: const TextStyle(
                       fontSize: 10,
                       color: Colors.lightBlueAccent,
                     ),
                   ),
+                ),
               ],
             );
           },
