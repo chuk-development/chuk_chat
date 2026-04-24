@@ -206,22 +206,15 @@ class ToolEnforcer {
         continue;
       }
 
-      // 1b. In discovery mode, only find_tools + always-available tools +
-      //     discovered tools are allowed without discovery.
+      // 1b. Soft-discovery: if the tool wasn't discovered yet, auto-mark
+      //     it as discovered so follow-up calls skip the gate entirely.
+      //     The declared-set check above already rejects hallucinated names;
+      //     argument mistakes surface via the backend's schema validation.
       if (discoveryMode &&
           name != 'find_tools' &&
           !_alwaysAllowedTools.contains(name) &&
           !discoveredToolNames.contains(name)) {
-        rejected.add(
-          RejectedToolCall(
-            name: name,
-            arguments: args,
-            reason:
-                'Discovery mode: call find_tools first to discover "$name". '
-                'Only find_tools and already-discovered tools are allowed.',
-          ),
-        );
-        continue;
+        discoveredToolNames.add(name);
       }
 
       // 1c. find_tools query must stay short and categorical.
