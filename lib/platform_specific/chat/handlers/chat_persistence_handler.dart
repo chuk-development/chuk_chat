@@ -201,6 +201,7 @@ class ChatPersistenceHandler {
     String? toolCallsJson,
     String? contentBlocksJson,
     String? images,
+    String? imageMetas,
     String? imageCostEur,
     String? imageGeneratedAt,
     String? tps,
@@ -217,6 +218,7 @@ class ChatPersistenceHandler {
       ..toolCallsJson = toolCallsJson ?? existing.toolCallsJson
       ..contentBlocksJson = contentBlocksJson ?? existing.contentBlocksJson
       ..images = images ?? existing.images
+      ..imageMetas = imageMetas ?? existing.imageMetas
       ..imageCostEur = imageCostEur ?? existing.imageCostEur
       ..imageGeneratedAt = imageGeneratedAt ?? existing.imageGeneratedAt
       ..tps = tps ?? existing.tps;
@@ -294,6 +296,9 @@ class ChatPersistenceHandler {
       if (pending.images != null) {
         messages[pending.messageIndex]['images'] = pending.images;
       }
+      if (pending.imageMetas != null) {
+        messages[pending.messageIndex]['imageMetas'] = pending.imageMetas;
+      }
       if (pending.imageCostEur != null) {
         messages[pending.messageIndex]['imageCostEur'] = pending.imageCostEur;
       }
@@ -324,6 +329,7 @@ class _PendingBackgroundUpdate {
   String? toolCallsJson;
   String? contentBlocksJson;
   String? images;
+  String? imageMetas;
   String? imageCostEur;
   String? imageGeneratedAt;
   String? tps;

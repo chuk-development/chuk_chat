@@ -2200,12 +2200,14 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       final updatedToolCallsJson = jsonEncode(
         imageResult.toolCalls.map((c) => c.toJson()).toList(),
       );
+      final imageMetasJson = jsonEncode(imageResult.imageMetas);
 
       final isActiveChat = _activeChatId == chatId;
       if (mounted && isActiveChat && index >= 0 && index < _messages.length) {
         setState(() {
           final message = Map<String, String>.from(_messages[index]);
           message['images'] = jsonEncode(imageResult.imagePaths);
+          message['imageMetas'] = imageMetasJson;
           if (imageResult.imageCostEur != null) {
             message['imageCostEur'] = imageResult.imageCostEur!;
           }
@@ -2221,6 +2223,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
             index >= 0 &&
             index < backgroundMsgs.length) {
           backgroundMsgs[index]['images'] = jsonEncode(imageResult.imagePaths);
+          backgroundMsgs[index]['imageMetas'] = imageMetasJson;
           if (imageResult.imageCostEur != null) {
             backgroundMsgs[index]['imageCostEur'] = imageResult.imageCostEur!;
           }

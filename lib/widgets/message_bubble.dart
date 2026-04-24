@@ -29,6 +29,41 @@ import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:flutter/foundation.dart';
 
+/// Per-image metadata describing how an image arrived in the chat and
+/// an optional caption the AI attached to it.
+class ImageMeta {
+  const ImageMeta({required this.source, this.caption});
+
+  /// "generated" (AI image tool) or "fetched" (fetch_image from URL).
+  final String source;
+
+  /// Optional short subtitle supplied by the AI, shown under the image.
+  final String? caption;
+
+  bool get isGenerated => source == 'generated';
+
+  static List<ImageMeta>? decode(String? json) {
+    if (json == null || json.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(json);
+      if (decoded is! List) return null;
+      return decoded
+          .whereType<Map>()
+          .map((raw) {
+            final source = raw['source']?.toString() ?? 'generated';
+            final captionRaw = raw['caption']?.toString().trim() ?? '';
+            return ImageMeta(
+              source: source,
+              caption: captionRaw.isEmpty ? null : captionRaw,
+            );
+          })
+          .toList();
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
 /// Document attachment data
 class DocumentAttachment {
   const DocumentAttachment({
@@ -112,6 +147,7 @@ class MessageBubble extends StatefulWidget {
     this.replyPreviewLabel,
     this.isStreamingMessage = false,
     this.images,
+    this.imageMetas,
     this.attachments,
     this.imageCostEur,
     this.imageGeneratedAt,
@@ -155,6 +191,10 @@ class MessageBubble extends StatefulWidget {
   final bool isStreamingMessage;
 
   final List<String>? images; // Base64 data URLs of images
+
+  /// Per-image metadata aligned with [images]. Distinguishes fetched vs
+  /// generated and carries the AI-supplied caption rendered under each image.
+  final List<ImageMeta>? imageMetas;
   final List<DocumentAttachment>? attachments; // Document attachments
   final double? imageCostEur;
   final DateTime? imageGeneratedAt;
@@ -662,12 +702,13 @@ class _MessageBubbleState extends State<MessageBubble>
         ),
       if (renderImagesInBubble && !placeQrImageAboveResponse) ...[
         _buildFramedUserImageGrid(_buildImagesGrid(widget.images!)),
-        _buildImageMetaMenu(
-          iconFgColor,
-          alignRight,
-          widget.imageCostEur,
-          widget.imageGeneratedAt,
-        ),
+        if (_hasGeneratedImage)
+          _buildImageMetaMenu(
+            iconFgColor,
+            alignRight,
+            widget.imageCostEur,
+            widget.imageGeneratedAt,
+          ),
         const SizedBox(height: 8),
       ],
       if (widget.attachments != null && widget.attachments!.isNotEmpty) ...[
@@ -682,12 +723,13 @@ class _MessageBubbleState extends State<MessageBubble>
       ],
       if (renderImagesInBubble && placeQrImageAboveResponse) ...[
         _buildFramedUserImageGrid(_buildImagesGrid(widget.images!)),
-        _buildImageMetaMenu(
-          iconFgColor,
-          alignRight,
-          widget.imageCostEur,
-          widget.imageGeneratedAt,
-        ),
+        if (_hasGeneratedImage)
+          _buildImageMetaMenu(
+            iconFgColor,
+            alignRight,
+            widget.imageCostEur,
+            widget.imageGeneratedAt,
+          ),
         const SizedBox(height: 8),
       ],
       _buildMessageBody(
@@ -806,14 +848,16 @@ class _MessageBubbleState extends State<MessageBubble>
           });
           if (hasImageResult) {
             children.add(_buildImagesGrid(widget.images!));
-            children.add(
-              _buildImageMetaMenu(
-                iconFgColor,
-                alignRight,
-                widget.imageCostEur,
-                widget.imageGeneratedAt,
-              ),
-            );
+            if (_hasGeneratedImage) {
+              children.add(
+                _buildImageMetaMenu(
+                  iconFgColor,
+                  alignRight,
+                  widget.imageCostEur,
+                  widget.imageGeneratedAt,
+                ),
+              );
+            }
             children.add(const SizedBox(height: 8));
             insertedImage = true;
           }
@@ -2297,6 +2341,25 @@ class _MessageBubbleState extends State<MessageBubble>
     return [AskUserCard(options: options, onSelect: widget.onAskUserAnswer!)];
   }
 
+  String? _captionFor(int index) {
+    final metas = widget.imageMetas;
+    if (metas == null || index < 0 || index >= metas.length) return null;
+    final caption = metas[index].caption?.trim();
+    if (caption == null || caption.isEmpty) return null;
+    return caption;
+  }
+
+  /// Whether the message has at least one AI-generated image. When
+  /// [imageMetas] is absent (legacy messages), assume generated so the
+  /// existing "Generated:" menu stays visible.
+  bool get _hasGeneratedImage {
+    final metas = widget.imageMetas;
+    if (metas == null || metas.isEmpty) {
+      return widget.images != null && widget.images!.isNotEmpty;
+    }
+    return metas.any((m) => m.isGenerated);
+  }
+
   Widget _buildImagesGrid(List<String> images) {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -2315,12 +2378,13 @@ class _MessageBubbleState extends State<MessageBubble>
 
           return Align(
             alignment: Alignment.center,
-            child: _CachedImageThumbnail(
-              imageDataUrl: imageSource,
+            child: _captionedTile(
+              imageSource: imageSource,
               width: squareSize,
               height: squareSize,
               borderRadius: 12,
               fit: BoxFit.contain,
+              caption: _captionFor(0),
               onTap: () => _openImagePreview(
                 imageSource: imageSource,
                 images: images,
@@ -2349,12 +2413,13 @@ class _MessageBubbleState extends State<MessageBubble>
           // Outer Column already right-aligns user messages via
           // CrossAxisAlignment.end — do NOT wrap in Align here, or the frame
           // stretches to full width and shows an asymmetric gap on the left.
-          return _CachedImageThumbnail(
-            imageDataUrl: imageSource,
+          return _captionedTile(
+            imageSource: imageSource,
             width: imageWidth,
             height: imageHeight,
             borderRadius: 12,
             fit: BoxFit.cover,
+            caption: _captionFor(0),
             onTap: () => _openImagePreview(
               imageSource: imageSource,
               images: images,
@@ -2378,11 +2443,12 @@ class _MessageBubbleState extends State<MessageBubble>
             final int index = entry.key;
             final String imageSource = entry.value;
 
-            return _CachedImageThumbnail(
-              imageDataUrl: imageSource,
+            return _captionedTile(
+              imageSource: imageSource,
               width: tileWidth,
               height: tileWidth,
               borderRadius: 10,
+              caption: _captionFor(index),
               onTap: () => _openImagePreview(
                 imageSource: imageSource,
                 images: images,
@@ -2392,6 +2458,50 @@ class _MessageBubbleState extends State<MessageBubble>
           }).toList(),
         );
       },
+    );
+  }
+
+  Widget _captionedTile({
+    required String imageSource,
+    required double width,
+    required double height,
+    required double borderRadius,
+    required VoidCallback onTap,
+    String? caption,
+    BoxFit fit = BoxFit.cover,
+  }) {
+    final thumbnail = _CachedImageThumbnail(
+      imageDataUrl: imageSource,
+      width: width,
+      height: height,
+      borderRadius: borderRadius,
+      fit: fit,
+      onTap: onTap,
+    );
+    if (caption == null) return thumbnail;
+
+    final captionColor = Theme.of(context).colorScheme.onSurface;
+    return SizedBox(
+      width: width,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          thumbnail,
+          const SizedBox(height: 4),
+          Text(
+            caption,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: captionColor.withValues(alpha: 0.85),
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              height: 1.25,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
