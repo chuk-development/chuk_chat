@@ -345,4 +345,29 @@ class InputValidator {
     if (!RegExp(r'^[+0-9()\- ]+$').hasMatch(trimmed)) return null;
     return Uri.parse('tel:$trimmed');
   }
+
+  /// Build a safe RFC 5870 `geo:` URI for handing coordinates off to an
+  /// external maps app (Google Maps, Apple Maps, OsmAnd, …). Coordinates must
+  /// be finite and inside the WGS84 range. [label] is optional and only
+  /// forwarded through the `q` parameter after URL-encoding. Returns `null`
+  /// on invalid input so callers never splice unchecked strings into a URI.
+  static Uri? safeGeoUri({
+    required double lat,
+    required double lon,
+    String? label,
+  }) {
+    if (lat.isNaN || lat.isInfinite || lat < -90 || lat > 90) return null;
+    if (lon.isNaN || lon.isInfinite || lon < -180 || lon > 180) return null;
+
+    final latStr = lat.toStringAsFixed(6);
+    final lonStr = lon.toStringAsFixed(6);
+
+    final trimmedLabel = label?.trim();
+    if (trimmedLabel == null || trimmedLabel.isEmpty) {
+      return Uri.parse('geo:$latStr,$lonStr');
+    }
+
+    final encodedLabel = Uri.encodeQueryComponent(trimmedLabel);
+    return Uri.parse('geo:$latStr,$lonStr?q=$latStr,$lonStr($encodedLabel)');
+  }
 }

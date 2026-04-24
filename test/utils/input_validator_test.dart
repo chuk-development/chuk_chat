@@ -261,4 +261,53 @@ void main() {
       expect(result.hasSpecialChar, isFalse);
     });
   });
+
+  group('safeGeoUri', () {
+    test('builds a bare geo uri without a label', () {
+      final uri = InputValidator.safeGeoUri(lat: 54.3233, lon: 10.1228);
+      expect(uri, isNotNull);
+      expect(uri!.scheme, 'geo');
+      expect(uri.toString(), 'geo:54.323300,10.122800');
+    });
+
+    test('includes a url-encoded label inside the q parameter', () {
+      final uri = InputValidator.safeGeoUri(
+        lat: 54.3233,
+        lon: 10.1228,
+        label: 'Chuk HQ & Co.',
+      );
+      expect(uri, isNotNull);
+      final str = uri.toString();
+      expect(str.startsWith('geo:54.323300,10.122800?q=54.323300,10.122800('),
+          isTrue);
+      expect(str.contains('Chuk HQ'), isFalse); // should be percent-encoded
+      expect(str.contains('%26'), isTrue); // encoded '&'
+      expect(str.endsWith(')'), isTrue);
+    });
+
+    test('rejects NaN, infinite and out-of-range coordinates', () {
+      expect(
+        InputValidator.safeGeoUri(lat: double.nan, lon: 0),
+        isNull,
+      );
+      expect(
+        InputValidator.safeGeoUri(lat: 0, lon: double.infinity),
+        isNull,
+      );
+      expect(InputValidator.safeGeoUri(lat: 91, lon: 0), isNull);
+      expect(InputValidator.safeGeoUri(lat: -91, lon: 0), isNull);
+      expect(InputValidator.safeGeoUri(lat: 0, lon: 181), isNull);
+      expect(InputValidator.safeGeoUri(lat: 0, lon: -181), isNull);
+    });
+
+    test('ignores an empty/whitespace label', () {
+      final uri = InputValidator.safeGeoUri(
+        lat: 1.0,
+        lon: 2.0,
+        label: '   ',
+      );
+      expect(uri, isNotNull);
+      expect(uri!.toString(), 'geo:1.000000,2.000000');
+    });
+  });
 }

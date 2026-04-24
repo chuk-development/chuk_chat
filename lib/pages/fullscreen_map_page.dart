@@ -69,6 +69,7 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
   bool _loadingRoute = false;
   bool _initialCameraApplied = false;
   bool _initialSelectionApplied = false;
+  bool _locationAvailable = false;
 
   bool get _supportsMapLibre {
     if (kIsWeb) return true;
@@ -115,11 +116,28 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
     if (_hasPlaces || _hasRouteEndpoints) {
       unawaited(_ensureCurrentLocation());
     }
+    unawaited(_refreshLocationAvailability());
+  }
+
+  Future<void> _refreshLocationAvailability() async {
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      final permission = await Geolocator.checkPermission();
+      final available =
+          serviceEnabled &&
+          (permission == LocationPermission.whileInUse ||
+              permission == LocationPermission.always);
+      if (!mounted) return;
+      if (_locationAvailable != available) {
+        setState(() => _locationAvailable = available);
+      }
+    } catch (_) {}
   }
 
   @override
   Widget build(BuildContext context) {
-    final hasLocationControls = _hasPlaces || _hasRouteEndpoints;
+    final hasLocationControls =
+        (_hasPlaces || _hasRouteEndpoints) && _locationAvailable;
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
@@ -131,6 +149,11 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
           onPressed: () => Navigator.of(context).pop(),
         ),
         actions: [
+          IconButton(
+            tooltip: 'Open in external maps app',
+            onPressed: _openCurrentViewInExternalMaps,
+            icon: const Icon(Icons.open_in_new),
+          ),
           if (hasLocationControls)
             IconButton(
               tooltip: 'My location',
@@ -720,6 +743,68 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
     await _animateTo(current, zoom: 15.8);
   }
 
+  ({LatLng point, String? label}) _resolveExternalTarget() {
+    if (_hasPlaces &&
+        _selectedPlaceIndex != null &&
+        _selectedPlaceIndex! >= 0 &&
+        _selectedPlaceIndex! < widget.places!.length) {
+      final place = widget.places![_selectedPlaceIndex!];
+      return (
+        point: LatLng(_toDouble(place['lat']), _toDouble(place['lon'])),
+        label: place['name'] as String?,
+      );
+    }
+    if (_hasMarkers &&
+        _selectedMarkerIndex != null &&
+        _selectedMarkerIndex! >= 0 &&
+        _selectedMarkerIndex! < widget.markers!.length) {
+      final marker = widget.markers![_selectedMarkerIndex!];
+      return (
+        point: LatLng(_toDouble(marker['lat']), _toDouble(marker['lon'])),
+        label: marker['label'] as String?,
+      );
+    }
+    if (_hasRouteEndpoints && _routeEnd != null) {
+      return (point: _routeEnd!, label: widget.routeToLabel);
+    }
+    return (point: widget.center, label: widget.title);
+  }
+
+  Future<void> _openCurrentViewInExternalMaps() async {
+    final target = _resolveExternalTarget();
+    await _launchExternalMaps(
+      lat: target.point.latitude,
+      lon: target.point.longitude,
+      label: target.label,
+    );
+  }
+
+  Future<void> _launchExternalMaps({
+    required double lat,
+    required double lon,
+    String? label,
+  }) async {
+    // AI-controlled label — validated before interpolation.
+    final uri = InputValidator.safeGeoUri(lat: lat, lon: lon, label: label);
+    if (uri == null) return;
+    try {
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (launched) return;
+    } catch (_) {}
+
+    final fallback = Uri.parse(
+      'https://www.openstreetmap.org/?mlat=${lat.toStringAsFixed(6)}'
+      '&mlon=${lon.toStringAsFixed(6)}#map=16/'
+      '${lat.toStringAsFixed(6)}/${lon.toStringAsFixed(6)}',
+    );
+    try {
+      await launchUrl(fallback, mode: LaunchMode.externalApplication);
+    } catch (_) {}
+  }
+
   Future<LatLng?> _ensureCurrentLocation() async {
     if (_currentLocation != null) {
       return _currentLocation;
@@ -735,6 +820,9 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
+        if (mounted) {
+          setState(() => _locationAvailable = false);
+        }
         return null;
       }
 
@@ -745,7 +833,14 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
 
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          setState(() => _locationAvailable = false);
+        }
         return null;
+      }
+
+      if (mounted) {
+        setState(() => _locationAvailable = true);
       }
 
       final LocationSettings locationSettings =
@@ -1267,11 +1362,17 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
                         const SizedBox(width: 8),
                       if (lat != null && lon != null)
                         _buildPopupAction(
-                          icon: Icons.center_focus_strong,
-                          label: 'Zoom',
-                          color: Colors.blue,
+                          icon: Icons.map,
+                          label: 'Maps',
+                          color: Colors.indigo,
                           onTap: () {
-                            unawaited(_animateTo(LatLng(lat, lon), zoom: 17.0));
+                            unawaited(
+                              _launchExternalMaps(
+                                lat: lat,
+                                lon: lon,
+                                label: name,
+                              ),
+                            );
                           },
                         ),
                     ],
