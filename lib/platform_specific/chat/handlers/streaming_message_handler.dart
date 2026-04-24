@@ -75,8 +75,8 @@ class StreamingMessageHandler {
   // In-memory cache for resolved Base64 images (storage path -> data URL)
   static final Map<String, String> _imageBase64Cache = {};
   static const int _maxCacheSize = 10;
-  static const int _maxHistoryImageCount = 2;
-  static const int _maxHistoryImageDataChars = 350000;
+  static const int _maxHistoryImageCount = 10;
+  static const int _maxHistoryImageDataChars = 1500000;
 
   /// Send a message with streaming response
   Future<void> sendMessage({
@@ -971,7 +971,7 @@ class StreamingMessageHandler {
 
     // Determine image window: count user messages with images from end
     final bool shouldIncludeImages = includeRecentImages || includeAllImages;
-    final int imageWindow = includeAllImages ? messages.length : 6;
+    final int imageWindow = includeAllImages ? messages.length : 10;
 
     // Find which user messages (by index) are within the image window
     final Set<int> imageEligibleIndices = {};
