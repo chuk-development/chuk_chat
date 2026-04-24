@@ -38,8 +38,11 @@ void main() {
 
       final formatted = DebugChatFormatter.format(messages);
 
+      // Compact summary — raw request JSON is no longer dumped. The image
+      // payload must not appear anywhere in the output; a summary line
+      // replaces the full dump.
       expect(formatted.contains('data:image'), isFalse);
-      expect(formatted.contains('[image removed]'), isTrue);
+      expect(formatted.contains('Request Payloads:'), isTrue);
     });
 
     test('renders system prompt when provided', () {

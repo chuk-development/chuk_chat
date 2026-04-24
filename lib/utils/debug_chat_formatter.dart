@@ -13,6 +13,9 @@ import 'package:chuk_chat/utils/clipboard_text_sanitizer.dart';
 class DebugChatFormatter {
   const DebugChatFormatter._();
 
+  // Explicitly drop a value without linter warnings.
+  static void _noop(Object? _) {}
+
   static int _countImages(String rawImages) {
     if (rawImages.trim().isEmpty) {
       return 0;
@@ -101,10 +104,17 @@ class DebugChatFormatter {
         buf.writeln();
       }
 
-      // Reasoning
+      // Reasoning (truncated — full dumps dominate the export)
       if (reasoning.trim().isNotEmpty) {
+        final trimmed = reasoning.trim();
         buf.writeln('Reasoning:');
-        buf.writeln(reasoning.trim());
+        if (trimmed.length > 400) {
+          buf.writeln(
+            '${trimmed.substring(0, 400)}... (${trimmed.length} chars total)',
+          );
+        } else {
+          buf.writeln(trimmed);
+        }
         buf.writeln();
       }
 
@@ -122,15 +132,11 @@ class DebugChatFormatter {
               final roundThinking = call['roundThinking'];
 
               buf.writeln('  [$callStatus] $name');
-              if (roundThinking != null &&
-                  roundThinking.toString().trim().isNotEmpty) {
-                buf.writeln('    Thinking: ${roundThinking.toString().trim()}');
-              }
+              // Thinking is a duplicate of the message Reasoning block —
+              // omit to keep the export compact.
               if (args != null && args is Map && args.isNotEmpty) {
                 try {
-                  final argsStr = const JsonEncoder.withIndent(
-                    '    ',
-                  ).convert(args);
+                  final argsStr = jsonEncode(args);
                   final sanitizedArgs = ClipboardTextSanitizer.sanitize(
                     argsStr,
                   );
@@ -141,14 +147,16 @@ class DebugChatFormatter {
                   );
                   buf.writeln('    Args: $sanitizedArgs');
                 }
+                // roundThinking intentionally omitted to reduce noise
+                _noop(roundThinking);
               }
               if (result != null && result.toString().trim().isNotEmpty) {
                 final resultStr = ClipboardTextSanitizer.sanitize(
                   result.toString().trim(),
                 );
-                if (resultStr.length > 500) {
+                if (resultStr.length > 250) {
                   buf.writeln(
-                    '    Result: ${resultStr.substring(0, 500)}... '
+                    '    Result: ${resultStr.substring(0, 250)}... '
                     '(${resultStr.length} chars)',
                   );
                 } else {
@@ -165,50 +173,42 @@ class DebugChatFormatter {
         buf.writeln();
       }
 
-      // Content blocks
+      // Content blocks — collapsed to a one-line type sequence since the
+      // text / reasoning / toolCalls fields above already carry the content.
       if (contentBlocksJson.isNotEmpty) {
-        buf.writeln('Content Blocks:');
         try {
           final List<dynamic> blocks = jsonDecode(contentBlocksJson) as List;
-          for (var bi = 0; bi < blocks.length; bi++) {
-            final block = blocks[bi];
-            if (block is! Map) continue;
-            final type = (block['type'] ?? 'text').toString();
-            buf.writeln('  [$bi] type=$type');
-            final textValue = block['text']?.toString() ?? '';
-            if (textValue.trim().isNotEmpty) {
-              final sanitizedBlockText = ClipboardTextSanitizer.sanitize(
-                textValue.trim(),
-              );
-              buf.writeln('    text: $sanitizedBlockText');
-            }
-            final rawCalls = block['toolCalls'];
-            if (rawCalls is List && rawCalls.isNotEmpty) {
-              buf.writeln('    toolCalls: ${rawCalls.length}');
-            }
+          if (blocks.isNotEmpty) {
+            final types = blocks
+                .whereType<Map>()
+                .map((b) => (b['type'] ?? 'text').toString())
+                .join(' → ');
+            buf.writeln('Block Order: $types');
+            buf.writeln();
           }
         } catch (_) {
-          final sanitizedRaw = ClipboardTextSanitizer.sanitize(
-            contentBlocksJson,
-          );
-          buf.writeln('  (raw): $sanitizedRaw');
+          // Skip malformed blocks silently — redundant with text field.
         }
-        buf.writeln();
       }
 
-      // Raw request payloads sent during streaming passes
+      // Raw request payloads — only a compact summary (count + size).
       if (debugRequestsJson.isNotEmpty) {
-        buf.writeln('Request Payloads Sent:');
         try {
           final decoded = jsonDecode(debugRequestsJson);
-          final pretty = const JsonEncoder.withIndent('  ').convert(decoded);
-          final sanitizedPretty = ClipboardTextSanitizer.sanitize(pretty);
-          buf.writeln(sanitizedPretty);
+          if (decoded is List) {
+            buf.writeln(
+              'Request Payloads: ${decoded.length} pass(es), '
+              '${debugRequestsJson.length} chars total',
+            );
+          } else {
+            buf.writeln(
+              'Request Payloads: ${debugRequestsJson.length} chars',
+            );
+          }
         } catch (_) {
-          final sanitizedRaw = ClipboardTextSanitizer.sanitize(
-            debugRequestsJson,
+          buf.writeln(
+            'Request Payloads: ${debugRequestsJson.length} chars (unparsed)',
           );
-          buf.writeln(sanitizedRaw);
         }
         buf.writeln();
       }

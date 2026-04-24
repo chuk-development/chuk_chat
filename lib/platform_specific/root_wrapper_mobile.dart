@@ -17,6 +17,8 @@ import 'package:chuk_chat/platform_specific/chat/chat_ui_mobile.dart';
 import 'package:chuk_chat/platform_specific/sidebar_mobile.dart'; // UPDATED: Use mobile sidebar
 import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/chat_storage_state.dart';
+import 'package:chuk_chat/services/chat_sync_service.dart';
 import 'package:chuk_chat/services/developer_options_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/widgets/artifact_panel.dart';
@@ -398,12 +400,31 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
 
   Map<String, String> _debugContext(ChukChatUIMobileState? state) {
     if (state == null) return const {};
+    final chatId = state.debugActiveChatId;
+    final chat = chatId == null ? null : ChatStorageState.chatsById[chatId];
+    final lastSync = ChatSyncService.lastSyncAt;
     return {
       'Model': state.debugModelId,
       'Provider': state.debugProviderSlug ?? '',
       'Workspace': state.debugWorkspaceId ?? '',
       'Reasoning': state.debugReasoningEnabled.toString(),
       'Platform': 'mobile',
+      'Chat ID': chatId ?? '',
+      'Chat UpdatedAt (local)': chat?.updatedAt?.toIso8601String() ?? '',
+      'Chat Fully Loaded': (chat?.isFullyLoaded ?? false).toString(),
+      'Chat Pending Save': chatId != null &&
+              ChatStorageState.pendingSaves.containsKey(chatId)
+          ? 'true'
+          : 'false',
+      'Chat Saving': chatId != null &&
+              ChatStorageState.savingChats.contains(chatId)
+          ? 'true'
+          : 'false',
+      'Sync Enabled': ChatSyncService.isEnabled.toString(),
+      'Sync In Progress': ChatSyncService.isSyncing.toString(),
+      'Sync First Done': ChatSyncService.hasCompletedFirstSync.toString(),
+      'Sync Last At': lastSync?.toIso8601String() ?? 'never',
+      'Sync Last Result': ChatSyncService.lastSyncOutcome ?? '',
     };
   }
 

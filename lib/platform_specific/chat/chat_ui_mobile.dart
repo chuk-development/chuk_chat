@@ -860,6 +860,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   /// Whether reasoning is enabled for the current model. Debug only.
   bool get debugReasoningEnabled => _reasoningEnabled;
 
+  /// Current active chat id. Debug only.
+  String? get debugActiveChatId => _activeChatId;
+
   void newChat() {
     if (kDebugMode) {
       debugPrint(
