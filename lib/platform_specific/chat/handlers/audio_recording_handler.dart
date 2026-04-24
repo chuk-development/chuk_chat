@@ -1,34 +1,32 @@
 // lib/platform_specific/chat/handlers/audio_recording_handler.dart
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:record/record.dart';
 
-import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:chuk_chat/utils/permission_handler_stub.dart'
     if (dart.library.io) 'package:permission_handler/permission_handler.dart';
-import 'package:chuk_chat/utils/path_provider_stub.dart'
-    if (dart.library.io) 'package:path_provider/path_provider.dart';
+import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart';
 import 'package:chuk_chat/services/streaming_transcription_service.dart';
-import 'package:http/http.dart' as http;
 
-/// Handles audio recording functionality including permissions, recording,
-/// and transcription.
+/// Handles microphone recording + transcription.
 ///
-/// Supports two modes:
-///
-/// **Streaming mode** (preferred) — when [startRecording] is called with
-/// an [accessToken], audio is captured as a PCM-16 stream and each chunk
-/// is forwarded to the server over a WebSocket *as the user speaks*. When
-/// [transcribeLastRecording] is called the server already has the audio, so
-/// only the Groq inference latency remains.
-///
-/// **File mode** (fallback) — when [startRecording] is called without an
-/// access token, or when the WebSocket connection fails, audio is recorded
-/// to a local file and uploaded via HTTP when transcription is requested.
+/// Recording starts **instantly** on mic press: the recorder is opened as a
+/// raw PCM-16 stream and every chunk is appended to an in-memory buffer from
+/// byte zero. In parallel a WebSocket connection to the transcription service
+/// is attempted; when it becomes ready the buffered audio is flushed to the
+/// socket and subsequent chunks are forwarded live. If the WebSocket never
+/// becomes ready (offline, auth fails, timeout) the buffered PCM is wrapped
+/// as a WAV file at stop time and uploaded via HTTP. Either way the full
+/// audio from the moment of mic press is sent — nothing is discarded.
 class AudioRecordingHandler {
+  static const int _sampleRate = 16000;
+  static const int _channels = 1;
+
   final AudioRecorder _audioRecorder = AudioRecorder();
   final List<double> _audioLevels = List<double>.filled(
     32,
@@ -36,32 +34,26 @@ class AudioRecordingHandler {
     growable: true,
   );
 
-  // --- common state ---
-  StreamSubscription<Amplitude>? _amplitudeSub;
+  // Shared state.
   bool _isMicActive = false;
   bool _isTranscribingAudio = false;
 
-  /// Called whenever audio levels are updated, so the UI can trigger a
-  /// rebuild (replaces the old inline `setState` that was lost during the
-  /// handler extraction).
+  /// Called whenever audio levels update, so the UI can rebuild.
   VoidCallback? onLevelsChanged;
 
-  // --- file-mode state ---
-  String? _lastRecordedFilePath;
-  Uint8List? _lastRecordedBytes;
-  String? _activeRecordingPath;
-
-  // --- streaming-mode state ---
-  StreamingTranscriptionService? _streamingService;
+  // PCM capture.
   StreamSubscription<Uint8List>? _pcmStreamSub;
+  final BytesBuilder _pcmBuffer = BytesBuilder(copy: false);
+
+  // Streaming (WebSocket) state.
+  StreamingTranscriptionService? _streamingService;
   bool _isStreamingMode = false;
 
-  // Getters
   bool get isMicActive => _isMicActive;
   bool get isTranscribingAudio => _isTranscribingAudio;
   List<double> get audioLevels => _audioLevels;
 
-  /// Whether the handler is using the fast WebSocket streaming path.
+  /// Whether a WebSocket streaming session is active.
   bool get isStreamingMode => _isStreamingMode;
 
   /// Allow UI to set transcribing state for immediate feedback.
@@ -71,66 +63,88 @@ class AudioRecordingHandler {
 
   /// Start microphone recording.
   ///
-  /// Recording starts **instantly** in file mode so the user sees the mic
-  /// activate with zero delay.  If [accessToken] is provided, a WebSocket
-  /// connection is attempted in the background.  When it succeeds before the
-  /// user stops recording, the handler transparently switches to streaming
-  /// mode (stops the file recorder, re-starts as PCM stream). If the
-  /// WebSocket isn't ready in time, file mode continues and the audio is
-  /// uploaded via HTTP at transcription time.
+  /// Recording begins **instantly** — PCM chunks are captured from the
+  /// moment this method returns. If [accessToken] is provided a WebSocket
+  /// connection is opened in the background; once ready the buffered audio
+  /// is flushed and live chunks are forwarded. The caller does not wait for
+  /// the WebSocket — recording never blocks on network.
   Future<bool> startRecording({String? accessToken}) async {
     try {
-      if (!await _ensureMicPermission()) {
-        return false;
-      }
+      if (!await _ensureMicPermission()) return false;
 
       if (!await _audioRecorder.hasPermission()) {
-        if (kDebugMode) {
-          debugPrint('Microphone permission required');
-        }
+        if (kDebugMode) debugPrint('Microphone permission required');
         return false;
       }
 
-      if (await _audioRecorder.isRecording()) {
-        return true;
-      }
+      if (await _audioRecorder.isRecording()) return true;
 
       _resetAudioLevels();
-      _amplitudeSub?.cancel();
+      _pcmBuffer.clear();
+      _pcmStreamSub?.cancel();
 
-      // Start file recording IMMEDIATELY — zero delay for the user.
-      final started = await _startFileRecording();
-      if (!started) return false;
+      const config = RecordConfig(
+        encoder: AudioEncoder.pcm16bits,
+        sampleRate: _sampleRate,
+        numChannels: _channels,
+      );
+      final Stream<Uint8List> pcmStream = await _audioRecorder.startStream(
+        config,
+      );
 
-      // Try to upgrade to streaming in the background.
+      _pcmStreamSub = pcmStream.listen(_handlePcmChunk);
+      _isMicActive = true;
+      _isStreamingMode = false;
+
       if (accessToken != null) {
-        unawaited(_tryUpgradeToStreaming(accessToken));
+        unawaited(_tryConnectStreaming(accessToken));
       }
-
       return true;
     } catch (error, stackTrace) {
       if (kDebugMode) {
         debugPrint('Failed to start microphone: $error\n$stackTrace');
       }
+      await _pcmStreamSub?.cancel();
+      _pcmStreamSub = null;
+      _pcmBuffer.clear();
       return false;
     }
   }
 
   /// Stop microphone recording.
+  ///
+  /// If [keepFile] is `true`, the captured audio is retained so the next
+  /// [transcribeLastRecording] call can use it. Otherwise everything is
+  /// discarded.
   Future<void> stopRecording({bool keepFile = false}) async {
-    if (_isStreamingMode) {
-      await _stopStreamingRecording(keepFile: keepFile);
-    } else {
-      await _stopFileRecording(keepFile: keepFile);
+    await _pcmStreamSub?.cancel();
+    _pcmStreamSub = null;
+
+    try {
+      await _audioRecorder.stop();
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('Failed to stop microphone: $error\n$stackTrace');
+      }
     }
+
     _isMicActive = false;
+
+    if (!keepFile) {
+      _pcmBuffer.clear();
+      if (_streamingService != null) {
+        await _streamingService!.abort();
+      }
+      _streamingService = null;
+      _isStreamingMode = false;
+    }
   }
 
   /// Transcribe the last recorded audio.
   ///
-  /// In streaming mode the server already has the audio — this just waits
-  /// for the Groq result (fast). In file mode the recording is uploaded
-  /// via HTTP (slower).
+  /// If the WebSocket was upgraded mid-recording, the server already has
+  /// the audio — this only waits for the Whisper result. Otherwise the
+  /// buffered PCM is wrapped as WAV and uploaded via HTTP.
   Future<TranscriptionResult> transcribeLastRecording({
     required ChatApiService apiService,
     required String accessToken,
@@ -140,135 +154,94 @@ class AudioRecordingHandler {
     if (_isStreamingMode && _streamingService != null) {
       return _transcribeStreaming();
     }
-
-    // Fall back to the original HTTP-based transcription.
-    if (kIsWeb) {
-      return _transcribeWebRecording(
-        apiService: apiService,
-        accessToken: accessToken,
-      );
-    }
-    return _transcribeFileRecording(
+    return _transcribeBufferedPcm(
       apiService: apiService,
       accessToken: accessToken,
     );
   }
 
-  /// Reset audio levels to zero.
   void resetAudioLevels() {
     _resetAudioLevels();
   }
 
-  /// Clean up resources.
   Future<void> dispose() async {
     await stopRecording();
-    _amplitudeSub?.cancel();
-    _pcmStreamSub?.cancel();
+    await _pcmStreamSub?.cancel();
     await _streamingService?.dispose();
     await _audioRecorder.dispose();
   }
 
   // =====================================================================
-  // STREAMING MODE
+  // Internals
   // =====================================================================
 
-  /// Try to upgrade from file mode to streaming mode in the background.
-  ///
-  /// Connects WebSocket while file recording is already running. If the
-  /// connection succeeds and the user is still recording, stops the file
-  /// recorder and re-starts as a PCM stream. If the connection fails or
-  /// the user already stopped, nothing changes — file mode continues.
-  Future<void> _tryUpgradeToStreaming(String accessToken) async {
-    try {
-      final service = StreamingTranscriptionService();
-      final connected = await service.connect(accessToken: accessToken);
+  void _handlePcmChunk(Uint8List data) {
+    _computeAmplitudeFromPcm(data);
+    // If WS is live forward the chunk directly; otherwise keep it in the
+    // buffer so nothing is lost while the WS is still connecting (or in
+    // case it never connects).
+    if (_isStreamingMode && _streamingService != null) {
+      _streamingService!.sendAudioChunk(data);
+    } else {
+      _pcmBuffer.add(data);
+    }
+  }
 
-      if (!connected) {
+  /// Connect the WebSocket in the background. On success, flush any PCM
+  /// buffered since mic press and switch future chunks to the live path.
+  Future<void> _tryConnectStreaming(String accessToken) async {
+    StreamingTranscriptionService? service;
+    try {
+      service = StreamingTranscriptionService();
+      final bool connected = await service.connect(
+        accessToken: accessToken,
+        sampleRate: _sampleRate,
+        channels: _channels,
+      );
+
+      // If the user already stopped, or we already have a streaming
+      // session, discard this connection.
+      if (!connected || !_isMicActive || _isStreamingMode) {
         await service.dispose();
-        if (kDebugMode) {
-          debugPrint('Streaming upgrade: WS connect failed, staying in file mode');
+        if (kDebugMode && !connected) {
+          debugPrint('WS connect failed — staying in buffered/HTTP fallback');
         }
         return;
       }
 
-      // WS connected — but only upgrade if still recording.
-      if (!_isMicActive || _isStreamingMode) {
-        await service.dispose();
-        return;
-      }
-
-      // Stop the file recorder (discard partial file).
-      _amplitudeSub?.cancel();
-      _amplitudeSub = null;
-      try {
-        await _audioRecorder.stop();
-      } catch (_) {}
-      await _deleteRecordingFile(_activeRecordingPath);
-      _activeRecordingPath = null;
-
-      // Re-start recorder as PCM stream.
-      const config = RecordConfig(
-        encoder: AudioEncoder.pcm16bits,
-        sampleRate: 16000,
-        numChannels: 1,
-      );
-      final Stream<Uint8List> pcmStream = await _audioRecorder.startStream(
-        config,
-      );
-
+      // Flush buffered audio before flipping the flag, so chunks that arrive
+      // after the flip (but before this method finishes) go to the socket
+      // and are not re-appended to the buffer.
+      final Uint8List buffered = _pcmBuffer.toBytes();
+      _pcmBuffer.clear();
       _streamingService = service;
-      _pcmStreamSub = pcmStream.listen((Uint8List data) {
-        _streamingService?.sendAudioChunk(data);
-        _computeAmplitudeFromPcm(data);
-      });
-
       _isStreamingMode = true;
-      if (kDebugMode) {
-        debugPrint('Streaming upgrade: switched to WebSocket streaming');
+
+      if (buffered.isNotEmpty) {
+        service.sendAudioChunk(buffered);
       }
-    } catch (e) {
       if (kDebugMode) {
-        debugPrint('Streaming upgrade failed: $e');
+        debugPrint(
+          'WS ready — flushed ${buffered.length} buffered PCM bytes, '
+          'forwarding live',
+        );
       }
-      _pcmStreamSub?.cancel();
-      _pcmStreamSub = null;
-      await _streamingService?.dispose();
-      _streamingService = null;
-      _isStreamingMode = false;
-      // File recording continues — nothing lost.
+    } catch (error) {
+      if (kDebugMode) debugPrint('WS upgrade error: $error');
+      await service?.dispose();
+      // Buffer still intact — HTTP fallback will handle it on stop.
     }
   }
 
-  /// Stop a streaming-mode recording session.
-  Future<void> _stopStreamingRecording({bool keepFile = false}) async {
-    _pcmStreamSub?.cancel();
-    _pcmStreamSub = null;
-
-    try {
-      await _audioRecorder.stop();
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('Error stopping streaming recorder: $e');
-      }
-    }
-
-    if (!keepFile) {
-      // User cancelled — abort the WebSocket without transcribing.
-      await _streamingService?.abort();
-      _streamingService = null;
-      _isStreamingMode = false;
-    }
-    // When keepFile is true we keep _streamingService alive so
-    // transcribeLastRecording() can call finishAndTranscribe().
-  }
-
-  /// Get the transcription result from the streaming WebSocket.
   Future<TranscriptionResult> _transcribeStreaming() async {
     final service = _streamingService;
     if (service == null) {
       _isTranscribingAudio = false;
       _isStreamingMode = false;
-      return TranscriptionResult(success: false, error: 'No streaming session');
+      return TranscriptionResult(
+        success: false,
+        error: 'No streaming session',
+      );
     }
 
     try {
@@ -277,13 +250,16 @@ class AudioRecordingHandler {
       _streamingService = null;
       _isStreamingMode = false;
       _isTranscribingAudio = false;
+      _pcmBuffer.clear();
 
       if (result == null) {
         return TranscriptionResult(success: false, error: 'No response');
       }
       if (result.containsKey('error')) {
-        final error = result['error'] as String;
-        return TranscriptionResult(success: false, error: error);
+        return TranscriptionResult(
+          success: false,
+          error: result['error'] as String,
+        );
       }
 
       final text = (result['text'] as String?)?.trim() ?? '';
@@ -291,15 +267,121 @@ class AudioRecordingHandler {
         return TranscriptionResult(success: false, error: 'No text found');
       }
       return TranscriptionResult(success: true, text: text);
-    } catch (e) {
+    } catch (error) {
       _streamingService = null;
       _isStreamingMode = false;
       _isTranscribingAudio = false;
-      return TranscriptionResult(success: false, error: 'Error: $e');
+      return TranscriptionResult(success: false, error: 'Error: $error');
     }
   }
 
-  /// Compute a normalised amplitude value from raw PCM-16 LE samples.
+  Future<TranscriptionResult> _transcribeBufferedPcm({
+    required ChatApiService apiService,
+    required String accessToken,
+  }) async {
+    final Uint8List pcm = _pcmBuffer.toBytes();
+    _pcmBuffer.clear();
+
+    if (pcm.isEmpty) {
+      _isTranscribingAudio = false;
+      return TranscriptionResult(success: false, error: 'No audio');
+    }
+
+    final Uint8List wav = _pcmToWav(
+      pcm,
+      sampleRate: _sampleRate,
+      channels: _channels,
+    );
+
+    try {
+      final transcription = await apiService.transcribeAudioBytes(
+        bytes: wav,
+        filename: 'recording.wav',
+        accessToken: accessToken,
+      );
+      final String text = transcription.text.trim();
+      _isTranscribingAudio = false;
+
+      if (text.isEmpty) {
+        return TranscriptionResult(success: false, error: 'No text found');
+      }
+      return TranscriptionResult(success: true, text: text);
+    } on TranscriptionException catch (error) {
+      _isTranscribingAudio = false;
+      switch (error.statusCode) {
+        case 401:
+          return TranscriptionResult(
+            success: false,
+            error: 'Session expired',
+            requiresLogout: true,
+          );
+        case 502:
+          return TranscriptionResult(
+            success: false,
+            error: 'Service unavailable',
+          );
+        default:
+          final String message = error.message.isNotEmpty
+              ? error.message
+              : 'Transcription failed';
+          return TranscriptionResult(success: false, error: message);
+      }
+    } on TimeoutException {
+      _isTranscribingAudio = false;
+      return TranscriptionResult(success: false, error: 'Timed out');
+    } catch (error) {
+      _isTranscribingAudio = false;
+      return TranscriptionResult(success: false, error: 'Error: $error');
+    }
+  }
+
+  /// Wrap raw PCM-16 LE mono samples in a minimal WAV (RIFF) container so
+  /// the server's multipart transcription endpoint can decode them.
+  static Uint8List _pcmToWav(
+    Uint8List pcm, {
+    required int sampleRate,
+    required int channels,
+  }) {
+    const int bitsPerSample = 16;
+    final int byteRate = sampleRate * channels * (bitsPerSample ~/ 8);
+    final int blockAlign = channels * (bitsPerSample ~/ 8);
+    final int dataSize = pcm.length;
+    final int riffSize = 36 + dataSize;
+
+    final header = ByteData(44);
+    // RIFF header.
+    header.setUint8(0, 0x52); // 'R'
+    header.setUint8(1, 0x49); // 'I'
+    header.setUint8(2, 0x46); // 'F'
+    header.setUint8(3, 0x46); // 'F'
+    header.setUint32(4, riffSize, Endian.little);
+    _writeAscii(header, 8, 'WAVE');
+    // fmt chunk.
+    _writeAscii(header, 12, 'fmt ');
+    header.setUint32(16, 16, Endian.little);
+    header.setUint16(20, 1, Endian.little); // PCM
+    header.setUint16(22, channels, Endian.little);
+    header.setUint32(24, sampleRate, Endian.little);
+    header.setUint32(28, byteRate, Endian.little);
+    header.setUint16(32, blockAlign, Endian.little);
+    header.setUint16(34, bitsPerSample, Endian.little);
+    // data chunk.
+    _writeAscii(header, 36, 'data');
+    header.setUint32(40, dataSize, Endian.little);
+
+    final out = Uint8List(44 + dataSize);
+    out.setRange(0, 44, header.buffer.asUint8List());
+    out.setRange(44, 44 + dataSize, pcm);
+    return out;
+  }
+
+  static void _writeAscii(ByteData buf, int offset, String value) {
+    final bytes = ascii.encode(value);
+    for (int i = 0; i < bytes.length; i++) {
+      buf.setUint8(offset + i, bytes[i]);
+    }
+  }
+
   void _computeAmplitudeFromPcm(Uint8List data) {
     if (data.length < 2) return;
     final byteData = ByteData.sublistView(data);
@@ -317,252 +399,16 @@ class AudioRecordingHandler {
     onLevelsChanged?.call();
   }
 
-  // =====================================================================
-  // FILE MODE (original implementation)
-  // =====================================================================
-
-  Future<bool> _startFileRecording() async {
-    if (kIsWeb) {
-      await _audioRecorder.start(
-        const RecordConfig(
-          encoder: AudioEncoder.opus,
-          sampleRate: 16000,
-          bitRate: 64000,
-        ),
-        path: '',
-      );
-    } else {
-      final String path = await _createRecordingPath();
-      _activeRecordingPath = path;
-
-      await _audioRecorder.start(
-        const RecordConfig(
-          encoder: AudioEncoder.aacLc,
-          sampleRate: 16000,
-          bitRate: 64000,
-        ),
-        path: path,
-      );
-    }
-
-    // Audio visualisation via the recorder's amplitude stream.
-    // 16ms ≈ 60 fps for immediate visual response.
-    _amplitudeSub = _audioRecorder
-        .onAmplitudeChanged(const Duration(milliseconds: 16))
-        .listen(_handleAmplitudeSample);
-
-    _isStreamingMode = false;
-    _isMicActive = true;
-    return true;
-  }
-
-  Future<void> _stopFileRecording({bool keepFile = false}) async {
-    _amplitudeSub?.cancel();
-    _amplitudeSub = null;
-    try {
-      if (!await _audioRecorder.isRecording()) {
-        if (!keepFile) {
-          _lastRecordedFilePath = null;
-          _lastRecordedBytes = null;
-          if (!kIsWeb) await _deleteRecordingFile(_activeRecordingPath);
-        }
-        _activeRecordingPath = null;
-        return;
-      }
-
-      final String? path = await _audioRecorder.stop();
-
-      if (kIsWeb) {
-        if (keepFile && path != null) {
-          try {
-            final response = await http.get(Uri.parse(path));
-            _lastRecordedBytes = response.bodyBytes;
-          } catch (e) {
-            if (kDebugMode) {
-              debugPrint('Failed to fetch web audio blob: $e');
-            }
-            _lastRecordedBytes = null;
-          }
-        } else {
-          _lastRecordedBytes = null;
-        }
-        _lastRecordedFilePath = null;
-      } else {
-        final String? effectivePath = path ?? _activeRecordingPath;
-        _activeRecordingPath = null;
-
-        if (keepFile) {
-          _lastRecordedFilePath = effectivePath;
-        } else {
-          _lastRecordedFilePath = null;
-          await _deleteRecordingFile(effectivePath);
-        }
-      }
-    } catch (error, stackTrace) {
-      if (kDebugMode) {
-        debugPrint('Failed to stop microphone: $error\n$stackTrace');
-      }
-    }
-  }
-
-  Future<TranscriptionResult> _transcribeFileRecording({
-    required ChatApiService apiService,
-    required String accessToken,
-  }) async {
-    final String? audioPath = _lastRecordedFilePath;
-    if (audioPath == null) {
-      _isTranscribingAudio = false;
-      return TranscriptionResult(success: false, error: 'No audio');
-    }
-
-    final File audioFile = File(audioPath);
-    if (!await audioFile.exists()) {
-      await _deleteRecordingFile(audioPath);
-      _lastRecordedFilePath = null;
-      _isTranscribingAudio = false;
-      return TranscriptionResult(success: false, error: 'Audio missing');
-    }
-
-    try {
-      final transcription = await apiService.transcribeAudioFile(
-        file: audioFile,
-        accessToken: accessToken,
-      );
-      final String text = transcription.text.trim();
-
-      await _deleteRecordingFile(audioPath);
-      _lastRecordedFilePath = null;
-      _isTranscribingAudio = false;
-
-      if (text.isEmpty) {
-        return TranscriptionResult(success: false, error: 'No text found');
-      }
-      return TranscriptionResult(success: true, text: text);
-    } on TranscriptionException catch (error) {
-      await _deleteRecordingFile(audioPath);
-      _lastRecordedFilePath = null;
-      _isTranscribingAudio = false;
-
-      switch (error.statusCode) {
-        case 401:
-          return TranscriptionResult(
-            success: false,
-            error: 'Session expired',
-            requiresLogout: true,
-          );
-        case 502:
-          return TranscriptionResult(
-            success: false,
-            error: 'Service unavailable',
-          );
-        default:
-          final String message = error.message.isNotEmpty
-              ? error.message
-              : 'Transcription failed';
-          return TranscriptionResult(success: false, error: message);
-      }
-    } on TimeoutException {
-      await _deleteRecordingFile(audioPath);
-      _lastRecordedFilePath = null;
-      _isTranscribingAudio = false;
-      return TranscriptionResult(success: false, error: 'Timed out');
-    } catch (error) {
-      await _deleteRecordingFile(audioPath);
-      _lastRecordedFilePath = null;
-      _isTranscribingAudio = false;
-      return TranscriptionResult(success: false, error: 'Error: $error');
-    }
-  }
-
-  Future<TranscriptionResult> _transcribeWebRecording({
-    required ChatApiService apiService,
-    required String accessToken,
-  }) async {
-    final Uint8List? bytes = _lastRecordedBytes;
-    if (bytes == null || bytes.isEmpty) {
-      _isTranscribingAudio = false;
-      _lastRecordedBytes = null;
-      return TranscriptionResult(success: false, error: 'No audio');
-    }
-
-    try {
-      final transcription = await apiService.transcribeAudioBytes(
-        bytes: bytes,
-        filename: 'recording.webm',
-        accessToken: accessToken,
-      );
-      final String text = transcription.text.trim();
-      _lastRecordedBytes = null;
-      _isTranscribingAudio = false;
-
-      if (text.isEmpty) {
-        return TranscriptionResult(success: false, error: 'No text found');
-      }
-      return TranscriptionResult(success: true, text: text);
-    } on TranscriptionException catch (error) {
-      _lastRecordedBytes = null;
-      _isTranscribingAudio = false;
-      switch (error.statusCode) {
-        case 401:
-          return TranscriptionResult(
-            success: false,
-            error: 'Session expired',
-            requiresLogout: true,
-          );
-        case 502:
-          return TranscriptionResult(
-            success: false,
-            error: 'Service unavailable',
-          );
-        default:
-          final String message = error.message.isNotEmpty
-              ? error.message
-              : 'Transcription failed';
-          return TranscriptionResult(success: false, error: message);
-      }
-    } on TimeoutException {
-      _lastRecordedBytes = null;
-      _isTranscribingAudio = false;
-      return TranscriptionResult(success: false, error: 'Timed out');
-    } catch (error) {
-      _lastRecordedBytes = null;
-      _isTranscribingAudio = false;
-      return TranscriptionResult(success: false, error: 'Error: $error');
-    }
-  }
-
-  // =====================================================================
-  // Shared helpers
-  // =====================================================================
-
   void _resetAudioLevels() {
     for (int i = 0; i < _audioLevels.length; i++) {
       _audioLevels[i] = 0.0;
     }
   }
 
-  void _handleAmplitudeSample(Amplitude amplitude) {
-    final double decibels = amplitude.current;
-    const double minDb = -60.0;
-    const double maxDb = 0.0;
-    final double normalized = ((decibels - minDb) / (maxDb - minDb)).clamp(
-      0.0,
-      1.0,
-    );
-
-    if (_audioLevels.isNotEmpty) {
-      _audioLevels.removeAt(0);
-    }
-    _audioLevels.add(normalized);
-    onLevelsChanged?.call();
-  }
-
   Future<bool> _ensureMicPermission() async {
-    if (kIsWeb) return true; // Browser handles permission via record package
+    if (kIsWeb) return true; // Browser handles permission via record package.
 
-    // permission_handler only supports Android, iOS, macOS, and Windows.
-    // On Linux (and any other desktop), skip — the record package handles
-    // audio permissions natively via PulseAudio/PipeWire.
+    // permission_handler only supports Android, iOS, macOS, Windows.
     if (!(Platform.isAndroid ||
         Platform.isIOS ||
         Platform.isMacOS ||
@@ -572,54 +418,23 @@ class AudioRecordingHandler {
 
     try {
       final PermissionStatus status = await Permission.microphone.request();
-      if (status.isGranted) {
-        return true;
-      }
+      if (status.isGranted) return true;
       if (status.isPermanentlyDenied) {
-        if (kDebugMode) {
-          debugPrint('Enable mic in settings');
-        }
+        if (kDebugMode) debugPrint('Enable mic in settings');
         return false;
       }
-      if (kDebugMode) {
-        debugPrint('Mic permission required');
-      }
+      if (kDebugMode) debugPrint('Mic permission required');
       return false;
     } on MissingPluginException {
-      // Plugin unavailable on this platform — proceed without it.
       if (kDebugMode) {
         debugPrint('permission_handler plugin unavailable; skipping request.');
       }
       return true;
     }
   }
-
-  Future<String> _createRecordingPath() async {
-    final Directory tempDir = await getTemporaryDirectory();
-    final Directory audioDir = Directory('${tempDir.path}/chuk_chat_audio');
-    if (!await audioDir.exists()) {
-      await audioDir.create(recursive: true);
-    }
-    final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-    return '${audioDir.path}/rec_$timestamp.m4a';
-  }
-
-  Future<void> _deleteRecordingFile(String? path) async {
-    if (path == null) return;
-    try {
-      final file = File(path);
-      if (await file.exists()) {
-        await file.delete();
-      }
-    } catch (error, stackTrace) {
-      if (kDebugMode) {
-        debugPrint('Failed to delete audio file: $error\n$stackTrace');
-      }
-    }
-  }
 }
 
-/// Result of audio transcription
+/// Result of audio transcription.
 class TranscriptionResult {
   final bool success;
   final String? text;
