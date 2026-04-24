@@ -18,7 +18,8 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/services/workspace_message_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
-import 'package:chuk_chat/widgets/message_bubble.dart' show DocumentAttachment;
+import 'package:chuk_chat/widgets/message_bubble.dart'
+    show DocumentAttachment, ImageMeta;
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 
 /// Data class holding pre-parsed render information for a single chat message.
@@ -35,6 +36,7 @@ class MessageRenderData {
     this.modelProvider,
     this.tps,
     this.images,
+    this.imageMetas,
     this.imageCostEur,
     this.imageGeneratedAt,
     this.attachments,
@@ -53,6 +55,10 @@ class MessageRenderData {
   final String? modelProvider;
   final double? tps;
   final List<String>? images;
+
+  /// Per-image metadata aligned with [images]. Each entry carries a
+  /// `source` ("generated"|"fetched") and optional `caption`.
+  final List<ImageMeta>? imageMetas;
   final double? imageCostEur;
   final DateTime? imageGeneratedAt;
   final List<DocumentAttachment>? attachments;
@@ -64,6 +70,7 @@ class MessageRenderData {
 
   bool get isUser => sender == 'user';
 }
+
 
 /// Static utility functions shared between the desktop and mobile chat UIs.
 class ChatUiHelpers {
@@ -235,6 +242,9 @@ class ChatUiHelpers {
     }
     if (message.images != null && message.images!.isNotEmpty) {
       map['images'] = message.images!;
+    }
+    if (message.imageMetas != null && message.imageMetas!.isNotEmpty) {
+      map['imageMetas'] = message.imageMetas!;
     }
     if (message.imageCostEur != null && message.imageCostEur!.isNotEmpty) {
       map['imageCostEur'] = message.imageCostEur!;
@@ -796,6 +806,7 @@ class ChatUiHelpers {
         imageGeneratedAtStr != null && imageGeneratedAtStr.isNotEmpty
         ? DateTime.tryParse(imageGeneratedAtStr)
         : null;
+    final List<ImageMeta>? imageMetas = ImageMeta.decode(raw['imageMetas']);
     final String? replyContextJson = raw['replyContext'];
     final String? replyPreviewText = extractReplyPreviewText(replyContextJson);
     final String? replyPreviewLabel = replyPreviewText != null
@@ -812,6 +823,7 @@ class ChatUiHelpers {
       modelProvider: modelProvider,
       tps: tps,
       images: images,
+      imageMetas: imageMetas,
       imageCostEur: imageCostEur,
       imageGeneratedAt: imageGeneratedAt,
       attachments: attachments,

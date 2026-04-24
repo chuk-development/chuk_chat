@@ -447,6 +447,9 @@ final List<ClientTool> builtinTools = [
       'image_size':
           'string (optional preset: square_hd, square, portrait_4_3, '
           'portrait_16_9, landscape_4_3, landscape_16_9)',
+      'caption':
+          'string (optional short subtitle shown under the image, e.g. '
+          'subject name, scene — keep it under ~40 chars)',
     },
     type: ToolType.builtin,
     tags: [
@@ -480,6 +483,9 @@ final List<ClientTool> builtinTools = [
       'aspect_ratio':
           'string (optional, overrides image_size: 1:1, 16:9, 9:16, '
           '3:2, 2:3, 4:5, 5:4, 3:4, 4:3, 21:9, 9:21)',
+      'caption':
+          'string (optional short subtitle shown under the image, e.g. '
+          'subject name, scene — keep it under ~40 chars)',
     },
     type: ToolType.builtin,
     tags: [
@@ -519,6 +525,9 @@ final List<ClientTool> builtinTools = [
       'megapixels':
           'string (optional resolution: "0.25", "0.5", "1", "2", "4" — '
           'default "1")',
+      'caption':
+          'string (optional short subtitle shown under the image, e.g. '
+          'subject name, scene — keep it under ~40 chars)',
     },
     type: ToolType.builtin,
     tags: [
@@ -566,7 +575,12 @@ final List<ClientTool> builtinTools = [
         'Download an image from a URL and store it in the chat. Use this '
         'to display an external image inline. Returns IMAGE_DATA metadata. '
         'Max size 4 MB.',
-    parameters: {'url': 'string (required: direct image URL)'},
+    parameters: {
+      'url': 'string (required: direct image URL)',
+      'caption':
+          'string (optional short subtitle shown under the image, e.g. '
+          'person name, place, product — keep it under ~40 chars)',
+    },
     type: ToolType.builtin,
     tags: ['image', 'fetch', 'download', 'picture', 'url', 'bild', 'foto'],
   ),

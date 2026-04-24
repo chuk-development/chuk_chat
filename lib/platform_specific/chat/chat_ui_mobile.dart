@@ -697,6 +697,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                 if (message.images != null && message.images!.isNotEmpty) {
                   map['images'] = message.images!;
                 }
+                if (message.imageMetas != null &&
+                    message.imageMetas!.isNotEmpty) {
+                  map['imageMetas'] = message.imageMetas!;
+                }
                 if (message.imageCostEur != null &&
                     message.imageCostEur!.isNotEmpty) {
                   map['imageCostEur'] = message.imageCostEur!;
@@ -1361,6 +1365,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   void _handleToolImagesProcessed(
     int index,
     List<String> imagePaths,
+    String imageMetasJson,
     String? imageCostEur,
     String? imageGeneratedAt,
     String toolCallsJson,
@@ -1373,6 +1378,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       setState(() {
         final message = Map<String, String>.from(_messages[index]);
         message['images'] = jsonEncode(imagePaths);
+        message['imageMetas'] = imageMetasJson;
         if (imageCostEur != null) {
           message['imageCostEur'] = imageCostEur;
         }
@@ -1390,6 +1396,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           messageIndex: index,
           toolCallsJson: toolCallsJson,
           images: jsonEncode(imagePaths),
+          imageMetas: imageMetasJson,
           imageCostEur: imageCostEur,
           imageGeneratedAt: imageGeneratedAt,
           immediate: true,
@@ -2836,6 +2843,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                           imageGeneratedAtStr.isNotEmpty
                                       ? DateTime.tryParse(imageGeneratedAtStr)
                                       : null;
+                                  final List<ImageMeta>? imageMetas =
+                                      ImageMeta.decode(raw['imageMetas']);
 
                                   return RepaintBoundary(
                                     child: MessageBubble(
@@ -2859,6 +2868,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                       replyPreviewLabel: replyPreviewLabel,
                                       isStreamingMessage: isStreamingMessage,
                                       images: images,
+                                      imageMetas: imageMetas,
                                       attachments: attachments,
                                       imageCostEur: imageCostEur,
                                       imageGeneratedAt: imageGeneratedAt,

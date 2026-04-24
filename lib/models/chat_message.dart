@@ -8,6 +8,7 @@ class ChatMessage {
     this.reasoning,
     this.replyContext,
     this.images,
+    this.imageMetas,
     this.imageCostEur,
     this.imageGeneratedAt,
     this.attachments,
@@ -25,6 +26,7 @@ class ChatMessage {
       reasoning: json['reasoning'] as String?,
       replyContext: json['replyContext'] as String?,
       images: json['images'] as String?,
+      imageMetas: json['imageMetas'] as String?,
       imageCostEur: json['imageCostEur'] as String?,
       imageGeneratedAt: json['imageGeneratedAt'] as String?,
       attachments: json['attachments'] as String?,
@@ -41,6 +43,11 @@ class ChatMessage {
   final String? reasoning;
   final String? replyContext;
   final String? images;
+
+  /// JSON-encoded list of per-image metadata objects aligned with [images].
+  /// Each entry: `{"source": "generated"|"fetched", "caption": "..."}`.
+  /// Absent for legacy messages — fall back to message-level metadata.
+  final String? imageMetas;
   final String? imageCostEur;
   final String? imageGeneratedAt;
   final String? attachments;
@@ -65,6 +72,7 @@ class ChatMessage {
     if (replyContext != null && replyContext!.isNotEmpty)
       'replyContext': replyContext,
     if (images != null && images!.isNotEmpty) 'images': images,
+    if (imageMetas != null && imageMetas!.isNotEmpty) 'imageMetas': imageMetas,
     if (imageCostEur != null && imageCostEur!.isNotEmpty)
       'imageCostEur': imageCostEur,
     if (imageGeneratedAt != null && imageGeneratedAt!.isNotEmpty)

@@ -41,6 +41,7 @@ class StreamingMessageHandler {
   Function(
     int index,
     List<String> imagePaths,
+    String imageMetasJson,
     String? imageCostEur,
     String? imageGeneratedAt,
     String toolCallsJson,
@@ -844,10 +845,12 @@ class StreamingMessageHandler {
       final updatedToolCallsJson = jsonEncode(
         imageResult.toolCalls.map((c) => c.toJson()).toList(),
       );
+      final imageMetasJson = jsonEncode(imageResult.imageMetas);
 
       onToolImagesProcessed?.call(
         index,
         imageResult.imagePaths,
+        imageMetasJson,
         imageResult.imageCostEur,
         imageResult.imageGeneratedAt,
         updatedToolCallsJson,

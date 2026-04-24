@@ -11,12 +11,17 @@ class ToolImageUpdateResult {
   const ToolImageUpdateResult({
     required this.toolCalls,
     required this.imagePaths,
+    required this.imageMetas,
     this.imageCostEur,
     this.imageGeneratedAt,
   });
 
   final List<ToolCall> toolCalls;
   final List<String> imagePaths;
+
+  /// Per-image metadata aligned with [imagePaths]. Each entry:
+  /// `{"source": "generated"|"fetched", "caption": "..."}` (caption optional).
+  final List<Map<String, dynamic>> imageMetas;
   final String? imageCostEur;
   final String? imageGeneratedAt;
 }
@@ -40,16 +45,36 @@ class ToolImageResultService {
     List<ToolCall> toolCalls,
   ) async {
     final imagePaths = <String>[];
+    final imageMetas = <Map<String, dynamic>>[];
     final seenPaths = <String>{};
 
     String? latestImageCostEur;
     String? latestGeneratedAt;
+
+    void addImage(
+      String path, {
+      required String source,
+      String? caption,
+    }) {
+      if (!seenPaths.add(path)) {
+        return;
+      }
+      imagePaths.add(path);
+      final meta = <String, dynamic>{'source': source};
+      final trimmedCaption = caption?.trim();
+      if (trimmedCaption != null && trimmedCaption.isNotEmpty) {
+        meta['caption'] = trimmedCaption;
+      }
+      imageMetas.add(meta);
+    }
 
     for (final call in toolCalls) {
       final rawResult = call.result;
       if (rawResult == null || rawResult.isEmpty) {
         continue;
       }
+
+      final caption = _nonEmptyString(call.arguments['caption']);
 
       if (rawResult.startsWith('IMAGE:')) {
         final payload = _tryDecodeMap(rawResult.substring(6));
@@ -62,8 +87,12 @@ class ToolImageResultService {
         call.result = 'IMAGE:${jsonEncode(normalizedPayload)}';
 
         final storagePath = extracted.storagePath;
-        if (storagePath != null && seenPaths.add(storagePath)) {
-          imagePaths.add(storagePath);
+        if (storagePath != null) {
+          addImage(
+            storagePath,
+            source: 'generated',
+            caption: caption ?? _nonEmptyString(payload['caption']),
+          );
         }
 
         final costEur = _coerceDouble(
@@ -93,8 +122,12 @@ class ToolImageResultService {
         call.result = 'IMAGE_DATA:${jsonEncode(normalizedPayload)}';
 
         final storagePath = extracted.storagePath;
-        if (storagePath != null && seenPaths.add(storagePath)) {
-          imagePaths.add(storagePath);
+        if (storagePath != null) {
+          addImage(
+            storagePath,
+            source: 'fetched',
+            caption: caption ?? _nonEmptyString(payload['caption']),
+          );
         }
 
         latestGeneratedAt ??= _coerceDateTimeIso(
@@ -107,6 +140,7 @@ class ToolImageResultService {
     return ToolImageUpdateResult(
       toolCalls: toolCalls,
       imagePaths: imagePaths,
+      imageMetas: imageMetas,
       imageCostEur: latestImageCostEur,
       imageGeneratedAt: imagePaths.isNotEmpty ? latestGeneratedAt : null,
     );
