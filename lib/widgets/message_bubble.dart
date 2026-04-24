@@ -11,9 +11,7 @@ import 'package:chuk_chat/services/app_theme_service.dart';
 import 'package:chuk_chat/utils/chat_font_resolver.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
-import 'package:chuk_chat/services/file_save_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
-import 'package:chuk_chat/utils/image_clipboard_service.dart';
 import 'package:chuk_chat/widgets/chart_widget.dart';
 import 'package:chuk_chat/widgets/map_block_renderer.dart';
 import 'package:chuk_chat/widgets/weather_widget.dart';
@@ -2365,9 +2363,13 @@ class _MessageBubbleState extends State<MessageBubble>
           );
         }
 
-        final int columns = maxWidth > 520 ? 3 : 2;
+        // 3 images always render as a single 3-wide row — the 2+1 layout
+        // from the generic mobile 2-column grid looks unbalanced.
+        final int columns = images.length == 3
+            ? 3
+            : (maxWidth > 520 ? 3 : 2);
         final double tileWidth = ((maxWidth - ((columns - 1) * 8)) / columns)
-            .clamp(120.0, 260.0);
+            .clamp(90.0, 260.0);
 
         return Wrap(
           spacing: 8,
@@ -2651,18 +2653,6 @@ class _MessageBubbleState extends State<MessageBubble>
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _imageActionIcon(
-                  icon: Icons.copy,
-                  tooltip: AppLocalizations.of(context)!.copyImage,
-                  color: iconFgColor,
-                  onPressed: _copyFirstImageToClipboard,
-                ),
-                _imageActionIcon(
-                  icon: Icons.download,
-                  tooltip: AppLocalizations.of(context)!.downloadImage,
-                  color: iconFgColor,
-                  onPressed: _downloadFirstImage,
-                ),
                 Builder(
                   builder: (btnContext) => _imageActionIcon(
                     icon: Icons.more_vert,
@@ -2735,75 +2725,6 @@ class _MessageBubbleState extends State<MessageBubble>
         onPressed: onPressed,
       ),
     );
-  }
-
-  Future<Uint8List?> _loadFirstImageBytes() async {
-    final images = widget.images;
-    if (images == null || images.isEmpty) return null;
-    final source = images.first;
-    if (source.startsWith('data:image/')) {
-      final commaIndex = source.indexOf(',');
-      if (commaIndex < 0) return null;
-      return base64Decode(source.substring(commaIndex + 1));
-    }
-    return ImageStorageService.downloadAndDecryptImage(source);
-  }
-
-  Future<void> _copyFirstImageToClipboard() async {
-    try {
-      final bytes = await _loadFirstImageBytes();
-      if (bytes == null) return;
-      final copied = await ImageClipboardService.copyImageBytes(bytes);
-      if (!mounted) return;
-      final l = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(copied ? l.imageCopied : l.unableToCopyImage)),
-      );
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context)!.unableToCopyImage),
-        ),
-      );
-    }
-  }
-
-  Future<void> _downloadFirstImage() async {
-    try {
-      final bytes = await _loadFirstImageBytes();
-      if (bytes == null) return;
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final result = await FileSaveService.save(
-        bytes: bytes,
-        suggestedName: 'chuk_chat_image_$timestamp.png',
-        dialogTitle: 'Save image',
-        allowedExtensions: const ['png'],
-      );
-      if (!mounted) return;
-      final l = AppLocalizations.of(context)!;
-      switch (result.outcome) {
-        case SaveOutcome.savedToFolder:
-        case SaveOutcome.savedViaPicker:
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(l.savedToPath(result.path ?? ''))),
-          );
-        case SaveOutcome.savedViaShare:
-        case SaveOutcome.cancelled:
-          break;
-        case SaveOutcome.failed:
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(l.unableToSaveImage)),
-          );
-      }
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context)!.unableToSaveImage),
-        ),
-      );
-    }
   }
 
   String _formatGeneratedAt(DateTime timestamp) {
