@@ -42,6 +42,9 @@ class ToolEnforcer {
     // find_tools round-trip them just burns a turn.
     'artifact_schema',
     'artifact_manager',
+    // typst_compile is the documented follow-up for artifact_schema
+    // type="typst"; gating it behind find_tools wastes a pass.
+    'typst_compile',
   };
 
   ToolEnforcer({this.maxIterations = 100});
@@ -55,6 +58,7 @@ class ToolEnforcer {
       'web_crawl',
       'artifact_schema',
       'artifact_manager',
+      'typst_compile',
       ...tools,
     };
   }
@@ -101,6 +105,7 @@ class ToolEnforcer {
       'web_crawl',
       'artifact_schema',
       'artifact_manager',
+      'typst_compile',
     };
   }
 

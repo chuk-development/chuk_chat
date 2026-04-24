@@ -289,10 +289,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       final bool shouldIncludeImages =
           widget.includeRecentImagesInHistory ||
           widget.includeAllImagesInHistory;
-      final int imgWindow = widget.includeAllImagesInHistory ? index : 6;
+      final int imgWindow = widget.includeAllImagesInHistory ? index : 10;
       final Set<int> imgEligible = {};
-      var remainingHistoryImageCount = 2;
-      var remainingHistoryImageChars = 350000;
+      var remainingHistoryImageCount = 10;
+      var remainingHistoryImageChars = 1500000;
       if (shouldIncludeImages) {
         int uCount = 0;
         for (int j = index - 1; j >= 0; j--) {
@@ -1950,9 +1950,9 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         widget.includeRecentImagesInHistory || widget.includeAllImagesInHistory;
     final int imageWindow = widget.includeAllImagesInHistory
         ? _messages.length
-        : 6;
-    var remainingHistoryImageCount = 2;
-    var remainingHistoryImageChars = 350000;
+        : 10;
+    var remainingHistoryImageCount = 10;
+    var remainingHistoryImageChars = 1500000;
 
     // Determine which user messages are within the image window
     final Set<int> imageEligibleIndices = {};
