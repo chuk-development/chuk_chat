@@ -178,8 +178,7 @@ class MessageBubble extends StatefulWidget {
   State<MessageBubble> createState() => _MessageBubbleState();
 }
 
-class _MessageBubbleState extends State<MessageBubble>
-    with AutomaticKeepAliveClientMixin {
+class _MessageBubbleState extends State<MessageBubble> {
   /// Regex to find `<chart>`, `<map>`, `<email>`, and `<weather>` blocks.
   static final RegExp _richBlockRegex = RegExp(
     r'<\s*(chart|map|email|weather)\s*>([\s\S]*?)<\s*/\s*\1\s*>',
@@ -207,9 +206,6 @@ class _MessageBubbleState extends State<MessageBubble>
         resolveChatFontFamily(AppThemeService.instance.chatFontFamily);
     return resolved ?? _kAiResponseFontFamilyDefault;
   }
-
-  @override
-  bool get wantKeepAlive => true; // Keep this widget alive to prevent rebuilds
 
   // User preferences for display - null until loaded
   bool? _showReasoningTokens;
@@ -469,7 +465,6 @@ class _MessageBubbleState extends State<MessageBubble>
 
   @override
   Widget build(BuildContext context) {
-    super.build(context); // Required for AutomaticKeepAliveClientMixin
     final stopwatch = Stopwatch()..start();
 
     final bool isUserMessage = widget.isUser;

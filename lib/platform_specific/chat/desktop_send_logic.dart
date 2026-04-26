@@ -455,7 +455,6 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                 _messages[placeholderIndex]['text'] = fullDisplay;
                 _messages[placeholderIndex]['reasoning'] = reasoning;
               });
-              _scrollChatToBottom();
             }
           },
           onComplete: (finalContent, finalReasoning, tps) {
@@ -1488,7 +1487,6 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                 _messages[placeholderIndex]['reasoning'] = reasoning;
               }
               _updateAiMessage(placeholderIndex, displayContent, reasoning);
-              _scrollChatToBottom();
             }
           },
           onComplete: (finalContent, finalReasoning, tps) {
