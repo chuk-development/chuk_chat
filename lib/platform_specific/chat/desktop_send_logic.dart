@@ -1382,7 +1382,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           TitleGenerationService.generateAndApplyTitle(
             chatIdForStream,
             displayMessageText,
-          ),
+          ).catchError((error) {
+            if (kDebugMode) {
+              debugPrint('Title generation failed: $error');
+            }
+          }),
         );
       }
 

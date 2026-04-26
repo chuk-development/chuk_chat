@@ -229,7 +229,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
               content: content,
               reasoning: reasoning,
               immediate: _isAppInBackground,
-            ),
+            ).catchError((error) {
+              if (kDebugMode) {
+                debugPrint('updateBackgroundChatMessage (onBackgroundUpdate) failed: $error');
+              }
+            }),
           );
         }
       }
@@ -332,34 +336,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     _scrollController.addListener(_onScrollChanged);
 
     // Text field focus listener — collapse mic & model buttons while typing
-    _textFieldFocusNode.addListener(() {
-      final bool focused = _textFieldFocusNode.hasFocus;
-      if (focused != _isInputFocused) {
-        setState(() {
-          _isInputFocused = focused;
-        });
-      }
-    });
+    _textFieldFocusNode.addListener(_onTextFieldFocusChanged);
 
     // Text controller listener
-    _controller.addListener(() {
-      final bool currentTextIsEmpty = _controller.text.trim().isEmpty;
-      final String text = _controller.text;
-
-      // Estimate if text is getting long (3+ lines worth of content)
-      // A line is roughly 22 chars, so 3 lines = ~66 chars
-      // Also check for newlines
-      final int newlineCount = '\n'.allMatches(text).length;
-      final bool shouldShowFullscreen = text.length > 66 || newlineCount >= 2;
-
-      if (currentTextIsEmpty != _lastTextWasEmpty ||
-          shouldShowFullscreen != _showFullscreenButton) {
-        setState(() {
-          _lastTextWasEmpty = currentTextIsEmpty;
-          _showFullscreenButton = shouldShowFullscreen;
-        });
-      }
-    });
+    _controller.addListener(_onControllerChanged);
 
     // Request focus if sidebar closed
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -401,6 +381,31 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       }
     };
     NetworkStatusService.isOnlineListenable.addListener(_networkStatusListener);
+  }
+
+  void _onTextFieldFocusChanged() {
+    final bool focused = _textFieldFocusNode.hasFocus;
+    if (focused != _isInputFocused) {
+      setState(() {
+        _isInputFocused = focused;
+      });
+    }
+  }
+
+  void _onControllerChanged() {
+    final bool currentTextIsEmpty = _controller.text.trim().isEmpty;
+    final String text = _controller.text;
+
+    final int newlineCount = '\n'.allMatches(text).length;
+    final bool shouldShowFullscreen = text.length > 66 || newlineCount >= 2;
+
+    if (currentTextIsEmpty != _lastTextWasEmpty ||
+        shouldShowFullscreen != _showFullscreenButton) {
+      setState(() {
+        _lastTextWasEmpty = currentTextIsEmpty;
+        _showFullscreenButton = shouldShowFullscreen;
+      });
+    }
   }
 
   void _loadInitialData() {
@@ -570,6 +575,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     NetworkStatusService.isOnlineListenable.removeListener(
       _networkStatusListener,
     );
+    _scrollController.removeListener(_onScrollChanged);
+    _textFieldFocusNode.removeListener(_onTextFieldFocusChanged);
+    _controller.removeListener(_onControllerChanged);
     _controller.dispose();
     _scrollController.dispose();
     _composerScrollController.dispose();
@@ -757,7 +765,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                   waitForCompletion: false,
                   isOffline: _isOffline,
                   silent: true,
-                ),
+                ).catchError((error) {
+                  if (kDebugMode) {
+                    debugPrint('persistChat (recover stale) failed: $error');
+                  }
+                  return null;
+                }),
               );
             }
           }
@@ -913,7 +926,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           waitForCompletion: false,
           isOffline: _isOffline,
           silent: true,
-        ),
+        ).catchError((error) {
+          if (kDebugMode) {
+            debugPrint('persistChat (newChat background) failed: $error');
+          }
+          return null;
+        }),
       );
     }
     if (kDebugMode) {
@@ -1350,7 +1368,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           messageIndex: index,
           toolCallsJson: toolCallsJson,
           immediate: !hasInFlightCalls,
-        ),
+        ).catchError((error) {
+          if (kDebugMode) {
+            debugPrint('updateBackgroundChatMessage (toolCalls) failed: $error');
+          }
+        }),
       );
     }
   }
@@ -1390,7 +1412,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           imageCostEur: imageCostEur,
           imageGeneratedAt: imageGeneratedAt,
           immediate: true,
-        ),
+        ).catchError((error) {
+          if (kDebugMode) {
+            debugPrint('updateBackgroundChatMessage (toolImages) failed: $error');
+          }
+        }),
       );
     }
   }
@@ -1416,7 +1442,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           chatId: chatId,
           messageIndex: index,
           contentBlocksJson: contentBlocksJson,
-        ),
+        ).catchError((error) {
+          if (kDebugMode) {
+            debugPrint('updateBackgroundChatMessage (contentBlocks) failed: $error');
+          }
+        }),
       );
     }
   }
@@ -1516,7 +1546,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
             reasoning: reasoning,
             tps: tps?.toString(),
             immediate: true,
-          ),
+          ).catchError((error) {
+            if (kDebugMode) {
+              debugPrint('updateBackgroundChatMessage (background-final) failed: $error');
+            }
+          }),
         );
       }
 
@@ -1533,7 +1567,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           content: content,
           reasoning: reasoning,
           immediate: true,
-        ),
+        ).catchError((error) {
+          if (kDebugMode) {
+            debugPrint('updateBackgroundChatMessage (chat-switched) failed: $error');
+          }
+        }),
       );
     }
   }
@@ -1928,7 +1966,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
           TitleGenerationService.generateAndApplyTitle(
             storedChat.id,
             displayMessageText,
-          ),
+          ).catchError((error) {
+            if (kDebugMode) {
+              debugPrint('Title generation failed: $error');
+            }
+          }),
         );
       }
     }
