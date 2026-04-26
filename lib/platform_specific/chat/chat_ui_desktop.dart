@@ -461,6 +461,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _audioVisualizerTimer?.cancel();
     _audioHandler.onLevelsChanged = null;
     _providerRefreshSubscription?.cancel();
+    _scrollController.removeListener(_onScrollChanged);
     _controller.dispose();
     _scrollController.dispose();
     _composerScrollController.dispose();
