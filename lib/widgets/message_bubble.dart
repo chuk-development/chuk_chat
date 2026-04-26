@@ -512,145 +512,10 @@ class _MessageBubbleState extends State<MessageBubble>
     super.build(context); // Required for AutomaticKeepAliveClientMixin
     final stopwatch = Stopwatch()..start();
 
-    // Determine alignment based on whether it's a user message or not.
-    // Historically voice mode inverted this flag, so we keep compatibility.
-    final bool isUserMessage =
-        widget.isUser; // In regular chat, true for user, false for AI.
-    final bool alignRight =
-        isUserMessage; // User messages go right, assistant responses go left.
-
-    // Get colors from theme
-    final Color accentColor = Theme.of(context).colorScheme.primary;
-    final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
-    final Color iconFgColor = Theme.of(context).resolvedIconColor;
-
-    // Use provided maxWidth, otherwise default to 80% of screen width.
-    final double effectiveMaxWidth =
-        widget.maxWidth ?? MediaQuery.of(context).size.width * 0.8;
-
-    // AI message actions are shown below the bubble (copy, retry).
-    // User message actions are hidden and shown via long-press popup.
-    final bool hasActions = !isUserMessage && widget.actions.isNotEmpty;
-
-    // Check if we should use the interleaved content blocks layout
-    final bool useContentBlocks =
-        !isUserMessage &&
-        widget.contentBlocks != null &&
-        widget.contentBlocks!.isNotEmpty;
-
-    final bool hasVisibleToolCalls =
-        !isUserMessage &&
-        !useContentBlocks &&
-        widget.showToolCalls &&
-        widget.toolCalls != null &&
-        widget.toolCalls!.isNotEmpty;
-    // Show the info status bar when:
-    // 1. We have reasoning/model info (normal case), OR
-    // 2. The message is actively streaming and waiting for first tokens
-    //    (shows a "Connecting..." / "Reasoning..." bar instead of plain
-    //    "Thinking..." text sitting in the bubble).
-    final bool isWaitingForFirstTokens =
-        widget.isReasoningStreaming &&
-        (widget.message == 'Thinking...' || widget.message.isEmpty);
-    final bool hasInfoStatusBar =
-        !isUserMessage &&
-        !useContentBlocks &&
-        (_hasReasoning || _hasModelInfo || isWaitingForFirstTokens) &&
-        !hasVisibleToolCalls;
-
-    final EdgeInsetsGeometry containerPadding = isUserMessage
-        ? const EdgeInsets.symmetric(horizontal: 14, vertical: 10)
-        : const EdgeInsets.symmetric(horizontal: 0, vertical: 2);
-
-    final BoxDecoration? decoration = isUserMessage
-        ? BoxDecoration(
-            color: accentColor.withValues(alpha: .8),
-            borderRadius: BorderRadius.only(
-              topLeft: const Radius.circular(16),
-              topRight: const Radius.circular(16),
-              bottomLeft: const Radius.circular(16),
-              bottomRight: Radius.circular(widget.endsGroup ? 5 : 16),
-            ),
-            border: Border.all(color: iconFgColor.withValues(alpha: .3)),
-          )
-        : null;
-
-    final Widget bubbleContent = Container(
-      margin: EdgeInsets.only(top: widget.startsNewGroup ? 10 : 2, bottom: 2),
-      padding: containerPadding,
-      decoration: decoration,
-      clipBehavior: isUserMessage ? Clip.antiAlias : Clip.none,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: alignRight
-            ? CrossAxisAlignment.end
-            : CrossAxisAlignment.start,
-        children: useContentBlocks
-            ? _buildContentBlocksLayout(
-                iconFgColor: iconFgColor,
-                accentColor: accentColor,
-                bgColor: bgColor,
-                alignRight: alignRight,
-              )
-            : _buildClassicLayout(
-                iconFgColor: iconFgColor,
-                accentColor: accentColor,
-                bgColor: bgColor,
-                isUserMessage: isUserMessage,
-                alignRight: alignRight,
-                hasInfoStatusBar: hasInfoStatusBar,
-                hasVisibleToolCalls: hasVisibleToolCalls,
-              ),
-      ),
-    );
-
-    // Wrap user messages in GestureDetector for long-press action bar.
-    final bool hasUserActions =
-        isUserMessage && widget.userMessageActions.isNotEmpty;
-    final Widget userBubble = hasUserActions
-        ? GestureDetector(
-            onTap: () => setState(() => _showUserActions = !_showUserActions),
-            child: bubbleContent,
-          )
-        : bubbleContent;
-
-    // User messages with images: render image + meta menu above the bubble,
-    // outside the rounded container, so the bubble wraps the text only.
-    final bool hasUserImages =
-        isUserMessage &&
-        widget.images != null &&
-        widget.images!.isNotEmpty;
-    // Hide the bubble entirely when the only content was the auto-generated
-    // "N image(s) attached" header — otherwise an empty blue pill would sit
-    // below the image.
-    final bool hideEmptyUserBubble =
-        hasUserImages &&
-        _stripAttachmentHeaderForUser(widget.message).trim().isEmpty &&
-        (widget.replyPreviewText == null ||
-            widget.replyPreviewText!.trim().isEmpty);
-
-    final result = Align(
-      alignment: alignRight ? Alignment.centerRight : Alignment.centerLeft,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: effectiveMaxWidth),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: alignRight
-              ? CrossAxisAlignment.end
-              : CrossAxisAlignment.start,
-          children: [
-            if (hasUserImages) ...[
-              _buildFramedUserImageGrid(_buildImagesGrid(widget.images!)),
-              const SizedBox(height: 2),
-            ],
-            if (!hideEmptyUserBubble) userBubble,
-            if (hasUserActions && _showUserActions)
-              _buildUserActionButtons(iconFgColor),
-            if (!isUserMessage) _buildBottomBar(iconFgColor, hasActions),
-          ],
-        ),
-      ),
-    );
+    final bool isUserMessage = widget.isUser;
+    final Widget result = isUserMessage
+        ? _buildUserBubble(context)
+        : _buildAiBubble(context);
 
     stopwatch.stop();
     final imageCount = widget.images?.length ?? 0;
@@ -676,6 +541,164 @@ class _MessageBubbleState extends State<MessageBubble>
     }
 
     return result;
+  }
+
+  Widget _buildUserBubble(BuildContext context) {
+    const bool isUserMessage = true;
+    const bool alignRight = true;
+
+    final Color accentColor = Theme.of(context).colorScheme.primary;
+    final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
+    final Color iconFgColor = Theme.of(context).resolvedIconColor;
+
+    final double effectiveMaxWidth =
+        widget.maxWidth ?? MediaQuery.of(context).size.width * 0.8;
+
+    final EdgeInsetsGeometry containerPadding =
+        const EdgeInsets.symmetric(horizontal: 14, vertical: 10);
+
+    final BoxDecoration decoration = BoxDecoration(
+      color: accentColor.withValues(alpha: .8),
+      borderRadius: BorderRadius.only(
+        topLeft: const Radius.circular(16),
+        topRight: const Radius.circular(16),
+        bottomLeft: const Radius.circular(16),
+        bottomRight: Radius.circular(widget.endsGroup ? 5 : 16),
+      ),
+      border: Border.all(color: iconFgColor.withValues(alpha: .3)),
+    );
+
+    final Widget bubbleContent = Container(
+      margin: EdgeInsets.only(top: widget.startsNewGroup ? 10 : 2, bottom: 2),
+      padding: containerPadding,
+      decoration: decoration,
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: _buildClassicLayout(
+          iconFgColor: iconFgColor,
+          accentColor: accentColor,
+          bgColor: bgColor,
+          isUserMessage: isUserMessage,
+          alignRight: alignRight,
+          hasInfoStatusBar: false,
+          hasVisibleToolCalls: false,
+        ),
+      ),
+    );
+
+    final bool hasUserActions = widget.userMessageActions.isNotEmpty;
+    final Widget userBubble = hasUserActions
+        ? GestureDetector(
+            onTap: () => setState(() => _showUserActions = !_showUserActions),
+            child: bubbleContent,
+          )
+        : bubbleContent;
+
+    final bool hasUserImages =
+        widget.images != null && widget.images!.isNotEmpty;
+    final bool hideEmptyUserBubble =
+        hasUserImages &&
+        _stripAttachmentHeaderForUser(widget.message).trim().isEmpty &&
+        (widget.replyPreviewText == null ||
+            widget.replyPreviewText!.trim().isEmpty);
+
+    return Align(
+      alignment: Alignment.centerRight,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: effectiveMaxWidth),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            if (hasUserImages) ...[
+              _buildFramedUserImageGrid(_buildImagesGrid(widget.images!)),
+              const SizedBox(height: 2),
+            ],
+            if (!hideEmptyUserBubble) userBubble,
+            if (hasUserActions && _showUserActions)
+              _buildUserActionButtons(iconFgColor),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAiBubble(BuildContext context) {
+    const bool isUserMessage = false;
+    const bool alignRight = false;
+
+    final Color accentColor = Theme.of(context).colorScheme.primary;
+    final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
+    final Color iconFgColor = Theme.of(context).resolvedIconColor;
+
+    final double effectiveMaxWidth =
+        widget.maxWidth ?? MediaQuery.of(context).size.width * 0.8;
+
+    final bool hasActions = widget.actions.isNotEmpty;
+
+    final bool useContentBlocks =
+        widget.contentBlocks != null && widget.contentBlocks!.isNotEmpty;
+
+    final bool hasVisibleToolCalls =
+        !useContentBlocks &&
+        widget.showToolCalls &&
+        widget.toolCalls != null &&
+        widget.toolCalls!.isNotEmpty;
+
+    final bool isWaitingForFirstTokens =
+        widget.isReasoningStreaming &&
+        (widget.message == 'Thinking...' || widget.message.isEmpty);
+    final bool hasInfoStatusBar =
+        !useContentBlocks &&
+        (_hasReasoning || _hasModelInfo || isWaitingForFirstTokens) &&
+        !hasVisibleToolCalls;
+
+    final EdgeInsetsGeometry containerPadding =
+        const EdgeInsets.symmetric(horizontal: 0, vertical: 2);
+
+    final Widget bubbleContent = Container(
+      margin: EdgeInsets.only(top: widget.startsNewGroup ? 10 : 2, bottom: 2),
+      padding: containerPadding,
+      decoration: null,
+      clipBehavior: Clip.none,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: useContentBlocks
+            ? _buildContentBlocksLayout(
+                iconFgColor: iconFgColor,
+                accentColor: accentColor,
+                bgColor: bgColor,
+                alignRight: alignRight,
+              )
+            : _buildClassicLayout(
+                iconFgColor: iconFgColor,
+                accentColor: accentColor,
+                bgColor: bgColor,
+                isUserMessage: isUserMessage,
+                alignRight: alignRight,
+                hasInfoStatusBar: hasInfoStatusBar,
+                hasVisibleToolCalls: hasVisibleToolCalls,
+              ),
+      ),
+    );
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: effectiveMaxWidth),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            bubbleContent,
+            _buildBottomBar(iconFgColor, hasActions),
+          ],
+        ),
+      ),
+    );
   }
 
   /// Classic flat layout: single tool calls bar + single text block.
