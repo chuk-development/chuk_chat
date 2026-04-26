@@ -2247,29 +2247,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     _messages[index]['modelId'] = modelIdToUse;
     _messages[index]['provider'] = providerToUse ?? '';
 
-    // Reconstruct attached files from stored JSON for resend
-    List<AttachedFile> attachedFilesForResend = [];
-    final String? attachedFilesJson = _messages[index]['attachedFilesJson'];
-    if (attachedFilesJson != null && attachedFilesJson.isNotEmpty) {
-      try {
-        final decoded = jsonDecode(attachedFilesJson);
-        if (decoded is List) {
-          attachedFilesForResend = decoded
-              .map(
-                (item) => AttachedFile.fromJson(item as Map<String, dynamic>),
-              )
-              .toList();
-          if (kDebugMode) {
-            debugPrint(
-              '🔄 [ResendDebug] Reconstructed ${attachedFilesForResend.length} attached files for resend',
-            );
-          }
-        }
-      } catch (e) {
-        if (kDebugMode) {
-          debugPrint('🔄 [ResendDebug] Failed to parse attachedFilesJson: $e');
-        }
-      }
+    final List<AttachedFile> attachedFilesForResend =
+        ChatUiHelpers.reconstructAttachedFilesForResend(
+          _messages[index],
+          _uuid,
+        );
+    if (kDebugMode) {
+      debugPrint(
+        '[ResendDebug] Reconstructed ${attachedFilesForResend.length} attached files for resend',
+      );
     }
 
     // Generate chat ID if needed BEFORE persisting
