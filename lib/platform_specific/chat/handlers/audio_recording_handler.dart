@@ -409,10 +409,12 @@ class AudioRecordingHandler {
     if (kIsWeb) return true; // Browser handles permission via record package.
 
     // permission_handler only supports Android, iOS, macOS, Windows.
-    if (!(Platform.isAndroid ||
-        Platform.isIOS ||
-        Platform.isMacOS ||
-        Platform.isWindows)) {
+    final bool supportsPermissionHandler = !kIsWeb &&
+        (Platform.isAndroid ||
+            Platform.isIOS ||
+            Platform.isMacOS ||
+            Platform.isWindows);
+    if (!supportsPermissionHandler) {
       return true;
     }
 
