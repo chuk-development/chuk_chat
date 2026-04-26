@@ -119,6 +119,12 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
     unawaited(_refreshLocationAvailability());
   }
 
+  @override
+  void dispose() {
+    _fallbackMapController.dispose();
+    super.dispose();
+  }
+
   Future<void> _refreshLocationAvailability() async {
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -695,12 +701,21 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
       throw StateError('Route geometry missing');
     }
 
-    final points = coords
-        .map((c) {
-          final pair = c as List;
-          return LatLng(_toDouble(pair[1]), _toDouble(pair[0]));
-        })
-        .toList(growable: false);
+    final points = <LatLng>[];
+    for (final c in coords) {
+      if (c is! List || c.length < 2) continue;
+      final lon = c[0];
+      final lat = c[1];
+      if (lon is! num || lat is! num) continue;
+      final latD = lat.toDouble();
+      final lonD = lon.toDouble();
+      if (!latD.isFinite || !lonD.isFinite) continue;
+      if (latD < -90 || latD > 90 || lonD < -180 || lonD > 180) continue;
+      points.add(LatLng(latD, lonD));
+    }
+    if (points.isEmpty) {
+      throw StateError('Route geometry missing');
+    }
 
     return _RouteGeometry(
       points: points,
@@ -1454,8 +1469,14 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
   }
 
   static double _toDouble(dynamic value) {
-    if (value is num) return value.toDouble();
-    if (value is String) return double.tryParse(value) ?? 0.0;
+    if (value is num) {
+      final d = value.toDouble();
+      return d.isFinite ? d : 0.0;
+    }
+    if (value is String) {
+      final d = double.tryParse(value);
+      return (d != null && d.isFinite) ? d : 0.0;
+    }
     return 0.0;
   }
 

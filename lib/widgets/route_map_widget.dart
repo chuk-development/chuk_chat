@@ -66,9 +66,23 @@ class _RouteMapWidgetState extends State<RouteMapWidget> {
           final geometry = routes[0]['geometry'] as Map<String, dynamic>?;
           final coords = geometry?['coordinates'] as List?;
           if (coords != null && coords.isNotEmpty) {
-            final points = coords
-                .map((c) => LatLng((c as List)[1].toDouble(), c[0].toDouble()))
-                .toList();
+            final points = <LatLng>[];
+            for (final c in coords) {
+              if (c is! List || c.length < 2) continue;
+              final lon = c[0];
+              final lat = c[1];
+              if (lon is! num || lat is! num) continue;
+              final latD = lat.toDouble();
+              final lonD = lon.toDouble();
+              if (!latD.isFinite || !lonD.isFinite) continue;
+              if (latD < -90 || latD > 90 || lonD < -180 || lonD > 180) {
+                continue;
+              }
+              points.add(LatLng(latD, lonD));
+            }
+            if (points.isEmpty) {
+              throw const FormatException('No valid route coordinates');
+            }
             if (mounted) {
               setState(() {
                 _routePoints = points;
@@ -114,10 +128,12 @@ class _RouteMapWidgetState extends State<RouteMapWidget> {
           LatLng(widget.toLat, widget.toLon),
         ];
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final mapLayers = <Widget>[
       TileLayer(
-        urlTemplate:
-            'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png',
+        urlTemplate: isDark
+            ? 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png'
+            : 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png',
         subdomains: const ['a', 'b', 'c', 'd'],
       ),
       PolylineLayer(
@@ -274,10 +290,11 @@ class _RouteMapWidgetState extends State<RouteMapWidget> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: widget.steps.take(6).map((step) {
-                  final distM = step['distance_m'] as int? ?? 0;
+                  final distRaw = step['distance_m'];
+                  final distM = distRaw is num ? distRaw.toDouble() : 0.0;
                   final distStr = distM > 1000
                       ? '${(distM / 1000).toStringAsFixed(1)} km'
-                      : '$distM m';
+                      : '${distM.round()} m';
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 3),
                     child: Row(

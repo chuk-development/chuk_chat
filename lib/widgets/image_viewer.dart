@@ -34,8 +34,14 @@ class _ImageViewerState extends State<ImageViewer> {
   final FocusNode _focusNode = FocusNode();
   final Map<int, GlobalKey> _imageKeys = <int, GlobalKey>{};
 
-  /// Cache for loaded image bytes (storage path -> bytes)
-  final Map<String, Uint8List> _imageCache = {};
+  /// Cache for loaded image bytes (storage path -> bytes).
+  /// Bounded LRU-ish FIFO to keep RAM in check across long galleries.
+  final Map<String, Uint8List> _imageCache = <String, Uint8List>{};
+  static const int _kMaxCachedImages = 8;
+
+  /// Stable per-source futures so FutureBuilder doesn't re-trigger on rebuild.
+  final Map<String, Future<Uint8List>> _loadFutures =
+      <String, Future<Uint8List>>{};
 
   @override
   void initState() {
@@ -74,28 +80,38 @@ class _ImageViewerState extends State<ImageViewer> {
     }
   }
 
+  /// Returns a stable Future for the given source. Re-using the same Future
+  /// across rebuilds keeps FutureBuilder from flashing the loading spinner
+  /// each time the surrounding widget tree rebuilds (e.g., PageView swipe).
+  Future<Uint8List> _futureFor(String imageSource) {
+    return _loadFutures.putIfAbsent(
+      imageSource,
+      () => _loadImageBytes(imageSource),
+    );
+  }
+
   /// Load image bytes from Base64 data URL or storage path.
   Future<Uint8List> _loadImageBytes(String imageSource) async {
-    // Check cache first
-    if (_imageCache.containsKey(imageSource)) {
-      return _imageCache[imageSource]!;
-    }
+    final cached = _imageCache[imageSource];
+    if (cached != null) return cached;
 
     Uint8List bytes;
     if (imageSource.startsWith('data:image/')) {
-      // Base64 data URI — decode inline (tool-generated images like QR codes)
       final commaIndex = imageSource.indexOf(',');
       if (commaIndex < 0) {
-        throw Exception('Invalid Base64 data URI');
+        throw const FormatException('Invalid Base64 data URI');
       }
       bytes = base64Decode(imageSource.substring(commaIndex + 1));
     } else {
-      // Storage path - download and decrypt
       bytes = await ImageStorageService.downloadAndDecryptImage(imageSource);
     }
 
-    // Cache the result
     _imageCache[imageSource] = bytes;
+    while (_imageCache.length > _kMaxCachedImages) {
+      final firstKey = _imageCache.keys.first;
+      _imageCache.remove(firstKey);
+      _loadFutures.remove(firstKey);
+    }
     return bytes;
   }
 
@@ -266,7 +282,7 @@ class _ImageViewerState extends State<ImageViewer> {
 
   Widget _buildImageView(String imageSource, int imageIndex) {
     return FutureBuilder<Uint8List>(
-      future: _loadImageBytes(imageSource),
+      future: _futureFor(imageSource),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(

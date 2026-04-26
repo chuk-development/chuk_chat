@@ -135,10 +135,63 @@ class MapBlockWidget extends StatelessWidget {
 // Shared helpers
 // ──────────────────────────────────────────────────────────
 
+const String _kLightTilesUrl =
+    'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png';
+const String _kDarkTilesUrl =
+    'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png';
+const List<String> _kTileSubdomains = ['a', 'b', 'c', 'd'];
+
+String _tileUrlForBrightness(BuildContext context) {
+  return Theme.of(context).brightness == Brightness.dark
+      ? _kDarkTilesUrl
+      : _kLightTilesUrl;
+}
+
 double _toDouble(dynamic v) {
-  if (v is num) return v.toDouble();
-  if (v is String) return double.tryParse(v) ?? 0.0;
+  if (v is num) {
+    final d = v.toDouble();
+    return d.isFinite ? d : 0.0;
+  }
+  if (v is String) {
+    final d = double.tryParse(v);
+    return (d != null && d.isFinite) ? d : 0.0;
+  }
   return 0.0;
+}
+
+bool _isValidLatLon(dynamic latRaw, dynamic lonRaw) {
+  if (latRaw == null || lonRaw == null) return false;
+  final lat = _toDouble(latRaw);
+  final lon = _toDouble(lonRaw);
+  if (!lat.isFinite || !lon.isFinite) return false;
+  if (lat < -90 || lat > 90) return false;
+  if (lon < -180 || lon > 180) return false;
+  // _toDouble silently coerces garbage like `"abc"` or `{}` to 0.0, which
+  // would otherwise paint a marker on Null Island. Only accept (0,0) when
+  // the raw inputs were actually numeric zeros.
+  if (lat == 0.0 && lon == 0.0) {
+    return _isExplicitNumericZero(latRaw) && _isExplicitNumericZero(lonRaw);
+  }
+  return true;
+}
+
+bool _isExplicitNumericZero(dynamic v) {
+  if (v is num) return v == 0;
+  if (v is String) {
+    final parsed = double.tryParse(v);
+    return parsed != null && parsed == 0;
+  }
+  return false;
+}
+
+List<Map<String, dynamic>> _filterValidCoordItems(
+  List<dynamic>? items,
+) {
+  if (items == null) return const [];
+  return items
+      .whereType<Map<String, dynamic>>()
+      .where((m) => _isValidLatLon(m['lat'], m['lon']))
+      .toList();
 }
 
 double _mapPreviewHeight(BuildContext context) {
@@ -341,8 +394,7 @@ class _MarkersMapBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final title = data['title'] as String?;
-    final markers =
-        (data['markers'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final markers = _filterValidCoordItems(data['markers'] as List?);
     if (markers.isEmpty) return const SizedBox.shrink();
 
     final lats = markers.map((m) => _toDouble(m['lat'])).toList();
@@ -356,9 +408,8 @@ class _MarkersMapBlock extends StatelessWidget {
 
     final mapLayers = <Widget>[
       TileLayer(
-        urlTemplate:
-            'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png',
-        subdomains: const ['a', 'b', 'c', 'd'],
+        urlTemplate: _tileUrlForBrightness(context),
+        subdomains: _kTileSubdomains,
       ),
       MarkerLayer(
         markers: markers.map((m) {
@@ -451,8 +502,7 @@ class _PlacesMapBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final title = data['title'] as String?;
-    final places =
-        (data['places'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final places = _filterValidCoordItems(data['places'] as List?);
     if (places.isEmpty) return const SizedBox.shrink();
 
     final lats = places.map((p) => _toDouble(p['lat'])).toList();
@@ -466,9 +516,8 @@ class _PlacesMapBlock extends StatelessWidget {
 
     final mapLayers = <Widget>[
       TileLayer(
-        urlTemplate:
-            'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png',
-        subdomains: const ['a', 'b', 'c', 'd'],
+        urlTemplate: _tileUrlForBrightness(context),
+        subdomains: _kTileSubdomains,
       ),
       MarkerLayer(markers: _buildLabeledPlaceMarkers(places)),
     ];
@@ -900,12 +949,19 @@ class _RouteMapBlock extends StatelessWidget {
     final to = data['to'] as Map<String, dynamic>? ?? {};
     final distKm = data['distance_km']?.toString() ?? '?';
     final durMin = data['duration_min']?.toString() ?? '?';
-    final steps = (data['steps'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final steps =
+        (data['steps'] as List?)?.whereType<Map<String, dynamic>>().toList() ??
+            const [];
 
-    final fromLat = from['lat'] != null ? _toDouble(from['lat']) : 0.0;
-    final fromLon = from['lon'] != null ? _toDouble(from['lon']) : 0.0;
-    final toLat = to['lat'] != null ? _toDouble(to['lat']) : 0.0;
-    final toLon = to['lon'] != null ? _toDouble(to['lon']) : 0.0;
+    if (!_isValidLatLon(from['lat'], from['lon']) ||
+        !_isValidLatLon(to['lat'], to['lon'])) {
+      return const SizedBox.shrink();
+    }
+
+    final fromLat = _toDouble(from['lat']);
+    final fromLon = _toDouble(from['lon']);
+    final toLat = _toDouble(to['lat']);
+    final toLon = _toDouble(to['lon']);
     final fromLabel = from['label'] as String? ?? 'Start';
     final toLabel = to['label'] as String? ?? 'Destination';
 
