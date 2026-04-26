@@ -107,6 +107,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
   bool _lastTextWasEmpty = true;
   bool _showFullscreenButton = false;
   bool _showScrollToBottom = false;
+  bool _isStickyBottom = true;
   bool _isInputFocused = false;
 
   // Services and handlers
@@ -1339,8 +1340,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       message['reasoning'] = reasoning;
       _messages[index] = message;
     });
-
-    _scrollChatToBottom();
   }
 
   void _updateToolCallsForMessage(
@@ -2571,18 +2570,34 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       nextShowScrollButton = false;
     }
 
-    if (nextShowScrollButton == _showScrollToBottom) return;
-    setState(() {
-      _showScrollToBottom = nextShowScrollButton;
-    });
+    bool nextStickyBottom = _isStickyBottom;
+    if (distanceToBottom > 100) {
+      nextStickyBottom = false;
+    } else if (distanceToBottom < 8) {
+      nextStickyBottom = true;
+    }
+
+    final buttonChanged = nextShowScrollButton != _showScrollToBottom;
+    final stickyChanged = nextStickyBottom != _isStickyBottom;
+    if (!buttonChanged && !stickyChanged) return;
+
+    if (buttonChanged) {
+      setState(() {
+        _showScrollToBottom = nextShowScrollButton;
+      });
+    }
+    if (stickyChanged) {
+      _isStickyBottom = nextStickyBottom;
+    }
   }
 
   void _scrollChatToBottom({bool force = false}) {
     if (!mounted) return;
+    if (!force && !_isStickyBottom) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) return;
+      if (_scrollController.position.isScrollingNotifier.value) return;
 
-      // Only auto-scroll if user is already near bottom (within 100px) or force is true
       final position = _scrollController.position;
       final isNearBottom = position.maxScrollExtent - position.pixels < 100;
 

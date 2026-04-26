@@ -159,6 +159,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   String _pendingReplyPreviewLabel = 'Reply to AI';
 
   bool _showScrollToBottom = false;
+  bool _isStickyBottom = true;
   bool _isLoadingChat = false; // Loading indicator for chat switching
   StreamSubscription<void>? _providerRefreshSubscription;
   final StreamingManager _streamingManager = StreamingManager();
@@ -1429,33 +1430,48 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       nextShowScrollButton = false;
     }
 
-    if (nextShowScrollButton == _showScrollToBottom) return;
+    bool nextStickyBottom = _isStickyBottom;
+    if (distanceToBottom > 100) {
+      nextStickyBottom = false;
+    } else if (distanceToBottom < 8) {
+      nextStickyBottom = true;
+    }
 
-    setState(() {
-      _showScrollToBottom = nextShowScrollButton;
-    });
-    unawaited(
-      DiagnosticsLogService.info(
-        'chat_ui',
-        'Scroll threshold toggled',
-        data: {
-          'show_scroll_button': nextShowScrollButton,
-          'distance_to_bottom': distanceToBottom.round(),
-          'pixels': position.pixels.round(),
-          'max_scroll_extent': position.maxScrollExtent.round(),
-          'show_threshold': _kShowScrollButtonDistance.round(),
-          'hide_threshold': _kHideScrollButtonDistance.round(),
-        },
-      ),
-    );
+    final buttonChanged = nextShowScrollButton != _showScrollToBottom;
+    final stickyChanged = nextStickyBottom != _isStickyBottom;
+    if (!buttonChanged && !stickyChanged) return;
+
+    if (buttonChanged) {
+      setState(() {
+        _showScrollToBottom = nextShowScrollButton;
+      });
+      unawaited(
+        DiagnosticsLogService.info(
+          'chat_ui',
+          'Scroll threshold toggled',
+          data: {
+            'show_scroll_button': nextShowScrollButton,
+            'distance_to_bottom': distanceToBottom.round(),
+            'pixels': position.pixels.round(),
+            'max_scroll_extent': position.maxScrollExtent.round(),
+            'show_threshold': _kShowScrollButtonDistance.round(),
+            'hide_threshold': _kHideScrollButtonDistance.round(),
+          },
+        ),
+      );
+    }
+    if (stickyChanged) {
+      _isStickyBottom = nextStickyBottom;
+    }
   }
 
   void _scrollChatToBottom({bool animate = true, bool force = false}) {
     if (!mounted) return;
+    if (!force && !_isStickyBottom) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) return;
+      if (_scrollController.position.isScrollingNotifier.value) return;
 
-      // Only auto-scroll if user is already near bottom (within 100px) or force is true
       final position = _scrollController.position;
       final isNearBottom = position.maxScrollExtent - position.pixels < 100;
 
