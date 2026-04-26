@@ -62,6 +62,9 @@ class _EncryptedImageWidgetState extends State<EncryptedImageWidget> {
   void didUpdateWidget(EncryptedImageWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.storagePath != widget.storagePath) {
+      _isDeleted = false;
+      _imageBytes = null;
+      _error = null;
       _loadImage();
     }
   }
