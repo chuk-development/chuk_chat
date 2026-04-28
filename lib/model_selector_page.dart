@@ -692,14 +692,8 @@ class _ModelSelectionRowState extends State<ModelSelectionRow> {
         children: [
           GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: () {
-              if (kDebugMode) {
-                debugPrint(
-                  'desc tap (model=${widget.model.id}) expanded=$_descriptionExpanded -> ${!_descriptionExpanded}',
-                );
-              }
-              setState(() => _descriptionExpanded = !_descriptionExpanded);
-            },
+            onTap: () =>
+                setState(() => _descriptionExpanded = !_descriptionExpanded),
             child: Text(
               description,
               style: descStyle,
@@ -712,14 +706,8 @@ class _ModelSelectionRowState extends State<ModelSelectionRow> {
           const SizedBox(height: 2),
           GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: () {
-              if (kDebugMode) {
-                debugPrint(
-                  'btn tap (model=${widget.model.id}) expanded=$_descriptionExpanded -> ${!_descriptionExpanded}',
-                );
-              }
-              setState(() => _descriptionExpanded = !_descriptionExpanded);
-            },
+            onTap: () =>
+                setState(() => _descriptionExpanded = !_descriptionExpanded),
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
