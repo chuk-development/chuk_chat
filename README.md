@@ -31,19 +31,19 @@
 ## Screenshots
 
 <p align="center">
-  <img src="assets/screenshots/screenshot_home_ui.webp" width="48%" alt="Clean chat interface">
-  <img src="assets/screenshots/screenshot_model_selection.webp" width="48%" alt="Model selection">
+  <img src="assets/screenshots/screenshot_home_ui.webp" width="90%" alt="Clean chat interface">
 </p>
 <p align="center">
-  <img src="assets/screenshots/screenshot_tool_calling_ui.webp" width="48%" alt="Tool calling">
-  <img src="assets/screenshots/screenshot_weather_ui.webp" width="48%" alt="Weather card">
+  <img src="assets/screenshots/screenshot_model_selection.webp" width="44%" alt="Model selection">
+  <img src="assets/screenshots/screenshot_tool_calling_ui.webp" width="44%" alt="Tool calling">
 </p>
 <p align="center">
-  <img src="assets/screenshots/screenshot_bitcoin_chart.webp" width="48%" alt="Live charts">
-  <img src="assets/screenshots/screenshot_customization.webp" width="48%" alt="Customization">
+  <img src="assets/screenshots/screenshot_weather_ui.webp" width="44%" alt="Weather card">
+  <img src="assets/screenshots/screenshot_bitcoin_chart.webp" width="44%" alt="Live charts">
 </p>
 <p align="center">
-  <img src="assets/screenshots/screenshot_theme_settings.webp" width="48%" alt="Theme settings">
+  <img src="assets/screenshots/screenshot_customization.webp" width="44%" alt="Customization">
+  <img src="assets/screenshots/screenshot_theme_settings.webp" width="44%" alt="Theme settings">
 </p>
 
 ## Why Chuk Chat?
