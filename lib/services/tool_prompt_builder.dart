@@ -581,7 +581,7 @@ FORMAT: Emit raw $toolCallStart...$toolCallEnd tags only. Do NOT wrap tool calls
 8. If the needed tool is already listed above with its full description, call it directly. Do NOT call find_tools again unless you need a tool from "Other available tools".
 9. REAL PHOTOS vs AI ART: When the user wants pictures of REAL things (people, actors, celebrities, movies, posters, places, products, cars, animals, food, events), call `web_search` with `type: "images"`. The app renders the returned image_url / thumbnail_url values inline — DO NOT call fetch_image afterwards. Only call fetch_image when the user explicitly asks to save, attach, or store a picture in the chat. Only use generate_image / generate_image_hunyuan / generate_image_flux when the user explicitly asks for AI art, illustration, fantasy, concept art, fictional subjects, or a stylized generated image. Never silently swap a real-photo request for AI-generated fakes — retry web_search with type="images" and a better query first, or report the failure.
    IMAGE CAPTIONS: When you call fetch_image or generate_image* and the image shows an identifiable subject (a person, actor, place, product, character, scene), pass a short `caption` argument — the app renders it as a subtitle under the image. Use the subject's name or a 2-4 word label (e.g. "Sean Connery", "Eiffel Tower at dusk"). Omit captions for abstract/decorative images. After a caption is set, do NOT repeat it in your message text — the app shows it automatically.
-10. NEWS & TIME-SENSITIVE QUERIES: For "latest", "news", "today", "breaking", "just released", "aktuell", "neu", "heute" or similar, call `web_search` with `type: "news"` and the right `freshness` (pd/pw/pm/py). You get publisher, date and thumbnail without a separate crawl. Follow up with `web_crawl` only when the user asks for full article detail.
+10. NEWS & TIME-SENSITIVE QUERIES: For "latest", "news", "today", "breaking", "just released", "aktuell", "neu", "heute" or similar, call `web_search` with `type: "news"` and the right `freshness` (pd/pw/pm/py). Then emit a `<news>` block with the structured results — the app renders polished cards. Do NOT also list the same articles as markdown. Follow up with `web_crawl` only when the user asks for full article detail.
 11. WEB SEARCH TUNING: `extra_snippets` is on by default — read the bullet-point snippets before deciding you need web_crawl. Use `country`/`search_lang` (e.g. "DE"/"de") for German or region-specific queries. Use `freshness` in web mode too when recency matters.
 
 ### Research depth:
@@ -701,6 +701,35 @@ Never wrap an <artifact> tag inside a markdown code fence (```…```); the parse
     );
     buffer.writeln(
       '**Weather rules:** Only include fields from weather tool results. Never fabricate temperatures, codes, or forecasts. Emit at most one <weather> block per response. Do NOT also dump the raw tool text — the card contains everything.',
+    );
+
+    buffer.writeln();
+    buffer.writeln('### News');
+    buffer.writeln(
+      'After `web_search` with `type: "news"`, emit a single <news> block with the structured results. The app renders polished article cards (thumbnail, title, publisher, summary, tap-to-open). Do NOT also list the same articles as markdown — the cards contain everything. A short intro sentence above the block is fine.',
+    );
+    buffer.writeln('<news>');
+    buffer.writeln(
+      '{"items":[{"title":"Qualcomm surges on OpenAI tie-up","publisher":"Reuters","age":"3 hours ago","url":"https://www.reuters.com/...","thumbnail":"https://...","summary":"Qualcomm shares jump 13% on reports of a partnership with OpenAI and MediaTek to develop AI smartphone processors.","breaking":false}]}',
+    );
+    buffer.writeln('</news>');
+    buffer.writeln();
+    buffer.writeln('**News fields per item:**');
+    buffer.writeln('- "title": headline (required)');
+    buffer.writeln('- "url": article URL (required)');
+    buffer.writeln('- "publisher": source name, e.g. "Reuters" (optional)');
+    buffer.writeln('- "age": e.g. "3 hours ago", "1 day ago" (optional)');
+    buffer.writeln(
+      '- "thumbnail": image URL from the search result `thumbnail_url` (optional)',
+    );
+    buffer.writeln(
+      '- "summary": 1-2 sentence description, taken from the result description (optional)',
+    );
+    buffer.writeln(
+      '- "breaking": true if the result is flagged BREAKING (optional)',
+    );
+    buffer.writeln(
+      '**News rules:** Only include fields from `web_search type:"news"` results. Never fabricate URLs or thumbnails. Emit at most one <news> block per response.',
     );
   }
 

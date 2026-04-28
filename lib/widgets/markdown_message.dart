@@ -342,6 +342,10 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
             color: widget.textColor.withValues(alpha: 0.85),
           ),
         ),
+        ImgConfig(
+          builder: (url, attributes) =>
+              _MarkdownImage(url: url, alt: attributes['alt'] ?? ''),
+        ),
       ],
     );
 
@@ -1383,6 +1387,157 @@ class _CopyButtonState extends State<_CopyButton> {
                 color: widget.textColor.withValues(alpha: 0.8),
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Polished markdown image: full-width on mobile bubbles (capped at 540px wide
+/// on large screens), preserves aspect ratio (max-height 320), rounded corners,
+/// loading shimmer, broken-image fallback, tap → fullscreen viewer.
+class _MarkdownImage extends StatelessWidget {
+  const _MarkdownImage({required this.url, required this.alt});
+
+  final String url;
+  final String alt;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isNet = url.startsWith('http://') || url.startsWith('https://');
+
+    final image = isNet
+        ? Image.network(
+            url,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _errorTile(colorScheme),
+            loadingBuilder: (ctx, child, progress) {
+              if (progress == null) return child;
+              return AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Container(
+                  color: colorScheme.surfaceContainerHighest,
+                  alignment: Alignment.center,
+                  child: const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              );
+            },
+          )
+        : Image.asset(
+            url,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _errorTile(colorScheme),
+          );
+
+    final framed = ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 540, maxHeight: 320),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: image,
+      ),
+    );
+
+    final tappable = InkWell(
+      onTap: isNet ? () => _openFullscreen(context) : null,
+      borderRadius: BorderRadius.circular(12),
+      child: framed,
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          tappable,
+          if (alt.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, left: 2),
+              child: Text(
+                alt,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontStyle: FontStyle.italic,
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _errorTile(ColorScheme colorScheme) {
+    return Container(
+      width: 220,
+      height: 140,
+      color: colorScheme.surfaceContainerHighest,
+      alignment: Alignment.center,
+      child: Icon(
+        Icons.broken_image_outlined,
+        color: colorScheme.onSurfaceVariant,
+        size: 36,
+      ),
+    );
+  }
+
+  void _openFullscreen(BuildContext context) {
+    Navigator.of(context).push(
+      PageRouteBuilder<void>(
+        opaque: false,
+        barrierColor: Colors.black.withValues(alpha: 0.92),
+        pageBuilder: (_, __, ___) => _NetworkImageViewer(url: url),
+      ),
+    );
+  }
+}
+
+class _NetworkImageViewer extends StatelessWidget {
+  const _NetworkImageViewer({required this.url});
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.of(context).pop(),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 4,
+              child: Center(
+                child: Image.network(
+                  url,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const Icon(
+                    Icons.broken_image_outlined,
+                    color: Colors.white70,
+                    size: 64,
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 16,
+              right: 16,
+              child: SafeArea(
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
               ),
             ),
           ],
