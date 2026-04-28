@@ -77,7 +77,10 @@ class ChartRenderer extends StatelessWidget {
               ),
             ),
           SizedBox(height: height, child: _buildChart(type, context)),
-          if (type == 'pie') _buildPieLegend(context),
+          if (type == 'pie')
+            _buildPieLegend(context)
+          else
+            _buildDatasetLegend(context),
         ],
       ),
     );
@@ -405,6 +408,59 @@ class ChartRenderer extends StatelessWidget {
         sectionsSpace: 2,
         centerSpaceRadius: 40,
         pieTouchData: PieTouchData(touchCallback: (_, _) {}),
+      ),
+    );
+  }
+
+  /// Generic legend for bar/line/scatter/radar charts with named datasets.
+  /// Shown only when at least one dataset has a non-empty `label`.
+  Widget _buildDatasetLegend(BuildContext context) {
+    final datasets = (data['datasets'] as List?) ?? [];
+    if (datasets.length < 2) return const SizedBox.shrink();
+
+    final entries = <(String, Color)>[];
+    for (var i = 0; i < datasets.length; i++) {
+      final ds = datasets[i];
+      if (ds is! Map) continue;
+      final label = (ds['label'] as String?)?.trim() ?? '';
+      if (label.isEmpty) continue;
+      final rawColor = ds['color'];
+      final color = rawColor is String
+          ? _parseColor(rawColor)
+          : _colorAt(i);
+      entries.add((label, color));
+    }
+    if (entries.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Wrap(
+        spacing: 16,
+        runSpacing: 4,
+        children: [
+          for (final entry in entries)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: entry.$2,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  entry.$1,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+        ],
       ),
     );
   }

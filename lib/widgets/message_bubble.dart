@@ -1823,11 +1823,22 @@ class _MessageBubbleState extends State<MessageBubble> {
       icon = Icons.psychology;
       showSpinner = true;
     } else {
-      final uniqueNames = toolCalls.map((t) => t.name).toSet();
-      if (uniqueNames.length <= 2) {
-        label = uniqueNames.join(', ');
+      final uniqueNames = toolCalls.map((t) => t.name).toList();
+      final distinct = uniqueNames.toSet();
+      if (toolCalls.length == 1) {
+        label = uniqueNames.first;
+      } else if (distinct.length == 1) {
+        label = '${uniqueNames.first} (${toolCalls.length}×)';
+      } else if (distinct.length <= 3) {
+        final counts = <String, int>{};
+        for (final n in uniqueNames) {
+          counts[n] = (counts[n] ?? 0) + 1;
+        }
+        label = counts.entries
+            .map((e) => e.value > 1 ? '${e.key} (${e.value}×)' : e.key)
+            .join(', ');
       } else {
-        label = '${toolCalls.length} tools used';
+        label = '${toolCalls.length} tool calls';
       }
       icon = Icons.build_circle_outlined;
       showSpinner = false;
