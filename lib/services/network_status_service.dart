@@ -63,6 +63,18 @@ class NetworkStatusService {
       }
     }
 
+    // On web, browsers block our cross-origin connectivity probes via CORS,
+    // so they always look offline even with a working connection. Trust the
+    // browser's own online signal instead — the actual API calls will fail
+    // loudly if the network is really down.
+    if (kIsWeb) {
+      _lastCheckResult = true;
+      _lastCheckTime = DateTime.now();
+      _consecutiveFailures = 0;
+      _updateStatus(true);
+      return true;
+    }
+
     // Run all probes in parallel - first success wins
     final result = await _checkWithParallelProbes(timeout);
 
