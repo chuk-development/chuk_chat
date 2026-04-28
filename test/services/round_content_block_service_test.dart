@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/round_content_block_service.dart';
+import 'package:chuk_chat/services/tool_call_handler.dart' show RoundSegment;
 
 void main() {
   group('RoundContentBlockService', () {
@@ -224,6 +225,48 @@ void main() {
         isNotEmpty,
         reason: 'Different tool call ids should NOT dedupe as tail match.',
       );
+    });
+
+    test('segmented builder preserves interleaved text → tool → text order', () {
+      final hamburgCall = ToolCall(
+        id: 'tc-hh',
+        name: 'weather',
+        arguments: const {'location': 'Hamburg'},
+        status: ToolCallStatus.completed,
+      );
+      final berlinCall = ToolCall(
+        id: 'tc-be',
+        name: 'weather',
+        arguments: const {'location': 'Berlin'},
+        status: ToolCallStatus.completed,
+      );
+
+      final segments = [
+        RoundSegment.text('Ich hole jetzt das Wetter für Hamburg.'),
+        RoundSegment.toolCall(hamburgCall),
+        RoundSegment.text('In Hamburg sind es 14 °C.'),
+        RoundSegment.toolCall(berlinCall),
+        RoundSegment.text('In Berlin sind es 16 °C.'),
+      ];
+
+      final result = RoundContentBlockService.buildSegmentedRoundBlocks(
+        segments: segments,
+        providerReasoning: 'Plan: Hamburg, dann Berlin.',
+      );
+
+      expect(
+        result.blocks.map((b) => b.type).toList(),
+        equals([
+          ContentBlockType.reasoning,
+          ContentBlockType.text,
+          ContentBlockType.toolCalls,
+          ContentBlockType.text,
+          ContentBlockType.toolCalls,
+          ContentBlockType.text,
+        ]),
+      );
+      expect(result.blocks[2].toolCalls!.single.id, 'tc-hh');
+      expect(result.blocks[4].toolCalls!.single.id, 'tc-be');
     });
 
     test(

@@ -60,6 +60,25 @@ class ToolLoopStep {
   final String? systemPrompt;
 }
 
+/// One segment in the model's interleaved output for a single round.
+///
+/// When the model emits text, then a tool_call, then more text, then
+/// another tool_call (and so on), the renderer needs the original order
+/// to display intro/outro text around each tool. A segment is either
+/// a text chunk or a single tool call.
+class RoundSegment {
+  const RoundSegment._({this.text, this.toolCall});
+
+  factory RoundSegment.text(String text) => RoundSegment._(text: text);
+  factory RoundSegment.toolCall(ToolCall tc) => RoundSegment._(toolCall: tc);
+
+  final String? text;
+  final ToolCall? toolCall;
+
+  bool get isText => text != null;
+  bool get isToolCall => toolCall != null;
+}
+
 class ToolLoopResult {
   const ToolLoopResult._({
     required this.shouldContinue,
@@ -69,6 +88,7 @@ class ToolLoopResult {
     this.interimContent,
     this.interimBeforeToolCalls = false,
     this.toolCalls = const [],
+    this.interleavedSegments = const [],
   });
 
   factory ToolLoopResult.continueWith({
@@ -76,6 +96,7 @@ class ToolLoopResult {
     String? interimContent,
     bool interimBeforeToolCalls = false,
     List<ToolCall> toolCalls = const [],
+    List<RoundSegment> interleavedSegments = const [],
   }) {
     return ToolLoopResult._(
       shouldContinue: true,
@@ -83,6 +104,7 @@ class ToolLoopResult {
       interimContent: interimContent,
       interimBeforeToolCalls: interimBeforeToolCalls,
       toolCalls: toolCalls,
+      interleavedSegments: interleavedSegments,
     );
   }
 
@@ -106,6 +128,12 @@ class ToolLoopResult {
   final String? interimContent;
   final bool interimBeforeToolCalls;
   final List<ToolCall> toolCalls;
+
+  /// Ordered list of text/tool segments produced this round. Empty when the
+  /// round was not interleaved (no text between tool calls). When non-empty,
+  /// renderers should prefer this over [interimContent] + [toolCalls] to
+  /// preserve the model's original ordering.
+  final List<RoundSegment> interleavedSegments;
 }
 
 class ToolCallHandler {
@@ -436,6 +464,15 @@ class ToolCallHandler {
     final resultMessage = enforcer.buildResultMessage(modelResults);
     session.latestUserMessage = resultMessage;
 
+    final orderedUiCalls = enforceResult.validCalls
+        .map((c) => uiCallsById[c.callId])
+        .whereType<ToolCall>()
+        .toList();
+    final interleaved = _splitInterleavedSegments(
+      cleanedContent,
+      orderedUiCalls,
+    );
+
     return ToolLoopResult.continueWith(
       nextStep: ToolLoopStep(
         message: resultMessage,
@@ -452,7 +489,73 @@ class ToolCallHandler {
       interimContent: _stripToolCallBlocks(cleanedContent),
       interimBeforeToolCalls: _hasInterimTextBeforeToolCalls(cleanedContent),
       toolCalls: _cloneToolCalls(session.toolCalls),
+      interleavedSegments: interleaved,
     );
+  }
+
+  /// Walks [content] in source order and splits it into text chunks /
+  /// individual tool calls based on the positions of `<tool_call>` blocks.
+  ///
+  /// Returns an empty list when interleaving cannot be reliably reconstructed
+  /// (mismatched span/tool count, or a single span with no surrounding text)
+  /// — callers fall back to the legacy bundled rendering in that case.
+  List<RoundSegment> _splitInterleavedSegments(
+    String content,
+    List<ToolCall> uiCalls,
+  ) {
+    if (uiCalls.isEmpty) return const [];
+
+    final spans = RegExp(
+      r'<tool_call>[\s\S]*?</tool_call>',
+      caseSensitive: false,
+    ).allMatches(content).toList();
+
+    // Mismatch (e.g. some tool calls were rejected, or the markdown form
+    // was used) → fall back to legacy rendering.
+    if (spans.length != uiCalls.length) return const [];
+
+    final segments = <RoundSegment>[];
+    var cursor = 0;
+    for (var i = 0; i < spans.length; i++) {
+      final span = spans[i];
+      final between = content.substring(cursor, span.start).trim();
+      if (between.isNotEmpty) {
+        segments.add(RoundSegment.text(between));
+      }
+      segments.add(RoundSegment.toolCall(uiCalls[i]));
+      cursor = span.end;
+    }
+    final tail = content.substring(cursor).trim();
+    if (tail.isNotEmpty) {
+      segments.add(RoundSegment.text(tail));
+    }
+
+    // Don't bother reporting an interleaved view when there was no genuine
+    // interleaving — legacy rendering handles "all tools, then optional
+    // tail text" cleanly.
+    final hasInterleavedText = segments.any(
+      (s) => s.isText && segments.indexOf(s) < segments.length - 1,
+    );
+    final hasMultipleToolGroups = _countToolGroups(segments) > 1;
+    if (!hasInterleavedText && !hasMultipleToolGroups) return const [];
+
+    return segments;
+  }
+
+  static int _countToolGroups(List<RoundSegment> segments) {
+    var groups = 0;
+    var inGroup = false;
+    for (final s in segments) {
+      if (s.isToolCall) {
+        if (!inGroup) {
+          groups += 1;
+          inGroup = true;
+        }
+      } else {
+        inGroup = false;
+      }
+    }
+    return groups;
   }
 
   void _appendRoundToHistory(
