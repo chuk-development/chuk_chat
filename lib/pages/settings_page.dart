@@ -154,7 +154,7 @@ class _SettingsPageState extends State<SettingsPage> {
               _SettingsRow(
                 icon: Icons.smart_toy_outlined,
                 title: l.modelSelection,
-                subtitle: 'Claude Opus 4.7 · 1M context',
+                subtitle: l.modelSelectionSubtitle,
                 onTap: () {
                   Navigator.push(
                     context,
@@ -712,7 +712,7 @@ class _AccountRowState extends State<_AccountRow> {
               width: 24,
               height: 24,
               child: Icon(
-                Icons.person_outline,
+                Icons.account_circle_outlined,
                 size: 22,
                 color: cs.primary,
               ),
