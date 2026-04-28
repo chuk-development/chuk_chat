@@ -28,6 +28,24 @@
 
 ---
 
+## Screenshots
+
+<p align="center">
+  <img src="assets/screenshots/screenshot_home_ui.webp" width="48%" alt="Clean chat interface">
+  <img src="assets/screenshots/screenshot_model_selection.webp" width="48%" alt="Model selection">
+</p>
+<p align="center">
+  <img src="assets/screenshots/screenshot_tool_calling_ui.webp" width="48%" alt="Tool calling">
+  <img src="assets/screenshots/screenshot_weather_ui.webp" width="48%" alt="Weather card">
+</p>
+<p align="center">
+  <img src="assets/screenshots/screenshot_bitcoin_chart.webp" width="48%" alt="Live charts">
+  <img src="assets/screenshots/screenshot_customization.webp" width="48%" alt="Customization">
+</p>
+<p align="center">
+  <img src="assets/screenshots/screenshot_theme_settings.webp" width="48%" alt="Theme settings">
+</p>
+
 ## Why Chuk Chat?
 
 We use only open-weight models — no black boxes and no silent data collection. You know exactly what runs your AI.
@@ -51,10 +69,12 @@ We use only open-weight models — no black boxes and no silent data collection.
 - **AI Image Generation** — Generate and edit images directly in chat
 - **Interactive Maps** — AI responses with `<map>` blocks render inline maps with markers, places, and route polylines
 - **Interactive Charts** — AI responses with `<chart>` blocks render inline charts (bar, line, pie, scatter, radar)
+- **Weather Cards** — AI responses with `<weather>` blocks render rich weather cards with hourly forecast
 - **Email Drafts** — AI responses with `<email>` blocks render email cards with "Open in Mail App" button
 - **Spotify Control** — Play, pause, search, manage playlists and volume via OAuth-connected Spotify
 - **Calendar & Reminders** — Create calendar events (native on Android/macOS, .ics on Linux/Windows) and set alarms/timers with notifications
-- **Web Search, Weather, Calculator, QR Codes, Notes** — Expanding set of built-in tool handlers
+- **Web Search & News** — Brave-powered web and news search with freshness controls
+- **Weather, Places, Calculator, QR Codes, Notes** — Expanding set of built-in tool handlers
 - **Multi-Pass Tool Call Rendering** — Interleaved content blocks show text and tool calls in correct chronological order with collapsible UI
 
 ### Account & Privacy
