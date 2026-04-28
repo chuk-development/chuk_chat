@@ -225,5 +225,43 @@ void main() {
         reason: 'Different tool call ids should NOT dedupe as tail match.',
       );
     });
+
+    test(
+      'drops duplicate text block when it repeats an earlier finalized text '
+      '(e.g. answer → notes tool → answer again)',
+      () {
+        // First round: model writes the answer + a notes tool call.
+        final firstPass = RoundContentBlockService.buildRoundBlocks(
+          interimText: 'Hamburg ist 16°C. Berlin ist 14°C.',
+          providerReasoning: '',
+          newToolCalls: [
+            ToolCall(
+              id: 'tc-notes',
+              name: 'notes',
+              status: ToolCallStatus.completed,
+            ),
+          ],
+        );
+
+        final accumulated = <ContentBlock>[...firstPass.blocks];
+
+        // Second round: tool returned, model now repeats the same answer.
+        final secondPass = RoundContentBlockService.buildRoundBlocks(
+          interimText: 'Hamburg ist 16°C. Berlin ist 14°C.',
+          providerReasoning: '',
+          newToolCalls: const [],
+          existingBlocks: accumulated,
+        );
+
+        // No new blocks expected because the only new content was a verbatim
+        // repeat of the prior text block.
+        expect(
+          secondPass.blocks,
+          isEmpty,
+          reason:
+              'Duplicate of an earlier finalized text block should be dropped.',
+        );
+      },
+    );
   });
 }

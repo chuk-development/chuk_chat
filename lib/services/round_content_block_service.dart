@@ -94,6 +94,19 @@ class RoundContentBlockService {
       );
     }
 
+    // De-duplicate: when the model writes the same answer text twice in
+    // separate rounds (e.g. answer → notes tool → answer again, which Kimi
+    // sometimes emits), drop the trailing text block from this round if it
+    // already appears verbatim in an earlier finalized text block.
+    if (blocks.isNotEmpty &&
+        blocks.last.type == ContentBlockType.text &&
+        _isDuplicateOfEarlierTextBlock(
+          (blocks.last.text ?? '').trim(),
+          existingBlocks,
+        )) {
+      blocks.removeLast();
+    }
+
     return RoundContentBlockResult(
       blocks: blocks,
       interimOutputText: interimOutputText,
@@ -135,5 +148,26 @@ class RoundContentBlockService {
 
   static bool _toolCallEqual(ToolCall a, ToolCall b) {
     return a.id == b.id && a.name == b.name;
+  }
+
+  static bool _isDuplicateOfEarlierTextBlock(
+    String newText,
+    List<ContentBlock> existing,
+  ) {
+    if (newText.isEmpty) return false;
+    final normalizedNew = _normalizeForCompare(newText);
+    if (normalizedNew.isEmpty) return false;
+    for (final block in existing) {
+      if (block.type != ContentBlockType.text) continue;
+      final normalizedExisting = _normalizeForCompare(block.text ?? '');
+      if (normalizedExisting.isEmpty) continue;
+      if (normalizedExisting == normalizedNew) return true;
+      if (normalizedExisting.contains(normalizedNew)) return true;
+    }
+    return false;
+  }
+
+  static String _normalizeForCompare(String s) {
+    return s.replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 }
