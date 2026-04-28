@@ -265,8 +265,15 @@ class ChartRenderer extends StatelessWidget {
             fitInsideVertically: true,
             getTooltipItem: (group, gIdx, rod, rIdx) {
               final label = gIdx < labels.length ? labels[gIdx] : '';
+              final dsLabel = (rIdx < datasets.length && datasets[rIdx] is Map)
+                  ? ((datasets[rIdx] as Map)['label'] as String? ?? '').trim()
+                  : '';
+              final valueText = _formatAxisValue(rod.toY);
+              final body = dsLabel.isEmpty
+                  ? valueText
+                  : '$dsLabel: $valueText';
               return BarTooltipItem(
-                '$label\n${_formatAxisValue(rod.toY)}',
+                '$label\n$body',
                 TextStyle(
                   color: rod.color,
                   fontWeight: FontWeight.bold,
