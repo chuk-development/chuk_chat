@@ -495,20 +495,30 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
         continue;
       }
       Map<String, dynamic>? matchedProvider;
+      Map<String, dynamic>? fallbackProvider;
       for (final dynamic providerEntry in providers) {
         if (providerEntry is! Map<String, dynamic>) continue;
+        fallbackProvider ??= providerEntry;
         if (providerEntry['slug'] == savedProviderSlug) {
           matchedProvider = providerEntry;
           break;
         }
       }
-      if (matchedProvider != null) {
+      // If the saved provider slug is stale (e.g. backend renamed
+      // `fireworks/serverless` to `fireworks`), keep the model visible by
+      // falling back to the first available provider instead of silently
+      // dropping it from the dropdown.
+      final Map<String, dynamic>? resolvedProvider =
+          matchedProvider ?? fallbackProvider;
+      if (resolvedProvider != null) {
+        final String resolvedSlug =
+            (resolvedProvider['slug'] as String?) ?? savedProviderSlug;
         filteredModels.add(modelItem);
-        enabledProviders[modelItem.value] = savedProviderSlug;
+        enabledProviders[modelItem.value] = resolvedSlug;
         providerLimits[modelItem.value] = ModelProviderLimits(
-          contextLength: _parseNullableInt(matchedProvider['context_length']),
+          contextLength: _parseNullableInt(resolvedProvider['context_length']),
           maxCompletionTokens: _parseNullableInt(
-            matchedProvider['max_completion_tokens'],
+            resolvedProvider['max_completion_tokens'],
           ),
         );
       } else {
