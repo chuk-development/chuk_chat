@@ -685,52 +685,67 @@ class _ModelSelectionRowState extends State<ModelSelectionRow> {
     final TextStyle? descStyle =
         theme.textTheme.bodySmall?.copyWith(color: descColor, height: 1.4);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (_descriptionExpanded)
-          Text(
-            description,
-            key: const ValueKey('desc-expanded'),
-            style: descStyle,
-          )
-        else
-          Text(
-            description,
-            key: const ValueKey('desc-collapsed'),
-            style: descStyle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        const SizedBox(height: 2),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            onPressed: () =>
-                setState(() => _descriptionExpanded = !_descriptionExpanded),
-            icon: Icon(
-              _descriptionExpanded
-                  ? Icons.keyboard_arrow_up
-                  : Icons.keyboard_arrow_down,
-              size: 16,
-              color: primary,
+    return SizedBox(
+      width: double.infinity,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              if (kDebugMode) {
+                debugPrint(
+                  'desc tap (model=${widget.model.id}) expanded=$_descriptionExpanded -> ${!_descriptionExpanded}',
+                );
+              }
+              setState(() => _descriptionExpanded = !_descriptionExpanded);
+            },
+            child: Text(
+              description,
+              style: descStyle,
+              maxLines: _descriptionExpanded ? null : 1,
+              overflow: _descriptionExpanded
+                  ? TextOverflow.visible
+                  : TextOverflow.ellipsis,
             ),
-            label: Text(
-              _descriptionExpanded ? 'Show less' : 'Show more',
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: primary,
-                fontWeight: FontWeight.w600,
+          ),
+          const SizedBox(height: 2),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              if (kDebugMode) {
+                debugPrint(
+                  'btn tap (model=${widget.model.id}) expanded=$_descriptionExpanded -> ${!_descriptionExpanded}',
+                );
+              }
+              setState(() => _descriptionExpanded = !_descriptionExpanded);
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _descriptionExpanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                    size: 16,
+                    color: primary,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    _descriptionExpanded ? 'Show less' : 'Show more',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
             ),
-            style: TextButton.styleFrom(
-              foregroundColor: primary,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
