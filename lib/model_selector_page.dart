@@ -674,36 +674,30 @@ class _ModelSelectionRowState extends State<ModelSelectionRow> {
     final Color descColor = m3.onSurfaceVariant as Color;
     final Color primary = theme.colorScheme.primary;
 
-    final collapsedText = Text(
-      description,
-      style: theme.textTheme.bodySmall?.copyWith(color: descColor, height: 1.4),
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-    );
-    final expandedText = Text(
-      description,
-      style: theme.textTheme.bodySmall?.copyWith(color: descColor, height: 1.4),
-    );
-
     if (!needsToggle) {
-      return expandedText;
+      return Text(
+        description,
+        style:
+            theme.textTheme.bodySmall?.copyWith(color: descColor, height: 1.4),
+      );
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        AnimatedCrossFade(
-          duration: const Duration(milliseconds: 180),
-          crossFadeState: _descriptionExpanded
-              ? CrossFadeState.showSecond
-              : CrossFadeState.showFirst,
-          firstChild: SizedBox(width: double.infinity, child: collapsedText),
-          secondChild: SizedBox(width: double.infinity, child: expandedText),
-          sizeCurve: Curves.easeInOut,
+        SizedBox(
+          width: double.infinity,
+          child: Text(
+            description,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: descColor, height: 1.4),
+            maxLines: _descriptionExpanded ? null : 1,
+            overflow: _descriptionExpanded
+                ? TextOverflow.visible
+                : TextOverflow.ellipsis,
+          ),
         ),
         const SizedBox(height: 2),
-        // TextButton.icon has a built-in Material ancestor so the tap always
-        // registers — some users reported the plain InkWell not responding.
         Align(
           alignment: Alignment.centerLeft,
           child: TextButton.icon(
