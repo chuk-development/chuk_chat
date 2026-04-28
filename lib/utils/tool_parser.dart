@@ -284,20 +284,49 @@ String stripToolCallBlocksForDisplay(
   );
 
   if (stripIncomplete) {
-    final xmlStart = _xmlToolCallStartPattern.firstMatch(cleaned)?.start;
-    if (xmlStart != null) {
-      cleaned = cleaned.substring(0, xmlStart);
+    // Match the full opening tag (already-streamed) AND any partial open like
+    // `<tool_call` mid-stream, so we never flash protocol text in the UI.
+    // The tag has no alternate forms in this codebase, so any occurrence of
+    // `<tool_call` is always tool protocol — safe to truncate from there.
+    final xmlPartialIdx = _earliestCaseInsensitiveIndex(cleaned, '<tool_call');
+    if (xmlPartialIdx != -1) {
+      cleaned = cleaned.substring(0, xmlPartialIdx);
     }
 
-    final markdownStart = _markdownToolCallStartPattern
-        .firstMatch(cleaned)
-        ?.start;
-    if (markdownStart != null) {
-      cleaned = cleaned.substring(0, markdownStart);
+    // Same for the markdown form: a fenced block starting with
+    // ```tool_call / ```toolcall / ```tool-call (or any in-flight prefix
+    // thereof, e.g. just ```too).
+    final markdownPartialIdx = _earliestMarkdownToolCallStart(cleaned);
+    if (markdownPartialIdx != -1) {
+      cleaned = cleaned.substring(0, markdownPartialIdx);
     }
   }
 
   return cleaned.trim();
+}
+
+int _earliestCaseInsensitiveIndex(String haystack, String needle) {
+  return haystack.toLowerCase().indexOf(needle.toLowerCase());
+}
+
+int _earliestMarkdownToolCallStart(String content) {
+  final lower = content.toLowerCase();
+  var search = 0;
+  while (true) {
+    final fence = lower.indexOf('```', search);
+    if (fence == -1) return -1;
+    final after = lower.substring(fence + 3);
+    if (after.startsWith('tool_call') ||
+        after.startsWith('toolcall') ||
+        after.startsWith('tool-call') ||
+        // In-flight prefix of any of the above (e.g. ```too).
+        ('tool_call'.startsWith(after) && after.isNotEmpty) ||
+        ('toolcall'.startsWith(after) && after.isNotEmpty) ||
+        ('tool-call'.startsWith(after) && after.isNotEmpty)) {
+      return fence;
+    }
+    search = fence + 3;
+  }
 }
 
 /// Parse ALL tool calls from LLM response content (supports multiple).
