@@ -1,5 +1,6 @@
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/services/tool_call_handler.dart' show RoundSegment;
 
 class RoundContentBlockResult {
   const RoundContentBlockResult({
@@ -13,6 +14,65 @@ class RoundContentBlockResult {
 
 class RoundContentBlockService {
   const RoundContentBlockService._();
+
+  /// Build content blocks for a round whose model output interleaved text
+  /// and tool calls (e.g. "I'll check Hamburg." → tool → "Got 14°C." → tool).
+  ///
+  /// Reasoning gets a single block at the top; the segments then translate
+  /// directly into alternating text / tool-calls blocks in their original
+  /// order. Returns the same idempotency contract as [buildRoundBlocks] —
+  /// an empty list when the tail of [existingBlocks] already matches.
+  static RoundContentBlockResult buildSegmentedRoundBlocks({
+    required List<RoundSegment> segments,
+    required String providerReasoning,
+    List<ContentBlock> existingBlocks = const [],
+  }) {
+    final blocks = <ContentBlock>[];
+    final reasoning = providerReasoning.trim();
+    if (reasoning.isNotEmpty) {
+      blocks.add(ContentBlock.reasoning(reasoning));
+    }
+
+    var pendingTools = <ToolCall>[];
+    void flushPendingTools() {
+      if (pendingTools.isEmpty) return;
+      blocks.add(ContentBlock.toolCalls(List<ToolCall>.from(pendingTools)));
+      pendingTools = <ToolCall>[];
+    }
+
+    for (final seg in segments) {
+      if (seg.isToolCall) {
+        pendingTools.add(seg.toolCall!);
+      } else {
+        flushPendingTools();
+        final text = seg.text!.trim();
+        if (text.isEmpty) continue;
+        if (_isDuplicateOfEarlierTextBlock(text, existingBlocks)) {
+          continue;
+        }
+        blocks.add(ContentBlock.text(text));
+      }
+    }
+    flushPendingTools();
+
+    final interimOutputText = segments
+        .where((s) => s.isText)
+        .map((s) => s.text!.trim())
+        .where((t) => t.isNotEmpty)
+        .join('\n\n');
+
+    if (blocks.isNotEmpty && _tailMatches(existingBlocks, blocks)) {
+      return RoundContentBlockResult(
+        blocks: const <ContentBlock>[],
+        interimOutputText: interimOutputText,
+      );
+    }
+
+    return RoundContentBlockResult(
+      blocks: blocks,
+      interimOutputText: interimOutputText,
+    );
+  }
 
   /// Build the content blocks for a single streaming round.
   ///

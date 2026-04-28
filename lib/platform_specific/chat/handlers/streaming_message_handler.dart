@@ -475,13 +475,43 @@ class StreamingMessageHandler {
                     : <ToolCall>[];
                 previousToolCallCount = allToolCalls.length;
 
-                final roundResult = RoundContentBlockService.buildRoundBlocks(
-                  interimText: interimText,
-                  providerReasoning: finalReasoning,
-                  newToolCalls: newToolCalls,
-                  interimBeforeToolCalls: loopResult.interimBeforeToolCalls,
-                  existingBlocks: contentBlocks,
-                );
+                // When the model emitted text BETWEEN tool calls in the
+                // same round, prefer the segmented builder so the UI can
+                // show "intro text → tool → result text → next tool" in
+                // the original order instead of bundling all tools at top.
+                // We still pass the same set of new tool calls to the
+                // legacy path as a fallback when no interleaving occurred.
+                final newSegments = loopResult.interleavedSegments
+                    .where(
+                      (s) =>
+                          s.isText ||
+                          (s.toolCall != null &&
+                              !contentBlocks.any(
+                                (block) =>
+                                    block.toolCalls?.any(
+                                      (tc) => tc.id == s.toolCall!.id,
+                                    ) ??
+                                    false,
+                              )),
+                    )
+                    .toList();
+                final useSegmented =
+                    newSegments.isNotEmpty &&
+                    newSegments.any((s) => s.isToolCall);
+                final roundResult = useSegmented
+                    ? RoundContentBlockService.buildSegmentedRoundBlocks(
+                        segments: newSegments,
+                        providerReasoning: finalReasoning,
+                        existingBlocks: contentBlocks,
+                      )
+                    : RoundContentBlockService.buildRoundBlocks(
+                        interimText: interimText,
+                        providerReasoning: finalReasoning,
+                        newToolCalls: newToolCalls,
+                        interimBeforeToolCalls:
+                            loopResult.interimBeforeToolCalls,
+                        existingBlocks: contentBlocks,
+                      );
                 final appendedBlocks = roundResult.blocks;
                 contentBlocks.addAll(appendedBlocks);
 
