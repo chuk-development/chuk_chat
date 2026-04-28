@@ -709,11 +709,11 @@ class _AccountRowState extends State<_AccountRow> {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             SizedBox(
-              width: 30,
-              height: 30,
+              width: 26,
+              height: 26,
               child: Icon(
                 Icons.account_circle_outlined,
-                size: 28,
+                size: 24,
                 color: cs.primary,
               ),
             ),
@@ -840,7 +840,7 @@ class _GroupedCard extends StatelessWidget {
       if (i > 0) {
         children.add(
           Padding(
-            padding: const EdgeInsets.only(left: 62, right: 16),
+            padding: const EdgeInsets.only(left: 58, right: 16),
             child: Divider(
               height: 1,
               thickness: 1,
@@ -894,9 +894,9 @@ class _SettingsRow extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             SizedBox(
-              width: 30,
-              height: 30,
-              child: Icon(icon, size: 28, color: iconColor),
+              width: 26,
+              height: 26,
+              child: Icon(icon, size: 24, color: iconColor),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -972,11 +972,11 @@ class _DevTile extends StatelessWidget {
             child: Row(
               children: [
                 SizedBox(
-                  width: 30,
-                  height: 30,
+                  width: 26,
+                  height: 26,
                   child: Icon(
                     Icons.developer_mode,
-                    size: 28,
+                    size: 24,
                     color: m3.onSurfaceVariant,
                   ),
                 ),
