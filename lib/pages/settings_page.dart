@@ -152,8 +152,7 @@ class _SettingsPageState extends State<SettingsPage> {
           _GroupedCard(
             rows: [
               _SettingsRow(
-                icon: Icons.psychology_alt,
-                iconAccent: true,
+                icon: Icons.smart_toy_outlined,
                 title: l.modelSelection,
                 subtitle: 'Claude Opus 4.7 · 1M context',
                 onTap: () {
@@ -166,8 +165,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 },
               ),
               _SettingsRow(
-                icon: Icons.psychology,
-                iconAccent: true,
+                icon: Icons.fingerprint,
                 title: l.aiIdentityMemory,
                 subtitle: l.aiIdentityMemorySubtitle,
                 onTap: () {
@@ -181,7 +179,6 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               _SettingsRow(
                 icon: Icons.build_circle_outlined,
-                iconAccent: true,
                 title: l.toolCalling,
                 subtitle: l.toolCallingSubtitle,
                 trailing: const _Badge('On', tone: BadgeTone.success),
@@ -676,7 +673,7 @@ class _AccountRowState extends State<_AccountRow> {
     }
   }
 
-  ({String displayName, String email, String initials}) _identity() {
+  ({String displayName, String email}) _identity() {
     User? user;
     try {
       user = Supabase.instance.client.auth.currentUser;
@@ -694,22 +691,7 @@ class _AccountRowState extends State<_AccountRow> {
     } else {
       displayName = 'User';
     }
-
-    String initials;
-    final parts = displayName
-        .split(RegExp(r'\s+'))
-        .where((p) => p.isNotEmpty)
-        .toList();
-    if (parts.isNotEmpty) {
-      final letters = parts.take(2).map((p) => p[0]).join();
-      initials = letters.toUpperCase();
-    } else if (email.isNotEmpty) {
-      initials = email[0].toUpperCase();
-    } else {
-      initials = 'U';
-    }
-    if (initials.isEmpty) initials = 'U';
-    return (displayName: displayName, email: email, initials: initials);
+    return (displayName: displayName, email: email);
   }
 
   @override
@@ -722,25 +704,17 @@ class _AccountRowState extends State<_AccountRow> {
     return InkWell(
       onTap: widget.onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Container(
-              width: 40,
-              height: 40,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: cs.primaryContainer,
-                shape: BoxShape.circle,
-              ),
-              child: Text(
-                id.initials,
-                style: TextStyle(
-                  color: cs.onPrimaryContainer,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: Icon(
+                Icons.person_outline,
+                size: 22,
+                color: cs.primary,
               ),
             ),
             const SizedBox(width: 16),
@@ -896,7 +870,6 @@ class _SettingsRow extends StatelessWidget {
   final String? subtitle;
   final Widget? trailing;
   final VoidCallback onTap;
-  final bool iconAccent;
 
   const _SettingsRow({
     required this.icon,
@@ -904,7 +877,6 @@ class _SettingsRow extends StatelessWidget {
     required this.onTap,
     this.subtitle,
     this.trailing,
-    this.iconAccent = false,
   });
 
   @override
@@ -912,7 +884,7 @@ class _SettingsRow extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final m3 = theme.m3;
-    final Color iconColor = iconAccent ? cs.primary : m3.onSurfaceVariant;
+    final Color iconColor = cs.primary;
 
     return InkWell(
       onTap: onTap,
