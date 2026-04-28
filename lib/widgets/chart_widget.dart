@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
@@ -86,6 +87,44 @@ class ChartRenderer extends StatelessWidget {
     );
   }
 
+  /// Pick a "nice" axis interval covering the given range with ~targetTicks
+  /// labels — avoids fl_chart drawing crowded labels like 14 / 14.5 next to
+  /// each other when the data range is small.
+  static double _niceInterval(double range, {int targetTicks = 5}) {
+    if (range <= 0 || !range.isFinite) return 1;
+    final raw = range / targetTicks;
+    final exponent = (math.log(raw) / math.ln10).floor();
+    final pow10 = math.pow(10, exponent).toDouble();
+    final mantissa = raw / pow10;
+    double nice;
+    if (mantissa < 1.5) {
+      nice = 1;
+    } else if (mantissa < 3) {
+      nice = 2;
+    } else if (mantissa < 7) {
+      nice = 5;
+    } else {
+      nice = 10;
+    }
+    return nice * pow10;
+  }
+
+  /// Largest numeric value across every dataset's `data` list.
+  /// Returns 0 if no datasets/values are present.
+  static double _maxYFromDatasets(List<dynamic> datasets) {
+    double m = 0;
+    for (final ds in datasets) {
+      if (ds is! Map) continue;
+      final values = ds['data'];
+      if (values is! List) continue;
+      for (final v in values) {
+        final d = v is num ? v.toDouble() : double.tryParse('$v');
+        if (d != null && d > m) m = d;
+      }
+    }
+    return m;
+  }
+
   /// Format axis values compactly: 1500 -> "1.5K", 2000000 -> "2M", etc.
   static String _formatAxisValue(double value) {
     if (value == 0) return '0';
@@ -129,6 +168,9 @@ class ChartRenderer extends StatelessWidget {
     final labels = (data['labels'] as List?)?.cast<String>() ?? [];
     final datasets = (data['datasets'] as List?) ?? [];
     final maxY = (data['max_y'] as num?)?.toDouble();
+    final double yInterval = _niceInterval(
+      (maxY ?? _maxYFromDatasets(datasets)).abs(),
+    );
 
     final groups = <BarChartGroupData>[];
     for (var i = 0; i < labels.length; i++) {
@@ -205,6 +247,7 @@ class ChartRenderer extends StatelessWidget {
           leftTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
+              interval: yInterval,
               reservedSize: 48,
               getTitlesWidget: (value, _) => Text(
                 _formatAxisValue(value),
@@ -245,6 +288,9 @@ class ChartRenderer extends StatelessWidget {
     final datasets = (data['datasets'] as List?) ?? [];
     final maxY = (data['max_y'] as num?)?.toDouble();
     final minY = (data['min_y'] as num?)?.toDouble();
+    final double yInterval = _niceInterval(
+      ((maxY ?? _maxYFromDatasets(datasets)) - (minY ?? 0)).abs(),
+    );
 
     int maxDataLen = 0;
     final lines = <LineChartBarData>[];
@@ -330,6 +376,7 @@ class ChartRenderer extends StatelessWidget {
           leftTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
+              interval: yInterval,
               reservedSize: 48,
               getTitlesWidget: (value, _) => Text(
                 _formatAxisValue(value),
