@@ -189,8 +189,12 @@ class StreamingManager {
       if (kDebugMode) {
         debugPrint('Stream ErrorEvent for chat $chatId: ${event.message}');
       }
-      onError(event.message);
+      // Mark the stream cleaned up BEFORE invoking onError. Otherwise the
+      // setState() inside onError rebuilds while isStreaming() still
+      // returns true, which leaves the UI stuck on the streaming spinner
+      // even after the error message is shown.
       _cleanupStream(chatId);
+      onError(event.message);
     } else if (event is DoneEvent) {
       if (kDebugMode) {
         debugPrint('Stream DoneEvent for chat $chatId');
