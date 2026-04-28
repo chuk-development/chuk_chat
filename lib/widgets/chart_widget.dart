@@ -167,10 +167,16 @@ class ChartRenderer extends StatelessWidget {
   Widget _buildBarChart(BuildContext context) {
     final labels = (data['labels'] as List?)?.cast<String>() ?? [];
     final datasets = (data['datasets'] as List?) ?? [];
-    final maxY = (data['max_y'] as num?)?.toDouble();
-    final double yInterval = _niceInterval(
-      (maxY ?? _maxYFromDatasets(datasets)).abs(),
-    );
+    final providedMaxY = (data['max_y'] as num?)?.toDouble();
+    final double dataMaxY = _maxYFromDatasets(datasets);
+    final double yInterval = _niceInterval((providedMaxY ?? dataMaxY).abs());
+    // Round up to a multiple of yInterval so fl_chart doesn't add a stray
+    // label one tick above the highest bar (e.g. "21" sitting on top of
+    // "20" when the data tops out at 20.7).
+    final double computedMaxY = providedMaxY ??
+        (yInterval > 0
+            ? ((dataMaxY / yInterval).ceilToDouble() * yInterval)
+            : dataMaxY);
 
     final groups = <BarChartGroupData>[];
     for (var i = 0; i < labels.length; i++) {
@@ -206,7 +212,7 @@ class ChartRenderer extends StatelessWidget {
 
     return BarChart(
       BarChartData(
-        maxY: maxY,
+        maxY: computedMaxY,
         barGroups: groups,
         gridData: const FlGridData(show: true, drawVerticalLine: false),
         borderData: FlBorderData(show: false),

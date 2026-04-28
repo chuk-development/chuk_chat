@@ -850,6 +850,17 @@ class _MessageBubbleState extends State<MessageBubble> {
         return;
       }
 
+      // Reasoning that arrives AFTER the last tool call belongs to the
+      // round that produced the upcoming text — not to the previous tool
+      // call's timeline. Pull those tail-only reasoning segments out so
+      // they render as their own reasoning card BELOW the tool-calls bar.
+      final tailReasonings = <String>[];
+      while (groupedSegments.isNotEmpty &&
+          groupedSegments.last.toolCalls.isEmpty) {
+        final r = groupedSegments.removeLast().reasoning.trim();
+        if (r.isNotEmpty) tailReasonings.insert(0, r);
+      }
+
       final mergedToolCalls = <ToolCall>[];
       final timeline = <_ToolTimelineEntry>[];
       final fallbackReasonings = <String>[];
@@ -873,6 +884,13 @@ class _MessageBubbleState extends State<MessageBubble> {
             mergedToolCalls.add(toolCall);
             timeline.add(_ToolTimelineEntry.tool(toolCall));
           }
+        }
+      }
+      if (!widget.showToolCalls) {
+        // When tool calls are hidden, treat tail reasoning as plain
+        // reasoning and render it after the existing fallback reasonings.
+        for (final r in tailReasonings) {
+          fallbackReasonings.add(r);
         }
       }
 
@@ -920,6 +938,14 @@ class _MessageBubbleState extends State<MessageBubble> {
       } else if (!widget.showToolCalls && fallbackReasonings.isNotEmpty) {
         for (final reasoning in fallbackReasonings) {
           children.add(_buildBlockReasoning(reasoning, accentColor));
+        }
+      }
+
+      // Render any tail reasoning that wasn't part of a tool-call round —
+      // it belongs to the next text answer, so it sits directly above it.
+      if (widget.showToolCalls) {
+        for (final r in tailReasonings) {
+          children.add(_buildBlockReasoning(r, accentColor));
         }
       }
 
