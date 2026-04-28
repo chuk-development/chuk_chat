@@ -370,8 +370,8 @@ class _MessageBubbleState extends State<MessageBubble> {
   static const double _mobileBottomBarHeight = 36.0;
 
   Widget _buildBottomBar(Color iconFgColor, bool hasActions) {
-    final bool hasSources =
-        widget.toolCalls != null && widget.toolCalls!.isNotEmpty;
+    final allToolCalls = _collectAllToolCalls();
+    final bool hasSources = allToolCalls.isNotEmpty;
 
     if (!hasSources && !hasActions) return const SizedBox.shrink();
 
@@ -380,9 +380,39 @@ class _MessageBubbleState extends State<MessageBubble> {
       children: [
         if (hasActions) _buildActionButtons(iconFgColor, false),
         const Spacer(),
-        if (hasSources) _buildSourcesBar(widget.toolCalls!),
+        if (hasSources) _buildSourcesBar(allToolCalls),
       ],
     );
+  }
+
+  /// Combine top-level tool calls with those nested in content blocks so the
+  /// sources bar still surfaces citations after a multi-round response is
+  /// finalized into blocks.
+  List<ToolCall> _collectAllToolCalls() {
+    final result = <ToolCall>[];
+    final seenIds = <String>{};
+    void add(ToolCall tc) {
+      if (seenIds.add(tc.id)) result.add(tc);
+    }
+
+    final top = widget.toolCalls;
+    if (top != null) {
+      for (final tc in top) {
+        add(tc);
+      }
+    }
+    final blocks = widget.contentBlocks;
+    if (blocks != null) {
+      for (final block in blocks) {
+        if (block.type == ContentBlockType.toolCalls &&
+            block.toolCalls != null) {
+          for (final tc in block.toolCalls!) {
+            add(tc);
+          }
+        }
+      }
+    }
+    return result;
   }
 
   Widget _buildUserActionButtons(Color iconFgColor) {
