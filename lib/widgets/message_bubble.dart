@@ -219,15 +219,15 @@ class MessageBubble extends StatefulWidget {
 }
 
 class _MessageBubbleState extends State<MessageBubble> {
-  /// Regex to find `<chart>`, `<map>`, `<email>`, and `<weather>` blocks.
+  /// Regex to find `<chart>`, `<map>`, `<email>`, `<weather>`, and `<news>` blocks.
   static final RegExp _richBlockRegex = RegExp(
-    r'<\s*(chart|map|email|weather)\s*>([\s\S]*?)<\s*/\s*\1\s*>',
+    r'<\s*(chart|map|email|weather|news)\s*>([\s\S]*?)<\s*/\s*\1\s*>',
     multiLine: true,
     caseSensitive: false,
   );
 
   static final RegExp _visualBlockStartRegex = RegExp(
-    r'<\s*(chart|map|email|weather)\b',
+    r'<\s*(chart|map|email|weather|news)\b',
     caseSensitive: false,
   );
 
@@ -1160,6 +1160,12 @@ class _MessageBubbleState extends State<MessageBubble> {
             throw const FormatException('Expected JSON object');
           }
           widgets.add(WeatherBlockWidget(data: parsed));
+        } else if (blockType == 'news') {
+          final parsed = _tryParseJson(blockJson);
+          if (parsed is! Map<String, dynamic>) {
+            throw const FormatException('Expected JSON object');
+          }
+          widgets.add(_buildNewsBlock(parsed));
         } else {
           final parsed = _tryParseJson(blockJson);
           if (parsed is! Map<String, dynamic>) {
@@ -1387,6 +1393,39 @@ class _MessageBubbleState extends State<MessageBubble> {
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
     }
+  }
+
+  /// Renders a `<news>` block as a list of news cards (thumbnail, title,
+  /// publisher · age, description, tap-to-open).
+  Widget _buildNewsBlock(Map<String, dynamic> data) {
+    final rawItems = data['items'];
+    final items = <Map<String, dynamic>>[];
+    if (rawItems is List) {
+      for (final entry in rawItems) {
+        if (entry is Map) {
+          items.add(Map<String, dynamic>.from(entry));
+        }
+      }
+    }
+    if (items.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final colorScheme = Theme.of(context).colorScheme;
+    final cards = <Widget>[];
+    for (int i = 0; i < items.length; i++) {
+      cards.add(_NewsCard(item: items[i], colorScheme: colorScheme));
+      if (i < items.length - 1) {
+        cards.add(const SizedBox(height: 10));
+      }
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: cards,
+      ),
+    );
   }
 
   /// Renders a text content block as a MarkdownMessage.
@@ -3316,5 +3355,195 @@ class _ArtifactErrorCard extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// News article card: thumbnail (left, 96x96), title, publisher · age, summary,
+/// tap anywhere → opens the article URL. Stretches to full bubble width.
+class _NewsCard extends StatelessWidget {
+  const _NewsCard({required this.item, required this.colorScheme});
+
+  final Map<String, dynamic> item;
+  final ColorScheme colorScheme;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = (item['title'] as String? ?? '').trim();
+    final publisher = (item['publisher'] as String? ?? '').trim();
+    final age = (item['age'] as String? ?? '').trim();
+    final summary = (item['summary'] as String? ?? item['description'] as String? ?? '').trim();
+    final url = (item['url'] as String? ?? '').trim();
+    final thumbnail = (item['thumbnail'] as String? ?? item['thumbnail_url'] as String? ?? '').trim();
+    final breaking = item['breaking'] == true;
+
+    final metaParts = <String>[
+      if (publisher.isNotEmpty) publisher,
+      if (age.isNotEmpty) age,
+    ];
+
+    final cardBg = Theme.of(context).brightness == Brightness.dark
+        ? colorScheme.surface.withValues(alpha: 0.6)
+        : colorScheme.surface;
+
+    return Material(
+      color: cardBg,
+      borderRadius: BorderRadius.circular(14),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: url.isEmpty ? null : () => _openUrl(context, url),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+              width: 1,
+            ),
+          ),
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (thumbnail.isNotEmpty) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.network(
+                    thumbnail,
+                    width: 96,
+                    height: 96,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      width: 96,
+                      height: 96,
+                      color: colorScheme.surfaceContainerHighest,
+                      child: Icon(
+                        Icons.broken_image_outlined,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    loadingBuilder: (ctx, child, progress) {
+                      if (progress == null) return child;
+                      return Container(
+                        width: 96,
+                        height: 96,
+                        color: colorScheme.surfaceContainerHighest,
+                        alignment: Alignment.center,
+                        child: const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+              ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (breaking)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colorScheme.error,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'BREAKING',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
+                            color: colorScheme.onError,
+                          ),
+                        ),
+                      ),
+                    Text(
+                      title.isEmpty ? '(untitled)' : title,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        height: 1.3,
+                        color: colorScheme.onSurface,
+                      ),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (metaParts.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        metaParts.join(' · '),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: colorScheme.primary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                    if (summary.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        summary,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          height: 1.35,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                    if (url.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.open_in_new,
+                            size: 12,
+                            color: colorScheme.onSurfaceVariant.withValues(
+                              alpha: 0.7,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              Uri.tryParse(url)?.host ?? url,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: colorScheme.onSurfaceVariant.withValues(
+                                  alpha: 0.7,
+                                ),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openUrl(BuildContext context, String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    if (!const {'http', 'https'}.contains(uri.scheme.toLowerCase())) return;
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 }
