@@ -1510,21 +1510,22 @@ class _MessageBubbleState extends State<MessageBubble> {
         : 'Model Info';
     final Color barAccent = accentColor;
 
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 6),
-      decoration: BoxDecoration(
-        color: barAccent.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: barAccent.withValues(alpha: 0.18)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header bar
-          InkWell(
-            onTap: () =>
-                setState(() => _isReasoningExpanded = !_isReasoningExpanded),
+    return SelectionContainer.disabled(
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 6),
+        decoration: BoxDecoration(
+          color: barAccent.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: barAccent.withValues(alpha: 0.18)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header bar
+            InkWell(
+              onTap: () =>
+                  setState(() => _isReasoningExpanded = !_isReasoningExpanded),
             borderRadius: BorderRadius.circular(10),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -1615,6 +1616,7 @@ class _MessageBubbleState extends State<MessageBubble> {
             ),
         ],
       ),
+      ),
     );
   }
 
@@ -1630,7 +1632,8 @@ class _MessageBubbleState extends State<MessageBubble> {
   }) {
     final bool cardExpanded = _expandedCards.contains(key);
 
-    return Container(
+    return SelectionContainer.disabled(
+      child: Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
@@ -1715,6 +1718,7 @@ class _MessageBubbleState extends State<MessageBubble> {
               ),
             ),
         ],
+      ),
       ),
     );
   }
@@ -1908,7 +1912,8 @@ class _MessageBubbleState extends State<MessageBubble> {
               ? Colors.orange
               : Colors.green);
 
-    return Container(
+    return SelectionContainer.disabled(
+      child: Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
@@ -2053,6 +2058,7 @@ class _MessageBubbleState extends State<MessageBubble> {
               ),
             ),
         ],
+      ),
       ),
     );
   }
