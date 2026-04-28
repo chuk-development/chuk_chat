@@ -682,21 +682,26 @@ class _ModelSelectionRowState extends State<ModelSelectionRow> {
       );
     }
 
+    final TextStyle? descStyle =
+        theme.textTheme.bodySmall?.copyWith(color: descColor, height: 1.4);
+
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SizedBox(
-          width: double.infinity,
-          child: Text(
+        if (_descriptionExpanded)
+          Text(
             description,
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: descColor, height: 1.4),
-            maxLines: _descriptionExpanded ? null : 1,
-            overflow: _descriptionExpanded
-                ? TextOverflow.visible
-                : TextOverflow.ellipsis,
+            key: const ValueKey('desc-expanded'),
+            style: descStyle,
+          )
+        else
+          Text(
+            description,
+            key: const ValueKey('desc-collapsed'),
+            style: descStyle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-        ),
         const SizedBox(height: 2),
         Align(
           alignment: Alignment.centerLeft,
