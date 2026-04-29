@@ -51,7 +51,7 @@
 We use only open-weight models — no black boxes and no silent data collection. You know exactly what runs your AI.
 
 - **Clear monthly pricing** — One fee covers platform access and AI credits. No hidden costs.
-- **Open-weight only** — DeepSeek, Llama, Mistral, Qwen, and more via [OpenRouter](https://openrouter.ai). No closed-source models.
+- **Open-weight only** — DeepSeek, Llama, Mistral, Qwen, and more via [OpenRouter](https://openrouter.ai). No closed-source models. Aggregate usage is publicly visible on the [OpenRouter app page](https://openrouter.ai/apps?url=https%3A%2F%2Fgithub.com%2Fchukfinley%2Fchuk_chat) — token totals and models, zero personal data.
 - **Privacy first** — Encrypted chats, no tracking, no profiling. Built like a tool, not a marketing funnel.
 - **Your data, your control** — We store nothing you don't want. Fully deletable. Fully controllable. Fully yours.
 
@@ -187,3 +187,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 - [Privacy Policy](https://chuk.chat/en/privacy)
 - [Status](https://status.chuk.chat)
 - [Blog](https://chuk.chat/en/blog)
+- [OpenRouter Usage Stats](https://openrouter.ai/apps?url=https%3A%2F%2Fgithub.com%2Fchukfinley%2Fchuk_chat) — Aggregate token usage and models used across all Chuk Chat users (no personal data)
