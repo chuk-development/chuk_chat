@@ -219,6 +219,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
       case ArtifactType.typst:
         return const [
           _DownloadFormat('PDF document', 'pdf'),
+          _DownloadFormat('Word document (.docx)', 'docx'),
           _DownloadFormat('Typst source', 'typ'),
         ];
       case ArtifactType.excalidraw:
@@ -266,6 +267,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
       case 'excalidraw':
         return Uint8List.fromList(utf8.encode(_effectiveContent));
       case 'pdf':
+      case 'docx':
         if (widget.artifact.type == ArtifactType.typst) {
           final baseUrl = ApiConfigService.apiBaseUrl;
           final token = SupabaseService.auth.currentSession?.accessToken;
@@ -276,6 +278,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
             serverHttpUrl: baseUrl,
             accessToken: token,
             source: _effectiveContent,
+            format: ext,
           );
         }
         return null;
