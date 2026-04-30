@@ -3207,21 +3207,27 @@ class _ArtifactInlineCard extends StatelessWidget {
     // multiple cards for the same artifact (e.g. create + rewrite) and expect
     // each click to refocus that artifact at the version captured in this
     // chat bubble.
+    //
+    // loadArtifactById hits Supabase directly and does not depend on
+    // ArtifactStorageService.activeChatId. The deferred setActiveChat() call
+    // in RootWrapperDesktop runs ~2s after launch, so guarding on activeChatId
+    // here would silently no-op for any tap that lands during that window —
+    // exactly the "first start, artifact card does nothing" symptom.
     try {
+      ArtifactDocument? match = await ArtifactStorageService.loadArtifactById(
+        artifactId,
+      );
       final chatId = ArtifactStorageService.activeChatId;
-      if (chatId != null && chatId.isNotEmpty) {
-        ArtifactDocument? match = await ArtifactStorageService.loadArtifactById(
-          artifactId,
-        );
-        match ??= (await ArtifactStorageService.loadArtifactsForChat(chatId))
+      if (match == null && chatId != null && chatId.isNotEmpty) {
+        match = (await ArtifactStorageService.loadArtifactsForChat(chatId))
             .where((a) => a.id == artifactId)
             .firstOrNull;
+      }
 
-        if (match != null) {
-          final current = ArtifactStorageService.activeArtifactNotifier.value;
-          if (!identical(current, match)) {
-            ArtifactStorageService.activeArtifactNotifier.value = match;
-          }
+      if (match != null) {
+        final current = ArtifactStorageService.activeArtifactNotifier.value;
+        if (!identical(current, match)) {
+          ArtifactStorageService.activeArtifactNotifier.value = match;
         }
       }
     } catch (_) {
