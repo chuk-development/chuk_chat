@@ -44,6 +44,8 @@ dependencies:
   image: ^4.3.0
   pdfx: ^2.8.0  # PDF viewing (mobile/macOS — used by workspace viewer)
   pdfrx: ^1.3.0  # Cross-platform PDF viewing incl. Linux/Windows (PDFium)
+  pdf: ^3.11.0  # PDF generation (export markdown responses)
+  printing: ^5.13.0  # Cross-platform PDF share/print/save
   flutter_foreground_task: ^9.2.1  # Keep streaming alive when app backgrounded
   flutter_local_notifications: ^21.0.0  # Completion notifications with deep linking
   pasteboard: ^0.5.0

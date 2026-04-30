@@ -12,6 +12,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   pasteboard
   pdfx
   permission_handler_windows
+  printing
   record_windows
   screen_retriever_windows
   share_plus
