@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'package:chuk_chat/services/pdf_export_service.dart';
 import 'package:chuk_chat/utils/clipboard_text_sanitizer.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 
@@ -100,6 +101,18 @@ class MessageActionsHandler {
       );
     }
 
+    // PDF export — only on finalized AI messages with actual text
+    if (!isAssistantPending && messageText.trim().isNotEmpty) {
+      actions.add(
+        MessageBubbleAction(
+          icon: Icons.picture_as_pdf_outlined,
+          tooltip: 'Save as PDF',
+          label: 'PDF',
+          onPressed: () => exportAsPdf(messageText),
+        ),
+      );
+    }
+
     // Retry action — always available on finalized AI messages
     if (!isAssistantPending) {
       actions.add(
@@ -113,6 +126,21 @@ class MessageActionsHandler {
     }
 
     return actions;
+  }
+
+  /// Export the given assistant text as a PDF and trigger the share/save flow.
+  Future<void> exportAsPdf(String messageText, {String? title}) async {
+    if (messageText.trim().isEmpty) {
+      onShowSnackBar?.call('Nothing to export');
+      return;
+    }
+    final bool ok = await PdfExportService.exportMarkdownAndShare(
+      messageText,
+      title: title,
+    );
+    if (!ok) {
+      onShowSnackBar?.call('PDF export failed');
+    }
   }
 
   /// Build actions for user messages (shown in long-press popup).
