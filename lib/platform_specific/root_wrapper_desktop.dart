@@ -14,6 +14,7 @@ import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/chat_sync_service.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_desktop.dart';
 import 'package:chuk_chat/platform_specific/sidebar_desktop.dart';
+import 'package:chuk_chat/pages/workspace_detail_page.dart';
 import 'package:chuk_chat/pages/workspaces_page.dart';
 import 'package:chuk_chat/pages/media_manager_page.dart';
 import 'package:chuk_chat/pages/settings_page.dart';
@@ -165,9 +166,29 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   }
 
   void _openWorkspace(String workspaceId) {
+    // Open the workspace edit/settings page first; from there the user
+    // can launch a new chat via the FAB. Previous behaviour skipped the
+    // detail view and jumped straight into a fresh chat.
+    setState(() {
+      _activePanel = null; // Close workspace list/panel
+    });
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => WorkspaceDetailPage(
+          workspaceId: workspaceId,
+          onStartNewChat: (id) {
+            Navigator.of(context).pop();
+            _startWorkspaceChat(id ?? workspaceId);
+          },
+        ),
+      ),
+    );
+  }
+
+  void _startWorkspaceChat(String workspaceId) {
     setState(() {
       _activeProjectId = workspaceId;
-      _activePanel = null; // Close workspace list, detail shown by chat UI
+      _activePanel = null;
       _chatUIKey.currentState?.newChat();
     });
     if (kFeatureArtifacts) {

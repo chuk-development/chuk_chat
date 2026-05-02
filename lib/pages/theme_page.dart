@@ -27,32 +27,71 @@ class _ThemePageState extends State<ThemePage> {
   final TextEditingController _iconFgHexController = TextEditingController();
   final TextEditingController _bgHexController = TextEditingController();
 
-  // Preset swatches preserved byte-for-byte from the prior version.
-  final List<Color> _accentColorOptions = [
+  // Curated swatch palettes. Order: brand default first, then a balanced
+  // spread across hues plus neutrals (incl. black & white) so users can
+  // dial in either vivid accents or pure-mono themes.
+  final List<Color> _accentColorOptions = const [
     kDefaultAccentColor,
-    Colors.deepPurple,
-    Colors.teal,
-    Colors.blue,
-    Colors.orange,
+    Color(0xFF8AB4F8), // soft blue
+    Color(0xFF7C4DFF), // deep purple A
+    Color(0xFFB388FF), // soft violet
+    Color(0xFFEA80FC), // pink violet
+    Color(0xFFFF80AB), // pink
+    Color(0xFFFF5252), // red
+    Color(0xFFFF7043), // deep orange
+    Color(0xFFFFB300), // amber
+    Color(0xFFFFD54F), // yellow
+    Color(0xFFAEEA00), // lime
+    Color(0xFF00E676), // green
+    Color(0xFF26A69A), // teal
+    Color(0xFF26C6DA), // cyan
+    Color(0xFF8D6E63), // brown
+    Color(0xFFBDBDBD), // light grey
+    Color(0xFF424242), // dark grey
+    Color(0xFF000000), // black
+    Color(0xFFFFFFFF), // white
   ];
 
-  final List<Color> _iconFgColorOptions = [
+  // Foreground/icon palette includes pure black + white so users can pick
+  // a high-contrast text colour against any background.
+  final List<Color> _iconFgColorOptions = const [
     kDefaultIconFgColor,
-    Colors.lightGreen,
-    Colors.cyan,
-    Colors.pinkAccent,
-    Colors.amber,
+    Color(0xFFFFFFFF), // white
+    Color(0xFF000000), // black
+    Color(0xFFE0E0E0), // light grey
+    Color(0xFF9E9E9E), // mid grey
+    Color(0xFF424242), // dark grey
+    Color(0xFFCFD8DC), // blue grey 100
+    Color(0xFF90A4AE), // blue grey 300
+    Color(0xFFFFE082), // amber 200
+    Color(0xFFFFAB91), // orange 200
+    Color(0xFFF48FB1), // pink 200
+    Color(0xFFCE93D8), // purple 200
+    Color(0xFF9FA8DA), // indigo 200
+    Color(0xFF80DEEA), // cyan 200
+    Color(0xFFA5D6A7), // green 200
+    Color(0xFFC5E1A5), // light green 200
+    Color(0xFFEEEBE3), // warm beige
   ];
 
   final List<Color> _bgColorOptions = [
     kDefaultBgColor,
     kDefaultBgColor.lighten(0.8),
-    Colors.black87,
-    Colors.blueGrey,
-    Colors.deepPurple,
-    Colors.white,
-    Colors.grey,
-    Colors.blue.shade50,
+    const Color(0xFF000000), // pure black
+    const Color(0xFFFFFFFF), // pure white
+    const Color(0xFF111318), // near-black
+    const Color(0xFF1B1B1F), // charcoal
+    const Color(0xFF202124), // graphite
+    const Color(0xFF263238), // blue grey 900
+    const Color(0xFF1A237E), // indigo 900
+    const Color(0xFF311B92), // deep purple 900
+    const Color(0xFF004D40), // teal 900
+    const Color(0xFF3E2723), // brown 900
+    const Color(0xFFF5F5F5), // off-white
+    const Color(0xFFFAFAFA), // grey 50
+    const Color(0xFFEEEBE3), // warm beige
+    const Color(0xFFE3F2FD), // blue 50
+    const Color(0xFFFFF3E0), // orange 50
   ];
 
   @override
@@ -426,8 +465,249 @@ class _ColorCard extends StatelessWidget {
               FilteringTextInputFormatter.allow(RegExp(r'^[#0-9a-fA-F]+$')),
             ],
           ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () async {
+                final picked = await showDialog<Color>(
+                  context: context,
+                  builder: (_) => _ColorPickerDialog(initial: currentColor),
+                );
+                if (picked != null) {
+                  onColorSelected(picked);
+                }
+              },
+              icon: const Icon(Icons.palette_outlined, size: 18),
+              label: Text(AppLocalizations.of(context)!.pickCustomColor),
+            ),
+          ),
         ],
       ),
+    );
+  }
+}
+
+// HSV-based custom color picker. Built in-tree to avoid a new dependency.
+class _ColorPickerDialog extends StatefulWidget {
+  final Color initial;
+  const _ColorPickerDialog({required this.initial});
+
+  @override
+  State<_ColorPickerDialog> createState() => _ColorPickerDialogState();
+}
+
+class _ColorPickerDialogState extends State<_ColorPickerDialog> {
+  late HSVColor _hsv;
+  late TextEditingController _hexController;
+
+  @override
+  void initState() {
+    super.initState();
+    _hsv = HSVColor.fromColor(widget.initial);
+    _hexController = TextEditingController(text: widget.initial.toHexString());
+  }
+
+  @override
+  void dispose() {
+    _hexController.dispose();
+    super.dispose();
+  }
+
+  void _setHsv(HSVColor v) {
+    setState(() {
+      _hsv = v;
+      _hexController.text = v.toColor().toHexString();
+    });
+  }
+
+  void _onHexSubmit(String hex) {
+    try {
+      final c = ColorExtension.fromHexString(hex);
+      setState(() {
+        _hsv = HSVColor.fromColor(c);
+        _hexController.text = c.toHexString();
+      });
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final m3 = theme.m3;
+    final l = AppLocalizations.of(context)!;
+    final color = _hsv.toColor();
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      backgroundColor: m3.surfaceContainerHigh,
+      title: Text(l.pickAColor),
+      content: SizedBox(
+        width: 320,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Live preview swatch.
+            Container(
+              height: 64,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: m3.outlineVariant),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              l.hue,
+              style: TextStyle(fontSize: 12, color: m3.onSurfaceVariant),
+            ),
+            const SizedBox(height: 6),
+            _GradientSlider(
+              colors: const [
+                Color(0xFFFF0000),
+                Color(0xFFFFFF00),
+                Color(0xFF00FF00),
+                Color(0xFF00FFFF),
+                Color(0xFF0000FF),
+                Color(0xFFFF00FF),
+                Color(0xFFFF0000),
+              ],
+              value: _hsv.hue / 360.0,
+              onChanged: (v) =>
+                  _setHsv(_hsv.withHue((v * 360.0).clamp(0.0, 360.0))),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              l.saturation,
+              style: TextStyle(fontSize: 12, color: m3.onSurfaceVariant),
+            ),
+            const SizedBox(height: 6),
+            _GradientSlider(
+              colors: [
+                HSVColor.fromAHSV(1, _hsv.hue, 0, _hsv.value).toColor(),
+                HSVColor.fromAHSV(1, _hsv.hue, 1, _hsv.value).toColor(),
+              ],
+              value: _hsv.saturation,
+              onChanged: (v) => _setHsv(_hsv.withSaturation(v)),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              l.brightness,
+              style: TextStyle(fontSize: 12, color: m3.onSurfaceVariant),
+            ),
+            const SizedBox(height: 6),
+            _GradientSlider(
+              colors: [
+                Colors.black,
+                HSVColor.fromAHSV(1, _hsv.hue, _hsv.saturation, 1).toColor(),
+              ],
+              value: _hsv.value,
+              onChanged: (v) => _setHsv(_hsv.withValue(v)),
+            ),
+            const SizedBox(height: 18),
+            TextFormField(
+              controller: _hexController,
+              decoration: InputDecoration(
+                prefixIcon:
+                    Icon(Icons.tag, color: m3.onSurfaceVariant, size: 18),
+                hintText: '#RRGGBB',
+                isDense: true,
+              ),
+              onFieldSubmitted: _onHexSubmit,
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'^[#0-9a-fA-F]+$')),
+              ],
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(l.cancel),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: cs.primary),
+          onPressed: () => Navigator.pop(context, color),
+          child: Text(l.useColor),
+        ),
+      ],
+    );
+  }
+}
+
+class _GradientSlider extends StatelessWidget {
+  final List<Color> colors;
+  final double value;
+  final ValueChanged<double> onChanged;
+
+  const _GradientSlider({
+    required this.colors,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const trackHeight = 18.0;
+    const thumbDiameter = 22.0;
+    return SizedBox(
+      height: thumbDiameter + 4,
+      child: LayoutBuilder(builder: (context, c) {
+        final w = c.maxWidth;
+        void update(double dx) {
+          final v = (dx / w).clamp(0.0, 1.0);
+          onChanged(v);
+        }
+
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (d) => update(d.localPosition.dx),
+          onPanStart: (d) => update(d.localPosition.dx),
+          onPanUpdate: (d) => update(d.localPosition.dx),
+          child: Stack(
+            alignment: Alignment.centerLeft,
+            children: [
+              Container(
+                height: trackHeight,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: colors),
+                  borderRadius: BorderRadius.circular(trackHeight / 2),
+                  border: Border.all(
+                    color: Colors.black.withValues(alpha: 0.08),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: ((w - thumbDiameter) * value).clamp(
+                  0.0,
+                  (w - thumbDiameter).clamp(0.0, double.infinity),
+                ),
+                child: Container(
+                  width: thumbDiameter,
+                  height: thumbDiameter,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.black.withValues(alpha: 0.35),
+                      width: 2,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.18),
+                        blurRadius: 4,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      }),
     );
   }
 }

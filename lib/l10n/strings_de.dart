@@ -121,6 +121,17 @@ const Map<String, String> stringsDe = {
   'filmGrainEffect': 'Filmkorn-Effekt',
   'filmGrainSubtitle': 'Subtile Filmkorn-Textur hinzufügen',
   'customHexColor': 'Benutzerdefinierte Hex-Farbe (#RRGGBB)',
+  'pickCustomColor': 'Eigene Farbe wählen',
+  'pickAColor': 'Farbe auswählen',
+  'hue': 'Farbton',
+  'saturation': 'Sättigung',
+  'brightness': 'Helligkeit',
+  'useColor': 'Farbe verwenden',
+  'searchWorkspacesHint': 'Arbeitsbereiche suchen...',
+  'newWorkspace': 'Neuer Arbeitsbereich',
+  'editedAt': 'Bearbeitet {date}',
+  'aiDisclaimer': 'KI/LLMs können Fehler machen — wichtige Infos bitte prüfen.',
+  'archive': 'Archivieren',
 
   // ── Tool calling page ──────────────────────────────────────
   'engine': 'Engine',
