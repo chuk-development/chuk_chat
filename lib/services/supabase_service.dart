@@ -86,9 +86,14 @@ class SupabaseService {
     if (_inFlightRefresh != null) {
       return await _inFlightRefresh!;
     }
-    if (_lastRefreshTime != null &&
+    final Session? current = auth.currentSession;
+    // If the cached session is already expired, bypass the throttle — we MUST
+    // refresh, otherwise callers receive an expired token and hit 401s.
+    final bool sessionExpired = current != null && current.isExpired;
+    if (!sessionExpired &&
+        _lastRefreshTime != null &&
         now.difference(_lastRefreshTime!) < _kMinRefreshInterval) {
-      return auth.currentSession;
+      return current;
     }
 
     Future<Session?> performRefresh() async {

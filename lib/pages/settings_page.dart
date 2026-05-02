@@ -617,7 +617,9 @@ class _AccountRowState extends State<_AccountRow> {
     try {
       String? token;
       try {
-        token = SupabaseService.client.auth.currentSession?.accessToken;
+        final session = await SupabaseService.refreshSession() ??
+            SupabaseService.auth.currentSession;
+        token = session?.accessToken;
       } catch (_) {
         token = null;
       }
