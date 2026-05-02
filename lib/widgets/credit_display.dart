@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:flutter/foundation.dart';
 
@@ -198,7 +199,8 @@ mixin _CreditListenerMixin<T extends StatefulWidget> on State<T> {
 
     final sw = Stopwatch()..start();
     try {
-      final session = _supabase.auth.currentSession;
+      final session = await SupabaseService.refreshSession() ??
+          _supabase.auth.currentSession;
       if (session == null) {
         if (!mounted) return;
         setState(() {
@@ -758,7 +760,8 @@ class _BalanceBadgeState extends State<BalanceBadge> {
 
     final sw = Stopwatch()..start();
     try {
-      final session = _supabase.auth.currentSession;
+      final session = await SupabaseService.refreshSession() ??
+          _supabase.auth.currentSession;
       if (session == null) {
         if (mounted) setState(() => _loading = false);
         return;

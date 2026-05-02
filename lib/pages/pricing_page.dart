@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/pages/usage_details_page.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/credit_display.dart';
 import 'package:flutter/gestures.dart';
@@ -33,7 +34,8 @@ Future<void> _launchExternalUrl(String url) async {
 }
 
 Future<String> _getAccessToken() async {
-  final session = _supabase.auth.currentSession;
+  final session = await SupabaseService.refreshSession() ??
+      _supabase.auth.currentSession;
   if (session == null) {
     throw Exception('Not authenticated');
   }
