@@ -111,6 +111,14 @@ class MessageActionsHandler {
           onPressed: () => exportAsPdf(messageText),
         ),
       );
+      actions.add(
+        MessageBubbleAction(
+          icon: Icons.print_outlined,
+          tooltip: 'Print',
+          label: 'Print',
+          onPressed: () => printMessage(messageText),
+        ),
+      );
     }
 
     // Retry action — always available on finalized AI messages
@@ -140,6 +148,21 @@ class MessageActionsHandler {
     );
     if (!ok) {
       onShowSnackBar?.call('PDF export failed');
+    }
+  }
+
+  /// Open the native print dialog for the given assistant text.
+  Future<void> printMessage(String messageText, {String? title}) async {
+    if (messageText.trim().isEmpty) {
+      onShowSnackBar?.call('Nothing to print');
+      return;
+    }
+    final bool ok = await PdfExportService.printMarkdown(
+      messageText,
+      title: title,
+    );
+    if (!ok) {
+      onShowSnackBar?.call('Print failed');
     }
   }
 
