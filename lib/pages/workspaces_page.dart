@@ -203,54 +203,33 @@ class _WorkspacesPageState extends State<WorkspacesPage> {
 
   @override
   Widget build(BuildContext context) {
-    final iconFg = Theme.of(context).resolvedIconColor;
+    final theme = Theme.of(context);
+    final iconFg = theme.resolvedIconColor;
     final isMobile = MediaQuery.of(context).size.width < 800;
+    final l = AppLocalizations.of(context)!;
 
     final body = Column(
       children: [
-        // Header row: search + sort + create
+        // Big serif headline — matches the "Projekte" look from the
+        // reference screenshot.
         Padding(
-          padding: EdgeInsets.fromLTRB(16, widget.embedded ? 12 : 16, 16, 8),
+          padding: EdgeInsets.fromLTRB(20, widget.embedded ? 8 : 12, 20, 12),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Search field
               Expanded(
-                child: SizedBox(
-                  height: 42,
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Search workspaces...',
-                      prefixIcon: Icon(Icons.search, color: iconFg, size: 20),
-                      suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
-                              icon: Icon(Icons.clear, color: iconFg, size: 18),
-                              onPressed: () => _searchController.clear(),
-                            )
-                          : null,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: iconFg.withValues(alpha: 0.2),
-                        ),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: iconFg.withValues(alpha: 0.15),
-                        ),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                      ),
-                      isDense: true,
-                    ),
-                    style: const TextStyle(fontSize: 14),
+                child: Text(
+                  l.workspaces,
+                  style: TextStyle(
+                    fontSize: 34,
+                    height: 1.05,
+                    fontWeight: FontWeight.w600,
+                    fontFamily: 'serif',
+                    color: iconFg,
+                    letterSpacing: -0.5,
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              // Sort button
               _SortButton(
                 sortMode: _sortMode,
                 onChanged: (mode) {
@@ -260,56 +239,56 @@ class _WorkspacesPageState extends State<WorkspacesPage> {
                   });
                 },
               ),
-              const SizedBox(width: 8),
-              // Create button
-              SizedBox(
-                height: 42,
-                child: FilledButton.icon(
-                  onPressed: _createProject,
-                  icon: const Icon(Icons.add, size: 18),
-                  label: isMobile || widget.embedded
-                      ? const SizedBox.shrink()
-                      : const Text('New Workspace'),
-                  style: FilledButton.styleFrom(
-                    padding: isMobile || widget.embedded
-                        ? const EdgeInsets.symmetric(horizontal: 12)
-                        : const EdgeInsets.symmetric(horizontal: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
+              IconButton(
+                tooltip: l.newWorkspace,
+                onPressed: _createProject,
+                icon: Icon(Icons.add, color: iconFg),
               ),
             ],
           ),
         ),
 
-        // Stats bar
-        if (!_isLoading && _filteredProjects.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                Text(
-                  '${_filteredProjects.length} workspace${_filteredProjects.length == 1 ? '' : 's'}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: iconFg.withValues(alpha: 0.5),
+        // Search field (rounded outline, matches reference).
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+          child: SizedBox(
+            height: 48,
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: l.searchWorkspacesHint,
+                prefixIcon: Icon(Icons.search, color: iconFg, size: 22),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: Icon(Icons.clear, color: iconFg, size: 18),
+                        onPressed: () => _searchController.clear(),
+                      )
+                    : null,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(28),
+                  borderSide: BorderSide(
+                    color: iconFg.withValues(alpha: 0.25),
                   ),
                 ),
-                const Spacer(),
-                Text(
-                  _sortModeLabel(_sortMode),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: iconFg.withValues(alpha: 0.4),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(28),
+                  borderSide: BorderSide(
+                    color: iconFg.withValues(alpha: 0.18),
                   ),
                 ),
-              ],
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(28),
+                  borderSide: BorderSide(
+                    color: iconFg.withValues(alpha: 0.35),
+                  ),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                isDense: true,
+              ),
+              style: const TextStyle(fontSize: 15),
             ),
           ),
-
-        const SizedBox(height: 8),
+        ),
 
         // Workspace list/grid
         Expanded(
@@ -330,13 +309,15 @@ class _WorkspacesPageState extends State<WorkspacesPage> {
     // In embedded mode, just return the body without Scaffold
     if (widget.embedded) return body;
 
-    // Mobile: AppBar with back button (pushed via Navigator)
-    // Desktop: plain Scaffold (sidebar handles navigation)
+    // Mobile: thin AppBar with back button only (the serif title lives
+    // inside the body to match the reference layout).
+    // Desktop: plain Scaffold (sidebar handles navigation).
     if (isMobile) {
-      final l = AppLocalizations.of(context)!;
       return Scaffold(
         appBar: AppBar(
-          title: Text(l.workspaces),
+          backgroundColor: theme.scaffoldBackgroundColor,
+          elevation: 0,
+          scrolledUnderElevation: 0,
           leading: IconButton(
             icon: Icon(Icons.arrow_back, color: iconFg),
             onPressed: () => Navigator.pop(context),
@@ -442,34 +423,16 @@ class _WorkspacesPageState extends State<WorkspacesPage> {
     );
   }
 
-  Widget _buildDesktopGrid() {
-    return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 360,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        childAspectRatio: 1.45,
-      ),
-      itemCount: _filteredProjects.length,
-      itemBuilder: (context, index) {
-        return _ProjectCard(
-          workspace: _filteredProjects[index],
-          onTap: () => _openProjectDetail(_filteredProjects[index]),
-          onDelete: () => _deleteProject(_filteredProjects[index]),
-          onArchive: () => _archiveProject(_filteredProjects[index]),
-        );
-      },
-    );
-  }
+  Widget _buildDesktopGrid() => _buildFlatList(horizontalPadding: 12);
 
-  Widget _buildMobileList() {
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+  Widget _buildMobileList() => _buildFlatList(horizontalPadding: 12);
+
+  Widget _buildFlatList({required double horizontalPadding}) {
+    return ListView.builder(
+      padding: EdgeInsets.fromLTRB(horizontalPadding, 0, horizontalPadding, 24),
       itemCount: _filteredProjects.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
-        return _ProjectCard(
+        return _ProjectRow(
           workspace: _filteredProjects[index],
           onTap: () => _openProjectDetail(_filteredProjects[index]),
           onDelete: () => _deleteProject(_filteredProjects[index]),
@@ -492,18 +455,6 @@ class _WorkspacesPageState extends State<WorkspacesPage> {
     }
   }
 
-  String _sortModeLabel(ProjectSortMode mode) {
-    switch (mode) {
-      case ProjectSortMode.recentlyUpdated:
-        return 'Recently updated';
-      case ProjectSortMode.name:
-        return 'By name';
-      case ProjectSortMode.mostFiles:
-        return 'Most files';
-      case ProjectSortMode.mostChats:
-        return 'Most chats';
-    }
-  }
 }
 
 // ---------- Sort Button ----------
@@ -563,251 +514,108 @@ class _SortButton extends StatelessWidget {
   }
 }
 
-// ---------- Workspace Card ----------
-
-class _ProjectCard extends StatelessWidget {
+// ---------- Workspace Row ----------
+//
+// Flat list row that mirrors the reference design: workspace name as a
+// large heading and a single muted "Edited <date>" subtitle. Long-press
+// (or hover-then-tap on the trailing more icon) opens archive/delete.
+class _ProjectRow extends StatelessWidget {
   final Workspace workspace;
   final VoidCallback onTap;
   final VoidCallback onDelete;
   final VoidCallback onArchive;
 
-  const _ProjectCard({
+  const _ProjectRow({
     required this.workspace,
     required this.onTap,
     required this.onDelete,
     required this.onArchive,
   });
 
+  Future<void> _showRowMenu(BuildContext context, Offset globalPos) async {
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final l = AppLocalizations.of(context)!;
+    final selected = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        globalPos.dx,
+        globalPos.dy,
+        overlay.size.width - globalPos.dx,
+        overlay.size.height - globalPos.dy,
+      ),
+      items: [
+        PopupMenuItem(
+          value: 'archive',
+          child: Row(
+            children: [
+              const Icon(Icons.archive_outlined, size: 18),
+              const SizedBox(width: 10),
+              Text(l.archive),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'delete',
+          child: Row(
+            children: [
+              const Icon(Icons.delete_outline, color: Colors.red, size: 18),
+              const SizedBox(width: 10),
+              Text(l.delete, style: const TextStyle(color: Colors.red)),
+            ],
+          ),
+        ),
+      ],
+    );
+    if (selected == 'archive') onArchive();
+    if (selected == 'delete') onDelete();
+  }
+
+  String _editedLabel(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
+    final dateText =
+        MaterialLocalizations.of(context).formatShortDate(workspace.updatedAt);
+    return l.editedAt(dateText);
+  }
+
   @override
   Widget build(BuildContext context) {
     final iconFg = Theme.of(context).resolvedIconColor;
-    final displayColor = workspace.displayColor;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: iconFg.withValues(alpha: 0.1)),
-      ),
-      clipBehavior: Clip.antiAlias,
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onLongPressStart: (d) => _showRowMenu(context, d.globalPosition),
+      onSecondaryTapDown: (d) => _showRowMenu(context, d.globalPosition),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Content
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Title row with avatar and menu
-                    Row(
-                      children: [
-                        // Workspace avatar
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: displayColor.withValues(
-                              alpha: isDark ? 0.2 : 0.12,
-                            ),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(
-                            workspace.displayIcon,
-                            color: displayColor,
-                            size: 20,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                workspace.name,
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                  height: 1.2,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                workspace.updatedAgo,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: iconFg.withValues(alpha: 0.45),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        // Menu
-                        PopupMenuButton<String>(
-                          icon: Icon(
-                            Icons.more_horiz,
-                            color: iconFg.withValues(alpha: 0.5),
-                            size: 20,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(
-                            minWidth: 28,
-                            minHeight: 28,
-                          ),
-                          onSelected: (value) {
-                            if (value == 'delete') onDelete();
-                            if (value == 'archive') onArchive();
-                          },
-                          itemBuilder: (context) => [
-                            const PopupMenuItem(
-                              value: 'archive',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.archive_outlined, size: 18),
-                                  SizedBox(width: 10),
-                                  Text('Archive'),
-                                ],
-                              ),
-                            ),
-                            PopupMenuItem(
-                              value: 'delete',
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.delete_outline,
-                                    color: Colors.red,
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: 10),
-                                  const Text(
-                                    'Delete',
-                                    style: TextStyle(color: Colors.red),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    // Description
-                    if (workspace.description != null &&
-                        workspace.description!.isNotEmpty)
-                      Expanded(
-                        child: Text(
-                          workspace.description!,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: iconFg.withValues(alpha: 0.6),
-                            height: 1.4,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      )
-                    else
-                      const Spacer(),
-
-                    // Bottom stats row
-                    Row(
-                      children: [
-                        _StatChip(
-                          icon: Icons.chat_bubble_outline,
-                          label: '${workspace.chatCount}',
-                          color: iconFg,
-                        ),
-                        const SizedBox(width: 12),
-                        _StatChip(
-                          icon: Icons.description_outlined,
-                          label: '${workspace.fileCount}',
-                          color: iconFg,
-                        ),
-                        if (workspace.totalFileSize > 0) ...[
-                          const SizedBox(width: 12),
-                          _StatChip(
-                            icon: Icons.storage_outlined,
-                            label: workspace.totalFileSizeFormatted,
-                            color: iconFg,
-                          ),
-                        ],
-                        const Spacer(),
-                        if (workspace.hasCustomPrompt)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: displayColor.withValues(
-                                alpha: isDark ? 0.15 : 0.1,
-                              ),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.tune, size: 12, color: displayColor),
-                                const SizedBox(width: 3),
-                                Text(
-                                  'Custom',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: displayColor,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ),
-                  ],
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                workspace.name,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  height: 1.2,
+                  color: iconFg,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _editedLabel(context),
+                style: TextStyle(
+                  fontSize: 13,
+                  color: iconFg.withValues(alpha: 0.55),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    );
-  }
-}
-
-class _StatChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-
-  const _StatChip({
-    required this.icon,
-    required this.label,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 14, color: color.withValues(alpha: 0.45)),
-        const SizedBox(width: 3),
-        Text(
-          label,
-          style: TextStyle(fontSize: 12, color: color.withValues(alpha: 0.5)),
-        ),
-      ],
     );
   }
 }

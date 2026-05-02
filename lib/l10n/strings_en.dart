@@ -117,6 +117,17 @@ const Map<String, String> stringsEn = {
   'filmGrainEffect': 'Film Grain Effect',
   'filmGrainSubtitle': 'Add a subtle shot-on-film texture',
   'customHexColor': 'Custom Hex Color (#RRGGBB)',
+  'pickCustomColor': 'Pick custom color',
+  'pickAColor': 'Pick a color',
+  'hue': 'Hue',
+  'saturation': 'Saturation',
+  'brightness': 'Brightness',
+  'useColor': 'Use color',
+  'searchWorkspacesHint': 'Search workspaces...',
+  'newWorkspace': 'New Workspace',
+  'editedAt': 'Edited {date}',
+  'aiDisclaimer': 'AI/LLMs can make mistakes — double-check important info.',
+  'archive': 'Archive',
 
   // ── Tool calling page ──────────────────────────────────────
   'engine': 'Engine',

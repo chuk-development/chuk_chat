@@ -6,10 +6,10 @@ import 'dart:math' as math;
 
 
 import 'package:flutter/material.dart';
-import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/pages/workspace_detail_page.dart';
 import 'package:chuk_chat/pages/workspaces_page.dart';
 import 'package:chuk_chat/pages/media_manager_page.dart';
 import 'package:chuk_chat/pages/settings_page.dart';
@@ -255,8 +255,26 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
       MaterialPageRoute(
         builder: (_) => WorkspacesPage(
           onOpenWorkspace: (workspaceId) {
-            Navigator.pop(context); // Close workspaces page
-            _chatUIMobileKey.currentState?.startNewChatWithWorkspace(workspaceId);
+            // Tap on a workspace card opens the workspace edit/settings
+            // view. The user can launch a new chat from inside it via
+            // the FAB. Previously this jumped straight into a new chat.
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => WorkspaceDetailPage(
+                  workspaceId: workspaceId,
+                  onStartNewChat: (id) {
+                    final wsId = id ?? workspaceId;
+                    // Pop the detail page and the workspaces list so
+                    // the new chat sits at the root again.
+                    Navigator.of(context)
+                      ..pop()
+                      ..pop();
+                    _chatUIMobileKey.currentState
+                        ?.startNewChatWithWorkspace(wsId);
+                  },
+                ),
+              ),
+            );
           },
         ),
       ),

@@ -3033,7 +3033,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                'AI/LLMs can make mistakes — double-check important info.',
+                                AppLocalizations.of(context)!.aiDisclaimer,
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: iconFg.withValues(alpha: 0.7),

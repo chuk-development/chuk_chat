@@ -172,6 +172,17 @@ class AppLocalizations {
   String get filmGrainEffect => _get('filmGrainEffect');
   String get filmGrainSubtitle => _get('filmGrainSubtitle');
   String get customHexColor => _get('customHexColor');
+  String get pickCustomColor => _get('pickCustomColor');
+  String get pickAColor => _get('pickAColor');
+  String get hue => _get('hue');
+  String get saturation => _get('saturation');
+  String get brightness => _get('brightness');
+  String get useColor => _get('useColor');
+  String get searchWorkspacesHint => _get('searchWorkspacesHint');
+  String get newWorkspace => _get('newWorkspace');
+  String editedAt(String date) => _get('editedAt').replaceAll('{date}', date);
+  String get aiDisclaimer => _get('aiDisclaimer');
+  String get archive => _get('archive');
 
   // ── Tool calling page ──────────────────────────────────────
   String get engine => _get('engine');
