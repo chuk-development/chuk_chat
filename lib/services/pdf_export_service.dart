@@ -30,6 +30,28 @@ class PdfExportService {
     }
   }
 
+  /// Build the PDF and open the native print dialog (Linux/macOS/Windows
+  /// system print, Android/iOS print sheet, web browser print). Returns
+  /// true if the dialog was shown.
+  static Future<bool> printMarkdown(
+    String markdownText, {
+    String? title,
+  }) async {
+    if (markdownText.trim().isEmpty) return false;
+    try {
+      final Uint8List bytes = await buildPdfBytes(markdownText, title: title);
+      return await Printing.layoutPdf(
+        onLayout: (PdfPageFormat _) async => bytes,
+        name: _safeFilename(title),
+      );
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('PdfExportService.printMarkdown failed: $e\n$st');
+      }
+      return false;
+    }
+  }
+
   static Future<Uint8List> buildPdfBytes(
     String markdownText, {
     String? title,
