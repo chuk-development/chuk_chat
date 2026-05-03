@@ -271,7 +271,8 @@ class PerModelSystemPromptService {
       final value = entry.value;
       if (value is! Map) continue;
       final encryptedPrompt = value['prompt'];
-      final mode = _modeFromString(value['mode'] as String?);
+      final rawMode = value['mode'];
+      final mode = _modeFromString(rawMode is String ? rawMode : null);
       if (encryptedPrompt is! String || encryptedPrompt.isEmpty) {
         // Allow stored empty entries (mode-only) to round-trip.
         result[key] = ModelPromptConfig(prompt: '', mode: mode);
