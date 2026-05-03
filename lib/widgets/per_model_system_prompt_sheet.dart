@@ -118,7 +118,7 @@ class _PerModelSystemPromptEditorState
     final hasInitial = widget.initial != null;
 
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,

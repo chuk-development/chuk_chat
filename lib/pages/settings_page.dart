@@ -701,8 +701,12 @@ class _AccountRowState extends State<_AccountRow> {
     }
     final email = user?.email ?? '';
     final profileName = _profile?.displayName.trim() ?? '';
-    final rawName = user?.userMetadata?['full_name'];
-    final metadataName = (rawName is String) ? rawName.trim() : '';
+    final rawDisplayName = user?.userMetadata?['display_name'];
+    final rawFullName = user?.userMetadata?['full_name'];
+    final displayMeta =
+        (rawDisplayName is String) ? rawDisplayName.trim() : '';
+    final fullMeta = (rawFullName is String) ? rawFullName.trim() : '';
+    final metadataName = displayMeta.isNotEmpty ? displayMeta : fullMeta;
     String displayName;
     if (profileName.isNotEmpty) {
       displayName = profileName;
