@@ -14,9 +14,11 @@ platform :mac do
     raise "SUPABASE_ANON_KEY not set" unless supabase_key
 
     # Build macOS release with Flutter
+    build_timestamp = Time.now.utc.strftime('%Y-%m-%dT%H:%M:%SZ')
     sh("cd ../.. && flutter build macos --release " \
        "--dart-define=SUPABASE_URL=#{supabase_url} " \
        "--dart-define=SUPABASE_ANON_KEY=#{supabase_key} " \
+       "--dart-define=BUILD_TIMESTAMP=#{build_timestamp} " \
        "--dart-define=FEATURE_PROJECTS=true " \
        "--dart-define=FEATURE_IMAGE_GEN=true " \
        "--dart-define=FEATURE_VOICE_MODE=true " \
@@ -100,9 +102,11 @@ platform :mac do
   desc "Upload to Mac App Store"
   lane :deploy do
     # Build for App Store (different signing)
+    build_timestamp = Time.now.utc.strftime('%Y-%m-%dT%H:%M:%SZ')
     sh("cd ../.. && flutter build macos --release " \
        "--dart-define=SUPABASE_URL=#{ENV['SUPABASE_URL']} " \
        "--dart-define=SUPABASE_ANON_KEY=#{ENV['SUPABASE_ANON_KEY']} " \
+       "--dart-define=BUILD_TIMESTAMP=#{build_timestamp} " \
        "--dart-define=FEATURE_PROJECTS=true " \
        "--dart-define=FEATURE_IMAGE_GEN=true " \
        "--dart-define=FEATURE_VOICE_MODE=true " \

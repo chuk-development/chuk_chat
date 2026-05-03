@@ -388,7 +388,8 @@ esac
 configure_android_local_api_access "$DEVICE"
 
 # Build dart-define arguments
-DART_DEFINES="--dart-define=SUPABASE_URL=$SUPABASE_URL --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY"
+BUILD_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+DART_DEFINES="--dart-define=SUPABASE_URL=$SUPABASE_URL --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY --dart-define=BUILD_TIMESTAMP=$BUILD_TIMESTAMP"
 
 # Override the local API server URL (debug builds use http://localhost:8000 by default).
 # Set LOCAL_API_URL in .env or export it to change:

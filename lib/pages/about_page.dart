@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/developer_options_service.dart';
 import 'package:chuk_chat/services/update_check_service.dart';
+import 'package:chuk_chat/utils/build_info.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/nice_snackbar.dart';
 
@@ -185,6 +186,15 @@ class _AboutPageState extends State<AboutPage> {
                           Text(
                             l.versionUnavailable,
                             style: theme.textTheme.bodyMedium?.copyWith(
+                              color: m3.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                        if (BuildInfo.formatted() != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            l.builtOn(BuildInfo.formatted()!),
+                            style: theme.textTheme.bodySmall?.copyWith(
                               color: m3.onSurfaceVariant,
                             ),
                           ),
