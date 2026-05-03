@@ -160,6 +160,29 @@ class AppLocalizations {
   String get reset => _get('reset');
   String get save => _get('save');
 
+  // ── Per-model system prompt ──────────────────────────────────
+  String get perModelPromptTitle => _get('perModelPromptTitle');
+  String get perModelPromptHint => _get('perModelPromptHint');
+  String get perModelPromptPlaceholder => _get('perModelPromptPlaceholder');
+  String get perModelPromptEdit => _get('perModelPromptEdit');
+  String get perModelPromptEditConfigured =>
+      _get('perModelPromptEditConfigured');
+  String get perModelPromptRemove => _get('perModelPromptRemove');
+  String get perModelPromptSaveFailed => _get('perModelPromptSaveFailed');
+  String get perModelPromptDeleteFailed => _get('perModelPromptDeleteFailed');
+  String get perModelPromptModeLabel => _get('perModelPromptModeLabel');
+  String get perModelPromptModeOff => _get('perModelPromptModeOff');
+  String get perModelPromptModeAppend => _get('perModelPromptModeAppend');
+  String get perModelPromptModePrepend => _get('perModelPromptModePrepend');
+  String get perModelPromptModeReplace => _get('perModelPromptModeReplace');
+  String get perModelPromptModeOffHint => _get('perModelPromptModeOffHint');
+  String get perModelPromptModeAppendHint =>
+      _get('perModelPromptModeAppendHint');
+  String get perModelPromptModePrependHint =>
+      _get('perModelPromptModePrependHint');
+  String get perModelPromptModeReplaceHint =>
+      _get('perModelPromptModeReplaceHint');
+
   // ── Theme page ─────────────────────────────────────────────
   String get darkMode => _get('darkMode');
   String get darkModeSubtitle => _get('darkModeSubtitle');
@@ -341,6 +364,7 @@ class AppLocalizations {
   String get termsOfService => _get('termsOfService');
   String get privacyPolicy => _get('privacyPolicy');
   String versionText(String version) => _get('versionText').replaceAll('{version}', version);
+  String builtOn(String date) => _get('builtOn').replaceAll('{date}', date);
   String updateAvailable(String version) => _get('updateAvailable').replaceAll('{version}', version);
   String get versionUnavailable => _get('versionUnavailable');
   String copyrightYear(String year) => _get('copyrightYear').replaceAll('{year}', year);

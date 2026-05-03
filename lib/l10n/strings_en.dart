@@ -105,6 +105,31 @@ const Map<String, String> stringsEn = {
   'reset': 'Reset',
   'save': 'Save',
 
+  // ── Per-model system prompt ────────────────────────────────
+  'perModelPromptTitle': 'Per-model system prompt',
+  'perModelPromptHint':
+      'Add an extra instruction that only applies when this model is selected. Encrypted at rest.',
+  'perModelPromptPlaceholder':
+      'Example: Always respond in formal English and cite sources.',
+  'perModelPromptEdit': 'Set system prompt',
+  'perModelPromptEditConfigured': 'Edit system prompt (configured)',
+  'perModelPromptRemove': 'Remove',
+  'perModelPromptSaveFailed': 'Failed to save the per-model prompt.',
+  'perModelPromptDeleteFailed': 'Failed to remove the per-model prompt.',
+  'perModelPromptModeLabel': 'Combine with global / workspace prompt',
+  'perModelPromptModeOff': 'Off',
+  'perModelPromptModeAppend': 'Append',
+  'perModelPromptModePrepend': 'Prepend',
+  'perModelPromptModeReplace': 'Replace',
+  'perModelPromptModeOffHint':
+      'The per-model prompt is ignored — only the global and workspace prompts are sent.',
+  'perModelPromptModeAppendHint':
+      'Sent after the global / workspace prompt, separated by a divider.',
+  'perModelPromptModePrependHint':
+      'Sent before the global / workspace prompt, separated by a divider.',
+  'perModelPromptModeReplaceHint':
+      'Replaces the global and workspace prompts entirely while this model is selected.',
+
   // ── Theme page ─────────────────────────────────────────────
   'darkMode': 'Dark Mode',
   'darkModeSubtitle': 'Toggle between dark and light themes',
@@ -319,6 +344,7 @@ const Map<String, String> stringsEn = {
   'termsOfService': 'Terms of Service',
   'privacyPolicy': 'Privacy Policy',
   'versionText': 'Version {version}',
+  'builtOn': 'Built {date}',
   'updateAvailable': 'Update available: v{version} \u2014 tap to download',
   'versionUnavailable': 'Version information unavailable.',
   'copyrightYear':

@@ -98,6 +98,7 @@ jobs:
       version: ${{ steps.bump.outputs.version }}
       version_short: ${{ steps.bump.outputs.version_short }}
       tag: ${{ steps.bump.outputs.tag }}
+      build_timestamp: ${{ steps.bump.outputs.build_timestamp }}
 
     steps:
       - uses: actions/checkout@v5
@@ -109,10 +110,13 @@ jobs:
         run: |
           CURRENT=$(grep '^version:' pubspec.yaml | sed 's/version: //' | tr -d '[:space:]')
           VER=$(echo "$CURRENT" | cut -d'+' -f1)
+          BUILD_TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           echo "version=$VER" >> $GITHUB_OUTPUT
           echo "version_short=$VER" >> $GITHUB_OUTPUT
           echo "tag=v$VER" >> $GITHUB_OUTPUT
+          echo "build_timestamp=$BUILD_TS" >> $GITHUB_OUTPUT
           echo "Using version: $VER"
+          echo "Using build timestamp: $BUILD_TS"
 
       - name: Create and push git tag
         env:
@@ -268,6 +272,7 @@ jobs:
             --build-number=$BUILD_NUM \
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
             --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} \
+            --dart-define=BUILD_TIMESTAMP=${{ needs.version-bump.outputs.build_timestamp }} \
             --dart-define=PLATFORM_MOBILE=true \
             --dart-define=FEATURE_PROJECTS=false \
             --dart-define=FEATURE_IMAGE_GEN=false \
@@ -319,6 +324,7 @@ jobs:
           flutter build linux --release \
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
             --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} \
+            --dart-define=BUILD_TIMESTAMP=${{ needs.version-bump.outputs.build_timestamp }} \
             --dart-define=PLATFORM_DESKTOP=true \
             --dart-define=FEATURE_PROJECTS=false \
             --dart-define=FEATURE_IMAGE_GEN=false \
@@ -558,6 +564,7 @@ jobs:
           flutter build linux --release \
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
             --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} \
+            --dart-define=BUILD_TIMESTAMP=${{ needs.version-bump.outputs.build_timestamp }} \
             --dart-define=PLATFORM_DESKTOP=true \
             --dart-define=FEATURE_PROJECTS=false \
             --dart-define=FEATURE_IMAGE_GEN=false \
@@ -741,6 +748,7 @@ jobs:
           flutter build linux --release \
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
             --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} \
+            --dart-define=BUILD_TIMESTAMP=${{ needs.version-bump.outputs.build_timestamp }} \
             --dart-define=PLATFORM_DESKTOP=true \
             --dart-define=LINUX_VARIANT=full \
             --dart-define=FEATURE_PROJECTS=false \
@@ -962,6 +970,7 @@ jobs:
           flutter build linux --release \
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
             --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} \
+            --dart-define=BUILD_TIMESTAMP=${{ needs.version-bump.outputs.build_timestamp }} \
             --dart-define=PLATFORM_DESKTOP=true \
             --dart-define=LINUX_VARIANT=full \
             --dart-define=FEATURE_PROJECTS=false \
@@ -1103,6 +1112,7 @@ jobs:
           flutter build windows --release `
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} `
             --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} `
+            --dart-define=BUILD_TIMESTAMP=${{ needs.version-bump.outputs.build_timestamp }} `
             --dart-define=FEATURE_PROJECTS=false `
             --dart-define=FEATURE_IMAGE_GEN=false `
             --dart-define=FEATURE_VOICE_MODE=false `
@@ -1256,6 +1266,7 @@ jobs:
           flutter build macos --release \
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
             --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} \
+            --dart-define=BUILD_TIMESTAMP=${{ needs.version-bump.outputs.build_timestamp }} \
             --dart-define=FEATURE_PROJECTS=false \
             --dart-define=FEATURE_IMAGE_GEN=false \
             --dart-define=FEATURE_VOICE_MODE=false \
@@ -1329,6 +1340,7 @@ jobs:
           flutter build ios --release --no-codesign \
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
             --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} \
+            --dart-define=BUILD_TIMESTAMP=${{ needs.version-bump.outputs.build_timestamp }} \
             --dart-define=PLATFORM_MOBILE=true \
             --dart-define=FEATURE_PROJECTS=false \
             --dart-define=FEATURE_IMAGE_GEN=false \

@@ -21,6 +21,7 @@ COPY . .
 
 ARG SUPABASE_URL
 ARG SUPABASE_ANON_KEY
+ARG BUILD_TIMESTAMP=""
 
 # Generate web environment config (dart-define can be unreliable with dart2js)
 RUN echo "// GENERATED - DO NOT EDIT" > lib/web_env.dart && \
@@ -29,6 +30,7 @@ RUN echo "// GENERATED - DO NOT EDIT" > lib/web_env.dart && \
     cat lib/web_env.dart
 
 RUN flutter build web --release \
+    --dart-define=BUILD_TIMESTAMP="${BUILD_TIMESTAMP}" \
     --dart-define=FEATURE_PROJECTS=false \
     --dart-define=FEATURE_IMAGE_GEN=false \
     --dart-define=FEATURE_VOICE_MODE=false

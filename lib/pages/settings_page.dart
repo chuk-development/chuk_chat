@@ -24,6 +24,7 @@ import 'package:chuk_chat/pages/system_prompt_page.dart';
 import 'package:chuk_chat/services/auth_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
+import 'package:chuk_chat/services/profile_service.dart';
 // ignore: unused_import
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:share_plus/share_plus.dart';
@@ -125,8 +126,8 @@ class _SettingsPageState extends State<SettingsPage> {
           _GroupedCard(
             rows: [
               _AccountRow(
-                onTap: () {
-                  Navigator.push(
+                onTap: () async {
+                  await Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (_) => const AccountSettingsPage(),
@@ -596,7 +597,7 @@ class _PlanInfo {
 }
 
 class _AccountRow extends StatefulWidget {
-  final VoidCallback onTap;
+  final Future<void> Function() onTap;
 
   const _AccountRow({required this.onTap});
 
@@ -606,11 +607,27 @@ class _AccountRow extends StatefulWidget {
 
 class _AccountRowState extends State<_AccountRow> {
   late Future<_PlanInfo> _planFuture;
+  ProfileRecord? _profile;
 
   @override
   void initState() {
     super.initState();
     _planFuture = _loadPlan();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) return;
+    try {
+      final record = await const ProfileService().loadOrCreateProfile();
+      if (!mounted) return;
+      setState(() {
+        _profile = record;
+      });
+    } catch (_) {
+      // Ignore — fall back to metadata/email.
+    }
   }
 
   Future<_PlanInfo> _loadPlan() async {
@@ -682,12 +699,19 @@ class _AccountRowState extends State<_AccountRow> {
     } catch (_) {
       user = null;
     }
-    final rawName = user?.userMetadata?['full_name'];
-    final name = (rawName is String) ? rawName.trim() : '';
     final email = user?.email ?? '';
+    final profileName = _profile?.displayName.trim() ?? '';
+    final rawDisplayName = user?.userMetadata?['display_name'];
+    final rawFullName = user?.userMetadata?['full_name'];
+    final displayMeta =
+        (rawDisplayName is String) ? rawDisplayName.trim() : '';
+    final fullMeta = (rawFullName is String) ? rawFullName.trim() : '';
+    final metadataName = displayMeta.isNotEmpty ? displayMeta : fullMeta;
     String displayName;
-    if (name.isNotEmpty) {
-      displayName = name;
+    if (profileName.isNotEmpty) {
+      displayName = profileName;
+    } else if (metadataName.isNotEmpty) {
+      displayName = metadataName;
     } else if (email.isNotEmpty) {
       displayName = email.split('@').first;
     } else {
@@ -704,7 +728,11 @@ class _AccountRowState extends State<_AccountRow> {
     final id = _identity();
 
     return InkWell(
-      onTap: widget.onTap,
+      onTap: () async {
+        await widget.onTap();
+        if (!mounted) return;
+        await _loadProfile();
+      },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
