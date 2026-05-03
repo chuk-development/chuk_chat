@@ -26,8 +26,8 @@ dependencies:
   crypto: ^3.0.6
   cryptography: ^2.7.0
   flutter_secure_storage: ^10.0.0
-  share_plus: ^12.0.1
-  package_info_plus: ^9.0.0
+  share_plus: ^12.0.1  # 13.x blocked by file_picker 11 → win32 5 conflict
+  package_info_plus: ^9.0.0  # 10.x blocked by file_picker 11 → win32 5 conflict
   record: ^6.1.2
   url_launcher: ^6.3.0
   path_provider: ^2.1.4
@@ -43,7 +43,7 @@ dependencies:
   window_manager: ^0.5.1
   image: ^4.3.0
   pdfx: ^2.8.0  # PDF viewing (mobile/macOS — used by workspace viewer)
-  pdfrx: ^1.3.0  # Cross-platform PDF viewing incl. Linux/Windows (PDFium)
+  pdfrx: ^2.2.24  # Cross-platform PDF viewing incl. Linux/Windows (PDFium)
   pdf: ^3.11.0  # PDF generation (export markdown responses)
   printing: ^5.13.0  # Cross-platform PDF share/print/save
   flutter_foreground_task: ^9.2.1  # Keep streaming alive when app backgrounded
@@ -51,7 +51,7 @@ dependencies:
   pasteboard: ^0.5.0
   flutter_map: ^8.2.2          # Map widget for displaying locations/routes
   maplibre: ^0.3.2             # 3D-capable interactive maps
-  latlong2: ^0.9.1              # Coordinate math (LatLng type)
+  latlong2: ^0.9.1              # Coordinate math (LatLng type) — flutter_map pins 0.9.x
   fl_chart: ^1.1.1              # Chart rendering (bar, line, pie, scatter, radar)
   geolocator: ^14.0.2           # GPS geolocation for device tools
   add_2_calendar: ^3.0.1        # Native calendar event creation
