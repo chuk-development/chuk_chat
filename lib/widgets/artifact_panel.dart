@@ -1341,7 +1341,7 @@ class _TypstPdfRendererState extends State<_TypstPdfRenderer> {
                 backgroundColor: const Color(0xFF202020),
                 scrollByMouseWheel: _ctrlHeld ? 0.0 : 0.5,
                 enableKeyboardNavigation: true,
-                enableTextSelection: true,
+                textSelectionParams: const PdfTextSelectionParams(),
               ),
             ),
           ),
