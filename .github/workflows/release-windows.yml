@@ -31,9 +31,11 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
+          $BuildTimestamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
           flutter build windows --release `
             --dart-define=SUPABASE_URL=$env:SUPABASE_URL `
             --dart-define=SUPABASE_ANON_KEY=$env:SUPABASE_ANON_KEY `
+            --dart-define=BUILD_TIMESTAMP=$BuildTimestamp `
             --dart-define=FEATURE_PROJECTS=true `
             --dart-define=FEATURE_IMAGE_GEN=false `
             --dart-define=FEATURE_VOICE_MODE=true `

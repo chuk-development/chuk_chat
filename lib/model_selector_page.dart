@@ -13,8 +13,10 @@ import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/api_status_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
+import 'package:chuk_chat/services/per_model_system_prompt_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/widgets/per_model_system_prompt_sheet.dart';
 
 // ─── Data models (mirroring FastAPI Pydantic models) ─────────────────────
 
@@ -136,6 +138,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
   final String _baseUrl = ApiConfigService.apiBaseUrl;
   List<CustomModelInfo> _models = [];
   Map<String, ModelProviderInfo?> _selectedProviders = {};
+  Map<String, ModelPromptConfig> _modelPromptConfigs = {};
   bool _isLoading = true;
   String? _error;
   Map<String, String> _lastSavedPreferences = {};
@@ -273,10 +276,22 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
               await UserPreferencesService.loadAllProviderPreferences();
         }
 
+        // Load any saved per-model system prompt configs (decrypted in-memory).
+        Map<String, ModelPromptConfig> promptConfigs;
+        try {
+          promptConfigs = await PerModelSystemPromptService.loadAll();
+        } catch (error) {
+          if (kDebugMode) {
+            debugPrint('Per-model prompt configs load failed: $error');
+          }
+          promptConfigs = <String, ModelPromptConfig>{};
+        }
+
         if (!mounted) return;
         setState(() {
           _models = fetchedModels;
           _selectedProviders = initialSelections;
+          _modelPromptConfigs = promptConfigs;
           _isLoading = false;
           _error = null;
         });
@@ -387,6 +402,33 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
   void _stopApiAvailabilityPolling() {
     _apiAvailabilityTimer?.cancel();
     _apiAvailabilityTimer = null;
+  }
+
+  Future<void> _onEditModelPrompt(
+    CustomModelInfo model,
+  ) async {
+    final existing = _modelPromptConfigs[model.id];
+    final changed = await showPerModelSystemPromptSheet(
+      context: context,
+      modelId: model.id,
+      modelName: model.name,
+      initial: existing,
+    );
+    if (changed != true) return;
+    // Refresh configs after edit / delete.
+    Map<String, ModelPromptConfig> refreshed;
+    try {
+      refreshed = await PerModelSystemPromptService.loadAll();
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Per-model prompt configs refresh failed: $error');
+      }
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _modelPromptConfigs = refreshed;
+    });
   }
 
   Future<void> _onProviderSelect(
@@ -549,6 +591,8 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                     final model = _filteredModels[index - 2];
                     final ModelProviderInfo? selectedProviderForModel =
                         _selectedProviders[model.id];
+                    final ModelPromptConfig? promptConfigForModel =
+                        _modelPromptConfigs[model.id];
 
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
@@ -556,8 +600,10 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                         key: ValueKey(model.id),
                         model: model,
                         selectedProvider: selectedProviderForModel,
+                        promptConfig: promptConfigForModel,
                         onProviderChanged: (provider) =>
                             _onProviderSelect(model.id, provider),
+                        onEditPrompt: () => _onEditModelPrompt(model),
                         formatContextLength: _formatContextLength,
                         buildIconWidget: _buildIconWidget,
                       ),
@@ -581,7 +627,9 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
 class ModelSelectionRow extends StatefulWidget {
   final CustomModelInfo model;
   final ModelProviderInfo? selectedProvider;
+  final ModelPromptConfig? promptConfig;
   final Function(ModelProviderInfo?) onProviderChanged;
+  final VoidCallback? onEditPrompt;
   final String Function(int?) formatContextLength;
   final Widget Function(String?, IconData, {double size}) buildIconWidget;
 
@@ -589,7 +637,9 @@ class ModelSelectionRow extends StatefulWidget {
     super.key,
     required this.model,
     required this.selectedProvider,
+    this.promptConfig,
     required this.onProviderChanged,
+    this.onEditPrompt,
     required this.formatContextLength,
     required this.buildIconWidget,
   });
@@ -614,6 +664,8 @@ class _ModelSelectionRowState extends State<ModelSelectionRow> {
     final Widget nameRow = _NameRow(
       model: widget.model,
       buildIconWidget: widget.buildIconWidget,
+      promptConfig: widget.promptConfig,
+      onEditPrompt: widget.onEditPrompt,
       trailing: _ProviderPill(
         model: widget.model,
         selectedProvider: widget.selectedProvider,
@@ -775,18 +827,27 @@ class _ModelSelectionRowState extends State<ModelSelectionRow> {
 class _NameRow extends StatelessWidget {
   final CustomModelInfo model;
   final Widget Function(String?, IconData, {double size}) buildIconWidget;
+  final ModelPromptConfig? promptConfig;
+  final VoidCallback? onEditPrompt;
   final Widget trailing;
 
   const _NameRow({
     required this.model,
     required this.buildIconWidget,
     required this.trailing,
+    this.promptConfig,
+    this.onEditPrompt,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final l = AppLocalizations.of(context);
+    final bool hasPromptConfig =
+        promptConfig != null && promptConfig!.isActive;
+    final Color promptIconColor =
+        hasPromptConfig ? colorScheme.primary : theme.m3.onSurfaceVariant;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -805,7 +866,24 @@ class _NameRow extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
         ),
-        const SizedBox(width: 12),
+        if (onEditPrompt != null) ...[
+          const SizedBox(width: 4),
+          IconButton(
+            tooltip: hasPromptConfig
+                ? (l?.perModelPromptEditConfigured ?? 'Edit system prompt')
+                : (l?.perModelPromptEdit ?? 'Set system prompt'),
+            visualDensity: VisualDensity.compact,
+            icon: Icon(
+              hasPromptConfig
+                  ? Icons.edit_note
+                  : Icons.note_alt_outlined,
+              color: promptIconColor,
+              size: 20,
+            ),
+            onPressed: onEditPrompt,
+          ),
+          const SizedBox(width: 4),
+        ],
         trailing,
       ],
     );

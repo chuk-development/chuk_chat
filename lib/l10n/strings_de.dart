@@ -109,6 +109,34 @@ const Map<String, String> stringsDe = {
   'reset': 'Zurücksetzen',
   'save': 'Speichern',
 
+  // ── Pro-Modell Systemprompt ────────────────────────────────
+  'perModelPromptTitle': 'Modellspezifischer Systemprompt',
+  'perModelPromptHint':
+      'Eine zusätzliche Anweisung, die nur greift, wenn dieses Modell ausgewählt ist. Wird verschlüsselt gespeichert.',
+  'perModelPromptPlaceholder':
+      'Beispiel: Antworte stets förmlich auf Deutsch und nenne Quellen.',
+  'perModelPromptEdit': 'Systemprompt festlegen',
+  'perModelPromptEditConfigured': 'Systemprompt bearbeiten (eingerichtet)',
+  'perModelPromptRemove': 'Entfernen',
+  'perModelPromptSaveFailed':
+      'Modellspezifischer Prompt konnte nicht gespeichert werden.',
+  'perModelPromptDeleteFailed':
+      'Modellspezifischer Prompt konnte nicht entfernt werden.',
+  'perModelPromptModeLabel':
+      'Mit globalem / Workspace-Prompt kombinieren',
+  'perModelPromptModeOff': 'Aus',
+  'perModelPromptModeAppend': 'Anhängen',
+  'perModelPromptModePrepend': 'Voranstellen',
+  'perModelPromptModeReplace': 'Ersetzen',
+  'perModelPromptModeOffHint':
+      'Der modellspezifische Prompt wird ignoriert — nur die globalen und Workspace-Prompts werden gesendet.',
+  'perModelPromptModeAppendHint':
+      'Wird nach dem globalen / Workspace-Prompt gesendet, durch einen Trenner abgesetzt.',
+  'perModelPromptModePrependHint':
+      'Wird vor dem globalen / Workspace-Prompt gesendet, durch einen Trenner abgesetzt.',
+  'perModelPromptModeReplaceHint':
+      'Ersetzt die globalen und Workspace-Prompts vollständig, solange dieses Modell ausgewählt ist.',
+
   // ── Theme page ─────────────────────────────────────────────
   'darkMode': 'Dunkelmodus',
   'darkModeSubtitle': 'Zwischen dunklem und hellem Design wechseln',
@@ -333,6 +361,7 @@ const Map<String, String> stringsDe = {
   'termsOfService': 'Nutzungsbedingungen',
   'privacyPolicy': 'Datenschutzrichtlinie',
   'versionText': 'Version {version}',
+  'builtOn': 'Erstellt am {date}',
   'updateAvailable':
       'Update verfügbar: v{version} \u2014 zum Herunterladen tippen',
   'versionUnavailable': 'Versionsinformationen nicht verfügbar.',

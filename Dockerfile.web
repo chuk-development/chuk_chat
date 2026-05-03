@@ -29,6 +29,7 @@ RUN echo "// GENERATED - DO NOT EDIT" > lib/web_env.dart && \
     cat lib/web_env.dart
 
 RUN flutter build web --release \
+    --dart-define=BUILD_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     --dart-define=FEATURE_PROJECTS=false \
     --dart-define=FEATURE_IMAGE_GEN=false \
     --dart-define=FEATURE_VOICE_MODE=false

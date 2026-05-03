@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/platform_config.dart';
+import 'package:chuk_chat/services/per_model_system_prompt_service.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/tool_enforcer.dart';
 import 'package:chuk_chat/services/tool_executor.dart';
@@ -25,6 +26,7 @@ class ToolLoopSession {
     required this.allowMarkdownToolCalls,
     this.baseSystemPrompt,
     this.discoveryContextKey,
+    this.modelId,
     this.skipIdentity = false,
   });
 
@@ -37,6 +39,10 @@ class ToolLoopSession {
   final bool allowMarkdownToolCalls;
   final String? baseSystemPrompt;
   final String? discoveryContextKey;
+
+  /// Currently-selected model id. When set, the per-model system prompt
+  /// configuration (if any) is merged into the final system prompt.
+  final String? modelId;
 
   /// When true, the identity section (Soul/User/Memory) is not injected
   /// into the system prompt. Used for assistants with memory disabled.
@@ -160,6 +166,7 @@ class ToolCallHandler {
     required String accessToken,
     String? discoveryContextKey,
     String? baseSystemPrompt,
+    String? modelId,
     bool toolCallingEnabled = true,
     bool discoveryMode = true,
     bool allowMarkdownToolCalls = true,
@@ -195,6 +202,7 @@ class ToolCallHandler {
       allowMarkdownToolCalls: allowMarkdownToolCalls,
       baseSystemPrompt: baseSystemPrompt,
       discoveryContextKey: discoveryContextKey,
+      modelId: modelId,
       skipIdentity: skipIdentity,
     );
 
@@ -207,7 +215,12 @@ class ToolCallHandler {
 
   Future<String> buildInitialSystemPrompt(ToolLoopSession session) async {
     if (!session.toolCallingEnabled) {
-      return session.baseSystemPrompt?.trim() ?? '';
+      // Even when tools are disabled the per-model prompt should still apply,
+      // so route through the merge helper rather than returning the raw base.
+      final base = session.baseSystemPrompt?.trim() ?? '';
+      final merged =
+          await _applyPerModelPrompt(base: base, modelId: session.modelId);
+      return merged ?? base;
     }
 
     return _buildSystemPrompt(
@@ -216,6 +229,7 @@ class ToolCallHandler {
       discoveryMode: session.discoveryMode,
       discoveredTools: session.discoveredTools,
       skipIdentity: session.skipIdentity,
+      modelId: session.modelId,
     );
   }
 
@@ -332,6 +346,7 @@ class ToolCallHandler {
               isToolResult: true,
               discoveryMode: session.discoveryMode,
               discoveredTools: session.discoveredTools,
+              modelId: session.modelId,
             ),
           ),
           interimContent: '',
@@ -400,6 +415,7 @@ class ToolCallHandler {
             isToolResult: true,
             discoveryMode: session.discoveryMode,
             discoveredTools: session.discoveredTools,
+            modelId: session.modelId,
           ),
         ),
         interimContent: _stripToolCallBlocks(cleanedContent),
@@ -482,6 +498,7 @@ class ToolCallHandler {
           isToolResult: true,
           discoveryMode: session.discoveryMode,
           discoveredTools: session.discoveredTools,
+          modelId: session.modelId,
         ),
       ),
       // Preserve all non-tool text from this pass (before/after tool blocks)
@@ -630,6 +647,7 @@ class ToolCallHandler {
     required bool discoveryMode,
     required List<Map<String, dynamic>> discoveredTools,
     bool skipIdentity = false,
+    String? modelId,
   }) async {
     // Check if identity system is enabled before loading Soul/User/Memory.
     // When skipIdentity is true (assistant with memory disabled), skip entirely.
@@ -722,10 +740,46 @@ class ToolCallHandler {
         )
         .trim();
 
-    final base = baseSystemPrompt?.trim();
+    final mergedBase = await _applyPerModelPrompt(
+      base: baseSystemPrompt,
+      modelId: modelId,
+    );
+    final base = mergedBase?.trim();
     if (base == null || base.isEmpty) return toolProtocol;
 
     return '$base\n\n$toolProtocol';
+  }
+
+  /// Merge the per-model prompt for [modelId] into [base] using the saved
+  /// [ModelPromptMode]. Returns [base] unchanged when no per-model config
+  /// exists or the model id is empty.
+  Future<String?> _applyPerModelPrompt({
+    required String? base,
+    required String? modelId,
+  }) async {
+    final id = modelId?.trim();
+    if (id == null || id.isEmpty) return base;
+    try {
+      final cfg = await PerModelSystemPromptService.get(id);
+      if (cfg == null || !cfg.isActive) return base;
+      final merged = mergeModelPrompt(
+        base: base,
+        modelPrompt: cfg.prompt,
+        mode: cfg.mode,
+      );
+      if (kDebugMode) {
+        debugPrint(
+          '[PerModelPrompt] applied modelId=$id mode=${cfg.mode.name} '
+          'baseLen=${base?.length ?? 0} mergedLen=${merged?.length ?? 0}',
+        );
+      }
+      return merged;
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('[PerModelPrompt] apply failed for $id: $error');
+      }
+      return base;
+    }
   }
 
   String _stripToolCallBlocks(String content) {
