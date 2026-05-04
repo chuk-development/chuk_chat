@@ -49,6 +49,27 @@ void main() {
       );
     });
 
+    test('detects "Let me search ...:" with trailing colon', () {
+      const content =
+          'Let me search more specifically for Business plan Codex details:';
+
+      expect(
+        ToolCallHandler.looksLikeDeferredActionWithoutToolCall(content),
+        isTrue,
+      );
+    });
+
+    test('detects German search-intent phrasing from regression log', () {
+      const content =
+          'Ich suche nach aktuellen Informationen zu Codex-Modellen und deren '
+          'Verfügbarkeit in verschiedenen Plänen.';
+
+      expect(
+        ToolCallHandler.looksLikeDeferredActionWithoutToolCall(content),
+        isTrue,
+      );
+    });
+
     test(
       'retries when stream signals tool use but no parseable tool call',
       () async {
