@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/tool_call_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -95,5 +96,62 @@ void main() {
         expect(result.nextStep, isNotNull);
       },
     );
+
+    test('keeps deferred interim text visible while retrying', () async {
+      final handler = ToolCallHandler();
+      final session = handler.createSession(
+        initialUserMessage: 'test',
+        history: const [],
+        accessToken: 'test-token',
+        toolCallingEnabled: true,
+        discoveryMode: false,
+      );
+
+      final result = await handler.processAssistantResponse(
+        session: session,
+        content:
+            "I'll search for the latest Codex plan limits and compare them.",
+        reasoning: '',
+      );
+
+      expect(result.shouldContinue, isTrue);
+      expect(
+        result.interimContent,
+        "I'll search for the latest Codex plan limits and compare them.",
+      );
+    });
+
+    test('retries non-final signaled turns during active tool loop', () async {
+      final handler = ToolCallHandler();
+      final session = handler.createSession(
+        initialUserMessage: 'test',
+        history: const [],
+        accessToken: 'test-token',
+        toolCallingEnabled: true,
+        discoveryMode: false,
+      );
+      session.toolCalls.add(
+        ToolCall(
+          id: 'tc-1',
+          name: 'web_search',
+          arguments: const <String, dynamic>{},
+          status: ToolCallStatus.completed,
+          result: 'ok',
+        ),
+      );
+
+      final result = await handler.processAssistantResponse(
+        session: session,
+        content: 'Working on it now.',
+        reasoning: '',
+        turnSignals: ToolTurnSignals.fromMeta(const {
+          'stop_reason': 'pause_turn',
+        }),
+      );
+
+      expect(result.shouldContinue, isTrue);
+      expect(result.nextStep, isNotNull);
+      expect(result.interimContent, 'Working on it now.');
+    });
   });
 }
