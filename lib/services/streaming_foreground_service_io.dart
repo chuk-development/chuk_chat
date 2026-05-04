@@ -2,6 +2,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:chuk_chat/utils/tool_parser.dart';
 
 /// Service to keep AI streaming alive when app is backgrounded or screen locked.
 /// Only active on Android - iOS handles background execution differently.
@@ -93,16 +94,18 @@ class StreamingForegroundService {
   static Future<void> acquireKeepAliveLock({
     String? title,
     String? content,
+    bool startIfNeeded = true,
   }) async {
     if (!Platform.isAndroid) return;
 
-    await startService();
+    _keepAliveLockCount++;
 
-    if (!_isRunning) {
+    if (!startIfNeeded) {
       return;
     }
 
-    _keepAliveLockCount++;
+    await startService();
+    if (!_isRunning) return;
 
     await updateNotification(
       title: title ?? 'Generating response...',
@@ -150,10 +153,13 @@ class StreamingForegroundService {
   }
 
   /// Stop the foreground service when streaming completes
-  static Future<void> stopService({bool force = false}) async {
+  static Future<void> stopService({
+    bool force = false,
+    bool preserveLocks = false,
+  }) async {
     if (!Platform.isAndroid) return;
     if (!_isRunning) return;
-    if (!force && _keepAliveLockCount > 0) {
+    if (!force && !preserveLocks && _keepAliveLockCount > 0) {
       if (kDebugMode) {
         debugPrint(
           '[ForegroundService] Stop skipped, keep-alive locks active: $_keepAliveLockCount',
@@ -192,7 +198,8 @@ class StreamingForegroundService {
 
   /// Strip common markdown syntax for clean notification display.
   static String _stripMarkdown(String content) {
-    return content
+    final plainContent = stripToolCallBlocksForDisplay(content);
+    return plainContent
         .replaceAll(RegExp(r'```[\s\S]*?```'), '[code]') // Code blocks
         .replaceAll(RegExp(r'`[^`]+`'), '[code]') // Inline code
         .replaceAll(RegExp(r'\*\*([^*]+)\*\*'), r'$1') // Bold

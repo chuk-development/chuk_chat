@@ -231,6 +231,7 @@ class StreamingMessageHandler {
       return;
     }
     const int kMaxStreamingPasses = 20;
+    const int kMaxPassReconnectRetries = 1;
 
     // Message-level auto-retry: if the final answer is empty after all
     // tool-loop retries, re-send the last user message once to give the
@@ -366,6 +367,7 @@ class StreamingMessageHandler {
       required String? systemPrompt,
       List<String>? passImages,
       int currentPass = 0,
+      int reconnectRetries = 0,
     }) async {
       if (currentPass >= kMaxStreamingPasses) {
         const stopMessage =
@@ -382,6 +384,18 @@ class StreamingMessageHandler {
         onUpdateUI?.call();
         await _releaseForegroundKeepAlive();
         return;
+      }
+
+      if (_hasForegroundKeepAliveLock && _streamingManager.isAppInBackground) {
+        try {
+          await StreamingForegroundService.startService();
+        } catch (error) {
+          if (kDebugMode) {
+            debugPrint(
+              'Failed to start foreground service in background: $error',
+            );
+          }
+        }
       }
 
       if (onRequestPayloadUpdate != null) {
@@ -735,6 +749,11 @@ class StreamingMessageHandler {
                 );
               }
 
+              await _updateForegroundNotification(
+                title: 'Response ready',
+                content: effectiveContent,
+              );
+
               _isStreaming = false;
               _isSending = false;
               onUpdateUI?.call();
@@ -771,6 +790,37 @@ class StreamingMessageHandler {
         },
         onError: (errorMessage) {
           if (_isDisposed) return;
+
+          final normalizedError = errorMessage.toLowerCase();
+          final isReconnectable =
+              errorMessage != '__PAYMENT_REQUIRED__' &&
+              (normalizedError.contains('connection') ||
+                  normalizedError.contains('websocket') ||
+                  normalizedError.contains('socket') ||
+                  normalizedError.contains('timed out') ||
+                  normalizedError.contains('server may be overloaded') ||
+                  normalizedError.contains('no response received'));
+          if (isReconnectable &&
+              reconnectRetries < kMaxPassReconnectRetries &&
+              !_isDisposed) {
+            unawaited(() async {
+              await _updateForegroundNotification(
+                title: 'Reconnecting...',
+                content: 'Retrying connection',
+              );
+              await Future<void>.delayed(const Duration(milliseconds: 700));
+              if (_isDisposed) return;
+              await startStreamingPass(
+                message: message,
+                history: history,
+                systemPrompt: systemPrompt,
+                passImages: passImages,
+                currentPass: currentPass,
+                reconnectRetries: reconnectRetries + 1,
+              );
+            }());
+            return;
+          }
 
           finalizeStaleToolState();
 
@@ -911,6 +961,7 @@ class StreamingMessageHandler {
       await StreamingForegroundService.acquireKeepAliveLock(
         title: 'Generating response...',
         content: 'AI is working',
+        startIfNeeded: _streamingManager.isAppInBackground,
       );
       _hasForegroundKeepAliveLock = true;
     } catch (error) {

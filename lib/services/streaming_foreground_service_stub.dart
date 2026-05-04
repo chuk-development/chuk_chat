@@ -27,6 +27,7 @@ class StreamingForegroundService {
   static Future<void> acquireKeepAliveLock({
     String? title,
     String? content,
+    bool startIfNeeded = true,
   }) async {
     // No-op on web
   }
@@ -45,7 +46,10 @@ class StreamingForegroundService {
   }
 
   /// Stop the foreground service (no-op on web)
-  static Future<void> stopService({bool force = false}) async {
+  static Future<void> stopService({
+    bool force = false,
+    bool preserveLocks = false,
+  }) async {
     // No-op on web
   }
 
