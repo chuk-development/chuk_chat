@@ -234,7 +234,7 @@ void main() {
       expect(ctx.getContent(), equals('')); // callback receives empty string
     });
 
-    test('UsageEvent and MetaEvent are silently ignored', () async {
+    test('UsageEvent is ignored and MetaEvent is stored', () async {
       final ctx = await startTestStream();
 
       ctx.controller.add(const UsageEvent({'prompt_tokens': 10}));
@@ -244,6 +244,8 @@ void main() {
 
       expect(ctx.getContent(), equals('After meta'));
       expect(manager.isStreaming('chat-1'), isTrue);
+      expect(manager.getLatestMeta('chat-1'), isNotNull);
+      expect(manager.getLatestMeta('chat-1')!['model'], equals('gpt-4'));
 
       await ctx.controller.close();
       await Future.delayed(Duration.zero);

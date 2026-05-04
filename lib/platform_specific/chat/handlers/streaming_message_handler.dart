@@ -448,12 +448,16 @@ class StreamingMessageHandler {
                 title: 'Running tools...',
                 content: 'AI is processing tool calls',
               );
+              final turnSignals = ToolTurnSignals.fromMeta(
+                _streamingManager.getLatestMeta(chatId),
+              );
 
               final loopResult = await _toolCallHandler
                   .processAssistantResponse(
                     session: toolSession,
                     content: finalContent,
                     reasoning: finalReasoning,
+                    turnSignals: turnSignals,
                     onToolCallsUpdated: (toolCalls) {
                       onToolCallsUpdate?.call(
                         placeholderIndex,
@@ -681,8 +685,11 @@ class StreamingMessageHandler {
               // existing inline-card render path picks it up, and the tag is
               // persisted via ArtifactStorageService (create or rewrite) for
               // version history.
-              final syntheticArtifactCalls = await ArtifactTagProcessor
-                  .processTags(content: effectiveContent, chatId: chatId);
+              final syntheticArtifactCalls =
+                  await ArtifactTagProcessor.processTags(
+                    content: effectiveContent,
+                    chatId: chatId,
+                  );
               if (syntheticArtifactCalls.isNotEmpty) {
                 finalToolCalls.addAll(syntheticArtifactCalls);
                 onToolCallsUpdate?.call(

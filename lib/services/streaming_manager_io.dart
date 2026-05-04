@@ -279,6 +279,8 @@ class StreamingManager {
     } else if (event is TpsEvent) {
       // Store TPS metric for later use in onComplete
       activeStream.tps = event.tokensPerSecond;
+    } else if (event is MetaEvent) {
+      activeStream.latestMeta = Map<String, dynamic>.from(event.meta);
     } else if (event is ErrorEvent) {
       // Handle error events from the stream (e.g., API errors)
       if (kDebugMode) {
@@ -456,6 +458,14 @@ class StreamingManager {
     return stream.tps;
   }
 
+  /// Get the latest stream metadata for a chat (active or completed).
+  /// Returns null if no metadata was received.
+  Map<String, dynamic>? getLatestMeta(String chatId) {
+    final stream = _activeStreams[chatId];
+    if (stream == null || stream.latestMeta == null) return null;
+    return Map<String, dynamic>.from(stream.latestMeta!);
+  }
+
   /// Check if a chat has a completed stream with buffered content
   /// that hasn't been consumed yet.
   bool hasCompletedStream(String chatId) {
@@ -543,6 +553,7 @@ class _ActiveStream {
 
   // Tokens per second metric (set when TpsEvent is received)
   double? tps;
+  Map<String, dynamic>? latestMeta;
 
   // Timestamp when stream completed (for TTL eviction)
   DateTime? completedAt;
