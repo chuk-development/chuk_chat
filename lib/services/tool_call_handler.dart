@@ -1131,21 +1131,29 @@ class ToolCallHandler {
       r"(first[,\s]+)?"
       r"(i\s*(?:will|'ll)|let me|i(?:’|')m going to|i need to|i should)\b",
     ).hasMatch(normalized);
-    if (!startsWithIntent) {
+    final startsWithIntentIntl = RegExp(
+      r'^(ich\s+(?:suche|werde)|'
+      r'je\s+vais|'
+      r'voy\s+a|'
+      r'vado\s+a|'
+      r'eu\s+vou|'
+      r'wij\s+gaan|'
+      r'we\s+will)\b',
+    ).hasMatch(normalized);
+    if (!startsWithIntent && !startsWithIntentIntl) {
       return false;
     }
 
     final hasDeferredActionVerb = RegExp(
-      r'\b(search|check|look up|lookup|verify|find|fetch|browse|compare|research|pull)\b',
+      r'\b(search|check|look up|lookup|verify|find|fetch|browse|compare|research|pull|'
+      r'suche|recherchiere|chercher|rechercher|buscar|investigar|procurar|onderzoek)\b',
     ).hasMatch(normalized);
     if (!hasDeferredActionVerb) {
       return false;
     }
 
     final hasAnswerLikeStructure =
-        normalized.contains('\n') ||
-        normalized.contains(':') ||
-        normalized.contains('```');
+        normalized.contains('\n') || normalized.contains('```');
 
     return !hasAnswerLikeStructure;
   }
