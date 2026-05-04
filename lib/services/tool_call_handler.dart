@@ -55,6 +55,7 @@ class ToolLoopSession {
   int malformedToolProtocolRecoveryAttempts = 0;
   int truncatedCompletionRecoveryAttempts = 0;
   int deferredActionRecoveryAttempts = 0;
+  int nonFinalTurnRecoveryAttempts = 0;
 }
 
 class ToolLoopStep {
@@ -265,6 +266,7 @@ class ToolCallHandler {
   static const int _maxMalformedToolProtocolRecoveryAttempts = 2;
   static const int _maxTruncatedCompletionRecoveryAttempts = 2;
   static const int _maxDeferredActionRecoveryAttempts = 2;
+  static const int _maxNonFinalTurnRecoveryAttempts = 1;
   static const int _maxDiscoveryContexts = 200;
   final Map<String, _DiscoveryContextState> _discoveryContextStates =
       <String, _DiscoveryContextState>{};
@@ -536,8 +538,50 @@ class ToolCallHandler {
               modelId: session.modelId,
             ),
           ),
-          // Don't surface "I'll search..." preambles as final user-facing text.
-          interimContent: '',
+          // Preserve interim "I'm checking..." text in the UI while the loop
+          // continues with the next tool round.
+          interimContent: displayContent,
+          toolCalls: _cloneToolCalls(session.toolCalls),
+        );
+      }
+
+      final isNonFinalSignaledTurn =
+          (turnSignals != null) &&
+          !signaledToolUse &&
+          !signaledTruncated &&
+          !(turnSignals.indicatesFinalStop);
+      final shouldRetryAfterNonFinalTurn =
+          session.toolCalls.isNotEmpty &&
+          displayContent.trim().isNotEmpty &&
+          isNonFinalSignaledTurn &&
+          session.nonFinalTurnRecoveryAttempts <
+              _maxNonFinalTurnRecoveryAttempts;
+
+      if (shouldRetryAfterNonFinalTurn) {
+        session.nonFinalTurnRecoveryAttempts++;
+        const retryMessage =
+            'Tool Results:\n'
+            '[INFO] The previous assistant turn appears non-final while the '
+            'tool loop is active.\n\n'
+            'Continue this response now. If additional tools are required, '
+            'emit valid <tool_call> blocks. If no more tools are needed, '
+            'provide the final user-facing answer now.';
+
+        session.latestUserMessage = retryMessage;
+        return ToolLoopResult.continueWith(
+          nextStep: ToolLoopStep(
+            message: retryMessage,
+            history: _cloneHistory(session.history),
+            systemPrompt: await _buildSystemPrompt(
+              baseSystemPrompt: session.baseSystemPrompt,
+              isToolResult: true,
+              discoveryMode: session.discoveryMode,
+              discoveredTools: session.discoveredTools,
+              skipIdentity: session.skipIdentity,
+              modelId: session.modelId,
+            ),
+          ),
+          interimContent: displayContent,
           toolCalls: _cloneToolCalls(session.toolCalls),
         );
       }
