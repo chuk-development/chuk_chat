@@ -52,6 +52,7 @@ class ToolLoopSession {
   final Set<String> discoveredToolNames = {};
   final List<ToolCall> toolCalls = [];
   int emptyFinalRecoveryAttempts = 0;
+  int deferredActionRecoveryAttempts = 0;
 }
 
 class ToolLoopStep {
@@ -154,6 +155,7 @@ class ToolCallHandler {
 
   final ToolExecutor _toolExecutor = ToolExecutor();
   static const int _maxEmptyFinalRecoveryAttempts = 3;
+  static const int _maxDeferredActionRecoveryAttempts = 2;
   static const int _maxDiscoveryContexts = 200;
   final Map<String, _DiscoveryContextState> _discoveryContextStates =
       <String, _DiscoveryContextState>{};
@@ -218,8 +220,10 @@ class ToolCallHandler {
       // Even when tools are disabled the per-model prompt should still apply,
       // so route through the merge helper rather than returning the raw base.
       final base = session.baseSystemPrompt?.trim() ?? '';
-      final merged =
-          await _applyPerModelPrompt(base: base, modelId: session.modelId);
+      final merged = await _applyPerModelPrompt(
+        base: base,
+        modelId: session.modelId,
+      );
       return merged ?? base;
     }
 
@@ -252,7 +256,7 @@ class ToolCallHandler {
     // content channel while the actual tool calls end up in the reasoning
     // channel.  Strip full <thinking>/<think> blocks (tags + inner text) to
     // determine whether the content is *effectively* empty for rescue purposes.
-    final _contentSansThinking = content
+    final contentSansThinking = content
         .replaceAll(
           RegExp(r'<thinking>[\s\S]*?</thinking>', caseSensitive: false),
           '',
@@ -263,7 +267,7 @@ class ToolCallHandler {
         )
         .trim();
 
-    if (_contentSansThinking.isEmpty && reasoning.contains('<tool_call>')) {
+    if (contentSansThinking.isEmpty && reasoning.contains('<tool_call>')) {
       final idx = reasoning.indexOf('<tool_call>');
       effectiveReasoning = reasoning.substring(0, idx).trim();
       effectiveContent = reasoning.substring(idx);
@@ -291,8 +295,9 @@ class ToolCallHandler {
     // Strip literal `<thinking>` / `<think>` wrapper tags — some providers
     // emit them inline in the content stream, which then renders as visible
     // gibberish in the chat UI.
-    final cleanedContent =
-        _stripThinkingTags(hallucinationCheck.cleanedContent).trim();
+    final cleanedContent = _stripThinkingTags(
+      hallucinationCheck.cleanedContent,
+    ).trim();
 
     if (!session.toolCallingEnabled) {
       final displayContent = _stripToolCallBlocks(cleanedContent);
@@ -320,6 +325,40 @@ class ToolCallHandler {
     );
     if (parsedCalls.isEmpty) {
       final displayContent = _stripToolCallBlocks(cleanedContent);
+      final shouldRetryAfterDeferredAction =
+          _looksLikeDeferredActionWithoutToolCall(displayContent) &&
+          session.deferredActionRecoveryAttempts <
+              _maxDeferredActionRecoveryAttempts;
+
+      if (shouldRetryAfterDeferredAction) {
+        session.deferredActionRecoveryAttempts++;
+        const retryMessage =
+            'Tool Results:\n'
+            '[INFO] Your previous response said you would perform an action '
+            '(search/check/lookup), but no tool call was emitted.\n\n'
+            'If external information is required, call the appropriate '
+            'tool(s) now. Otherwise, provide the final answer directly now '
+            'without saying you will do it later.';
+
+        session.latestUserMessage = retryMessage;
+        return ToolLoopResult.continueWith(
+          nextStep: ToolLoopStep(
+            message: retryMessage,
+            history: _cloneHistory(session.history),
+            systemPrompt: await _buildSystemPrompt(
+              baseSystemPrompt: session.baseSystemPrompt,
+              isToolResult: true,
+              discoveryMode: session.discoveryMode,
+              discoveredTools: session.discoveredTools,
+              skipIdentity: session.skipIdentity,
+              modelId: session.modelId,
+            ),
+          ),
+          // Don't surface "I'll search..." preambles as final user-facing text.
+          interimContent: '',
+          toolCalls: _cloneToolCalls(session.toolCalls),
+        );
+      }
 
       final shouldRetryAfterEmptyResponse =
           displayContent.trim().isEmpty &&
@@ -825,10 +864,7 @@ class ToolCallHandler {
       RegExp(r'</?thinking>', caseSensitive: false),
       '',
     );
-    out = out.replaceAll(
-      RegExp(r'</?think>', caseSensitive: false),
-      '',
-    );
+    out = out.replaceAll(RegExp(r'</?think>', caseSensitive: false), '');
     return out;
   }
 
@@ -893,6 +929,43 @@ class ToolCallHandler {
         .trim();
 
     return withoutThinkingBlocks.isNotEmpty;
+  }
+
+  /// Detects "I'll search/check/lookup..." style deferred-action text that
+  /// often appears when a model intends to call tools but emits no call.
+  @visibleForTesting
+  static bool looksLikeDeferredActionWithoutToolCall(String content) =>
+      _looksLikeDeferredActionWithoutToolCall(content);
+
+  static bool _looksLikeDeferredActionWithoutToolCall(String content) {
+    final text = content.trim();
+    if (text.isEmpty || text.length > 280) {
+      return false;
+    }
+
+    final normalized = text.toLowerCase();
+    final startsWithIntent = RegExp(
+      r"^(ok[,\s]+|sure[,\s]+|alright[,\s]+)?"
+      r"(first[,\s]+)?"
+      r"(i\s*(?:will|'ll)|let me|i(?:’|')m going to)\b",
+    ).hasMatch(normalized);
+    if (!startsWithIntent) {
+      return false;
+    }
+
+    final hasDeferredActionVerb = RegExp(
+      r'\b(search|check|look up|lookup|verify|find|fetch|browse|compare|research|pull)\b',
+    ).hasMatch(normalized);
+    if (!hasDeferredActionVerb) {
+      return false;
+    }
+
+    final hasAnswerLikeStructure =
+        normalized.contains('\n') ||
+        normalized.contains(':') ||
+        normalized.contains('```');
+
+    return !hasAnswerLikeStructure;
   }
 
   List<Map<String, dynamic>> _cloneHistory(List<Map<String, dynamic>> history) {

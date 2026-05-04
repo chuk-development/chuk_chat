@@ -13,6 +13,14 @@ import 'package:chuk_chat/utils/clipboard_text_sanitizer.dart';
 class DebugChatFormatter {
   const DebugChatFormatter._();
 
+  static const int _maxContextValueChars = 220;
+  static const int _maxSystemPromptChars = 1800;
+  static const int _maxReasoningChars = 400;
+  static const int _maxMessageTextChars = 2200;
+  static const int _maxToolArgsChars = 320;
+  static const int _maxToolResultChars = 250;
+  static const int _maxAttachmentsChars = 420;
+
   // Explicitly drop a value without linter warnings.
   static void _noop(Object? _) {}
 
@@ -31,6 +39,15 @@ class DebugChatFormatter {
     return 1;
   }
 
+  static String _truncateForExport(String value, {required int maxChars}) {
+    final trimmed = value.trim();
+    if (trimmed.length <= maxChars) {
+      return trimmed;
+    }
+    return '${trimmed.substring(0, maxChars)}... '
+        '(${trimmed.length} chars total)';
+  }
+
   /// Format a list of message maps (as used by chat UIs) into a debug string.
   ///
   /// Optional context — when supplied — is rendered above the message list so
@@ -43,7 +60,8 @@ class DebugChatFormatter {
     String? systemPrompt,
     Map<String, String>? context,
   }) {
-    final hasContext = systemPrompt != null && systemPrompt.trim().isNotEmpty ||
+    final hasContext =
+        systemPrompt != null && systemPrompt.trim().isNotEmpty ||
         (context != null && context.isNotEmpty);
 
     if (messages.isEmpty && !hasContext) return '(empty chat)';
@@ -58,16 +76,23 @@ class DebugChatFormatter {
       buf.writeln('--- Context ---');
       context.forEach((k, v) {
         if (v.trim().isEmpty) return;
-        buf.writeln(
-          '$k: ${ClipboardTextSanitizer.sanitize(v).trim()}',
+        final compactValue = _truncateForExport(
+          ClipboardTextSanitizer.sanitize(v),
+          maxChars: _maxContextValueChars,
         );
+        buf.writeln('$k: $compactValue');
       });
       buf.writeln();
     }
 
     if (systemPrompt != null && systemPrompt.trim().isNotEmpty) {
       buf.writeln('--- System Prompt ---');
-      buf.writeln(ClipboardTextSanitizer.sanitize(systemPrompt).trim());
+      buf.writeln(
+        _truncateForExport(
+          ClipboardTextSanitizer.sanitize(systemPrompt),
+          maxChars: _maxSystemPromptChars,
+        ),
+      );
       buf.writeln();
     }
 
@@ -108,13 +133,7 @@ class DebugChatFormatter {
       if (reasoning.trim().isNotEmpty) {
         final trimmed = reasoning.trim();
         buf.writeln('Reasoning:');
-        if (trimmed.length > 400) {
-          buf.writeln(
-            '${trimmed.substring(0, 400)}... (${trimmed.length} chars total)',
-          );
-        } else {
-          buf.writeln(trimmed);
-        }
+        buf.writeln(_truncateForExport(trimmed, maxChars: _maxReasoningChars));
         buf.writeln();
       }
 
@@ -140,12 +159,16 @@ class DebugChatFormatter {
                   final sanitizedArgs = ClipboardTextSanitizer.sanitize(
                     argsStr,
                   );
-                  buf.writeln('    Args: $sanitizedArgs');
+                  buf.writeln(
+                    '    Args: ${_truncateForExport(sanitizedArgs, maxChars: _maxToolArgsChars)}',
+                  );
                 } catch (_) {
                   final sanitizedArgs = ClipboardTextSanitizer.sanitize(
                     args.toString(),
                   );
-                  buf.writeln('    Args: $sanitizedArgs');
+                  buf.writeln(
+                    '    Args: ${_truncateForExport(sanitizedArgs, maxChars: _maxToolArgsChars)}',
+                  );
                 }
                 // roundThinking intentionally omitted to reduce noise
                 _noop(roundThinking);
@@ -154,14 +177,9 @@ class DebugChatFormatter {
                 final resultStr = ClipboardTextSanitizer.sanitize(
                   result.toString().trim(),
                 );
-                if (resultStr.length > 250) {
-                  buf.writeln(
-                    '    Result: ${resultStr.substring(0, 250)}... '
-                    '(${resultStr.length} chars)',
-                  );
-                } else {
-                  buf.writeln('    Result: $resultStr');
-                }
+                buf.writeln(
+                  '    Result: ${_truncateForExport(resultStr, maxChars: _maxToolResultChars)}',
+                );
               }
             }
           }
@@ -201,9 +219,7 @@ class DebugChatFormatter {
               '${debugRequestsJson.length} chars total',
             );
           } else {
-            buf.writeln(
-              'Request Payloads: ${debugRequestsJson.length} chars',
-            );
+            buf.writeln('Request Payloads: ${debugRequestsJson.length} chars');
           }
         } catch (_) {
           buf.writeln(
@@ -216,7 +232,7 @@ class DebugChatFormatter {
       // Message text
       if (text.trim().isNotEmpty) {
         buf.writeln('Text:');
-        buf.writeln(text.trim());
+        buf.writeln(_truncateForExport(text, maxChars: _maxMessageTextChars));
         buf.writeln();
       }
 
@@ -237,10 +253,14 @@ class DebugChatFormatter {
 
       // Attachments
       if (attachments.isNotEmpty) {
-        buf.writeln('Attachments: $attachments');
+        buf.writeln(
+          'Attachments: ${_truncateForExport(attachments, maxChars: _maxAttachmentsChars)}',
+        );
       }
       if (attachedFilesJson.isNotEmpty) {
-        buf.writeln('Attached Files: $attachedFilesJson');
+        buf.writeln(
+          'Attached Files: ${_truncateForExport(attachedFilesJson, maxChars: _maxAttachmentsChars)}',
+        );
       }
 
       buf.writeln();

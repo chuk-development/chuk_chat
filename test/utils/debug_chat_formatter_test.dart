@@ -103,18 +103,20 @@ void main() {
       expect(providerIdx < platformIdx, isTrue);
     });
 
-    test('renders header-only export when messages empty but context given',
-        () {
-      final formatted = DebugChatFormatter.format(
-        const [],
-        systemPrompt: 'prompt',
-        context: {'Model': 'x'},
-      );
+    test(
+      'renders header-only export when messages empty but context given',
+      () {
+        final formatted = DebugChatFormatter.format(
+          const [],
+          systemPrompt: 'prompt',
+          context: {'Model': 'x'},
+        );
 
-      expect(formatted.contains('--- System Prompt ---'), isTrue);
-      expect(formatted.contains('Model: x'), isTrue);
-      expect(formatted.contains('Messages: 0'), isTrue);
-    });
+        expect(formatted.contains('--- System Prompt ---'), isTrue);
+        expect(formatted.contains('Model: x'), isTrue);
+        expect(formatted.contains('Messages: 0'), isTrue);
+      },
+    );
 
     test('returns placeholder when nothing provided', () {
       final formatted = DebugChatFormatter.format(const []);
@@ -133,6 +135,22 @@ void main() {
 
       expect(formatted.contains('data:image/png'), isFalse);
       expect(formatted.contains('[image removed]'), isTrue);
+    });
+
+    test('truncates oversized system prompt and message text', () {
+      final longPrompt = 'p' * 2500;
+      final longText = 't' * 2600;
+      final messages = [
+        <String, String>{'sender': 'assistant', 'text': longText},
+      ];
+
+      final formatted = DebugChatFormatter.format(
+        messages,
+        systemPrompt: longPrompt,
+      );
+
+      expect(formatted.contains('(2500 chars total)'), isTrue);
+      expect(formatted.contains('(2600 chars total)'), isTrue);
     });
   });
 }
