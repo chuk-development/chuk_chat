@@ -185,6 +185,8 @@ class StreamingManager {
       );
     } else if (event is TpsEvent) {
       activeStream.tps = event.tokensPerSecond;
+    } else if (event is MetaEvent) {
+      activeStream.latestMeta = Map<String, dynamic>.from(event.meta);
     } else if (event is ErrorEvent) {
       if (kDebugMode) {
         debugPrint('Stream ErrorEvent for chat $chatId: ${event.message}');
@@ -274,6 +276,14 @@ class StreamingManager {
     return stream.tps;
   }
 
+  /// Get the latest stream metadata for a chat (active or completed).
+  /// Returns null if no metadata was received.
+  Map<String, dynamic>? getLatestMeta(String chatId) {
+    final stream = _activeStreams[chatId];
+    if (stream == null || stream.latestMeta == null) return null;
+    return Map<String, dynamic>.from(stream.latestMeta!);
+  }
+
   /// Check if a chat has a completed stream with buffered content.
   bool hasCompletedStream(String chatId) {
     final stream = _activeStreams[chatId];
@@ -352,6 +362,7 @@ class _ActiveStream {
   bool isActive = true;
 
   double? tps;
+  Map<String, dynamic>? latestMeta;
   DateTime? completedAt;
   List<Map<String, dynamic>>? backgroundMessages;
   String? modelId;

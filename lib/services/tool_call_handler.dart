@@ -52,6 +52,8 @@ class ToolLoopSession {
   final Set<String> discoveredToolNames = {};
   final List<ToolCall> toolCalls = [];
   int emptyFinalRecoveryAttempts = 0;
+  int malformedToolProtocolRecoveryAttempts = 0;
+  int truncatedCompletionRecoveryAttempts = 0;
   int deferredActionRecoveryAttempts = 0;
 }
 
@@ -143,6 +145,111 @@ class ToolLoopResult {
   final List<RoundSegment> interleavedSegments;
 }
 
+/// Provider/tool-loop hints extracted from stream metadata.
+///
+/// When available, this enables Anthropic/OpenAI-style control flow:
+/// - `tool_use` / `tool_calls` => continue tool loop.
+/// - `end_turn` / `stop` => finalize answer.
+/// - `max_tokens` / `length` => request continuation pass.
+///
+/// If the backend does not provide these fields, fall back to local parsing.
+class ToolTurnSignals {
+  const ToolTurnSignals._({this.stopReason, this.finishReason, this.rawMeta});
+
+  final String? stopReason;
+  final String? finishReason;
+  final Map<String, dynamic>? rawMeta;
+
+  static const Set<String> _toolUseReasons = <String>{
+    'tool_use',
+    'tool_calls',
+    'function_call',
+    'function_calls',
+  };
+
+  static const Set<String> _finalReasons = <String>{
+    'stop',
+    'end_turn',
+    'stop_sequence',
+    'eos',
+  };
+
+  static const Set<String> _truncatedReasons = <String>{'max_tokens', 'length'};
+
+  bool get indicatesToolUse =>
+      _toolUseReasons.contains(stopReason) ||
+      _toolUseReasons.contains(finishReason);
+
+  bool get indicatesFinalStop =>
+      _finalReasons.contains(stopReason) ||
+      _finalReasons.contains(finishReason);
+
+  bool get indicatesTruncated =>
+      _truncatedReasons.contains(stopReason) ||
+      _truncatedReasons.contains(finishReason);
+
+  static ToolTurnSignals fromMeta(Map<String, dynamic>? meta) {
+    if (meta == null || meta.isEmpty) {
+      return const ToolTurnSignals._();
+    }
+
+    final finishReason = _firstLowercasedString(meta, const [
+      ['finish_reason'],
+      ['response', 'finish_reason'],
+      ['provider', 'finish_reason'],
+      ['choice', 'finish_reason'],
+      ['choices', 0, 'finish_reason'],
+    ]);
+    final stopReason = _firstLowercasedString(meta, const [
+      ['stop_reason'],
+      ['response', 'stop_reason'],
+      ['provider', 'stop_reason'],
+      ['choice', 'stop_reason'],
+      ['choices', 0, 'stop_reason'],
+    ]);
+
+    return ToolTurnSignals._(
+      stopReason: stopReason,
+      finishReason: finishReason,
+      rawMeta: Map<String, dynamic>.from(meta),
+    );
+  }
+
+  static String? _firstLowercasedString(
+    Map<String, dynamic> root,
+    List<List<Object>> paths,
+  ) {
+    for (final path in paths) {
+      final value = _readPath(root, path);
+      if (value is! String) continue;
+      final normalized = value.trim().toLowerCase();
+      if (normalized.isNotEmpty) {
+        return normalized;
+      }
+    }
+    return null;
+  }
+
+  static Object? _readPath(Object? current, List<Object> path) {
+    Object? cursor = current;
+    for (final segment in path) {
+      if (cursor is Map) {
+        cursor = cursor[segment];
+        continue;
+      }
+      if (cursor is List && segment is int) {
+        if (segment < 0 || segment >= cursor.length) {
+          return null;
+        }
+        cursor = cursor[segment];
+        continue;
+      }
+      return null;
+    }
+    return cursor;
+  }
+}
+
 class ToolCallHandler {
   ToolCallHandler._internal() {
     registerBuiltinTools(_toolExecutor);
@@ -155,6 +262,8 @@ class ToolCallHandler {
 
   final ToolExecutor _toolExecutor = ToolExecutor();
   static const int _maxEmptyFinalRecoveryAttempts = 3;
+  static const int _maxMalformedToolProtocolRecoveryAttempts = 2;
+  static const int _maxTruncatedCompletionRecoveryAttempts = 2;
   static const int _maxDeferredActionRecoveryAttempts = 2;
   static const int _maxDiscoveryContexts = 200;
   final Map<String, _DiscoveryContextState> _discoveryContextStates =
@@ -241,6 +350,7 @@ class ToolCallHandler {
     required ToolLoopSession session,
     required String content,
     required String reasoning,
+    ToolTurnSignals? turnSignals,
     void Function(List<ToolCall>)? onToolCallsUpdated,
   }) async {
     final enforcer = session.enforcer;
@@ -325,6 +435,78 @@ class ToolCallHandler {
     );
     if (parsedCalls.isEmpty) {
       final displayContent = _stripToolCallBlocks(cleanedContent);
+      final markerInContent = hasToolCallStartMarker(cleanedContent);
+      final markerInReasoning = hasToolCallStartMarker(effectiveReasoning);
+      final hasToolProtocolMarker = markerInContent || markerInReasoning;
+      final signaledToolUse = turnSignals?.indicatesToolUse ?? false;
+      final signaledTruncated = turnSignals?.indicatesTruncated ?? false;
+
+      final shouldRetryAfterMalformedToolProtocol =
+          (signaledToolUse || hasToolProtocolMarker) &&
+          session.malformedToolProtocolRecoveryAttempts <
+              _maxMalformedToolProtocolRecoveryAttempts;
+
+      if (shouldRetryAfterMalformedToolProtocol) {
+        session.malformedToolProtocolRecoveryAttempts++;
+
+        const retryMessage =
+            'Tool Results:\n'
+            '[INFO] The previous response indicated tool usage, but no valid '
+            'tool call could be parsed.\n\n'
+            'If tools are needed, emit a valid <tool_call> now. '
+            'Otherwise, provide the final user-facing answer directly now.';
+
+        session.latestUserMessage = retryMessage;
+        return ToolLoopResult.continueWith(
+          nextStep: ToolLoopStep(
+            message: retryMessage,
+            history: _cloneHistory(session.history),
+            systemPrompt: await _buildSystemPrompt(
+              baseSystemPrompt: session.baseSystemPrompt,
+              isToolResult: true,
+              discoveryMode: session.discoveryMode,
+              discoveredTools: session.discoveredTools,
+              skipIdentity: session.skipIdentity,
+              modelId: session.modelId,
+            ),
+          ),
+          interimContent: '',
+          toolCalls: _cloneToolCalls(session.toolCalls),
+        );
+      }
+
+      final shouldRetryAfterTruncatedCompletion =
+          signaledTruncated &&
+          session.truncatedCompletionRecoveryAttempts <
+              _maxTruncatedCompletionRecoveryAttempts;
+
+      if (shouldRetryAfterTruncatedCompletion) {
+        session.truncatedCompletionRecoveryAttempts++;
+        const retryMessage =
+            'Tool Results:\n'
+            '[INFO] The previous response was cut off by the token limit.\n\n'
+            'Continue from where you stopped and complete the response for '
+            'the user. Do not restart from the beginning.';
+
+        session.latestUserMessage = retryMessage;
+        return ToolLoopResult.continueWith(
+          nextStep: ToolLoopStep(
+            message: retryMessage,
+            history: _cloneHistory(session.history),
+            systemPrompt: await _buildSystemPrompt(
+              baseSystemPrompt: session.baseSystemPrompt,
+              isToolResult: true,
+              discoveryMode: session.discoveryMode,
+              discoveredTools: session.discoveredTools,
+              skipIdentity: session.skipIdentity,
+              modelId: session.modelId,
+            ),
+          ),
+          interimContent: displayContent,
+          toolCalls: _cloneToolCalls(session.toolCalls),
+        );
+      }
+
       final shouldRetryAfterDeferredAction =
           _looksLikeDeferredActionWithoutToolCall(displayContent) &&
           session.deferredActionRecoveryAttempts <
@@ -947,7 +1129,7 @@ class ToolCallHandler {
     final startsWithIntent = RegExp(
       r"^(ok[,\s]+|sure[,\s]+|alright[,\s]+)?"
       r"(first[,\s]+)?"
-      r"(i\s*(?:will|'ll)|let me|i(?:’|')m going to)\b",
+      r"(i\s*(?:will|'ll)|let me|i(?:’|')m going to|i need to|i should)\b",
     ).hasMatch(normalized);
     if (!startsWithIntent) {
       return false;

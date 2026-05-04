@@ -114,9 +114,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         // next loadArtifactsForChat return the ghost artifact, which
         // ends up in the system prompt as a "still active" item the
         // model then tries to update instead of creating fresh.
-        await ArtifactStorageService.deleteArtifactsByIds(
-          artifactIdsToDelete,
-        );
+        await ArtifactStorageService.deleteArtifactsByIds(artifactIdsToDelete);
       }
 
       _persistChat();
@@ -461,11 +459,15 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           onComplete: (finalContent, finalReasoning, tps) {
             unawaited(
               (() async {
+                final turnSignals = ToolTurnSignals.fromMeta(
+                  _streamingManager.getLatestMeta(chatIdForStream),
+                );
                 final loopResult = await _toolCallHandler
                     .processAssistantResponse(
                       session: toolSession,
                       content: finalContent,
                       reasoning: finalReasoning,
+                      turnSignals: turnSignals,
                       onToolCallsUpdated: (toolCalls) {
                         _updateToolCallsForMessage(
                           placeholderIndex,
@@ -626,8 +628,8 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                 // the existing inline-card render path picks it up, and the
                 // tag is persisted via ArtifactStorageService (create or
                 // rewrite) for version history.
-                final syntheticArtifactCalls = await ArtifactTagProcessor
-                    .processTags(
+                final syntheticArtifactCalls =
+                    await ArtifactTagProcessor.processTags(
                       content: effectiveContent,
                       chatId: chatIdForStream,
                     );
@@ -1182,7 +1184,8 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       final int maxResponseTokens = result.maxResponseTokens!;
       final String? systemPrompt = result.effectiveSystemPrompt;
       final workspaceForChat = _resolveWorkspaceForCurrentChat();
-      final skipIdentity = workspaceForChat != null && !workspaceForChat.memoryEnabled;
+      final skipIdentity =
+          workspaceForChat != null && !workspaceForChat.memoryEnabled;
       final List<String>? imageDataUrls = result.images;
 
       final bool hasAttachments = _fileHandler.attachedFiles.any(
@@ -1500,11 +1503,15 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                 }
 
                 try {
+                  final turnSignals = ToolTurnSignals.fromMeta(
+                    _streamingManager.getLatestMeta(chatIdForStream),
+                  );
                   final loopResult = await _toolCallHandler
                       .processAssistantResponse(
                         session: toolSession,
                         content: finalContent,
                         reasoning: finalReasoning,
+                        turnSignals: turnSignals,
                         onToolCallsUpdated: (toolCalls) {
                           _updateToolCallsForMessage(
                             placeholderIndex,
@@ -1673,8 +1680,8 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                   // the existing inline-card render path picks it up, and
                   // the tag is persisted via ArtifactStorageService (create
                   // or rewrite) for version history.
-                  final syntheticArtifactCalls = await ArtifactTagProcessor
-                      .processTags(
+                  final syntheticArtifactCalls =
+                      await ArtifactTagProcessor.processTags(
                         content: effectiveContent,
                         chatId: chatIdForStream,
                       );
