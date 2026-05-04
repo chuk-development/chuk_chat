@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/utils/tool_parser.dart';
 
 /// Service for handling local notifications (completion notifications with deep linking)
 class NotificationService {
@@ -182,7 +183,7 @@ class NotificationService {
     if (content.isEmpty) return '';
 
     // Strip common markdown
-    String cleaned = content
+    String cleaned = stripToolCallBlocksForDisplay(content)
         .replaceAll(RegExp(r'```[\s\S]*?```'), '[code]') // Code blocks
         .replaceAll(RegExp(r'`[^`]+`'), '[code]') // Inline code
         .replaceAll(RegExp(r'\*\*([^*]+)\*\*'), r'$1') // Bold

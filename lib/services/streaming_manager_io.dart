@@ -28,6 +28,7 @@ class StreamingManager {
 
   // Track if app is in background - only show notification when backgrounded
   bool _isAppInBackground = false;
+  bool get isAppInBackground => _isAppInBackground;
 
   /// Check if a chat is currently streaming
   bool isStreaming(String chatId) {
@@ -303,7 +304,7 @@ class StreamingManager {
 
       // Show completion notification if app is in background
       // IMPORTANT: Await this before cleanup so foreground service stops AFTER
-      if (_isAppInBackground && (Platform.isAndroid || Platform.isIOS)) {
+      if (_shouldShowCompletionNotification()) {
         await NotificationService.showCompletionNotification(
           chatId: chatId,
           chatTitle: activeStream.chatTitle ?? 'AI Chat',
@@ -337,7 +338,7 @@ class StreamingManager {
 
     // Show completion notification if app is in background
     // IMPORTANT: Await this before cleanup so foreground service stops AFTER
-    if (_isAppInBackground && (Platform.isAndroid || Platform.isIOS)) {
+    if (_shouldShowCompletionNotification()) {
       await NotificationService.showCompletionNotification(
         chatId: chatId,
         chatTitle: activeStream.chatTitle ?? 'AI Chat',
@@ -379,11 +380,13 @@ class StreamingManager {
 
     if (!Platform.isAndroid) return;
 
-    if (isInBackground && hasActiveStreams) {
-      // App went to background with active streams - start foreground service
+    if (isInBackground &&
+        (hasActiveStreams || StreamingForegroundService.hasKeepAliveLock)) {
+      // App went to background while a stream/tool-loop is active.
+      // Keep foreground service alive so follow-up passes can reconnect.
       if (kDebugMode) {
         debugPrint(
-          '[StreamingManager] App backgrounded with active streams - starting foreground service',
+          '[StreamingManager] App backgrounded with active stream/lock - starting foreground service',
         );
       }
       unawaited(
@@ -411,8 +414,21 @@ class StreamingManager {
           '[StreamingManager] App resumed - stopping foreground service',
         );
       }
-      unawaited(StreamingForegroundService.stopService());
+      unawaited(StreamingForegroundService.stopService(preserveLocks: true));
     }
+  }
+
+  bool _shouldShowCompletionNotification() {
+    if (!_isAppInBackground) return false;
+    if (Platform.isAndroid) {
+      // On Android we already have a single foreground-service notification.
+      // Avoid showing a second "completion" notification for the same turn.
+      if (StreamingForegroundService.hasKeepAliveLock ||
+          StreamingForegroundService.isRunning) {
+        return false;
+      }
+    }
+    return Platform.isAndroid || Platform.isIOS;
   }
 
   /// Get info about active streams (for debugging)
