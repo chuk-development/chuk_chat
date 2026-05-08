@@ -354,6 +354,11 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
       inlineSyntaxList: [LatexSyntax()],
       generators: [
         SpanNodeGeneratorWithTag(
+          tag: MarkdownTag.pre.name,
+          generator: (e, config, visitor) =>
+              _SafeCodeBlockNode(e, config.pre, visitor),
+        ),
+        SpanNodeGeneratorWithTag(
           tag: _latexTag,
           generator: (e, config, visitor) =>
               LatexNode(e.attributes, textColor: widget.textColor),
@@ -741,9 +746,8 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
   /// formatting is a single long line. Otherwise returns [code] verbatim.
   String _prettifyIfJson(String code, String? language) {
     final normalized = (language ?? '').trim().toLowerCase();
-    final looksLikeJson = normalized == 'json' ||
-        normalized == 'jsonc' ||
-        _autoDetectJson(code);
+    final looksLikeJson =
+        normalized == 'json' || normalized == 'jsonc' || _autoDetectJson(code);
     if (!looksLikeJson) return code;
     // Already has meaningful newlines — leave it alone.
     final newlineCount = '\n'.allMatches(code).length;
@@ -765,8 +769,7 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
     final head = trimmed.codeUnitAt(0);
     final tail = trimmed.codeUnitAt(trimmed.length - 1);
     // Must start with { or [ and end with } or ]
-    if (!((head == 0x7B && tail == 0x7D) ||
-        (head == 0x5B && tail == 0x5D))) {
+    if (!((head == 0x7B && tail == 0x7D) || (head == 0x5B && tail == 0x5D))) {
       return false;
     }
     return true;
@@ -1396,6 +1399,92 @@ class _CopyButtonState extends State<_CopyButton> {
   }
 }
 
+/// Replacement for markdown_widget's CodeBlockNode that avoids noisy
+/// "get language error" logs when fenced code blocks have no class attr.
+class _SafeCodeBlockNode extends ElementNode {
+  _SafeCodeBlockNode(this.element, this.preConfig, this.visitor);
+
+  final m.Element element;
+  final PreConfig preConfig;
+  final WidgetVisitor visitor;
+
+  String get content => element.textContent;
+
+  @override
+  InlineSpan build() {
+    final String language = _extractLanguage(element);
+    final CodeBuilder? codeBuilder = preConfig.builder;
+    if (codeBuilder != null) {
+      return WidgetSpan(child: codeBuilder.call(content, language));
+    }
+
+    final splitContents = content.trim().split(
+      visitor.splitRegExp ?? WidgetVisitor.defaultSplitRegExp,
+    );
+    if (splitContents.isNotEmpty && splitContents.last.isEmpty) {
+      splitContents.removeLast();
+    }
+
+    final widget = Container(
+      decoration: preConfig.decoration,
+      margin: preConfig.margin,
+      padding: preConfig.padding,
+      width: double.infinity,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: List.generate(splitContents.length, (index) {
+            final currentContent = splitContents[index];
+            return ProxyRichText(
+              TextSpan(
+                children: highLightSpans(
+                  currentContent,
+                  language: language.isEmpty ? preConfig.language : language,
+                  theme: preConfig.theme,
+                  textStyle: style,
+                  styleNotMatched: preConfig.styleNotMatched,
+                ),
+              ),
+              richTextBuilder: visitor.richTextBuilder,
+            );
+          }),
+        ),
+      ),
+    );
+
+    return WidgetSpan(
+      child: preConfig.wrapper?.call(widget, content, language) ?? widget,
+    );
+  }
+
+  @override
+  TextStyle get style => preConfig.textStyle.merge(parentStyle);
+
+  static String _extractLanguage(m.Element element) {
+    final List<m.Node>? children = element.children;
+    if (children == null || children.isEmpty) {
+      return '';
+    }
+
+    final m.Node first = children.first;
+    if (first is! m.Element) {
+      return '';
+    }
+
+    final String? classValue = first.attributes['class'];
+    if (classValue == null || classValue.isEmpty) {
+      return '';
+    }
+
+    final int dashIndex = classValue.lastIndexOf('-');
+    final String language =
+        (dashIndex >= 0 ? classValue.substring(dashIndex + 1) : classValue)
+            .trim();
+    return language;
+  }
+}
+
 /// Polished markdown image: full-width on mobile bubbles (capped at 540px wide
 /// on large screens), preserves aspect ratio (max-height 320), rounded corners,
 /// loading shimmer, broken-image fallback, tap → fullscreen viewer.
@@ -1414,7 +1503,7 @@ class _MarkdownImage extends StatelessWidget {
         ? Image.network(
             url,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => _errorTile(colorScheme),
+            errorBuilder: (_, _, _) => _errorTile(colorScheme),
             loadingBuilder: (ctx, child, progress) {
               if (progress == null) return child;
               return AspectRatio(
@@ -1434,15 +1523,12 @@ class _MarkdownImage extends StatelessWidget {
         : Image.asset(
             url,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => _errorTile(colorScheme),
+            errorBuilder: (_, _, _) => _errorTile(colorScheme),
           );
 
     final framed = ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 540, maxHeight: 320),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: image,
-      ),
+      child: ClipRRect(borderRadius: BorderRadius.circular(12), child: image),
     );
 
     final tappable = InkWell(
@@ -1496,7 +1582,7 @@ class _MarkdownImage extends StatelessWidget {
       PageRouteBuilder<void>(
         opaque: false,
         barrierColor: Colors.black.withValues(alpha: 0.92),
-        pageBuilder: (_, __, ___) => _NetworkImageViewer(url: url),
+        pageBuilder: (_, _, _) => _NetworkImageViewer(url: url),
       ),
     );
   }
@@ -1522,7 +1608,7 @@ class _NetworkImageViewer extends StatelessWidget {
                 child: Image.network(
                   url,
                   fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const Icon(
+                  errorBuilder: (_, _, _) => const Icon(
                     Icons.broken_image_outlined,
                     color: Colors.white70,
                     size: 64,
