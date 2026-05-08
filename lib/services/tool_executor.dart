@@ -192,8 +192,9 @@ class ToolExecutor {
     // Wait for the UI to settle before hitting the network.
     await Future<void>.delayed(const Duration(seconds: 5));
     try {
-      await _syncToolEnabledPreferencesFromSupabase(prefs)
-          .timeout(const Duration(seconds: 10));
+      await _syncToolEnabledPreferencesFromSupabase(
+        prefs,
+      ).timeout(const Duration(seconds: 10));
     } catch (error) {
       if (kDebugMode) {
         debugPrint('Tool preferences Supabase sync skipped: $error');
@@ -786,7 +787,8 @@ class ToolExecutor {
           await typst_tools.executeTypstCompile(
             serverHttpUrl: serverHttpUrl,
             accessToken: accessToken,
-            chatId: currentChatId ??
+            chatId:
+                currentChatId ??
                 ChatStorageService.selectedChatId ??
                 ChatStorageService.activeMessageChatId,
             args: args,
@@ -809,7 +811,8 @@ class ToolExecutor {
     //   2. `ChatStorageService.selectedChatId` — parent widget state.
     //   3. `ChatStorageService.activeMessageChatId` — set by the resend
     //      path and mirrored by the send path for the same reason.
-    final chatId = currentChatId ??
+    final chatId =
+        currentChatId ??
         ChatStorageService.selectedChatId ??
         ChatStorageService.activeMessageChatId;
 
@@ -852,17 +855,63 @@ class ToolExecutor {
                 'rendered PDF is persisted. Call typst_compile with the '
                 '`source` argument instead of artifact_manager.';
           }
-          final created = await ArtifactStorageService.createArtifact(
-            chatId: chatId,
-            artifactId: artifactId,
-            title: title,
-            type: type,
-            content: content,
-            language: language,
-            messageId: messageId,
+          Future<String> rewriteExisting({
+            required ArtifactDocument existing,
+          }) async {
+            if (existing.type == ArtifactType.typst) {
+              return 'Error: artifact "$artifactId" is a typst artifact. '
+                  'Rewrite it via `typst_compile` with the new `source` so '
+                  'the compiler validates the changes before the PDF is '
+                  'replaced.';
+            }
+            if (existing.chatId != chatId) {
+              return 'Error: Artifact "$artifactId" already exists in a '
+                  'different chat. Use a unique artifact_id for create, or '
+                  'use rewrite in the original chat.';
+            }
+            final rewritten = await ArtifactStorageService.rewriteArtifact(
+              artifactId: artifactId,
+              content: content,
+              title: title,
+              type: type,
+              language: language,
+            );
+            return 'Artifact "${rewritten.id}" rewritten to '
+                'version ${rewritten.version} (create fallback).';
+          }
+
+          final existing = await ArtifactStorageService.loadArtifactById(
+            artifactId,
           );
-          return 'Artifact "${created.id}" created '
-              '(type: ${created.type.value}, version: ${created.version}).';
+          if (existing != null) {
+            return rewriteExisting(existing: existing);
+          }
+
+          try {
+            final created = await ArtifactStorageService.createArtifact(
+              chatId: chatId,
+              artifactId: artifactId,
+              title: title,
+              type: type,
+              content: content,
+              language: language,
+              messageId: messageId,
+            );
+            return 'Artifact "${created.id}" created '
+                '(type: ${created.type.value}, version: ${created.version}).';
+          } on StateError catch (error) {
+            final message = error.message.toString();
+            if (!message.contains('already exists')) {
+              rethrow;
+            }
+            final raceExisting = await ArtifactStorageService.loadArtifactById(
+              artifactId,
+            );
+            if (raceExisting != null) {
+              return rewriteExisting(existing: raceExisting);
+            }
+            rethrow;
+          }
 
         case 'update':
           final artifactId = (args['artifact_id'] as String? ?? '').trim();
@@ -940,8 +989,9 @@ class ToolExecutor {
                 'with the same artifact_id and the new `source` — it will '
                 'validate the compile and replace the saved PDF.';
           }
-          final existing =
-              await ArtifactStorageService.loadArtifactById(artifactId);
+          final existing = await ArtifactStorageService.loadArtifactById(
+            artifactId,
+          );
           if (existing != null &&
               existing.type == ArtifactType.typst &&
               (type == null || type == ArtifactType.typst)) {
@@ -1108,7 +1158,6 @@ class ToolExecutor {
     final parsed = int.tryParse(value.toString().trim());
     return parsed ?? fallback;
   }
-
 }
 
 // ---------------------------------------------------------------------------
