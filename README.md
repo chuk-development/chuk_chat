@@ -58,7 +58,7 @@ We use only open-weight models — no black boxes and no silent data collection.
 ## Features
 
 ### Core
-- **End-to-End Encryption** — All chats encrypted client-side with AES-256-GCM before being stored or synced
+- **End-to-End Encryption** — Server-synced chat data is encrypted client-side with AES-256-GCM before upload
 - **Cross-Platform** — Android, iOS, Linux, macOS, Windows, and Web
 - **Real-Time Streaming** — Watch AI responses as they're generated, with streaming preserved across chat switches
 - **File Attachments** — Share images, PDFs, and documents with AI
@@ -91,8 +91,9 @@ We use only open-weight models — no black boxes and no silent data collection.
 
 ## Security & Privacy
 
-- **Client-side encryption** — Messages are encrypted on your device before leaving it
+- **Client-side encryption** — Chats synced to the server are encrypted on your device before upload
 - **Zero-knowledge architecture** — We cannot read your chats, even if the server is compromised
+- **Plaintext local cache** — Previously loaded chats are also cached locally in plaintext for instant loading and offline access; this cache is protected by your device account and OS sandbox, not by the chat encryption layer
 - **Certificate pinning** — Protection against MITM attacks, including WebSocket connections
 - **Image validation** — Magic-byte verification on uploaded images
 - **No logging in production** — All debug logs are disabled in release builds
@@ -103,10 +104,10 @@ We use only open-weight models — no black boxes and no silent data collection.
 
 | Data | Storage |
 |------|---------|
-| All chat messages | Encrypted on the server (AES-256-GCM). Local cache stores plaintext for instant loading — device OS sandbox provides local isolation |
-| Chat titles & metadata | Encrypted on the server |
-| Starred chat status | Encrypted on the server |
-| Your encryption key | Stored locally (device keychain or app storage) — never leaves your device |
+| Chat messages | Encrypted before sync/storage on the server (AES-256-GCM). Previously loaded chats are also cached locally in plaintext for instant loading and offline access |
+| Chat titles & metadata | Encrypted on the server. When cached locally for faster loading, they are stored in plaintext |
+| Starred chat status | Encrypted on the server. When cached locally, it is stored in plaintext |
+| Your encryption key | Stored locally only and never synced to the server. Uses secure storage where available, with local app-storage fallback on some desktop builds |
 
 For detailed security information, see [SECURITY.md](SECURITY.md).
 
