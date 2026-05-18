@@ -52,6 +52,7 @@ class _SetNewPasswordPageState extends State<SetNewPasswordPage> {
 
   Future<void> _handleSetPassword() async {
     if (!_formKey.currentState!.validate()) return;
+    final l = AppLocalizations.of(context)!;
 
     setState(() {
       _isSubmitting = true;
@@ -69,7 +70,7 @@ class _SetNewPasswordPageState extends State<SetNewPasswordPage> {
       // 2. Get the current user (now authenticated via reset link)
       final user = SupabaseService.auth.currentUser;
       if (user == null) {
-        throw StateError(AppLocalizations.of(context)!.noAuthenticatedUser);
+        throw StateError(l.noAuthenticatedUser);
       }
 
       // 3. Preserve old encryption key metadata before creating new key
@@ -79,9 +80,7 @@ class _SetNewPasswordPageState extends State<SetNewPasswordPage> {
         // This MUST succeed or old chats become unrecoverable.
         final promoted = await KeyVersionService.promoteCurrentToPrevious(user);
         if (promoted == null) {
-          throw StateError(
-            AppLocalizations.of(context)!.failedToPreserveEncryption,
-          );
+          throw StateError(l.failedToPreserveEncryption);
         }
       }
 
@@ -103,7 +102,7 @@ class _SetNewPasswordPageState extends State<SetNewPasswordPage> {
       }
       if (!mounted) return;
       setState(() {
-        _errorMessage = AppLocalizations.of(context)!.failedToSetNewPassword;
+        _errorMessage = l.failedToSetNewPassword;
       });
     } finally {
       if (mounted) {
@@ -198,9 +197,7 @@ class _SetNewPasswordPageState extends State<SetNewPasswordPage> {
                                 : Icons.visibility,
                           ),
                           onPressed: () {
-                            setState(
-                              () => _obscureConfirm = !_obscureConfirm,
-                            );
+                            setState(() => _obscureConfirm = !_obscureConfirm);
                           },
                         ),
                       ),

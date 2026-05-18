@@ -205,8 +205,10 @@ class GoogleOAuth {
     try {
       final params = <String, String>{
         'maxResults': maxResults.toString(),
-        if (query != null) 'q': query,
-        if (labelIds != null) 'labelIds': labelIds.join(','),
+        ...?(query == null ? null : <String, String>{'q': query}),
+        ...?(labelIds == null
+            ? null
+            : <String, String>{'labelIds': labelIds.join(',')}),
       };
 
       final uri = Uri.parse(
@@ -489,7 +491,7 @@ class GoogleOAuth {
         'orderBy': 'startTime',
         if (timeMin != null) 'timeMin': timeMin.toUtc().toIso8601String(),
         if (timeMax != null) 'timeMax': timeMax.toUtc().toIso8601String(),
-        if (query != null) 'q': query,
+        ...?(query == null ? null : <String, String>{'q': query}),
       };
 
       final uri = Uri.parse(
@@ -547,8 +549,10 @@ class GoogleOAuth {
     try {
       final eventBody = <String, dynamic>{
         'summary': summary,
-        if (description != null) 'description': description,
-        if (location != null) 'location': location,
+        ...?(description == null
+            ? null
+            : <String, dynamic>{'description': description}),
+        ...?(location == null ? null : <String, dynamic>{'location': location}),
         'start': {'dateTime': start.toUtc().toIso8601String()},
         'end': {'dateTime': end.toUtc().toIso8601String()},
         if (attendees != null)
@@ -603,9 +607,11 @@ class GoogleOAuth {
 
     try {
       final eventBody = <String, dynamic>{
-        if (summary != null) 'summary': summary,
-        if (description != null) 'description': description,
-        if (location != null) 'location': location,
+        ...?(summary == null ? null : <String, dynamic>{'summary': summary}),
+        ...?(description == null
+            ? null
+            : <String, dynamic>{'description': description}),
+        ...?(location == null ? null : <String, dynamic>{'location': location}),
         if (start != null)
           'start': {'dateTime': start.toUtc().toIso8601String()},
         if (end != null) 'end': {'dateTime': end.toUtc().toIso8601String()},

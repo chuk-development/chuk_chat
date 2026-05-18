@@ -172,9 +172,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(
-                      builder: (_) => const SystemPromptPage(),
-                    ),
+                    MaterialPageRoute(builder: (_) => const SystemPromptPage()),
                   );
                 },
               ),
@@ -546,8 +544,8 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<String?> _saveExportToLinux(Uint8List data, String fileName) async {
-    final Directory? initialDirectory = await _linuxInitialDirectory();
     final l = AppLocalizations.of(context)!;
+    final Directory? initialDirectory = await _linuxInitialDirectory();
     final String? outputPath = await FilePicker.saveFile(
       dialogTitle: l.saveChatExport,
       fileName: fileName,
@@ -634,7 +632,8 @@ class _AccountRowState extends State<_AccountRow> {
     try {
       String? token;
       try {
-        final session = await SupabaseService.refreshSession() ??
+        final session =
+            await SupabaseService.refreshSession() ??
             SupabaseService.auth.currentSession;
         token = session?.accessToken;
       } catch (_) {
@@ -651,9 +650,7 @@ class _AccountRowState extends State<_AccountRow> {
         headers: {'Authorization': 'Bearer $token'},
       );
       if (response.statusCode != 200) {
-        throw StateError(
-          'user_status returned ${response.statusCode}',
-        );
+        throw StateError('user_status returned ${response.statusCode}');
       }
       final decoded = jsonDecode(response.body);
       if (decoded is! Map<String, dynamic>) {
@@ -665,10 +662,7 @@ class _AccountRowState extends State<_AccountRow> {
         final plan = (currentPlan == null || currentPlan.trim().isEmpty)
             ? 'Plus'
             : currentPlan.trim();
-        return _PlanInfo(
-          heroLabel: '$plan plan',
-          chipLabel: '$plan plan',
-        );
+        return _PlanInfo(heroLabel: '$plan plan', chipLabel: '$plan plan');
       }
       return const _PlanInfo(
         heroLabel: 'Free plan',
@@ -703,8 +697,7 @@ class _AccountRowState extends State<_AccountRow> {
     final profileName = _profile?.displayName.trim() ?? '';
     final rawDisplayName = user?.userMetadata?['display_name'];
     final rawFullName = user?.userMetadata?['full_name'];
-    final displayMeta =
-        (rawDisplayName is String) ? rawDisplayName.trim() : '';
+    final displayMeta = (rawDisplayName is String) ? rawDisplayName.trim() : '';
     final fullMeta = (rawFullName is String) ? rawFullName.trim() : '';
     final metadataName = displayMeta.isNotEmpty ? displayMeta : fullMeta;
     String displayName;
@@ -793,11 +786,7 @@ class _AccountRowState extends State<_AccountRow> {
               },
             ),
             const SizedBox(width: 10),
-            Icon(
-              Icons.chevron_right,
-              size: 20,
-              color: m3.onSurfaceVariant,
-            ),
+            Icon(Icons.chevron_right, size: 20, color: m3.onSurfaceVariant),
           ],
         ),
       ),
@@ -958,16 +947,9 @@ class _SettingsRow extends StatelessWidget {
                 ],
               ),
             ),
-            if (trailing != null) ...[
-              const SizedBox(width: 10),
-              trailing!,
-            ],
+            if (trailing != null) ...[const SizedBox(width: 10), trailing!],
             const SizedBox(width: 10),
-            Icon(
-              Icons.chevron_right,
-              size: 20,
-              color: m3.onSurfaceVariant,
-            ),
+            Icon(Icons.chevron_right, size: 20, color: m3.onSurfaceVariant),
           ],
         ),
       ),
@@ -1041,11 +1023,7 @@ class _DevTile extends StatelessWidget {
                 const SizedBox(width: 10),
                 const _Badge('Dev', tone: BadgeTone.warning),
                 const SizedBox(width: 10),
-                Icon(
-                  Icons.chevron_right,
-                  size: 20,
-                  color: m3.onSurfaceVariant,
-                ),
+                Icon(Icons.chevron_right, size: 20, color: m3.onSurfaceVariant),
               ],
             ),
           ),
@@ -1102,11 +1080,7 @@ class _Badge extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: fg,
-        ),
+        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: fg),
       ),
     );
   }
@@ -1147,10 +1121,7 @@ class _MiniChip extends StatelessWidget {
           ],
           Text(
             label,
-            style: TextStyle(
-              fontSize: 11,
-              color: m3.onSurfaceVariant,
-            ),
+            style: TextStyle(fontSize: 11, color: m3.onSurfaceVariant),
           ),
         ],
       ),
@@ -1186,11 +1157,9 @@ class _DashedRectPainter extends CustomPainter {
   final double dashWidth;
   final double dashSpace;
 
-  _DashedRectPainter({
-    required this.color,
-    required this.radius,
-  })  : dashWidth = 5,
-        dashSpace = 4;
+  _DashedRectPainter({required this.color, required this.radius})
+    : dashWidth = 5,
+      dashSpace = 4;
 
   @override
   void paint(Canvas canvas, Size size) {
