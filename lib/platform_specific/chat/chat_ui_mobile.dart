@@ -7,6 +7,8 @@ import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/services/offline_retry_manager.dart';
+import 'package:chuk_chat/services/offline_send_coordinator.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -1734,14 +1736,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       return;
     }
 
-    if (_isOffline) {
-      _showSnackBar('You are offline. Please check your connection.');
-      ChatStorageService.isMessageOperationInProgress = false;
-      if (kDebugMode) {
-        debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (offline)');
-      }
-      return;
-    }
+    // Offline check happens after the user message is added below so we can
+    // enqueue + reflect "pending" in the UI.
 
     if (_fileHandler.hasUploading) {
       _showSnackBar('Upload in progress');
@@ -1942,6 +1938,84 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     final int placeholderIndex = _messages.length - 1;
     _textFieldFocusNode.requestFocus();
     _scrollChatToBottom(force: true);
+
+    // ── Offline short-circuit ──────────────────────────────────────
+    // If offline, enqueue the send, flip the user bubble to pending, drop
+    // the AI placeholder, persist and bail.  The retry manager replays the
+    // send when the network returns.
+    if (!NetworkStatusService.isOnline) {
+      // Resolve the system prompt the same way the online path does, so the
+      // offline replay later behaves identically (workspace context, etc.).
+      final resolvedSystemPrompt = await _resolveSystemPromptForSend();
+      try {
+        final queueId = await OfflineSendCoordinator.enqueue(
+          OfflineSendPayload(
+            chatId: chatIdForThisMessage,
+            messageText: validationResult.aiPromptContent ?? displayMessageText,
+            modelId: _selectedModelId,
+            providerSlug: _selectedProviderSlug ?? '',
+            systemPrompt: resolvedSystemPrompt,
+            replyContext: replyContextForMessage,
+            imagesJson: imageDataUrls != null && imageDataUrls.isNotEmpty
+                ? jsonEncode(imageDataUrls)
+                : null,
+            maxTokens: validationResult.maxResponseTokens ?? 512,
+            reasoningEffort: _reasoningEnabled ? null : 'none',
+          ),
+        );
+        if (mounted) {
+          setState(() {
+            final userIdx = placeholderIndex - 1;
+            if (userIdx >= 0 && userIdx < _messages.length) {
+              _messages[userIdx]['status'] = 'pending';
+              _messages[userIdx]['queueId'] = queueId;
+            }
+            if (placeholderIndex >= 0 &&
+                placeholderIndex < _messages.length &&
+                _messages[placeholderIndex]['text'] == 'Thinking...') {
+              _messages.removeAt(placeholderIndex);
+            }
+          });
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('[Mobile-Send] enqueue failed: $e');
+        }
+        if (mounted) {
+          setState(() {
+            final userIdx = placeholderIndex - 1;
+            if (userIdx >= 0 && userIdx < _messages.length) {
+              _messages[userIdx]['status'] = 'failed';
+              _messages[userIdx]['lastError'] = e.toString();
+            }
+            if (placeholderIndex >= 0 &&
+                placeholderIndex < _messages.length &&
+                _messages[placeholderIndex]['text'] == 'Thinking...') {
+              _messages.removeAt(placeholderIndex);
+            }
+          });
+        }
+      }
+      unawaited(
+        _persistenceHandler.persistChat(
+          messages: _messages,
+          chatId: chatIdForThisMessage,
+          isOffline: true,
+        ),
+      );
+      // Propagate the new chat ID to the parent so chat-switch behavior
+      // stays consistent. Without this the parent thinks selection is
+      // still null while this widget already owns chatIdForThisMessage.
+      if (isNewChat) {
+        widget.onChatIdChanged(chatIdForThisMessage);
+      }
+      _isSendingMessage = false;
+      ChatStorageService.isMessageOperationInProgress = false;
+      if (kDebugMode) {
+        debugPrint('🔓 [SendMessage] GLOBAL LOCK RELEASED (queued offline)');
+      }
+      return;
+    }
 
     // Immediately create chat in Supabase for reliable chat ID assignment
     // Use the captured chatIdForThisMessage to ensure consistency
@@ -2992,6 +3066,17 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                   final List<ImageMeta>? imageMetas =
                                       ImageMeta.decode(raw['imageMetas']);
 
+                                  final statusRaw = raw['status'];
+                                  ChatMessageStatus? status;
+                                  if (statusRaw == 'pending') {
+                                    status = ChatMessageStatus.pending;
+                                  } else if (statusRaw == 'failed') {
+                                    status = ChatMessageStatus.failed;
+                                  } else if (statusRaw == 'sent') {
+                                    status = ChatMessageStatus.sent;
+                                  }
+                                  final lastError = raw['lastError'];
+
                                   return RepaintBoundary(
                                     child: MessageBubble(
                                       key: ValueKey('msg_$i'),
@@ -3068,6 +3153,18 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                             )
                                           : null,
                                       useSharedSelectionArea: true,
+                                      status: status,
+                                      lastError: lastError,
+                                      onRetryPending: isUser &&
+                                              (status ==
+                                                      ChatMessageStatus
+                                                          .pending ||
+                                                  status ==
+                                                      ChatMessageStatus.failed)
+                                          ? () => OfflineRetryManager
+                                              .instance
+                                              .retryNow()
+                                          : null,
                                     ),
                                   );
                                 },

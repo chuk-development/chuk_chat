@@ -45,6 +45,9 @@ class MessageRenderData {
     this.replyPreviewText,
     this.replyPreviewLabel,
     this.isStreamingMessage = false,
+    this.status,
+    this.queueId,
+    this.lastError,
   });
 
   final String sender;
@@ -67,6 +70,15 @@ class MessageRenderData {
   final String? replyPreviewText;
   final String? replyPreviewLabel;
   final bool isStreamingMessage;
+
+  /// Local-only offline delivery status for user messages. `null` = sent.
+  final ChatMessageStatus? status;
+
+  /// Offline queue id linking this user message to its pending entry.
+  final String? queueId;
+
+  /// Last error message recorded while trying to send (for failed status).
+  final String? lastError;
 
   bool get isUser => sender == 'user';
 }
@@ -828,6 +840,24 @@ class ChatUiHelpers {
         ? extractReplyPreviewLabel(replyContextJson)
         : null;
 
+    ChatMessageStatus? status;
+    final statusRaw = raw['status'];
+    if (statusRaw != null && statusRaw.isNotEmpty) {
+      switch (statusRaw) {
+        case 'pending':
+          status = ChatMessageStatus.pending;
+          break;
+        case 'failed':
+          status = ChatMessageStatus.failed;
+          break;
+        case 'sent':
+          status = ChatMessageStatus.sent;
+          break;
+      }
+    }
+    final queueId = raw['queueId'];
+    final lastError = raw['lastError'];
+
     return MessageRenderData(
       sender: sender,
       displayText: displayText,
@@ -847,6 +877,9 @@ class ChatUiHelpers {
       replyPreviewText: replyPreviewText,
       replyPreviewLabel: replyPreviewLabel,
       isStreamingMessage: isStreamingMessage,
+      status: status,
+      queueId: queueId,
+      lastError: lastError,
     );
   }
 }

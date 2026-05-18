@@ -1,5 +1,38 @@
 // lib/models/chat_message.dart
 
+/// Delivery status of a chat message in the local queue/UI.
+///
+/// - [sent]: server acknowledged or stored — default for historical messages
+///   and the only state visible until offline support landed.
+/// - [pending]: in the persistent offline queue, awaiting connectivity.
+/// - [failed]: retried and gave up (non-retryable error or max attempts).
+enum ChatMessageStatus { sent, pending, failed }
+
+ChatMessageStatus? _statusFromString(String? raw) {
+  if (raw == null || raw.isEmpty) return null;
+  switch (raw) {
+    case 'pending':
+      return ChatMessageStatus.pending;
+    case 'failed':
+      return ChatMessageStatus.failed;
+    case 'sent':
+      return ChatMessageStatus.sent;
+  }
+  return null;
+}
+
+String? _statusToString(ChatMessageStatus? status) {
+  if (status == null) return null;
+  switch (status) {
+    case ChatMessageStatus.sent:
+      return 'sent';
+    case ChatMessageStatus.pending:
+      return 'pending';
+    case ChatMessageStatus.failed:
+      return 'failed';
+  }
+}
+
 /// Represents a single message in a chat.
 class ChatMessage {
   ChatMessage({
@@ -17,6 +50,8 @@ class ChatMessage {
     this.contentBlocks,
     this.modelId,
     this.provider,
+    this.status,
+    this.queueId,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -35,6 +70,8 @@ class ChatMessage {
       contentBlocks: json['contentBlocks'] as String?,
       modelId: json['modelId'] as String?,
       provider: json['provider'] as String?,
+      status: _statusFromString(json['status'] as String?),
+      queueId: json['queueId'] as String?,
     );
   }
 
@@ -62,8 +99,58 @@ class ChatMessage {
   final String? modelId;
   final String? provider;
 
+  /// Local-only delivery status. `null` is treated as [ChatMessageStatus.sent]
+  /// so existing chats stay unchanged.
+  final ChatMessageStatus? status;
+
+  /// Optional offline-queue id linking this user message to its pending entry
+  /// in [OfflineQueueService]. Local-only.
+  final String? queueId;
+
   // Alias for backwards compatibility
   String get sender => role == 'assistant' ? 'ai' : role;
+
+  /// Effective status — defaults to [ChatMessageStatus.sent] for legacy rows.
+  ChatMessageStatus get effectiveStatus =>
+      status ?? ChatMessageStatus.sent;
+
+  ChatMessage copyWith({
+    String? role,
+    String? text,
+    String? reasoning,
+    String? replyContext,
+    String? images,
+    String? imageMetas,
+    String? imageCostEur,
+    String? imageGeneratedAt,
+    String? attachments,
+    String? attachedFilesJson,
+    String? toolCalls,
+    String? contentBlocks,
+    String? modelId,
+    String? provider,
+    ChatMessageStatus? status,
+    String? queueId,
+  }) {
+    return ChatMessage(
+      role: role ?? this.role,
+      text: text ?? this.text,
+      reasoning: reasoning ?? this.reasoning,
+      replyContext: replyContext ?? this.replyContext,
+      images: images ?? this.images,
+      imageMetas: imageMetas ?? this.imageMetas,
+      imageCostEur: imageCostEur ?? this.imageCostEur,
+      imageGeneratedAt: imageGeneratedAt ?? this.imageGeneratedAt,
+      attachments: attachments ?? this.attachments,
+      attachedFilesJson: attachedFilesJson ?? this.attachedFilesJson,
+      toolCalls: toolCalls ?? this.toolCalls,
+      contentBlocks: contentBlocks ?? this.contentBlocks,
+      modelId: modelId ?? this.modelId,
+      provider: provider ?? this.provider,
+      status: status ?? this.status,
+      queueId: queueId ?? this.queueId,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
     'role': role,
@@ -86,5 +173,7 @@ class ChatMessage {
       'contentBlocks': contentBlocks,
     if (modelId != null && modelId!.isNotEmpty) 'modelId': modelId,
     if (provider != null && provider!.isNotEmpty) 'provider': provider,
+    if (_statusToString(status) != null) 'status': _statusToString(status),
+    if (queueId != null && queueId!.isNotEmpty) 'queueId': queueId,
   };
 }

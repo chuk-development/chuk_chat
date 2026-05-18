@@ -704,4 +704,8 @@ const Map<String, String> stringsEn = {
   'projectView': 'View',
   'projectNotSupportedPlatform': 'Not supported on this platform.',
   'projectEditProjectTitle': 'Edit project',
+  // ── Offline queue ──────────────────────────────────────────
+  'messagePending': 'Will send when online',
+  'messageFailed': 'Failed to send',
+  'messageRetry': 'Retry',
 };

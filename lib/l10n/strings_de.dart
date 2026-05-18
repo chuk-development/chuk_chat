@@ -735,4 +735,8 @@ const Map<String, String> stringsDe = {
   'projectView': 'Anzeigen',
   'projectNotSupportedPlatform': 'Auf dieser Plattform nicht unterstützt.',
   'projectEditProjectTitle': 'Projekt bearbeiten',
+  // ── Offline-Warteschlange ──────────────────────────────────
+  'messagePending': 'Wird gesendet sobald online',
+  'messageFailed': 'Senden fehlgeschlagen',
+  'messageRetry': 'Erneut versuchen',
 };

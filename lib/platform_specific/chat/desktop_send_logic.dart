@@ -1366,6 +1366,50 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         placeholderIndex = _messages.length - 1;
       });
 
+      // ── Offline short-circuit ──────────────────────────────────────
+      // If we're offline at send time, enqueue the payload, flip the user
+      // bubble to "pending", remove the "Thinking..." placeholder, persist
+      // and bail out before contacting the WebSocket.  The retry manager
+      // will replay the send once connectivity returns.
+      if (!NetworkStatusService.isOnline) {
+        final userMsgIndex = placeholderIndex - 1;
+        final enqueued = await _enqueueOfflineSend(
+          chatId: _activeChatId!,
+          userMsgIndex: userMsgIndex,
+          placeholderIndex: placeholderIndex,
+          messageText: aiPromptContent,
+          displayText: displayMessageText,
+          providerSlug: providerSlug,
+          systemPrompt: systemPrompt,
+          imagesJson: imageDataUrls != null && imageDataUrls.isNotEmpty
+              ? jsonEncode(imageDataUrls)
+              : null,
+          replyContext: replyContextForMessage,
+          maxTokens: maxResponseTokens,
+          reasoningEffort: _reasoningEnabled ? null : 'none',
+        );
+        ChatStorageService.isMessageOperationInProgress = false;
+        if (enqueued) return;
+        // Enqueue failed — flip the user message to failed, drop placeholder,
+        // notify the user. They can retry manually.
+        if (mounted) {
+          setState(() {
+            if (userMsgIndex >= 0 && userMsgIndex < _messages.length) {
+              _messages[userMsgIndex]['status'] = 'failed';
+              _messages[userMsgIndex]['lastError'] = 'Failed to queue message';
+            }
+            if (placeholderIndex >= 0 &&
+                placeholderIndex < _messages.length &&
+                _messages[placeholderIndex]['text'] == 'Thinking...') {
+              _messages.removeAt(placeholderIndex);
+            }
+            _isSending = false;
+          });
+        }
+        _persistChatWithId(_activeChatId!);
+        return;
+      }
+
       // Don't persist "Thinking..." placeholder - wait for actual response
       // _persistChat(); // Removed - will persist after streaming completes
 
@@ -1806,7 +1850,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
               }),
             );
           },
-          onError: (errorMessage) {
+          onError: (errorMessage) async {
             if (kDebugMode) {
               debugPrint(
                 'Stream error for chat $chatIdForStream: $errorMessage',
@@ -1847,6 +1891,47 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
               }
               _showPaymentRequiredDialog();
               return;
+            }
+
+            // Network error → enqueue for retry instead of surfacing an
+            // error message in the chat. The user message keeps its content
+            // and just flips to a "pending" state; AI placeholder is removed.
+            // If enqueue itself fails, fall through to the normal error
+            // display path so the user always gets feedback.
+            if (NetworkStatusService.isNetworkError(errorMessage) &&
+                _activeChatId == chatIdForStream) {
+              final userMsgIndex = placeholderIndex - 1;
+              bool enqueued = false;
+              try {
+                enqueued = await _enqueueOfflineSend(
+                  chatId: chatIdForStream,
+                  userMsgIndex: userMsgIndex,
+                  placeholderIndex: placeholderIndex,
+                  messageText: aiPromptContent,
+                  displayText: displayMessageText,
+                  providerSlug: providerSlug,
+                  systemPrompt: systemPrompt,
+                  imagesJson: imageDataUrls != null && imageDataUrls.isNotEmpty
+                      ? jsonEncode(imageDataUrls)
+                      : null,
+                  replyContext: replyContextForMessage,
+                  maxTokens: maxResponseTokens,
+                  reasoningEffort: _reasoningEnabled ? null : 'none',
+                );
+              } catch (error) {
+                if (kDebugMode) {
+                  debugPrint('[Desktop-Send] enqueue failed: $error');
+                }
+              }
+              if (enqueued) {
+                if (mounted) {
+                  setState(() {
+                    _isSending = false;
+                  });
+                }
+                return;
+              }
+              // Fall through to normal error display below.
             }
 
             final errorText = 'Error: $errorMessage';
@@ -2332,5 +2417,66 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     _controller.text = pending;
     _controller.selection = TextSelection.collapsed(offset: pending.length);
     unawaited(_sendMessage());
+  }
+
+  /// Enqueue an in-flight send (offline or network-error) and reflect the
+  /// "pending" state in the UI + storage. Drops the trailing AI placeholder
+  /// (if it's still "Thinking...") since no response will arrive until
+  /// connectivity returns.
+  /// Returns true if the message was successfully enqueued, false otherwise.
+  /// Callers must check the return value and fall back to error display on
+  /// failure.
+  Future<bool> _enqueueOfflineSend({
+    required String chatId,
+    required int userMsgIndex,
+    required int placeholderIndex,
+    required String messageText,
+    required String displayText,
+    required String providerSlug,
+    String? systemPrompt,
+    String? imagesJson,
+    String? replyContext,
+    required int maxTokens,
+    String? reasoningEffort,
+  }) async {
+    final payload = OfflineSendPayload(
+      chatId: chatId,
+      messageText: messageText,
+      modelId: _selectedModelId,
+      providerSlug: providerSlug,
+      systemPrompt: systemPrompt,
+      replyContext: replyContext,
+      imagesJson: imagesJson,
+      maxTokens: maxTokens,
+      reasoningEffort: reasoningEffort,
+    );
+
+    String queueId;
+    try {
+      queueId = await OfflineSendCoordinator.enqueue(payload);
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[Desktop-Send] enqueue failed: $e');
+      }
+      return false;
+    }
+
+    if (!mounted) return true;
+    setState(() {
+      if (userMsgIndex >= 0 && userMsgIndex < _messages.length) {
+        _messages[userMsgIndex]['status'] = 'pending';
+        _messages[userMsgIndex]['queueId'] = queueId;
+      }
+      // Drop the trailing "Thinking..." placeholder — no AI reply will come
+      // until the queued send is replayed.
+      if (placeholderIndex >= 0 &&
+          placeholderIndex < _messages.length &&
+          _messages[placeholderIndex]['text'] == 'Thinking...') {
+        _messages.removeAt(placeholderIndex);
+      }
+      _isSending = false;
+    });
+    _persistChatWithId(chatId);
+    return true;
   }
 }

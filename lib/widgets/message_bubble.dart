@@ -4,6 +4,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:chuk_chat/models/chat_message.dart' show ChatMessageStatus;
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/models/artifact.dart';
@@ -152,6 +153,9 @@ class MessageBubble extends StatefulWidget {
     this.onReplyToAiBlock,
     this.userMessageActions = const <MessageBubbleAction>[],
     this.useSharedSelectionArea = false,
+    this.status,
+    this.lastError,
+    this.onRetryPending,
   });
 
   final String message;
@@ -212,6 +216,16 @@ class MessageBubble extends StatefulWidget {
   /// the UX pattern of ChatGPT, Gemini, etc.
   final List<MessageBubbleAction> userMessageActions;
   final bool useSharedSelectionArea;
+
+  /// Local offline-delivery status. Only rendered for user messages. `null`
+  /// behaves like [ChatMessageStatus.sent].
+  final ChatMessageStatus? status;
+
+  /// Last error text shown in the failed-status tooltip.
+  final String? lastError;
+
+  /// Called when the user taps the inline retry button on a failed message.
+  final VoidCallback? onRetryPending;
 
   @override
   State<MessageBubble> createState() => _MessageBubbleState();
@@ -647,6 +661,70 @@ class _MessageBubbleState extends State<MessageBubble> {
             if (!hideEmptyUserBubble) userBubble,
             if (hasUserActions && _showUserActions)
               _buildUserActionButtons(iconFgColor),
+            if (widget.status == ChatMessageStatus.pending ||
+                widget.status == ChatMessageStatus.failed)
+              _buildStatusIndicator(context),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusIndicator(BuildContext context) {
+    final loc = AppLocalizations.of(context);
+    final t = Theme.of(context);
+    final isFailed = widget.status == ChatMessageStatus.failed;
+    final color = isFailed
+        ? t.colorScheme.error
+        : t.colorScheme.onSurface.withValues(alpha: .6);
+    final icon = isFailed ? Icons.error_outline : Icons.schedule;
+    final label = isFailed
+        ? (loc?.messageFailed ?? 'Failed to send')
+        : (loc?.messagePending ?? 'Will send when online');
+    final tooltip = isFailed && widget.lastError != null
+        ? '$label: ${widget.lastError}'
+        : label;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, right: 2),
+      child: Tooltip(
+        message: tooltip,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 12, color: color),
+              ),
+            ),
+            if (isFailed && widget.onRetryPending != null) ...[
+              const SizedBox(width: 8),
+              InkWell(
+                onTap: widget.onRetryPending,
+                borderRadius: BorderRadius.circular(4),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  child: Text(
+                    loc?.messageRetry ?? 'Retry',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: t.colorScheme.primary,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
