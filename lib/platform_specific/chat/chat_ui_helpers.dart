@@ -137,7 +137,15 @@ class ChatUiHelpers {
       return dropdownSlug;
     }
 
-    return await UserPreferencesService.loadSelectedProvider(modelId);
+    final String? prefsSlug =
+        await UserPreferencesService.loadSelectedProvider(modelId);
+    if (prefsSlug != null && prefsSlug.isNotEmpty) return prefsSlug;
+
+    // Third fallback: use the static in-memory providers list — survives
+    // network glitches.
+    final providers =
+        ModelSelectionDropdown.availableProvidersForModel(modelId);
+    return providers.isNotEmpty ? providers.first.slug : null;
   }
 
   /// Ensure provider slug is available for the current model.
@@ -146,10 +154,17 @@ class ChatUiHelpers {
     String? currentSlug,
   ) async {
     if (selectedModelId.isEmpty) return null;
-    if (currentSlug != null && currentSlug.isNotEmpty) {
-      return currentSlug;
+    String? slug = (currentSlug != null && currentSlug.isNotEmpty)
+        ? currentSlug
+        : await loadProviderSlugForModel(selectedModelId);
+    if (slug == null || slug.isEmpty) return null;
+    if (slug == kAutoCheapestProviderSlug) {
+      return ModelSelectionDropdown.resolveProviderSlugForSend(
+        selectedModelId,
+        slug,
+      );
     }
-    return await loadProviderSlugForModel(selectedModelId);
+    return slug;
   }
 
   /// Load system prompt from preferences.

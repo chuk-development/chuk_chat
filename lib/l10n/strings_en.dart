@@ -535,6 +535,8 @@ const Map<String, String> stringsEn = {
   'perMillion': '/M',
   'perRequest': '/req',
   'best': 'Best',
+  'autoCheapest': 'Auto (cheapest)',
+  'autoCheapestCurrently': 'Auto (cheapest) — currently: {provider} ({price})',
 
   // ── Message bubble / chat ──────────────────────────────────
   'openInMailApp': 'Open in Mail App',

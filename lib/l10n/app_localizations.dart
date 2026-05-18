@@ -533,6 +533,11 @@ class AppLocalizations {
   String get perMillion => _get('perMillion');
   String get perRequest => _get('perRequest');
   String get best => _get('best');
+  String get autoCheapest => _get('autoCheapest');
+  String autoCheapestCurrently(String provider, String price) =>
+      _get('autoCheapestCurrently')
+          .replaceAll('{provider}', provider)
+          .replaceAll('{price}', price);
 
   // ── Message bubble / chat ──────────────────────────────────
   String get openInMailApp => _get('openInMailApp');

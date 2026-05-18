@@ -17,6 +17,8 @@ import 'package:chuk_chat/services/per_model_system_prompt_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/widgets/per_model_system_prompt_sheet.dart';
+import 'package:chuk_chat/widgets/model_selection_dropdown.dart'
+    show kAutoCheapestProviderSlug;
 
 // ─── Data models (mirroring FastAPI Pydantic models) ─────────────────────
 
@@ -138,6 +140,9 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
   final String _baseUrl = ApiConfigService.apiBaseUrl;
   List<CustomModelInfo> _models = [];
   Map<String, ModelProviderInfo?> _selectedProviders = {};
+  // Models for which the user picked "Auto (cheapest)". The map's value is
+  // the currently-cheapest provider (for display in the pill).
+  final Map<String, ModelProviderInfo> _autoSelected = {};
   Map<String, ModelPromptConfig> _modelPromptConfigs = {};
   bool _isLoading = true;
   String? _error;
@@ -249,12 +254,19 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
             .toList();
 
         final Map<String, ModelProviderInfo?> initialSelections = {};
+        final Map<String, ModelProviderInfo> autoSelected = {};
         final List<Future<void>> cleanupFutures = [];
         for (final model in fetchedModels) {
           final String? savedProviderSlug = _lastSavedPreferences[model.id];
           ModelProviderInfo? selectedProvider;
 
-          if (savedProviderSlug != null) {
+          if (savedProviderSlug == kAutoCheapestProviderSlug) {
+            final cheapest = _cheapestProvider(model);
+            if (cheapest != null) {
+              selectedProvider = cheapest;
+              autoSelected[model.id] = cheapest;
+            }
+          } else if (savedProviderSlug != null) {
             try {
               selectedProvider = model.providers.firstWhere(
                 (provider) => provider.slug == savedProviderSlug,
@@ -291,6 +303,9 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
         setState(() {
           _models = fetchedModels;
           _selectedProviders = initialSelections;
+          _autoSelected
+            ..clear()
+            ..addAll(autoSelected);
           _modelPromptConfigs = promptConfigs;
           _isLoading = false;
           _error = null;
@@ -437,6 +452,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
   ) async {
     setState(() {
       _selectedProviders[modelId] = provider;
+      _autoSelected.remove(modelId);
     });
 
     if (provider != null) {
@@ -448,6 +464,30 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
     }
 
     await UserPreferencesService.refreshModelSelections();
+  }
+
+  Future<void> _onAutoSelect(CustomModelInfo model) async {
+    final cheapest = _cheapestProvider(model);
+    if (cheapest == null) return;
+    setState(() {
+      _selectedProviders[model.id] = cheapest;
+      _autoSelected[model.id] = cheapest;
+    });
+    _lastSavedPreferences[model.id] = kAutoCheapestProviderSlug;
+    await UserPreferencesService.saveSelectedProvider(
+      model.id,
+      kAutoCheapestProviderSlug,
+    );
+    await UserPreferencesService.refreshModelSelections();
+  }
+
+  ModelProviderInfo? _cheapestProvider(CustomModelInfo model) {
+    if (model.providers.isEmpty) return null;
+    ModelProviderInfo best = model.providers.first;
+    for (final p in model.providers.skip(1)) {
+      if (p.pricing.completion < best.pricing.completion) best = p;
+    }
+    return best;
   }
 
   String _formatContextLength(int? tokens) {
@@ -601,8 +641,10 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                         model: model,
                         selectedProvider: selectedProviderForModel,
                         promptConfig: promptConfigForModel,
+                        isAutoSelected: _autoSelected.containsKey(model.id),
                         onProviderChanged: (provider) =>
                             _onProviderSelect(model.id, provider),
+                        onAutoSelected: () => _onAutoSelect(model),
                         onEditPrompt: () => _onEditModelPrompt(model),
                         formatContextLength: _formatContextLength,
                         buildIconWidget: _buildIconWidget,
@@ -628,7 +670,9 @@ class ModelSelectionRow extends StatefulWidget {
   final CustomModelInfo model;
   final ModelProviderInfo? selectedProvider;
   final ModelPromptConfig? promptConfig;
+  final bool isAutoSelected;
   final Function(ModelProviderInfo?) onProviderChanged;
+  final VoidCallback? onAutoSelected;
   final VoidCallback? onEditPrompt;
   final String Function(int?) formatContextLength;
   final Widget Function(String?, IconData, {double size}) buildIconWidget;
@@ -638,7 +682,9 @@ class ModelSelectionRow extends StatefulWidget {
     required this.model,
     required this.selectedProvider,
     this.promptConfig,
+    this.isAutoSelected = false,
     required this.onProviderChanged,
+    this.onAutoSelected,
     this.onEditPrompt,
     required this.formatContextLength,
     required this.buildIconWidget,
@@ -669,7 +715,9 @@ class _ModelSelectionRowState extends State<ModelSelectionRow> {
       trailing: _ProviderPill(
         model: widget.model,
         selectedProvider: widget.selectedProvider,
+        isAutoSelected: widget.isAutoSelected,
         onProviderChanged: widget.onProviderChanged,
+        onAutoSelected: widget.onAutoSelected,
         buildIconWidget: widget.buildIconWidget,
       ),
     );
@@ -893,21 +941,34 @@ class _NameRow extends StatelessWidget {
 class _ProviderPill extends StatelessWidget {
   final CustomModelInfo model;
   final ModelProviderInfo? selectedProvider;
+  final bool isAutoSelected;
   final Function(ModelProviderInfo?) onProviderChanged;
+  final VoidCallback? onAutoSelected;
   final Widget Function(String?, IconData, {double size}) buildIconWidget;
+
+  static const String _kDisabledValue = '__disabled__';
 
   const _ProviderPill({
     required this.model,
     required this.selectedProvider,
+    this.isAutoSelected = false,
     required this.onProviderChanged,
+    this.onAutoSelected,
     required this.buildIconWidget,
   });
+
+  String get _selectedValue {
+    if (isAutoSelected) return kAutoCheapestProviderSlug;
+    final p = selectedProvider;
+    return p == null ? _kDisabledValue : p.slug;
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final m3 = theme.m3;
+    final bool hasMultipleProviders = model.providers.length > 1;
 
     // Fixed column width keeps provider pills visually aligned across all
     // cards, even when one provider label is very long (e.g. "Cerebras (US)").
@@ -920,8 +981,8 @@ class _ProviderPill extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
       ),
       child: DropdownButtonHideUnderline(
-        child: DropdownButton<ModelProviderInfo?>(
-          value: selectedProvider,
+        child: DropdownButton<String>(
+          value: _selectedValue,
           dropdownColor: m3.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(16),
           isExpanded: true,
@@ -932,21 +993,48 @@ class _ProviderPill extends StatelessWidget {
           style: theme.textTheme.bodyMedium?.copyWith(
             color: colorScheme.onSurface,
           ),
-          onChanged: onProviderChanged,
+          onChanged: (value) {
+            if (value == null || value == _kDisabledValue) {
+              onProviderChanged(null);
+              return;
+            }
+            if (value == kAutoCheapestProviderSlug) {
+              onAutoSelected?.call();
+              return;
+            }
+            for (final p in model.providers) {
+              if (p.slug == value) {
+                onProviderChanged(p);
+                return;
+              }
+            }
+          },
           isDense: true,
           hint: _buildDisabledDisplay(context),
           items: [
-            DropdownMenuItem<ModelProviderInfo?>(
-              value: null,
+            DropdownMenuItem<String>(
+              value: _kDisabledValue,
               child: _buildDisabledDisplay(context),
             ),
+            if (hasMultipleProviders)
+              DropdownMenuItem<String>(
+                value: kAutoCheapestProviderSlug,
+                child: _buildAutoDisplay(
+                  context,
+                  cheapest: _cheapestProvider(),
+                  isSelected: isAutoSelected,
+                  isMenuItem: true,
+                ),
+              ),
             ...model.providers.map(
-              (provider) => DropdownMenuItem<ModelProviderInfo?>(
-                value: provider,
+              (provider) => DropdownMenuItem<String>(
+                value: provider.slug,
                 child: _buildProviderDisplay(
                   context,
                   provider,
-                  isSelected: selectedProvider?.slug == provider.slug,
+                  isSelected:
+                      !isAutoSelected && selectedProvider?.slug == provider.slug,
+                  showPrice: true,
                 ),
               ),
             ),
@@ -954,11 +1042,19 @@ class _ProviderPill extends StatelessWidget {
           selectedItemBuilder: (ctx) {
             return [
               _buildDisabledDisplay(ctx),
+              if (hasMultipleProviders)
+                _buildAutoDisplay(
+                  ctx,
+                  cheapest: _cheapestProvider(),
+                  isSelected: true,
+                  isMenuItem: false,
+                ),
               ...model.providers.map(
                 (provider) => _buildProviderDisplay(
                   ctx,
                   provider,
                   isSelected: true,
+                  showPrice: false,
                 ),
               ),
             ];
@@ -967,6 +1063,15 @@ class _ProviderPill extends StatelessWidget {
       ),
       ),
     );
+  }
+
+  ModelProviderInfo? _cheapestProvider() {
+    if (model.providers.isEmpty) return null;
+    ModelProviderInfo best = model.providers.first;
+    for (final p in model.providers.skip(1)) {
+      if (p.pricing.completion < best.pricing.completion) best = p;
+    }
+    return best;
   }
 
   Widget _buildDisabledDisplay(BuildContext context) {
@@ -987,13 +1092,71 @@ class _ProviderPill extends StatelessWidget {
     );
   }
 
+  Widget _buildAutoDisplay(
+    BuildContext context, {
+    required ModelProviderInfo? cheapest,
+    required bool isSelected,
+    required bool isMenuItem,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final m3 = theme.m3;
+    final l = AppLocalizations.of(context)!;
+    final Color textColor =
+        isSelected ? colorScheme.primary : colorScheme.onSurface;
+
+    final String label = (cheapest != null && isMenuItem)
+        ? l.autoCheapestCurrently(
+            cheapest.name,
+            cheapest.pricing.formatTokenPrice(cheapest.pricing.completion),
+          )
+        : l.autoCheapest;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.bolt, color: textColor, size: 16),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: textColor,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (isMenuItem && cheapest != null)
+                Text(
+                  _formatInOutPrice(cheapest),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: m3.onSurfaceVariant,
+                    fontSize: 11,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildProviderDisplay(
     BuildContext context,
     ModelProviderInfo provider, {
     required bool isSelected,
+    required bool showPrice,
   }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final m3 = theme.m3;
     final Color textColor =
         isSelected ? colorScheme.primary : colorScheme.onSurface;
     return Row(
@@ -1002,18 +1165,41 @@ class _ProviderPill extends StatelessWidget {
         buildIconWidget(provider.iconUrl, Icons.business, size: 16),
         const SizedBox(width: 6),
         Flexible(
-          child: Text(
-            provider.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: textColor,
-              fontWeight: FontWeight.w600,
-            ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                provider.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: textColor,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (showPrice)
+                Text(
+                  _formatInOutPrice(provider),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: m3.onSurfaceVariant,
+                    fontSize: 11,
+                  ),
+                ),
+            ],
           ),
         ),
       ],
     );
+  }
+
+  String _formatInOutPrice(ModelProviderInfo provider) {
+    final inPrice = provider.pricing.formatTokenPrice(provider.pricing.prompt);
+    final outPrice =
+        provider.pricing.formatTokenPrice(provider.pricing.completion);
+    return '$inPrice in · $outPrice out';
   }
 }
 

@@ -2545,11 +2545,52 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
   Future<String?> _ensureProviderSlugForCurrentModel() async {
     if (_selectedModelId.isEmpty) return null;
-    if (_selectedProviderSlug != null && _selectedProviderSlug!.isNotEmpty) {
-      return _selectedProviderSlug;
+
+    String? slug =
+        (_selectedProviderSlug != null && _selectedProviderSlug!.isNotEmpty)
+            ? _selectedProviderSlug
+            : null;
+
+    if (slug == null) {
+      await _loadProviderSlugForModel(_selectedModelId);
+      slug = _selectedProviderSlug;
     }
-    await _loadProviderSlugForModel(_selectedModelId);
-    return _selectedProviderSlug;
+
+    // Third fallback: the dropdown/prefs lookups can both fail after a
+    // network glitch (cache cleared / Supabase request timing out). Use the
+    // static in-memory providers list known for the model — it survives
+    // transient network issues because it was hydrated at startup.
+    if (slug == null || slug.isEmpty) {
+      final providers =
+          ModelSelectionDropdown.availableProvidersForModel(_selectedModelId);
+      if (providers.isNotEmpty) {
+        final fallback = providers.first.slug;
+        if (kDebugMode) {
+          debugPrint(
+            'Provider fallback: using $fallback for $_selectedModelId (cache miss)',
+          );
+        }
+        if (mounted && _selectedProviderSlug != fallback) {
+          setState(() {
+            _selectedProviderSlug = fallback;
+          });
+        }
+        slug = fallback;
+      }
+    }
+
+    if (slug == null || slug.isEmpty) return null;
+
+    // Resolve "auto" sentinel at send time so the cheapest current provider
+    // is used without overwriting the user's preference.
+    if (slug == kAutoCheapestProviderSlug) {
+      final resolved = ModelSelectionDropdown.resolveProviderSlugForSend(
+        _selectedModelId,
+        slug,
+      );
+      return (resolved != null && resolved.isNotEmpty) ? resolved : null;
+    }
+    return slug;
   }
 
   Future<void> _loadSystemPrompt() async {
