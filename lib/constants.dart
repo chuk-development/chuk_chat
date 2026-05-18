@@ -35,6 +35,11 @@ const double kDefaultChatFontSize = 15.0;
 const double kMinChatFontSize = 11.0;
 const double kMaxChatFontSize = 24.0;
 
+/* ---------- UI SCALE ---------- */
+const double kDefaultUiScale = 1.0;
+const double kMinUiScale = 0.8;
+const double kMaxUiScale = 1.5;
+
 /* ---------- CHAT FONT FAMILY ---------- */
 /// Identifiers used to persist the user's font family preference.
 /// The actual resolved [fontFamily] string is looked up at render time

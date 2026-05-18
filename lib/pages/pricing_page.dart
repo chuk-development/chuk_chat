@@ -273,8 +273,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final m3 = theme.m3;
-    final bool isMobile =
-        kPlatformMobile || MediaQuery.of(context).size.width < 720;
+    final bool paymentsDisabled = !kFeaturePaymentsDirect;
     final l = AppLocalizations.of(context)!;
 
     if (_isLoading) {
@@ -348,9 +347,9 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
           // ── Plans ──────────────────────────────────────────────
           const _SectionHeader('PLANS'),
 
-          // Mobile notice
-          if (isMobile) ...[
-            _InfoCard(l.subscriptionDesktopOnly),
+          // Payments-disabled notice
+          if (paymentsDisabled) ...[
+            _InfoCard(l.paymentsDisabledInBuild),
             const SizedBox(height: 12),
           ],
 
@@ -366,7 +365,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
               badgeLabel: l.active,
               badgeTone: _BadgeTone.success,
               highlighted: false,
-              child: !isMobile
+              child: !paymentsDisabled
                   ? Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -442,7 +441,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
                       ),
                     ),
                   ),
-                  if (!isMobile) ...[
+                  if (!paymentsDisabled) ...[
                     const SizedBox(height: 16),
                     // Consent checkbox — inline rich text with terms + withdrawal links.
                     Row(

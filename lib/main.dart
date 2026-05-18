@@ -289,12 +289,23 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
       ],
       builder: (context, child) {
         if (child == null) return const SizedBox.shrink();
+
+        // Apply user-chosen UI scale to all text in the app via MediaQuery.
+        // This is the safest scaling approach — it doesn't break layout
+        // calculations the way Transform.scale would.
+        final scaled = MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: TextScaler.linear(_themeService.uiScale),
+          ),
+          child: child,
+        );
+
         // Linux: skip film-grain overlay to avoid startup and interaction jank.
-        if (!_themeService.grainEnabled || _isLinuxDesktop) return child;
+        if (!_themeService.grainEnabled || _isLinuxDesktop) return scaled;
 
         return Stack(
           children: [
-            child,
+            scaled,
             const Positioned.fill(
               child: IgnorePointer(
                 child: GrainOverlay(
@@ -384,6 +395,8 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
         setChatFontSize: _themeService.setChatFontSize,
         chatFontFamily: _themeService.chatFontFamily,
         setChatFontFamily: _themeService.setChatFontFamily,
+        uiScale: _themeService.uiScale,
+        setUiScale: _themeService.setUiScale,
       ),
     );
   }

@@ -121,6 +121,10 @@ class AppLocalizations {
   String get showTpsSubtitle => _get('showTpsSubtitle');
   String get chatFontSize => _get('chatFontSize');
   String get chatFontSizeSubtitle => _get('chatFontSizeSubtitle');
+  String get uiScale => _get('uiScale');
+  String get uiScaleSubtitle => _get('uiScaleSubtitle');
+  String uiScalePercentage(String percent) =>
+      _get('uiScalePercentage').replaceAll('{percent}', percent);
   String get fontSizePreview => _get('fontSizePreview');
   String get chatFontFamily => _get('chatFontFamily');
   String get chatFontFamilySubtitle => _get('chatFontFamilySubtitle');
@@ -390,6 +394,7 @@ class AppLocalizations {
   String get manageBillingSubtitle => _get('manageBillingSubtitle');
   String get subscribeToGetCredits => _get('subscribeToGetCredits');
   String get subscriptionDesktopOnly => _get('subscriptionDesktopOnly');
+  String get paymentsDisabledInBuild => _get('paymentsDisabledInBuild');
   String get active => _get('active');
   String get getCreditsMonthly => _get('getCreditsMonthly');
   String get accessAllModels => _get('accessAllModels');

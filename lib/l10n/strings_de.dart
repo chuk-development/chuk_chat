@@ -58,6 +58,10 @@ const Map<String, String> stringsDe = {
   'chatFontSize': 'Chat-Schriftgröße',
   'chatFontSizeSubtitle':
       'Textgröße der Chatnachrichten anpassen für bessere Lesbarkeit',
+  'uiScale': 'UI-Skalierung',
+  'uiScaleSubtitle':
+      'Skaliert die gesamte App-Oberfläche — nützlich auf hochauflösenden Bildschirmen',
+  'uiScalePercentage': 'UI-Skalierung: {percent}%',
   'fontSizePreview':
       'Franz jagt im komplett verwahrlosten Taxi quer durch Bayern.',
   'chatFontFamily': 'Chat-Schriftart',
@@ -394,6 +398,8 @@ const Map<String, String> stringsDe = {
   'subscribeToGetCredits': 'Abonnieren für KI-Guthaben',
   'subscriptionDesktopOnly':
       'Abonnement-Verwaltung ist nur auf dem Desktop verfügbar.',
+  'paymentsDisabledInBuild':
+      'Direkte Zahlungen sind in diesem Build deaktiviert.',
   'active': 'AKTIV',
   'getCreditsMonthly': '16\u00a0\u20ac KI-Guthaben monatlich erhalten',
   'accessAllModels': 'Zugang zu allen KI-Modellen',

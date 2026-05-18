@@ -627,7 +627,11 @@ class ToolCallHandler {
       );
     }
 
+    // When memory is disabled (skipIdentity), suppress the notes tool from
+    // both the enforcer's declared list and the prompt's tools section so
+    // the assistant cannot call it (no overwrite/delete of memory).
     final declaredTools = _toolExecutor.allTools
+        .where((t) => !session.skipIdentity || t.name != 'notes')
         .map((t) => t.toJson())
         .toList();
     enforcer.setDeclaredTools(declaredTools);
@@ -986,7 +990,13 @@ class ToolCallHandler {
           .firstOrNull;
     }
 
-    final tools = _toolExecutor.allTools.map((t) => t.toJson()).toList();
+    // When memory is disabled (skipIdentity), exclude the `notes` tool from
+    // the prompt's tool list so the assistant can't invoke it to
+    // overwrite/delete memory. Identity text injection is already gated above.
+    final tools = _toolExecutor.allTools
+        .where((t) => !skipIdentity || t.name != 'notes')
+        .map((t) => t.toJson())
+        .toList();
     final promptBuilder = ToolPromptBuilder(discoveryMode: discoveryMode);
     final toolProtocol = promptBuilder
         .buildToolProtocolSection(
