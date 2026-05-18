@@ -3,6 +3,8 @@ import 'package:chuk_chat/platform_config.dart'
     show
         kFeatureArtifacts,
         kFeatureServerTools,
+        kFeatureSpotify,
+        kFeatureWhoop,
         kPlatformDesktop,
         kPlatformMobile;
 import 'package:chuk_chat/services/tool_executor.dart' show ToolExecutor;
@@ -1354,6 +1356,14 @@ void registerBuiltinTools(ToolExecutor executor) {
       continue;
     }
     if (!kFeatureArtifacts && tool.name == 'artifact_manager') {
+      continue;
+    }
+    // Spotify / WHOOP: integration removed. Tool definitions stay in the
+    // source so re-enabling later only requires flipping the feature flag.
+    if (!kFeatureSpotify && tool.name == 'spotify_control') {
+      continue;
+    }
+    if (!kFeatureWhoop && tool.name == 'whoop') {
       continue;
     }
     // Device tool: available on all platforms.

@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import 'package:chuk_chat/platform_config.dart'
+    show kFeatureSpotify, kFeatureWhoop;
 import 'package:chuk_chat/services/approval_config.dart';
 import 'package:chuk_chat/services/bash_sandbox.dart';
 import 'package:chuk_chat/services/device_services.dart';
@@ -26,24 +28,33 @@ final ApprovalConfig _approvalConfig = ApprovalConfig();
 final WhoopOAuth _whoopOAuth = WhoopOAuth();
 
 /// Initialize platform services — loads saved tokens/configs.
+///
+/// Spotify and WHOOP services are dormant unless their feature flags are
+/// enabled (the backend OAuth endpoints have been removed). We skip their
+/// token probes here so no background work happens for disabled features.
 Future<void> initPlatformServices() async {
-  await Future.wait([
+  final tasks = <Future<void>>[
     _approvalConfig.load(),
-    _spotifyOAuth.checkAuthenticated(), // loads tokens internally
     _gitHubOAuth.loadSavedToken(),
     _slackOAuth.isAuthenticated(), // loads tokens internally
     _googleOAuth.getAccessToken().then((_) {}), // loads tokens internally
     _emailService.loadSavedConfig(),
     _bashSandbox.loadSavedFolder(),
-    _whoopOAuth.checkAuthenticated(), // loads tokens internally
-  ]);
+  ];
+  if (kFeatureSpotify) {
+    tasks.add(_spotifyOAuth.checkAuthenticated().then((_) {}));
+  }
+  if (kFeatureWhoop) {
+    tasks.add(_whoopOAuth.checkAuthenticated().then((_) {}));
+  }
+  await Future.wait(tasks);
 }
 
 /// Check if a platform service is connected.
 bool isPlatformServiceConnected(String service) {
   switch (service) {
     case 'spotify':
-      return _spotifyOAuth.hasToken;
+      return kFeatureSpotify && _spotifyOAuth.hasToken;
     case 'bash':
       return _bashSandbox.isConfigured;
     case 'github':
@@ -55,7 +66,7 @@ bool isPlatformServiceConnected(String service) {
     case 'email':
       return _emailService.isConfigured;
     case 'whoop':
-      return _whoopOAuth.hasToken;
+      return kFeatureWhoop && _whoopOAuth.hasToken;
     default:
       return false;
   }
@@ -63,19 +74,22 @@ bool isPlatformServiceConnected(String service) {
 
 // ============== Service connection management ==============
 
-/// Categories that support OAuth connect/disconnect.
-const Set<String> connectableServices = {
-  'spotify',
+/// Categories that support OAuth connect/disconnect. Spotify and WHOOP are
+/// excluded by default — their feature flags add them back at compile time
+/// when the integrations are re-enabled.
+final Set<String> connectableServices = {
   'github',
   'slack',
   'google',
-  'whoop',
+  if (kFeatureSpotify) 'spotify',
+  if (kFeatureWhoop) 'whoop',
 };
 
 /// Start the OAuth flow for a service. Returns true on success.
 Future<bool> connectPlatformService(String service) async {
   switch (service) {
     case 'spotify':
+      if (!kFeatureSpotify) return false;
       await _spotifyOAuth.startAuth();
       return _spotifyOAuth.completeAuth();
     case 'github':
@@ -88,6 +102,7 @@ Future<bool> connectPlatformService(String service) async {
       await _googleOAuth.startAuth();
       return _googleOAuth.completeAuth();
     case 'whoop':
+      if (!kFeatureWhoop) return false;
       await _whoopOAuth.startAuth();
       return _whoopOAuth.completeAuth();
     default:
@@ -99,7 +114,7 @@ Future<bool> connectPlatformService(String service) async {
 Future<void> disconnectPlatformService(String service) async {
   switch (service) {
     case 'spotify':
-      await _spotifyOAuth.logout();
+      if (kFeatureSpotify) await _spotifyOAuth.logout();
     case 'github':
       await _gitHubOAuth.logout();
     case 'slack':
@@ -109,7 +124,7 @@ Future<void> disconnectPlatformService(String service) async {
     case 'email':
       await _emailService.clearConfig();
     case 'whoop':
-      await _whoopOAuth.logout();
+      if (kFeatureWhoop) await _whoopOAuth.logout();
   }
 }
 
@@ -1457,7 +1472,11 @@ Future<String> executeReminder(Map<String, dynamic> args) async {
       // Default: set_alarm
       // Allow "time" or "start" for convenience
       final time = args['time'] ?? args['start'];
-      return executeDevice({...args, if (time != null) 'time': time, 'action': 'set_alarm'});
+      return executeDevice({
+        ...args,
+        ...?(time == null ? null : <String, dynamic>{'time': time}),
+        'action': 'set_alarm',
+      });
   }
 }
 

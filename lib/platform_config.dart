@@ -80,3 +80,18 @@ const bool kFeatureLinuxKeyring = bool.fromEnvironment(
   defaultValue: false,
 );
 
+/// Spotify playback tool. Disabled by default — API server no longer
+/// exposes Spotify OAuth endpoints. Set `--dart-define=FEATURE_SPOTIFY=true`
+/// only when the backend route is re-enabled.
+const bool kFeatureSpotify = bool.fromEnvironment(
+  'FEATURE_SPOTIFY',
+  defaultValue: false,
+);
+
+/// WHOOP health/fitness tool. Disabled by default — integration removed
+/// alongside Spotify. Set `--dart-define=FEATURE_WHOOP=true` to re-enable.
+const bool kFeatureWhoop = bool.fromEnvironment(
+  'FEATURE_WHOOP',
+  defaultValue: false,
+);
+
