@@ -26,6 +26,25 @@ const double _menuExtraAllowance = 12.0; // Safety margin against glyph clipping
 const double _buttonHorizontalPadding = 20.0; // 10 left + 10 right
 const double _buttonTrailingAllowance = 56.0; // Icon + arrow + spacing + extra
 
+/// Sentinel value stored in user preferences when the user picks
+/// "Auto (cheapest)". Resolved at send time to the cheapest provider for
+/// the model, based on completion (output) pricing.
+const String kAutoCheapestProviderSlug = '__auto_cheapest__';
+
+class ModelProviderSummary {
+  final String slug;
+  final String name;
+  final double promptPrice;
+  final double completionPrice;
+
+  const ModelProviderSummary({
+    required this.slug,
+    required this.name,
+    required this.promptPrice,
+    required this.completionPrice,
+  });
+}
+
 class _WidthMetrics {
   final double menuWidth;
   final double buttonWidth;
@@ -50,12 +69,14 @@ class _FilteredModelResult {
     required this.enabledProviders,
     required this.invalidModelIds,
     required this.providerLimits,
+    required this.availableProviders,
   });
 
   final List<ModelItem> models;
   final Map<String, String> enabledProviders;
   final Set<String> invalidModelIds;
   final Map<String, ModelProviderLimits> providerLimits;
+  final Map<String, List<ModelProviderSummary>> availableProviders;
 }
 
 class ModelSelectionDropdown extends StatefulWidget {
@@ -90,6 +111,8 @@ class ModelSelectionDropdown extends StatefulWidget {
   // Survives widget dispose/re-init cycles so re-mounts are instant.
   static List<ModelItem> _cachedModels = [];
   static Map<String, String> _cachedProviders = {};
+  static final Map<String, List<ModelProviderSummary>>
+      _cachedAvailableProviders = {};
   static bool _hasEverLoaded = false;
 
   static ValueListenable<String> get selectedModelListenable =>
@@ -169,6 +192,44 @@ class ModelSelectionDropdown extends StatefulWidget {
       }
     }
     return null;
+  }
+
+  /// Static, in-memory list of providers known for [modelId]. Survives
+  /// network glitches because it is hydrated from the cached models list
+  /// fetched at startup. Returns an empty list if the model is unknown.
+  static List<ModelProviderSummary> availableProvidersForModel(String modelId) {
+    final cached = _cachedAvailableProviders[modelId];
+    if (cached != null && cached.isNotEmpty) return cached;
+    for (final _ModelSelectionDropdownState state in _activeStates) {
+      final list = state._availableProviders[modelId];
+      if (list != null && list.isNotEmpty) {
+        _cachedAvailableProviders[modelId] = list;
+        return list;
+      }
+    }
+    return const <ModelProviderSummary>[];
+  }
+
+  /// Pick the cheapest provider for [modelId] by completion (output) price.
+  /// Returns null if no providers are known.
+  static ModelProviderSummary? cheapestProviderForModel(String modelId) {
+    final providers = availableProvidersForModel(modelId);
+    if (providers.isEmpty) return null;
+    ModelProviderSummary best = providers.first;
+    for (final p in providers.skip(1)) {
+      if (p.completionPrice < best.completionPrice) {
+        best = p;
+      }
+    }
+    return best;
+  }
+
+  /// Resolve [savedSlug] (which may be [kAutoCheapestProviderSlug]) to a
+  /// concrete provider slug for the given [modelId]. Returns null if the
+  /// model has no known providers and the slug is the auto marker.
+  static String? resolveProviderSlugForSend(String modelId, String savedSlug) {
+    if (savedSlug != kAutoCheapestProviderSlug) return savedSlug;
+    return cheapestProviderForModel(modelId)?.slug;
   }
 
   /// Show a model selection bottom sheet.
@@ -278,6 +339,8 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
   final Map<String, String> _enabledModelProviders = {};
   final Map<String, ModelProviderLimits> _providerLimits =
       <String, ModelProviderLimits>{};
+  final Map<String, List<ModelProviderSummary>> _availableProviders =
+      <String, List<ModelProviderSummary>>{};
   bool _isLoadingModels = true;
   String _errorMessage = '';
   Timer? _apiAvailabilityTimer;
@@ -312,6 +375,9 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       _allModels = ModelSelectionDropdown._cachedModels;
       _enabledModelProviders.addAll(ModelSelectionDropdown._cachedProviders);
       _providerLimits.addAll(ModelSelectionDropdown._cachedProviderLimits);
+      _availableProviders.addAll(
+        ModelSelectionDropdown._cachedAvailableProviders,
+      );
       _isLoadingModels = false;
       _updateSelectedModelNameSync();
       // Width metrics need BuildContext — recalculate after the first frame.
@@ -466,6 +532,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       models: result.models,
       enabledProviders: result.enabledProviders,
       providerLimits: result.providerLimits,
+      availableProviders: result.availableProviders,
       savedPreferences: cachedProviders,
     );
   }
@@ -479,6 +546,8 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
     final List<ModelItem> filteredModels = [];
     final Map<String, ModelProviderLimits> providerLimits =
         <String, ModelProviderLimits>{};
+    final Map<String, List<ModelProviderSummary>> availableProviders =
+        <String, List<ModelProviderSummary>>{};
 
     for (final Map<String, dynamic> modelJson in payload) {
       final ModelItem modelItem = ModelItem.fromJson(modelJson);
@@ -494,14 +563,56 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
         invalidModelIds.add(modelItem.value);
         continue;
       }
-      Map<String, dynamic>? matchedProvider;
-      Map<String, dynamic>? fallbackProvider;
+
+      // Build the lightweight pricing summary list for the model — used by
+      // dropdown/sub-sheets to display per-provider prices and by the auto
+      // resolver to pick the cheapest provider at send time.
+      final List<ModelProviderSummary> summaries = [];
       for (final dynamic providerEntry in providers) {
         if (providerEntry is! Map<String, dynamic>) continue;
-        fallbackProvider ??= providerEntry;
-        if (providerEntry['slug'] == savedProviderSlug) {
-          matchedProvider = providerEntry;
-          break;
+        final String? slug = providerEntry['slug'] as String?;
+        final String? name = providerEntry['name'] as String?;
+        if (slug == null || slug.isEmpty) continue;
+        final Map<String, dynamic>? pricing =
+            providerEntry['pricing'] as Map<String, dynamic>?;
+        summaries.add(
+          ModelProviderSummary(
+            slug: slug,
+            name: name ?? slug,
+            promptPrice: _parseDouble(pricing?['prompt']),
+            completionPrice: _parseDouble(pricing?['completion']),
+          ),
+        );
+      }
+
+      final bool isAuto = savedProviderSlug == kAutoCheapestProviderSlug;
+
+      Map<String, dynamic>? matchedProvider;
+      Map<String, dynamic>? fallbackProvider;
+      if (isAuto) {
+        // Pick cheapest by completion price for the "Auto" preset.
+        Map<String, dynamic>? cheapest;
+        double cheapestPrice = double.infinity;
+        for (final dynamic providerEntry in providers) {
+          if (providerEntry is! Map<String, dynamic>) continue;
+          fallbackProvider ??= providerEntry;
+          final Map<String, dynamic>? pricing =
+              providerEntry['pricing'] as Map<String, dynamic>?;
+          final double price = _parseDouble(pricing?['completion']);
+          if (cheapest == null || price < cheapestPrice) {
+            cheapest = providerEntry;
+            cheapestPrice = price;
+          }
+        }
+        matchedProvider = cheapest;
+      } else {
+        for (final dynamic providerEntry in providers) {
+          if (providerEntry is! Map<String, dynamic>) continue;
+          fallbackProvider ??= providerEntry;
+          if (providerEntry['slug'] == savedProviderSlug) {
+            matchedProvider = providerEntry;
+            break;
+          }
         }
       }
       // If the saved provider slug is stale (e.g. backend renamed
@@ -511,16 +622,23 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       final Map<String, dynamic>? resolvedProvider =
           matchedProvider ?? fallbackProvider;
       if (resolvedProvider != null) {
-        final String resolvedSlug =
-            (resolvedProvider['slug'] as String?) ?? savedProviderSlug;
+        // Store the AUTO sentinel literally so consumers know the user wants
+        // dynamic resolution. The resolved cheapest provider is used for
+        // limits + UX display, but not as the persisted preference.
+        final String slugForState = isAuto
+            ? kAutoCheapestProviderSlug
+            : ((resolvedProvider['slug'] as String?) ?? savedProviderSlug);
         filteredModels.add(modelItem);
-        enabledProviders[modelItem.value] = resolvedSlug;
+        enabledProviders[modelItem.value] = slugForState;
         providerLimits[modelItem.value] = ModelProviderLimits(
           contextLength: _parseNullableInt(resolvedProvider['context_length']),
           maxCompletionTokens: _parseNullableInt(
             resolvedProvider['max_completion_tokens'],
           ),
         );
+        if (summaries.isNotEmpty) {
+          availableProviders[modelItem.value] = summaries;
+        }
       } else {
         invalidModelIds.add(modelItem.value);
       }
@@ -533,13 +651,24 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       enabledProviders: enabledProviders,
       invalidModelIds: invalidModelIds,
       providerLimits: providerLimits,
+      availableProviders: availableProviders,
     );
+  }
+
+  double _parseDouble(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0.0;
+    return 0.0;
   }
 
   Future<void> _applyModels({
     required List<ModelItem> models,
     required Map<String, String> enabledProviders,
     required Map<String, ModelProviderLimits> providerLimits,
+    required Map<String, List<ModelProviderSummary>> availableProviders,
     required Map<String, String> savedPreferences,
   }) async {
     final String previousModelId = _selectedModelId;
@@ -573,6 +702,9 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
       _providerLimits
         ..clear()
         ..addAll(providerLimits);
+      _availableProviders
+        ..clear()
+        ..addAll(availableProviders);
       _selectedModelId = newModelId;
       _isLoadingModels = false;
       _errorMessage = '';
@@ -585,6 +717,11 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
     );
     if (providerLimits.isNotEmpty) {
       ModelSelectionDropdown._cachedProviderLimits.addAll(providerLimits);
+    }
+    if (availableProviders.isNotEmpty) {
+      ModelSelectionDropdown._cachedAvailableProviders
+        ..clear()
+        ..addAll(availableProviders);
     }
     ModelSelectionDropdown._hasEverLoaded = true;
 
@@ -719,6 +856,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> {
           models: result.models,
           enabledProviders: result.enabledProviders,
           providerLimits: result.providerLimits,
+          availableProviders: result.availableProviders,
           savedPreferences: _lastSavedPreferences,
         );
         unawaited(
