@@ -274,8 +274,8 @@ class GitHubOAuth {
     try {
       final params = <String, String>{
         'per_page': perPage.toString(),
-        if (type != null) 'type': type,
-        if (sort != null) 'sort': sort,
+        ...?(type == null ? null : <String, String>{'type': type}),
+        ...?(sort == null ? null : <String, String>{'sort': sort}),
       };
 
       final uri = Uri.parse(
@@ -417,8 +417,8 @@ class GitHubOAuth {
         headers: {..._authHeaders, 'Content-Type': 'application/json'},
         body: jsonEncode({
           'title': title,
-          if (body != null) 'body': body,
-          if (labels != null) 'labels': labels,
+          ...?(body == null ? null : <String, dynamic>{'body': body}),
+          ...?(labels == null ? null : <String, dynamic>{'labels': labels}),
         }),
       );
 

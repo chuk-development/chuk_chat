@@ -83,6 +83,22 @@ flutter build web --release --dart-define-from-file=.env
 
 **Release notes = changelog only.** Write what changed (from git commits), grouped by category (Performance, New Features, Bug Fixes, etc.). NEVER include download instructions, architecture explanations, platform lists, or "build artifacts will be attached" notices. Users can figure out downloads themselves.
 
+**Release notes are mandatory for every new release** (no exceptions):
+
+- Always summarize **all commits since the previous release**, not just changes from the current session.
+- Scope must be: `last_release_tag..new_release_tag` (example: `v1.0.92..v1.0.93`).
+- Build notes from commit messages and group by category (for example: New Features, Bug Fixes, Performance, Refactors, Dependencies, Maintenance).
+- Keep notes as changelog text only (no download/install/platform instructions).
+- Include both:
+  - hash-linked commit list (`[abc1234](.../commit/<full_sha>)`)
+  - compare link (`.../compare/<last_tag>...<new_tag>`) and explicit commit range hashes.
+- Update the release body directly with `gh release edit` after generating notes from the full tag range.
+- Preferred direct command pattern (no repo script required):
+  ```bash
+  gh release edit <new_tag> --notes-file <notes_file>
+  gh release view <new_tag> --json body --jq .body
+  ```
+
 **Important:** The `Cross-Platform Build & Release` workflow is triggered by `workflow_dispatch` only. Do not rely on git tags to trigger releases.
 
 ### Mandatory Post-Task Workflow

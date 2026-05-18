@@ -76,21 +76,9 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
     } catch (e) {
       if (mounted) {
         setState(() => _isUploadingAvatar = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to upload image: $e')),
-        );
-      }
-    }
-  }
-
-  Future<void> _removeAvatarImage() async {
-    try {
-      await WorkspaceStorageService.deleteAvatar(widget.workspaceId);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to remove image: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to upload image: $e')));
       }
     }
   }
@@ -588,21 +576,15 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
               hintStyle: TextStyle(color: iconFg.withValues(alpha: 0.4)),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(
-                  color: iconFg.withValues(alpha: 0.15),
-                ),
+                borderSide: BorderSide(color: iconFg.withValues(alpha: 0.15)),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(
-                  color: iconFg.withValues(alpha: 0.15),
-                ),
+                borderSide: BorderSide(color: iconFg.withValues(alpha: 0.15)),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(
-                  color: iconFg.withValues(alpha: 0.3),
-                ),
+                borderSide: BorderSide(color: iconFg.withValues(alpha: 0.3)),
               ),
               contentPadding: const EdgeInsets.all(12),
             ),

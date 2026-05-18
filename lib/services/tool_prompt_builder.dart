@@ -37,6 +37,7 @@ class ToolPromptBuilder {
     Map<String, dynamic>? projectToolDef,
     Map<String, dynamic>? artifactToolDef,
     Map<String, dynamic>? artifactSchemaToolDef,
+    List<Map<String, dynamic>> extraAlwaysAvailableTools = const [],
     bool includeMapVisualOutput = true,
     bool includeChartVisualOutput = true,
   }) {
@@ -83,7 +84,7 @@ class ToolPromptBuilder {
           discoveredTools != null && discoveredTools.isNotEmpty;
 
       // Tools that bypass discovery and are always shown.
-      final List<Map<String, dynamic>> alwaysAvailableTools = [];
+      List<Map<String, dynamic>> alwaysAvailableTools = [];
       if (notesToolDef != null) {
         alwaysAvailableTools.add(notesToolDef);
       }
@@ -105,6 +106,10 @@ class ToolPromptBuilder {
       if (artifactSchemaToolDef != null) {
         alwaysAvailableTools.add(artifactSchemaToolDef);
       }
+      if (extraAlwaysAvailableTools.isNotEmpty) {
+        alwaysAvailableTools.addAll(extraAlwaysAvailableTools);
+      }
+      alwaysAvailableTools = _dedupeToolsByName(alwaysAvailableTools);
 
       if (discoveryMode && hasDiscoveredTools) {
         final findToolDef = tools
@@ -383,6 +388,7 @@ $toolCallEnd
 The query must be 1-3 SHORT keywords for the TYPE of tool (e.g. "restaurant", "web search", "email", "rechnen", "route karte"). Never paste the user's full message.
 
 FORMAT: Emit raw $toolCallStart...$toolCallEnd tags only. Do NOT wrap tool calls in Markdown code fences.
+NEVER emit legacy per-tool XML tags such as <fetch_image>...</fetch_image> or <web_search>...</web_search>. Only use $toolCallStart...$toolCallEnd.
 
 RESEARCH DEPTH: Do NOT answer from a single source. A good answer requires multiple steps:
 1) Discover relevant tools with find_tools
@@ -401,17 +407,19 @@ After find_tools returns the tool descriptions and parameters, you can use those
 DO NOT STALL: Never end with intention-only text like "I will search". Either emit the next tool_call, or provide a complete final answer.
 
 VISUAL OUTPUT NOTE:
-- <chart>, <map>, <email>, and <weather> are OUTPUT TAGS, not tools. Write them directly in your response.
+- <chart>, <map>, <email>, <weather>, <news>, and <image> are OUTPUT TAGS, not tools. Write them directly in your response.
 - Never call find_tools for "chart", "graph", "plot", "map", "email", or "weather".
 - If user asks for a chart/map, discover DATA tools first, then emit <chart>/<map> directly in your final response text.
 - To draft an email, emit <email>{"to":"...","subject":"...","body":"..."}</email> in your response. The app renders it as a card with an "Open in Mail App" button.
 - For weather questions, call the weather tool first, then emit a <weather> block with the structured data so the app renders a nice weather card.
+- For render-only pictures in your final answer, emit an <image> block with a URL (no tool call needed for rendering).
 - For "technische Zeichnung" / "technical drawing" / "engineering drawing" / DIN-style blueprints: use artifact_manager with type="technical_drawing" and JSON content. This is a RENDERED drawing with dimensions, NOT an AI-generated image. Do NOT use generate_image for technical drawings.
 
 REAL PHOTOS vs AI ART — HARD RULE:
-- User wants pictures of REAL things (people, actors, celebrities, movies, posters, places, products, cars, animals, food, events) -> call `web_search` with `type: "images"`. The returned image_url / thumbnail_url values are rendered inline by the app automatically. DO NOT call fetch_image afterwards — it is only needed when the user explicitly asks to save, store, or attach a picture to the chat.
+- User wants pictures of REAL things (people, actors, celebrities, movies, posters, places, products, cars, animals, food, events) -> call `web_search` with `type: "images"`, then emit ONE `<image>` block in your final answer using a returned image_url.
 - Only use generate_image / generate_image_hunyuan / generate_image_flux when the user explicitly asks for AI art, illustration, fantasy, concept art, something fictional, or a stylized generated image.
 - NEVER fall back to generate_image* just because image search returned nothing useful. Retry web_search with type="images" and a different query first, or explain the failure — do not silently substitute AI fakes for a real-photo request.
+- `fetch_image` is for fetch/store/vision flows (e.g. user asks to attach/store/analyze an image), not for display-only rendering.
 
 NEWS QUERIES:
 - For "latest", "news", "today", "breaking", "just released", "aktuell", "neu", "heute" or other time-sensitive questions -> call `web_search` with `type: "news"` and the matching `freshness` (pd/pw/pm/py). You get publisher, age and thumbnail without a separate crawl. Follow up with web_crawl only when the user asks for full article detail.
@@ -569,6 +577,7 @@ $toolCallEnd
 Multiple tools in one response: use multiple $toolCallStart...$toolCallEnd blocks.
 
 FORMAT: Emit raw $toolCallStart...$toolCallEnd tags only. Do NOT wrap tool calls in Markdown code fences.
+NEVER emit legacy per-tool XML tags such as <fetch_image>...</fetch_image> or <web_search>...</web_search>. Only use $toolCallStart...$toolCallEnd.
 
 ### Rules:
 1. You can only call tools whose full description is shown above. To use a tool from "Other available tools", call find_tools first to get its description.
@@ -579,7 +588,7 @@ FORMAT: Emit raw $toolCallStart...$toolCallEnd tags only. Do NOT wrap tool calls
 6. Never stop with intention-only text (e.g. "I will now search"). Do the next tool_call or provide the final answer.
 7. COST & PRIVACY: Before calling generate_image, generate_image_hunyuan, generate_image_flux, or edit_image, ALWAYS briefly inform the user that (a) it costs credits and (b) generated/edited images are NOT end-to-end encrypted and can be seen by the service operator. Then proceed with the tool call in the same response — do not wait for confirmation unless the user previously expressed privacy concerns. After the image is generated, do NOT show the URL, dimensions, seed, model, or other technical metadata — the image is displayed inline automatically by the app. Use generate_image (fast, ~0.01 EUR) by default; use generate_image_hunyuan (high quality, ~0.08 EUR) or generate_image_flux (best quality, ~0.02 EUR) when the user requests higher quality or a specific model.
 8. If the needed tool is already listed above with its full description, call it directly. Do NOT call find_tools again unless you need a tool from "Other available tools".
-9. REAL PHOTOS vs AI ART: When the user wants pictures of REAL things (people, actors, celebrities, movies, posters, places, products, cars, animals, food, events), call `web_search` with `type: "images"`. The app renders the returned image_url / thumbnail_url values inline — DO NOT call fetch_image afterwards. Only call fetch_image when the user explicitly asks to save, attach, or store a picture in the chat. Only use generate_image / generate_image_hunyuan / generate_image_flux when the user explicitly asks for AI art, illustration, fantasy, concept art, fictional subjects, or a stylized generated image. Never silently swap a real-photo request for AI-generated fakes — retry web_search with type="images" and a better query first, or report the failure.
+9. REAL PHOTOS vs AI ART: When the user wants pictures of REAL things (people, actors, celebrities, movies, posters, places, products, cars, animals, food, events), call `web_search` with `type: "images"`, then emit ONE `<image>` block in your final answer using a returned image_url. Do NOT use `fetch_image` for display-only rendering. Only call `fetch_image` when the user explicitly asks to save/store/attach/analyze a picture. Only use generate_image / generate_image_hunyuan / generate_image_flux when the user explicitly asks for AI art, illustration, fantasy, concept art, fictional subjects, or a stylized generated image. Never silently swap a real-photo request for AI-generated fakes — retry web_search with type="images" and a better query first, or report the failure.
    IMAGE CAPTIONS: When you call fetch_image or generate_image* and the image shows an identifiable subject (a person, actor, place, product, character, scene), pass a short `caption` argument — the app renders it as a subtitle under the image. Use the subject's name or a 2-4 word label (e.g. "Sean Connery", "Eiffel Tower at dusk"). Omit captions for abstract/decorative images. After a caption is set, do NOT repeat it in your message text — the app shows it automatically.
 10. NEWS & TIME-SENSITIVE QUERIES: For "latest", "news", "today", "breaking", "just released", "aktuell", "neu", "heute" or similar, call `web_search` with `type: "news"` and the right `freshness` (pd/pw/pm/py). Then emit a `<news>` block with the structured results — the app renders polished cards. Do NOT also list the same articles as markdown. Follow up with `web_crawl` only when the user asks for full article detail.
 11. WEB SEARCH TUNING: `extra_snippets` is on by default — read the bullet-point snippets before deciding you need web_crawl. Use `country`/`search_lang` (e.g. "DE"/"de") for German or region-specific queries. Use `freshness` in web mode too when recency matters.
@@ -651,9 +660,47 @@ Never wrap an <artifact> tag inside a markdown code fence (```…```); the parse
 ''';
   }
 
+  List<Map<String, dynamic>> _dedupeToolsByName(
+    List<Map<String, dynamic>> tools,
+  ) {
+    final seen = <String>{};
+    final out = <Map<String, dynamic>>[];
+    for (final tool in tools) {
+      final rawName = tool['name'];
+      final name = rawName is String ? rawName.trim() : '';
+      if (name.isEmpty || seen.contains(name)) {
+        continue;
+      }
+      seen.add(name);
+      out.add(tool);
+    }
+    return out;
+  }
+
   /// Docs for visual tags that are always available regardless of the
-  /// chart/map feature switches (email drafts, weather cards).
+  /// chart/map feature switches (email drafts, weather/news/image cards).
   void _appendAlwaysOnVisualTags(StringBuffer buffer) {
+    buffer.writeln();
+    buffer.writeln('### Images');
+    buffer.writeln(
+      'Use `<image>` for display-only rendering in your final answer. This is an output tag (no tool call required for rendering).',
+    );
+    buffer.writeln('<image>');
+    buffer.writeln(
+      '{"url":"https://example.com/photo.jpg","caption":"Michelangelo (Porträt, ca. 1548)","source":"Daniele da Volterra"}',
+    );
+    buffer.writeln('</image>');
+    buffer.writeln();
+    buffer.writeln('**Image fields:**');
+    buffer.writeln('- "url": direct http/https image URL (required)');
+    buffer.writeln(
+      '- "caption": short subtitle shown under the image (optional)',
+    );
+    buffer.writeln('- "source" or "credit": attribution text (optional)');
+    buffer.writeln(
+      '**Image routing rules:** `web_search type:"images"` finds URLs; `<image>` renders one selected URL; `fetch_image` is only for fetch/store/vision workflows.',
+    );
+
     buffer.writeln();
     buffer.writeln('### Emails');
     buffer.writeln(
@@ -839,10 +886,10 @@ Never wrap an <artifact> tag inside a markdown code fence (```…```); the parse
     buffer.writeln('### Visual output rules:');
     var ruleNumber = 1;
     final tagLabel = includeMaps && includeCharts
-        ? '<map>/<chart>'
+        ? '<map>/<chart>/<image>/<weather>/<news>/<email>'
         : includeCharts
-        ? '<chart>'
-        : '<map>';
+        ? '<chart>/<image>/<weather>/<news>/<email>'
+        : '<map>/<image>/<weather>/<news>/<email>';
     buffer.writeln(
       '${ruleNumber++}. $tagLabel tags go OUTSIDE tool_call tags — they are part of your text response.',
     );
@@ -854,21 +901,21 @@ Never wrap an <artifact> tag inside a markdown code fence (```…```); the parse
     );
     if (includeMaps && includeCharts) {
       buffer.writeln(
-        '${ruleNumber++}. STOP after the closing </map> or </chart> tag. Do not write text after it.',
+        '${ruleNumber++}. STOP after your last visual closing tag (e.g. </map>, </chart>, </image>, </weather>, </news>, </email>). Do not write text after it.',
       );
       buffer.writeln(
         '${ruleNumber++}. In <map> and <chart> JSON: only include fields from tool results. Do NOT fabricate data.',
       );
     } else if (includeCharts) {
       buffer.writeln(
-        '${ruleNumber++}. STOP after the closing </chart> tag. Do not write text after it.',
+        '${ruleNumber++}. STOP after your last visual closing tag (e.g. </chart>, </image>, </weather>, </news>, </email>). Do not write text after it.',
       );
       buffer.writeln(
         '${ruleNumber++}. In <chart> JSON: only include fields from tool results. Do NOT fabricate data.',
       );
     } else {
       buffer.writeln(
-        '${ruleNumber++}. STOP after the closing </map> tag. Do not write text after it.',
+        '${ruleNumber++}. STOP after your last visual closing tag (e.g. </map>, </image>, </weather>, </news>, </email>). Do not write text after it.',
       );
       buffer.writeln(
         '${ruleNumber++}. In <map> JSON: only include fields from tool results. Do NOT fabricate data.',

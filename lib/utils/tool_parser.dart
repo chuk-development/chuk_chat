@@ -9,6 +9,10 @@ final RegExp _xmlToolCallBlockPattern = RegExp(
   r'<tool_call>[\s\S]*?</tool_call>',
   caseSensitive: false,
 );
+final RegExp _xmlDirectToolTagBlockPattern = RegExp(
+  r'<([a-zA-Z][a-zA-Z0-9_]*_[a-zA-Z0-9_]+)>\s*([\s\S]*?)\s*</\1>',
+  caseSensitive: false,
+);
 final RegExp _xmlToolCallStartPattern = RegExp(
   r'<tool_call>',
   caseSensitive: false,
@@ -21,6 +25,32 @@ final RegExp _markdownToolCallStartPattern = RegExp(
   r'```(?:tool_call|toolcall|tool-call)\b',
   caseSensitive: false,
 );
+const Set<String> _knownDirectXmlToolNames = <String>{
+  'ask_user',
+  'web_search',
+  'web_crawl',
+  'generate_image',
+  'generate_image_hunyuan',
+  'generate_image_flux',
+  'edit_image',
+  'fetch_image',
+  'view_chat_images',
+  'search_places',
+  'search_restaurants',
+  'get_route',
+  'search_chats',
+  'spotify_control',
+  'google_calendar',
+  'random_number',
+  'flip_coin',
+  'roll_dice',
+  'password_generator',
+  'uuid_generator',
+  'artifact_manager',
+  'artifact_schema',
+  'update_project',
+  'typst_compile',
+};
 
 /// Try to parse JSON from a tool call, with repair for common LLM errors:
 /// - Missing closing braces: {"name":"x","arguments":{"q":"y"}
@@ -259,7 +289,8 @@ Map<String, dynamic> _coerceStringKeyedMap(dynamic rawArgs) {
 /// including incomplete blocks during token streaming.
 bool hasToolCallStartMarker(String content) {
   return _xmlToolCallStartPattern.hasMatch(content) ||
-      _markdownToolCallStartPattern.hasMatch(content);
+      _markdownToolCallStartPattern.hasMatch(content) ||
+      _earliestDirectXmlToolStart(content) != -1;
 }
 
 /// Removes tool-call XML/markdown blocks from user-visible text.
@@ -274,6 +305,13 @@ String stripToolCallBlocksForDisplay(
   var cleaned = content
       .replaceAll(_xmlToolCallBlockPattern, '')
       .replaceAll(_markdownToolCallBlockPattern, '');
+  cleaned = cleaned.replaceAllMapped(_xmlDirectToolTagBlockPattern, (match) {
+    final tagName = (match.group(1) ?? '').trim().toLowerCase();
+    if (_isKnownDirectXmlToolName(tagName)) {
+      return '';
+    }
+    return match.group(0) ?? '';
+  });
 
   // Also strip inline <artifact> blocks — they are rendered as inline
   // artifact cards (mirroring artifact_manager tool-call output), not as
@@ -291,6 +329,11 @@ String stripToolCallBlocksForDisplay(
     final xmlPartialIdx = _earliestCaseInsensitiveIndex(cleaned, '<tool_call');
     if (xmlPartialIdx != -1) {
       cleaned = cleaned.substring(0, xmlPartialIdx);
+    }
+
+    final directToolStartIdx = _earliestDirectXmlToolStart(cleaned);
+    if (directToolStartIdx != -1) {
+      cleaned = cleaned.substring(0, directToolStartIdx);
     }
 
     // Same for the markdown form: a fenced block starting with
@@ -401,6 +444,21 @@ List<Map<String, dynamic>> parseToolCalls(
     }
   }
 
+  for (final match in _xmlDirectToolTagBlockPattern.allMatches(content)) {
+    final tagName = (match.group(1) ?? '').trim();
+    final normalizedName = tagName.toLowerCase();
+    if (!_isKnownDirectXmlToolName(normalizedName)) {
+      continue;
+    }
+
+    final inner = (match.group(2) ?? '').trim();
+    final args = _parseDirectXmlToolArgs(inner);
+    indexedCalls.add((
+      index: match.start,
+      call: <String, dynamic>{'name': normalizedName, 'arguments': args},
+    ));
+  }
+
   indexedCalls.sort((a, b) => a.index.compareTo(b.index));
   return indexedCalls.map((entry) => entry.call).toList();
 }
@@ -411,5 +469,64 @@ bool hasToolCalls(String content) {
     return true;
   }
 
+  final hasDirectXmlTool = _xmlDirectToolTagBlockPattern
+      .allMatches(content)
+      .any(
+        (match) => _isKnownDirectXmlToolName(
+          (match.group(1) ?? '').trim().toLowerCase(),
+        ),
+      );
+  if (hasDirectXmlTool) {
+    return true;
+  }
+
   return _markdownToolCallBlockPattern.hasMatch(content);
+}
+
+bool _isKnownDirectXmlToolName(String tagName) {
+  return tagName.isNotEmpty && _knownDirectXmlToolNames.contains(tagName);
+}
+
+Map<String, dynamic> _parseDirectXmlToolArgs(String inner) {
+  if (inner.isEmpty) {
+    return <String, dynamic>{};
+  }
+
+  final parsed =
+      tryParseToolJson(inner) ??
+      _extractEmbeddedToolJson(inner) ??
+      _parseLegacyToolCallSyntax(inner);
+
+  if (parsed == null) {
+    return <String, dynamic>{};
+  }
+
+  final rawArgs = parsed['arguments'] ?? parsed['args'];
+  if (rawArgs != null) {
+    return _coerceStringKeyedMap(rawArgs);
+  }
+
+  final valueOnly = <String, dynamic>{};
+  for (final entry in parsed.entries) {
+    if (entry.key == 'name' ||
+        entry.key == 'arguments' ||
+        entry.key == 'args') {
+      continue;
+    }
+    valueOnly[entry.key] = entry.value;
+  }
+  return valueOnly;
+}
+
+int _earliestDirectXmlToolStart(String content) {
+  for (final match in RegExp(
+    r'<([a-zA-Z][a-zA-Z0-9_]*_[a-zA-Z0-9_]+)\b',
+    caseSensitive: false,
+  ).allMatches(content)) {
+    final tagName = (match.group(1) ?? '').trim().toLowerCase();
+    if (_isKnownDirectXmlToolName(tagName)) {
+      return match.start;
+    }
+  }
+  return -1;
 }

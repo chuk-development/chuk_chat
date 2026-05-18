@@ -47,17 +47,14 @@ class ImageMeta {
     try {
       final decoded = jsonDecode(json);
       if (decoded is! List) return null;
-      return decoded
-          .whereType<Map>()
-          .map((raw) {
-            final source = raw['source']?.toString() ?? 'generated';
-            final captionRaw = raw['caption']?.toString().trim() ?? '';
-            return ImageMeta(
-              source: source,
-              caption: captionRaw.isEmpty ? null : captionRaw,
-            );
-          })
-          .toList();
+      return decoded.whereType<Map>().map((raw) {
+        final source = raw['source']?.toString() ?? 'generated';
+        final captionRaw = raw['caption']?.toString().trim() ?? '';
+        return ImageMeta(
+          source: source,
+          caption: captionRaw.isEmpty ? null : captionRaw,
+        );
+      }).toList();
     } catch (_) {
       return null;
     }
@@ -154,6 +151,7 @@ class MessageBubble extends StatefulWidget {
     this.onAskUserAnswer,
     this.onReplyToAiBlock,
     this.userMessageActions = const <MessageBubbleAction>[],
+    this.useSharedSelectionArea = false,
   });
 
   final String message;
@@ -213,21 +211,23 @@ class MessageBubble extends StatefulWidget {
   /// These are hidden by default and only appear on long-press, matching
   /// the UX pattern of ChatGPT, Gemini, etc.
   final List<MessageBubbleAction> userMessageActions;
+  final bool useSharedSelectionArea;
 
   @override
   State<MessageBubble> createState() => _MessageBubbleState();
 }
 
 class _MessageBubbleState extends State<MessageBubble> {
-  /// Regex to find `<chart>`, `<map>`, `<email>`, `<weather>`, and `<news>` blocks.
+  /// Regex to find visual output blocks (`<chart>`, `<map>`, `<email>`,
+  /// `<weather>`, `<news>`, `<image>`).
   static final RegExp _richBlockRegex = RegExp(
-    r'<\s*(chart|map|email|weather|news)\s*>([\s\S]*?)<\s*/\s*\1\s*>',
+    r'<\s*(chart|map|email|weather|news|image)\s*>([\s\S]*?)<\s*/\s*\1\s*>',
     multiLine: true,
     caseSensitive: false,
   );
 
   static final RegExp _visualBlockStartRegex = RegExp(
-    r'<\s*(chart|map|email|weather|news)\b',
+    r'<\s*(chart|map|email|weather|news|image)\b',
     caseSensitive: false,
   );
 
@@ -242,8 +242,9 @@ class _MessageBubbleState extends State<MessageBubble> {
   /// Returns the user-selected chat font family, falling back to the historic
   /// Arimo default when the user has explicitly picked the system font.
   String get _chatFontFamily {
-    final resolved =
-        resolveChatFontFamily(AppThemeService.instance.chatFontFamily);
+    final resolved = resolveChatFontFamily(
+      AppThemeService.instance.chatFontFamily,
+    );
     return resolved ?? _kAiResponseFontFamilyDefault;
   }
 
@@ -579,8 +580,10 @@ class _MessageBubbleState extends State<MessageBubble> {
     final double effectiveMaxWidth =
         widget.maxWidth ?? MediaQuery.of(context).size.width * 0.8;
 
-    final EdgeInsetsGeometry containerPadding =
-        const EdgeInsets.symmetric(horizontal: 14, vertical: 10);
+    final EdgeInsetsGeometry containerPadding = const EdgeInsets.symmetric(
+      horizontal: 14,
+      vertical: 10,
+    );
 
     final BoxDecoration decoration = BoxDecoration(
       color: accentColor.withValues(alpha: .8),
@@ -680,8 +683,10 @@ class _MessageBubbleState extends State<MessageBubble> {
         (_hasReasoning || _hasModelInfo || isWaitingForFirstTokens) &&
         !hasVisibleToolCalls;
 
-    final EdgeInsetsGeometry containerPadding =
-        const EdgeInsets.symmetric(horizontal: 0, vertical: 2);
+    final EdgeInsetsGeometry containerPadding = const EdgeInsets.symmetric(
+      horizontal: 0,
+      vertical: 2,
+    );
 
     final Widget bubbleContent = Container(
       margin: EdgeInsets.only(top: widget.startsNewGroup ? 10 : 2, bottom: 2),
@@ -717,10 +722,7 @@ class _MessageBubbleState extends State<MessageBubble> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            bubbleContent,
-            _buildBottomBar(iconFgColor, hasActions),
-          ],
+          children: [bubbleContent, _buildBottomBar(iconFgColor, hasActions)],
         ),
       ),
     );
@@ -1135,6 +1137,7 @@ class _MessageBubbleState extends State<MessageBubble> {
               text: textBefore,
               textColor: textColor,
               backgroundColor: bgColor,
+              wrapWithSelectionArea: !widget.useSharedSelectionArea,
               fontFamily: _chatFontFamily,
               paragraphFontSize: AppThemeService.instance.chatFontSize,
             ),
@@ -1166,6 +1169,12 @@ class _MessageBubbleState extends State<MessageBubble> {
             throw const FormatException('Expected JSON object');
           }
           widgets.add(_buildNewsBlock(parsed));
+        } else if (blockType == 'image') {
+          final parsed = _tryParseJson(blockJson);
+          if (parsed is! Map<String, dynamic>) {
+            throw const FormatException('Expected JSON object');
+          }
+          widgets.add(_buildImageBlock(parsed));
         } else {
           final parsed = _tryParseJson(blockJson);
           if (parsed is! Map<String, dynamic>) {
@@ -1207,6 +1216,7 @@ class _MessageBubbleState extends State<MessageBubble> {
             text: textAfter,
             textColor: textColor,
             backgroundColor: bgColor,
+            wrapWithSelectionArea: !widget.useSharedSelectionArea,
             fontFamily: _chatFontFamily,
             paragraphFontSize: AppThemeService.instance.chatFontSize,
           ),
@@ -1222,6 +1232,7 @@ class _MessageBubbleState extends State<MessageBubble> {
             text: content,
             textColor: textColor,
             backgroundColor: bgColor,
+            wrapWithSelectionArea: !widget.useSharedSelectionArea,
             fontFamily: _chatFontFamily,
             paragraphFontSize: AppThemeService.instance.chatFontSize,
           ),
@@ -1428,9 +1439,107 @@ class _MessageBubbleState extends State<MessageBubble> {
     );
   }
 
+  /// Renders an `<image>` block as a display-only image card.
+  ///
+  /// This is intentionally separate from the `fetch_image` tool path:
+  /// - `<image>` = render-only output tag (no fetch/persist side effects)
+  /// - `fetch_image` = tool pipeline for fetch/store/vision workflows
+  Widget _buildImageBlock(Map<String, dynamic> data) {
+    final rawUrl = (data['url'] ?? data['image_url'] ?? data['src'] ?? '')
+        .toString()
+        .trim();
+    final caption = (data['caption'] ?? '').toString().trim();
+    final source = (data['source'] ?? data['credit'] ?? '').toString().trim();
+
+    final uri = Uri.tryParse(rawUrl);
+    final validHttp =
+        uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
+    if (!validHttp) {
+      return Container(
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: Theme.of(
+            context,
+          ).colorScheme.errorContainer.withValues(alpha: 0.3),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Text(
+          'image parse error: invalid or missing http(s) url',
+          style: TextStyle(
+            fontSize: 12,
+            color: Theme.of(context).colorScheme.error,
+          ),
+        ),
+      );
+    }
+
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.6),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
+            child: AspectRatio(
+              aspectRatio: 16 / 10,
+              child: Image.network(
+                rawUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  color: colorScheme.surfaceContainerHighest,
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.broken_image_outlined,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (caption.isNotEmpty || source.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (caption.isNotEmpty)
+                    Text(
+                      caption,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: colorScheme.onSurface,
+                      ),
+                    ),
+                  if (source.isNotEmpty) ...[
+                    if (caption.isNotEmpty) const SizedBox(height: 2),
+                    Text(
+                      source,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colorScheme.onSurface.withValues(alpha: 0.65),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   /// Renders a text content block as a MarkdownMessage.
   Widget _buildBlockText(String text, Color textColor, Color bgColor) {
-    // Check for embedded <chart> / <map> blocks
+    // Check for embedded visual blocks (<chart>/<map>/<email>/<weather>/<news>/<image>)
     if (_hasVisualBlocks(text)) {
       return _buildVisualContent(
         content: text,
@@ -1445,6 +1554,7 @@ class _MessageBubbleState extends State<MessageBubble> {
         text: text,
         textColor: textColor,
         backgroundColor: bgColor,
+        wrapWithSelectionArea: !widget.useSharedSelectionArea,
         fontFamily: _chatFontFamily,
         paragraphFontSize: AppThemeService.instance.chatFontSize,
       ),
@@ -1565,96 +1675,99 @@ class _MessageBubbleState extends State<MessageBubble> {
             InkWell(
               onTap: () =>
                   setState(() => _isReasoningExpanded = !_isReasoningExpanded),
-            borderRadius: BorderRadius.circular(10),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              child: Row(
-                children: [
-                  if (isStreaming)
-                    SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 1.5,
+              borderRadius: BorderRadius.circular(10),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: [
+                    if (isStreaming)
+                      SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 1.5,
+                          color: barAccent,
+                        ),
+                      )
+                    else
+                      Icon(
+                        _hasReasoning
+                            ? Icons.psychology
+                            : Icons.smart_toy_outlined,
+                        size: 14,
                         color: barAccent,
                       ),
-                    )
-                  else
-                    Icon(
-                      _hasReasoning
-                          ? Icons.psychology
-                          : Icons.smart_toy_outlined,
-                      size: 14,
-                      color: barAccent,
-                    ),
-                  const SizedBox(width: 8),
-                  Text(
-                    label,
-                    style: TextStyle(
-                      color: barAccent,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  // Preview text when collapsed
-                  if (!isExpanded && _hasReasoning)
-                    Expanded(
-                      child: Text(
-                        _truncatePreview(widget.reasoning!, 60),
-                        style: TextStyle(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurface.withValues(alpha: 0.5),
-                          fontSize: 12,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
+                    const SizedBox(width: 8),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: barAccent,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
                       ),
-                    )
-                  else
-                    const Spacer(),
-                  Icon(
-                    isExpanded ? Icons.expand_less : Icons.expand_more,
-                    size: 16,
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.5),
-                  ),
-                ],
+                    ),
+                    const SizedBox(width: 8),
+                    // Preview text when collapsed
+                    if (!isExpanded && _hasReasoning)
+                      Expanded(
+                        child: Text(
+                          _truncatePreview(widget.reasoning!, 60),
+                          style: TextStyle(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.5),
+                            fontSize: 12,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                      )
+                    else
+                      const Spacer(),
+                    Icon(
+                      isExpanded ? Icons.expand_less : Icons.expand_more,
+                      size: 16,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.5),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          // Expanded content: sub-cards for reasoning and model info
-          if (isExpanded)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
-              child: Column(
-                children: [
-                  if (_hasReasoning)
-                    _buildExpandableCard(
-                      key: 'reasoning',
-                      icon: Icons.psychology,
-                      label: 'Reasoning',
-                      preview: widget.reasoning!,
-                      expandedContent: widget.reasoning!,
-                      accentColor: barAccent,
-                      isRunning: isStreaming,
-                    ),
-                  if (_hasModelInfo)
-                    _buildExpandableCard(
-                      key: 'model_info',
-                      icon: Icons.smart_toy_outlined,
-                      label: widget.modelLabel!,
-                      preview: _buildModelPreview(),
-                      expandedContent: _buildModelDetails(),
-                      accentColor: Colors.green,
-                    ),
-                ],
+            // Expanded content: sub-cards for reasoning and model info
+            if (isExpanded)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
+                child: Column(
+                  children: [
+                    if (_hasReasoning)
+                      _buildExpandableCard(
+                        key: 'reasoning',
+                        icon: Icons.psychology,
+                        label: 'Reasoning',
+                        preview: widget.reasoning!,
+                        expandedContent: widget.reasoning!,
+                        accentColor: barAccent,
+                        isRunning: isStreaming,
+                      ),
+                    if (_hasModelInfo)
+                      _buildExpandableCard(
+                        key: 'model_info',
+                        icon: Icons.smart_toy_outlined,
+                        label: widget.modelLabel!,
+                        preview: _buildModelPreview(),
+                        expandedContent: _buildModelDetails(),
+                        accentColor: Colors.green,
+                      ),
+                  ],
+                ),
               ),
-            ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }
@@ -1673,91 +1786,94 @@ class _MessageBubbleState extends State<MessageBubble> {
 
     return SelectionContainer.disabled(
       child: Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 6),
-      decoration: BoxDecoration(
-        color: accentColor.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: accentColor.withValues(alpha: 0.18)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            onTap: () => setState(() {
-              if (_expandedCards.contains(key)) {
-                _expandedCards.remove(key);
-              } else {
-                _expandedCards.add(key);
-              }
-            }),
-            borderRadius: BorderRadius.circular(10),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              child: Row(
-                children: [
-                  if (isRunning)
-                    SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 1.5,
-                        color: accentColor,
-                      ),
-                    )
-                  else
-                    Icon(icon, size: 14, color: accentColor),
-                  const SizedBox(width: 8),
-                  Text(
-                    label,
-                    style: TextStyle(
-                      color: accentColor,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      cardExpanded ? '' : _truncatePreview(preview, 60),
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 6),
+        decoration: BoxDecoration(
+          color: accentColor.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: accentColor.withValues(alpha: 0.18)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            InkWell(
+              onTap: () => setState(() {
+                if (_expandedCards.contains(key)) {
+                  _expandedCards.remove(key);
+                } else {
+                  _expandedCards.add(key);
+                }
+              }),
+              borderRadius: BorderRadius.circular(10),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: [
+                    if (isRunning)
+                      SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 1.5,
+                          color: accentColor,
+                        ),
+                      )
+                    else
+                      Icon(icon, size: 14, color: accentColor),
+                    const SizedBox(width: 8),
+                    Text(
+                      label,
                       style: TextStyle(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.5),
+                        color: accentColor,
+                        fontWeight: FontWeight.w600,
                         fontSize: 12,
                       ),
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
                     ),
-                  ),
-                  Icon(
-                    cardExpanded ? Icons.expand_less : Icons.expand_more,
-                    size: 16,
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.5),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (cardExpanded)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-              child: SelectableText(
-                expandedContent,
-                style: TextStyle(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.onSurface.withValues(alpha: 0.7),
-                  fontSize: 12,
-                  fontFamily: 'monospace',
-                  height: 1.4,
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        cardExpanded ? '' : _truncatePreview(preview, 60),
+                        style: TextStyle(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.5),
+                          fontSize: 12,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                    ),
+                    Icon(
+                      cardExpanded ? Icons.expand_less : Icons.expand_more,
+                      size: 16,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.5),
+                    ),
+                  ],
                 ),
               ),
             ),
-        ],
-      ),
+            if (cardExpanded)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+                child: SelectableText(
+                  expandedContent,
+                  style: TextStyle(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.7),
+                    fontSize: 12,
+                    fontFamily: 'monospace',
+                    height: 1.4,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -1802,10 +1918,7 @@ class _MessageBubbleState extends State<MessageBubble> {
         cards.add(
           Padding(
             padding: const EdgeInsets.only(bottom: 6),
-            child: _ArtifactErrorCard(
-              toolName: tc.name,
-              message: result,
-            ),
+            child: _ArtifactErrorCard(toolName: tc.name, message: result),
           ),
         );
         continue;
@@ -1953,151 +2066,155 @@ class _MessageBubbleState extends State<MessageBubble> {
 
     return SelectionContainer.disabled(
       child: Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 6),
-      decoration: BoxDecoration(
-        color: accentColor.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: accentColor.withValues(alpha: 0.18)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            onTap: () {
-              setState(() {
-                _blockExpanded[expandKey] = !isExpanded;
-              });
-            },
-            borderRadius: BorderRadius.circular(10),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              child: Row(
-                children: [
-                  if (showSpinner)
-                    SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 1.5,
-                        color: accentColor,
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 6),
+        decoration: BoxDecoration(
+          color: accentColor.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: accentColor.withValues(alpha: 0.18)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            InkWell(
+              onTap: () {
+                setState(() {
+                  _blockExpanded[expandKey] = !isExpanded;
+                });
+              },
+              borderRadius: BorderRadius.circular(10),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: [
+                    if (showSpinner)
+                      SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 1.5,
+                          color: accentColor,
+                        ),
+                      )
+                    else
+                      Icon(icon, size: 14, color: accentColor),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: TextStyle(
+                          color: accentColor,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    )
-                  else
-                    Icon(icon, size: 14, color: accentColor),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      label,
-                      style: TextStyle(
-                        color: accentColor,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12,
-                      ),
-                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-          if (isExpanded)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (isContentBlock && effectiveTimeline.isNotEmpty)
-                    for (int ti = 0; ti < effectiveTimeline.length; ti++) ...[
-                      if (effectiveTimeline[ti].isReasoning)
-                        _buildExpandableCard(
-                          key: 'timeline_reasoning_${expandKey}_$ti',
-                          icon: Icons.psychology,
-                          label: 'Reasoning',
-                          preview: effectiveTimeline[ti].reasoning!,
-                          expandedContent: effectiveTimeline[ti].reasoning!,
-                          accentColor: colorScheme.primary,
-                        )
-                      else
-                        _buildExpandableCard(
-                          key: 'tool_${effectiveTimeline[ti].toolCall!.id}_$ti',
-                          icon: _toolCallIcon(
-                            effectiveTimeline[ti].toolCall!.status,
+            if (isExpanded)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (isContentBlock && effectiveTimeline.isNotEmpty)
+                      for (int ti = 0; ti < effectiveTimeline.length; ti++) ...[
+                        if (effectiveTimeline[ti].isReasoning)
+                          _buildExpandableCard(
+                            key: 'timeline_reasoning_${expandKey}_$ti',
+                            icon: Icons.psychology,
+                            label: 'Reasoning',
+                            preview: effectiveTimeline[ti].reasoning!,
+                            expandedContent: effectiveTimeline[ti].reasoning!,
+                            accentColor: colorScheme.primary,
+                          )
+                        else
+                          _buildExpandableCard(
+                            key:
+                                'tool_${effectiveTimeline[ti].toolCall!.id}_$ti',
+                            icon: _toolCallIcon(
+                              effectiveTimeline[ti].toolCall!.status,
+                            ),
+                            label: effectiveTimeline[ti].toolCall!.name,
+                            preview:
+                                _toolCallSubtitle(
+                                  effectiveTimeline[ti].toolCall!,
+                                ) ??
+                                (effectiveTimeline[ti].toolCall!.result != null
+                                    ? _truncatePreview(
+                                        effectiveTimeline[ti].toolCall!.result!,
+                                        60,
+                                      )
+                                    : 'running...'),
+                            expandedContent: _formatToolCallDetails(
+                              effectiveTimeline[ti].toolCall!,
+                            ),
+                            accentColor: _toolCallColor(
+                              effectiveTimeline[ti].toolCall!.status,
+                            ),
+                            isRunning:
+                                effectiveTimeline[ti].toolCall!.status ==
+                                ToolCallStatus.running,
                           ),
-                          label: effectiveTimeline[ti].toolCall!.name,
+                      ]
+                    else
+                      for (int i = 0; i < toolCalls.length; i++) ...[
+                        if (toolCalls[i].roundThinking != null &&
+                            toolCalls[i].roundThinking!.trim().isNotEmpty)
+                          _buildExpandableCard(
+                            key: 'thinking_round_${toolCalls[i].id}_$i',
+                            icon: Icons.psychology,
+                            label: 'Reasoning',
+                            preview: toolCalls[i].roundThinking!,
+                            expandedContent: toolCalls[i].roundThinking!,
+                            accentColor: colorScheme.primary,
+                          ),
+                        _buildExpandableCard(
+                          key: 'tool_${toolCalls[i].id}',
+                          icon: _toolCallIcon(toolCalls[i].status),
+                          label: toolCalls[i].name,
                           preview:
-                              _toolCallSubtitle(
-                                effectiveTimeline[ti].toolCall!,
-                              ) ??
-                              (effectiveTimeline[ti].toolCall!.result != null
-                                  ? _truncatePreview(
-                                      effectiveTimeline[ti].toolCall!.result!,
-                                      60,
-                                    )
+                              _toolCallSubtitle(toolCalls[i]) ??
+                              (toolCalls[i].result != null
+                                  ? _truncatePreview(toolCalls[i].result!, 60)
                                   : 'running...'),
-                          expandedContent: _formatToolCallDetails(
-                            effectiveTimeline[ti].toolCall!,
-                          ),
-                          accentColor: _toolCallColor(
-                            effectiveTimeline[ti].toolCall!.status,
-                          ),
+                          expandedContent: _formatToolCallDetails(toolCalls[i]),
+                          accentColor: _toolCallColor(toolCalls[i].status),
                           isRunning:
-                              effectiveTimeline[ti].toolCall!.status ==
-                              ToolCallStatus.running,
+                              toolCalls[i].status == ToolCallStatus.running,
                         ),
-                    ]
-                  else
-                    for (int i = 0; i < toolCalls.length; i++) ...[
-                      if (toolCalls[i].roundThinking != null &&
-                          toolCalls[i].roundThinking!.trim().isNotEmpty)
-                        _buildExpandableCard(
-                          key: 'thinking_round_${toolCalls[i].id}_$i',
-                          icon: Icons.psychology,
-                          label: 'Reasoning',
-                          preview: toolCalls[i].roundThinking!,
-                          expandedContent: toolCalls[i].roundThinking!,
-                          accentColor: colorScheme.primary,
-                        ),
+                      ],
+                    // Skip reasoning/model info in content block mode —
+                    // those are rendered as separate blocks.
+                    if (!isContentBlock && _hasReasoning)
                       _buildExpandableCard(
-                        key: 'tool_${toolCalls[i].id}',
-                        icon: _toolCallIcon(toolCalls[i].status),
-                        label: toolCalls[i].name,
-                        preview:
-                            _toolCallSubtitle(toolCalls[i]) ??
-                            (toolCalls[i].result != null
-                                ? _truncatePreview(toolCalls[i].result!, 60)
-                                : 'running...'),
-                        expandedContent: _formatToolCallDetails(toolCalls[i]),
-                        accentColor: _toolCallColor(toolCalls[i].status),
-                        isRunning:
-                            toolCalls[i].status == ToolCallStatus.running,
+                        key: 'thinking_final',
+                        icon: Icons.psychology,
+                        label: 'Reasoning',
+                        preview: widget.reasoning!,
+                        expandedContent: widget.reasoning!,
+                        accentColor: colorScheme.primary,
                       ),
-                    ],
-                  // Skip reasoning/model info in content block mode —
-                  // those are rendered as separate blocks.
-                  if (!isContentBlock && _hasReasoning)
-                    _buildExpandableCard(
-                      key: 'thinking_final',
-                      icon: Icons.psychology,
-                      label: 'Reasoning',
-                      preview: widget.reasoning!,
-                      expandedContent: widget.reasoning!,
-                      accentColor: colorScheme.primary,
-                    ),
-                  if (_hasModelInfo)
-                    _buildExpandableCard(
-                      key: 'model_info_$expandKey',
-                      icon: Icons.smart_toy_outlined,
-                      label: widget.modelLabel!,
-                      preview: _buildModelPreview(),
-                      expandedContent: _buildModelDetails(),
-                      accentColor: Colors.green,
-                    ),
-                ],
+                    if (_hasModelInfo)
+                      _buildExpandableCard(
+                        key: 'model_info_$expandKey',
+                        icon: Icons.smart_toy_outlined,
+                        label: widget.modelLabel!,
+                        preview: _buildModelPreview(),
+                        expandedContent: _buildModelDetails(),
+                        accentColor: Colors.green,
+                      ),
+                  ],
+                ),
               ),
-            ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }
@@ -2560,9 +2677,7 @@ class _MessageBubbleState extends State<MessageBubble> {
 
         // 3 images always render as a single 3-wide row — the 2+1 layout
         // from the generic mobile 2-column grid looks unbalanced.
-        final int columns = images.length == 3
-            ? 3
-            : (maxWidth > 520 ? 3 : 2);
+        final int columns = images.length == 3 ? 3 : (maxWidth > 520 ? 3 : 2);
         final double tileWidth = ((maxWidth - ((columns - 1) * 8)) / columns)
             .clamp(90.0, 260.0);
 
@@ -3219,9 +3334,9 @@ class _ArtifactInlineCard extends StatelessWidget {
       );
       final chatId = ArtifactStorageService.activeChatId;
       if (match == null && chatId != null && chatId.isNotEmpty) {
-        match = (await ArtifactStorageService.loadArtifactsForChat(chatId))
-            .where((a) => a.id == artifactId)
-            .firstOrNull;
+        match = (await ArtifactStorageService.loadArtifactsForChat(
+          chatId,
+        )).where((a) => a.id == artifactId).firstOrNull;
       }
 
       if (match != null) {
@@ -3377,9 +3492,13 @@ class _NewsCard extends StatelessWidget {
     final title = (item['title'] as String? ?? '').trim();
     final publisher = (item['publisher'] as String? ?? '').trim();
     final age = (item['age'] as String? ?? '').trim();
-    final summary = (item['summary'] as String? ?? item['description'] as String? ?? '').trim();
+    final summary =
+        (item['summary'] as String? ?? item['description'] as String? ?? '')
+            .trim();
     final url = (item['url'] as String? ?? '').trim();
-    final thumbnail = (item['thumbnail'] as String? ?? item['thumbnail_url'] as String? ?? '').trim();
+    final thumbnail =
+        (item['thumbnail'] as String? ?? item['thumbnail_url'] as String? ?? '')
+            .trim();
     final breaking = item['breaking'] == true;
 
     final metaParts = <String>[
@@ -3417,7 +3536,7 @@ class _NewsCard extends StatelessWidget {
                     width: 96,
                     height: 96,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
+                    errorBuilder: (_, _, _) => Container(
                       width: 96,
                       height: 96,
                       color: colorScheme.surfaceContainerHighest,

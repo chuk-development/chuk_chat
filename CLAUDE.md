@@ -137,21 +137,28 @@ Stale cache? Purge Cloudflare: Dashboard > chuk.chat > Caching > Purge Everythin
       --field build_ios=false \
       --field enable_signing=true
    ```
-5. **Immediately** after triggering CI, update the release notes on the draft release:
-   ```bash
-   gh release edit v1.0.50 --notes "$(cat <<'NOTES'
-   ## What's New
-   ### Section
-   - Change description
-   NOTES
-   )"
-   ```
-   Write the notes from git commits (`git log <prev-tag>..HEAD --oneline`). CI attaches artifacts to the same release tag.
+5. **Immediately** after triggering CI, update the release notes on the GitHub Release.
 6. Web deploys automatically via Dokploy on push to master
 
 **Repo is public** — only one release on `chuk-development/chuk_chat`. No second repo needed.
 
 **Release notes = changelog only.** Write what changed (from git commits), grouped by category. NEVER include download instructions, architecture explanations, platform lists, or "build artifacts" notices.
+
+**Release notes are mandatory for every new release** (no exceptions):
+
+- Always summarize **all commits since the previous release**, not just changes from the current session.
+- Scope must be: `last_release_tag..new_release_tag` (example: `v1.0.92..v1.0.93`).
+- Build notes from commit messages and group by category (for example: New Features, Bug Fixes, Performance, Refactors, Dependencies, Maintenance).
+- Keep notes as changelog text only (no download/install/platform instructions).
+- Include both:
+  - hash-linked commit list (`[abc1234](.../commit/<full_sha>)`)
+  - compare link (`.../compare/<last_tag>...<new_tag>`) and explicit commit range hashes.
+- Update the release body directly with `gh release edit` after generating notes from the full tag range.
+- Preferred direct command pattern (no repo script required):
+  ```bash
+  gh release edit <new_tag> --notes-file <notes_file>
+  gh release view <new_tag> --json body --jq .body
+  ```
 
 **Note:** Do not rely on git tags to trigger releases. Use `workflow_dispatch` for `build-cross-platform.yml`.
 

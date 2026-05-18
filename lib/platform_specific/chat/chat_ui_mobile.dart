@@ -221,20 +221,33 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       ..onToolImagesProcessed = _handleToolImagesProcessed
       ..onContentBlocksUpdate = _updateContentBlocksForMessage
       ..onRequestPayloadUpdate = _updateRequestPayloadForMessage
+      ..onPassRetryAvailabilityChanged = (chatId, index, available) {
+        if (!mounted || _activeChatId != chatId) {
+          return;
+        }
+        if (index < 0 || index >= _messages.length) {
+          return;
+        }
+        setState(() {});
+      }
       ..onBackgroundUpdate = (chatId, index, content, reasoning) {
         if (_activeChatId != chatId || _isAppInBackground) {
           unawaited(
-            _persistenceHandler.updateBackgroundChatMessage(
-              chatId: chatId,
-              messageIndex: index,
-              content: content,
-              reasoning: reasoning,
-              immediate: _isAppInBackground,
-            ).catchError((error) {
-              if (kDebugMode) {
-                debugPrint('updateBackgroundChatMessage (onBackgroundUpdate) failed: $error');
-              }
-            }),
+            _persistenceHandler
+                .updateBackgroundChatMessage(
+                  chatId: chatId,
+                  messageIndex: index,
+                  content: content,
+                  reasoning: reasoning,
+                  immediate: _isAppInBackground,
+                )
+                .catchError((error) {
+                  if (kDebugMode) {
+                    debugPrint(
+                      'updateBackgroundChatMessage (onBackgroundUpdate) failed: $error',
+                    );
+                  }
+                }),
           );
         }
       }
@@ -368,7 +381,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     _providerRefreshSubscription = ModelSelectionEventBus().refreshStream
         .listen((_) {
           // Skip dropdown cache (may be stale) and read from prefs directly
-          unawaited(_loadProviderSlugForModel(_selectedModelId, forceFromPrefs: true));
+          unawaited(
+            _loadProviderSlugForModel(_selectedModelId, forceFromPrefs: true),
+          );
         });
 
     // Network status listener
@@ -762,20 +777,24 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
             if (recoveredStaleCalls) {
               unawaited(
-                _persistenceHandler.persistChat(
-                  messages: _messages
-                      .map((m) => Map<String, String>.from(m))
-                      .toList(),
-                  chatId: _activeChatId,
-                  waitForCompletion: false,
-                  isOffline: _isOffline,
-                  silent: true,
-                ).catchError((error) {
-                  if (kDebugMode) {
-                    debugPrint('persistChat (recover stale) failed: $error');
-                  }
-                  return null;
-                }),
+                _persistenceHandler
+                    .persistChat(
+                      messages: _messages
+                          .map((m) => Map<String, String>.from(m))
+                          .toList(),
+                      chatId: _activeChatId,
+                      waitForCompletion: false,
+                      isOffline: _isOffline,
+                      silent: true,
+                    )
+                    .catchError((error) {
+                      if (kDebugMode) {
+                        debugPrint(
+                          'persistChat (recover stale) failed: $error',
+                        );
+                      }
+                      return null;
+                    }),
               );
             }
           }
@@ -928,18 +947,20 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
         chatIdToSave != null &&
         !ChatStorageState.wasRecentlyDeleted(chatIdToSave)) {
       unawaited(
-        _persistenceHandler.persistChat(
-          messages: messagesToSave,
-          chatId: chatIdToSave,
-          waitForCompletion: false,
-          isOffline: _isOffline,
-          silent: true,
-        ).catchError((error) {
-          if (kDebugMode) {
-            debugPrint('persistChat (newChat background) failed: $error');
-          }
-          return null;
-        }),
+        _persistenceHandler
+            .persistChat(
+              messages: messagesToSave,
+              chatId: chatIdToSave,
+              waitForCompletion: false,
+              isOffline: _isOffline,
+              silent: true,
+            )
+            .catchError((error) {
+              if (kDebugMode) {
+                debugPrint('persistChat (newChat background) failed: $error');
+              }
+              return null;
+            }),
       );
     }
     if (kDebugMode) {
@@ -988,6 +1009,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     if (!_audioHandler.isMicActive || _audioHandler.isTranscribingAudio) {
       return;
     }
+    final l = AppLocalizations.of(context)!;
 
     await _audioHandler.stopRecording(keepFile: true);
     _audioHandler.onLevelsChanged = null;
@@ -1018,9 +1040,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     }
 
     if (!result.success) {
-      _showSnackBar(
-        result.error ?? AppLocalizations.of(context)!.transcriptionFailed,
-      );
+      _showSnackBar(result.error ?? l.transcriptionFailed);
       setState(() {}); // Trigger UI update to hide loading icon
       return;
     }
@@ -1369,16 +1389,20 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
             call.status == ToolCallStatus.pending,
       );
       unawaited(
-        _persistenceHandler.updateBackgroundChatMessage(
-          chatId: chatId,
-          messageIndex: index,
-          toolCallsJson: toolCallsJson,
-          immediate: !hasInFlightCalls,
-        ).catchError((error) {
-          if (kDebugMode) {
-            debugPrint('updateBackgroundChatMessage (toolCalls) failed: $error');
-          }
-        }),
+        _persistenceHandler
+            .updateBackgroundChatMessage(
+              chatId: chatId,
+              messageIndex: index,
+              toolCallsJson: toolCallsJson,
+              immediate: !hasInFlightCalls,
+            )
+            .catchError((error) {
+              if (kDebugMode) {
+                debugPrint(
+                  'updateBackgroundChatMessage (toolCalls) failed: $error',
+                );
+              }
+            }),
       );
     }
   }
@@ -1412,20 +1436,24 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       _persistChat();
     } else if (!isActiveChat) {
       unawaited(
-        _persistenceHandler.updateBackgroundChatMessage(
-          chatId: chatId,
-          messageIndex: index,
-          toolCallsJson: toolCallsJson,
-          images: jsonEncode(imagePaths),
-          imageMetas: imageMetasJson,
-          imageCostEur: imageCostEur,
-          imageGeneratedAt: imageGeneratedAt,
-          immediate: true,
-        ).catchError((error) {
-          if (kDebugMode) {
-            debugPrint('updateBackgroundChatMessage (toolImages) failed: $error');
-          }
-        }),
+        _persistenceHandler
+            .updateBackgroundChatMessage(
+              chatId: chatId,
+              messageIndex: index,
+              toolCallsJson: toolCallsJson,
+              images: jsonEncode(imagePaths),
+              imageMetas: imageMetasJson,
+              imageCostEur: imageCostEur,
+              imageGeneratedAt: imageGeneratedAt,
+              immediate: true,
+            )
+            .catchError((error) {
+              if (kDebugMode) {
+                debugPrint(
+                  'updateBackgroundChatMessage (toolImages) failed: $error',
+                );
+              }
+            }),
       );
     }
   }
@@ -1447,15 +1475,19 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
     if (!isActiveChat) {
       unawaited(
-        _persistenceHandler.updateBackgroundChatMessage(
-          chatId: chatId,
-          messageIndex: index,
-          contentBlocksJson: contentBlocksJson,
-        ).catchError((error) {
-          if (kDebugMode) {
-            debugPrint('updateBackgroundChatMessage (contentBlocks) failed: $error');
-          }
-        }),
+        _persistenceHandler
+            .updateBackgroundChatMessage(
+              chatId: chatId,
+              messageIndex: index,
+              contentBlocksJson: contentBlocksJson,
+            )
+            .catchError((error) {
+              if (kDebugMode) {
+                debugPrint(
+                  'updateBackgroundChatMessage (contentBlocks) failed: $error',
+                );
+              }
+            }),
       );
     }
   }
@@ -1548,18 +1580,22 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       _persistChat();
       if (_isAppInBackground) {
         unawaited(
-          _persistenceHandler.updateBackgroundChatMessage(
-            chatId: chatId,
-            messageIndex: index,
-            content: content,
-            reasoning: reasoning,
-            tps: tps?.toString(),
-            immediate: true,
-          ).catchError((error) {
-            if (kDebugMode) {
-              debugPrint('updateBackgroundChatMessage (background-final) failed: $error');
-            }
-          }),
+          _persistenceHandler
+              .updateBackgroundChatMessage(
+                chatId: chatId,
+                messageIndex: index,
+                content: content,
+                reasoning: reasoning,
+                tps: tps?.toString(),
+                immediate: true,
+              )
+              .catchError((error) {
+                if (kDebugMode) {
+                  debugPrint(
+                    'updateBackgroundChatMessage (background-final) failed: $error',
+                  );
+                }
+              }),
         );
       }
 
@@ -1570,17 +1606,21 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       // DO NOT check _messages.length - it's the wrong chat's message list.
       // Persist using the background update handler which reads from storage.
       unawaited(
-        _persistenceHandler.updateBackgroundChatMessage(
-          chatId: chatId,
-          messageIndex: index,
-          content: content,
-          reasoning: reasoning,
-          immediate: true,
-        ).catchError((error) {
-          if (kDebugMode) {
-            debugPrint('updateBackgroundChatMessage (chat-switched) failed: $error');
-          }
-        }),
+        _persistenceHandler
+            .updateBackgroundChatMessage(
+              chatId: chatId,
+              messageIndex: index,
+              content: content,
+              reasoning: reasoning,
+              immediate: true,
+            )
+            .catchError((error) {
+              if (kDebugMode) {
+                debugPrint(
+                  'updateBackgroundChatMessage (chat-switched) failed: $error',
+                );
+              }
+            }),
       );
     }
   }
@@ -2228,9 +2268,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       // only after the Supabase round-trip; firing it unawaited lets
       // the next loadArtifactsForChat return the ghost artifact which
       // ends up in the system prompt as a "still active" item.
-      await ArtifactStorageService.deleteArtifactsByIds(
-        artifactIdsToDelete,
-      );
+      await ArtifactStorageService.deleteArtifactsByIds(artifactIdsToDelete);
     }
 
     // Resend with new text
@@ -2428,6 +2466,27 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     );
   }
 
+  bool _hasToolPassRetryAt(int index) {
+    final chatId = _activeChatId;
+    if (chatId == null || index < 0 || index >= _messages.length) {
+      return false;
+    }
+    return _streamingHandler.hasRetryForPass(chatId: chatId, index: index);
+  }
+
+  Future<void> _retryToolPassAt(int index) async {
+    final chatId = _activeChatId;
+    if (chatId == null) return;
+
+    final resumed = await _streamingHandler.retryFailedPass(
+      chatId: chatId,
+      index: index,
+    );
+    if (!resumed && mounted) {
+      _showSnackBar('No retry available for this message.');
+    }
+  }
+
   // --- FULLSCREEN EDITOR ---
 
   Future<void> _openFullscreenEditor() async {
@@ -2447,7 +2506,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
 
   // --- UTILITY METHODS ---
 
-  Future<void> _loadProviderSlugForModel(String modelId, {bool forceFromPrefs = false}) async {
+  Future<void> _loadProviderSlugForModel(
+    String modelId, {
+    bool forceFromPrefs = false,
+  }) async {
     if (modelId.isEmpty) {
       if (_selectedProviderSlug != null) {
         setState(() {
@@ -2921,13 +2983,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                             messageText: displayText,
                                             isUser: isUser,
                                             isStreaming: isStreamingMessage,
-                                            hasFailedToolCalls:
-                                                toolCalls != null &&
-                                                toolCalls.any(
-                                                  (t) =>
-                                                      t.status ==
-                                                      ToolCallStatus.error,
-                                                ),
+                                            canRetryToolPass:
+                                                !isUser &&
+                                                _hasToolPassRetryAt(i),
+                                            onRetryToolPass: _retryToolPassAt,
                                             onEdit: _editMessageAt,
                                             onResendMessage: _resendMessageAt,
                                           ),
@@ -2967,6 +3026,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                               blockText: blockText,
                                             )
                                           : null,
+                                      useSharedSelectionArea: true,
                                     ),
                                   );
                                 },

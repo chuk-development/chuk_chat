@@ -1,4 +1,6 @@
 // lib/platform_specific/chat/handlers/message_actions_handler.dart
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -80,7 +82,8 @@ class MessageActionsHandler {
     required bool isStreaming,
     required Function(int) onEdit,
     required Function(int) onResendMessage,
-    bool hasFailedToolCalls = false,
+    Future<void> Function(int)? onRetryToolPass,
+    bool canRetryToolPass = false,
   }) {
     // User message actions are built separately via buildUserMessageActions.
     if (isUser) return const [];
@@ -123,12 +126,21 @@ class MessageActionsHandler {
 
     // Retry action — always available on finalized AI messages
     if (!isAssistantPending) {
+      final shouldUsePassRetry = canRetryToolPass && onRetryToolPass != null;
       actions.add(
         MessageBubbleAction(
           icon: Icons.replay,
-          tooltip: 'Retry response',
+          tooltip: shouldUsePassRetry
+              ? 'Retry from failed tool step'
+              : 'Retry response',
           label: 'Retry',
-          onPressed: () => onResendMessage(index),
+          onPressed: () {
+            if (shouldUsePassRetry) {
+              unawaited(onRetryToolPass(index));
+              return;
+            }
+            onResendMessage(index);
+          },
         ),
       );
     }

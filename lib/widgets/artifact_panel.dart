@@ -9,10 +9,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:chuk_chat/models/artifact.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
+import 'package:chuk_chat/services/excalidraw_share_service.dart';
 import 'package:chuk_chat/services/file_save_service.dart';
 import 'package:chuk_chat/services/pdf_attachment_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -20,7 +22,6 @@ import 'package:chuk_chat/tool_handlers/typst_tools.dart' as typst_tools;
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
 import 'package:chuk_chat/widgets/excalidraw_svg_export.dart';
-import 'package:chuk_chat/widgets/excalidraw_view.dart';
 import 'package:chuk_chat/widgets/html_artifact_view.dart';
 import 'package:chuk_chat/widgets/technical_drawing_svg_export.dart';
 import 'package:chuk_chat/widgets/technical_drawing_widget.dart';
@@ -90,8 +91,9 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
     _artifactsChangesSub = ArtifactStorageService.changes.listen(
       (_) => _loadChatArtifacts(),
     );
-    ArtifactStorageService.pendingInitialOpen
-        .addListener(_onPendingVersionChanged);
+    ArtifactStorageService.pendingInitialOpen.addListener(
+      _onPendingVersionChanged,
+    );
   }
 
   Future<void> _loadChatArtifacts() async {
@@ -118,8 +120,9 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
 
   @override
   void dispose() {
-    ArtifactStorageService.pendingInitialOpen
-        .removeListener(_onPendingVersionChanged);
+    ArtifactStorageService.pendingInitialOpen.removeListener(
+      _onPendingVersionChanged,
+    );
     _artifactsChangesSub?.cancel();
     super.dispose();
   }
@@ -225,7 +228,6 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
       case ArtifactType.excalidraw:
         return const [
           _DownloadFormat('Excalidraw file', 'excalidraw'),
-          _DownloadFormat('PNG image', 'png'),
           _DownloadFormat('SVG vector', 'svg'),
         ];
       case ArtifactType.html:
@@ -465,8 +467,9 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
   String? get _effectiveAttachmentPath {
     final selected = _selectedVersion;
     if (selected != null && selected != widget.artifact.version) {
-      final snapshot =
-          _versions.where((v) => v.version == selected).firstOrNull;
+      final snapshot = _versions
+          .where((v) => v.version == selected)
+          .firstOrNull;
       return snapshot?.attachmentPath;
     }
     return widget.artifact.attachmentPath;
@@ -493,33 +496,33 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
             ),
           )
         : (_versions.length <= 1
-            ? const SizedBox.shrink()
-            : Container(
-                height: dropdownHeight,
-                padding: EdgeInsets.symmetric(horizontal: dropdownHorizPad),
-                decoration: BoxDecoration(
-                  border: Border.all(color: iconFg.withValues(alpha: 0.2)),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: DropdownButton<int>(
-                  value: _versions.any((v) => v.version == _selectedVersion)
-                      ? _selectedVersion
-                      : null,
-                  isDense: true,
-                  underline: const SizedBox.shrink(),
-                  iconSize: dropdownIconSize,
-                  style: TextStyle(fontSize: dropdownFontSize, color: iconFg),
-                  items: _versions
-                      .map(
-                        (v) => DropdownMenuItem<int>(
-                          value: v.version,
-                          child: Text('v${v.version}'),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: _selectVersion,
-                ),
-              ));
+              ? const SizedBox.shrink()
+              : Container(
+                  height: dropdownHeight,
+                  padding: EdgeInsets.symmetric(horizontal: dropdownHorizPad),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: iconFg.withValues(alpha: 0.2)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: DropdownButton<int>(
+                    value: _versions.any((v) => v.version == _selectedVersion)
+                        ? _selectedVersion
+                        : null,
+                    isDense: true,
+                    underline: const SizedBox.shrink(),
+                    iconSize: dropdownIconSize,
+                    style: TextStyle(fontSize: dropdownFontSize, color: iconFg),
+                    items: _versions
+                        .map(
+                          (v) => DropdownMenuItem<int>(
+                            value: v.version,
+                            child: Text('v${v.version}'),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: _selectVersion,
+                  ),
+                ));
 
     final actionMenu = PopupMenuButton<String>(
       icon: const Icon(Icons.more_vert, size: 20),
@@ -620,12 +623,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
             else if (showVersion)
               Padding(
                 padding: const EdgeInsets.only(top: 4, right: 8),
-                child: Row(
-                  children: [
-                    const Spacer(),
-                    versionDropdown,
-                  ],
-                ),
+                child: Row(children: [const Spacer(), versionDropdown]),
               ),
           ],
         ),
@@ -695,7 +693,8 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
               attachmentPath: _effectiveAttachmentPath,
               artifactId: widget.artifact.id,
               captureKey: _visualCaptureKey,
-              forceCodeView: _hasDualView && _viewMode == _ArtifactViewMode.code,
+              forceCodeView:
+                  _hasDualView && _viewMode == _ArtifactViewMode.code,
               codeLanguageHint: _codeLanguageHint,
             ),
           ),
@@ -791,10 +790,9 @@ class ArtifactBottomSheet extends StatelessWidget {
                       width: 44,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurface
-                            .withValues(alpha: 0.25),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.25),
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
@@ -908,14 +906,9 @@ class _ArtifactRenderer extends StatelessWidget {
           ),
         );
       case ArtifactType.excalidraw:
-        // Excalidraw owns its own zoom/pan UI; wrapping it in
-        // `_ZoomableVisual` (InteractiveViewer) would re-layout the
-        // underlying WebView every time the panel was resized, which
-        // thrashed the CEF iframe and re-fit the scene. Render at the
-        // panel's natural size and let the bundle handle gestures.
         return RepaintBoundary(
           key: captureKey,
-          child: ExcalidrawView(jsonString: content),
+          child: _ExcalidrawExternalOpenView(jsonString: content),
         );
       case ArtifactType.html:
         return HtmlArtifactView(
@@ -963,7 +956,8 @@ class _ArtifactRenderer extends StatelessWidget {
     // keep BOTH children mounted so toggling Preview ⇄ Code doesn't tear
     // down the preview renderer (and, for typst, re-download / re-render
     // the PDF every flip).
-    final bool supportsDualView = type == ArtifactType.typst ||
+    final bool supportsDualView =
+        type == ArtifactType.typst ||
         type == ArtifactType.svg ||
         type == ArtifactType.technicalDrawing ||
         type == ArtifactType.excalidraw ||
@@ -972,10 +966,7 @@ class _ArtifactRenderer extends StatelessWidget {
       return IndexedStack(
         index: forceCodeView ? 1 : 0,
         sizing: StackFit.expand,
-        children: [
-          _buildVisualView(context, iconFg),
-          _buildCodeView(context),
-        ],
+        children: [_buildVisualView(context, iconFg), _buildCodeView(context)],
       );
     }
 
@@ -1072,6 +1063,195 @@ class _ArtifactRenderer extends StatelessWidget {
   }
 }
 
+class _ExcalidrawExternalOpenView extends StatefulWidget {
+  const _ExcalidrawExternalOpenView({required this.jsonString});
+
+  final String jsonString;
+
+  @override
+  State<_ExcalidrawExternalOpenView> createState() =>
+      _ExcalidrawExternalOpenViewState();
+}
+
+class _ExcalidrawExternalOpenViewState
+    extends State<_ExcalidrawExternalOpenView> {
+  bool _busy = false;
+  Uri? _shareLink;
+  String? _error;
+
+  Future<void> _openExcalidraw() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final link =
+          _shareLink ??
+          await ExcalidrawShareService.createShareLink(widget.jsonString);
+      final launched = await launchUrl(
+        link,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched) {
+        await launchUrl(link, mode: LaunchMode.platformDefault);
+      }
+      if (!mounted) return;
+      setState(() {
+        _shareLink = link;
+      });
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Excalidraw share-link upload failed: $error');
+      }
+      final fallback = ExcalidrawShareService.editorHomeUri;
+      var fallbackOpened = false;
+      try {
+        final opened = await launchUrl(
+          fallback,
+          mode: LaunchMode.externalApplication,
+        );
+        if (!opened) {
+          fallbackOpened = await launchUrl(
+            fallback,
+            mode: LaunchMode.platformDefault,
+          );
+        } else {
+          fallbackOpened = true;
+        }
+      } catch (_) {
+        // Keep showing error text below.
+      }
+      if (!mounted) return;
+      setState(() {
+        _error = fallbackOpened
+            ? 'Link creation failed. Opened excalidraw.com without scene.'
+            : 'Link creation failed and fallback page could not be opened.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  Future<void> _copyShareLink() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final link =
+          _shareLink ??
+          await ExcalidrawShareService.createShareLink(widget.jsonString);
+      await Clipboard.setData(ClipboardData(text: link.toString()));
+      if (!mounted) return;
+      setState(() {
+        _shareLink = link;
+        _error = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Excalidraw link copied'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Excalidraw share-link copy failed: $error');
+      }
+      if (!mounted) return;
+      setState(() {
+        _error = 'Could not create an Excalidraw share link.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _ExcalidrawExternalOpenView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.jsonString != widget.jsonString) {
+      _shareLink = null;
+      _error = null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 540),
+        child: Card(
+          clipBehavior: Clip.antiAlias,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.open_in_new, size: 30, color: colorScheme.primary),
+                const SizedBox(height: 10),
+                const Text(
+                  'Excalidraw opens externally',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'The scene is uploaded to Excalidraw and opened in your browser.',
+                  style: TextStyle(
+                    color: colorScheme.onSurface.withValues(alpha: 0.75),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                if (_error != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _error!,
+                    style: TextStyle(color: colorScheme.error, fontSize: 12),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+                const SizedBox(height: 14),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    FilledButton.icon(
+                      onPressed: _busy ? null : _openExcalidraw,
+                      icon: const Icon(Icons.open_in_new),
+                      label: const Text('Open in Excalidraw'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _busy ? null : _copyShareLink,
+                      icon: const Icon(Icons.link),
+                      label: const Text('Copy link'),
+                    ),
+                  ],
+                ),
+                if (_busy) ...[
+                  const SizedBox(height: 12),
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Renders a Typst artifact's PDF. Prefers the persisted encrypted
 /// attachment (downloaded & decrypted client-side); falls back to a
 /// live backend compile if no attachment exists or it can't be read.
@@ -1151,9 +1331,11 @@ class _TypstPdfRendererState extends State<_TypstPdfRenderer> {
 
     final path = widget.attachmentPath;
     if (kDebugMode) {
-      debugPrint('📄 [Typst] _load() — attachmentPath=${path ?? "NULL"}, '
-          'artifactId=${widget.artifactId ?? "NULL"}, '
-          'source=${widget.source.length} chars');
+      debugPrint(
+        '📄 [Typst] _load() — attachmentPath=${path ?? "NULL"}, '
+        'artifactId=${widget.artifactId ?? "NULL"}, '
+        'source=${widget.source.length} chars',
+      );
     }
     if (path != null && path.isNotEmpty) {
       try {
@@ -1163,8 +1345,10 @@ class _TypstPdfRendererState extends State<_TypstPdfRenderer> {
         final bytes = await PdfAttachmentService.download(path);
         if (!mounted) return;
         if (kDebugMode) {
-          debugPrint('📄 [Typst] ✅ Downloaded ${bytes.length} bytes — '
-              'skipping compile');
+          debugPrint(
+            '📄 [Typst] ✅ Downloaded ${bytes.length} bytes — '
+            'skipping compile',
+          );
         }
         setState(() {
           _pdfBytes = bytes;
@@ -1173,8 +1357,10 @@ class _TypstPdfRendererState extends State<_TypstPdfRenderer> {
         return;
       } catch (e) {
         if (kDebugMode) {
-          debugPrint('📄 [Typst] ❌ Download failed ($path): $e — '
-              'falling back to compile');
+          debugPrint(
+            '📄 [Typst] ❌ Download failed ($path): $e — '
+            'falling back to compile',
+          );
         }
       }
     }
@@ -1225,8 +1411,10 @@ class _TypstPdfRendererState extends State<_TypstPdfRenderer> {
       // compiled bytes so future opens skip the compile round-trip.
       if (widget.attachmentPath == null && widget.artifactId != null) {
         if (kDebugMode) {
-          debugPrint('📄 [Typst] Starting backfill for '
-              '${widget.artifactId}...');
+          debugPrint(
+            '📄 [Typst] Starting backfill for '
+            '${widget.artifactId}...',
+          );
         }
         _backfillAttachment(bytes, widget.artifactId!);
       }
@@ -1253,8 +1441,10 @@ class _TypstPdfRendererState extends State<_TypstPdfRenderer> {
           attachmentPath: path,
         );
         if (kDebugMode) {
-          debugPrint('[TypstPdfRenderer] Backfilled attachment for '
-              '$artifactId → $path');
+          debugPrint(
+            '[TypstPdfRenderer] Backfilled attachment for '
+            '$artifactId → $path',
+          );
         }
       } catch (e) {
         if (kDebugMode) {
@@ -1294,10 +1484,7 @@ class _TypstPdfRendererState extends State<_TypstPdfRenderer> {
             const SizedBox(height: 8),
             SelectableText(
               _error!,
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 12,
-              ),
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
             ),
             const SizedBox(height: 12),
             FilledButton.tonalIcon(
@@ -1561,10 +1748,7 @@ class _ArtifactSwitcher extends StatelessWidget {
       tooltip: 'Switch artifact',
       position: PopupMenuPosition.under,
       onSelected: (id) {
-        final target = all.firstWhere(
-          (a) => a.id == id,
-          orElse: () => current,
-        );
+        final target = all.firstWhere((a) => a.id == id, orElse: () => current);
         onSelect(target);
       },
       itemBuilder: (_) => all
