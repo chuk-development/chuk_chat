@@ -75,6 +75,10 @@ class AppShellConfig {
   final String chatFontFamily;
   final Function(String) setChatFontFamily;
 
+  // ── UI scale ───────────────────────────────────────────────
+  final double uiScale;
+  final Future<void> Function(double) setUiScale;
+
   const AppShellConfig({
     required this.currentThemeMode,
     required this.currentAccentColor,
@@ -124,5 +128,7 @@ class AppShellConfig {
     required this.setChatFontSize,
     required this.chatFontFamily,
     required this.setChatFontFamily,
+    required this.uiScale,
+    required this.setUiScale,
   });
 }

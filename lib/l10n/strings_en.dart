@@ -56,6 +56,10 @@ const Map<String, String> stringsEn = {
   'chatFontSize': 'Chat font size',
   'chatFontSizeSubtitle':
       'Adjust the text size of chat messages for easier reading',
+  'uiScale': 'UI Scale',
+  'uiScaleSubtitle':
+      'Scale the entire app interface — useful on high-DPI displays',
+  'uiScalePercentage': 'UI Scale: {percent}%',
   'fontSizePreview': 'The quick brown fox jumps over the lazy dog.',
   'chatFontFamily': 'Chat font',
   'chatFontFamilySubtitle':
@@ -374,6 +378,7 @@ const Map<String, String> stringsEn = {
   'subscribeToGetCredits': 'Subscribe to Get AI Credits',
   'subscriptionDesktopOnly':
       'Subscription management is only available on desktop.',
+  'paymentsDisabledInBuild': 'Direct payments are disabled in this build.',
   'active': 'ACTIVE',
   'getCreditsMonthly': 'Get \u20ac16 in AI credits monthly',
   'accessAllModels': 'Access to all AI models',

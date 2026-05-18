@@ -95,3 +95,11 @@ const bool kFeatureWhoop = bool.fromEnvironment(
   defaultValue: false,
 );
 
+/// Direct payment integration via Stripe (web + mobile + desktop).
+/// Defaults to true for direct distribution.
+/// MUST be set false for Google Play Store builds to comply with Google's billing policy.
+const bool kFeaturePaymentsDirect = bool.fromEnvironment(
+  'FEATURE_PAYMENTS_DIRECT',
+  defaultValue: true,
+);
+

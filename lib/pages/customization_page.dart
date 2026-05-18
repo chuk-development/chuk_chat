@@ -27,6 +27,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
   late bool _selectedShowTps;
   late double _selectedChatFontSize;
   late String _selectedChatFontFamily;
+  late double _selectedUiScale;
   // AI context state
   late bool _selectedIncludeRecentImagesInHistory;
   late bool _selectedIncludeAllImagesInHistory;
@@ -56,6 +57,10 @@ class _CustomizationPageState extends State<CustomizationPage> {
         kSupportedChatFontFamilies.contains(widget.config.chatFontFamily)
         ? widget.config.chatFontFamily
         : kDefaultChatFontFamily;
+    _selectedUiScale = widget.config.uiScale.clamp(
+      kMinUiScale,
+      kMaxUiScale,
+    );
     _selectedIncludeRecentImagesInHistory =
         widget.config.includeRecentImagesInHistory;
     _selectedIncludeAllImagesInHistory =
@@ -469,6 +474,88 @@ class _CustomizationPageState extends State<CustomizationPage> {
                       height: 1.38,
                     ),
                   ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // UI Scale section.
+          _SectionHeader(l.uiScale),
+          _FilledCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l.uiScalePercentage(
+                    (_selectedUiScale * 100).round().toString(),
+                  ),
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  l.uiScaleSubtitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: m3.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Slider(
+                        value: _selectedUiScale,
+                        min: kMinUiScale,
+                        max: kMaxUiScale,
+                        // 5% steps across the 80%-150% range => 14 divisions.
+                        divisions: 14,
+                        label:
+                            '${(_selectedUiScale * 100).round()}%',
+                        onChanged: (double value) {
+                          setState(() {
+                            _selectedUiScale = value;
+                          });
+                        },
+                        onChangeEnd: (double value) {
+                          widget.config.setUiScale(value);
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 56,
+                      child: Text(
+                        '${(_selectedUiScale * 100).round()}%',
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                          color: cs.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: <double>[0.8, 1.0, 1.2].map((preset) {
+                    final selected =
+                        (_selectedUiScale - preset).abs() < 0.001;
+                    return ChoiceChip(
+                      label: Text('${(preset * 100).round()}%'),
+                      selected: selected,
+                      onSelected: (_) {
+                        setState(() {
+                          _selectedUiScale = preset;
+                        });
+                        widget.config.setUiScale(preset);
+                      },
+                    );
+                  }).toList(),
                 ),
               ],
             ),

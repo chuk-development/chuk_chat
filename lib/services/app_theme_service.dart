@@ -65,6 +65,9 @@ class AppThemeService extends ChangeNotifier {
   // Chat body font family identifier
   String _chatFontFamily = kDefaultChatFontFamily;
 
+  // UI scale (applies to entire app via MediaQuery textScaler)
+  double _uiScale = kDefaultUiScale;
+
   // Keys for SharedPreferences
   static const String _kThemeModeKey = 'themeMode';
   static const String _kAccentColorKey = 'accentColor';
@@ -94,6 +97,7 @@ class AppThemeService extends ChangeNotifier {
   static const String _kUiLocaleKey = 'uiLocale';
   static const String _kChatFontSizeKey = 'chatFontSize';
   static const String _kChatFontFamilyKey = 'chatFontFamily';
+  static const String _kUiScaleKey = 'uiScale';
 
   // Performance optimizations
   SharedPreferences? _cachedPrefs;
@@ -129,6 +133,7 @@ class AppThemeService extends ChangeNotifier {
   String get uiLocale => _uiLocale;
   double get chatFontSize => _chatFontSize;
   String get chatFontFamily => _chatFontFamily;
+  double get uiScale => _uiScale;
   bool get hasAppliedSupabaseTheme => _hasAppliedSupabaseTheme;
 
   ThemeData? get cachedThemeData => _cachedThemeData;
@@ -192,6 +197,9 @@ class AppThemeService extends ChangeNotifier {
     _chatFontFamily = _sanitizeChatFontFamily(
       prefs.getString(_kChatFontFamilyKey),
     );
+    _uiScale = _clampUiScale(
+      prefs.getDouble(_kUiScaleKey) ?? kDefaultUiScale,
+    );
 
     _cachedThemeData = null;
     notifyListeners();
@@ -199,6 +207,8 @@ class AppThemeService extends ChangeNotifier {
 
   double _clampChatFontSize(double v) =>
       v.clamp(kMinChatFontSize, kMaxChatFontSize);
+
+  double _clampUiScale(double v) => v.clamp(kMinUiScale, kMaxUiScale);
 
   String _sanitizeChatFontFamily(String? id) {
     if (id == null || !kSupportedChatFontFamilies.contains(id)) {
@@ -351,6 +361,7 @@ class AppThemeService extends ChangeNotifier {
       prefs.setString(_kUiLocaleKey, _uiLocale),
       prefs.setDouble(_kChatFontSizeKey, _chatFontSize),
       prefs.setString(_kChatFontFamilyKey, _chatFontFamily),
+      prefs.setDouble(_kUiScaleKey, _uiScale),
     ]);
   }
 
@@ -579,6 +590,17 @@ class AppThemeService extends ChangeNotifier {
     _chatFontFamily = sanitized;
     notifyListeners();
     _debouncedSyncCustomization();
+  }
+
+  /// UI scale is a device-local display preference and is NOT synced to
+  /// Supabase. Persists to SharedPreferences on each change.
+  Future<void> setUiScale(double scale) async {
+    final clamped = _clampUiScale(scale);
+    if (_uiScale == clamped) return;
+    _uiScale = clamped;
+    notifyListeners();
+    final prefs = await _getPrefs();
+    await prefs.setDouble(_kUiScaleKey, _uiScale);
   }
 
   void resetSupabaseThemeFlag() {
