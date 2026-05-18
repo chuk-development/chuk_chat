@@ -21,6 +21,9 @@ import 'package:chuk_chat/services/developer_options_service.dart';
 import 'package:chuk_chat/services/settings_sync_service.dart';
 import 'package:chuk_chat/services/session_manager_service.dart';
 import 'package:chuk_chat/services/notification_service.dart';
+import 'package:chuk_chat/services/offline_queue_service.dart';
+import 'package:chuk_chat/services/offline_retry_manager.dart';
+import 'package:chuk_chat/services/offline_send_executor.dart';
 import 'package:chuk_chat/services/system_tray_service.dart';
 import 'package:chuk_chat/services/window_close_service.dart';
 import 'package:chuk_chat/platform_specific/root_wrapper.dart';
@@ -44,6 +47,23 @@ Future<void> main() async {
 
   // Keep chat storage cache deterministic to avoid early access races.
   await initChatStorageCache();
+
+  // Persistent offline queue + retry manager. Await init before wiring
+  // retry/executor so the drain loop never observes an uninitialized queue.
+  // If queue init fails, skip retry/executor entirely.
+  var offlineQueueReady = false;
+  try {
+    await OfflineQueueService.instance.init();
+    offlineQueueReady = true;
+  } catch (error) {
+    if (kDebugMode) {
+      debugPrint('⚠️ [Main] Offline queue init failed: $error');
+    }
+  }
+  if (offlineQueueReady) {
+    OfflineRetryManager.instance.init();
+    OfflineSendExecutor.register();
+  }
 
   // Ensure clean window close on Linux desktop (see window_close_service_io.dart).
   unawaited(initializeWindowCloseHandler());

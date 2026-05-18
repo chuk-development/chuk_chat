@@ -708,6 +708,11 @@ class AppLocalizations {
   String get projectView => _get('projectView');
   String get projectNotSupportedPlatform => _get('projectNotSupportedPlatform');
   String get projectEditProjectTitle => _get('projectEditProjectTitle');
+
+  // ── Offline queue ──────────────────────────────────────────
+  String get messagePending => _get('messagePending');
+  String get messageFailed => _get('messageFailed');
+  String get messageRetry => _get('messageRetry');
 }
 
 class _AppLocalizationsDelegate

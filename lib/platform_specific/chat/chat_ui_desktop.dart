@@ -10,6 +10,9 @@ import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/services/network_status_service.dart';
+import 'package:chuk_chat/services/offline_retry_manager.dart';
+import 'package:chuk_chat/services/offline_send_coordinator.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -1919,6 +1922,19 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                                     blockType: blockType,
                                                     blockText: blockText,
                                                   )
+                                                : null,
+                                            status: data.status,
+                                            lastError: data.lastError,
+                                            onRetryPending: data.isUser &&
+                                                    (data.status ==
+                                                            ChatMessageStatus
+                                                                .pending ||
+                                                        data.status ==
+                                                            ChatMessageStatus
+                                                                .failed)
+                                                ? () => OfflineRetryManager
+                                                    .instance
+                                                    .retryNow()
                                                 : null,
                                           ),
                                         );
