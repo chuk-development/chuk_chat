@@ -29,6 +29,7 @@ import 'package:chuk_chat/services/window_close_service.dart';
 import 'package:chuk_chat/platform_specific/root_wrapper.dart';
 import 'package:chuk_chat/utils/grain_overlay.dart';
 import 'package:chuk_chat/pages/login_page.dart';
+import 'package:chuk_chat/pages/onboarding_page.dart';
 import 'package:chuk_chat/pages/set_new_password_page.dart';
 import 'package:chuk_chat/widgets/auth_gate.dart';
 
@@ -343,7 +344,8 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
         loadingBuilder: (context) =>
             const Scaffold(body: Center(child: CircularProgressIndicator())),
         signedOutBuilder: (context) => const LoginPage(),
-        signedInBuilder: (context) => _buildRootWrapper(),
+        signedInBuilder: (context) =>
+            _OnboardingFirstLaunchGate(child: _buildRootWrapper()),
         passwordRecoveryBuilder: (context) => SetNewPasswordPage(
           onComplete: () {
             // Force rebuild of AuthGate to transition to signed-in view.
@@ -420,4 +422,43 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
       ),
     );
   }
+}
+
+/// Shows [OnboardingPage] once per app launch if the user hasn't completed it.
+/// Persists completion via AppThemeService.setOnboardingCompleted.
+class _OnboardingFirstLaunchGate extends StatefulWidget {
+  const _OnboardingFirstLaunchGate({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_OnboardingFirstLaunchGate> createState() =>
+      _OnboardingFirstLaunchGateState();
+}
+
+class _OnboardingFirstLaunchGateState
+    extends State<_OnboardingFirstLaunchGate> {
+  bool _didShowOnboarding = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShow());
+  }
+
+  void _maybeShow() {
+    if (_didShowOnboarding) return;
+    if (AppThemeService.instance.onboardingCompleted) return;
+    if (!mounted) return;
+    _didShowOnboarding = true;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const OnboardingPage(),
+        fullscreenDialog: true,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

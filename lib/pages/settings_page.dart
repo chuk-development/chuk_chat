@@ -19,8 +19,10 @@ import 'package:chuk_chat/pages/diagnostics_settings_page.dart';
 import 'package:chuk_chat/pages/tool_calling_settings_page.dart';
 import 'package:chuk_chat/pages/account_settings_page.dart';
 import 'package:chuk_chat/pages/about_page.dart';
+import 'package:chuk_chat/pages/onboarding_page.dart';
 import 'package:chuk_chat/pages/pricing_page.dart';
 import 'package:chuk_chat/pages/system_prompt_page.dart';
+import 'package:chuk_chat/services/app_theme_service.dart';
 import 'package:chuk_chat/services/auth_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
@@ -244,6 +246,12 @@ class _SettingsPageState extends State<SettingsPage> {
           _GroupedCard(
             rows: [
               _SettingsRow(
+                icon: Icons.school_outlined,
+                title: l.onboardingReplayTile,
+                subtitle: l.onboardingReplayTileSubtitle,
+                onTap: () => _replayOnboarding(context),
+              ),
+              _SettingsRow(
                 icon: Icons.info_outline,
                 title: l.about,
                 subtitle: l.aboutSubtitle,
@@ -363,6 +371,22 @@ class _SettingsPageState extends State<SettingsPage> {
         ],
       ),
     );
+  }
+
+  Future<void> _replayOnboarding(BuildContext context) async {
+    final navigator = Navigator.of(context);
+    await AppThemeService.instance.setOnboardingCompleted(false);
+    if (!navigator.mounted) return;
+    await navigator.push(
+      MaterialPageRoute<void>(
+        builder: (_) => const OnboardingPage(),
+        fullscreenDialog: true,
+      ),
+    );
+    // If the user skipped/finished, OnboardingPage already sets the flag.
+    // If they popped via back gesture without finishing, mark it complete
+    // so the first-launch gate doesn't fire again next launch.
+    await AppThemeService.instance.setOnboardingCompleted(true);
   }
 
   Future<void> _exportChats(BuildContext context) async {

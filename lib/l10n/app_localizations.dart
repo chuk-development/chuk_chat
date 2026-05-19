@@ -713,6 +713,26 @@ class AppLocalizations {
   String get messagePending => _get('messagePending');
   String get messageFailed => _get('messageFailed');
   String get messageRetry => _get('messageRetry');
+
+  // ── Onboarding ─────────────────────────────────────────────
+  String get onboardingSkip => _get('onboardingSkip');
+  String get onboardingNext => _get('onboardingNext');
+  String get onboardingBack => _get('onboardingBack');
+  String get onboardingDone => _get('onboardingDone');
+  String get onboardingNoModelHint => _get('onboardingNoModelHint');
+  String get onboardingReplayTile => _get('onboardingReplayTile');
+  String get onboardingReplayTileSubtitle =>
+      _get('onboardingReplayTileSubtitle');
+  String get onboardingSlide1Title => _get('onboardingSlide1Title');
+  String get onboardingSlide1Body => _get('onboardingSlide1Body');
+  String get onboardingSlide2Title => _get('onboardingSlide2Title');
+  String get onboardingSlide2Body => _get('onboardingSlide2Body');
+  String get onboardingSlide3Title => _get('onboardingSlide3Title');
+  String get onboardingSlide3Body => _get('onboardingSlide3Body');
+  String get onboardingSlide4Title => _get('onboardingSlide4Title');
+  String get onboardingSlide4Body => _get('onboardingSlide4Body');
+  String get onboardingSlide5Title => _get('onboardingSlide5Title');
+  String get onboardingSlide5Body => _get('onboardingSlide5Body');
 }
 
 class _AppLocalizationsDelegate

@@ -708,4 +708,28 @@ const Map<String, String> stringsEn = {
   'messagePending': 'Will send when online',
   'messageFailed': 'Failed to send',
   'messageRetry': 'Retry',
+
+  // ── Onboarding ─────────────────────────────────────────────
+  'onboardingSkip': 'Skip',
+  'onboardingNext': 'Next',
+  'onboardingBack': 'Back',
+  'onboardingDone': 'Done',
+  'onboardingNoModelHint': 'No model selected yet',
+  'onboardingReplayTile': 'Show onboarding again',
+  'onboardingReplayTileSubtitle': 'Replay the welcome tour',
+  'onboardingSlide1Title': 'Welcome to Chuk Chat',
+  'onboardingSlide1Body':
+      'End-to-end encrypted multi-provider AI chat. Your messages never leave your control.',
+  'onboardingSlide2Title': 'Pick a model',
+  'onboardingSlide2Body':
+      "Tap the model name at the top of any chat to choose from OpenAI, Anthropic, OpenRouter, and more. Each model has multiple providers — pick the cheapest with 'Auto (cheapest)'.",
+  'onboardingSlide3Title': 'Make it yours',
+  'onboardingSlide3Body':
+      'Settings → Customization: change theme, font size, UI scale (great for high-DPI screens). Settings → Account: manage subscription and sign-in.',
+  'onboardingSlide4Title': 'Start chatting',
+  'onboardingSlide4Body':
+      'Type at the bottom and press Enter. Attach images and files with the paperclip. Voice mode (if enabled) lets you talk instead of type.',
+  'onboardingSlide5Title': "You're all set",
+  'onboardingSlide5Body':
+      "Tap 'Done' to start chatting. You can revisit this tour any time from Settings.",
 };

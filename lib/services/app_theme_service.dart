@@ -68,6 +68,9 @@ class AppThemeService extends ChangeNotifier {
   // UI scale (applies to entire app via MediaQuery textScaler)
   double _uiScale = kDefaultUiScale;
 
+  // Onboarding (device-local, NOT synced to Supabase)
+  bool _onboardingCompleted = false;
+
   // Keys for SharedPreferences
   static const String _kThemeModeKey = 'themeMode';
   static const String _kAccentColorKey = 'accentColor';
@@ -98,6 +101,7 @@ class AppThemeService extends ChangeNotifier {
   static const String _kChatFontSizeKey = 'chatFontSize';
   static const String _kChatFontFamilyKey = 'chatFontFamily';
   static const String _kUiScaleKey = 'uiScale';
+  static const String _kOnboardingCompletedKey = 'onboardingCompleted';
 
   // Performance optimizations
   SharedPreferences? _cachedPrefs;
@@ -134,6 +138,7 @@ class AppThemeService extends ChangeNotifier {
   double get chatFontSize => _chatFontSize;
   String get chatFontFamily => _chatFontFamily;
   double get uiScale => _uiScale;
+  bool get onboardingCompleted => _onboardingCompleted;
   bool get hasAppliedSupabaseTheme => _hasAppliedSupabaseTheme;
 
   ThemeData? get cachedThemeData => _cachedThemeData;
@@ -200,6 +205,7 @@ class AppThemeService extends ChangeNotifier {
     _uiScale = _clampUiScale(
       prefs.getDouble(_kUiScaleKey) ?? kDefaultUiScale,
     );
+    _onboardingCompleted = prefs.getBool(_kOnboardingCompletedKey) ?? false;
 
     _cachedThemeData = null;
     notifyListeners();
@@ -601,6 +607,15 @@ class AppThemeService extends ChangeNotifier {
     notifyListeners();
     final prefs = await _getPrefs();
     await prefs.setDouble(_kUiScaleKey, _uiScale);
+  }
+
+  /// Onboarding completion is per-device and NOT synced to Supabase.
+  Future<void> setOnboardingCompleted(bool completed) async {
+    if (_onboardingCompleted == completed) return;
+    _onboardingCompleted = completed;
+    notifyListeners();
+    final prefs = await _getPrefs();
+    await prefs.setBool(_kOnboardingCompletedKey, _onboardingCompleted);
   }
 
   void resetSupabaseThemeFlag() {
