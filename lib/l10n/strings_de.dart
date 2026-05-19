@@ -739,4 +739,28 @@ const Map<String, String> stringsDe = {
   'messagePending': 'Wird gesendet sobald online',
   'messageFailed': 'Senden fehlgeschlagen',
   'messageRetry': 'Erneut versuchen',
+
+  // ── Onboarding ─────────────────────────────────────────────
+  'onboardingSkip': 'Überspringen',
+  'onboardingNext': 'Weiter',
+  'onboardingBack': 'Zurück',
+  'onboardingDone': 'Fertig',
+  'onboardingNoModelHint': 'Noch kein Modell ausgewählt',
+  'onboardingReplayTile': 'Onboarding erneut anzeigen',
+  'onboardingReplayTileSubtitle': 'Begrüßungstour erneut abspielen',
+  'onboardingSlide1Title': 'Willkommen bei Chuk Chat',
+  'onboardingSlide1Body':
+      'Ende-zu-Ende verschlüsselter AI-Chat mit mehreren Anbietern. Deine Nachrichten bleiben unter deiner Kontrolle.',
+  'onboardingSlide2Title': 'Wähle ein Modell',
+  'onboardingSlide2Body':
+      "Tippe oben in jedem Chat auf den Modellnamen, um aus OpenAI, Anthropic, OpenRouter und mehr zu wählen. Jedes Modell hat mehrere Anbieter — wähle den günstigsten mit 'Auto (günstigster)'.",
+  'onboardingSlide3Title': 'Personalisiere die App',
+  'onboardingSlide3Body':
+      'Einstellungen → Anpassung: Theme, Schriftgröße, UI-Skalierung (super für hochauflösende Bildschirme). Einstellungen → Konto: Abo und Anmeldung verwalten.',
+  'onboardingSlide4Title': 'Starte einen Chat',
+  'onboardingSlide4Body':
+      'Tippe unten und drücke Enter. Hänge Bilder und Dateien mit der Büroklammer an. Sprachmodus (falls aktiv) lässt dich sprechen statt tippen.',
+  'onboardingSlide5Title': 'Alles bereit',
+  'onboardingSlide5Body':
+      "Tippe auf 'Fertig', um loszulegen. Du kannst diese Tour jederzeit in den Einstellungen erneut starten.",
 };
