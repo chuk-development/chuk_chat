@@ -15,9 +15,12 @@ import 'package:flutter/widgets.dart';
 /// Known target slots used by the onboarding tour.
 class TourSlots {
   static const String modelDropdown = 'model_dropdown';
+  static const String modelProviderPill = 'model_provider_pill';
   static const String menuButton = 'menu_button';
   static const String settingsEntry = 'settings_entry';
   static const String chatInput = 'chat_input';
+  static const String settingsPricingTile = 'settings_pricing_tile';
+  static const String settingsAiIdentityTile = 'settings_ai_identity_tile';
 
   const TourSlots._();
 }

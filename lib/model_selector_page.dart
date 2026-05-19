@@ -15,6 +15,7 @@ import 'package:chuk_chat/services/api_status_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/per_model_system_prompt_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/tour_key_registry.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/widgets/per_model_system_prompt_sheet.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart'
@@ -642,6 +643,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage> {
                         selectedProvider: selectedProviderForModel,
                         promptConfig: promptConfigForModel,
                         isAutoSelected: _autoSelected.containsKey(model.id),
+                        isFirstRow: index == 2,
                         onProviderChanged: (provider) =>
                             _onProviderSelect(model.id, provider),
                         onAutoSelected: () => _onAutoSelect(model),
@@ -671,6 +673,7 @@ class ModelSelectionRow extends StatefulWidget {
   final ModelProviderInfo? selectedProvider;
   final ModelPromptConfig? promptConfig;
   final bool isAutoSelected;
+  final bool isFirstRow;
   final Function(ModelProviderInfo?) onProviderChanged;
   final VoidCallback? onAutoSelected;
   final VoidCallback? onEditPrompt;
@@ -683,6 +686,7 @@ class ModelSelectionRow extends StatefulWidget {
     required this.selectedProvider,
     this.promptConfig,
     this.isAutoSelected = false,
+    this.isFirstRow = false,
     required this.onProviderChanged,
     this.onAutoSelected,
     this.onEditPrompt,
@@ -707,19 +711,26 @@ class _ModelSelectionRowState extends State<ModelSelectionRow> {
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isDesktop = screenWidth >= kTabletBreakpoint;
 
+    final Widget pill = _ProviderPill(
+      model: widget.model,
+      selectedProvider: widget.selectedProvider,
+      isAutoSelected: widget.isAutoSelected,
+      onProviderChanged: widget.onProviderChanged,
+      onAutoSelected: widget.onAutoSelected,
+      buildIconWidget: widget.buildIconWidget,
+    );
     final Widget nameRow = _NameRow(
       model: widget.model,
       buildIconWidget: widget.buildIconWidget,
       promptConfig: widget.promptConfig,
       onEditPrompt: widget.onEditPrompt,
-      trailing: _ProviderPill(
-        model: widget.model,
-        selectedProvider: widget.selectedProvider,
-        isAutoSelected: widget.isAutoSelected,
-        onProviderChanged: widget.onProviderChanged,
-        onAutoSelected: widget.onAutoSelected,
-        buildIconWidget: widget.buildIconWidget,
-      ),
+      trailing: widget.isFirstRow
+          ? KeyedSubtree(
+              key: TourKeyRegistry.instance
+                  .keyFor(TourSlots.modelProviderPill),
+              child: pill,
+            )
+          : pill,
     );
 
     final Widget? descriptionBlock = _buildDescriptionBlock(theme, m3);

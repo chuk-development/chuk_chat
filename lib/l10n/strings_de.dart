@@ -773,9 +773,14 @@ const Map<String, String> stringsDe = {
   'tourChatTitle': 'Starte einen Chat',
   'tourChatBody':
       'Tippe deine Nachricht unten und drücke Enter. Mit der Büroklammer hängst du Dateien an.',
-  'tourChatInputTitle': 'Nachricht eingeben',
-  'tourChatInputBody':
-      'Hier tippen und Enter drücken. Büroklammer für Anhänge.',
+  'tourProviderPillBody':
+      'Tippe hier, um einen Anbieter auszuwählen — Pflicht, um das Modell zu aktivieren.',
+  'tourSettingsPricingTitle': 'Abo',
+  'tourSettingsPricingBody':
+      'Hier kannst du ein Abo abschließen — direkt bezahlen, kein App-Store-Zwischenhändler.',
+  'tourSettingsAiIdentityTitle': 'AI-Verhalten',
+  'tourSettingsAiIdentityBody':
+      'Hier konfigurierst du System-Prompt, Memory an/aus und Reasoning.',
   'tourDoneTitle': 'Alles bereit',
   'tourDoneBody':
       'Du kannst diese Tour jederzeit in den Einstellungen erneut starten.',
