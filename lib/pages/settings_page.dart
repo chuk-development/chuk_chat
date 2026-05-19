@@ -27,6 +27,7 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/onboarding_tour_controller.dart';
 import 'package:chuk_chat/services/profile_service.dart';
+import 'package:chuk_chat/services/tour_key_registry.dart';
 // ignore: unused_import
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:share_plus/share_plus.dart';
@@ -137,16 +138,20 @@ class _SettingsPageState extends State<SettingsPage> {
                   );
                 },
               ),
-              _SettingsRow(
-                icon: Icons.credit_card,
-                title: l.pricingPlans,
-                subtitle: l.pricingPlansSubtitle,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const PricingPage()),
-                  );
-                },
+              KeyedSubtree(
+                key: TourKeyRegistry.instance
+                    .keyFor(TourSlots.settingsPricingTile),
+                child: _SettingsRow(
+                  icon: Icons.credit_card,
+                  title: l.pricingPlans,
+                  subtitle: l.pricingPlansSubtitle,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const PricingPage()),
+                    );
+                  },
+                ),
               ),
             ],
           ),
@@ -170,16 +175,22 @@ class _SettingsPageState extends State<SettingsPage> {
                   );
                 },
               ),
-              _SettingsRow(
-                icon: Icons.fingerprint,
-                title: l.aiIdentityMemory,
-                subtitle: l.aiIdentityMemorySubtitle,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const SystemPromptPage()),
-                  );
-                },
+              KeyedSubtree(
+                key: TourKeyRegistry.instance
+                    .keyFor(TourSlots.settingsAiIdentityTile),
+                child: _SettingsRow(
+                  icon: Icons.fingerprint,
+                  title: l.aiIdentityMemory,
+                  subtitle: l.aiIdentityMemorySubtitle,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const SystemPromptPage(),
+                      ),
+                    );
+                  },
+                ),
               ),
               _SettingsRow(
                 icon: Icons.build_circle_outlined,

@@ -10,6 +10,8 @@
 // across pushed routes (model picker, settings page) and pops back to the
 // chat root.
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -25,12 +27,13 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 enum _Step {
   welcome, // 1
   pointerModel, // 2  pulsing ring on model dropdown
-  modelPage, // 3  banner on ModelSelectorPage
-  pointerMenu, // 4  pulsing ring on menu button
+  pointerProviderPill, // 3  pulsing ring on first provider pill on model page
+  pointerMenu, // 4  pulsing ring on menu button (auto-advances on drawer open)
   pointerSettings, // 5  pulsing ring on settings tile inside open drawer
   settingsPage, // 6  banner on SettingsPage
-  pointerChatInput, // 7  pulsing ring on chat input
-  finale, // 8
+  pointerSettingsPricing, // 7  pulsing ring on Pricing tile
+  pointerSettingsAiIdentity, // 8  pulsing ring on AI Identity tile
+  finale, // 9
 }
 
 /// Navigator observer the controller installs on the root navigator. It
@@ -85,6 +88,7 @@ class OnboardingTourController {
   NavigatorState? _navigator;
   _Step _step = _Step.welcome;
   bool _active = false;
+  Timer? _mountWatchTimer;
 
   /// Whether the tour is currently being shown.
   bool get isActive => _active;
@@ -124,6 +128,7 @@ class OnboardingTourController {
   }
 
   void _teardown({required bool markCompleted}) {
+    _stopMountWatch();
     _disposeOverlay();
     navigatorObserver.detach();
     _active = false;
@@ -164,10 +169,10 @@ class OnboardingTourController {
 
     // Model picker: the in-header dropdown opens a popup. Treat ANY route
     // push (popup OR navigated page) while pointing at the dropdown as the
-    // "user tapped" signal. The popup will pop again when they pick a model;
-    // we advance to the modelPage banner so they see context for the choice.
+    // "user tapped" signal. Move directly to the provider-pill pointer —
+    // we no longer show a separate page-level banner.
     if (_step == _Step.pointerModel) {
-      _goTo(_Step.modelPage);
+      _goTo(_Step.pointerProviderPill);
       return;
     }
   }
@@ -177,7 +182,8 @@ class OnboardingTourController {
     final name = route.settings.name;
 
     if (name == _tourModelSelectorRoute) {
-      if (_step == _Step.modelPage || _step == _Step.pointerModel) {
+      if (_step == _Step.pointerProviderPill ||
+          _step == _Step.pointerModel) {
         _goTo(_Step.pointerMenu);
         return;
       }
@@ -186,15 +192,17 @@ class OnboardingTourController {
     if (name == _tourSettingsRoute) {
       if (_step == _Step.settingsPage ||
           _step == _Step.pointerSettings ||
-          _step == _Step.pointerMenu) {
-        _goTo(_Step.pointerChatInput);
+          _step == _Step.pointerMenu ||
+          _step == _Step.pointerSettingsPricing ||
+          _step == _Step.pointerSettingsAiIdentity) {
+        _goTo(_Step.finale);
         return;
       }
     }
 
-    // The dropdown popup just closed. Advance from modelPage banner to the
-    // menu pointer (the user picked a model and is back on chat).
-    if (_step == _Step.modelPage) {
+    // The dropdown popup just closed. Advance from the provider-pill pointer
+    // to the menu pointer (the user picked a model and is back on chat).
+    if (_step == _Step.pointerProviderPill) {
       _goTo(_Step.pointerMenu);
       return;
     }
@@ -207,19 +215,42 @@ class OnboardingTourController {
     _step = next;
     // Rebuild overlay against the new step.
     _refreshOverlay();
-    if (next == _Step.pointerSettings) {
-      // If the settings entry isn't reachable (e.g. drawer not animated yet,
-      // or sidebar isn't yet opened), gracefully degrade to a text-only
-      // banner that waits for the user to push Settings via the menu.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!_active || _step != _Step.pointerSettings) return;
-        if (!TourKeyRegistry.instance.isMounted(TourSlots.settingsEntry)) {
-          // Just keep banner — pointer overlay handles missing keys by
-          // showing only the banner.
-          _refreshOverlay();
-        }
-      });
+
+    // While pointing at the menu button, the drawer/sidebar opening is NOT a
+    // route push, so the NavigatorObserver won't fire. Poll the registry: as
+    // soon as the settings entry mounts (drawer animated open), advance.
+    if (next == _Step.pointerMenu) {
+      _startMountWatch(
+        slot: TourSlots.settingsEntry,
+        whileStep: _Step.pointerMenu,
+        nextStep: _Step.pointerSettings,
+      );
+    } else {
+      _stopMountWatch();
     }
+  }
+
+  void _startMountWatch({
+    required String slot,
+    required _Step whileStep,
+    required _Step nextStep,
+  }) {
+    _stopMountWatch();
+    _mountWatchTimer = Timer.periodic(const Duration(milliseconds: 200), (_) {
+      if (!_active || _step != whileStep) {
+        _stopMountWatch();
+        return;
+      }
+      if (TourKeyRegistry.instance.isMounted(slot)) {
+        _stopMountWatch();
+        _goTo(nextStep);
+      }
+    });
+  }
+
+  void _stopMountWatch() {
+    _mountWatchTimer?.cancel();
+    _mountWatchTimer = null;
   }
 
   void _onContinuePressed() {
@@ -228,31 +259,26 @@ class OnboardingTourController {
       case _Step.welcome:
         _goTo(_Step.pointerModel);
         break;
-      case _Step.modelPage:
-        // Pop back to chat root, then jump to the menu pointer. The route
-        // observer will also fire pop → menu, but we lead with the explicit
-        // call so the Continue button always works even if observers miss.
-        final navigator = _navigator;
-        if (navigator != null && navigator.mounted && navigator.canPop()) {
-          navigator.popUntil((route) => route.isFirst);
-        }
-        _goTo(_Step.pointerMenu);
-        break;
       case _Step.settingsPage:
-        final navigator = _navigator;
-        if (navigator != null && navigator.mounted && navigator.canPop()) {
-          navigator.popUntil((route) => route.isFirst);
-        }
-        _goTo(_Step.pointerChatInput);
+        _goTo(_Step.pointerSettingsPricing);
         break;
-      case _Step.pointerChatInput:
+      case _Step.pointerSettingsPricing:
+        _goTo(_Step.pointerSettingsAiIdentity);
+        break;
+      case _Step.pointerSettingsAiIdentity:
         _goTo(_Step.finale);
         break;
       case _Step.finale:
+        // Return the user to chat root before tearing down.
+        final navigator = _navigator;
+        if (navigator != null && navigator.mounted && navigator.canPop()) {
+          navigator.popUntil((route) => route.isFirst);
+        }
         _finish(markCompleted: true);
         break;
-      // Pointer steps don't render Continue.
+      // Pointer-only steps don't render Continue.
       case _Step.pointerModel:
+      case _Step.pointerProviderPill:
       case _Step.pointerMenu:
       case _Step.pointerSettings:
         break;
@@ -316,16 +342,7 @@ class OnboardingTourController {
         bodyKind: _BodyKind.finale,
       );
     }
-    // Model + Settings page steps render a banner only (no pointer needed).
-    if (_step == _Step.modelPage) {
-      return _TourBannerOverlay(
-        slot: null,
-        bodyKind: _BodyKind.modelPage,
-        showContinue: true,
-        onContinue: _onContinuePressed,
-        onSkip: _onSkipPressed,
-      );
-    }
+    // SettingsPage step renders a banner only (no pointer needed).
     if (_step == _Step.settingsPage) {
       return _TourBannerOverlay(
         slot: null,
@@ -336,10 +353,13 @@ class OnboardingTourController {
       );
     }
 
-    // Pointer steps.
+    // Pointer steps. The settings sub-tour pointers (pricing + AI identity)
+    // are informational and rely on Continue. The other pointers advance
+    // when the user taps the highlighted target.
     final slot = _slotFor(_step);
     final bodyKind = _bodyKindFor(_step);
-    final canShowContinue = _step == _Step.pointerChatInput;
+    final canShowContinue = _step == _Step.pointerSettingsPricing ||
+        _step == _Step.pointerSettingsAiIdentity;
     return _TourBannerOverlay(
       slot: slot,
       bodyKind: bodyKind,
@@ -353,12 +373,16 @@ class OnboardingTourController {
     switch (step) {
       case _Step.pointerModel:
         return TourSlots.modelDropdown;
+      case _Step.pointerProviderPill:
+        return TourSlots.modelProviderPill;
       case _Step.pointerMenu:
         return TourSlots.menuButton;
       case _Step.pointerSettings:
         return TourSlots.settingsEntry;
-      case _Step.pointerChatInput:
-        return TourSlots.chatInput;
+      case _Step.pointerSettingsPricing:
+        return TourSlots.settingsPricingTile;
+      case _Step.pointerSettingsAiIdentity:
+        return TourSlots.settingsAiIdentityTile;
       default:
         return null;
     }
@@ -368,12 +392,16 @@ class OnboardingTourController {
     switch (step) {
       case _Step.pointerModel:
         return _BodyKind.pointerModel;
+      case _Step.pointerProviderPill:
+        return _BodyKind.pointerProviderPill;
       case _Step.pointerMenu:
         return _BodyKind.pointerMenu;
       case _Step.pointerSettings:
         return _BodyKind.pointerSettings;
-      case _Step.pointerChatInput:
-        return _BodyKind.pointerChatInput;
+      case _Step.pointerSettingsPricing:
+        return _BodyKind.pointerSettingsPricing;
+      case _Step.pointerSettingsAiIdentity:
+        return _BodyKind.pointerSettingsAiIdentity;
       default:
         return _BodyKind.welcome;
     }
@@ -383,13 +411,14 @@ class OnboardingTourController {
 /// Marker for which copy block the banner should show.
 enum _BodyKind {
   welcome,
-  modelPage,
   settingsPage,
   finale,
   pointerModel,
+  pointerProviderPill,
   pointerMenu,
   pointerSettings,
-  pointerChatInput,
+  pointerSettingsPricing,
+  pointerSettingsAiIdentity,
 }
 
 // ── Overlay widgets ───────────────────────────────────────────────────────
@@ -788,7 +817,7 @@ class _TourBannerOverlayState extends State<_TourBannerOverlay>
     switch (k) {
       case _BodyKind.pointerModel:
         return l.tourModelTitle;
-      case _BodyKind.modelPage:
+      case _BodyKind.pointerProviderPill:
         return l.tourModelTitle;
       case _BodyKind.pointerMenu:
         return l.tourMenuTitle;
@@ -796,8 +825,10 @@ class _TourBannerOverlayState extends State<_TourBannerOverlay>
         return l.tourSettingsTitle;
       case _BodyKind.settingsPage:
         return l.tourSettingsTitle;
-      case _BodyKind.pointerChatInput:
-        return l.tourChatInputTitle;
+      case _BodyKind.pointerSettingsPricing:
+        return l.tourSettingsPricingTitle;
+      case _BodyKind.pointerSettingsAiIdentity:
+        return l.tourSettingsAiIdentityTitle;
       case _BodyKind.welcome:
         return l.tourWelcomeTitle;
       case _BodyKind.finale:
@@ -809,16 +840,18 @@ class _TourBannerOverlayState extends State<_TourBannerOverlay>
     switch (k) {
       case _BodyKind.pointerModel:
         return l.tourModelBody;
-      case _BodyKind.modelPage:
-        return l.tourModelPageBody;
+      case _BodyKind.pointerProviderPill:
+        return l.tourProviderPillBody;
       case _BodyKind.pointerMenu:
         return l.tourMenuBody;
       case _BodyKind.pointerSettings:
         return l.tourSettingsTapHere;
       case _BodyKind.settingsPage:
         return l.tourSettingsPageBody;
-      case _BodyKind.pointerChatInput:
-        return l.tourChatInputBody;
+      case _BodyKind.pointerSettingsPricing:
+        return l.tourSettingsPricingBody;
+      case _BodyKind.pointerSettingsAiIdentity:
+        return l.tourSettingsAiIdentityBody;
       case _BodyKind.welcome:
         return l.tourWelcomeBody;
       case _BodyKind.finale:

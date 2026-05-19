@@ -742,8 +742,12 @@ class AppLocalizations {
   String get tourMenuBody => _get('tourMenuBody');
   String get tourChatTitle => _get('tourChatTitle');
   String get tourChatBody => _get('tourChatBody');
-  String get tourChatInputTitle => _get('tourChatInputTitle');
-  String get tourChatInputBody => _get('tourChatInputBody');
+  String get tourProviderPillBody => _get('tourProviderPillBody');
+  String get tourSettingsPricingTitle => _get('tourSettingsPricingTitle');
+  String get tourSettingsPricingBody => _get('tourSettingsPricingBody');
+  String get tourSettingsAiIdentityTitle =>
+      _get('tourSettingsAiIdentityTitle');
+  String get tourSettingsAiIdentityBody => _get('tourSettingsAiIdentityBody');
   String get tourDoneTitle => _get('tourDoneTitle');
   String get tourDoneBody => _get('tourDoneBody');
 }

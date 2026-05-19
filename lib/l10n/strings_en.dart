@@ -742,9 +742,14 @@ const Map<String, String> stringsEn = {
   'tourChatTitle': 'Start chatting',
   'tourChatBody':
       'Type your message at the bottom and press Enter. Use the paperclip to attach files.',
-  'tourChatInputTitle': 'Type your message',
-  'tourChatInputBody':
-      'Type here and press Enter. Use the paperclip to attach files.',
+  'tourProviderPillBody':
+      'Tap here to pick a provider — required to activate the model.',
+  'tourSettingsPricingTitle': 'Subscription',
+  'tourSettingsPricingBody':
+      'Subscribe here to unlock more usage. Pay directly — no app-store middleman.',
+  'tourSettingsAiIdentityTitle': 'AI behavior',
+  'tourSettingsAiIdentityBody':
+      'Configure system prompt, memory on/off, and reasoning here.',
   'tourDoneTitle': "You're all set",
   'tourDoneBody':
       'You can replay this tour any time from Settings.',
