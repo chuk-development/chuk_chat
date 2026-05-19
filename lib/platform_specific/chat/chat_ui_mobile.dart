@@ -223,15 +223,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
       ..onToolImagesProcessed = _handleToolImagesProcessed
       ..onContentBlocksUpdate = _updateContentBlocksForMessage
       ..onRequestPayloadUpdate = _updateRequestPayloadForMessage
-      ..onPassRetryAvailabilityChanged = (chatId, index, available) {
-        if (!mounted || _activeChatId != chatId) {
-          return;
-        }
-        if (index < 0 || index >= _messages.length) {
-          return;
-        }
-        setState(() {});
-      }
       ..onBackgroundUpdate = (chatId, index, content, reasoning) {
         if (_activeChatId != chatId || _isAppInBackground) {
           unawaited(
@@ -2540,27 +2531,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
     );
   }
 
-  bool _hasToolPassRetryAt(int index) {
-    final chatId = _activeChatId;
-    if (chatId == null || index < 0 || index >= _messages.length) {
-      return false;
-    }
-    return _streamingHandler.hasRetryForPass(chatId: chatId, index: index);
-  }
-
-  Future<void> _retryToolPassAt(int index) async {
-    final chatId = _activeChatId;
-    if (chatId == null) return;
-
-    final resumed = await _streamingHandler.retryFailedPass(
-      chatId: chatId,
-      index: index,
-    );
-    if (!resumed && mounted) {
-      _showSnackBar('No retry available for this message.');
-    }
-  }
-
   // --- FULLSCREEN EDITOR ---
 
   Future<void> _openFullscreenEditor() async {
@@ -3109,10 +3079,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                             messageText: displayText,
                                             isUser: isUser,
                                             isStreaming: isStreamingMessage,
-                                            canRetryToolPass:
-                                                !isUser &&
-                                                _hasToolPassRetryAt(i),
-                                            onRetryToolPass: _retryToolPassAt,
                                             onEdit: _editMessageAt,
                                             onResendMessage: _resendMessageAt,
                                           ),
