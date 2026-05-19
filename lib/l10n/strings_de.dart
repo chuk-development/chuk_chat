@@ -756,11 +756,12 @@ const Map<String, String> stringsDe = {
   'tourFinish': 'Fertig',
   'tourWelcomeTitle': 'Willkommen bei Chuk Chat',
   'tourWelcomeBody':
-      'Ende-zu-Ende verschlüsselter AI-Chat. Ich zeige dir die App in 4 kurzen Schritten.',
-  'tourModelTitle': 'Wähle ein Modell',
-  'tourModelBody': 'Tippe auf den Modellnamen, um den Picker zu öffnen.',
+      'Ende-zu-Ende verschlüsselter AI-Chat. Zuerst musst du ein Modell auswählen — ich zeige dir wo.',
+  'tourModelTitle': 'Modell wählen — Pflicht',
+  'tourModelBody':
+      'Du musst ein Modell auswählen, bevor du chatten kannst. Tippe hier, um den Picker zu öffnen.',
   'tourModelPageBody':
-      "Wähle ein Modell und einen Anbieter. Probier 'Auto (günstigster)' für den besten Preis.",
+      "Wähle ein Modell und einen Anbieter — Pflicht, sonst kannst du keine Nachrichten senden. Probier 'Auto (günstigster)' für den besten Preis.",
   'tourSettingsTitle': 'Personalisiere die App',
   'tourSettingsBody':
       'In den Einstellungen änderst du Theme, Schriftgröße, UI-Skalierung und Konto.',

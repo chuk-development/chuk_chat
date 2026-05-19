@@ -725,11 +725,12 @@ const Map<String, String> stringsEn = {
   'tourFinish': 'Finish',
   'tourWelcomeTitle': 'Welcome to Chuk Chat',
   'tourWelcomeBody':
-      'End-to-end encrypted AI chat. Let me show you around in 4 quick steps.',
-  'tourModelTitle': 'Pick a model',
-  'tourModelBody': 'Tap the model name to open the picker.',
+      "End-to-end encrypted AI chat. First, you'll need to pick a model — let me show you where.",
+  'tourModelTitle': 'Pick a model — required',
+  'tourModelBody':
+      'You need to pick a model before you can chat. Tap here to open the picker.',
   'tourModelPageBody':
-      "Pick any model and a provider. Try 'Auto (cheapest)' for the best price.",
+      "Choose a model and a provider — this is required to send messages. Try 'Auto (cheapest)' for the best price.",
   'tourSettingsTitle': 'Make it yours',
   'tourSettingsBody':
       'Settings is where you change theme, font size, UI scale, and your account.',
