@@ -1334,9 +1334,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     final Map<String, String> rawMessage = _messages[index];
     final String messageText = rawMessage['text'] ?? '';
-    final bool hasFailedToolCalls =
-        data.toolCalls != null &&
-        data.toolCalls!.any((t) => t.status == ToolCallStatus.error);
 
     return _messageActionsHandler.buildActionsForMessage(
       index: index,
@@ -1345,7 +1342,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       isStreaming: data.isReasoningStreaming,
       onEdit: _editMessageAt,
       onResendMessage: _resendMessageAt,
-      hasFailedToolCalls: hasFailedToolCalls,
     );
   }
 
@@ -2308,8 +2304,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                         builder: (context) {
                                           final a =
                                               _resolveWorkspaceForCurrentChat();
-                                          if (a == null)
+                                          if (a == null) {
                                             return const SizedBox.shrink();
+                                          }
                                           return Padding(
                                             padding: const EdgeInsets.only(
                                               right: 6,
