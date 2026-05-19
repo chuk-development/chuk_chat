@@ -717,19 +717,34 @@ const Map<String, String> stringsEn = {
   'onboardingNoModelHint': 'No model selected yet',
   'onboardingReplayTile': 'Show onboarding again',
   'onboardingReplayTileSubtitle': 'Replay the welcome tour',
-  'onboardingSlide1Title': 'Welcome to Chuk Chat',
-  'onboardingSlide1Body':
-      'End-to-end encrypted multi-provider AI chat. Your messages never leave your control.',
-  'onboardingSlide2Title': 'Pick a model',
-  'onboardingSlide2Body':
-      "Tap the model name at the top of any chat to choose from OpenAI, Anthropic, OpenRouter, and more. Each model has multiple providers — pick the cheapest with 'Auto (cheapest)'.",
-  'onboardingSlide3Title': 'Make it yours',
-  'onboardingSlide3Body':
-      'Settings → Customization: change theme, font size, UI scale (great for high-DPI screens). Settings → Account: manage subscription and sign-in.',
-  'onboardingSlide4Title': 'Start chatting',
-  'onboardingSlide4Body':
-      'Type at the bottom and press Enter. Attach images and files with the paperclip. Voice mode (if enabled) lets you talk instead of type.',
-  'onboardingSlide5Title': "You're all set",
-  'onboardingSlide5Body':
-      "Tap 'Done' to start chatting. You can revisit this tour any time from Settings.",
+
+  // Interactive guided tour (banner overlay shown over real UI)
+  'tourSkip': 'Skip',
+  'tourContinue': 'Continue',
+  'tourGetStarted': 'Get started',
+  'tourFinish': 'Finish',
+  'tourWelcomeTitle': 'Welcome to Chuk Chat',
+  'tourWelcomeBody':
+      'End-to-end encrypted AI chat. Let me show you around in 4 quick steps.',
+  'tourModelTitle': 'Pick a model',
+  'tourModelBody': 'Tap the model name to open the picker.',
+  'tourModelPageBody':
+      "Pick any model and a provider. Try 'Auto (cheapest)' for the best price.",
+  'tourSettingsTitle': 'Make it yours',
+  'tourSettingsBody':
+      'Settings is where you change theme, font size, UI scale, and your account.',
+  'tourSettingsPageBody':
+      'Customize the app: theme, font, UI scale, account.',
+  'tourSettingsTapHere': 'Tap Settings here.',
+  'tourMenuTitle': 'Open the menu',
+  'tourMenuBody': 'Tap the menu icon to find Settings.',
+  'tourChatTitle': 'Start chatting',
+  'tourChatBody':
+      'Type your message at the bottom and press Enter. Use the paperclip to attach files.',
+  'tourChatInputTitle': 'Type your message',
+  'tourChatInputBody':
+      'Type here and press Enter. Use the paperclip to attach files.',
+  'tourDoneTitle': "You're all set",
+  'tourDoneBody':
+      'You can replay this tour any time from Settings.',
 };

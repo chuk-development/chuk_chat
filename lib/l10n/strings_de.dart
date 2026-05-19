@@ -748,19 +748,34 @@ const Map<String, String> stringsDe = {
   'onboardingNoModelHint': 'Noch kein Modell ausgewählt',
   'onboardingReplayTile': 'Onboarding erneut anzeigen',
   'onboardingReplayTileSubtitle': 'Begrüßungstour erneut abspielen',
-  'onboardingSlide1Title': 'Willkommen bei Chuk Chat',
-  'onboardingSlide1Body':
-      'Ende-zu-Ende verschlüsselter AI-Chat mit mehreren Anbietern. Deine Nachrichten bleiben unter deiner Kontrolle.',
-  'onboardingSlide2Title': 'Wähle ein Modell',
-  'onboardingSlide2Body':
-      "Tippe oben in jedem Chat auf den Modellnamen, um aus OpenAI, Anthropic, OpenRouter und mehr zu wählen. Jedes Modell hat mehrere Anbieter — wähle den günstigsten mit 'Auto (günstigster)'.",
-  'onboardingSlide3Title': 'Personalisiere die App',
-  'onboardingSlide3Body':
-      'Einstellungen → Anpassung: Theme, Schriftgröße, UI-Skalierung (super für hochauflösende Bildschirme). Einstellungen → Konto: Abo und Anmeldung verwalten.',
-  'onboardingSlide4Title': 'Starte einen Chat',
-  'onboardingSlide4Body':
-      'Tippe unten und drücke Enter. Hänge Bilder und Dateien mit der Büroklammer an. Sprachmodus (falls aktiv) lässt dich sprechen statt tippen.',
-  'onboardingSlide5Title': 'Alles bereit',
-  'onboardingSlide5Body':
-      "Tippe auf 'Fertig', um loszulegen. Du kannst diese Tour jederzeit in den Einstellungen erneut starten.",
+
+  // Interaktive Tour (Banner über der echten UI)
+  'tourSkip': 'Überspringen',
+  'tourContinue': 'Weiter',
+  'tourGetStarted': "Los geht's",
+  'tourFinish': 'Fertig',
+  'tourWelcomeTitle': 'Willkommen bei Chuk Chat',
+  'tourWelcomeBody':
+      'Ende-zu-Ende verschlüsselter AI-Chat. Ich zeige dir die App in 4 kurzen Schritten.',
+  'tourModelTitle': 'Wähle ein Modell',
+  'tourModelBody': 'Tippe auf den Modellnamen, um den Picker zu öffnen.',
+  'tourModelPageBody':
+      "Wähle ein Modell und einen Anbieter. Probier 'Auto (günstigster)' für den besten Preis.",
+  'tourSettingsTitle': 'Personalisiere die App',
+  'tourSettingsBody':
+      'In den Einstellungen änderst du Theme, Schriftgröße, UI-Skalierung und Konto.',
+  'tourSettingsPageBody':
+      'Personalisiere die App: Theme, Schrift, UI-Skalierung, Konto.',
+  'tourSettingsTapHere': 'Tippe hier auf Einstellungen.',
+  'tourMenuTitle': 'Menü öffnen',
+  'tourMenuBody': 'Tippe auf das Menü-Icon, um Einstellungen zu finden.',
+  'tourChatTitle': 'Starte einen Chat',
+  'tourChatBody':
+      'Tippe deine Nachricht unten und drücke Enter. Mit der Büroklammer hängst du Dateien an.',
+  'tourChatInputTitle': 'Nachricht eingeben',
+  'tourChatInputBody':
+      'Hier tippen und Enter drücken. Büroklammer für Anhänge.',
+  'tourDoneTitle': 'Alles bereit',
+  'tourDoneBody':
+      'Du kannst diese Tour jederzeit in den Einstellungen erneut starten.',
 };

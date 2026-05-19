@@ -21,6 +21,7 @@ import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
+import 'package:chuk_chat/services/tour_key_registry.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:uuid/uuid.dart';
@@ -3421,19 +3422,24 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                 ),
                               ),
                             ),
-                          ModelSelectionDropdown(
-                            key: const ValueKey<String>(
-                              'mobile-model-selection-dropdown',
+                          KeyedSubtree(
+                            key: TourKeyRegistry.instance.keyFor(
+                              TourSlots.modelDropdown,
                             ),
-                            initialSelectedModelId: _selectedModelId,
-                            onModelSelected: (newModelId) {
-                              setState(() {
-                                _selectedModelId = newModelId;
-                              });
-                            },
-                            textFieldFocusNode: _textFieldFocusNode,
-                            isCompactMode: isCompactMode,
-                            transparentStyle: true,
+                            child: ModelSelectionDropdown(
+                              key: const ValueKey<String>(
+                                'mobile-model-selection-dropdown',
+                              ),
+                              initialSelectedModelId: _selectedModelId,
+                              onModelSelected: (newModelId) {
+                                setState(() {
+                                  _selectedModelId = newModelId;
+                                });
+                              },
+                              textFieldFocusNode: _textFieldFocusNode,
+                              isCompactMode: isCompactMode,
+                              transparentStyle: true,
+                            ),
                           ),
                         ],
                       ),
@@ -3529,11 +3535,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                             focusNode: _rawKeyboardListenerFocusNode,
                             controller: _controller,
                             onSend: _sendOrSubmitEdit,
-                            child: Scrollbar(
-                              controller: _composerScrollController,
-                              child: Semantics(
-                                identifier: 'message_input',
-                                child: TextField(
+                            child: KeyedSubtree(
+                              key: TourKeyRegistry.instance.keyFor(
+                                TourSlots.chatInput,
+                              ),
+                              child: Scrollbar(
+                                controller: _composerScrollController,
+                                child: Semantics(
+                                  identifier: 'message_input',
+                                  child: TextField(
                                   controller: _controller,
                                   focusNode: _textFieldFocusNode,
                                   autofocus: false,
@@ -3615,6 +3625,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile> {
                                   ),
                                   cursorColor: accent,
                                   cursorWidth: 1.5,
+                                ),
                                 ),
                               ),
                             ),

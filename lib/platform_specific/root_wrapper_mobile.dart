@@ -21,6 +21,7 @@ import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/chat_sync_service.dart';
 import 'package:chuk_chat/services/developer_options_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/tour_key_registry.dart';
 import 'package:chuk_chat/widgets/artifact_panel.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:chuk_chat/utils/debug_chat_formatter.dart';
@@ -245,7 +246,10 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
   void _openSettingsPage() {
     if (_isSidebarExpanded) _toggleSidebar();
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => SettingsPage(config: widget.config)),
+      MaterialPageRoute(
+        settings: const RouteSettings(name: 'tour:settings'),
+        builder: (_) => SettingsPage(config: widget.config),
+      ),
     );
   }
 
@@ -481,12 +485,15 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
             AppBar(
               backgroundColor: Theme.of(context).scaffoldBackgroundColor,
               elevation: 0,
-              leading: Semantics(
-                identifier: 'menu_button',
-                child: IconButton(
-                  icon: Icon(Icons.menu, color: iconFg, size: 24),
-                  onPressed: _toggleSidebar,
-                  tooltip: 'Open menu',
+              leading: KeyedSubtree(
+                key: TourKeyRegistry.instance.keyFor(TourSlots.menuButton),
+                child: Semantics(
+                  identifier: 'menu_button',
+                  child: IconButton(
+                    icon: Icon(Icons.menu, color: iconFg, size: 24),
+                    onPressed: _toggleSidebar,
+                    tooltip: 'Open menu',
+                  ),
                 ),
               ),
               title: SizedBox(

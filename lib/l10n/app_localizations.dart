@@ -723,16 +723,29 @@ class AppLocalizations {
   String get onboardingReplayTile => _get('onboardingReplayTile');
   String get onboardingReplayTileSubtitle =>
       _get('onboardingReplayTileSubtitle');
-  String get onboardingSlide1Title => _get('onboardingSlide1Title');
-  String get onboardingSlide1Body => _get('onboardingSlide1Body');
-  String get onboardingSlide2Title => _get('onboardingSlide2Title');
-  String get onboardingSlide2Body => _get('onboardingSlide2Body');
-  String get onboardingSlide3Title => _get('onboardingSlide3Title');
-  String get onboardingSlide3Body => _get('onboardingSlide3Body');
-  String get onboardingSlide4Title => _get('onboardingSlide4Title');
-  String get onboardingSlide4Body => _get('onboardingSlide4Body');
-  String get onboardingSlide5Title => _get('onboardingSlide5Title');
-  String get onboardingSlide5Body => _get('onboardingSlide5Body');
+
+  // Interactive guided tour
+  String get tourSkip => _get('tourSkip');
+  String get tourContinue => _get('tourContinue');
+  String get tourGetStarted => _get('tourGetStarted');
+  String get tourFinish => _get('tourFinish');
+  String get tourWelcomeTitle => _get('tourWelcomeTitle');
+  String get tourWelcomeBody => _get('tourWelcomeBody');
+  String get tourModelTitle => _get('tourModelTitle');
+  String get tourModelBody => _get('tourModelBody');
+  String get tourModelPageBody => _get('tourModelPageBody');
+  String get tourSettingsTitle => _get('tourSettingsTitle');
+  String get tourSettingsBody => _get('tourSettingsBody');
+  String get tourSettingsPageBody => _get('tourSettingsPageBody');
+  String get tourSettingsTapHere => _get('tourSettingsTapHere');
+  String get tourMenuTitle => _get('tourMenuTitle');
+  String get tourMenuBody => _get('tourMenuBody');
+  String get tourChatTitle => _get('tourChatTitle');
+  String get tourChatBody => _get('tourChatBody');
+  String get tourChatInputTitle => _get('tourChatInputTitle');
+  String get tourChatInputBody => _get('tourChatInputBody');
+  String get tourDoneTitle => _get('tourDoneTitle');
+  String get tourDoneBody => _get('tourDoneBody');
 }
 
 class _AppLocalizationsDelegate
