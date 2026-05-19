@@ -971,9 +971,11 @@ class _ProviderPill extends StatelessWidget {
     final bool hasMultipleProviders = model.providers.length > 1;
 
     // Fixed column width keeps provider pills visually aligned across all
-    // cards, even when one provider label is very long (e.g. "Cerebras (US)").
+    // cards. Wide enough to fit "Auto (cheapest) — currently: <Provider>"
+    // and the two-line "$X.XX/M in · $Y.YY/M out" price subtitle without
+    // truncation.
     return SizedBox(
-      width: 180,
+      width: 280,
       child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
