@@ -19,13 +19,13 @@ import 'package:chuk_chat/pages/diagnostics_settings_page.dart';
 import 'package:chuk_chat/pages/tool_calling_settings_page.dart';
 import 'package:chuk_chat/pages/account_settings_page.dart';
 import 'package:chuk_chat/pages/about_page.dart';
-import 'package:chuk_chat/pages/onboarding_page.dart';
 import 'package:chuk_chat/pages/pricing_page.dart';
 import 'package:chuk_chat/pages/system_prompt_page.dart';
 import 'package:chuk_chat/services/app_theme_service.dart';
 import 'package:chuk_chat/services/auth_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
+import 'package:chuk_chat/services/onboarding_tour_controller.dart';
 import 'package:chuk_chat/services/profile_service.dart';
 // ignore: unused_import
 import 'package:chuk_chat/utils/color_extensions.dart';
@@ -162,6 +162,9 @@ class _SettingsPageState extends State<SettingsPage> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
+                      settings: const RouteSettings(
+                        name: 'tour:model_selector',
+                      ),
                       builder: (_) => const ModelSelectorPage(),
                     ),
                   );
@@ -375,18 +378,17 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _replayOnboarding(BuildContext context) async {
     final navigator = Navigator.of(context);
+    // Pop the Settings page first so the tour starts on the chat root.
+    if (navigator.canPop()) {
+      navigator.popUntil((route) => route.isFirst);
+    }
+    if (!navigator.mounted) return;
     await AppThemeService.instance.setOnboardingCompleted(false);
     if (!navigator.mounted) return;
-    await navigator.push(
-      MaterialPageRoute<void>(
-        builder: (_) => const OnboardingPage(),
-        fullscreenDialog: true,
-      ),
+    await OnboardingTourController.instance.start(
+      navigator.context,
+      shellConfig: widget.config,
     );
-    // If the user skipped/finished, OnboardingPage already sets the flag.
-    // If they popped via back gesture without finishing, mark it complete
-    // so the first-launch gate doesn't fire again next launch.
-    await AppThemeService.instance.setOnboardingCompleted(true);
   }
 
   Future<void> _exportChats(BuildContext context) async {

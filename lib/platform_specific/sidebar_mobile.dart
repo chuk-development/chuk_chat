@@ -10,6 +10,7 @@ import 'package:chuk_chat/services/chat_sync_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/profile_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/tour_key_registry.dart';
 import 'package:chuk_chat/utils/color_extensions.dart'; // Assuming this exists
 import 'package:chuk_chat/services/update_check_service.dart';
 import 'package:chuk_chat/widgets/credit_display.dart';
@@ -804,7 +805,11 @@ class _SidebarMobileState extends State<SidebarMobile> {
                               16.0,
                               24.0,
                             ),
-                            child: InkWell(
+                            child: KeyedSubtree(
+                              key: TourKeyRegistry.instance.keyFor(
+                                TourSlots.settingsEntry,
+                              ),
+                              child: InkWell(
                               borderRadius: BorderRadius.circular(12),
                               onTap: widget.onSettingsTapped,
                               child: Container(
@@ -858,6 +863,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
                                   ],
                                 ),
                               ),
+                            ),
                             ),
                           ),
                         ),

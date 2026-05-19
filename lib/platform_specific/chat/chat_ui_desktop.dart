@@ -27,6 +27,7 @@ import 'package:chuk_chat/widgets/message_bubble.dart'
     show MessageBubble, MessageBubbleAction, DocumentAttachment;
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
+import 'package:chuk_chat/services/tour_key_registry.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart'; // NEW
 import 'package:chuk_chat/services/websocket_chat_service.dart';
 import 'package:chuk_chat/services/streaming_manager.dart';
@@ -2190,7 +2191,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                   child: _wrapWithSmartPasteActions(
                     Scrollbar(
                       controller: _composerScrollController,
-                      child: TextField(
+                      child: KeyedSubtree(
+                        key: TourKeyRegistry.instance.keyFor(
+                          TourSlots.chatInput,
+                        ),
+                        child: TextField(
                         controller: _controller,
                         focusNode: _textFieldFocusNode,
                         contextMenuBuilder: _buildComposerContextMenu,
@@ -2234,6 +2239,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                         cursorColor: accent,
                         cursorWidth: 2,
                         cursorRadius: const Radius.circular(1),
+                      ),
                       ),
                     ),
                   ),
@@ -2343,25 +2349,31 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                         ),
                                         const SizedBox(width: 6),
                                       ],
-                                      ModelSelectionDropdown(
-                                        key: const ValueKey<String>(
-                                          'desktop-model-selection-dropdown',
+                                      KeyedSubtree(
+                                        key: TourKeyRegistry.instance.keyFor(
+                                          TourSlots.modelDropdown,
                                         ),
-                                        initialSelectedModelId:
-                                            _selectedModelId,
-                                        onModelSelected: (newModelId) {
-                                          setState(() {
-                                            _selectedModelId = newModelId;
-                                          });
-                                          if (kDebugMode) {
-                                            debugPrint(
-                                              'Selected model ID: $_selectedModelId',
-                                            );
-                                          }
-                                        },
-                                        textFieldFocusNode: _textFieldFocusNode,
-                                        isCompactMode: isCompactMode,
-                                        transparentStyle: true,
+                                        child: ModelSelectionDropdown(
+                                          key: const ValueKey<String>(
+                                            'desktop-model-selection-dropdown',
+                                          ),
+                                          initialSelectedModelId:
+                                              _selectedModelId,
+                                          onModelSelected: (newModelId) {
+                                            setState(() {
+                                              _selectedModelId = newModelId;
+                                            });
+                                            if (kDebugMode) {
+                                              debugPrint(
+                                                'Selected model ID: $_selectedModelId',
+                                              );
+                                            }
+                                          },
+                                          textFieldFocusNode:
+                                              _textFieldFocusNode,
+                                          isCompactMode: isCompactMode,
+                                          transparentStyle: true,
+                                        ),
                                       ),
                                     ],
                                   ),

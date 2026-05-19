@@ -19,6 +19,7 @@ import 'package:chuk_chat/pages/workspaces_page.dart';
 import 'package:chuk_chat/pages/media_manager_page.dart';
 import 'package:chuk_chat/pages/settings_page.dart';
 import 'package:chuk_chat/services/developer_options_service.dart';
+import 'package:chuk_chat/services/tour_key_registry.dart';
 import 'package:chuk_chat/widgets/artifact_panel.dart';
 import 'package:chuk_chat/utils/debug_chat_formatter.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
@@ -151,7 +152,10 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   void _openSettingsPage() {
     if (_isSidebarExpanded) _toggleSidebar();
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => SettingsPage(config: widget.config)),
+      MaterialPageRoute(
+        settings: const RouteSettings(name: 'tour:settings'),
+        builder: (_) => SettingsPage(config: widget.config),
+      ),
     );
   }
 
@@ -633,9 +637,12 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
           Positioned(
             top: kTopInitialSpacing,
             left: kFixedLeftPadding,
-            child: IconButton(
-              icon: Icon(Icons.menu, color: iconFg, size: 24),
-              onPressed: _toggleSidebar,
+            child: KeyedSubtree(
+              key: TourKeyRegistry.instance.keyFor(TourSlots.menuButton),
+              child: IconButton(
+                icon: Icon(Icons.menu, color: iconFg, size: 24),
+                onPressed: _toggleSidebar,
+              ),
             ),
           ),
 

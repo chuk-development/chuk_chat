@@ -24,14 +24,16 @@ import 'package:chuk_chat/services/notification_service.dart';
 import 'package:chuk_chat/services/offline_queue_service.dart';
 import 'package:chuk_chat/services/offline_retry_manager.dart';
 import 'package:chuk_chat/services/offline_send_executor.dart';
+import 'package:chuk_chat/services/onboarding_tour_controller.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/system_tray_service.dart';
 import 'package:chuk_chat/services/window_close_service.dart';
 import 'package:chuk_chat/platform_specific/root_wrapper.dart';
 import 'package:chuk_chat/utils/grain_overlay.dart';
 import 'package:chuk_chat/pages/login_page.dart';
-import 'package:chuk_chat/pages/onboarding_page.dart';
 import 'package:chuk_chat/pages/set_new_password_page.dart';
 import 'package:chuk_chat/widgets/auth_gate.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 /* ---------- MAIN ---------- */
 Future<void> main() async {
@@ -297,6 +299,7 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return MaterialApp(
       navigatorKey: navigatorKey,
+      navigatorObservers: [OnboardingTourController.navigatorObserver],
       title: 'Chuk Chat',
       debugShowCheckedModeBanner: false,
       theme: _themeService.buildTheme(),
@@ -344,8 +347,13 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
         loadingBuilder: (context) =>
             const Scaffold(body: Center(child: CircularProgressIndicator())),
         signedOutBuilder: (context) => const LoginPage(),
-        signedInBuilder: (context) =>
-            _OnboardingFirstLaunchGate(child: _buildRootWrapper()),
+        signedInBuilder: (context) {
+          final config = _buildShellConfig();
+          return _OnboardingFirstLaunchGate(
+            shellConfig: config,
+            child: RootWrapper(config: config),
+          );
+        },
         passwordRecoveryBuilder: (context) => SetNewPasswordPage(
           onComplete: () {
             // Force rebuild of AuthGate to transition to signed-in view.
@@ -362,8 +370,11 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
   }
 
   Widget _buildRootWrapper() {
-    return RootWrapper(
-      config: AppShellConfig(
+    return RootWrapper(config: _buildShellConfig());
+  }
+
+  AppShellConfig _buildShellConfig() {
+    return AppShellConfig(
         currentThemeMode: _themeService.themeMode,
         currentAccentColor: _themeService.accentColor,
         currentIconFgColor: _themeService.iconFgColor,
@@ -419,17 +430,22 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
         setChatFontFamily: _themeService.setChatFontFamily,
         uiScale: _themeService.uiScale,
         setUiScale: _themeService.setUiScale,
-      ),
     );
   }
 }
 
-/// Shows [OnboardingPage] once per app launch if the user hasn't completed it.
-/// Persists completion via AppThemeService.setOnboardingCompleted.
+/// Starts the interactive onboarding tour once per app launch if the user
+/// hasn't completed it. Persists completion via
+/// [AppThemeService.setOnboardingCompleted]. Also tears the tour down if the
+/// user signs out mid-tour so the overlay can't leak.
 class _OnboardingFirstLaunchGate extends StatefulWidget {
-  const _OnboardingFirstLaunchGate({required this.child});
+  const _OnboardingFirstLaunchGate({
+    required this.child,
+    required this.shellConfig,
+  });
 
   final Widget child;
+  final AppShellConfig shellConfig;
 
   @override
   State<_OnboardingFirstLaunchGate> createState() =>
@@ -438,24 +454,38 @@ class _OnboardingFirstLaunchGate extends StatefulWidget {
 
 class _OnboardingFirstLaunchGateState
     extends State<_OnboardingFirstLaunchGate> {
-  bool _didShowOnboarding = false;
+  bool _didStartTour = false;
+  StreamSubscription<AuthState>? _authSub;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShow());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeStart());
+
+    // Defensive: if the user signs out while the tour is up, drop the overlay
+    // so it doesn't end up rendered on top of the LoginPage.
+    _authSub = SupabaseService.auth.onAuthStateChange.listen((event) {
+      if (event.event == AuthChangeEvent.signedOut &&
+          OnboardingTourController.instance.isActive) {
+        OnboardingTourController.instance.cancel();
+      }
+    });
   }
 
-  void _maybeShow() {
-    if (_didShowOnboarding) return;
+  @override
+  void dispose() {
+    _authSub?.cancel();
+    super.dispose();
+  }
+
+  void _maybeStart() {
+    if (_didStartTour) return;
     if (AppThemeService.instance.onboardingCompleted) return;
     if (!mounted) return;
-    _didShowOnboarding = true;
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => const OnboardingPage(),
-        fullscreenDialog: true,
-      ),
+    _didStartTour = true;
+    OnboardingTourController.instance.start(
+      context,
+      shellConfig: widget.shellConfig,
     );
   }
 
