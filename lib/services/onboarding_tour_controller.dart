@@ -441,12 +441,18 @@ class OnboardingTourController {
         _step == _Step.pointerSettingsModelSelection ||
         _step == _Step.pointerSettingsPricing ||
         _step == _Step.pointerSettingsAiIdentity;
+    // Look-here steps: tapping the highlighted tile shouldn't navigate
+    // away — absorb the tap and advance instead. The user can revisit
+    // these screens normally after the tour.
+    final absorbTargetTap = _step == _Step.pointerSettingsPricing ||
+        _step == _Step.pointerSettingsAiIdentity;
     final canShowContinue = _step == _Step.pointerProviderPill;
     return _TourBannerOverlay(
       slot: slot,
       bodyKind: bodyKind,
       showContinue: canShowContinue,
       useScrim: useScrim,
+      absorbTargetTap: absorbTargetTap,
       onContinue: _onContinuePressed,
       onSkip: _onSkipPressed,
       onEndTour: _onEndTourPressed,
@@ -678,6 +684,7 @@ class _TourBannerOverlay extends StatefulWidget {
     required this.onSkip,
     required this.onEndTour,
     this.useScrim = false,
+    this.absorbTargetTap = false,
   });
 
   /// Null when no pointer should be drawn (page-level banner steps).
@@ -696,6 +703,14 @@ class _TourBannerOverlay extends StatefulWidget {
   /// pointer events. Forces the user to interact with the highlighted
   /// element only — no accidental taps on other UI.
   final bool useScrim;
+
+  /// When true, taps INSIDE the hole are also absorbed — they call
+  /// [onContinue] (advancing the tour) instead of triggering the
+  /// underlying widget. Used for "look here" pointer steps where the
+  /// underlying action would navigate away (e.g. Pricing, AI Identity)
+  /// and the tour should acknowledge the tap by advancing rather than
+  /// letting the user disappear into a sub-page.
+  final bool absorbTargetTap;
 
   @override
   State<_TourBannerOverlay> createState() => _TourBannerOverlayState();
@@ -858,15 +873,22 @@ class _TourBannerOverlayState extends State<_TourBannerOverlay>
       children: [
         ...scrim,
 
-        // Pulsing pointer ring. Always passes taps through to the real
-        // target so the user can interact with it.
+        // Pulsing pointer ring. By default passes taps through to the
+        // real target. For "look here" steps the parent supplies an
+        // absorber that catches the tap and advances the tour.
         if (rect != null)
           Positioned(
             left: rect.left - 8,
             top: rect.top - 8,
             width: rect.width + 16,
             height: rect.height + 16,
-            child: const IgnorePointer(child: _PulsingRing()),
+            child: widget.absorbTargetTap
+                ? GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: widget.onContinue,
+                    child: const _PulsingRing(),
+                  )
+                : const IgnorePointer(child: _PulsingRing()),
           ),
 
         // Banner (tap-receiving buttons). AnimatedPositioned smooths the
