@@ -971,7 +971,12 @@ class _ProviderPill extends StatelessWidget {
   String get _selectedValue {
     if (isAutoSelected) return kAutoCheapestProviderSlug;
     final p = selectedProvider;
-    return p == null ? _kDisabledValue : p.slug;
+    if (p != null) return p.slug;
+    // Default suggestion: when nothing is selected AND the model has more
+    // than one provider, show "Auto (cheapest)" as the visual default. The
+    // user can still pick a specific provider; tapping Auto persists it.
+    if (model.providers.length > 1) return kAutoCheapestProviderSlug;
+    return _kDisabledValue;
   }
 
   @override
