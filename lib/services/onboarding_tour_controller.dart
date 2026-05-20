@@ -284,11 +284,17 @@ class OnboardingTourController {
   }
 
   void _onSkipPressed() {
+    // Disable the state machine BEFORE popping routes — otherwise the
+    // NavigatorObserver fires `didPop` for each popped route and
+    // _handleRoutePopped would re-enter `_goTo(finale)` mid-teardown,
+    // making Skip look like it only advances one step.
+    _active = false;
+    _stopMountWatch();
     final navigator = _navigator;
     if (navigator != null && navigator.mounted && navigator.canPop()) {
       navigator.popUntil((route) => route.isFirst);
     }
-    _finish(markCompleted: true);
+    _teardown(markCompleted: true);
   }
 
   // ── Overlay management ──────────────────────────────────────────────────
@@ -671,15 +677,10 @@ class _TourBannerOverlayState extends State<_TourBannerOverlay>
     final String body = _bodyFor(widget.bodyKind, l);
 
     // Banner positioning: if a target rect exists, anchor near it; otherwise
-    // pin to the top of the screen.
+    // pin to the top of the screen. AnimatedPositioned handles the
+    // measurement transition so the banner slides smoothly into place
+    // instead of jumping when the ticker first fires.
     final rect = _targetRect;
-    // For pointer steps (slot != null), if we haven't measured the target
-    // yet we hide everything for one frame — otherwise the banner would
-    // briefly render at the top, then jump down to the target when the
-    // ticker first fires.
-    if (widget.slot != null && rect == null) {
-      return const SizedBox.shrink();
-    }
     final screenH = mq.size.height;
     final screenW = mq.size.width;
 
@@ -729,8 +730,12 @@ class _TourBannerOverlayState extends State<_TourBannerOverlay>
                 : const IgnorePointer(child: _PulsingRing()),
           ),
 
-        // Banner (tap-receiving buttons).
-        Positioned(
+        // Banner (tap-receiving buttons). AnimatedPositioned smooths the
+        // top/left transitions when the ticker first measures the target
+        // or when the target widget moves.
+        AnimatedPositioned(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
           left: bannerLeft,
           top: bannerTop,
           width: bannerWidth,
