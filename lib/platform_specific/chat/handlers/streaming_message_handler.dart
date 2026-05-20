@@ -308,6 +308,15 @@ class StreamingMessageHandler {
           lastTextBlock.text!.trim() == normalizedFinalText) {
         return '';
       }
+      // Fuzzy duplicate check (whitespace-normalized + contains) catches
+      // near-duplicates that exact comparison misses, e.g. when a retry pass
+      // re-emits the same answer with minor punctuation/whitespace drift.
+      if (RoundContentBlockService.isDuplicateOfEarlierTextBlock(
+        normalizedFinalText,
+        contentBlocks,
+      )) {
+        return '';
+      }
 
       final finalizedPrefix = contentBlocks
           .where(
