@@ -53,6 +53,23 @@ class TourKeyRegistry {
     return ro is RenderBox && ro.hasSize;
   }
 
+  /// True when [slot] is mounted AND visible on screen — i.e. its top-left
+  /// global position is within (or just outside) the viewport bounds.
+  /// Distinguishes "mounted but translated offscreen" (drawer/sidebar that
+  /// slides in) from "mounted and visible".
+  bool isVisibleOnScreen(String slot, Size screenSize) {
+    final ctx = _keys[slot]?.currentContext;
+    if (ctx == null) return false;
+    final ro = ctx.findRenderObject();
+    if (ro is! RenderBox || !ro.hasSize) return false;
+    final pos = ro.localToGlobal(Offset.zero);
+    // Tolerate a tiny epsilon — animations can momentarily land at -0.5px.
+    return pos.dx > -1.0 &&
+        pos.dy > -1.0 &&
+        pos.dx < screenSize.width &&
+        pos.dy < screenSize.height;
+  }
+
   /// Drops every registered key. Intended for tests.
   @visibleForTesting
   void clear() => _keys.clear();
