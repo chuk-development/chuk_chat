@@ -1281,7 +1281,15 @@ final List<ClientTool> builtinTools = [
         'reuse an unrelated existing id — create a new descriptive slug so '
         'each document has its own version history. '
         'Start with `#set page(paper: "a4")` and write normal Typst '
-        r'markup. Math: `$ a^2 + b^2 = c^2 $`. Headings: `= Title`.',
+        r'markup. Math: `$ a^2 + b^2 = c^2 $`. Headings: `= Title`. '
+        'Each compile result reports `PDF: N pages; last page ~X% filled` '
+        '— if the last page is an orphan (only a small slice spills over) '
+        'the result also explicitly says so. When you see that, retry with '
+        'a tighter layout so the content fits on N-1 pages: shrink margins '
+        '(`#set page(margin: 1.5cm)`), reduce font size '
+        '(`#set text(size: 10pt)`), tighten leading '
+        '(`#set par(leading: 0.55em)`), or trim filler. Reuse the same '
+        '`artifact_id` so the version updates in place.',
     parameters: {
       'source':
           'string (required: full Typst document source, max ~256KB)',

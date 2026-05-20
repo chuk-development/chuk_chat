@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:pdfrx/pdfrx.dart';
 
 import 'package:chuk_chat/models/artifact.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
@@ -114,6 +115,11 @@ Future<String> executeTypstCompile({
     return _compileErrorGuidance(e.toString());
   }
 
+  // Inspect layout so the AI knows page count + how full the last page
+  // is. Lets the model decide whether to retry with tighter layout to
+  // avoid an orphan last page.
+  final layout = await _analyzePdfLayout(pdfBytes);
+
   // Upload the PDF encrypted (same trust model as chat messages &
   // images). Failure here is not fatal — we fall back to live
   // recompilation on open, but surface the error to the AI so it
@@ -166,8 +172,9 @@ Future<String> executeTypstCompile({
         ? 'stored end-to-end encrypted in Supabase'
         : 'source stored; PDF will be re-rendered on demand '
           '(attachment upload failed: ${uploadError ?? "unknown"})';
+    final layoutNote = _layoutGuidance(layout);
     return 'Typst artifact "${stored.id}" $verb '
-        '(version: ${stored.version}, $persisted).';
+        '(version: ${stored.version}, $persisted).$layoutNote';
   } on StateError catch (e) {
     if (attachmentPath != null) {
       unawaited(PdfAttachmentService.delete(attachmentPath));
@@ -179,6 +186,99 @@ Future<String> executeTypstCompile({
     }
     return 'Error: Could not save Typst artifact: $e';
   }
+}
+
+/// Snapshot of a compiled Typst PDF's layout used to nudge the AI when
+/// the last page is an orphan (only a tiny slice of content).
+class _PdfLayoutSnapshot {
+  const _PdfLayoutSnapshot({
+    required this.pageCount,
+    required this.lastPageFillPct,
+  });
+  final int pageCount;
+  final double lastPageFillPct;
+}
+
+/// Below this fill % on the last page we tell the AI the page is an
+/// orphan and worth re-shaping the document to avoid.
+const double _orphanFillPctThreshold = 15.0;
+
+/// Renders the last PDF page at low DPI and counts non-white pixels to
+/// estimate how full the page is. Returns null on any failure so the
+/// caller can silently degrade.
+Future<_PdfLayoutSnapshot?> _analyzePdfLayout(Uint8List bytes) async {
+  PdfDocument? doc;
+  try {
+    await pdfrxFlutterInitialize();
+    doc = await PdfDocument.openData(bytes, sourceName: 'typst-orphan-check');
+    final pages = doc.pages;
+    if (pages.isEmpty) return null;
+    final last = pages.last;
+    if (last.width <= 0 || last.height <= 0) {
+      return _PdfLayoutSnapshot(
+        pageCount: pages.length,
+        lastPageFillPct: 0,
+      );
+    }
+    const targetW = 200;
+    final scale = targetW / last.width;
+    final targetH = (last.height * scale).round().clamp(1, 4000);
+    final image = await last.render(
+      fullWidth: targetW.toDouble(),
+      fullHeight: targetH.toDouble(),
+    );
+    if (image == null) return null;
+    final pixels = image.pixels;
+    final total = image.width * image.height;
+    if (total <= 0) return null;
+    int ink = 0;
+    for (var i = 0; i + 3 < pixels.length; i += 4) {
+      // PDFium delivers BGRA. Anything appreciably darker than white
+      // counts as ink — Typst's default background is pure white.
+      if (pixels[i] < 240 || pixels[i + 1] < 240 || pixels[i + 2] < 240) {
+        ink++;
+      }
+    }
+    return _PdfLayoutSnapshot(
+      pageCount: pages.length,
+      lastPageFillPct: (ink * 100.0) / total,
+    );
+  } catch (e) {
+    if (kDebugMode) {
+      debugPrint('Typst orphan check failed: $e');
+    }
+    return null;
+  } finally {
+    try {
+      await doc?.dispose();
+    } catch (_) {
+      // ignore — best effort cleanup
+    }
+  }
+}
+
+/// Builds the layout suffix appended to the tool result string. Always
+/// includes page count + fill %; flags orphan pages so the AI can
+/// decide whether to retry with a tighter layout.
+String _layoutGuidance(_PdfLayoutSnapshot? layout) {
+  if (layout == null) return '';
+  final pct = layout.lastPageFillPct.toStringAsFixed(1);
+  if (layout.pageCount <= 1) {
+    return ' PDF: 1 page (~$pct% filled).';
+  }
+  final base =
+      ' PDF: ${layout.pageCount} pages; last page ~$pct% filled.';
+  if (layout.lastPageFillPct >= _orphanFillPctThreshold) {
+    return base;
+  }
+  return '$base Last page is an orphan — only a small slice of content '
+      'spills onto it, which looks ugly. If you can, retry typst_compile '
+      'with a tighter layout so the content fits on '
+      '${layout.pageCount - 1} pages: e.g. shrink margins '
+      '(`#set page(margin: 1.5cm)`), reduce font size '
+      '(`#set text(size: 10pt)`), tighten paragraph/leading spacing '
+      '(`#set par(leading: 0.55em)`), or trim filler text. Keep the '
+      'same `artifact_id` so the version updates in place.';
 }
 
 /// Wraps a Typst compile error so the AI sees both the compiler output
