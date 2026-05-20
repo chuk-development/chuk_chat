@@ -760,7 +760,7 @@ const Map<String, String> stringsDe = {
       'Ende-zu-Ende verschlüsselter AI-Chat. Zuerst musst du ein Modell auswählen — ich zeige dir wo.',
   'tourModelTitle': 'Modell wählen — Pflicht',
   'tourSettingsModelBody':
-      'Tippe hier auf Modellauswahl, um den Picker zu öffnen und ein Modell zu aktivieren — Pflicht zum Chatten.',
+      'Tippe auf Modellauswahl, um den Picker zu öffnen. Du brauchst in der Regel ein Modell und einen Anbieter, um chatten zu können.',
   'tourModelBody':
       'Du musst ein Modell auswählen, bevor du chatten kannst. Tippe hier, um den Picker zu öffnen.',
   'tourModelPageBody':
@@ -777,7 +777,7 @@ const Map<String, String> stringsDe = {
   'tourChatBody':
       'Tippe deine Nachricht unten und drücke Enter. Mit der Büroklammer hängst du Dateien an.',
   'tourProviderPillBody':
-      'Tippe hier, um einen Anbieter auszuwählen — Pflicht, um das Modell zu aktivieren.',
+      'Wähle einen Anbieter für ein Modell — der Anbieter aktiviert es. Auto (günstigster) ist die Voreinstellung.',
   'tourSettingsPricingTitle': 'Abo',
   'tourSettingsPricingBody':
       'Hier kannst du ein Abo abschließen — direkt bezahlen, kein App-Store-Zwischenhändler.',

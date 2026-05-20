@@ -261,6 +261,15 @@ class OnboardingTourController {
         // Skipping the model selection demo — go straight to Pricing tile.
         _goTo(_Step.pointerSettingsPricing);
         break;
+      case _Step.pointerProviderPill:
+        // User pressed Continue on the model selector — pop back to
+        // Settings and resume the sub-tour from the Pricing tile.
+        final navigator = _navigator;
+        if (navigator != null && navigator.mounted && navigator.canPop()) {
+          navigator.pop();
+        }
+        _goTo(_Step.pointerSettingsPricing);
+        break;
       case _Step.pointerSettingsPricing:
         _goTo(_Step.pointerSettingsAiIdentity);
         break;
@@ -276,7 +285,6 @@ class OnboardingTourController {
         _finish(markCompleted: true);
         break;
       // Pointer-only steps that advance on user action don't render Continue.
-      case _Step.pointerProviderPill:
       case _Step.pointerMenu:
       case _Step.pointerSettings:
         break;
@@ -400,25 +408,24 @@ class OnboardingTourController {
       );
     }
 
-    // Pointer steps. Three flavors:
-    //   1. Tap-advances (no Continue): pointerMenu, pointerSettings,
-    //      pointerProviderPill — user taps the real target to advance.
-    //   2. Tap-advances WITH Continue fallback: pointerSettingsModelSelection
-    //      — user can tap the tile OR press Continue to skip the demo.
-    //   3. Continue-only with taps blocked: pointerSettingsPricing,
-    //      pointerSettingsAiIdentity — pure informational, accidental tile
-    //      taps would derail the tour (Pricing page, etc.).
+    // Pointer steps. Two flavors:
+    //   1. Tap-advances (no Continue): pointerMenu, pointerSettings —
+    //      user taps the real target to advance.
+    //   2. Tap-OR-Continue: pointerSettingsModelSelection, the two
+    //      sub-tour tiles (Pricing, AI Identity) — taps fall through to
+    //      the real tile (user can explore the destination), Continue
+    //      button advances the tour either way.
     final slot = _slotFor(_step);
     final bodyKind = _bodyKindFor(_step);
-    final isInformational = _step == _Step.pointerSettingsPricing ||
+    final canShowContinue = _step == _Step.pointerSettingsModelSelection ||
+        _step == _Step.pointerProviderPill ||
+        _step == _Step.pointerSettingsPricing ||
         _step == _Step.pointerSettingsAiIdentity;
-    final canShowContinue = isInformational ||
-        _step == _Step.pointerSettingsModelSelection;
     return _TourBannerOverlay(
       slot: slot,
       bodyKind: bodyKind,
       showContinue: canShowContinue,
-      blockTargetTaps: isInformational,
+      blockTargetTaps: false,
       onContinue: _onContinuePressed,
       onSkip: _onSkipPressed,
       onEndTour: _onEndTourPressed,
