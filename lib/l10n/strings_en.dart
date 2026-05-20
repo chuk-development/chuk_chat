@@ -729,6 +729,8 @@ const Map<String, String> stringsEn = {
   'tourModelTitle': 'Pick a model — required',
   'tourModelBody':
       'You need to pick a model before you can chat. Tap here to open the picker.',
+  'tourSettingsModelBody':
+      'Tap Model Selection here to open the picker and activate a model — required to chat.',
   'tourModelPageBody':
       "Choose a model and a provider — this is required to send messages. Try 'Auto (cheapest)' for the best price.",
   'tourSettingsTitle': 'Make it yours',

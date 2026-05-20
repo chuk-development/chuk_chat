@@ -26,13 +26,13 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 /// Step in the interactive tour state machine.
 enum _Step {
   welcome, // 1
-  pointerModel, // 2  pulsing ring on model dropdown
-  pointerProviderPill, // 3  pulsing ring on first provider pill on model page
-  pointerMenu, // 4  pulsing ring on menu button (auto-advances on drawer open)
-  pointerSettings, // 5  pulsing ring on settings tile inside open drawer
-  settingsPage, // 6  banner on SettingsPage
-  pointerSettingsPricing, // 7  pulsing ring on Pricing tile
-  pointerSettingsAiIdentity, // 8  pulsing ring on AI Identity tile
+  pointerMenu, // 2  pulsing ring on menu button (auto-advances on drawer open)
+  pointerSettings, // 3  pulsing ring on settings tile inside open drawer
+  settingsPage, // 4  banner on SettingsPage
+  pointerSettingsModelSelection, // 5  pointer on Model Selection tile
+  pointerProviderPill, // 6  pointer on first provider pill (model selector)
+  pointerSettingsPricing, // 7  pointer on Pricing tile (Continue, taps blocked)
+  pointerSettingsAiIdentity, // 8  pointer on AI Identity tile (Continue, taps blocked)
   finale, // 9
 }
 
@@ -167,13 +167,13 @@ class OnboardingTourController {
       }
     }
 
-    // Model picker: the in-header dropdown opens a popup. Treat ANY route
-    // push (popup OR navigated page) while pointing at the dropdown as the
-    // "user tapped" signal. Move directly to the provider-pill pointer —
-    // we no longer show a separate page-level banner.
-    if (_step == _Step.pointerModel) {
-      _goTo(_Step.pointerProviderPill);
-      return;
+    // User tapped Model Selection from inside Settings → advance to the
+    // provider-pill pointer on the model selector page.
+    if (_step == _Step.pointerSettingsModelSelection) {
+      if (name == _tourModelSelectorRoute) {
+        _goTo(_Step.pointerProviderPill);
+        return;
+      }
     }
   }
 
@@ -181,10 +181,11 @@ class OnboardingTourController {
     if (!_active) return;
     final name = route.settings.name;
 
+    // User popped the model selector back to Settings → continue the
+    // Settings sub-tour from the Pricing tile.
     if (name == _tourModelSelectorRoute) {
-      if (_step == _Step.pointerProviderPill ||
-          _step == _Step.pointerModel) {
-        _goTo(_Step.pointerMenu);
+      if (_step == _Step.pointerProviderPill) {
+        _goTo(_Step.pointerSettingsPricing);
         return;
       }
     }
@@ -193,18 +194,12 @@ class OnboardingTourController {
       if (_step == _Step.settingsPage ||
           _step == _Step.pointerSettings ||
           _step == _Step.pointerMenu ||
+          _step == _Step.pointerSettingsModelSelection ||
           _step == _Step.pointerSettingsPricing ||
           _step == _Step.pointerSettingsAiIdentity) {
         _goTo(_Step.finale);
         return;
       }
-    }
-
-    // The dropdown popup just closed. Advance from the provider-pill pointer
-    // to the menu pointer (the user picked a model and is back on chat).
-    if (_step == _Step.pointerProviderPill) {
-      _goTo(_Step.pointerMenu);
-      return;
     }
   }
 
@@ -257,9 +252,13 @@ class OnboardingTourController {
     if (!_active) return;
     switch (_step) {
       case _Step.welcome:
-        _goTo(_Step.pointerModel);
+        _goTo(_Step.pointerMenu);
         break;
       case _Step.settingsPage:
+        _goTo(_Step.pointerSettingsModelSelection);
+        break;
+      case _Step.pointerSettingsModelSelection:
+        // Skipping the model selection demo — go straight to Pricing tile.
         _goTo(_Step.pointerSettingsPricing);
         break;
       case _Step.pointerSettingsPricing:
@@ -276,8 +275,7 @@ class OnboardingTourController {
         }
         _finish(markCompleted: true);
         break;
-      // Pointer-only steps don't render Continue.
-      case _Step.pointerModel:
+      // Pointer-only steps that advance on user action don't render Continue.
       case _Step.pointerProviderPill:
       case _Step.pointerMenu:
       case _Step.pointerSettings:
@@ -353,17 +351,25 @@ class OnboardingTourController {
       );
     }
 
-    // Pointer steps. The settings sub-tour pointers (pricing + AI identity)
-    // are informational and rely on Continue. The other pointers advance
-    // when the user taps the highlighted target.
+    // Pointer steps. Three flavors:
+    //   1. Tap-advances (no Continue): pointerMenu, pointerSettings,
+    //      pointerProviderPill — user taps the real target to advance.
+    //   2. Tap-advances WITH Continue fallback: pointerSettingsModelSelection
+    //      — user can tap the tile OR press Continue to skip the demo.
+    //   3. Continue-only with taps blocked: pointerSettingsPricing,
+    //      pointerSettingsAiIdentity — pure informational, accidental tile
+    //      taps would derail the tour (Pricing page, etc.).
     final slot = _slotFor(_step);
     final bodyKind = _bodyKindFor(_step);
-    final canShowContinue = _step == _Step.pointerSettingsPricing ||
+    final isInformational = _step == _Step.pointerSettingsPricing ||
         _step == _Step.pointerSettingsAiIdentity;
+    final canShowContinue = isInformational ||
+        _step == _Step.pointerSettingsModelSelection;
     return _TourBannerOverlay(
       slot: slot,
       bodyKind: bodyKind,
       showContinue: canShowContinue,
+      blockTargetTaps: isInformational,
       onContinue: _onContinuePressed,
       onSkip: _onSkipPressed,
     );
@@ -371,14 +377,14 @@ class OnboardingTourController {
 
   String? _slotFor(_Step step) {
     switch (step) {
-      case _Step.pointerModel:
-        return TourSlots.modelDropdown;
       case _Step.pointerProviderPill:
         return TourSlots.modelProviderPill;
       case _Step.pointerMenu:
         return TourSlots.menuButton;
       case _Step.pointerSettings:
         return TourSlots.settingsEntry;
+      case _Step.pointerSettingsModelSelection:
+        return TourSlots.settingsModelSelectionTile;
       case _Step.pointerSettingsPricing:
         return TourSlots.settingsPricingTile;
       case _Step.pointerSettingsAiIdentity:
@@ -390,14 +396,14 @@ class OnboardingTourController {
 
   _BodyKind _bodyKindFor(_Step step) {
     switch (step) {
-      case _Step.pointerModel:
-        return _BodyKind.pointerModel;
       case _Step.pointerProviderPill:
         return _BodyKind.pointerProviderPill;
       case _Step.pointerMenu:
         return _BodyKind.pointerMenu;
       case _Step.pointerSettings:
         return _BodyKind.pointerSettings;
+      case _Step.pointerSettingsModelSelection:
+        return _BodyKind.pointerSettingsModelSelection;
       case _Step.pointerSettingsPricing:
         return _BodyKind.pointerSettingsPricing;
       case _Step.pointerSettingsAiIdentity:
@@ -413,10 +419,10 @@ enum _BodyKind {
   welcome,
   settingsPage,
   finale,
-  pointerModel,
   pointerProviderPill,
   pointerMenu,
   pointerSettings,
+  pointerSettingsModelSelection,
   pointerSettingsPricing,
   pointerSettingsAiIdentity,
 }
@@ -592,6 +598,7 @@ class _TourBannerOverlay extends StatefulWidget {
     required this.showContinue,
     required this.onContinue,
     required this.onSkip,
+    this.blockTargetTaps = false,
   });
 
   /// Null when no pointer should be drawn (page-level banner steps).
@@ -600,6 +607,11 @@ class _TourBannerOverlay extends StatefulWidget {
   final bool showContinue;
   final VoidCallback onContinue;
   final VoidCallback onSkip;
+
+  /// When true, the area over the highlighted target absorbs pointer events
+  /// so the underlying tile cannot be tapped. Used for informational sub-tour
+  /// pointers (Pricing, AI Identity) where a stray tap would derail the tour.
+  final bool blockTargetTaps;
 
   @override
   State<_TourBannerOverlay> createState() => _TourBannerOverlayState();
@@ -691,14 +703,23 @@ class _TourBannerOverlayState extends State<_TourBannerOverlay>
 
     return Stack(
       children: [
-        // Pulsing pointer ring (does NOT block taps).
+        // Pulsing pointer ring. For tap-advances steps it ignores pointer
+        // events so the real target stays tappable; for informational
+        // (Continue-only) steps it absorbs taps to prevent accidental
+        // navigation away from the current page.
         if (rect != null)
           Positioned(
             left: rect.left - 8,
             top: rect.top - 8,
             width: rect.width + 16,
             height: rect.height + 16,
-            child: const IgnorePointer(child: _PulsingRing()),
+            child: widget.blockTargetTaps
+                ? GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {},
+                    child: const _PulsingRing(),
+                  )
+                : const IgnorePointer(child: _PulsingRing()),
           ),
 
         // Banner (tap-receiving buttons).
@@ -815,8 +836,6 @@ class _TourBannerOverlayState extends State<_TourBannerOverlay>
 
   String _headlineFor(_BodyKind k, AppLocalizations l) {
     switch (k) {
-      case _BodyKind.pointerModel:
-        return l.tourModelTitle;
       case _BodyKind.pointerProviderPill:
         return l.tourModelTitle;
       case _BodyKind.pointerMenu:
@@ -825,6 +844,8 @@ class _TourBannerOverlayState extends State<_TourBannerOverlay>
         return l.tourSettingsTitle;
       case _BodyKind.settingsPage:
         return l.tourSettingsTitle;
+      case _BodyKind.pointerSettingsModelSelection:
+        return l.tourModelTitle;
       case _BodyKind.pointerSettingsPricing:
         return l.tourSettingsPricingTitle;
       case _BodyKind.pointerSettingsAiIdentity:
@@ -838,8 +859,6 @@ class _TourBannerOverlayState extends State<_TourBannerOverlay>
 
   String _bodyFor(_BodyKind k, AppLocalizations l) {
     switch (k) {
-      case _BodyKind.pointerModel:
-        return l.tourModelBody;
       case _BodyKind.pointerProviderPill:
         return l.tourProviderPillBody;
       case _BodyKind.pointerMenu:
@@ -848,6 +867,8 @@ class _TourBannerOverlayState extends State<_TourBannerOverlay>
         return l.tourSettingsTapHere;
       case _BodyKind.settingsPage:
         return l.tourSettingsPageBody;
+      case _BodyKind.pointerSettingsModelSelection:
+        return l.tourSettingsModelBody;
       case _BodyKind.pointerSettingsPricing:
         return l.tourSettingsPricingBody;
       case _BodyKind.pointerSettingsAiIdentity:

@@ -21,6 +21,8 @@ class TourSlots {
   static const String chatInput = 'chat_input';
   static const String settingsPricingTile = 'settings_pricing_tile';
   static const String settingsAiIdentityTile = 'settings_ai_identity_tile';
+  static const String settingsModelSelectionTile =
+      'settings_model_selection_tile';
 
   const TourSlots._();
 }

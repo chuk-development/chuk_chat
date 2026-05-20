@@ -159,21 +159,25 @@ class _SettingsPageState extends State<SettingsPage> {
           _SectionHeader(label: 'AI & Chat'),
           _GroupedCard(
             rows: [
-              _SettingsRow(
-                icon: Icons.smart_toy_outlined,
-                title: l.modelSelection,
-                subtitle: l.modelSelectionSubtitle,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      settings: const RouteSettings(
-                        name: 'tour:model_selector',
+              KeyedSubtree(
+                key: TourKeyRegistry.instance
+                    .keyFor(TourSlots.settingsModelSelectionTile),
+                child: _SettingsRow(
+                  icon: Icons.smart_toy_outlined,
+                  title: l.modelSelection,
+                  subtitle: l.modelSelectionSubtitle,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        settings: const RouteSettings(
+                          name: 'tour:model_selector',
+                        ),
+                        builder: (_) => const ModelSelectorPage(),
                       ),
-                      builder: (_) => const ModelSelectorPage(),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
               KeyedSubtree(
                 key: TourKeyRegistry.instance
