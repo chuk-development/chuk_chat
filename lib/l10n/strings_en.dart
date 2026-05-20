@@ -731,7 +731,7 @@ const Map<String, String> stringsEn = {
   'tourModelBody':
       'You need to pick a model before you can chat. Tap here to open the picker.',
   'tourSettingsModelBody':
-      'Tap Model Selection here to open the picker and activate a model — required to chat.',
+      'Tap Model Selection to open the picker. You generally need a model and a provider selected to chat.',
   'tourModelPageBody':
       "Choose a model and a provider — this is required to send messages. Try 'Auto (cheapest)' for the best price.",
   'tourSettingsTitle': 'Make it yours',
@@ -746,7 +746,7 @@ const Map<String, String> stringsEn = {
   'tourChatBody':
       'Type your message at the bottom and press Enter. Use the paperclip to attach files.',
   'tourProviderPillBody':
-      'Tap here to pick a provider — required to activate the model.',
+      'Pick a provider on any model — the provider is what activates it. Auto (cheapest) is the default.',
   'tourSettingsPricingTitle': 'Subscription',
   'tourSettingsPricingBody':
       'Subscribe here to unlock more usage. Pay directly — no app-store middleman.',
