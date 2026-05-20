@@ -254,7 +254,16 @@ class OnboardingTourController {
         _stopMountWatch();
         return;
       }
-      if (TourKeyRegistry.instance.isMounted(slot)) {
+      final navigator = _navigator;
+      if (navigator == null || !navigator.mounted) return;
+      // Use the navigator's overlay context to read the actual on-screen
+      // size. The settings entry lives in a sidebar that is always
+      // mounted but translated offscreen — check visibility, not just
+      // mount state, so we don't advance prematurely.
+      final overlayCtx = navigator.overlay?.context;
+      if (overlayCtx == null) return;
+      final size = MediaQuery.of(overlayCtx).size;
+      if (TourKeyRegistry.instance.isVisibleOnScreen(slot, size)) {
         _stopMountWatch();
         _goTo(nextStep);
       }
