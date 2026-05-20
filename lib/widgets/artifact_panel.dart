@@ -276,12 +276,13 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
           if (baseUrl.isEmpty) {
             return null;
           }
-          return typst_tools.compileTypstToPdf(
+          final result = await typst_tools.compileTypstToPdf(
             serverHttpUrl: baseUrl,
             accessToken: token,
             source: _effectiveContent,
             format: ext,
           );
+          return result.bytes;
         }
         return null;
       default:
@@ -1394,17 +1395,17 @@ class _TypstPdfRendererState extends State<_TypstPdfRenderer> {
       debugPrint('📄 [Typst] Compiling via $baseUrl ...');
     }
     try {
-      final bytes = await typst_tools.compileTypstToPdf(
+      final result = await typst_tools.compileTypstToPdf(
         serverHttpUrl: baseUrl,
         accessToken: token,
         source: widget.source,
       );
       if (!mounted) return;
       if (kDebugMode) {
-        debugPrint('📄 [Typst] ✅ Compiled ${bytes.length} bytes');
+        debugPrint('📄 [Typst] ✅ Compiled ${result.bytes.length} bytes');
       }
       setState(() {
-        _pdfBytes = bytes;
+        _pdfBytes = result.bytes;
         _loading = false;
       });
       // Backfill: if this artifact had no stored PDF, persist the
@@ -1416,7 +1417,7 @@ class _TypstPdfRendererState extends State<_TypstPdfRenderer> {
             '${widget.artifactId}...',
           );
         }
-        _backfillAttachment(bytes, widget.artifactId!);
+        _backfillAttachment(result.bytes, widget.artifactId!);
       }
     } catch (e) {
       if (kDebugMode) {

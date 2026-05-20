@@ -1,18 +1,27 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:pdfrx/pdfrx.dart';
 
 import 'package:chuk_chat/models/artifact.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/pdf_attachment_service.dart';
 
-/// Compile Typst source via the backend. Returns PDF bytes on success.
+/// Result of a Typst compile: the rendered bytes plus optional layout
+/// info derived by the server (page count + last-page fill %) so the
+/// AI can decide whether to retry with a tighter layout.
+class TypstCompileResult {
+  const TypstCompileResult({required this.bytes, this.layout});
+  final Uint8List bytes;
+  final TypstLayoutSnapshot? layout;
+}
+
+/// Compile Typst source via the backend. Returns the rendered bytes and
+/// any layout metadata the server reported in response headers.
 /// Nothing is persisted on the server — the backend wipes its tempdir
 /// the moment the response is sent.
-Future<Uint8List> compileTypstToPdf({
+Future<TypstCompileResult> compileTypstToPdf({
   required String serverHttpUrl,
   required String? accessToken,
   required String source,
@@ -46,7 +55,10 @@ Future<Uint8List> compileTypstToPdf({
     throw _TypstCompileError(detail);
   }
 
-  return response.bodyBytes;
+  return TypstCompileResult(
+    bytes: response.bodyBytes,
+    layout: _layoutFromHeaders(response.headers),
+  );
 }
 
 class _TypstCompileError implements Exception {
@@ -101,9 +113,9 @@ Future<String> executeTypstCompile({
   // Compile once. We keep the bytes so we can persist the rendered PDF
   // as an encrypted attachment — the client no longer has to re-compile
   // every time the artifact is reopened.
-  Uint8List pdfBytes;
+  TypstCompileResult compile;
   try {
-    pdfBytes = await compileTypstToPdf(
+    compile = await compileTypstToPdf(
       serverHttpUrl: baseUrl,
       accessToken: accessToken,
       source: source,
@@ -115,10 +127,8 @@ Future<String> executeTypstCompile({
     return _compileErrorGuidance(e.toString());
   }
 
-  // Inspect layout so the AI knows page count + how full the last page
-  // is. Lets the model decide whether to retry with tighter layout to
-  // avoid an orphan last page.
-  final layout = await _analyzePdfLayout(pdfBytes);
+  final pdfBytes = compile.bytes;
+  final layout = compile.layout;
 
   // Upload the PDF encrypted (same trust model as chat messages &
   // images). Failure here is not fatal — we fall back to live
@@ -188,10 +198,11 @@ Future<String> executeTypstCompile({
   }
 }
 
-/// Snapshot of a compiled Typst PDF's layout used to nudge the AI when
-/// the last page is an orphan (only a tiny slice of content).
-class _PdfLayoutSnapshot {
-  const _PdfLayoutSnapshot({
+/// Snapshot of a compiled Typst PDF's layout (page count + last-page
+/// fill %) reported by the server in response headers. Used to nudge
+/// the AI when the last page is an orphan (tiny slice of content).
+class TypstLayoutSnapshot {
+  const TypstLayoutSnapshot({
     required this.pageCount,
     required this.lastPageFillPct,
   });
@@ -200,67 +211,28 @@ class _PdfLayoutSnapshot {
 }
 
 /// Below this fill % on the last page we tell the AI the page is an
-/// orphan and worth re-shaping the document to avoid.
+/// orphan and worth re-shaping the document to avoid. Must match the
+/// server-side threshold (`TYPST_ORPHAN_FILL_PCT_THRESHOLD`).
 const double _orphanFillPctThreshold = 15.0;
 
-/// Renders the last PDF page at low DPI and counts non-white pixels to
-/// estimate how full the page is. Returns null on any failure so the
-/// caller can silently degrade.
-Future<_PdfLayoutSnapshot?> _analyzePdfLayout(Uint8List bytes) async {
-  PdfDocument? doc;
-  try {
-    await pdfrxFlutterInitialize();
-    doc = await PdfDocument.openData(bytes, sourceName: 'typst-orphan-check');
-    final pages = doc.pages;
-    if (pages.isEmpty) return null;
-    final last = pages.last;
-    if (last.width <= 0 || last.height <= 0) {
-      return _PdfLayoutSnapshot(
-        pageCount: pages.length,
-        lastPageFillPct: 0,
-      );
-    }
-    const targetW = 200;
-    final scale = targetW / last.width;
-    final targetH = (last.height * scale).round().clamp(1, 4000);
-    final image = await last.render(
-      fullWidth: targetW.toDouble(),
-      fullHeight: targetH.toDouble(),
-    );
-    if (image == null) return null;
-    final pixels = image.pixels;
-    final total = image.width * image.height;
-    if (total <= 0) return null;
-    int ink = 0;
-    for (var i = 0; i + 3 < pixels.length; i += 4) {
-      // PDFium delivers BGRA. Anything appreciably darker than white
-      // counts as ink — Typst's default background is pure white.
-      if (pixels[i] < 240 || pixels[i + 1] < 240 || pixels[i + 2] < 240) {
-        ink++;
-      }
-    }
-    return _PdfLayoutSnapshot(
-      pageCount: pages.length,
-      lastPageFillPct: (ink * 100.0) / total,
-    );
-  } catch (e) {
-    if (kDebugMode) {
-      debugPrint('Typst orphan check failed: $e');
-    }
-    return null;
-  } finally {
-    try {
-      await doc?.dispose();
-    } catch (_) {
-      // ignore — best effort cleanup
-    }
-  }
+/// Parses layout headers the server attaches to every PDF compile:
+///   X-Typst-Pages: 3
+///   X-Typst-Last-Page-Fill-Pct: 12.7
+/// Returns null if either header is missing or malformed.
+TypstLayoutSnapshot? _layoutFromHeaders(Map<String, String> headers) {
+  final rawPages = headers['x-typst-pages'];
+  final rawFill = headers['x-typst-last-page-fill-pct'];
+  if (rawPages == null || rawFill == null) return null;
+  final pages = int.tryParse(rawPages);
+  final fill = double.tryParse(rawFill);
+  if (pages == null || pages <= 0 || fill == null) return null;
+  return TypstLayoutSnapshot(pageCount: pages, lastPageFillPct: fill);
 }
 
 /// Builds the layout suffix appended to the tool result string. Always
 /// includes page count + fill %; flags orphan pages so the AI can
 /// decide whether to retry with a tighter layout.
-String _layoutGuidance(_PdfLayoutSnapshot? layout) {
+String _layoutGuidance(TypstLayoutSnapshot? layout) {
   if (layout == null) return '';
   final pct = layout.lastPageFillPct.toStringAsFixed(1);
   if (layout.pageCount <= 1) {
