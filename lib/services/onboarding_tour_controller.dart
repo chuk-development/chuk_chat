@@ -673,6 +673,13 @@ class _TourBannerOverlayState extends State<_TourBannerOverlay>
     // Banner positioning: if a target rect exists, anchor near it; otherwise
     // pin to the top of the screen.
     final rect = _targetRect;
+    // For pointer steps (slot != null), if we haven't measured the target
+    // yet we hide everything for one frame — otherwise the banner would
+    // briefly render at the top, then jump down to the target when the
+    // ticker first fires.
+    if (widget.slot != null && rect == null) {
+      return const SizedBox.shrink();
+    }
     final screenH = mq.size.height;
     final screenW = mq.size.width;
 
