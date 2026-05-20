@@ -155,6 +155,8 @@ class OnboardingTourController {
 
   static const String _tourSettingsRoute = 'tour:settings';
   static const String _tourModelSelectorRoute = 'tour:model_selector';
+  static const String _tourPricingRoute = 'tour:pricing';
+  static const String _tourAiIdentityRoute = 'tour:ai_identity';
 
   void _handleRoutePushed(Route<dynamic> route, Route<dynamic>? previousRoute) {
     if (!_active) return;
@@ -186,6 +188,22 @@ class OnboardingTourController {
     if (name == _tourModelSelectorRoute) {
       if (_step == _Step.pointerProviderPill) {
         _goTo(_Step.pointerSettingsPricing);
+        return;
+      }
+    }
+
+    // User explored Pricing and came back → advance to AI Identity.
+    if (name == _tourPricingRoute) {
+      if (_step == _Step.pointerSettingsPricing) {
+        _goTo(_Step.pointerSettingsAiIdentity);
+        return;
+      }
+    }
+
+    // User explored AI Identity and came back → finale.
+    if (name == _tourAiIdentityRoute) {
+      if (_step == _Step.pointerSettingsAiIdentity) {
+        _goTo(_Step.finale);
         return;
       }
     }
@@ -408,24 +426,27 @@ class OnboardingTourController {
       );
     }
 
-    // Pointer steps. Two flavors:
-    //   1. Tap-advances (no Continue): pointerMenu, pointerSettings —
-    //      user taps the real target to advance.
-    //   2. Tap-OR-Continue: pointerSettingsModelSelection, the two
-    //      sub-tour tiles (Pricing, AI Identity) — taps fall through to
-    //      the real tile (user can explore the destination), Continue
-    //      button advances the tour either way.
+    // Pointer steps:
+    //   * Scrim with hole (only target tappable): pointerMenu,
+    //     pointerSettings, pointerSettingsModelSelection,
+    //     pointerSettingsPricing, pointerSettingsAiIdentity. The user
+    //     MUST tap the highlighted element (or Skip/× to escape).
+    //   * No scrim (free exploration + Continue button):
+    //     pointerProviderPill — the model selector page has many tiles
+    //     the user might want to explore.
     final slot = _slotFor(_step);
     final bodyKind = _bodyKindFor(_step);
-    final canShowContinue = _step == _Step.pointerSettingsModelSelection ||
-        _step == _Step.pointerProviderPill ||
+    final useScrim = _step == _Step.pointerMenu ||
+        _step == _Step.pointerSettings ||
+        _step == _Step.pointerSettingsModelSelection ||
         _step == _Step.pointerSettingsPricing ||
         _step == _Step.pointerSettingsAiIdentity;
+    final canShowContinue = _step == _Step.pointerProviderPill;
     return _TourBannerOverlay(
       slot: slot,
       bodyKind: bodyKind,
       showContinue: canShowContinue,
-      blockTargetTaps: false,
+      useScrim: useScrim,
       onContinue: _onContinuePressed,
       onSkip: _onSkipPressed,
       onEndTour: _onEndTourPressed,
@@ -656,7 +677,7 @@ class _TourBannerOverlay extends StatefulWidget {
     required this.onContinue,
     required this.onSkip,
     required this.onEndTour,
-    this.blockTargetTaps = false,
+    this.useScrim = false,
   });
 
   /// Null when no pointer should be drawn (page-level banner steps).
@@ -669,10 +690,12 @@ class _TourBannerOverlay extends StatefulWidget {
   /// Ends the entire tour. Wired to the × close icon in the banner.
   final VoidCallback onEndTour;
 
-  /// When true, the area over the highlighted target absorbs pointer events
-  /// so the underlying tile cannot be tapped. Used for informational sub-tour
-  /// pointers (Pricing, AI Identity) where a stray tap would derail the tour.
-  final bool blockTargetTaps;
+  /// When true, render a semi-transparent scrim around the target with a
+  /// cut-out "hole" exactly over the highlighted element. Only the hole
+  /// passes taps through to the underlying UI; everywhere else absorbs
+  /// pointer events. Forces the user to interact with the highlighted
+  /// element only — no accidental taps on other UI.
+  final bool useScrim;
 
   @override
   State<_TourBannerOverlay> createState() => _TourBannerOverlayState();
@@ -764,25 +787,86 @@ class _TourBannerOverlayState extends State<_TourBannerOverlay>
     final bannerWidth = (screenW - 24).clamp(0.0, 560.0);
     final bannerLeft = ((screenW - bannerWidth) / 2).clamp(0.0, screenW);
 
+    // Scrim with hole: 4 rectangles around the target absorb all taps so
+    // the user can only interact with the highlighted element.
+    final List<Widget> scrim = <Widget>[];
+    if (widget.useScrim) {
+      const scrimColor = Color(0x99000000); // ~60% black
+      const holePadding = 6.0;
+      if (rect == null) {
+        // No target measured yet → full-screen scrim blocking all taps.
+        scrim.add(
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {},
+              child: Container(color: scrimColor),
+            ),
+          ),
+        );
+      } else {
+        final hole = Rect.fromLTRB(
+          (rect.left - holePadding).clamp(0.0, screenW),
+          (rect.top - holePadding).clamp(0.0, screenH),
+          (rect.right + holePadding).clamp(0.0, screenW),
+          (rect.bottom + holePadding).clamp(0.0, screenH),
+        );
+        Widget block({
+          required double left,
+          required double top,
+          required double width,
+          required double height,
+        }) {
+          if (width <= 0 || height <= 0) return const SizedBox.shrink();
+          return Positioned(
+            left: left,
+            top: top,
+            width: width,
+            height: height,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {},
+              child: Container(color: scrimColor),
+            ),
+          );
+        }
+        scrim.addAll([
+          block(left: 0, top: 0, width: screenW, height: hole.top),
+          block(
+            left: 0,
+            top: hole.bottom,
+            width: screenW,
+            height: screenH - hole.bottom,
+          ),
+          block(
+            left: 0,
+            top: hole.top,
+            width: hole.left,
+            height: hole.height,
+          ),
+          block(
+            left: hole.right,
+            top: hole.top,
+            width: screenW - hole.right,
+            height: hole.height,
+          ),
+        ]);
+      }
+    }
+
     return Stack(
       children: [
-        // Pulsing pointer ring. For tap-advances steps it ignores pointer
-        // events so the real target stays tappable; for informational
-        // (Continue-only) steps it absorbs taps to prevent accidental
-        // navigation away from the current page.
+        ...scrim,
+
+        // Pulsing pointer ring. Always passes taps through to the real
+        // target so the user can interact with it.
         if (rect != null)
           Positioned(
             left: rect.left - 8,
             top: rect.top - 8,
             width: rect.width + 16,
             height: rect.height + 16,
-            child: widget.blockTargetTaps
-                ? GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () {},
-                    child: const _PulsingRing(),
-                  )
-                : const IgnorePointer(child: _PulsingRing()),
+            child: const IgnorePointer(child: _PulsingRing()),
           ),
 
         // Banner (tap-receiving buttons). AnimatedPositioned smooths the

@@ -148,7 +148,10 @@ class _SettingsPageState extends State<SettingsPage> {
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const PricingPage()),
+                      MaterialPageRoute(
+                        settings: const RouteSettings(name: 'tour:pricing'),
+                        builder: (_) => const PricingPage(),
+                      ),
                     );
                   },
                 ),
@@ -190,6 +193,9 @@ class _SettingsPageState extends State<SettingsPage> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
+                        settings: const RouteSettings(
+                          name: 'tour:ai_identity',
+                        ),
                         builder: (_) => const SystemPromptPage(),
                       ),
                     );
