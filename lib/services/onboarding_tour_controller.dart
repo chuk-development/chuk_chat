@@ -283,11 +283,53 @@ class OnboardingTourController {
     }
   }
 
+  /// "Skip" advances past the current step (same as Continue). To end the
+  /// whole tour the user taps the × close icon (`_onEndTourPressed`).
   void _onSkipPressed() {
-    // Disable the state machine BEFORE popping routes — otherwise the
-    // NavigatorObserver fires `didPop` for each popped route and
-    // _handleRoutePopped would re-enter `_goTo(finale)` mid-teardown,
-    // making Skip look like it only advances one step.
+    if (!_active) return;
+    // Pointer-only steps don't render Continue — for those, "Skip"
+    // jumps over the current target. Use the same forward logic as
+    // Continue but include the pointer-only cases.
+    switch (_step) {
+      case _Step.welcome:
+        _goTo(_Step.pointerMenu);
+        break;
+      case _Step.pointerMenu:
+        _goTo(_Step.pointerSettings);
+        break;
+      case _Step.pointerSettings:
+        _goTo(_Step.settingsPage);
+        break;
+      case _Step.settingsPage:
+        _goTo(_Step.pointerSettingsModelSelection);
+        break;
+      case _Step.pointerSettingsModelSelection:
+        _goTo(_Step.pointerSettingsPricing);
+        break;
+      case _Step.pointerProviderPill:
+        // User skipped while on the model selector — pop back to Settings
+        // first, then continue the sub-tour.
+        final navigator = _navigator;
+        if (navigator != null && navigator.mounted && navigator.canPop()) {
+          navigator.pop();
+        }
+        _goTo(_Step.pointerSettingsPricing);
+        break;
+      case _Step.pointerSettingsPricing:
+        _goTo(_Step.pointerSettingsAiIdentity);
+        break;
+      case _Step.pointerSettingsAiIdentity:
+        _goTo(_Step.finale);
+        break;
+      case _Step.finale:
+        _onEndTourPressed();
+        break;
+    }
+  }
+
+  /// End the entire tour. Disables the state machine BEFORE popping routes
+  /// so the NavigatorObserver can't re-enter `_goTo` mid-teardown.
+  void _onEndTourPressed() {
     _active = false;
     _stopMountWatch();
     final navigator = _navigator;
@@ -334,7 +376,7 @@ class OnboardingTourController {
       return _TourModalCard(
         showLogo: true,
         onPrimary: _onContinuePressed,
-        onSkip: _onSkipPressed,
+        onSkip: _onEndTourPressed,
         bodyKind: _BodyKind.welcome,
       );
     }
@@ -354,6 +396,7 @@ class OnboardingTourController {
         showContinue: true,
         onContinue: _onContinuePressed,
         onSkip: _onSkipPressed,
+        onEndTour: _onEndTourPressed,
       );
     }
 
@@ -378,6 +421,7 @@ class OnboardingTourController {
       blockTargetTaps: isInformational,
       onContinue: _onContinuePressed,
       onSkip: _onSkipPressed,
+      onEndTour: _onEndTourPressed,
     );
   }
 
@@ -604,6 +648,7 @@ class _TourBannerOverlay extends StatefulWidget {
     required this.showContinue,
     required this.onContinue,
     required this.onSkip,
+    required this.onEndTour,
     this.blockTargetTaps = false,
   });
 
@@ -613,6 +658,9 @@ class _TourBannerOverlay extends StatefulWidget {
   final bool showContinue;
   final VoidCallback onContinue;
   final VoidCallback onSkip;
+
+  /// Ends the entire tour. Wired to the × close icon in the banner.
+  final VoidCallback onEndTour;
 
   /// When true, the area over the highlighted target absorbs pointer events
   /// so the underlying tile cannot be tapped. Used for informational sub-tour
@@ -805,6 +853,18 @@ class _TourBannerOverlayState extends State<_TourBannerOverlay>
                             fontSize: 12.5,
                             fontWeight: FontWeight.w500,
                           ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: widget.onEndTour,
+                        tooltip: l.tourEndTour,
+                        icon: const Icon(Icons.close, size: 18),
+                        color: m3.onSurfaceVariant,
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 28,
+                          minHeight: 28,
                         ),
                       ),
                     ],

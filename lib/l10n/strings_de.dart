@@ -751,6 +751,7 @@ const Map<String, String> stringsDe = {
 
   // Interaktive Tour (Banner über der echten UI)
   'tourSkip': 'Überspringen',
+  'tourEndTour': 'Tour beenden',
   'tourContinue': 'Weiter',
   'tourGetStarted': "Los geht's",
   'tourFinish': 'Fertig',

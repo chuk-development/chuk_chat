@@ -720,6 +720,7 @@ const Map<String, String> stringsEn = {
 
   // Interactive guided tour (banner overlay shown over real UI)
   'tourSkip': 'Skip',
+  'tourEndTour': 'End tour',
   'tourContinue': 'Continue',
   'tourGetStarted': 'Get started',
   'tourFinish': 'Finish',
