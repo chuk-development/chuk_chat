@@ -758,6 +758,8 @@ const Map<String, String> stringsDe = {
   'tourWelcomeBody':
       'Ende-zu-Ende verschlüsselter AI-Chat. Zuerst musst du ein Modell auswählen — ich zeige dir wo.',
   'tourModelTitle': 'Modell wählen — Pflicht',
+  'tourSettingsModelBody':
+      'Tippe hier auf Modellauswahl, um den Picker zu öffnen und ein Modell zu aktivieren — Pflicht zum Chatten.',
   'tourModelBody':
       'Du musst ein Modell auswählen, bevor du chatten kannst. Tippe hier, um den Picker zu öffnen.',
   'tourModelPageBody':

@@ -733,6 +733,7 @@ class AppLocalizations {
   String get tourWelcomeBody => _get('tourWelcomeBody');
   String get tourModelTitle => _get('tourModelTitle');
   String get tourModelBody => _get('tourModelBody');
+  String get tourSettingsModelBody => _get('tourSettingsModelBody');
   String get tourModelPageBody => _get('tourModelPageBody');
   String get tourSettingsTitle => _get('tourSettingsTitle');
   String get tourSettingsBody => _get('tourSettingsBody');
