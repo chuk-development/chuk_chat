@@ -726,6 +726,7 @@ class AppLocalizations {
 
   // Interactive guided tour
   String get tourSkip => _get('tourSkip');
+  String get tourEndTour => _get('tourEndTour');
   String get tourContinue => _get('tourContinue');
   String get tourGetStarted => _get('tourGetStarted');
   String get tourFinish => _get('tourFinish');

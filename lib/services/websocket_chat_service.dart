@@ -161,6 +161,8 @@ class WebSocketChatService {
       // (see streaming_manager_io.dart) provides a separate, shorter
       // inter-chunk timeout once the first chunk has arrived.
       bool receivedFirstChunk = false;
+      bool yieldedContent = false;
+      bool retriedTransient = false;
 
       await for (final message in channel.stream.timeout(
         _firstChunkTimeout,
@@ -177,8 +179,29 @@ class WebSocketChatService {
             final Map<String, dynamic> data = jsonDecode(message);
 
             if (data.containsKey('error')) {
+              final rawError = data['error'] as String;
+              // Backend occasionally returns a transient routing/cache miss
+              // (e.g. "Model 'X' is not available on Fireworks AI." or
+              // "No provider selected") on the synthesis pass after tool calls
+              // succeeded. Resending the identical payload normally works.
+              // Retry once silently, but only before any content was streamed.
+              final transient =
+                  !yieldedContent &&
+                  !retriedTransient &&
+                  (rawError.contains('is not available on') ||
+                      rawError.contains('No provider') ||
+                      rawError.contains('no provider'));
+              if (transient) {
+                retriedTransient = true;
+                if (kDebugMode) {
+                  debugPrint('↻ Transient backend error, retrying once');
+                }
+                channel.sink.add(jsonEncode(requestPayload));
+                continue;
+              }
+
               final errorMsg = SecureTokenHandler.createSafeErrorMessage(
-                data['error'] as String,
+                rawError,
                 token: accessToken,
               );
 
@@ -207,8 +230,10 @@ class WebSocketChatService {
             }
 
             if (data.containsKey('content')) {
+              yieldedContent = true;
               yield ChatStreamEvent.content(data['content'] as String);
             } else if (data.containsKey('reasoning')) {
+              yieldedContent = true;
               yield ChatStreamEvent.reasoning(data['reasoning'] as String);
             } else if (data.containsKey('usage')) {
               yield ChatStreamEvent.usage(
