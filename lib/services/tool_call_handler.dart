@@ -545,8 +545,18 @@ class ToolCallHandler {
         );
       }
 
+      // Only treat the turn as "non-final" when the provider actually emitted
+      // a stop/finish reason that we recognize as non-final. Absent/unknown
+      // signals (Fireworks + Kimi often omit a finish_reason entirely) must
+      // NOT trigger a retry — otherwise the model gets asked to "continue"
+      // after a complete answer and re-emits the same response, surfacing as
+      // a duplicated/reformulated answer below the first one.
+      final hasExplicitTurnSignal =
+          (turnSignals?.stopReason?.isNotEmpty ?? false) ||
+          (turnSignals?.finishReason?.isNotEmpty ?? false);
       final isNonFinalSignaledTurn =
           (turnSignals != null) &&
+          hasExplicitTurnSignal &&
           !signaledToolUse &&
           !signaledTruncated &&
           !(turnSignals.indicatesFinalStop);
@@ -1172,6 +1182,7 @@ class ToolCallHandler {
   @visibleForTesting
   static bool looksLikeDeferredActionWithoutToolCall(String content) =>
       _looksLikeDeferredActionWithoutToolCall(content);
+
 
   static bool _looksLikeDeferredActionWithoutToolCall(String content) {
     final text = content.trim();

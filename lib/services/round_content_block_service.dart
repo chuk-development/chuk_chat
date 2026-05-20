@@ -47,7 +47,7 @@ class RoundContentBlockService {
         flushPendingTools();
         final text = seg.text!.trim();
         if (text.isEmpty) continue;
-        if (_isDuplicateOfEarlierTextBlock(text, existingBlocks)) {
+        if (isDuplicateOfEarlierTextBlock(text, existingBlocks)) {
           continue;
         }
         blocks.add(ContentBlock.text(text));
@@ -160,7 +160,7 @@ class RoundContentBlockService {
     // already appears verbatim in an earlier finalized text block.
     if (blocks.isNotEmpty &&
         blocks.last.type == ContentBlockType.text &&
-        _isDuplicateOfEarlierTextBlock(
+        isDuplicateOfEarlierTextBlock(
           (blocks.last.text ?? '').trim(),
           existingBlocks,
         )) {
@@ -210,16 +210,23 @@ class RoundContentBlockService {
     return a.id == b.id && a.name == b.name;
   }
 
-  static bool _isDuplicateOfEarlierTextBlock(
+  /// Returns true when [newText] is effectively a duplicate of an earlier
+  /// finalized text block (exact, contained, or near-contained after
+  /// whitespace normalization).
+  ///
+  /// Public so callers that build text blocks outside this service (e.g. the
+  /// final-pass append in `StreamingMessageHandler`) can use the same fuzzy
+  /// check rather than re-implementing exact-match comparison.
+  static bool isDuplicateOfEarlierTextBlock(
     String newText,
     List<ContentBlock> existing,
   ) {
     if (newText.isEmpty) return false;
-    final normalizedNew = _normalizeForCompare(newText);
+    final normalizedNew = normalizeTextForCompare(newText);
     if (normalizedNew.isEmpty) return false;
     for (final block in existing) {
       if (block.type != ContentBlockType.text) continue;
-      final normalizedExisting = _normalizeForCompare(block.text ?? '');
+      final normalizedExisting = normalizeTextForCompare(block.text ?? '');
       if (normalizedExisting.isEmpty) continue;
       if (normalizedExisting == normalizedNew) return true;
       if (normalizedExisting.contains(normalizedNew)) return true;
@@ -227,7 +234,8 @@ class RoundContentBlockService {
     return false;
   }
 
-  static String _normalizeForCompare(String s) {
+  /// Whitespace-normalized form used for duplicate detection.
+  static String normalizeTextForCompare(String s) {
     return s.replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 }

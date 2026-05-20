@@ -153,5 +153,45 @@ void main() {
       expect(result.nextStep, isNotNull);
       expect(result.interimContent, 'Working on it now.');
     });
+
+    test(
+      'does NOT retry when provider emits no finish/stop reason '
+      '(Fireworks/Kimi: prevents duplicate reformulated answer)',
+      () async {
+        final handler = ToolCallHandler();
+        final session = handler.createSession(
+          initialUserMessage: 'test',
+          history: const [],
+          accessToken: 'test-token',
+          toolCallingEnabled: true,
+          discoveryMode: false,
+        );
+        session.toolCalls.add(
+          ToolCall(
+            id: 'tc-1',
+            name: 'web_search',
+            arguments: const <String, dynamic>{},
+            status: ToolCallStatus.completed,
+            result: 'ok',
+          ),
+        );
+
+        // No stop_reason or finish_reason at all — absence MUST NOT be
+        // treated as "non-final" or the model gets asked to redo its
+        // already-complete answer, producing a duplicate reformulation.
+        final result = await handler.processAssistantResponse(
+          session: session,
+          content: 'Here is the complete final answer to the user question.',
+          reasoning: '',
+          turnSignals: ToolTurnSignals.fromMeta(const {}),
+        );
+
+        expect(
+          result.shouldContinue,
+          isFalse,
+          reason: 'Missing finish_reason must default to final, not retry.',
+        );
+      },
+    );
   });
 }
