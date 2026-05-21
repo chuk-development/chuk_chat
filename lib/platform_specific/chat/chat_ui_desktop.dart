@@ -1386,11 +1386,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   }
 
   Widget _buildAudioVisualizer({required Color accent, required Color iconFg}) {
-    const int barCount = 40;
     final levels = _audioHandler.audioLevels;
-    final int startIndex = levels.length > barCount
-        ? levels.length - barCount
-        : 0;
+    // Match bar count to buffer so newest sample lands at the right edge and
+    // the bars fill the row edge-to-edge instead of clustering in the middle.
+    final int barCount = levels.length;
 
     return SizedBox(
       key: const ValueKey<String>('audio-visualizer'),
@@ -1398,40 +1397,40 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: List.generate(barCount, (index) {
-          final int levelIndex = startIndex + index;
-          final double rawLevel = levelIndex < levels.length
-              ? levels[levelIndex]
-              : 0.0;
+          // Newest sample at right edge: index N-1 maps to last level.
+          final int levelIndex = index;
+          final double rawLevel = levels[levelIndex];
 
           // sqrt scaling — boosts quiet speech for visible response.
           final double boosted = rawLevel < 0.01 ? 0.0 : math.sqrt(rawLevel);
 
-          // Bar height: 2px idle → 28px loud.
-          final double barHeight = (boosted * 26 + 2).clamp(2.0, 28.0);
-
-          final double opacity = (0.5 + boosted * 0.5).clamp(0.5, 1.0);
+          // Bar height: 3px idle → 28px loud.
+          final double barHeight = (boosted * 25 + 3).clamp(3.0, 28.0);
+          final double opacity = (0.55 + boosted * 0.45).clamp(0.55, 1.0);
 
           return Expanded(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 0.6),
-              child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 1.2),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 80),
+                curve: Curves.easeOutCubic,
                 height: barHeight,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      accent.withValues(alpha: opacity),
-                      accent.withValues(alpha: opacity * 0.6),
+                      Colors.red.withValues(alpha: opacity),
+                      Colors.redAccent.shade200.withValues(alpha: opacity * 0.7),
                     ],
                   ),
-                  borderRadius: BorderRadius.circular(2),
-                  boxShadow: boosted > 0.4
+                  borderRadius: BorderRadius.circular(3),
+                  boxShadow: boosted > 0.3
                       ? [
                           BoxShadow(
-                            color: accent.withValues(alpha: 0.3),
-                            blurRadius: 3,
-                            spreadRadius: 0.5,
+                            color: Colors.red.withValues(alpha: 0.45),
+                            blurRadius: 5,
+                            spreadRadius: 0.6,
                           ),
                         ]
                       : null,
@@ -1440,6 +1439,26 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             ),
           );
         }),
+      ),
+    );
+  }
+
+  Widget _buildRecordingPill({required Color iconFg}) {
+    return SizedBox(
+      key: const ValueKey<String>('recording-pill'),
+      height: 36,
+      child: Row(
+        children: [
+          const SizedBox(width: 4),
+          const _DesktopRecordingDot(),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _buildAudioVisualizer(
+              accent: Colors.red,
+              iconFg: iconFg,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -2255,10 +2274,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                       switchInCurve: Curves.easeOutCubic,
                       switchOutCurve: Curves.easeInCubic,
                       child: _audioHandler.isMicActive
-                          ? _buildAudioVisualizer(
-                              accent: accent,
-                              iconFg: iconFg,
-                            )
+                          ? _buildRecordingPill(iconFg: iconFg)
                           : Row(
                               key: const ValueKey<String>(
                                 'default-mic-controls',
@@ -2565,6 +2581,61 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           },
         ),
       ),
+    );
+  }
+}
+
+class _DesktopRecordingDot extends StatefulWidget {
+  const _DesktopRecordingDot();
+
+  @override
+  State<_DesktopRecordingDot> createState() => _DesktopRecordingDotState();
+}
+
+class _DesktopRecordingDotState extends State<_DesktopRecordingDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..repeat(reverse: true);
+    _animation = Tween<double>(begin: 0.4, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, _) {
+        return Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            color: Colors.red.withValues(alpha: _animation.value),
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.red.withValues(alpha: _animation.value * 0.6),
+                blurRadius: 6,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
