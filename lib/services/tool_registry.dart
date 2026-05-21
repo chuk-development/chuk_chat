@@ -25,6 +25,7 @@ const Set<String> _serverBackedToolNames = {
   'sandbox_read',
   'sandbox_write',
   'sandbox_reset',
+  'send_file_to_user',
 };
 
 /// Maps tool names to their ToolCategory for enable/disable filtering.
@@ -77,6 +78,7 @@ const Map<String, ToolCategory> toolCategoryMap = {
   'sandbox_read': ToolCategory.sandbox,
   'sandbox_write': ToolCategory.sandbox,
   'sandbox_reset': ToolCategory.sandbox,
+  'send_file_to_user': ToolCategory.sandbox,
 };
 
 /// Discovery catalog: category labels -> human-readable descriptions.
@@ -1459,6 +1461,35 @@ final List<ClientTool> builtinTools = [
     parameters: const {},
     type: ToolType.builtin,
     tags: ['sandbox', 'reset', 'destroy', 'clean'],
+  ),
+  ClientTool(
+    name: 'send_file_to_user',
+    description:
+        'Send a file from the sandbox directly to the user as a downloadable '
+        'attachment in the chat. Use this AFTER the user has explicitly asked '
+        'for a file you produced inside the sandbox (chart, PDF, CSV, image, '
+        'ZIP, etc.). The file is uploaded encrypted to the user\'s private '
+        'storage — only they can decrypt it; no public link is created. '
+        'When NOT to use: do not call this for every file you create. Only '
+        'call when the user has asked to receive the file. For very large or '
+        'non-renderable files (e.g. multi-hundred-MB videos generated via '
+        'ffmpeg), prefer using `code_run` with `curl` to upload to a '
+        'temporary file host (0x0.st, transfer.sh, file.io) and give the '
+        'user the temp link, since the chat UI cannot render those. '
+        'Path must be under /home/sandbox.',
+    parameters: {
+      'path':
+          'string (required: absolute path of the file inside the sandbox, '
+          'e.g. /home/sandbox/report.pdf)',
+      'display_name':
+          'string (optional: override filename shown to the user; '
+          'defaults to the last segment of `path`)',
+    },
+    type: ToolType.builtin,
+    tags: [
+      'sandbox', 'send', 'attach', 'attachment', 'download', 'share',
+      'file', 'deliver', 'artifact',
+    ],
   ),
 ];
 

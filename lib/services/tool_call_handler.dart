@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/services/per_model_system_prompt_service.dart';
@@ -51,6 +52,13 @@ class ToolLoopSession {
   final List<Map<String, dynamic>> discoveredTools = [];
   final Set<String> discoveredToolNames = {};
   final List<ToolCall> toolCalls = [];
+
+  /// Content blocks produced as side-effects of tool calls in this loop
+  /// (e.g. `send_file_to_user` emits a `sandboxArtifact` block). These are
+  /// surfaced to the streaming handler via `ToolLoopResult.producedBlocks`,
+  /// which slices the new items off this list each round.
+  final List<ContentBlock> producedBlocks = [];
+
   int emptyFinalRecoveryAttempts = 0;
   int malformedToolProtocolRecoveryAttempts = 0;
   int truncatedCompletionRecoveryAttempts = 0;
@@ -99,6 +107,7 @@ class ToolLoopResult {
     this.interimBeforeToolCalls = false,
     this.toolCalls = const [],
     this.interleavedSegments = const [],
+    this.producedBlocks = const [],
   });
 
   factory ToolLoopResult.continueWith({
@@ -107,6 +116,7 @@ class ToolLoopResult {
     bool interimBeforeToolCalls = false,
     List<ToolCall> toolCalls = const [],
     List<RoundSegment> interleavedSegments = const [],
+    List<ContentBlock> producedBlocks = const [],
   }) {
     return ToolLoopResult._(
       shouldContinue: true,
@@ -115,6 +125,7 @@ class ToolLoopResult {
       interimBeforeToolCalls: interimBeforeToolCalls,
       toolCalls: toolCalls,
       interleavedSegments: interleavedSegments,
+      producedBlocks: producedBlocks,
     );
   }
 
@@ -122,12 +133,14 @@ class ToolLoopResult {
     required String content,
     required String reasoning,
     List<ToolCall> toolCalls = const [],
+    List<ContentBlock> producedBlocks = const [],
   }) {
     return ToolLoopResult._(
       shouldContinue: false,
       finalContent: content,
       finalReasoning: reasoning,
       toolCalls: toolCalls,
+      producedBlocks: producedBlocks,
     );
   }
 
@@ -144,6 +157,12 @@ class ToolLoopResult {
   /// renderers should prefer this over [interimContent] + [toolCalls] to
   /// preserve the model's original ordering.
   final List<RoundSegment> interleavedSegments;
+
+  /// New content blocks produced as side-effects of tool calls during this
+  /// round (e.g. `send_file_to_user` -> `sandboxArtifact`). Streaming
+  /// handlers should append these to the assistant message's content blocks
+  /// so the user sees the artifact inline.
+  final List<ContentBlock> producedBlocks;
 }
 
 /// Provider/tool-loop hints extracted from stream metadata.
@@ -721,6 +740,10 @@ class ToolCallHandler {
     onToolCallsUpdated?.call(_cloneToolCalls(session.toolCalls));
 
     final modelResults = <ToolCallResult>[];
+    // Snapshot the session.producedBlocks length BEFORE this round's tool
+    // calls so we can slice off only the blocks added in this round and
+    // return them via ToolLoopResult.producedBlocks.
+    final producedBlocksBefore = session.producedBlocks.length;
     for (final call in enforceResult.validCalls) {
       final uiCall = uiCallsById[call.callId]!;
 
@@ -734,6 +757,9 @@ class ToolCallHandler {
         );
         rawResult = executionResult.output;
         isError = executionResult.isError;
+        if (executionResult.producedBlocks.isNotEmpty) {
+          session.producedBlocks.addAll(executionResult.producedBlocks);
+        }
       } catch (error) {
         rawResult = 'Error executing ${call.name}: $error';
         isError = true;
@@ -789,6 +815,13 @@ class ToolCallHandler {
       interimBeforeToolCalls: _hasInterimTextBeforeToolCalls(cleanedContent),
       toolCalls: _cloneToolCalls(session.toolCalls),
       interleavedSegments: interleaved,
+      // Forward any side-effect blocks emitted by tools this round
+      // (e.g. send_file_to_user -> sandboxArtifact).
+      producedBlocks: session.producedBlocks.length > producedBlocksBefore
+          ? List<ContentBlock>.unmodifiable(
+              session.producedBlocks.sublist(producedBlocksBefore),
+            )
+          : const <ContentBlock>[],
     );
   }
 

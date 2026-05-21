@@ -495,6 +495,13 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     interimBeforeToolCalls: loopResult.interimBeforeToolCalls,
                   );
                   contentBlocks.addAll(roundResult.blocks);
+
+                  // Append side-effect blocks produced by tools this round
+                  // (e.g. send_file_to_user -> sandboxArtifact).
+                  if (loopResult.producedBlocks.isNotEmpty) {
+                    contentBlocks.addAll(loopResult.producedBlocks);
+                  }
+
                   final interimOutputText = roundResult.interimOutputText;
 
                   // Accumulate text for backward-compat message field.
@@ -644,6 +651,12 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     finalToolCalls,
                     chatIdForStream,
                   );
+                }
+
+                // Append side-effect blocks (e.g. sandboxArtifact) produced
+                // in the final-answer pass.
+                if (loopResult.producedBlocks.isNotEmpty) {
+                  contentBlocks.addAll(loopResult.producedBlocks);
                 }
 
                 // Build final content blocks.
@@ -1586,6 +1599,13 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                               loopResult.interimBeforeToolCalls,
                         );
                     contentBlocks2.addAll(roundResult.blocks);
+
+                    // Append side-effect blocks (e.g. sandboxArtifact)
+                    // produced by tools this round.
+                    if (loopResult.producedBlocks.isNotEmpty) {
+                      contentBlocks2.addAll(loopResult.producedBlocks);
+                    }
+
                     final interimOutputText = roundResult.interimOutputText;
 
                     // Accumulate text for backward-compat message field.
@@ -1739,6 +1759,12 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                       finalToolCalls,
                       chatIdForStream,
                     );
+                  }
+
+                  // Append side-effect blocks (e.g. sandboxArtifact) produced
+                  // in the final-answer pass.
+                  if (loopResult.producedBlocks.isNotEmpty) {
+                    contentBlocks2.addAll(loopResult.producedBlocks);
                   }
 
                   // Build final content blocks.

@@ -19,6 +19,7 @@ import 'package:chuk_chat/widgets/weather_widget.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
 import 'package:chuk_chat/widgets/document_viewer.dart';
+import 'package:chuk_chat/widgets/sandbox_artifact_block.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
@@ -101,18 +102,27 @@ class MessageBubbleAction {
 }
 
 class _RenderSegment {
-  _RenderSegment._({this.text})
+  _RenderSegment._({this.text, this.sandboxArtifact})
       : reasonings = <String>[],
         toolCalls = <ToolCall>[];
 
   _RenderSegment.text(String t) : this._(text: t);
   _RenderSegment.round() : this._();
+  _RenderSegment.sandboxArtifact(SandboxArtifactPayload p)
+      : this._(sandboxArtifact: p);
 
   final String? text;
+
+  /// Set for sandbox-artifact segments — the inline downloadable file the
+  /// AI handed to the user via send_file_to_user. Rendered as its own
+  /// widget (image / pdf / text preview / file chip) between text blocks.
+  final SandboxArtifactPayload? sandboxArtifact;
+
   final List<String> reasonings;
   final List<ToolCall> toolCalls;
 
   bool get isText => text != null;
+  bool get isSandboxArtifact => sandboxArtifact != null;
   bool get hasContent => reasonings.isNotEmpty || toolCalls.isNotEmpty;
 }
 
@@ -1004,6 +1014,13 @@ class _MessageBubbleState extends State<MessageBubble> {
           closeCurrentRound();
           final t = block.text?.trim() ?? '';
           if (t.isNotEmpty) segments.add(_RenderSegment.text(block.text!));
+        case ContentBlockType.sandboxArtifact:
+          // Sandbox artifacts are first-class inline blocks. Close the
+          // current reasoning/tool round so the artifact appears between
+          // the round above it and any subsequent text, in source order.
+          closeCurrentRound();
+          final p = block.sandboxArtifact;
+          if (p != null) segments.add(_RenderSegment.sandboxArtifact(p));
       }
     }
 
@@ -1102,6 +1119,13 @@ class _MessageBubbleState extends State<MessageBubble> {
             baseBlockIndex: segmentIndex * 1000,
           ),
         );
+        hasRenderedMainContent = true;
+      } else if (seg.isSandboxArtifact) {
+        if (hasRenderedMainContent) {
+          children.add(const SizedBox(height: 6));
+        }
+        children.add(SandboxArtifactBlock(payload: seg.sandboxArtifact!));
+        children.add(const SizedBox(height: 6));
         hasRenderedMainContent = true;
       } else {
         renderRound(seg);
