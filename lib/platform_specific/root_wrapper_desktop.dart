@@ -149,6 +149,23 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     ArtifactStorageService.panelOpenNotifier.value = false;
   }
 
+  // Jump to the chat that produced the currently shown artifact. We close
+  // any side panel (media/workspaces) so the chat area becomes visible, and
+  // also exit any active workspace scope so the chat lands in its real home.
+  void _openSourceChatForArtifact(String chatId) {
+    if (ChatStorageService.isLoadingChat) return;
+    setState(() {
+      _activePanel = null;
+      _activeProjectId = null;
+      ChatStorageService.selectedChatId = chatId;
+    });
+    if (kFeatureArtifacts) {
+      unawaited(
+        ArtifactStorageService.setActiveChat(chatId, forceRefresh: false),
+      );
+    }
+  }
+
   void _openSettingsPage() {
     if (_isSidebarExpanded) _toggleSidebar();
     Navigator.of(context).push(
@@ -356,6 +373,90 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     };
   }
 
+  // Mini-rail icons. Visible only when sidebar is collapsed. Each row is
+  // kButtonVisualHeight tall and sits flush under the brand area so the
+  // icon centres line up perfectly with the SbRailRow icons inside the
+  // expanded sidebar.
+  List<Widget> _buildMiniRail(Color iconFg, AppLocalizations l) {
+    final List<Widget> items = [];
+    int rowIndex = 0;
+    Widget railIcon({
+      required IconData icon,
+      required String tooltip,
+      required VoidCallback onPressed,
+    }) {
+      final double top = kTopInitialSpacing +
+          kMenuButtonHeight +
+          rowIndex * kButtonVisualHeight;
+      rowIndex++;
+      return Positioned(
+        top: top,
+        left: kFixedLeftPadding,
+        child: SizedBox(
+          width: kMenuButtonHeight,
+          height: kButtonVisualHeight,
+          child: IconButton(
+            icon: Icon(icon, color: iconFg, size: 24),
+            padding: EdgeInsets.zero,
+            visualDensity: VisualDensity.standard,
+            constraints: BoxConstraints.tightFor(
+              width: kMenuButtonHeight,
+              height: kButtonVisualHeight,
+            ),
+            tooltip: tooltip,
+            onPressed: onPressed,
+          ),
+        ),
+      );
+    }
+
+    items.add(railIcon(
+      icon: Icons.edit_square,
+      tooltip: l.newChat,
+      onPressed: _handleNewChatFromSidebar,
+    ));
+    if (kFeatureWorkspaces) {
+      items.add(railIcon(
+        icon: Icons.folder_rounded,
+        tooltip: l.workspaces,
+        onPressed: _openWorkspacesPage,
+      ));
+    }
+    if (kFeatureMediaManager) {
+      items.add(railIcon(
+        icon: Icons.image_rounded,
+        tooltip: l.media,
+        onPressed: _openMediaPage,
+      ));
+    }
+    return items;
+  }
+
+  void _handleNewChatFromSidebar() {
+    if (ChatStorageService.isLoadingChat) {
+      if (kDebugMode) {
+        debugPrint(
+          '🚫 [ROOT-DESKTOP] BLOCKED newChat - Chat is still loading',
+        );
+      }
+      return;
+    }
+    // Close any right-side panel (workspaces/media) AND drop the workspace
+    // scope before creating the new chat — otherwise the new chat is
+    // hidden behind a full-page panel and the user has to back out manually.
+    setState(() {
+      _activePanel = null;
+      _activeProjectId = null;
+    });
+    _chatUIKey.currentState?.newChat();
+    if (kFeatureArtifacts) {
+      unawaited(
+        ArtifactStorageService.setActiveChat(null, forceRefresh: true),
+      );
+    }
+    if (_isSidebarExpanded) _toggleSidebar();
+  }
+
   Future<void> _handleChatDeleted(String deletedChatId) async {
     // deleteChat() clears selectedChatId when the active chat is deleted.
     // If selectedChatId is null here, reset the chat UI to a fresh state.
@@ -381,8 +482,8 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     final bool isCompactMode = screenWidth < kCompactModeBreakpoint;
 
     final double sidebarVisibleWidth = isCompactMode
-        ? screenWidth * 0.8
-        : 280.0;
+        ? screenWidth * 0.85
+        : 320.0;
     final double effectiveSidebarWidth = math.min(
       screenWidth,
       sidebarVisibleWidth,
@@ -519,6 +620,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                         artifact: _activeArtifact!,
                         showHeader: true,
                         onClose: _closeArtifactPanel,
+                        onOpenSourceChat: _openSourceChatForArtifact,
                       )
                     : Column(
                         children: [
@@ -624,6 +726,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                     onSettingsTapped: _openSettingsPage,
                     onWorkspacesTapped: _openWorkspacesPage,
                     onMediaTapped: _openMediaPage,
+                    onNewChatTapped: _handleNewChatFromSidebar,
                     onChatDeleted: _handleChatDeleted,
                     selectedChatId: ChatStorageService.selectedChatId,
                     isCompactMode: isCompactMode,
@@ -633,229 +736,46 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
               ),
             ),
 
-          // Layer 3: Hamburger-Menü
+          // Hamburger menu — stays anchored at the top-left, never moves.
+          // We force standard density + explicit 48x48 constraints because
+          // Flutter applies compact density (-2, -2 → 40x40) to IconButton on
+          // Linux/macOS/Windows by default, which would shift this icon's
+          // visual centre 4 px left of the rail icons below it. Locking both
+          // to 48x48 keeps every icon on the same vertical line.
           Positioned(
             top: kTopInitialSpacing,
             left: kFixedLeftPadding,
             child: KeyedSubtree(
               key: TourKeyRegistry.instance.keyFor(TourSlots.menuButton),
               child: IconButton(
-                icon: Icon(Icons.menu, color: iconFg, size: 24),
+                icon: Icon(Icons.menu_rounded, color: iconFg, size: 24),
+                padding: EdgeInsets.zero,
+                visualDensity: VisualDensity.standard,
+                constraints: const BoxConstraints.tightFor(
+                  width: kMenuButtonHeight,
+                  height: kMenuButtonHeight,
+                ),
                 onPressed: _toggleSidebar,
               ),
             ),
           ),
 
-          // Layer 4: Title
-          Positioned(
-            top:
-                kTopInitialSpacing +
-                (kMenuButtonHeight - kButtonVisualHeight) / 2,
-            left: kFixedLeftPadding + kMenuButtonHeight + 16,
-            child: InkWell(
-              onTap: () {},
-              borderRadius: BorderRadius.circular(8),
-              child: Container(
-                height: kButtonVisualHeight,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (_isSidebarExpanded)
-                      SizedBox(
-                        width: 140,
-                        child: ClipRect(
-                          child: Padding(
-                            padding: const EdgeInsets.only(left: 10.0),
-                            child: Text(
-                              'Chuk Chat',
-                              style: TextStyle(color: iconFg, fontSize: 20, fontWeight: FontWeight.w700),
-                              softWrap: false,
-                              overflow: TextOverflow.clip,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ),
+          // Mini rail — visible only when sidebar is collapsed. Each icon's
+          // visual centre lines up *exactly* with the matching SbRailRow in
+          // the expanded sidebar: brand row is kMenuButtonHeight (48) tall,
+          // then nav rows are kButtonVisualHeight (40) tall. Search is NOT
+          // in the mini-rail — only New chat, Workspaces, Media.
+          if (!_isSidebarExpanded) ..._buildMiniRail(iconFg, l),
 
-          // Layer 5: New Chat (External for Desktop)
-          if (!isCompactMode || _isSidebarExpanded)
-            Positioned(
-              top:
-                  kTopInitialSpacing +
-                  kMenuButtonHeight +
-                  kSpacingBetweenTopButtons,
-              left: kFixedLeftPadding,
-              child: InkWell(
-                onTap: () {
-                  // Block new chat while another chat is loading
-                  if (ChatStorageService.isLoadingChat) {
-                    if (kDebugMode) {
-                      debugPrint(
-                        '🚫 [ROOT-DESKTOP] BLOCKED newChat - Chat is still loading',
-                      );
-                    }
-                    return;
-                  }
-                  _chatUIKey.currentState?.newChat();
-                  if (kFeatureArtifacts) {
-                    unawaited(
-                      ArtifactStorageService.setActiveChat(
-                        null,
-                        forceRefresh: true,
-                      ),
-                    );
-                  }
-                  if (_isSidebarExpanded) _toggleSidebar();
-                },
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  height: kButtonVisualHeight,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.edit_square, color: iconFg),
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        curve: Curves.easeOut,
-                        width: _isSidebarExpanded ? 100 : 0,
-                        constraints: BoxConstraints(
-                          minWidth: _isSidebarExpanded ? 100 : 0,
-                        ),
-                        child: ClipRect(
-                          child: Padding(
-                            padding: const EdgeInsets.only(left: 12.0),
-                            child: Text(
-                              l.newChat,
-                              style: TextStyle(color: iconFg, fontSize: 16),
-                              softWrap: false,
-                              overflow: TextOverflow.clip,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-          // Layer 6: Workspaces (External for Desktop) - Feature Flag
-          if (kFeatureWorkspaces && (!isCompactMode || _isSidebarExpanded))
-            Positioned(
-              top:
-                  kTopInitialSpacing +
-                  kMenuButtonHeight +
-                  kSpacingBetweenTopButtons +
-                  kButtonVisualHeight +
-                  kSpacingBetweenTopButtons,
-              left: kFixedLeftPadding,
-              child: InkWell(
-                onTap: _openWorkspacesPage,
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  height: kButtonVisualHeight,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.folder_open, color: iconFg),
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        curve: Curves.easeOut,
-                        width: _isSidebarExpanded ? 100 : 0,
-                        constraints: BoxConstraints(
-                          minWidth: _isSidebarExpanded ? 100 : 0,
-                        ),
-                        child: ClipRect(
-                          child: Padding(
-                            padding: const EdgeInsets.only(left: 12.0),
-                            child: Text(
-                              l.workspaces,
-                              style: TextStyle(color: iconFg, fontSize: 16),
-                              softWrap: false,
-                              overflow: TextOverflow.clip,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-          // Layer: Copy full chat button (top-right of chat area)
+          // Copy full chat button (top-right of chat area)
           if (showContent && _activeProjectId == null)
             Positioned(
               top: kTopInitialSpacing,
               right: (showPanel ? panelWidth : 0) + 12,
               child: IconButton(
-                icon: Icon(Icons.copy_all, color: iconFg, size: 20),
+                icon: Icon(Icons.copy_all_rounded, color: iconFg, size: 20),
                 onPressed: _copyDebugChat,
                 tooltip: 'Copy full chat',
-              ),
-            ),
-
-          // Layer 8: Media Manager (External for Desktop) - Feature Flag
-          if (kFeatureMediaManager && (!isCompactMode || _isSidebarExpanded))
-            Positioned(
-              top:
-                  kTopInitialSpacing +
-                  kMenuButtonHeight +
-                  kSpacingBetweenTopButtons +
-                  kButtonVisualHeight +
-                  kSpacingBetweenTopButtons +
-                  (kFeatureWorkspaces
-                      ? kButtonVisualHeight + kSpacingBetweenTopButtons
-                      : 0),
-              left: kFixedLeftPadding,
-              child: InkWell(
-                onTap: _openMediaPage,
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  height: kButtonVisualHeight,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.photo_library_outlined, color: iconFg),
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        curve: Curves.easeOut,
-                        width: _isSidebarExpanded ? 100 : 0,
-                        constraints: BoxConstraints(
-                          minWidth: _isSidebarExpanded ? 100 : 0,
-                        ),
-                        child: ClipRect(
-                          child: Padding(
-                            padding: const EdgeInsets.only(left: 12.0),
-                            child: Text(
-                              l.media,
-                              style: TextStyle(color: iconFg, fontSize: 16),
-                              softWrap: false,
-                              overflow: TextOverflow.clip,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               ),
             ),
         ],

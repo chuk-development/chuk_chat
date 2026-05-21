@@ -32,11 +32,16 @@ class ArtifactPanel extends StatefulWidget {
     super.key,
     required this.artifact,
     this.onClose,
+    this.onOpenSourceChat,
     this.showHeader = true,
   });
 
   final ArtifactDocument artifact;
   final VoidCallback? onClose;
+  /// Optional jump to the chat this artifact was generated in. When set,
+  /// the panel shows a header button that lets the user open the source
+  /// conversation in the main chat area.
+  final void Function(String chatId)? onOpenSourceChat;
   final bool showHeader;
 
   @override
@@ -592,6 +597,13 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
                       fontSize: 16,
                     ),
                   ),
+                  if (widget.onOpenSourceChat != null)
+                    IconButton(
+                      icon: const Icon(Icons.forum_outlined, size: 22),
+                      onPressed: () =>
+                          widget.onOpenSourceChat!(widget.artifact.chatId),
+                      tooltip: 'Open source chat',
+                    ),
                   actionMenu,
                   if (widget.onClose != null)
                     IconButton(
@@ -658,6 +670,13 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
                   mode: _viewMode,
                   onChanged: (mode) => setState(() => _viewMode = mode),
                 ),
+              ),
+            if (widget.onOpenSourceChat != null)
+              IconButton(
+                icon: const Icon(Icons.forum_outlined, size: 18),
+                onPressed: () =>
+                    widget.onOpenSourceChat!(widget.artifact.chatId),
+                tooltip: 'Open source chat',
               ),
             IconButton(
               icon: const Icon(Icons.copy_outlined, size: 18),
@@ -757,7 +776,12 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
 }
 
 class ArtifactBottomSheet extends StatelessWidget {
-  const ArtifactBottomSheet({super.key});
+  const ArtifactBottomSheet({super.key, this.onOpenSourceChat});
+
+  /// Mobile equivalent of the desktop side panel's source-chat button:
+  /// dismisses the sheet and switches the underlying chat UI to the
+  /// conversation that produced this artifact.
+  final void Function(String chatId)? onOpenSourceChat;
 
   @override
   Widget build(BuildContext context) {
@@ -815,6 +839,12 @@ class ArtifactBottomSheet extends StatelessWidget {
                       return ArtifactPanel(
                         artifact: artifact,
                         onClose: () => Navigator.of(context).maybePop(),
+                        onOpenSourceChat: onOpenSourceChat == null
+                            ? null
+                            : (chatId) {
+                                Navigator.of(context).maybePop();
+                                onOpenSourceChat!(chatId);
+                              },
                       );
                     },
                   ),
@@ -1527,7 +1557,10 @@ class _TypstPdfRendererState extends State<_TypstPdfRenderer> {
               params: PdfViewerParams(
                 margin: 12,
                 backgroundColor: const Color(0xFF202020),
-                scrollByMouseWheel: _ctrlHeld ? 0.0 : 0.5,
+                // Match the standard Flutter ListView wheel scroll feel
+                // used in the chat UI — anything less than 1.0 makes the PDF
+                // viewer feel sluggish relative to the rest of the app.
+                scrollByMouseWheel: _ctrlHeld ? 0.0 : 1.0,
                 enableKeyboardNavigation: true,
                 textSelectionParams: const PdfTextSelectionParams(),
               ),

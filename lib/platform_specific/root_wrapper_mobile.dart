@@ -373,6 +373,15 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     }
   }
 
+  void _newChatFromSidebar() {
+    // Mirrors the close-then-act pattern of _openSettingsPage etc. — the
+    // sidebar's "new chat" button needs to collapse the drawer, otherwise
+    // the overlay stays mounted on top of the fresh chat until the user
+    // dismisses it manually.
+    if (_isSidebarExpanded) _toggleSidebar();
+    _newChatFromAppBar();
+  }
+
   void _openArtifactSheet() {
     final artifact = ArtifactStorageService.activeArtifactNotifier.value;
     if (artifact == null) return;
@@ -385,7 +394,9 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
       useSafeArea: true,
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black.withValues(alpha: 0.4),
-      builder: (_) => const ArtifactBottomSheet(),
+      builder: (_) => ArtifactBottomSheet(
+        onOpenSourceChat: (chatId) => _handleChatSelected(chatId),
+      ),
     ).whenComplete(() {
       _artifactSheetOpen = false;
       // Clear the "open" flag so the next tap can re-open via the listener.
@@ -619,6 +630,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                     onSettingsTapped: _openSettingsPage,
                     onWorkspacesTapped: _openWorkspacesPage,
                     onMediaTapped: _openMediaPage,
+                    onNewChatTapped: _newChatFromSidebar,
                     onChatDeleted: _handleChatDeleted,
                     selectedChatId: ChatStorageService.selectedChatId,
                     isCompactMode: true,

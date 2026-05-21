@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 
+import 'app_palette.dart';
 import 'demo_data.dart';
 import 'variants/variant_1_minimal.dart';
 import 'variants/variant_2_glass.dart';
 import 'variants/variant_3_dense.dart';
 import 'variants/variant_4_playful.dart';
 import 'variants/variant_5_bento.dart';
+import 'variants/variant_6_final.dart';
+
+const double kSidebarWidth = 320;
 
 void main() {
   runApp(const SidebarDemoApp());
@@ -13,7 +17,6 @@ void main() {
 
 class SidebarDemoApp extends StatefulWidget {
   const SidebarDemoApp({super.key});
-
   @override
   State<SidebarDemoApp> createState() => _SidebarDemoAppState();
 }
@@ -23,19 +26,20 @@ class _SidebarDemoAppState extends State<SidebarDemoApp> {
 
   @override
   Widget build(BuildContext context) {
+    const accent = Color(0xFFA8C7FA);
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Sidebar Demos',
+      title: 'Sidebar Mix Demos',
       themeMode: _themeMode,
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.light,
-        colorSchemeSeed: const Color(0xFF7C3AED),
+        colorSchemeSeed: accent,
       ),
       darkTheme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
-        colorSchemeSeed: const Color(0xFF7C3AED),
+        colorSchemeSeed: accent,
       ),
       home: DemoHome(
         themeMode: _themeMode,
@@ -59,31 +63,32 @@ class DemoHome extends StatefulWidget {
     required this.themeMode,
     required this.onToggleTheme,
   });
-
   @override
   State<DemoHome> createState() => _DemoHomeState();
 }
 
 class _DemoHomeState extends State<DemoHome> {
-  int _variant = 0;
+  int _variant = 5;
   FrameMode _mode = FrameMode.desktop;
   String? _selected = '1';
   String _query = '';
 
   static const _variantNames = [
-    '1. Minimal',
-    '2. Glass',
-    '3. Dense Pro',
-    '4. Playful',
-    '5. Bento',
+    'A · Classic+',
+    'B · Bento header',
+    'C · Single bento',
+    'D · Full bento',
+    'E · Pinned bento',
+    'F · Final mix',
   ];
 
   static const _variantDescriptions = [
-    'Hairline dividers, monochrome, generous whitespace. Quiet UI.',
-    'Translucent panel with blur, gradient mesh background, glow accents.',
-    'IDE-style compact rows, monospace timestamps, tabs, status bar.',
-    'Rounded bubbles, soft shadows, project chips, friendly greeting.',
-    'Bento grid cards: identity, quick actions, pinned, recents in separate tiles.',
+    'Classic ListTile look refined. Hairline section headers. Closest to current sidebar — just cleaner.',
+    'Top: bento cards for identity + New chat + Media + Search. Bottom: classic list with section headers.',
+    'Everything wrapped in one rounded surface card. Minimal hairline rows inside. Clean unified container.',
+    'Full bento: every section (identity, actions, search, pinned, recents) is its own rounded card.',
+    'Flat identity + big accent New chat button. Pinned chats in a small accent-tinted bento card. Flat minimal list of recents.',
+    'FINAL: original top-left stack (New chat / Workspaces / Media stacked vertically) + accent Pinned bento + flat classic recents. Mobile keeps New chat top-right.',
   ];
 
   List<DemoChat> get _chats {
@@ -136,6 +141,9 @@ class _DemoHomeState extends State<DemoHome> {
       case 4:
         return VariantBento(
             chats: _chats, selectedId: _selected, cb: cb, mobile: isMobile);
+      case 5:
+        return VariantFinal(
+            chats: _chats, selectedId: _selected, cb: cb, mobile: isMobile);
       default:
         return const SizedBox.shrink();
     }
@@ -143,75 +151,81 @@ class _DemoHomeState extends State<DemoHome> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final pageBg = isDark ? const Color(0xFF050507) : const Color(0xFFEDEEF0);
-    final stage = isDark ? const Color(0xFF0F0F12) : const Color(0xFFE2E4E8);
-
+    final p = AppPalette.of(context);
     return Scaffold(
-      backgroundColor: pageBg,
+      backgroundColor: p.bg,
       body: SafeArea(
         child: Column(
           children: [
-            _toolbar(isDark),
+            _toolbar(p),
             Expanded(
               child: Container(
-                color: pageBg,
-                padding: const EdgeInsets.all(24),
-                child: Center(
-                  child: _stage(stage, isDark),
-                ),
+                color: p.bg,
+                padding: const EdgeInsets.all(20),
+                child: Center(child: _stage(p)),
               ),
             ),
-            _description(isDark),
+            _description(p),
           ],
         ),
       ),
     );
   }
 
-  Widget _toolbar(bool isDark) {
+  Widget _toolbar(AppPalette p) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF111114) : Colors.white,
-        border: Border(
-          bottom: BorderSide(
-            color: Colors.black.withValues(alpha: 0.08),
-          ),
-        ),
+        color: p.surfaceLow,
+        border: Border(bottom: BorderSide(color: p.hairline)),
       ),
       child: Row(
         children: [
-          Text('Sidebar redesign demos',
+          Text('Sidebar mixes',
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
-                color: isDark ? Colors.white : Colors.black,
+                color: p.fg,
               )),
-          const SizedBox(width: 24),
+          const SizedBox(width: 16),
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: p.accent.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text('${kSidebarWidth.toInt()}px',
+                style: TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: p.accentText,
+                )),
+          ),
+          const SizedBox(width: 16),
           Expanded(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
                   for (int i = 0; i < _variantNames.length; i++) ...[
-                    _tabChip(_variantNames[i], _variant == i, () {
-                      setState(() => _variant = i);
-                    }, isDark),
+                    _tabChip(_variantNames[i], _variant == i,
+                        () => setState(() => _variant = i), p),
                     const SizedBox(width: 6),
                   ],
                 ],
               ),
             ),
           ),
-          _segmented(isDark),
+          _segmented(p),
           const SizedBox(width: 10),
           IconButton(
             tooltip: 'Toggle theme',
             onPressed: widget.onToggleTheme,
             icon: Icon(
-              isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-              color: isDark ? Colors.white : Colors.black,
+              p.isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+              color: p.fg,
             ),
           ),
         ],
@@ -219,12 +233,10 @@ class _DemoHomeState extends State<DemoHome> {
     );
   }
 
-  Widget _tabChip(String label, bool selected, VoidCallback onTap, bool isDark) {
-    final fg = isDark ? Colors.white : Colors.black;
+  Widget _tabChip(
+      String label, bool selected, VoidCallback onTap, AppPalette p) {
     return Material(
-      color: selected
-          ? (isDark ? Colors.white : Colors.black)
-          : (isDark ? Colors.white12 : Colors.black12),
+      color: selected ? p.accent : p.surfaceHigh,
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
@@ -238,22 +250,16 @@ class _DemoHomeState extends State<DemoHome> {
                 fontWeight:
                     selected ? FontWeight.w700 : FontWeight.w500,
                 color: selected
-                    ? (isDark ? Colors.black : Colors.white)
-                    : fg.withValues(alpha: 0.85),
+                    ? (p.isDark ? Colors.black : Colors.white)
+                    : p.fg.withValues(alpha: 0.85),
               )),
         ),
       ),
     );
   }
 
-  Widget _segmented(bool isDark) {
-    Color seg(bool active) => active
-        ? (isDark ? Colors.white : Colors.black)
-        : Colors.transparent;
-    Color txt(bool active) => active
-        ? (isDark ? Colors.black : Colors.white)
-        : (isDark ? Colors.white : Colors.black);
-    Widget seg2(String label, IconData icon, FrameMode m) {
+  Widget _segmented(AppPalette p) {
+    Widget seg(String label, IconData icon, FrameMode m) {
       final active = _mode == m;
       return InkWell(
         onTap: () => setState(() => _mode = m),
@@ -262,18 +268,24 @@ class _DemoHomeState extends State<DemoHome> {
           padding:
               const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
-            color: seg(active),
+            color: active ? p.accent : Colors.transparent,
             borderRadius: BorderRadius.circular(6),
           ),
           child: Row(
             children: [
-              Icon(icon, size: 14, color: txt(active)),
+              Icon(icon,
+                  size: 14,
+                  color: active
+                      ? (p.isDark ? Colors.black : Colors.white)
+                      : p.fg),
               const SizedBox(width: 6),
               Text(label,
                   style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: txt(active))),
+                      color: active
+                          ? (p.isDark ? Colors.black : Colors.white)
+                          : p.fg)),
             ],
           ),
         ),
@@ -283,38 +295,35 @@ class _DemoHomeState extends State<DemoHome> {
     return Container(
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: isDark ? Colors.white12 : Colors.black12,
+        color: p.surfaceHigh,
         borderRadius: BorderRadius.circular(9),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          seg2('Desktop', Icons.desktop_windows, FrameMode.desktop),
+          seg('Desktop', Icons.desktop_windows, FrameMode.desktop),
           const SizedBox(width: 2),
-          seg2('Mobile', Icons.smartphone, FrameMode.mobile),
+          seg('Mobile', Icons.smartphone, FrameMode.mobile),
         ],
       ),
     );
   }
 
-  Widget _stage(Color stage, bool isDark) {
-    if (_mode == FrameMode.desktop) {
-      return _desktopFrame(stage, isDark);
-    }
-    return _mobileFrame(stage, isDark);
+  Widget _stage(AppPalette p) {
+    return _mode == FrameMode.desktop ? _desktopFrame(p) : _mobileFrame(p);
   }
 
-  Widget _desktopFrame(Color stage, bool isDark) {
+  Widget _desktopFrame(AppPalette p) {
     return Container(
-      constraints: const BoxConstraints(maxWidth: 1100, maxHeight: 720),
+      constraints: const BoxConstraints(maxWidth: 1180, maxHeight: 760),
       decoration: BoxDecoration(
-        color: stage,
+        color: p.surfaceLow,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 30,
-            offset: const Offset(0, 16),
+            color: Colors.black.withValues(alpha: 0.35),
+            blurRadius: 36,
+            offset: const Offset(0, 18),
           ),
         ],
       ),
@@ -322,16 +331,13 @@ class _DemoHomeState extends State<DemoHome> {
         borderRadius: BorderRadius.circular(14),
         child: Column(
           children: [
-            _windowChrome(isDark),
+            _windowChrome(p),
             Expanded(
               child: Row(
                 children: [
-                  SizedBox(width: 300, child: _sidebar()),
-                  Container(
-                    width: 1,
-                    color: Colors.black.withValues(alpha: 0.15),
-                  ),
-                  Expanded(child: _fakeChatArea(isDark)),
+                  SizedBox(width: kSidebarWidth, child: _sidebar()),
+                  Container(width: 1, color: p.hairline),
+                  Expanded(child: _mockChatArea(p)),
                 ],
               ),
             ),
@@ -341,7 +347,7 @@ class _DemoHomeState extends State<DemoHome> {
     );
   }
 
-  Widget _mobileFrame(Color stage, bool isDark) {
+  Widget _mobileFrame(AppPalette p) {
     return Container(
       width: 380,
       height: 720,
@@ -360,18 +366,18 @@ class _DemoHomeState extends State<DemoHome> {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(33),
         child: Container(
-          color: stage,
+          color: p.bg,
           child: Column(
             children: [
               Container(
-                height: 28,
-                alignment: Alignment.center,
+                height: 24,
                 color: Colors.black,
+                alignment: Alignment.center,
                 child: Container(
-                  width: 110, height: 22,
+                  width: 110, height: 18,
                   decoration: BoxDecoration(
                     color: Colors.black,
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(18),
                   ),
                 ),
               ),
@@ -383,10 +389,10 @@ class _DemoHomeState extends State<DemoHome> {
     );
   }
 
-  Widget _windowChrome(bool isDark) {
+  Widget _windowChrome(AppPalette p) {
     return Container(
       height: 36,
-      color: isDark ? const Color(0xFF1A1A1F) : const Color(0xFFEDEEF0),
+      color: p.surface,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
         children: [
@@ -396,11 +402,8 @@ class _DemoHomeState extends State<DemoHome> {
           const SizedBox(width: 6),
           _dot(const Color(0xFF22C55E)),
           const Spacer(),
-          Text('chuk — Variant ${_variant + 1}',
-              style: TextStyle(
-                fontSize: 11.5,
-                color: isDark ? Colors.white70 : Colors.black54,
-              )),
+          Text('chuk — ${_variantNames[_variant]}',
+              style: TextStyle(fontSize: 11.5, color: p.muted)),
           const Spacer(),
         ],
       ),
@@ -412,22 +415,18 @@ class _DemoHomeState extends State<DemoHome> {
         decoration: BoxDecoration(color: c, shape: BoxShape.circle),
       );
 
-  Widget _fakeChatArea(bool isDark) {
-    final bg = isDark ? const Color(0xFF111114) : Colors.white;
-    final fg = isDark ? Colors.white : Colors.black;
-    final muted = fg.withValues(alpha: 0.5);
-    final selected = DemoData.chats()
-        .firstWhere((c) => c.id == _selected, orElse: () => DemoData.chats().first);
+  Widget _mockChatArea(AppPalette p) {
+    final selected = DemoData.chats().firstWhere(
+        (c) => c.id == _selected,
+        orElse: () => DemoData.chats().first);
     return Container(
-      color: bg,
+      color: p.bg,
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
             decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: fg.withValues(alpha: 0.08)),
-              ),
+              border: Border(bottom: BorderSide(color: p.hairline)),
             ),
             child: Row(
               children: [
@@ -435,47 +434,130 @@ class _DemoHomeState extends State<DemoHome> {
                     style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
-                        color: fg)),
+                        color: p.fg)),
+                const SizedBox(width: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: p.accent.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text('Claude Sonnet 4.6',
+                      style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                          color: p.accentText)),
+                ),
                 const Spacer(),
-                Icon(Icons.more_horiz, color: muted, size: 18),
+                Icon(Icons.tune, color: p.muted, size: 18),
+                const SizedBox(width: 14),
+                Icon(Icons.more_horiz, color: p.muted, size: 20),
               ],
             ),
           ),
           Expanded(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.chat_bubble_outline,
-                        size: 48, color: muted),
-                    const SizedBox(height: 12),
-                    Text('Chat content (mock)',
-                        style: TextStyle(
-                            fontSize: 13, color: muted)),
-                    const SizedBox(height: 4),
-                    Text('Selected: ${selected.title}',
-                        style: TextStyle(
-                            fontSize: 11, color: muted)),
-                  ],
-                ),
-              ),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+              children: [
+                _msgUser(
+                    'Can you redesign the sidebar so it feels more like the rest of the app?',
+                    p),
+                const SizedBox(height: 14),
+                _msgAssistant(
+                    'Here are 5 mixes — blends of bento layout, minimal styling, and the current ListTile look. They all use the app palette (${p.accent.toARGB32().toRadixString(16).substring(2).toUpperCase()}) and a 320px width which matches Gemini\'s current layout. Pick whichever lands best.',
+                    p),
+              ],
             ),
           ),
+          _composer(p),
         ],
       ),
     );
   }
 
-  Widget _description(bool isDark) {
+  Widget _msgUser(String text, AppPalette p) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        Flexible(
+          child: Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: p.accent.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Text(text,
+                style: TextStyle(fontSize: 13.5, color: p.fg, height: 1.4)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _msgAssistant(String text, AppPalette p) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 28, height: 28,
+          decoration: BoxDecoration(
+            color: p.accent.withValues(alpha: 0.18),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          alignment: Alignment.center,
+          child: Icon(Icons.auto_awesome, size: 15, color: p.accent),
+        ),
+        const SizedBox(width: 10),
+        Flexible(
+          child: Text(text,
+              style: TextStyle(fontSize: 13.5, color: p.fg, height: 1.5)),
+        ),
+      ],
+    );
+  }
+
+  Widget _composer(AppPalette p) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 8, 24, 18),
+      child: Container(
+        decoration: BoxDecoration(
+          color: p.surfaceLow,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: p.hairline),
+        ),
+        padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
+        child: Row(
+          children: [
+            Icon(Icons.add_circle_outline, color: p.muted, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text('Ask anything…',
+                  style: TextStyle(color: p.muted, fontSize: 14)),
+            ),
+            Container(
+              width: 34, height: 34,
+              decoration: BoxDecoration(
+                color: p.accent,
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: Icon(Icons.arrow_upward,
+                  color: p.isDark ? Colors.black : Colors.white, size: 18),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _description(AppPalette p) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF111114) : Colors.white,
-        border: Border(
-          top: BorderSide(color: Colors.black.withValues(alpha: 0.08)),
-        ),
+        color: p.surfaceLow,
+        border: Border(top: BorderSide(color: p.hairline)),
       ),
       child: Row(
         children: [
@@ -483,14 +565,14 @@ class _DemoHomeState extends State<DemoHome> {
             padding:
                 const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: isDark ? Colors.white12 : Colors.black12,
+              color: p.accent.withValues(alpha: 0.16),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(_variantNames[_variant],
                 style: TextStyle(
                   fontSize: 11.5,
                   fontWeight: FontWeight.w700,
-                  color: isDark ? Colors.white : Colors.black,
+                  color: p.accentText,
                 )),
           ),
           const SizedBox(width: 12),
@@ -498,9 +580,8 @@ class _DemoHomeState extends State<DemoHome> {
             child: Text(
               _variantDescriptions[_variant],
               style: TextStyle(
-                fontSize: 12,
-                color: (isDark ? Colors.white : Colors.black)
-                    .withValues(alpha: 0.7),
+                fontSize: 12.5,
+                color: p.fg.withValues(alpha: 0.75),
               ),
             ),
           ),
