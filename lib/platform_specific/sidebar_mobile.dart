@@ -1097,7 +1097,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
     final String title = isLocked ? 'Locked chat' : _deriveChatTitle(chat);
     return SbChatTile(
       title: title,
-      createdAt: chat.createdAt,
+      createdAt: chat.updatedAt ?? chat.createdAt,
       selected: isSelected,
       pinned: isPinned,
       locked: isLocked,

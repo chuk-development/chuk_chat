@@ -959,7 +959,7 @@ class _SidebarDesktopState extends State<SidebarDesktop> {
     final bool isPinned = chat.isStarred;
     return SbChatTile(
       title: title,
-      createdAt: chat.createdAt,
+      createdAt: chat.updatedAt ?? chat.createdAt,
       selected: isSelected,
       pinned: isPinned,
       locked: isLocked,
