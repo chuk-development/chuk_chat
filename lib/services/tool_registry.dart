@@ -17,6 +17,14 @@ const Set<String> _serverBackedToolNames = {
   'gmail',
   'email',
   'nextcloud',
+  // Sandbox tools — proxy through the api_server to the chuk-chat-sandbox
+  // upstream. Gating them with kFeatureServerTools keeps offline /
+  // server-free builds from advertising tools they cannot fulfil.
+  'code_run',
+  'sandbox_list',
+  'sandbox_read',
+  'sandbox_write',
+  'sandbox_reset',
 };
 
 /// Maps tool names to their ToolCategory for enable/disable filtering.
@@ -64,6 +72,11 @@ const Map<String, ToolCategory> toolCategoryMap = {
   'artifact_schema': ToolCategory.basic,
   'update_project': ToolCategory.basic,
   'typst_compile': ToolCategory.basic,
+  'code_run': ToolCategory.sandbox,
+  'sandbox_list': ToolCategory.sandbox,
+  'sandbox_read': ToolCategory.sandbox,
+  'sandbox_write': ToolCategory.sandbox,
+  'sandbox_reset': ToolCategory.sandbox,
 };
 
 /// Discovery catalog: category labels -> human-readable descriptions.
@@ -98,6 +111,10 @@ const Map<String, String> discoveryCatalog = {
     'Productivity / Produktivität':
         'Email (IMAP/SMTP), Gmail, Slack, GitHub, Nextcloud, Google Calendar / '
         'E-Mail, Gmail, Slack, GitHub, Nextcloud, Google Kalender',
+  if (kFeatureServerTools)
+    'Sandbox / Code':
+        'Run Python or shell code in an isolated sandbox, read/write files in /home/sandbox / '
+        'Python- oder Shell-Code in einer isolierten Sandbox ausführen, Dateien in /home/sandbox lesen/schreiben',
   'Device / Gerät':
       'Reminders, calendar events, alarms, timers, SMS drafts, GPS / '
       'Erinnerungen, Kalendereinträge, Wecker, Timer, SMS, GPS',
@@ -1341,6 +1358,101 @@ final List<ClientTool> builtinTools = [
       'projekt',
       'anweisungen',
     ],
+  ),
+
+  // -- Sandbox: code execution in an isolated Docker container --
+  ClientTool(
+    name: 'code_run',
+    description:
+        'Run code in an isolated Docker sandbox on the server. Python by default; '
+        'pass language="shell" for bash. The sandbox has pandas, numpy, scipy, '
+        'scikit-learn, matplotlib, pillow, opencv, ffmpeg, yt-dlp, pypdf, typst, '
+        'pandoc and ~30 other common tools preinstalled. Files persist between '
+        'calls in /home/sandbox (read/write via sandbox_read / sandbox_write). '
+        'Network egress is restricted to an allowlist (github, pypi, wikipedia, '
+        'youtube, groq, etc) — arbitrary HTTP is BLOCKED. The sandbox is created '
+        'on first call and reused for the rest of this chat; files survive across '
+        'calls and a 3-day snapshot keeps them between sessions. '
+        'Prefer typst_compile for PDF/document generation, web_crawl for fetching '
+        'URLs, weather/crypto/search tools for their data, and the dedicated '
+        'image tools for image generation/editing — use code_run only when '
+        'computation, file manipulation, or library calls (pandas/numpy/'
+        'matplotlib/yt-dlp/pypdf) are required. '
+        'Exec timeout 5 min, 512MB RAM, 50%% of one CPU core. Returns stdout, '
+        'stderr, exit code and duration.',
+    parameters: {
+      'code': 'string (required: source code to execute)',
+      'language': 'string (optional: "python" (default) or "shell")',
+      'timeout':
+          'int (optional: per-execution seconds, 1..300; omit for the '
+          'server default — usually adequate).',
+    },
+    type: ToolType.builtin,
+    tags: [
+      // Note: 'bash' deliberately omitted to avoid stealing find_tools
+      // traffic from the desktop-only 'bash' tool. 'shell' is fine —
+      // it's part of the code_run language enum.
+      'code', 'python', 'shell', 'execute', 'run',
+      'sandbox', 'compute', 'script', 'data', 'analysis',
+      'plot', 'matplotlib', 'pandas', 'numpy', 'jupyter',
+    ],
+  ),
+  ClientTool(
+    name: 'sandbox_list',
+    description:
+        'List files in the sandbox at /home/sandbox (or a subdirectory). '
+        'Use after code_run to see what files were created.',
+    parameters: {
+      'path': 'string (optional: must be under /home/sandbox, defaults there)',
+    },
+    type: ToolType.builtin,
+    tags: ['sandbox', 'list', 'ls', 'files'],
+  ),
+  ClientTool(
+    name: 'sandbox_read',
+    description:
+        'Read a file from the sandbox /home/sandbox. Returns text inline for '
+        'small text files (<=64KB UTF-8); for binary files returns a metadata '
+        'line with a hint to have code_run base64-encode the bytes so you can '
+        'still inspect them. Use to look at output files created by code_run.',
+    parameters: {
+      'path': 'string (required: absolute path under /home/sandbox)',
+    },
+    type: ToolType.builtin,
+    tags: ['sandbox', 'read', 'cat', 'open', 'file'],
+  ),
+  ClientTool(
+    name: 'sandbox_write',
+    description:
+        'Write a file into the sandbox /home/sandbox. Use for seeding input '
+        'data before calling code_run. For text data (CSV, JSON, markdown, '
+        'source code, etc.) keep the default mode="text" and pass the raw '
+        'string as content. For BINARY data (images, parquet, sqlite, pickle, '
+        'pre-compiled bytes, etc.) set mode="base64" and pass the base64-'
+        'encoded payload as content — otherwise the bytes will be mangled by '
+        'UTF-8 encoding.',
+    parameters: {
+      'path': 'string (required: absolute path under /home/sandbox)',
+      'content':
+          'string (required: file contents — raw text in mode="text", '
+          'base64-encoded bytes in mode="base64")',
+      'mode': 'string (optional: "text" (default) or "base64")',
+    },
+    type: ToolType.builtin,
+    tags: ['sandbox', 'write', 'save', 'file'],
+  ),
+  ClientTool(
+    name: 'sandbox_reset',
+    description:
+        'Destroy the current chat\'s sandbox. The next code_run will create a '
+        'fresh one (snapshot for this chat is still restored). Only call after '
+        'code_run has failed twice with the same error that points at '
+        'environment corruption (broken package, stuck process, weird state). '
+        'Do NOT call before a fresh code_run "to start clean" — that destroys '
+        'the persistent files in /home/sandbox unnecessarily.',
+    parameters: const {},
+    type: ToolType.builtin,
+    tags: ['sandbox', 'reset', 'destroy', 'clean'],
   ),
 ];
 
