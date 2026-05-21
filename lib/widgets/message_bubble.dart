@@ -2373,86 +2373,146 @@ class _MessageBubbleState extends State<MessageBubble> {
     return buffer.toString().trimRight();
   }
 
-  /// Builds a rich, syntax-highlighted expanded view for a tool call.
-  /// `code_run` / `sandbox_*` get the `code` arg rendered as a fenced
-  /// block in its declared language; other args become a compact
-  /// key/value list. The result block is parsed for `--- stdout ---`
-  /// markers so stdout/stderr render as separate fenced blocks.
+  /// Builds a plain-formatted expanded view for a tool call. No syntax
+  /// highlighting — just labelled sections with monospace containers so
+  /// the raw `code` / stdout / stderr stay readable instead of showing
+  /// as a single escape-ridden line.
   Widget _buildToolCallExpandedWidget(ToolCall toolCall) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textColor = colorScheme.onSurface.withValues(alpha: 0.85);
-    final bgColor = colorScheme.surface;
-    final mdSections = <String>[];
+    final sections = <Widget>[];
 
     final args = Map<String, dynamic>.from(toolCall.arguments);
-    String? codeArg;
-    String? codeLang;
     final rawCode = args.remove('code');
-    if (rawCode is String && rawCode.isNotEmpty) {
-      codeArg = rawCode;
-      final rawLang = args['language'];
-      codeLang = rawLang is String && rawLang.trim().isNotEmpty
-          ? rawLang.trim()
-          : (toolCall.name == 'code_run' ? 'python' : 'text');
+    final String? codeArg = rawCode is String && rawCode.isNotEmpty
+        ? rawCode
+        : null;
+
+    if (codeArg != null) {
+      sections.add(_buildToolSection(label: 'code', body: codeArg, mono: true));
     }
 
-    // Non-code args as compact key:value lines (or pretty JSON for objects).
-    final argLines = <String>[];
     args.forEach((k, v) {
       if (v == null) return;
       if (v is String) {
-        if (v.contains('\n') || v.length > 80) {
-          argLines.add('**$k:**\n```text\n$v\n```');
-        } else {
-          argLines.add('**$k:** `$v`');
-        }
+        final mono = v.contains('\n') || v.length > 80;
+        sections.add(_buildToolSection(label: k, body: v, mono: mono));
       } else if (v is num || v is bool) {
-        argLines.add('**$k:** `$v`');
+        sections.add(_buildToolSection(label: k, body: v.toString()));
       } else {
-        // List/Map → pretty JSON fence.
         String pretty;
         try {
           pretty = const JsonEncoder.withIndent('  ').convert(v);
         } catch (_) {
           pretty = v.toString();
         }
-        argLines.add('**$k:**\n```json\n$pretty\n```');
+        sections.add(_buildToolSection(label: k, body: pretty, mono: true));
       }
     });
 
-    if (codeArg != null) {
-      mdSections.add('```$codeLang\n$codeArg\n```');
-    }
-    if (argLines.isNotEmpty) {
-      mdSections.add(argLines.join('  \n'));
-    }
-
-    // Result block — split sandbox-style stdout/stderr if present.
     final result = toolCall.result;
     if (result != null && result.isNotEmpty) {
-      mdSections.add(_formatToolResultMarkdown(toolCall, result));
+      sections.addAll(_buildToolResultSections(toolCall, result));
     } else if (toolCall.status == ToolCallStatus.running ||
         toolCall.status == ToolCallStatus.pending) {
-      mdSections.add('_Running…_');
+      sections.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Text(
+            'Running…',
+            style: TextStyle(
+              fontSize: 12,
+              fontStyle: FontStyle.italic,
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
+          ),
+        ),
+      );
     }
 
-    if (mdSections.isEmpty) {
-      mdSections.add('_No details._');
+    if (sections.isEmpty) {
+      return Text(
+        'No details.',
+        style: TextStyle(
+          fontSize: 12,
+          fontStyle: FontStyle.italic,
+          color: Theme.of(
+            context,
+          ).colorScheme.onSurface.withValues(alpha: 0.6),
+        ),
+      );
     }
 
-    return MarkdownMessage(
-      text: mdSections.join('\n\n'),
-      textColor: textColor,
-      backgroundColor: bgColor,
-      wrapWithSelectionArea: !widget.useSharedSelectionArea,
-      fontFamily: 'monospace',
-      paragraphFontSize: 12,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: sections,
     );
   }
 
-  String _formatToolResultMarkdown(ToolCall toolCall, String result) {
-    // Sandbox result shape: header lines, then `--- stdout ---` and
-    // optional `--- stderr ---`. Split so each stream is its own fence.
+  Widget _buildToolSection({
+    required String label,
+    required String body,
+    bool mono = false,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final labelColor = colorScheme.onSurface.withValues(alpha: 0.7);
+    final bodyColor = colorScheme.onSurface.withValues(alpha: 0.85);
+
+    final Widget bodyWidget = mono
+        ? Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(top: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: colorScheme.onSurface.withValues(alpha: 0.04),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: colorScheme.onSurface.withValues(alpha: 0.08),
+              ),
+            ),
+            child: SelectableText(
+              body,
+              style: TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 12,
+                height: 1.4,
+                color: bodyColor,
+              ),
+            ),
+          )
+        : Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: SelectableText(
+              body,
+              style: TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 12,
+                color: bodyColor,
+              ),
+            ),
+          );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: labelColor,
+              letterSpacing: 0.3,
+            ),
+          ),
+          bodyWidget,
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildToolResultSections(ToolCall toolCall, String result) {
     final stdoutMarker = RegExp(r'^--- stdout ---\s*$', multiLine: true);
     final stderrMarker = RegExp(r'^--- stderr ---\s*$', multiLine: true);
     final stdoutMatch = stdoutMarker.firstMatch(result);
@@ -2467,34 +2527,33 @@ class _MessageBubbleState extends State<MessageBubble> {
           ? result.substring(stderrMatch.end).trim()
           : '';
 
-      final buf = StringBuffer();
-      buf.writeln('**Result**');
+      final out = <Widget>[];
       if (header.isNotEmpty) {
-        for (final line in header.split('\n')) {
-          if (line.trim().isEmpty) continue;
-          buf.writeln('- `${line.trim()}`');
-        }
+        out.add(_buildToolSection(label: 'result', body: header));
       }
-      buf.writeln();
-      buf.writeln('_stdout_');
-      buf.writeln('```text');
-      buf.writeln(stdout.isEmpty ? '(empty)' : stdout);
-      buf.writeln('```');
+      out.add(
+        _buildToolSection(
+          label: 'stdout',
+          body: stdout.isEmpty ? '(empty)' : stdout,
+          mono: true,
+        ),
+      );
       if (stderr.isNotEmpty) {
-        buf.writeln();
-        buf.writeln('_stderr_');
-        buf.writeln('```text');
-        buf.writeln(stderr);
-        buf.writeln('```');
+        out.add(_buildToolSection(label: 'stderr', body: stderr, mono: true));
       }
-      return buf.toString().trimRight();
+      return out;
     }
 
     final isError =
         toolCall.status == ToolCallStatus.error ||
         result.startsWith('Error:');
-    final label = isError ? '**Error**' : '**Result**';
-    return '$label\n```text\n$result\n```';
+    return [
+      _buildToolSection(
+        label: isError ? 'error' : 'result',
+        body: result,
+        mono: true,
+      ),
+    ];
   }
 
   String? _toolCallSubtitle(ToolCall toolCall) {
