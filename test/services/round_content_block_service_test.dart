@@ -29,34 +29,40 @@ void main() {
     });
 
     test(
-      'folds pre-tool interim text into first tool call roundThinking',
+      'emits pre-tool interim text as its own text block above tool calls',
       () {
         final toolCalls = [
           ToolCall(name: 'web_search', status: ToolCallStatus.completed),
         ];
 
         final result = RoundContentBlockService.buildRoundBlocks(
-          interimText: 'ZWISCHENSTAND 1: Ich habe erste Treffer.',
+          interimText: 'Ich rufe jetzt web_search auf.',
           providerReasoning: 'Ich suche jetzt die naechsten Details.',
           newToolCalls: toolCalls,
           interimBeforeToolCalls: true,
         );
 
-        // Interim text is folded into tool call's roundThinking, not a
-        // separate text block.
+        // Preserve chronological order: reasoning → text → toolCalls.
+        // Pre-tool text must NOT be folded into roundThinking.
         expect(
           result.blocks.map((b) => b.type).toList(),
           equals([
             ContentBlockType.reasoning,
+            ContentBlockType.text,
             ContentBlockType.toolCalls,
           ]),
         );
+
+        final textBlock = result.blocks
+            .firstWhere((b) => b.type == ContentBlockType.text);
+        expect(textBlock.text, contains('web_search'));
 
         final tcBlock = result.blocks
             .firstWhere((b) => b.type == ContentBlockType.toolCalls);
         expect(
           tcBlock.toolCalls!.first.roundThinking,
-          contains('ZWISCHENSTAND 1'),
+          isNull,
+          reason: 'Pre-tool interim text must not be merged into roundThinking.',
         );
       },
     );
