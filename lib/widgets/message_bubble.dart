@@ -822,6 +822,38 @@ class _MessageBubbleState extends State<MessageBubble> {
     // User messages render images above the bubble (see build()).
     final bool renderImagesInBubble = hasImages && !isUserMessage;
 
+    // When streaming AND the model emitted text before any tool call started
+    // (text is visible while tools are still pending/running), render the
+    // text body above the tool-calls bar so chronological order is preserved.
+    final bool streamingTextBeforeTools =
+        hasVisibleToolCalls &&
+        widget.isStreamingMessage &&
+        stripToolCallBlocksForDisplay(widget.message).trim().isNotEmpty &&
+        widget.toolCalls!.any(
+          (t) =>
+              t.status == ToolCallStatus.pending ||
+              t.status == ToolCallStatus.running,
+        );
+
+    final Widget toolBarSection = !hasVisibleToolCalls
+        ? const SizedBox.shrink()
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildToolCallsBar(widget.toolCalls!),
+              const SizedBox(height: 6),
+              ..._buildArtifactCards(widget.toolCalls!),
+              const SizedBox(height: 8),
+            ],
+          );
+
+    final Widget messageBody = _buildMessageBody(
+      iconFgColor: iconFgColor,
+      bgColor: bgColor,
+      isUserMessage: isUserMessage,
+    );
+
     return [
       if (hasInfoStatusBar)
         SizedBox(
@@ -843,12 +875,8 @@ class _MessageBubbleState extends State<MessageBubble> {
         _buildAttachmentsChips(widget.attachments!),
         const SizedBox(height: 8),
       ],
-      if (hasVisibleToolCalls) ...[
-        _buildToolCallsBar(widget.toolCalls!),
-        const SizedBox(height: 6),
-        ..._buildArtifactCards(widget.toolCalls!),
-        const SizedBox(height: 8),
-      ],
+      if (streamingTextBeforeTools) messageBody,
+      if (hasVisibleToolCalls) toolBarSection,
       if (renderImagesInBubble && placeQrImageAboveResponse) ...[
         _buildFramedUserImageGrid(_buildImagesGrid(widget.images!)),
         if (_hasGeneratedImage)
@@ -860,11 +888,7 @@ class _MessageBubbleState extends State<MessageBubble> {
           ),
         const SizedBox(height: 8),
       ],
-      _buildMessageBody(
-        iconFgColor: iconFgColor,
-        bgColor: bgColor,
-        isUserMessage: isUserMessage,
-      ),
+      if (!streamingTextBeforeTools) messageBody,
       ..._buildAskUserOptions(),
     ];
   }

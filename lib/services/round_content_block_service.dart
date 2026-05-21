@@ -114,34 +114,15 @@ class RoundContentBlockService {
         !_lastReasoningMatches(existingBlocks, roundReasoning)) {
       blocks.add(ContentBlock.reasoning(roundReasoning));
     }
-    // Work on a local copy to avoid mutating the caller's list.
-    var effectiveToolCalls = newToolCalls;
-    if (interimBeforeToolCalls &&
-        interimOutputText.isNotEmpty &&
-        newToolCalls.isNotEmpty) {
-      // Fold the interim text into the first tool call's thinking so it
-      // appears inside the collapsible tool-call section rather than as a
-      // standalone text block that looks like a truncated final answer.
-      final first = newToolCalls.first;
-      final existingThinking = first.roundThinking?.trim() ?? '';
-      final merged = existingThinking.isEmpty
-          ? interimOutputText
-          : '$existingThinking\n\n$interimOutputText';
-      final updated = ToolCall(
-        id: first.id,
-        name: first.name,
-        arguments: first.arguments,
-        status: first.status,
-        result: first.result,
-        roundThinking: merged,
-        startedAt: first.startedAt,
-      )..completedAt = first.completedAt;
-      effectiveToolCalls = [updated, ...newToolCalls.skip(1)];
-    } else if (interimBeforeToolCalls && interimOutputText.isNotEmpty) {
+    // Preserve true emission order: text emitted BEFORE tool calls renders
+    // as its own block above the tool-calls bar; text emitted AFTER tool
+    // calls renders below. Never fold pre-tool text into a tool call's
+    // roundThinking — that hid the message inside a collapsed card.
+    if (interimBeforeToolCalls && interimOutputText.isNotEmpty) {
       blocks.add(ContentBlock.text(interimOutputText));
     }
-    if (effectiveToolCalls.isNotEmpty) {
-      blocks.add(ContentBlock.toolCalls(effectiveToolCalls));
+    if (newToolCalls.isNotEmpty) {
+      blocks.add(ContentBlock.toolCalls(newToolCalls));
     }
     if (!interimBeforeToolCalls && interimOutputText.isNotEmpty) {
       blocks.add(ContentBlock.text(interimOutputText));
