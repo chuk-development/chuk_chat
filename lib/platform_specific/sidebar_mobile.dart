@@ -16,12 +16,14 @@ import 'package:chuk_chat/services/update_check_service.dart';
 import 'package:chuk_chat/widgets/credit_display.dart';
 import 'package:chuk_chat/widgets/update_banner.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/sidebar/sidebar_chrome.dart';
 
 class SidebarMobile extends StatefulWidget {
   final Function(String? chatId) onChatSelected;
   final Function() onSettingsTapped;
   final Function() onWorkspacesTapped;
   final Function() onMediaTapped;
+  final Function() onNewChatTapped;
   final Future<void> Function(String chatId)? onChatDeleted;
   final String? selectedChatId;
   final bool isCompactMode; // Not directly used in the UI, but kept for context
@@ -32,6 +34,7 @@ class SidebarMobile extends StatefulWidget {
     required this.onSettingsTapped,
     required this.onWorkspacesTapped,
     required this.onMediaTapped,
+    required this.onNewChatTapped,
     this.onChatDeleted,
     required this.selectedChatId,
     required this.isCompactMode,
@@ -46,12 +49,17 @@ class _SidebarMobileState extends State<SidebarMobile> {
   static const double _sidebarHorizontalPadding = 16.0;
   static const Duration _searchDebounceDuration = Duration(milliseconds: 300);
   static const int _searchMessageLimit = 50;
-  static const int _kPageSize = 20;
+  static const int _kPageSize = 40;
 
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   List<StoredChat> _filteredRecentChats = [];
   int _displayLimit = _kPageSize;
+  final ScrollController _scrollController = ScrollController();
+  String _currentBucket = '';
+  final List<_BucketBound> _sectionMarkers = [];
+  static const double _kEstimatedRowHeight = 32.0;
+  static const double _kStickyHeaderHeight = 32.0;
   ProfileRecord? _profile;
   Future<void>? _refreshInFlight;
   bool _refreshPending = false;
@@ -61,12 +69,15 @@ class _SidebarMobileState extends State<SidebarMobile> {
   Timer? _deleteNotificationTimer;
   String? _lastDeletedChatTitle;
   bool _isOfflineMode = false;
+  bool _searchVisible = false;
+  final FocusNode _searchFocus = FocusNode();
 
   @override
   void initState() {
     super.initState();
     // Chat loading handled by AppInitializationService and ChatSyncService
     _searchController.addListener(_onSearchChanged);
+    _scrollController.addListener(_onScrollForAutoLoad);
     unawaited(_loadProfile());
     _chatUpdatesSub = ChatStorageService.changes.listen((changedChatId) {
       if (!mounted) return;
@@ -96,8 +107,64 @@ class _SidebarMobileState extends State<SidebarMobile> {
       _onNetworkStatusChanged,
     );
     _searchController.removeListener(_onSearchChanged);
+    _scrollController.removeListener(_onScrollForAutoLoad);
+    _scrollController.dispose();
     _searchController.dispose();
+    _searchFocus.dispose();
     super.dispose();
+  }
+
+  // Auto-load older chats as the user scrolls near the bottom — no
+  // Show-more button needed. Also keeps the sticky overlay header in
+  // sync with the topmost-visible bucket.
+  void _onScrollForAutoLoad() {
+    if (!_scrollController.hasClients) return;
+    final pos = _scrollController.position;
+    if (pos.pixels >= pos.maxScrollExtent - 240) {
+      final int restLen =
+          _filteredRecentChats.where((c) => !c.isStarred).length;
+      if (restLen > _displayLimit) {
+        setState(() {
+          _displayLimit += _kPageSize;
+        });
+      }
+    }
+    _refreshCurrentBucket();
+  }
+
+  void _refreshCurrentBucket() {
+    if (_sectionMarkers.isEmpty) {
+      if (_currentBucket.isNotEmpty) {
+        setState(() => _currentBucket = '');
+      }
+      return;
+    }
+    final double offset =
+        _scrollController.hasClients ? _scrollController.position.pixels : 0.0;
+    String found = _sectionMarkers.first.label;
+    for (final m in _sectionMarkers) {
+      if (offset >= m.startOffset) {
+        found = m.label;
+      } else {
+        break;
+      }
+    }
+    if (found != _currentBucket) {
+      setState(() => _currentBucket = found);
+    }
+  }
+
+  void _toggleSearch() {
+    setState(() {
+      _searchVisible = !_searchVisible;
+    });
+    if (_searchVisible) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _searchFocus.requestFocus();
+      });
+    } else {
+      _searchController.clear();
+    }
   }
 
   void _onSearchChanged() {
@@ -525,60 +592,120 @@ class _SidebarMobileState extends State<SidebarMobile> {
         theme.textTheme.bodyMedium?.color ?? theme.colorScheme.onSurface;
     final Color accentColor = theme.colorScheme.primary;
     final Color sidebarBg = theme.cardColor.darken(0.02);
-    final Color dividerColor = theme.dividerColor.withValues(alpha: 0.5);
-    // Pinned chats float to the top of the recents list instead of living in
-    // their own section. A stable partition keeps original (recency) order
-    // within each group.
-    final List<StoredChat> displayChats = <StoredChat>[
-      ..._filteredRecentChats.where((c) => c.isStarred),
-      ..._filteredRecentChats.where((c) => !c.isStarred),
-    ];
 
-    const double topQuickActionSpacing =
-        40.0; // ~1cm offset to clear the phone status bar comfortably
+    final List<StoredChat> pinnedChats =
+        _filteredRecentChats.where((c) => c.isStarred).toList();
+    final List<StoredChat> restChats =
+        _filteredRecentChats.where((c) => !c.isStarred).toList();
+
+    // Use the real device safe-area inset instead of a magic 40.0 — a
+    // fixed value puts the brand row under the dynamic island / camera
+    // notch on devices with larger top insets. Add 8 px of breathing
+    // room on top of the inset so the brand sits visually below the
+    // status indicators, not flush against them.
+    final double topStatusBarSpacing =
+        MediaQuery.paddingOf(context).top + 8.0;
+    final bool showSearchField = _searchVisible || _searchQuery.isNotEmpty;
 
     return Container(
       color: sidebarBg,
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox(height: topQuickActionSpacing),
+          SizedBox(height: topStatusBarSpacing),
 
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: _sidebarHorizontalPadding,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (kFeatureWorkspaces) ...[
-                  _buildQuickActionButton(
-                    icon: Icons.folder_open,
-                    label: l.workspaces,
-                    onTap: widget.onWorkspacesTapped,
-                    iconColor: iconColorDefault,
-                    textColor: textColorDefault,
-                  ),
-                  const SizedBox(height: 6),
-                ],
-                if (kFeatureMediaManager)
-                  _buildQuickActionButton(
-                    icon: Icons.photo_library_outlined,
-                    label: l.media,
-                    onTap: widget.onMediaTapped,
-                    iconColor: iconColorDefault,
-                    textColor: textColorDefault,
-                  ),
-              ],
-            ),
+          SbBrand(
+            label: 'chuk chat',
+            padding: const EdgeInsets.fromLTRB(16, 4, 12, 12),
+            trailing: SbNewChatPill(onTap: widget.onNewChatTapped),
           ),
-          const SizedBox(height: 16),
 
-          // Offline indicator
+          if (showSearchField)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+              child: Container(
+                height: 38,
+                decoration: BoxDecoration(
+                  color: textColorDefault.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: TextField(
+                  controller: _searchController,
+                  focusNode: _searchFocus,
+                  decoration: InputDecoration(
+                    hintText: 'Search chats',
+                    hintStyle: TextStyle(
+                      color: textColorDefault.withValues(alpha: 0.5),
+                      fontSize: 13.5,
+                    ),
+                    prefixIcon: Icon(
+                      Icons.search_rounded,
+                      size: 17,
+                      color: textColorDefault.withValues(alpha: 0.6),
+                    ),
+                    prefixIconConstraints: const BoxConstraints(
+                      minWidth: 36,
+                      minHeight: 38,
+                    ),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 11),
+                    border: InputBorder.none,
+                    suffixIcon: InkResponse(
+                      radius: 14,
+                      onTap: () {
+                        if (_searchQuery.isNotEmpty) {
+                          _clearSearchQuery();
+                        } else {
+                          setState(() => _searchVisible = false);
+                        }
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Icon(
+                          Icons.close_rounded,
+                          size: 15,
+                          color: textColorDefault.withValues(alpha: 0.55),
+                        ),
+                      ),
+                    ),
+                    suffixIconConstraints: const BoxConstraints(
+                      minWidth: 28,
+                      minHeight: 28,
+                    ),
+                  ),
+                  style: TextStyle(
+                    color: textColorDefault,
+                    fontSize: 13.5,
+                  ),
+                  cursorColor: accentColor,
+                ),
+              ),
+            ),
+
+          SbNavItem(
+            icon: Icons.search_rounded,
+            label: 'Search',
+            onTap: _toggleSearch,
+          ),
+          if (kFeatureWorkspaces)
+            SbNavItem(
+              icon: Icons.folder_rounded,
+              label: l.workspaces,
+              onTap: widget.onWorkspacesTapped,
+            ),
+          if (kFeatureMediaManager)
+            SbNavItem(
+              icon: Icons.image_rounded,
+              label: l.media,
+              onTap: widget.onMediaTapped,
+            ),
+          const SizedBox(height: 10),
+
           if (_isOfflineMode)
             Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: _sidebarHorizontalPadding,
-                vertical: 8,
+                vertical: 4,
               ),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -593,7 +720,8 @@ class _SidebarMobileState extends State<SidebarMobile> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.cloud_off, size: 14, color: Colors.orange),
+                    Icon(Icons.cloud_off_rounded,
+                        size: 14, color: Colors.orange),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
@@ -607,7 +735,8 @@ class _SidebarMobileState extends State<SidebarMobile> {
                     ),
                     const SizedBox(width: 6),
                     IconButton(
-                      icon: Icon(Icons.refresh, size: 14, color: Colors.orange),
+                      icon: Icon(Icons.refresh_rounded,
+                          size: 14, color: Colors.orange),
                       tooltip: 'Check for updates',
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints.tightFor(
@@ -615,7 +744,6 @@ class _SidebarMobileState extends State<SidebarMobile> {
                         height: 20,
                       ),
                       onPressed: () async {
-                        // Quick network check and refresh if online
                         final isOnline =
                             await NetworkStatusService.quickCheck();
                         if (isOnline && mounted) {
@@ -628,247 +756,99 @@ class _SidebarMobileState extends State<SidebarMobile> {
               ),
             ),
 
-          // Search Old Chats input field (styled from main.dart's InputDecorationTheme)
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: _sidebarHorizontalPadding,
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Suchen',
-                      prefixIcon: Icon(Icons.search, color: iconColorDefault),
-                      filled: true,
-                      fillColor: sidebarBg.lighten(0.05),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: dividerColor, width: 1),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: dividerColor, width: 1),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: accentColor, width: 1.3),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        vertical: 10,
-                        horizontal: 0,
-                      ),
-                      suffixIcon: _searchQuery.isEmpty
-                          ? null
-                          : IconButton(
-                              tooltip: 'Eingabe löschen',
-                              splashRadius: 18,
-                              icon: Icon(Icons.clear, color: iconColorDefault),
-                              onPressed: _clearSearchQuery,
-                            ),
-                    ),
-                    style: TextStyle(color: textColorDefault),
-                    cursorColor: textColorDefault,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16), // Spacing after search bar
-          // Recents Section - Scrollable with floating bottom profile/update cards
           Expanded(
             child: Stack(
               children: [
-                ListView(
-                  padding: const EdgeInsets.only(bottom: 130),
+                Column(
                   children: [
-                    _buildSectionHeader('Recents', textColor: textColorDefault),
-                    if (_filteredRecentChats.isEmpty && _searchQuery.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: _sidebarHorizontalPadding,
-                          vertical: 8.0,
-                        ),
-                        child: Text(
-                          'No recent chats yet.',
-                          style: TextStyle(
-                            color: iconColorDefault.withValues(alpha: 0.4),
-                          ),
-                        ),
-                      )
-                    else if (_filteredRecentChats.isEmpty &&
-                        _searchQuery.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: _sidebarHorizontalPadding,
-                          vertical: 8.0,
-                        ),
-                        child: Text(
-                          'No chats found for "$_searchQuery".',
-                          style: TextStyle(
-                            color: iconColorDefault.withValues(alpha: 0.4),
-                          ),
+                    if (pinnedChats.isNotEmpty)
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 220),
+                        child: _buildPinnedSticky(
+                          pinnedChats,
+                          iconColorDefault,
+                          textColorDefault,
+                          accentColor,
                         ),
                       ),
-                    ...displayChats.take(_displayLimit).map((storedChat) {
-                      return _buildRecentItem(
-                        storedChat,
-                        onTap: () {
-                          if (kDebugMode) {
-                            debugPrint('');
-                          }
-                          if (kDebugMode) {
-                            debugPrint(
-                              '═══════════════════════════════════════════════════════════',
-                            );
-                          }
-                          if (kDebugMode) {
-                            debugPrint(
-                              '👆 [SIDEBAR-MOBILE] User tapped recent chat',
-                            );
-                          }
-                          if (kDebugMode) {
-                            debugPrint(
-                              '👆 [SIDEBAR-MOBILE] Chat ID: ${storedChat.id}',
-                            );
-                          }
-                          if (kDebugMode) {
-                            debugPrint(
-                              '👆 [SIDEBAR-MOBILE] Preview: "${storedChat.previewText.substring(0, storedChat.previewText.length > 40 ? 40 : storedChat.previewText.length)}..."',
-                            );
-                          }
-                          if (kDebugMode) {
-                            debugPrint(
-                              '═══════════════════════════════════════════════════════════',
-                            );
-                          }
-                          widget.onChatSelected(storedChat.id);
-                        },
-                        onDelete: () => _confirmAndDeleteChat(storedChat),
-                        accentColor: accentColor,
-                        iconColor: iconColorDefault,
-                        textColor: textColorDefault,
-                      );
-                    }),
-                    if (_filteredRecentChats.length > _displayLimit)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: _sidebarHorizontalPadding,
-                          vertical: 8.0,
-                        ),
-                        child: TextButton(
-                          onPressed: () {
-                            setState(() {
-                              _displayLimit += _kPageSize;
-                            });
-                          },
-                          child: Text(
-                            'Show more (${_filteredRecentChats.length - _displayLimit} remaining)',
-                            style: TextStyle(
-                              color: iconColorDefault.withValues(alpha: 0.7),
-                              fontWeight: FontWeight.w600,
+                    Expanded(
+                      child: Stack(
+                        children: [
+                          CustomScrollView(
+                            controller: _scrollController,
+                            slivers: _buildScrollableSlivers(
+                              restChats,
+                              iconColorDefault,
+                              textColorDefault,
+                              accentColor,
+                              sidebarBg,
                             ),
                           ),
-                        ),
+                          if (_currentBucket.isNotEmpty)
+                            Positioned(
+                              top: 0,
+                              left: 0,
+                              right: 0,
+                              child: IgnorePointer(
+                                child: Container(
+                                  height: _kStickyHeaderHeight,
+                                  color: sidebarBg,
+                                  child: SbSectionLabel(
+                                    label: _currentBucket,
+                                    color: accentColor,
+                                    padding: const EdgeInsets.fromLTRB(
+                                        20, 8, 16, 8),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
-                    const SizedBox(height: 10),
+                    ),
                   ],
                 ),
                 Positioned(
                   left: 0,
                   right: 0,
                   bottom: 0,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          sidebarBg.withValues(alpha: 0),
-                          sidebarBg.withValues(alpha: 0.72),
-                          sidebarBg,
-                        ],
-                        stops: const [0.0, 0.56, 1.0],
-                      ),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const UpdateBanner(),
-                        Align(
-                          alignment: Alignment.bottomCenter,
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(
-                              16.0,
-                              8.0,
-                              16.0,
-                              24.0,
-                            ),
-                            child: KeyedSubtree(
-                              key: TourKeyRegistry.instance.keyFor(
-                                TourSlots.settingsEntry,
-                              ),
-                              child: InkWell(
-                              borderRadius: BorderRadius.circular(12),
-                              onTap: widget.onSettingsTapped,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 10,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: sidebarBg.lighten(0.05),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: dividerColor,
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        _displayNameFor(_profile),
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          color: textColorDefault,
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    BalanceBadge(
-                                      textStyle: TextStyle(
-                                        color: accentColor,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                      placeholderStyle: TextStyle(
-                                        color: textColorDefault.withValues(
-                                          alpha: 0.6,
-                                        ),
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 6,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Icon(
-                                      Icons.settings,
-                                      color: iconColorDefault,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IgnorePointer(
+                        child: Container(
+                          height: 22,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                sidebarBg.withValues(alpha: 0),
+                                sidebarBg,
+                              ],
                             ),
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                      Container(
+                        color: sidebarBg,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const UpdateBanner(),
+                            KeyedSubtree(
+                              key: TourKeyRegistry.instance.keyFor(
+                                TourSlots.settingsEntry,
+                              ),
+                              child: _buildFooterRow(
+                                iconColorDefault,
+                                textColorDefault,
+                                accentColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -879,73 +859,226 @@ class _SidebarMobileState extends State<SidebarMobile> {
     );
   }
 
-  Widget _buildQuickActionButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    required Color iconColor,
-    required Color textColor,
-    Color? backgroundColor,
-    Color? borderColor,
-  }) {
-    final BorderRadius radius = BorderRadius.circular(12);
-    final Widget content = Row(
-      mainAxisAlignment: MainAxisAlignment.start,
+  // Sticky pinned block — sits above the scrolling time-bucketed list.
+  Widget _buildPinnedSticky(
+    List<StoredChat> pinned,
+    Color iconColor,
+    Color textColor,
+    Color accent,
+  ) {
+    Widget chatTile(StoredChat c) => _buildRecentItem(
+          c,
+          onTap: () => _onChatTapped(c),
+          onDelete: () => _confirmAndDeleteChat(c),
+          accentColor: accent,
+          iconColor: iconColor,
+          textColor: textColor,
+        );
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Icon(icon, color: iconColor, size: 20),
-        const SizedBox(width: 8),
+        const SbSectionLabel(
+          label: 'Pinned',
+          padding: EdgeInsets.fromLTRB(20, 8, 16, 4),
+        ),
         Flexible(
-          child: Text(
-            label,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: textColor, fontWeight: FontWeight.w600),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: pinned.map(chatTile).toList(),
+            ),
           ),
         ),
       ],
     );
-    return SizedBox(
-      height: 48,
+  }
+
+  // Time-bucketed slivers with pinned section headers — TODAY stays at
+  // the top while scrolling today's chats, then THIS WEEK pins as the
+  // user scrolls past, then OLDER. Pagination is invisible: more chats
+  // stream in as the user scrolls (see `_onScrollForAutoLoad`).
+  List<Widget> _buildScrollableSlivers(
+    List<StoredChat> rest,
+    Color iconColor,
+    Color textColor,
+    Color accent,
+    Color sidebarBg,
+  ) {
+    final List<Widget> slivers = [];
+    _sectionMarkers.clear();
+
+    slivers.add(const SliverToBoxAdapter(
+      child: SizedBox(height: _kStickyHeaderHeight + 4),
+    ));
+
+    if (rest.isEmpty) {
+      _currentBucket = '';
+      final String msg = _searchQuery.isEmpty
+          ? 'No recent chats yet.'
+          : 'No chats found for "$_searchQuery".';
+      slivers.add(SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: _sidebarHorizontalPadding,
+            vertical: 8.0,
+          ),
+          child: Text(msg,
+              style: TextStyle(color: iconColor.withValues(alpha: 0.4))),
+        ),
+      ));
+      slivers.add(const SliverToBoxAdapter(child: SizedBox(height: 130)));
+      return slivers;
+    }
+
+    final int visible = rest.length < _displayLimit ? rest.length : _displayLimit;
+    final List<StoredChat> visibleRest = rest.take(visible).toList();
+
+    final DateTime now = DateTime.now();
+    final DateTime today0 = DateTime(now.year, now.month, now.day);
+    final DateTime weekStart = today0.subtract(const Duration(days: 6));
+
+    final List<StoredChat> today = [];
+    final List<StoredChat> week = [];
+    final List<StoredChat> older = [];
+    for (final c in visibleRest) {
+      // Bucket by last activity (the same field that drives recent
+      // ordering) so a long-running chat that got a new message today
+      // shows up under "Today" rather than under its creation date.
+      final d = c.updatedAt ?? c.createdAt;
+      if (!d.isBefore(today0)) {
+        today.add(c);
+      } else if (!d.isBefore(weekStart)) {
+        week.add(c);
+      } else {
+        older.add(c);
+      }
+    }
+
+    double cursor = 0;
+    void addBucket(String label, List<StoredChat> chats) {
+      if (chats.isEmpty) return;
+      _sectionMarkers.add(_BucketBound(label, cursor));
+      cursor += chats.length * _kEstimatedRowHeight;
+      slivers.add(SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (context, i) => _buildRecentItem(
+            chats[i],
+            onTap: () => _onChatTapped(chats[i]),
+            onDelete: () => _confirmAndDeleteChat(chats[i]),
+            accentColor: accent,
+            iconColor: iconColor,
+            textColor: textColor,
+          ),
+          childCount: chats.length,
+        ),
+      ));
+    }
+
+    addBucket('Today', today);
+    addBucket('This week', week);
+    addBucket('Older', older);
+
+    if (_sectionMarkers.isNotEmpty) {
+      final double offset = _scrollController.hasClients
+          ? _scrollController.position.pixels
+          : 0.0;
+      String found = _sectionMarkers.first.label;
+      for (final m in _sectionMarkers) {
+        if (offset >= m.startOffset) {
+          found = m.label;
+        } else {
+          break;
+        }
+      }
+      _currentBucket = found;
+    } else {
+      _currentBucket = '';
+    }
+
+    slivers.add(const SliverToBoxAdapter(child: SizedBox(height: 130)));
+
+    return slivers;
+  }
+
+  Widget _buildFooterRow(Color iconColor, Color textColor, Color accent) {
+    final String name = _displayNameFor(_profile);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 4, 10, 18),
       child: Material(
-        color: Colors.transparent,
+        color: accent.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(20),
         child: InkWell(
-          onTap: onTap,
-          borderRadius: radius,
-          child: Ink(
-            width: double.infinity,
-            decoration: (backgroundColor != null || borderColor != null)
-                ? BoxDecoration(
-                    color: backgroundColor,
-                    borderRadius: radius,
-                    border: borderColor != null
-                        ? Border.all(color: borderColor, width: 1)
-                        : null,
-                  )
-                : null,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: content,
+          borderRadius: BorderRadius.circular(20),
+          onTap: widget.onSettingsTapped,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 5, 4, 5),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    name,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: textColor,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.20),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: BalanceBadge(
+                    textStyle: TextStyle(
+                      color: accent,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                    ),
+                    placeholderStyle: TextStyle(
+                      color: textColor.withValues(alpha: 0.55),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    padding: EdgeInsets.zero,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Material(
+                  color: Colors.transparent,
+                  shape: const CircleBorder(),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: widget.onSettingsTapped,
+                    child: Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Icon(Icons.settings_rounded,
+                          size: 22, color: iconColor),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildSectionHeader(String title, {required Color textColor}) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        _sidebarHorizontalPadding,
-        16.0,
-        _sidebarHorizontalPadding,
-        8.0,
-      ),
-      child: Text(
-        title,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 14,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
+  void _onChatTapped(StoredChat storedChat) {
+    if (kDebugMode) {
+      debugPrint(
+        '👆 [SIDEBAR-MOBILE] User tapped recent chat ${storedChat.id}',
+      );
+    }
+    widget.onChatSelected(storedChat.id);
   }
 
   Widget _buildRecentItem(
@@ -956,32 +1089,20 @@ class _SidebarMobileState extends State<SidebarMobile> {
     required Color accentColor,
     required Color iconColor,
     required Color textColor,
+    bool compact = false,
   }) {
     bool isSelected = chat.id == widget.selectedChatId;
     final bool isLocked = chat.isLocked;
     final bool isPinned = chat.isStarred;
     final String title = isLocked ? 'Locked chat' : _deriveChatTitle(chat);
-    return ListTile(
-      leading: isLocked
-          ? Icon(Icons.lock, size: 16, color: textColor.withValues(alpha: 0.4))
-          : isPinned
-          ? Icon(Icons.push_pin, size: 16, color: accentColor)
-          : null,
-      title: Text(
-        title,
-        style: TextStyle(
-          color: isLocked
-              ? textColor.withValues(alpha: 0.35)
-              : isLast
-              ? textColor.withValues(alpha: 0.38)
-              : (isSelected ? accentColor : textColor),
-          fontSize: 15,
-          fontWeight: FontWeight.w600,
-          fontStyle: isLocked ? FontStyle.italic : null,
-        ),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
+    return SbChatTile(
+      title: title,
+      createdAt: chat.createdAt,
+      selected: isSelected,
+      pinned: isPinned,
+      locked: isLocked,
+      dimmed: isLast,
+      compact: compact,
       onTap: isLocked
           ? () => _showLockedChatDialog(accentColor: accentColor)
           : onTap,
@@ -994,16 +1115,6 @@ class _SidebarMobileState extends State<SidebarMobile> {
               iconColor: iconColor,
               textColor: textColor,
             ),
-      dense: true,
-      contentPadding: const EdgeInsets.only(
-        left: _sidebarHorizontalPadding,
-        right: 16.0,
-      ),
-      tileColor: isSelected ? accentColor.withValues(alpha: 0.1) : null,
-      selectedTileColor: accentColor.withValues(alpha: 0.1),
-      selectedColor: accentColor,
-      iconColor: iconColor,
-      textColor: textColor,
     );
   }
 
@@ -1212,4 +1323,10 @@ List<String> _filterChatsIsolate(Map<String, dynamic> params) {
   }
 
   return matches;
+}
+
+class _BucketBound {
+  final String label;
+  final double startOffset;
+  const _BucketBound(this.label, this.startOffset);
 }
