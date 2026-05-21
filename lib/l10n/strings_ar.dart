@@ -132,6 +132,7 @@ const Map<String, String> stringsAr = {
   'catEmailImapSmtp': 'البريد الإلكتروني (IMAP/SMTP)',
   'catWhoop': 'WHOOP',
   'catNextcloud': 'Nextcloud',
+  'catSandbox': 'الصندوق الرملي / الكود',
   'catSearchWebDesc':
       'البحث في الويب، جلب الصفحات، توليد الصور، والبحث عن البيانات',
   'catUtilitiesDesc':
@@ -152,6 +153,8 @@ const Map<String, String> stringsAr = {
       'عرض بيانات التعافي والجهد والنوم والتمارين من WHOOP',
   'catNextcloudDesc':
       'تصفح الملفات والتقويم وجهات الاتصال على Nextcloud',
+  'catSandboxDesc':
+      'تشغيل كود Python أو الصدفة في صندوق رملي معزول وقراءة/كتابة الملفات',
   'connect': 'اتصال',
   'disconnect': 'قطع الاتصال',
   'disconnectCategory': 'قطع اتصال {label}؟',
