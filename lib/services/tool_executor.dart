@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import 'package:chuk_chat/models/client_tool.dart';
+import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/artifact.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
@@ -32,10 +33,20 @@ import 'package:chuk_chat/tool_handlers/sandbox_tools.dart' as sandbox_tools;
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 
 class ToolExecutionResult {
-  const ToolExecutionResult({required this.output, required this.isError});
+  const ToolExecutionResult({
+    required this.output,
+    required this.isError,
+    this.producedBlocks = const [],
+  });
 
   final String output;
   final bool isError;
+
+  /// Optional content blocks produced as a side-effect of this tool call.
+  /// Currently used by `send_file_to_user` to attach a
+  /// [ContentBlockType.sandboxArtifact] block to the streaming assistant
+  /// message so the user sees the file inline as a downloadable artifact.
+  final List<ContentBlock> producedBlocks;
 }
 
 /// Service to execute tools client-side.
@@ -112,6 +123,7 @@ class ToolExecutor {
     'sandbox_read',
     'sandbox_write',
     'sandbox_reset',
+    'send_file_to_user',
   };
 
   static const Set<String> _defaultDisabledTools = {'whoop'};
@@ -839,6 +851,18 @@ class ToolExecutor {
                 ?? ChatStorageService.activeMessageChatId,
             args: args,
           ),
+        );
+
+      // `send_file_to_user` is a sandbox tool that also produces a
+      // ContentBlock side-effect, so it returns its own ToolExecutionResult
+      // (with `producedBlocks`) rather than going through `_wrapOutput`.
+      case 'send_file_to_user':
+        return sandbox_tools.executeSandboxSendFileToUser(
+          accessToken: accessToken,
+          chatId: currentChatId
+              ?? ChatStorageService.selectedChatId
+              ?? ChatStorageService.activeMessageChatId,
+          args: args,
         );
 
       // -- Typst compile (server-sandboxed) --

@@ -543,8 +543,18 @@ class StreamingMessageHandler {
                 final appendedBlocks = roundResult.blocks;
                 contentBlocks.addAll(appendedBlocks);
 
+                // Append side-effect blocks produced by tools this round
+                // (e.g. send_file_to_user -> sandboxArtifact). These ride
+                // after the tool-calls block they came from so the user
+                // sees the artifact right next to the call that produced it.
+                final producedThisRound = loopResult.producedBlocks;
+                if (producedThisRound.isNotEmpty) {
+                  contentBlocks.addAll(producedThisRound);
+                }
+
                 // Fire content blocks update so the UI can render them.
-                if (appendedBlocks.isNotEmpty) {
+                if (appendedBlocks.isNotEmpty ||
+                    producedThisRound.isNotEmpty) {
                   onContentBlocksUpdate?.call(
                     placeholderIndex,
                     encodeBlocks(),
@@ -720,6 +730,15 @@ class StreamingMessageHandler {
                   finalToolCalls,
                   chatId,
                 );
+              }
+
+              // Append any side-effect blocks (e.g. sandboxArtifact) carried
+              // on the final-answer loop result. They may arrive here if a
+              // producing tool ran in the same pass that emitted the final
+              // text instead of continuing the loop.
+              final finalProducedBlocks = loopResult.producedBlocks;
+              if (finalProducedBlocks.isNotEmpty) {
+                contentBlocks.addAll(finalProducedBlocks);
               }
 
               // --- Build final content blocks ---

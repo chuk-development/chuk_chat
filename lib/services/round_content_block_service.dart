@@ -204,6 +204,11 @@ class RoundContentBlockService {
           if (!_toolCallEqual(aCalls[i], bCalls[i])) return false;
         }
         return true;
+      case ContentBlockType.sandboxArtifact:
+        // Compare by storage path — same encrypted ciphertext path means
+        // the same artifact, regardless of incidental metadata drift.
+        return a.sandboxArtifact?.storagePath ==
+            b.sandboxArtifact?.storagePath;
     }
   }
 

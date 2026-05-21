@@ -2,7 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:chuk_chat/models/content_block.dart';
+import 'package:chuk_chat/services/pdf_attachment_service.dart';
 import 'package:chuk_chat/services/sandbox_service.dart';
+import 'package:chuk_chat/services/tool_executor.dart';
 
 // Session cache + ensure logic lives in `SandboxSessionCache` so that
 // sign-out hooks and other services don't have to import a tool handler
@@ -340,4 +343,195 @@ Future<String> executeSandboxReset({
   }
   return 'Sandbox destroyed for this chat. Next code_run call will '
       'create a fresh one.';
+}
+
+// ---------------------------------------------------------------------------
+// send_file_to_user
+// ---------------------------------------------------------------------------
+
+/// Extension-based mime sniffing for filenames whose upstream content-type
+/// is missing or unhelpful (e.g. `application/octet-stream`). Intentionally
+/// small — the chat UI only needs to distinguish image / pdf / text / other
+/// to pick a renderer.
+const Map<String, String> _extensionMimeMap = {
+  // Images
+  'png': 'image/png',
+  'jpg': 'image/jpeg',
+  'jpeg': 'image/jpeg',
+  'gif': 'image/gif',
+  'webp': 'image/webp',
+  'svg': 'image/svg+xml',
+  'bmp': 'image/bmp',
+  // Documents
+  'pdf': 'application/pdf',
+  // Text-like
+  'csv': 'text/csv',
+  'json': 'application/json',
+  'md': 'text/markdown',
+  'markdown': 'text/markdown',
+  'txt': 'text/plain',
+  'log': 'text/plain',
+  'html': 'text/html',
+  'htm': 'text/html',
+  'xml': 'application/xml',
+  // Source code — render as plain text in the chat preview
+  'py': 'text/plain',
+  'js': 'text/plain',
+  'ts': 'text/plain',
+  'dart': 'text/plain',
+  'go': 'text/plain',
+  'rs': 'text/plain',
+  'c': 'text/plain',
+  'cpp': 'text/plain',
+  'h': 'text/plain',
+  'hpp': 'text/plain',
+  'java': 'text/plain',
+  'kt': 'text/plain',
+  'sh': 'text/plain',
+  'bash': 'text/plain',
+  'yaml': 'text/plain',
+  'yml': 'text/plain',
+  'toml': 'text/plain',
+  'ini': 'text/plain',
+  'env': 'text/plain',
+  'tex': 'text/plain',
+  'typ': 'text/plain',
+  // Archives / binaries
+  'zip': 'application/zip',
+  'tar': 'application/x-tar',
+  'gz': 'application/gzip',
+  '7z': 'application/x-7z-compressed',
+  // Media
+  'mp4': 'video/mp4',
+  'webm': 'video/webm',
+  'mov': 'video/quicktime',
+  'mp3': 'audio/mpeg',
+  'wav': 'audio/wav',
+  'ogg': 'audio/ogg',
+  'flac': 'audio/flac',
+};
+
+String _extOf(String filename) {
+  final dot = filename.lastIndexOf('.');
+  if (dot <= 0 || dot == filename.length - 1) return '';
+  return filename.substring(dot + 1).toLowerCase();
+}
+
+String _inferMimeFromFilename(String filename) {
+  final ext = _extOf(filename);
+  if (ext.isEmpty) return 'application/octet-stream';
+  return _extensionMimeMap[ext] ?? 'application/octet-stream';
+}
+
+String _humanReadableBytes(int n) {
+  if (n < 1024) return '$n B';
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  var value = n / 1024.0;
+  var unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex++;
+  }
+  // Show one decimal for values under 10, none above.
+  final formatted = value < 10
+      ? value.toStringAsFixed(1)
+      : value.round().toString();
+  return '$formatted ${units[unitIndex]}';
+}
+
+String _lastSegment(String path) {
+  final normalized = path.replaceAll('\\', '/');
+  final idx = normalized.lastIndexOf('/');
+  if (idx < 0 || idx == normalized.length - 1) {
+    return normalized.isEmpty ? 'file' : normalized;
+  }
+  return normalized.substring(idx + 1);
+}
+
+Future<ToolExecutionResult> executeSandboxSendFileToUser({
+  required String? accessToken,
+  required String? chatId,
+  required Map<String, dynamic> args,
+}) async {
+  if (accessToken == null || accessToken.isEmpty) {
+    return const ToolExecutionResult(
+      output: 'Error: Not authenticated.',
+      isError: true,
+    );
+  }
+  if (chatId == null || chatId.isEmpty) {
+    return const ToolExecutionResult(
+      output: 'Error: No active chat. Start or select a chat first.',
+      isError: true,
+    );
+  }
+
+  final rawPath = args['path'];
+  final path = rawPath is String ? rawPath.trim() : '';
+  if (path.isEmpty) {
+    return const ToolExecutionResult(
+      output: 'Error: "path" parameter required.',
+      isError: true,
+    );
+  }
+  if (!_isUnderSandbox(path)) {
+    return const ToolExecutionResult(
+      output: 'Error: "path" must be under /home/sandbox.',
+      isError: true,
+    );
+  }
+
+  final rawDisplayName = args['display_name'];
+  final displayName = rawDisplayName is String ? rawDisplayName.trim() : '';
+
+  try {
+    final sessionId = await SandboxSessionCache.ensureSession(
+      accessToken: accessToken,
+      chatId: chatId,
+    );
+    final result = await SandboxService.downloadFile(
+      accessToken: accessToken,
+      sessionId: sessionId,
+      path: path,
+    );
+
+    final filename = displayName.isNotEmpty ? displayName : _lastSegment(path);
+
+    // Prefer upstream content-type when it is non-empty AND specific;
+    // fall back to filename extension otherwise. We treat
+    // `application/octet-stream` as "unknown" so we still try to infer.
+    final upstreamMime = result.contentType.trim();
+    String mime;
+    if (upstreamMime.isEmpty || upstreamMime == 'application/octet-stream') {
+      mime = _inferMimeFromFilename(filename);
+    } else {
+      mime = upstreamMime;
+    }
+
+    final storagePath = await PdfAttachmentService.upload(result.bytes);
+
+    final payload = SandboxArtifactPayload(
+      storagePath: storagePath,
+      filename: filename,
+      mime: mime,
+      sizeBytes: result.bytes.length,
+    );
+    final block = ContentBlock.sandboxArtifact(payload);
+
+    final humanSize = _humanReadableBytes(result.bytes.length);
+    return ToolExecutionResult(
+      output:
+          'Sent "$filename" ($humanSize, $mime) to the user. '
+          'It is now visible in the chat as a downloadable attachment.',
+      isError: false,
+      producedBlocks: [block],
+    );
+  } on SandboxServiceException catch (e) {
+    return ToolExecutionResult(output: _formatError(e), isError: true);
+  } catch (e) {
+    return ToolExecutionResult(
+      output: 'Error: send_file_to_user failed: $e',
+      isError: true,
+    );
+  }
 }

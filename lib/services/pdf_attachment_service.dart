@@ -39,6 +39,13 @@ class PdfAttachmentService {
   /// Encrypts the given bytes with the active encryption key and uploads
   /// them to Supabase Storage. Returns the storage path (relative to the
   /// bucket) which must be persisted alongside the artifact row.
+  ///
+  /// NOTE on mime types: the `images` bucket has an `image/*` MIME allow-list
+  /// at the Supabase Storage layer, so every upload here advertises
+  /// `image/png` regardless of the original file's real mime. The bytes on
+  /// disk are opaque ciphertext either way. **Callers must track the real
+  /// filename and mime separately** (e.g. in the artifact row, ContentBlock
+  /// payload, or chat metadata) — this service does not record it.
   static Future<String> upload(Uint8List bytes) async {
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
