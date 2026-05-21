@@ -1859,6 +1859,7 @@ class _MessageBubbleState extends State<MessageBubble> {
     required String expandedContent,
     required Color accentColor,
     bool isRunning = false,
+    Widget? expandedWidget,
   }) {
     final bool cardExpanded = _expandedCards.contains(key);
 
@@ -1938,17 +1939,19 @@ class _MessageBubbleState extends State<MessageBubble> {
             if (cardExpanded)
               Padding(
                 padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-                child: SelectableText(
-                  expandedContent,
-                  style: TextStyle(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.7),
-                    fontSize: 12,
-                    fontFamily: 'monospace',
-                    height: 1.4,
-                  ),
-                ),
+                child:
+                    expandedWidget ??
+                    SelectableText(
+                      expandedContent,
+                      style: TextStyle(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.7),
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                        height: 1.4,
+                      ),
+                    ),
               ),
           ],
         ),
@@ -2233,6 +2236,9 @@ class _MessageBubbleState extends State<MessageBubble> {
                             expandedContent: _formatToolCallDetails(
                               effectiveTimeline[ti].toolCall!,
                             ),
+                            expandedWidget: _buildToolCallExpandedWidget(
+                              effectiveTimeline[ti].toolCall!,
+                            ),
                             accentColor: _toolCallColor(
                               effectiveTimeline[ti].toolCall!.status,
                             ),
@@ -2263,6 +2269,9 @@ class _MessageBubbleState extends State<MessageBubble> {
                                   ? _truncatePreview(toolCalls[i].result!, 60)
                                   : 'running...'),
                           expandedContent: _formatToolCallDetails(toolCalls[i]),
+                          expandedWidget: _buildToolCallExpandedWidget(
+                            toolCalls[i],
+                          ),
                           accentColor: _toolCallColor(toolCalls[i].status),
                           isRunning:
                               toolCalls[i].status == ToolCallStatus.running,
@@ -2338,6 +2347,130 @@ class _MessageBubbleState extends State<MessageBubble> {
       return 'No result yet.';
     }
     return buffer.toString().trimRight();
+  }
+
+  /// Builds a rich, syntax-highlighted expanded view for a tool call.
+  /// `code_run` / `sandbox_*` get the `code` arg rendered as a fenced
+  /// block in its declared language; other args become a compact
+  /// key/value list. The result block is parsed for `--- stdout ---`
+  /// markers so stdout/stderr render as separate fenced blocks.
+  Widget _buildToolCallExpandedWidget(ToolCall toolCall) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textColor = colorScheme.onSurface.withValues(alpha: 0.85);
+    final bgColor = colorScheme.surface;
+    final mdSections = <String>[];
+
+    final args = Map<String, dynamic>.from(toolCall.arguments);
+    String? codeArg;
+    String? codeLang;
+    final rawCode = args.remove('code');
+    if (rawCode is String && rawCode.isNotEmpty) {
+      codeArg = rawCode;
+      final rawLang = args['language'];
+      codeLang = rawLang is String && rawLang.trim().isNotEmpty
+          ? rawLang.trim()
+          : (toolCall.name == 'code_run' ? 'python' : 'text');
+    }
+
+    // Non-code args as compact key:value lines (or pretty JSON for objects).
+    final argLines = <String>[];
+    args.forEach((k, v) {
+      if (v == null) return;
+      if (v is String) {
+        if (v.contains('\n') || v.length > 80) {
+          argLines.add('**$k:**\n```text\n$v\n```');
+        } else {
+          argLines.add('**$k:** `$v`');
+        }
+      } else if (v is num || v is bool) {
+        argLines.add('**$k:** `$v`');
+      } else {
+        // List/Map → pretty JSON fence.
+        String pretty;
+        try {
+          pretty = const JsonEncoder.withIndent('  ').convert(v);
+        } catch (_) {
+          pretty = v.toString();
+        }
+        argLines.add('**$k:**\n```json\n$pretty\n```');
+      }
+    });
+
+    if (codeArg != null) {
+      mdSections.add('```$codeLang\n$codeArg\n```');
+    }
+    if (argLines.isNotEmpty) {
+      mdSections.add(argLines.join('  \n'));
+    }
+
+    // Result block — split sandbox-style stdout/stderr if present.
+    final result = toolCall.result;
+    if (result != null && result.isNotEmpty) {
+      mdSections.add(_formatToolResultMarkdown(toolCall, result));
+    } else if (toolCall.status == ToolCallStatus.running ||
+        toolCall.status == ToolCallStatus.pending) {
+      mdSections.add('_Running…_');
+    }
+
+    if (mdSections.isEmpty) {
+      mdSections.add('_No details._');
+    }
+
+    return MarkdownMessage(
+      text: mdSections.join('\n\n'),
+      textColor: textColor,
+      backgroundColor: bgColor,
+      wrapWithSelectionArea: !widget.useSharedSelectionArea,
+      fontFamily: 'monospace',
+      paragraphFontSize: 12,
+    );
+  }
+
+  String _formatToolResultMarkdown(ToolCall toolCall, String result) {
+    // Sandbox result shape: header lines, then `--- stdout ---` and
+    // optional `--- stderr ---`. Split so each stream is its own fence.
+    final stdoutMarker = RegExp(r'^--- stdout ---\s*$', multiLine: true);
+    final stderrMarker = RegExp(r'^--- stderr ---\s*$', multiLine: true);
+    final stdoutMatch = stdoutMarker.firstMatch(result);
+    final stderrMatch = stderrMarker.firstMatch(result);
+
+    if (stdoutMatch != null) {
+      final header = result.substring(0, stdoutMatch.start).trim();
+      final stdoutStart = stdoutMatch.end;
+      final stdoutEnd = stderrMatch?.start ?? result.length;
+      final stdout = result.substring(stdoutStart, stdoutEnd).trim();
+      final stderr = stderrMatch != null
+          ? result.substring(stderrMatch.end).trim()
+          : '';
+
+      final buf = StringBuffer();
+      buf.writeln('**Result**');
+      if (header.isNotEmpty) {
+        for (final line in header.split('\n')) {
+          if (line.trim().isEmpty) continue;
+          buf.writeln('- `${line.trim()}`');
+        }
+      }
+      buf.writeln();
+      buf.writeln('_stdout_');
+      buf.writeln('```text');
+      buf.writeln(stdout.isEmpty ? '(empty)' : stdout);
+      buf.writeln('```');
+      if (stderr.isNotEmpty) {
+        buf.writeln();
+        buf.writeln('_stderr_');
+        buf.writeln('```text');
+        buf.writeln(stderr);
+        buf.writeln('```');
+      }
+      return buf.toString().trimRight();
+    }
+
+    final isError =
+        toolCall.status == ToolCallStatus.error ||
+        result.startsWith('Error:');
+    final label = isError ? '**Error**' : '**Result**';
+    return '$label\n```text\n$result\n```';
   }
 
   String? _toolCallSubtitle(ToolCall toolCall) {
