@@ -960,16 +960,25 @@ class _MessageBubbleState extends State<MessageBubble> {
     // Reasoning blocks are buffered and attached to the NEXT tool-calls block
     // so each (reasoning + tool calls) round renders as ONE collapsible bar,
     // even when plain text appears between them. Text renders inline in
-    // chronological position; the bar follows below it. When NO tool calls
-    // follow, reasoning flushes standalone ABOVE the next text instead.
+    // chronological position; the bar follows below it. Exceptions that
+    // force a standalone reasoning card ABOVE the next text:
+    //   1. No tool calls follow (lookahead).
+    //   2. This is the FIRST piece of main content in the response — the
+    //      initial "planning" reasoning belongs visibly on top, not folded
+    //      into the first tool-calls round below the opening text.
     final pendingReasoning = <String>[];
+    var hasRenderedMainContent = false;
 
     void flushStandaloneReasoning() {
       if (pendingReasoning.isEmpty) return;
-      for (final r in pendingReasoning) {
-        children.add(_buildBlockReasoning(r, accentColor));
-      }
+      // Multiple buffered reasoning blocks render as ONE merged card —
+      // adjacent reasoning entries with no other content between them
+      // should never appear as separate tiles.
+      children.add(
+        _buildBlockReasoning(pendingReasoning.join('\n\n'), accentColor),
+      );
       pendingReasoning.clear();
+      hasRenderedMainContent = true;
     }
 
     void renderToolCallsBlock(List<ToolCall> toolCalls) {
@@ -979,13 +988,20 @@ class _MessageBubbleState extends State<MessageBubble> {
         return;
       }
       final timeline = <_ToolTimelineEntry>[];
-      for (final r in pendingReasoning) {
-        timeline.add(_ToolTimelineEntry.reasoning(r));
+      if (pendingReasoning.isNotEmpty) {
+        // Adjacent reasoning entries collapse into ONE timeline tile.
+        timeline.add(
+          _ToolTimelineEntry.reasoning(pendingReasoning.join('\n\n')),
+        );
       }
       for (final tc in toolCalls) {
         timeline.add(_ToolTimelineEntry.tool(tc));
       }
       pendingReasoning.clear();
+      // Symmetric spacing: same gap above the bar as below.
+      if (hasRenderedMainContent) {
+        children.add(const SizedBox(height: 8));
+      }
       children.add(
         _buildToolCallsBar(
           toolCalls,
@@ -996,6 +1012,7 @@ class _MessageBubbleState extends State<MessageBubble> {
       children.add(const SizedBox(height: 6));
       children.addAll(_buildArtifactCards(toolCalls));
       children.add(const SizedBox(height: 8));
+      hasRenderedMainContent = true;
       if (hasImages && !insertedImage) {
         final hasImageResult = toolCalls.any((tc) {
           final r = tc.result;
@@ -1037,8 +1054,13 @@ class _MessageBubbleState extends State<MessageBubble> {
             );
           }
         case ContentBlockType.text:
+          // Flush pending reasoning standalone if:
+          //  - no tool-calls follow at all (lookahead), or
+          //  - we haven't rendered any main content yet (the initial
+          //    "planning" reasoning belongs visibly on top of the response).
           if (pendingReasoning.isNotEmpty &&
-              !toolCallsFollowFrom(blockIndex + 1)) {
+              (!hasRenderedMainContent ||
+                  !toolCallsFollowFrom(blockIndex + 1))) {
             flushStandaloneReasoning();
           }
           if (block.text != null && block.text!.trim().isNotEmpty) {
@@ -1050,6 +1072,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                 baseBlockIndex: blockIndex * 1000,
               ),
             );
+            hasRenderedMainContent = true;
           }
       }
     }
