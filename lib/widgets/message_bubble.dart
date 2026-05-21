@@ -100,13 +100,6 @@ class MessageBubbleAction {
   final String? label;
 }
 
-class _ToolCallGroupSegment {
-  _ToolCallGroupSegment({this.reasoning = ''});
-
-  String reasoning;
-  final List<ToolCall> toolCalls = <ToolCall>[];
-}
-
 class _ToolTimelineEntry {
   const _ToolTimelineEntry.reasoning(this.reasoning) : toolCall = null;
   const _ToolTimelineEntry.tool(this.toolCall) : reasoning = null;
@@ -944,150 +937,85 @@ class _MessageBubbleState extends State<MessageBubble> {
         .join('\n\n')
         .trim();
 
-    // Group contiguous reasoning/tool-call rounds into one parent block.
-    // A plain text block ends the current reasoning block and starts a new one
-    // below that text.
-    final groupedSegments = <_ToolCallGroupSegment>[];
+    // Reasoning blocks are buffered and attached to the NEXT tool-calls block
+    // so each (reasoning + tool calls) round renders as ONE collapsible bar,
+    // even when plain text appears between them. Text renders inline in
+    // chronological position; the bar follows below it.
+    final pendingReasoning = <String>[];
 
-    void flushGroupedReasoningTools() {
-      if (groupedSegments.isEmpty) {
-        return;
+    void flushStandaloneReasoning() {
+      if (pendingReasoning.isEmpty) return;
+      for (final r in pendingReasoning) {
+        children.add(_buildBlockReasoning(r, accentColor));
       }
-
-      // Reasoning that arrives AFTER the last tool call belongs to the
-      // round that produced the upcoming text — not to the previous tool
-      // call's timeline. Pull those tail-only reasoning segments out so
-      // they render as their own reasoning card BELOW the tool-calls bar.
-      final tailReasonings = <String>[];
-      while (groupedSegments.isNotEmpty &&
-          groupedSegments.last.toolCalls.isEmpty) {
-        final r = groupedSegments.removeLast().reasoning.trim();
-        if (r.isNotEmpty) tailReasonings.insert(0, r);
-      }
-
-      final mergedToolCalls = <ToolCall>[];
-      final timeline = <_ToolTimelineEntry>[];
-      final fallbackReasonings = <String>[];
-
-      for (final segment in groupedSegments) {
-        final segmentReasoning = segment.reasoning.trim();
-
-        if (!widget.showToolCalls) {
-          if (segmentReasoning.isNotEmpty) {
-            fallbackReasonings.add(segmentReasoning);
-          }
-          continue;
-        }
-
-        if (segmentReasoning.isNotEmpty) {
-          timeline.add(_ToolTimelineEntry.reasoning(segmentReasoning));
-        }
-
-        if (segment.toolCalls.isNotEmpty) {
-          for (final toolCall in segment.toolCalls) {
-            mergedToolCalls.add(toolCall);
-            timeline.add(_ToolTimelineEntry.tool(toolCall));
-          }
-        }
-      }
-      if (!widget.showToolCalls) {
-        // When tool calls are hidden, treat tail reasoning as plain
-        // reasoning and render it after the existing fallback reasonings.
-        for (final r in tailReasonings) {
-          fallbackReasonings.add(r);
-        }
-      }
-
-      if (widget.showToolCalls && mergedToolCalls.isNotEmpty) {
-        children.add(
-          _buildToolCallsBar(
-            mergedToolCalls,
-            isContentBlock: true,
-            contentBlockTimeline: timeline,
-          ),
-        );
-        children.add(const SizedBox(height: 6));
-        children.addAll(_buildArtifactCards(mergedToolCalls));
-        children.add(const SizedBox(height: 8));
-        // Insert images right after the tool calls bar that produced them.
-        if (hasImages && !insertedImage) {
-          final hasImageResult = mergedToolCalls.any((tc) {
-            final r = tc.result;
-            return r != null &&
-                (r.startsWith('IMAGE:') || r.startsWith('IMAGE_DATA:'));
-          });
-          if (hasImageResult) {
-            children.add(_buildImagesGrid(widget.images!));
-            if (_hasGeneratedImage) {
-              children.add(
-                _buildImageMetaMenu(
-                  iconFgColor,
-                  alignRight,
-                  widget.imageCostEur,
-                  widget.imageGeneratedAt,
-                ),
-              );
-            }
-            children.add(const SizedBox(height: 8));
-            insertedImage = true;
-          }
-        }
-      } else if (widget.showToolCalls && timeline.isNotEmpty) {
-        for (final entry in timeline) {
-          if (entry.isReasoning &&
-              (entry.reasoning?.trim().isNotEmpty ?? false)) {
-            children.add(_buildBlockReasoning(entry.reasoning!, accentColor));
-          }
-        }
-      } else if (!widget.showToolCalls && fallbackReasonings.isNotEmpty) {
-        for (final reasoning in fallbackReasonings) {
-          children.add(_buildBlockReasoning(reasoning, accentColor));
-        }
-      }
-
-      // Render any tail reasoning that wasn't part of a tool-call round —
-      // it belongs to the next text answer, so it sits directly above it.
-      if (widget.showToolCalls) {
-        for (final r in tailReasonings) {
-          children.add(_buildBlockReasoning(r, accentColor));
-        }
-      }
-
-      groupedSegments.clear();
+      pendingReasoning.clear();
     }
 
-    // Render grouped reasoning/tool-call blocks. Text blocks break groups.
+    void renderToolCallsBlock(List<ToolCall> toolCalls) {
+      if (toolCalls.isEmpty) return;
+      if (!widget.showToolCalls) {
+        flushStandaloneReasoning();
+        return;
+      }
+      final timeline = <_ToolTimelineEntry>[];
+      for (final r in pendingReasoning) {
+        timeline.add(_ToolTimelineEntry.reasoning(r));
+      }
+      for (final tc in toolCalls) {
+        timeline.add(_ToolTimelineEntry.tool(tc));
+      }
+      pendingReasoning.clear();
+      children.add(
+        _buildToolCallsBar(
+          toolCalls,
+          isContentBlock: true,
+          contentBlockTimeline: timeline,
+        ),
+      );
+      children.add(const SizedBox(height: 6));
+      children.addAll(_buildArtifactCards(toolCalls));
+      children.add(const SizedBox(height: 8));
+      if (hasImages && !insertedImage) {
+        final hasImageResult = toolCalls.any((tc) {
+          final r = tc.result;
+          return r != null &&
+              (r.startsWith('IMAGE:') || r.startsWith('IMAGE_DATA:'));
+        });
+        if (hasImageResult) {
+          children.add(_buildImagesGrid(widget.images!));
+          if (_hasGeneratedImage) {
+            children.add(
+              _buildImageMetaMenu(
+                iconFgColor,
+                alignRight,
+                widget.imageCostEur,
+                widget.imageGeneratedAt,
+              ),
+            );
+          }
+          children.add(const SizedBox(height: 8));
+          insertedImage = true;
+        }
+      }
+    }
+
     for (int blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
       final block = blocks[blockIndex];
       switch (block.type) {
         case ContentBlockType.reasoning:
           final reasoningText = block.text?.trim() ?? '';
           if (reasoningText.isNotEmpty) {
-            if (groupedSegments.isEmpty ||
-                groupedSegments.last.toolCalls.isNotEmpty) {
-              groupedSegments.add(
-                _ToolCallGroupSegment(reasoning: reasoningText),
-              );
-            } else {
-              final existing = groupedSegments.last.reasoning.trim();
-              groupedSegments.last.reasoning = existing.isEmpty
-                  ? reasoningText
-                  : '$existing\n\n$reasoningText';
-            }
+            pendingReasoning.add(reasoningText);
           }
         case ContentBlockType.toolCalls:
           if (block.toolCalls != null && block.toolCalls!.isNotEmpty) {
-            if (groupedSegments.isEmpty) {
-              groupedSegments.add(_ToolCallGroupSegment());
-            }
-            groupedSegments.last.toolCalls.addAll(
+            renderToolCallsBlock(
               block.toolCalls!
                   .map((tc) => ToolCall.fromJson(tc.toJson()))
                   .toList(),
             );
           }
         case ContentBlockType.text:
-          flushGroupedReasoningTools();
           if (block.text != null && block.text!.trim().isNotEmpty) {
             children.addAll(
               _buildSwipeableTextParagraphs(
@@ -1118,11 +1046,6 @@ class _MessageBubbleState extends State<MessageBubble> {
         }
       }
 
-      // Keep one reasoning/tool block open until we actually show text.
-      if (trailingText.isNotEmpty) {
-        flushGroupedReasoningTools();
-      }
-
       if (trailingText.isNotEmpty) {
         children.addAll(
           _buildSwipeableTextParagraphs(
@@ -1136,10 +1059,8 @@ class _MessageBubbleState extends State<MessageBubble> {
     }
 
     // Live tool calls: any tool calls NOT yet in a content block
-    // (from the currently-running pass). Treat them as a synthetic
-    // in-progress tool-calls block appended to the ordered block list — this
-    // preserves true emission order: finalized rounds, then trailing
-    // streaming text, then the in-progress tools for the current pass.
+    // (from the currently-running pass). Attach any still-pending reasoning
+    // to them so the live round renders as one bar.
     var liveToolCalls = <ToolCall>[];
     if (widget.showToolCalls &&
         widget.toolCalls != null &&
@@ -1149,26 +1070,12 @@ class _MessageBubbleState extends State<MessageBubble> {
           .toList();
     }
 
-    // If there's no trailing text, live tools start a new group so they stay
-    // separated from any prior-round finalized tools sitting in the open
-    // group. If trailing text already rendered, live tools belong to a new
-    // block below the text.
-    if (trailingText.isEmpty && liveToolCalls.isNotEmpty) {
-      // Flush any pending prior-round reasoning/tools first so the live
-      // tools render as their own block (true sequence order).
-      flushGroupedReasoningTools();
-      groupedSegments.add(_ToolCallGroupSegment());
-      groupedSegments.last.toolCalls.addAll(
+    if (liveToolCalls.isNotEmpty) {
+      renderToolCallsBlock(
         liveToolCalls.map((tc) => ToolCall.fromJson(tc.toJson())).toList(),
       );
-    }
-
-    // Flush any still-open reasoning/tool-call group now.
-    flushGroupedReasoningTools();
-
-    if (trailingText.isNotEmpty && liveToolCalls.isNotEmpty) {
-      children.add(_buildToolCallsBar(liveToolCalls));
-      children.add(const SizedBox(height: 8));
+    } else {
+      flushStandaloneReasoning();
     }
 
     if (hasImages && !insertedImage) {
