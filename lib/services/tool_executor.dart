@@ -28,6 +28,7 @@ import 'package:chuk_chat/tool_handlers/chat_search_tools.dart'
 import 'package:chuk_chat/tool_handlers/nextcloud_tools.dart'
     as nextcloud_tools;
 import 'package:chuk_chat/tool_handlers/typst_tools.dart' as typst_tools;
+import 'package:chuk_chat/tool_handlers/sandbox_tools.dart' as sandbox_tools;
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 
 class ToolExecutionResult {
@@ -106,6 +107,11 @@ class ToolExecutor {
     'artifact_schema',
     'update_project',
     'typst_compile',
+    'code_run',
+    'sandbox_list',
+    'sandbox_read',
+    'sandbox_write',
+    'sandbox_reset',
   };
 
   static const Set<String> _defaultDisabledTools = {'whoop'};
@@ -476,6 +482,8 @@ class ToolExecutor {
         return nextcloud_tools.isNextcloudConnected();
       case ToolCategory.whoop:
         return platform_tools.isPlatformServiceConnected('whoop');
+      case ToolCategory.sandbox:
+        return true; // Server-managed Docker sandbox
     }
   }
 
@@ -780,6 +788,58 @@ class ToolExecutor {
         return _wrapOutput(_executeArtifactSchema(args));
       case 'update_project':
         return _wrapOutput(await _executeUpdateProject(args));
+
+      // -- Sandbox: code execution + file I/O --
+      case 'code_run':
+        return _wrapOutput(
+          await sandbox_tools.executeCodeRun(
+            accessToken: accessToken,
+            chatId: currentChatId
+                ?? ChatStorageService.selectedChatId
+                ?? ChatStorageService.activeMessageChatId,
+            args: args,
+          ),
+        );
+      case 'sandbox_list':
+        return _wrapOutput(
+          await sandbox_tools.executeSandboxListFiles(
+            accessToken: accessToken,
+            chatId: currentChatId
+                ?? ChatStorageService.selectedChatId
+                ?? ChatStorageService.activeMessageChatId,
+            args: args,
+          ),
+        );
+      case 'sandbox_read':
+        return _wrapOutput(
+          await sandbox_tools.executeSandboxReadFile(
+            accessToken: accessToken,
+            chatId: currentChatId
+                ?? ChatStorageService.selectedChatId
+                ?? ChatStorageService.activeMessageChatId,
+            args: args,
+          ),
+        );
+      case 'sandbox_write':
+        return _wrapOutput(
+          await sandbox_tools.executeSandboxWriteFile(
+            accessToken: accessToken,
+            chatId: currentChatId
+                ?? ChatStorageService.selectedChatId
+                ?? ChatStorageService.activeMessageChatId,
+            args: args,
+          ),
+        );
+      case 'sandbox_reset':
+        return _wrapOutput(
+          await sandbox_tools.executeSandboxReset(
+            accessToken: accessToken,
+            chatId: currentChatId
+                ?? ChatStorageService.selectedChatId
+                ?? ChatStorageService.activeMessageChatId,
+            args: args,
+          ),
+        );
 
       // -- Typst compile (server-sandboxed) --
       case 'typst_compile':

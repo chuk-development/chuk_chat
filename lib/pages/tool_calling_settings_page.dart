@@ -185,6 +185,8 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return 10;
       case ToolCategory.nextcloud:
         return 11;
+      case ToolCategory.sandbox:
+        return 12;
     }
   }
 
@@ -215,6 +217,8 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return l.catWhoop;
       case ToolCategory.nextcloud:
         return l.catNextcloud;
+      case ToolCategory.sandbox:
+        return l.catSandbox;
     }
   }
 
@@ -244,6 +248,8 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return Icons.monitor_heart_outlined;
       case ToolCategory.nextcloud:
         return Icons.cloud_outlined;
+      case ToolCategory.sandbox:
+        return Icons.code_outlined;
     }
   }
 
@@ -274,6 +280,8 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return l.catWhoopDesc;
       case ToolCategory.nextcloud:
         return l.catNextcloudDesc;
+      case ToolCategory.sandbox:
+        return l.catSandboxDesc;
     }
   }
 

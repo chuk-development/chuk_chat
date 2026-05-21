@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/password_revision_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/tool_handlers/sandbox_tools.dart' as sandbox_tools;
 
 class AuthService {
   const AuthService();
@@ -74,6 +75,11 @@ class AuthService {
         await PasswordRevisionService.clearCachedRevision(userId: userId);
       }
       await SupabaseService.auth.signOut();
+      // Drop any sandbox session ids we cached for this user's chats —
+      // the next sign-in must not reuse them. Done BEFORE clearKey() so
+      // that if EncryptionService.clearKey() throws, the cache is still
+      // wiped (the user is already signed out at this point).
+      sandbox_tools.clearSandboxCache();
       await EncryptionService.clearKey();
     } on AuthException catch (error) {
       throw AuthServiceException(message: error.message);
