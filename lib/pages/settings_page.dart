@@ -16,6 +16,7 @@ import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/pages/theme_page.dart';
 import 'package:chuk_chat/pages/customization_page.dart';
 import 'package:chuk_chat/pages/diagnostics_settings_page.dart';
+import 'package:chuk_chat/pages/sandbox_management_page.dart';
 import 'package:chuk_chat/pages/tool_calling_settings_page.dart';
 import 'package:chuk_chat/pages/account_settings_page.dart';
 import 'package:chuk_chat/pages/about_page.dart';
@@ -228,6 +229,20 @@ class _SettingsPageState extends State<SettingsPage> {
                     context,
                     MaterialPageRoute(
                       builder: (_) => const GitHubConnectionPage(),
+                    ),
+                  );
+                },
+              ),
+              _SettingsRow(
+                icon: Icons.developer_board,
+                title: 'Sandboxes',
+                subtitle:
+                    'See and stop running code-execution containers (max 2)',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const SandboxManagementPage(),
                     ),
                   );
                 },
