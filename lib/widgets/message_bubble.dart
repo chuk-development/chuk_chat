@@ -937,10 +937,31 @@ class _MessageBubbleState extends State<MessageBubble> {
         .join('\n\n')
         .trim();
 
+    // Live tool calls computed up front so the lookahead can see them too:
+    // pending reasoning is allowed to "wait" past a text block only when a
+    // tool-calls block (finalized or live) still lies ahead.
+    final hasAnyLiveToolCalls =
+        widget.showToolCalls &&
+        widget.toolCalls != null &&
+        widget.toolCalls!.any((tc) => !blockToolCallIds.contains(tc.id));
+
+    bool toolCallsFollowFrom(int fromIndex) {
+      for (var i = fromIndex; i < blocks.length; i++) {
+        final b = blocks[i];
+        if (b.type == ContentBlockType.toolCalls &&
+            b.toolCalls != null &&
+            b.toolCalls!.isNotEmpty) {
+          return true;
+        }
+      }
+      return hasAnyLiveToolCalls;
+    }
+
     // Reasoning blocks are buffered and attached to the NEXT tool-calls block
     // so each (reasoning + tool calls) round renders as ONE collapsible bar,
     // even when plain text appears between them. Text renders inline in
-    // chronological position; the bar follows below it.
+    // chronological position; the bar follows below it. When NO tool calls
+    // follow, reasoning flushes standalone ABOVE the next text instead.
     final pendingReasoning = <String>[];
 
     void flushStandaloneReasoning() {
@@ -1016,6 +1037,10 @@ class _MessageBubbleState extends State<MessageBubble> {
             );
           }
         case ContentBlockType.text:
+          if (pendingReasoning.isNotEmpty &&
+              !toolCallsFollowFrom(blockIndex + 1)) {
+            flushStandaloneReasoning();
+          }
           if (block.text != null && block.text!.trim().isNotEmpty) {
             children.addAll(
               _buildSwipeableTextParagraphs(
@@ -1047,6 +1072,11 @@ class _MessageBubbleState extends State<MessageBubble> {
       }
 
       if (trailingText.isNotEmpty) {
+        // Without an upcoming live tool-calls bar, pending reasoning has
+        // nothing to attach to and belongs ABOVE the streaming text.
+        if (pendingReasoning.isNotEmpty && !hasAnyLiveToolCalls) {
+          flushStandaloneReasoning();
+        }
         children.addAll(
           _buildSwipeableTextParagraphs(
             text: trailingText,
@@ -1061,14 +1091,11 @@ class _MessageBubbleState extends State<MessageBubble> {
     // Live tool calls: any tool calls NOT yet in a content block
     // (from the currently-running pass). Attach any still-pending reasoning
     // to them so the live round renders as one bar.
-    var liveToolCalls = <ToolCall>[];
-    if (widget.showToolCalls &&
-        widget.toolCalls != null &&
-        widget.toolCalls!.isNotEmpty) {
-      liveToolCalls = widget.toolCalls!
-          .where((tc) => !blockToolCallIds.contains(tc.id))
-          .toList();
-    }
+    final liveToolCalls = hasAnyLiveToolCalls
+        ? widget.toolCalls!
+              .where((tc) => !blockToolCallIds.contains(tc.id))
+              .toList()
+        : <ToolCall>[];
 
     if (liveToolCalls.isNotEmpty) {
       renderToolCallsBlock(
