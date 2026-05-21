@@ -100,6 +100,22 @@ class MessageBubbleAction {
   final String? label;
 }
 
+class _RenderSegment {
+  _RenderSegment._({this.text})
+      : reasonings = <String>[],
+        toolCalls = <ToolCall>[];
+
+  _RenderSegment.text(String t) : this._(text: t);
+  _RenderSegment.round() : this._();
+
+  final String? text;
+  final List<String> reasonings;
+  final List<ToolCall> toolCalls;
+
+  bool get isText => text != null;
+  bool get hasContent => reasonings.isNotEmpty || toolCalls.isNotEmpty;
+}
+
 class _ToolTimelineEntry {
   const _ToolTimelineEntry.reasoning(this.reasoning) : toolCall = null;
   const _ToolTimelineEntry.tool(this.toolCall) : reasoning = null;
@@ -937,84 +953,123 @@ class _MessageBubbleState extends State<MessageBubble> {
         .join('\n\n')
         .trim();
 
-    // Live tool calls computed up front so the lookahead can see them too:
-    // pending reasoning is allowed to "wait" past a text block only when a
-    // tool-calls block (finalized or live) still lies ahead.
-    final hasAnyLiveToolCalls =
-        widget.showToolCalls &&
-        widget.toolCalls != null &&
-        widget.toolCalls!.any((tc) => !blockToolCallIds.contains(tc.id));
+    // Live tool calls from the current streaming pass that aren't in blocks.
+    final liveToolCalls = widget.showToolCalls &&
+            widget.toolCalls != null &&
+            widget.toolCalls!.isNotEmpty
+        ? widget.toolCalls!
+              .where((tc) => !blockToolCallIds.contains(tc.id))
+              .map((tc) => ToolCall.fromJson(tc.toJson()))
+              .toList()
+        : <ToolCall>[];
 
-    bool toolCallsFollowFrom(int fromIndex) {
-      for (var i = fromIndex; i < blocks.length; i++) {
-        final b = blocks[i];
-        if (b.type == ContentBlockType.toolCalls &&
-            b.toolCalls != null &&
-            b.toolCalls!.isNotEmpty) {
-          return true;
-        }
-      }
-      return hasAnyLiveToolCalls;
+    // Pre-process blocks into render segments. Text blocks act as separators.
+    // Between any two text blocks, ALL reasoning blocks merge into one string
+    // and ALL tool-calls collect into one list — so a run of reasoning+tool
+    // emissions with no text between them renders as ONE collapsible bar.
+    final segments = <_RenderSegment>[];
+    _RenderSegment current = _RenderSegment.round();
+
+    void closeCurrentRound() {
+      if (current.hasContent) segments.add(current);
+      current = _RenderSegment.round();
     }
 
-    // Reasoning blocks are buffered and attached to the NEXT tool-calls block
-    // so each (reasoning + tool calls) round renders as ONE collapsible bar,
-    // even when plain text appears between them. Text renders inline in
-    // chronological position; the bar follows below it. Exceptions that
-    // force a standalone reasoning card ABOVE the next text:
-    //   1. No tool calls follow (lookahead).
-    //   2. This is the FIRST piece of main content in the response — the
-    //      initial "planning" reasoning belongs visibly on top, not folded
-    //      into the first tool-calls round below the opening text.
-    final pendingReasoning = <String>[];
+    // Trailing widget.message (streaming or finalized tail like an error)
+    // computed up front so we know whether trailing text "ends" the last
+    // round before live tools or appears after.
+    var trailingText = stripToolCallBlocksForDisplay(widget.message).trim();
+    if (trailingText.isNotEmpty && finalizedTextPrefix.isNotEmpty) {
+      if (trailingText == finalizedTextPrefix) {
+        trailingText = '';
+      } else if (trailingText.startsWith('$finalizedTextPrefix\n\n')) {
+        trailingText = trailingText
+            .substring(finalizedTextPrefix.length)
+            .trim();
+      }
+    }
+
+    for (final block in blocks) {
+      switch (block.type) {
+        case ContentBlockType.reasoning:
+          final r = block.text?.trim() ?? '';
+          if (r.isNotEmpty) current.reasonings.add(r);
+        case ContentBlockType.toolCalls:
+          if (block.toolCalls != null && block.toolCalls!.isNotEmpty) {
+            current.toolCalls.addAll(
+              block.toolCalls!.map((tc) => ToolCall.fromJson(tc.toJson())),
+            );
+          }
+        case ContentBlockType.text:
+          closeCurrentRound();
+          final t = block.text?.trim() ?? '';
+          if (t.isNotEmpty) segments.add(_RenderSegment.text(block.text!));
+      }
+    }
+
+    // Trailing text acts as a separator before any live tool calls, just
+    // like a text content block would.
+    if (trailingText.isNotEmpty) {
+      closeCurrentRound();
+      segments.add(_RenderSegment.text(trailingText));
+    }
+
+    if (liveToolCalls.isNotEmpty) {
+      current.toolCalls.addAll(liveToolCalls);
+    }
+    closeCurrentRound();
+
+    // Render segments.
+    var segmentIndex = 0;
     var hasRenderedMainContent = false;
 
-    void flushStandaloneReasoning() {
-      if (pendingReasoning.isEmpty) return;
-      // Multiple buffered reasoning blocks render as ONE merged card —
-      // adjacent reasoning entries with no other content between them
-      // should never appear as separate tiles.
-      children.add(
-        _buildBlockReasoning(pendingReasoning.join('\n\n'), accentColor),
-      );
-      pendingReasoning.clear();
-      hasRenderedMainContent = true;
-    }
-
-    void renderToolCallsBlock(List<ToolCall> toolCalls) {
-      if (toolCalls.isEmpty) return;
+    void renderRound(_RenderSegment seg) {
+      if (!seg.hasContent) return;
+      // Reasoning-only round: standalone collapsible reasoning card.
+      if (seg.toolCalls.isEmpty) {
+        if (seg.reasonings.isEmpty) return;
+        children.add(
+          _buildBlockReasoning(seg.reasonings.join('\n\n'), accentColor),
+        );
+        hasRenderedMainContent = true;
+        return;
+      }
+      // Tool-calls round: one bar with merged reasoning + all tools.
       if (!widget.showToolCalls) {
-        flushStandaloneReasoning();
+        if (seg.reasonings.isNotEmpty) {
+          children.add(
+            _buildBlockReasoning(seg.reasonings.join('\n\n'), accentColor),
+          );
+          hasRenderedMainContent = true;
+        }
         return;
       }
       final timeline = <_ToolTimelineEntry>[];
-      if (pendingReasoning.isNotEmpty) {
-        // Adjacent reasoning entries collapse into ONE timeline tile.
+      if (seg.reasonings.isNotEmpty) {
         timeline.add(
-          _ToolTimelineEntry.reasoning(pendingReasoning.join('\n\n')),
+          _ToolTimelineEntry.reasoning(seg.reasonings.join('\n\n')),
         );
       }
-      for (final tc in toolCalls) {
+      for (final tc in seg.toolCalls) {
         timeline.add(_ToolTimelineEntry.tool(tc));
       }
-      pendingReasoning.clear();
-      // Symmetric spacing: same gap above the bar as below.
       if (hasRenderedMainContent) {
         children.add(const SizedBox(height: 8));
       }
       children.add(
         _buildToolCallsBar(
-          toolCalls,
+          seg.toolCalls,
           isContentBlock: true,
           contentBlockTimeline: timeline,
         ),
       );
       children.add(const SizedBox(height: 6));
-      children.addAll(_buildArtifactCards(toolCalls));
+      children.addAll(_buildArtifactCards(seg.toolCalls));
       children.add(const SizedBox(height: 8));
       hasRenderedMainContent = true;
+      // Image insertion right after the round that produced it.
       if (hasImages && !insertedImage) {
-        final hasImageResult = toolCalls.any((tc) {
+        final hasImageResult = seg.toolCalls.any((tc) {
           final r = tc.result;
           return r != null &&
               (r.startsWith('IMAGE:') || r.startsWith('IMAGE_DATA:'));
@@ -1037,93 +1092,21 @@ class _MessageBubbleState extends State<MessageBubble> {
       }
     }
 
-    for (int blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
-      final block = blocks[blockIndex];
-      switch (block.type) {
-        case ContentBlockType.reasoning:
-          final reasoningText = block.text?.trim() ?? '';
-          if (reasoningText.isNotEmpty) {
-            pendingReasoning.add(reasoningText);
-          }
-        case ContentBlockType.toolCalls:
-          if (block.toolCalls != null && block.toolCalls!.isNotEmpty) {
-            renderToolCallsBlock(
-              block.toolCalls!
-                  .map((tc) => ToolCall.fromJson(tc.toJson()))
-                  .toList(),
-            );
-          }
-        case ContentBlockType.text:
-          // Flush pending reasoning standalone if:
-          //  - no tool-calls follow at all (lookahead), or
-          //  - we haven't rendered any main content yet (the initial
-          //    "planning" reasoning belongs visibly on top of the response).
-          if (pendingReasoning.isNotEmpty &&
-              (!hasRenderedMainContent ||
-                  !toolCallsFollowFrom(blockIndex + 1))) {
-            flushStandaloneReasoning();
-          }
-          if (block.text != null && block.text!.trim().isNotEmpty) {
-            children.addAll(
-              _buildSwipeableTextParagraphs(
-                text: block.text!,
-                textColor: iconFgColor,
-                bgColor: bgColor,
-                baseBlockIndex: blockIndex * 1000,
-              ),
-            );
-            hasRenderedMainContent = true;
-          }
+    for (final seg in segments) {
+      if (seg.isText) {
+        children.addAll(
+          _buildSwipeableTextParagraphs(
+            text: seg.text!,
+            textColor: iconFgColor,
+            bgColor: bgColor,
+            baseBlockIndex: segmentIndex * 1000,
+          ),
+        );
+        hasRenderedMainContent = true;
+      } else {
+        renderRound(seg);
       }
-    }
-
-    // Trailing text: streaming text during a pass OR a finalized tail
-    // (timeout/error message, model output that never made it into a
-    // content text block). Always computed so finalized error/info messages
-    // don't silently vanish when content_blocks contain only reasoning.
-    var trailingText = stripToolCallBlocksForDisplay(widget.message).trim();
-    if (trailingText.isNotEmpty && finalizedTextPrefix.isNotEmpty) {
-      if (trailingText == finalizedTextPrefix) {
-        trailingText = '';
-      } else if (trailingText.startsWith('$finalizedTextPrefix\n\n')) {
-        trailingText = trailingText
-            .substring(finalizedTextPrefix.length)
-            .trim();
-      }
-    }
-
-    if (trailingText.isNotEmpty) {
-      // Without an upcoming live tool-calls bar, pending reasoning has
-      // nothing to attach to and belongs ABOVE the trailing text.
-      if (pendingReasoning.isNotEmpty && !hasAnyLiveToolCalls) {
-        flushStandaloneReasoning();
-      }
-      children.addAll(
-        _buildSwipeableTextParagraphs(
-          text: trailingText,
-          textColor: iconFgColor,
-          bgColor: bgColor,
-          baseBlockIndex: blocks.length * 1000,
-        ),
-      );
-      hasRenderedMainContent = true;
-    }
-
-    // Live tool calls: any tool calls NOT yet in a content block
-    // (from the currently-running pass). Attach any still-pending reasoning
-    // to them so the live round renders as one bar.
-    final liveToolCalls = hasAnyLiveToolCalls
-        ? widget.toolCalls!
-              .where((tc) => !blockToolCallIds.contains(tc.id))
-              .toList()
-        : <ToolCall>[];
-
-    if (liveToolCalls.isNotEmpty) {
-      renderToolCallsBlock(
-        liveToolCalls.map((tc) => ToolCall.fromJson(tc.toJson())).toList(),
-      );
-    } else {
-      flushStandaloneReasoning();
+      segmentIndex++;
     }
 
     if (hasImages && !insertedImage) {
