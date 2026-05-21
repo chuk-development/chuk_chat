@@ -113,7 +113,7 @@ const Map<String, String> discoveryCatalog = {
         'E-Mail, Gmail, Slack, GitHub, Nextcloud, Google Kalender',
   if (kFeatureServerTools)
     'Sandbox / Code':
-        'Run Python or shell code in an isolated sandbox, read/write files in /home/sandbox / '
+        'Run Python or bash code in an isolated sandbox, read/write files in /home/sandbox / '
         'Python- oder Shell-Code in einer isolierten Sandbox ausführen, Dateien in /home/sandbox lesen/schreiben',
   'Device / Gerät':
       'Reminders, calendar events, alarms, timers, SMS drafts, GPS / '
@@ -1365,7 +1365,7 @@ final List<ClientTool> builtinTools = [
     name: 'code_run',
     description:
         'Run code in an isolated Docker sandbox on the server. Python by default; '
-        'pass language="shell" for bash. The sandbox has pandas, numpy, scipy, '
+        'pass language="bash" for shell commands. The sandbox has pandas, numpy, scipy, '
         'scikit-learn, matplotlib, pillow, opencv, ffmpeg, yt-dlp, pypdf, typst, '
         'pandoc and ~30 other common tools preinstalled. Files persist between '
         'calls in /home/sandbox (read/write via sandbox_read / sandbox_write). '
@@ -1389,17 +1389,16 @@ final List<ClientTool> builtinTools = [
         'stderr, exit code and duration.',
     parameters: {
       'code': 'string (required: source code to execute)',
-      'language': 'string (optional: "python" (default) or "shell")',
+      'language': 'string (optional: "python" (default) or "bash")',
       'timeout':
           'int (optional: per-execution seconds, 1..300; omit for the '
           'server default — usually adequate).',
     },
     type: ToolType.builtin,
     tags: [
-      // Note: 'bash' deliberately omitted to avoid stealing find_tools
-      // traffic from the desktop-only 'bash' tool. 'shell' is fine —
-      // it's part of the code_run language enum.
-      'code', 'python', 'shell', 'execute', 'run',
+      // 'shell' kept as a discovery tag for legacy phrasing; 'bash'
+      // is now the canonical language name in code_run params.
+      'code', 'python', 'bash', 'shell', 'execute', 'run',
       'sandbox', 'compute', 'script', 'data', 'analysis',
       'plot', 'matplotlib', 'pandas', 'numpy', 'jupyter',
     ],
