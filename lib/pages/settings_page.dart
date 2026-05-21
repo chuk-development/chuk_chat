@@ -19,6 +19,7 @@ import 'package:chuk_chat/pages/diagnostics_settings_page.dart';
 import 'package:chuk_chat/pages/tool_calling_settings_page.dart';
 import 'package:chuk_chat/pages/account_settings_page.dart';
 import 'package:chuk_chat/pages/about_page.dart';
+import 'package:chuk_chat/pages/github_connection_page.dart';
 import 'package:chuk_chat/pages/pricing_page.dart';
 import 'package:chuk_chat/pages/system_prompt_page.dart';
 import 'package:chuk_chat/services/app_theme_service.dart';
@@ -213,6 +214,20 @@ class _SettingsPageState extends State<SettingsPage> {
                     MaterialPageRoute(
                       builder: (_) =>
                           ToolCallingSettingsPage(config: widget.config),
+                    ),
+                  );
+                },
+              ),
+              _SettingsRow(
+                icon: Icons.code,
+                title: 'GitHub',
+                subtitle:
+                    'Let the AI clone your repos, push, and open PRs in the sandbox',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const GitHubConnectionPage(),
                     ),
                   );
                 },

@@ -1378,6 +1378,13 @@ final List<ClientTool> builtinTools = [
         'image tools for image generation/editing — use code_run only when '
         'computation, file manipulation, or library calls (pandas/numpy/'
         'matplotlib/yt-dlp/pypdf) are required. '
+        'GitHub: if the user has connected their account via Settings → GitHub, '
+        '`git` and `gh` work without prompts. You can `git clone` private repos, '
+        'create branches, commit, push, and `gh pr create` — all under the '
+        'user\'s identity. If a git/gh command says "authentication required", '
+        'the user has not connected GitHub yet; ask them to do so before '
+        'retrying. Always confirm with the user before destructive actions: '
+        'force-push, branch deletion, closing PRs, repo deletion. '
         'Exec timeout 5 min, 512MB RAM, 50%% of one CPU core. Returns stdout, '
         'stderr, exit code and duration.',
     parameters: {
