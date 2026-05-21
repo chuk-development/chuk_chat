@@ -1077,38 +1077,36 @@ class _MessageBubbleState extends State<MessageBubble> {
       }
     }
 
-    // Trailing streaming text from the current pass (only while streaming).
-    // When finalized, all text is already in content blocks.
-    var trailingText = '';
-    if (widget.isStreamingMessage) {
-      trailingText = stripToolCallBlocksForDisplay(widget.message).trim();
-
-      // Avoid duplicating finalized text blocks while a newer pass streams.
-      if (trailingText.isNotEmpty && finalizedTextPrefix.isNotEmpty) {
-        if (trailingText == finalizedTextPrefix) {
-          trailingText = '';
-        } else if (trailingText.startsWith('$finalizedTextPrefix\n\n')) {
-          trailingText = trailingText
-              .substring(finalizedTextPrefix.length)
-              .trim();
-        }
+    // Trailing text: streaming text during a pass OR a finalized tail
+    // (timeout/error message, model output that never made it into a
+    // content text block). Always computed so finalized error/info messages
+    // don't silently vanish when content_blocks contain only reasoning.
+    var trailingText = stripToolCallBlocksForDisplay(widget.message).trim();
+    if (trailingText.isNotEmpty && finalizedTextPrefix.isNotEmpty) {
+      if (trailingText == finalizedTextPrefix) {
+        trailingText = '';
+      } else if (trailingText.startsWith('$finalizedTextPrefix\n\n')) {
+        trailingText = trailingText
+            .substring(finalizedTextPrefix.length)
+            .trim();
       }
+    }
 
-      if (trailingText.isNotEmpty) {
-        // Without an upcoming live tool-calls bar, pending reasoning has
-        // nothing to attach to and belongs ABOVE the streaming text.
-        if (pendingReasoning.isNotEmpty && !hasAnyLiveToolCalls) {
-          flushStandaloneReasoning();
-        }
-        children.addAll(
-          _buildSwipeableTextParagraphs(
-            text: trailingText,
-            textColor: iconFgColor,
-            bgColor: bgColor,
-            baseBlockIndex: blocks.length * 1000,
-          ),
-        );
+    if (trailingText.isNotEmpty) {
+      // Without an upcoming live tool-calls bar, pending reasoning has
+      // nothing to attach to and belongs ABOVE the trailing text.
+      if (pendingReasoning.isNotEmpty && !hasAnyLiveToolCalls) {
+        flushStandaloneReasoning();
       }
+      children.addAll(
+        _buildSwipeableTextParagraphs(
+          text: trailingText,
+          textColor: iconFgColor,
+          bgColor: bgColor,
+          baseBlockIndex: blocks.length * 1000,
+        ),
+      );
+      hasRenderedMainContent = true;
     }
 
     // Live tool calls: any tool calls NOT yet in a content block
