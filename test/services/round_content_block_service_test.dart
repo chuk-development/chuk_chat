@@ -270,6 +270,130 @@ void main() {
     });
 
     test(
+      'skips reasoning block when previous reasoning has identical text '
+      '(buildRoundBlocks, provider re-emits same reasoning per round)',
+      () {
+        const sameReasoning = 'Plan: ich rufe Tools auf.';
+
+        final firstPass = RoundContentBlockService.buildRoundBlocks(
+          interimText: '',
+          providerReasoning: sameReasoning,
+          newToolCalls: [
+            ToolCall(
+              id: 'tc-1',
+              name: 'code_run',
+              status: ToolCallStatus.completed,
+            ),
+          ],
+        );
+
+        final accumulated = <ContentBlock>[...firstPass.blocks];
+
+        final secondPass = RoundContentBlockService.buildRoundBlocks(
+          interimText: '',
+          providerReasoning: sameReasoning,
+          newToolCalls: [
+            ToolCall(
+              id: 'tc-2',
+              name: 'code_run',
+              status: ToolCallStatus.completed,
+            ),
+          ],
+          existingBlocks: accumulated,
+        );
+
+        expect(
+          secondPass.blocks.map((b) => b.type).toList(),
+          equals([ContentBlockType.toolCalls]),
+          reason:
+              'Reasoning identical to last reasoning block should be skipped; '
+              'only the new tool call block should be appended.',
+        );
+      },
+    );
+
+    test(
+      'still emits reasoning block when reasoning text differs from previous '
+      '(buildRoundBlocks)',
+      () {
+        final firstPass = RoundContentBlockService.buildRoundBlocks(
+          interimText: '',
+          providerReasoning: 'Reasoning A',
+          newToolCalls: [
+            ToolCall(
+              id: 'tc-1',
+              name: 'code_run',
+              status: ToolCallStatus.completed,
+            ),
+          ],
+        );
+
+        final accumulated = <ContentBlock>[...firstPass.blocks];
+
+        final secondPass = RoundContentBlockService.buildRoundBlocks(
+          interimText: '',
+          providerReasoning: 'Reasoning B',
+          newToolCalls: [
+            ToolCall(
+              id: 'tc-2',
+              name: 'code_run',
+              status: ToolCallStatus.completed,
+            ),
+          ],
+          existingBlocks: accumulated,
+        );
+
+        expect(
+          secondPass.blocks.map((b) => b.type).toList(),
+          equals([ContentBlockType.reasoning, ContentBlockType.toolCalls]),
+        );
+      },
+    );
+
+    test(
+      'segmented builder skips reasoning when previous reasoning matches',
+      () {
+        const sameReasoning = 'Plan: weiter testen.';
+
+        final firstPass = RoundContentBlockService.buildSegmentedRoundBlocks(
+          segments: [
+            RoundSegment.toolCall(
+              ToolCall(
+                id: 'tc-1',
+                name: 'code_run',
+                status: ToolCallStatus.completed,
+              ),
+            ),
+          ],
+          providerReasoning: sameReasoning,
+        );
+
+        final accumulated = <ContentBlock>[...firstPass.blocks];
+
+        final secondPass = RoundContentBlockService.buildSegmentedRoundBlocks(
+          segments: [
+            RoundSegment.toolCall(
+              ToolCall(
+                id: 'tc-2',
+                name: 'code_run',
+                status: ToolCallStatus.completed,
+              ),
+            ),
+          ],
+          providerReasoning: sameReasoning,
+          existingBlocks: accumulated,
+        );
+
+        expect(
+          secondPass.blocks.map((b) => b.type).toList(),
+          equals([ContentBlockType.toolCalls]),
+          reason:
+              'Segmented builder should skip duplicate reasoning across rounds.',
+        );
+      },
+    );
+
+    test(
       'drops duplicate text block when it repeats an earlier finalized text '
       '(e.g. answer → notes tool → answer again)',
       () {

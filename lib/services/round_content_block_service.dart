@@ -29,7 +29,8 @@ class RoundContentBlockService {
   }) {
     final blocks = <ContentBlock>[];
     final reasoning = providerReasoning.trim();
-    if (reasoning.isNotEmpty) {
+    if (reasoning.isNotEmpty &&
+        !_lastReasoningMatches(existingBlocks, reasoning)) {
       blocks.add(ContentBlock.reasoning(reasoning));
     }
 
@@ -109,7 +110,8 @@ class RoundContentBlockService {
     }
 
     final blocks = <ContentBlock>[];
-    if (roundReasoning.isNotEmpty) {
+    if (roundReasoning.isNotEmpty &&
+        !_lastReasoningMatches(existingBlocks, roundReasoning)) {
       blocks.add(ContentBlock.reasoning(roundReasoning));
     }
     // Work on a local copy to avoid mutating the caller's list.
@@ -171,6 +173,24 @@ class RoundContentBlockService {
       blocks: blocks,
       interimOutputText: interimOutputText,
     );
+  }
+
+  /// True when the most recent reasoning block in [existing] has the same
+  /// trimmed text as [reasoning]. Used to avoid prepending the same reasoning
+  /// block when providers (or the streaming handler) re-emit identical
+  /// reasoning text across rounds.
+  static bool _lastReasoningMatches(
+    List<ContentBlock> existing,
+    String reasoning,
+  ) {
+    final target = reasoning.trim();
+    if (target.isEmpty) return false;
+    for (var i = existing.length - 1; i >= 0; i--) {
+      final block = existing[i];
+      if (block.type != ContentBlockType.reasoning) continue;
+      return (block.text ?? '').trim() == target;
+    }
+    return false;
   }
 
   /// Returns true when [tail] is the exact suffix of [existing] (by content
